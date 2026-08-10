@@ -19,14 +19,33 @@ use crate::tensor::backend::{Execute, FloatOps, NumericOps, ReductionOps, Tensor
 macro_rules! impl_reduction_op {
     (
         $(#[$meta:meta])*
-        $method:ident, $backend_method:ident
+        $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(self) -> Result<Tensor<(), B, K, G>> {
-            let inner = self.under_grad_mode(|| B::$backend_method(&self.inner))?;
+        pub fn $method(self) -> Result<Tensor<(), B, K, G>>
+        where
+            B: Execute<Descriptor<op::$operation>> + crate::exec::Capabilities,
+            <B as Execute<Descriptor<op::$operation>>>::Output: Into<B::Storage<K>>,
+        {
+            let output_shape = crate::shapes::ShapeValue::<()>::try_new(
+                crate::shapes::ShapeBuf::scalar(),
+            )
+            .map_err(crate::prelude::Error::Shape)?;
+            let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+            let context = ExecutionContext::from_scope(B::default());
+            let inner = self
+                .under_grad_mode(|| {
+                    crate::exec::dispatch::execute_shaped::<op::$operation, B, ()>(
+                        &context,
+                        crate::exec::catalog::NoAttributes,
+                        &[input],
+                        &output_shape,
+                    )
+                })?
+                .into();
             Tensor::from_parts(
                 inner,
-                crate::shapes::ShapeBuf::scalar(), // Scalar shape buffer
+                output_shape.shape_buf().clone(),
                 self._dtype,
                 self._device,
                 self._grad,
@@ -259,7 +278,7 @@ impl<
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
         /// ```
-        sum_all, sum_all
+        sum_all, SumAll
     );
 
     impl_reduction_op!(
@@ -273,7 +292,7 @@ impl<
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
         /// ```
-        mean_all, mean_all
+        mean_all, MeanAll
     );
 
     impl_reduction_op!(
@@ -287,7 +306,7 @@ impl<
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
         /// ```
-        max_all, max_all
+        max_all, MaxAll
     );
 
     impl_reduction_op!(
@@ -301,12 +320,12 @@ impl<
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()
         /// ```
-        min_all, min_all
+        min_all, MinAll
     );
 
     impl_reduction_op!(
         /// Product of all elements in the tensor, reducing it to a scalar tensor.
-        prod_all, prod_all
+        prod_all, ProdAll
     );
 
     /// Cumulative sum along dimension `DIM`.
@@ -331,10 +350,13 @@ impl<
         B: crate::tensor::backend::FloatOps<B>
             + Execute<Descriptor<op::Mul>>
             + Execute<Descriptor<op::Abs>>
-            + Execute<Descriptor<op::Sqrt>>,
+            + Execute<Descriptor<op::Sqrt>>
+            + Execute<Descriptor<op::SumAll>>
+            + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
         <B as Execute<Descriptor<op::Abs>>>::Output: Into<B::Storage<K>>,
         <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
     {
         if (p - 1.0).abs() < 1e-6 {
             self.abs()?.sum_all()
@@ -525,7 +547,10 @@ impl<
         + TensorOps<B>
         + Execute<Descriptor<op::Sub>>
         + Execute<Descriptor<op::Mul>>
-        + Execute<Descriptor<op::Sqrt>>,
+        + Execute<Descriptor<op::Sqrt>>
+        + Execute<Descriptor<op::MeanAll>>
+        + Execute<Descriptor<op::SumAll>>
+        + crate::exec::Capabilities,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
 > Tensor<S, B, K, G>
@@ -533,6 +558,8 @@ where
     <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::MeanAll>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
     pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {

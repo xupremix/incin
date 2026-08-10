@@ -4,7 +4,7 @@
 //! needs to launch it, computed once from a shape that the frontend has already
 //! proved legal. `PROPOSALS.md` §1.2.1 lists the four that anchor the design,
 //! chosen because their launch parameters are direct consequences of shape
-//! proofs — [`MatMulSpec`], [`BroadcastSpec`], [`ReductionSpec`], and
+//! proofs --- [`MatMulSpec`], [`BroadcastSpec`], [`ReductionSpec`], and
 //! [`Conv2dSpec`]. [`Pool2dSpec`] and [`ReshapeSpec`] joined them under
 //! `EXE-003`, which needs a descriptor for each of the six operations it
 //! lowers; decision `D-018` records why neither reuses one of the first four.
@@ -22,7 +22,7 @@
 //! * **The field set is a versioned contract.** Kernel caches, autotune
 //!   records, and specialization keys are all derived from descriptor contents.
 //!   Adding, removing, or reinterpreting a field invalidates them, so it must
-//!   bump [`DescriptorSchemaVersion::CURRENT`] — a change a pinning test makes
+//!   bump [`DescriptorSchemaVersion::CURRENT`] --- a change a pinning test makes
 //!   deliberate rather than accidental.
 //!
 //! Descriptors are `#[non_exhaustive]` with public fields: readable everywhere,
@@ -35,12 +35,13 @@
 //! is what lets one descriptor be reused across operands, cached, and used as a
 //! specialization key. A descriptor holds logical geometry only.
 //!
-//! # Rank ceiling
+//! # Rank handling
 //!
-//! [`AxisMask`] addresses [`AxisMask::MAX_AXES`] axes, and every constructor
-//! here rejects a shape above that ceiling rather than silently truncating. It
-//! sits well above the `MAX_RANK` ceiling of the typed frontend, so a shape
-//! the type system can express always fits.
+//! Descriptors use [`AxisSet`] for semantic axis collections. Its inline
+//! [`AxisMask`] representation is only an optimization; axes beyond 63 spill
+//! into owned storage. Descriptor construction therefore has no frontend
+//! rank ceiling. Backend capability and resource-policy limits are checked at
+//! their respective boundaries.
 
 use core::fmt;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
@@ -54,8 +55,8 @@ use crate::shapes::spatial::spatial_out_size;
 
 /// The version of the descriptor field layout.
 ///
-/// Anything derived from descriptor *contents* and kept across runs — a kernel
-/// cache, an autotune record, a serialized execution plan — is only valid for
+/// Anything derived from descriptor *contents* and kept across runs --- a kernel
+/// cache, an autotune record, a serialized execution plan --- is only valid for
 /// the schema it was produced under. Comparing versions is how a stale entry is
 /// recognized instead of being replayed against fields that have since changed
 /// meaning.
@@ -154,14 +155,14 @@ impl fmt::Display for ReduceOp {
 /// [`BroadcastSpec`] is the one descriptor whose operator may be absent, because
 /// it is the one descriptor that is useful without one: it describes iteration
 /// geometry, and a named broadcast stretches an operand without combining it
-/// with anything. `Option<BinaryOp>` is that distinction — `None` is a stretch,
+/// with anything. `Option<BinaryOp>` is that distinction --- `None` is a stretch,
 /// `Some` is a stretch a kernel then folds two operands through.
 ///
 /// The set is closed at the four operations the shared broadcasting path
 /// implements. `maximum` and `minimum` are deliberately absent: they read only
 /// the left operand's shape and index both with it, so they require equal shapes
 /// and would ask this geometry for something no kernel behind it performs.
-/// Comparisons are absent for the reason `argmax` is absent from [`ReduceOp`] —
+/// Comparisons are absent for the reason `argmax` is absent from [`ReduceOp`] ---
 /// their result dtype is not their input's, so they are a different operation
 /// wearing the same shape rule.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -214,42 +215,49 @@ impl fmt::Display for PoolOp {
 
 // --- axis mask --------------------------------------------------------------
 
-/// A set of axis positions.
+/// Compact inline storage for the semantic [`AxisSet`] axis collection.
 ///
 /// Reductions name the axes they collapse, and broadcasts name the axes they
 /// stretch. Both are sets over a small range, both are read in kernel inner
 /// loops, and neither may allocate. A bitmask gives all three, plus a form that
-/// passes to a native kernel as a single scalar — see [`bits`](Self::bits).
+/// passes to a native kernel as a single scalar --- see [`bits`](Self::bits).
 ///
 /// Axes are counted from the front of the shape, so axis 0 is the outermost.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct AxisMask(u32);
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+pub(crate) struct AxisMask(u64);
 
 impl AxisMask {
-    /// The number of axes a mask can address.
-    ///
-    /// This is the rank ceiling for every descriptor in this module. It is far
-    /// above `MAX_RANK`, so it never limits a shape the typed frontend can
-    /// express; it bounds only the dynamic path.
-    pub const MAX_AXES: usize = u32::BITS as usize;
+    /// The number of axes a mask can address inline (64).
+    pub const MAX_AXES: usize = u64::BITS as usize;
 
     /// The empty set.
     pub const EMPTY: Self = Self(0);
 
-    /// Reinterpret a raw bit pattern, where bit *n* means axis *n*.
+    /// Reinterpret a raw 32-bit pattern.
     #[must_use]
     pub const fn from_bits(bits: u32) -> Self {
+        Self(bits as u64)
+    }
+
+    /// Reinterpret a raw 64-bit pattern.
+    #[must_use]
+    pub const fn from_bits_u64(bits: u64) -> Self {
         Self(bits)
     }
 
-    /// The raw bit pattern, for passing the set to a kernel as one scalar.
+    /// The raw 32-bit pattern (saturates if axes >= 32 are present).
     #[must_use]
     pub const fn bits(self) -> u32 {
+        self.0 as u32
+    }
+
+    /// The raw 64-bit pattern.
+    #[must_use]
+    pub const fn bits_u64(self) -> u64 {
         self.0
     }
 
-    /// Whether `axis` is in the set. Axes at or above [`MAX_AXES`](Self::MAX_AXES)
-    /// are never in it.
+    /// Whether `axis` is in the set.
     #[must_use]
     pub const fn contains(self, axis: usize) -> bool {
         axis < Self::MAX_AXES && (self.0 >> axis) & 1 == 1
@@ -271,7 +279,7 @@ impl AxisMask {
     #[must_use]
     pub const fn insert(self, axis: usize) -> Option<Self> {
         if axis < Self::MAX_AXES {
-            Some(Self(self.0 | (1 << axis)))
+            Some(Self(self.0 | (1u64 << axis)))
         } else {
             None
         }
@@ -282,7 +290,7 @@ impl AxisMask {
     #[must_use]
     pub const fn remove(self, axis: usize) -> Self {
         if axis < Self::MAX_AXES {
-            Self(self.0 & !(1 << axis))
+            Self(self.0 & !(1u64 << axis))
         } else {
             self
         }
@@ -295,10 +303,9 @@ impl AxisMask {
         if rank > Self::MAX_AXES {
             None
         } else if rank == Self::MAX_AXES {
-            // `1 << MAX_AXES` overflows; the full mask is the same value.
-            Some(Self(u32::MAX))
+            Some(Self(u64::MAX))
         } else {
-            Some(Self((1 << rank) - 1))
+            Some(Self((1u64 << rank) - 1))
         }
     }
 
@@ -318,7 +325,7 @@ impl AxisMask {
     ///
     /// A repeated axis is rejected rather than absorbed. In a set, the second
     /// mention has no effect, which means `sum(dims = [1, 1])` would silently
-    /// behave as `sum(dims = [1])` — an argument list that says one thing and
+    /// behave as `sum(dims = [1])` --- an argument list that says one thing and
     /// does another is worth a diagnostic.
     pub fn try_from_axes(
         operation: OperationKind,
@@ -372,8 +379,8 @@ impl AxisMask {
 
     /// Whether the set is a single unbroken run of axes.
     ///
-    /// Descriptors whose geometry collapses a shape into contiguous regions —
-    /// [`ReductionSpec`] is the one here — are only expressible when the axes
+    /// Descriptors whose geometry collapses a shape into contiguous regions ---
+    /// [`ReductionSpec`] is the one here --- are only expressible when the axes
     /// they act on are adjacent.
     #[must_use]
     pub const fn is_contiguous_run(self) -> bool {
@@ -381,8 +388,140 @@ impl AxisMask {
             return true;
         }
         let lowest = self.0.trailing_zeros();
-        let past_highest = u32::BITS - self.0.leading_zeros();
+        let past_highest = u64::BITS - self.0.leading_zeros();
         self.0.count_ones() == past_highest - lowest
+    }
+}
+
+/// Dynamic/arbitrary rank descriptor axis set.
+///
+/// The representation is deliberately private: callers use this semantic
+/// collection, while the <=64-bit mask remains an implementation detail.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct AxisSet(AxisSetRepr);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+enum AxisSetRepr {
+    Empty,
+    Inline(AxisMask),
+    Spilled(alloc::vec::Vec<usize>),
+}
+
+impl Default for AxisSet {
+    fn default() -> Self {
+        Self::EMPTY
+    }
+}
+
+pub trait IntoAxisSet {
+    fn into_axis_set(self) -> AxisSet;
+}
+
+impl IntoAxisSet for AxisSet {
+    fn into_axis_set(self) -> AxisSet {
+        self
+    }
+}
+
+impl IntoAxisSet for AxisMask {
+    fn into_axis_set(self) -> AxisSet {
+        self.axes()
+            .fold(AxisSet::EMPTY, |set, axis| set.insert(axis))
+    }
+}
+
+impl AxisSet {
+    pub const EMPTY: Self = Self(AxisSetRepr::Empty);
+
+    pub fn contains(&self, axis: usize) -> bool {
+        match &self.0 {
+            AxisSetRepr::Empty => false,
+            AxisSetRepr::Inline(mask) => mask.contains(axis),
+            AxisSetRepr::Spilled(axes) => axes.contains(&axis),
+        }
+    }
+
+    pub fn count(&self) -> usize {
+        match &self.0 {
+            AxisSetRepr::Empty => 0,
+            AxisSetRepr::Inline(mask) => mask.count(),
+            AxisSetRepr::Spilled(axes) => axes.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match &self.0 {
+            AxisSetRepr::Empty => true,
+            AxisSetRepr::Inline(mask) => mask.is_empty(),
+            AxisSetRepr::Spilled(axes) => axes.is_empty(),
+        }
+    }
+
+    pub fn axes(&self) -> alloc::vec::IntoIter<usize> {
+        match &self.0 {
+            AxisSetRepr::Empty => alloc::vec::Vec::new().into_iter(),
+            AxisSetRepr::Inline(mask) => mask.axes().collect::<alloc::vec::Vec<_>>().into_iter(),
+            AxisSetRepr::Spilled(axes) => axes.clone().into_iter(),
+        }
+    }
+
+    pub fn all_below(rank: usize) -> Self {
+        (0..rank).fold(Self::EMPTY, |set, axis| set.insert(axis))
+    }
+
+    pub fn is_contiguous_run(&self) -> bool {
+        let axes: alloc::vec::Vec<_> = self.axes().collect();
+        axes.windows(2).all(|pair| pair[1] == pair[0] + 1)
+    }
+
+    pub fn try_from_axes(
+        operation: OperationKind,
+        rank: usize,
+        axes: impl IntoIterator<Item = usize>,
+    ) -> Result<Self, ShapeError> {
+        let mut set = Self::EMPTY;
+        for axis in axes {
+            if axis >= rank || set.contains(axis) {
+                return Err(ShapeError::InvalidParameter {
+                    operation,
+                    parameter: "axis",
+                    value: axis,
+                });
+            }
+            set = set.insert(axis);
+        }
+        Ok(set)
+    }
+
+    pub fn insert(self, axis: usize) -> Self {
+        match self.0 {
+            AxisSetRepr::Empty => {
+                if axis < AxisMask::MAX_AXES {
+                    Self(AxisSetRepr::Inline(AxisMask::EMPTY.insert(axis).unwrap()))
+                } else {
+                    Self(AxisSetRepr::Spilled(alloc::vec![axis]))
+                }
+            }
+            AxisSetRepr::Inline(mask) => {
+                if axis < AxisMask::MAX_AXES {
+                    Self(AxisSetRepr::Inline(mask.insert(axis).unwrap()))
+                } else {
+                    let mut axes: alloc::vec::Vec<usize> = (0..AxisMask::MAX_AXES)
+                        .filter(|&a| mask.contains(a))
+                        .collect();
+                    axes.push(axis);
+                    axes.sort_unstable();
+                    Self(AxisSetRepr::Spilled(axes))
+                }
+            }
+            AxisSetRepr::Spilled(mut axes) => {
+                if !axes.contains(&axis) {
+                    axes.push(axis);
+                    axes.sort_unstable();
+                }
+                Self(AxisSetRepr::Spilled(axes))
+            }
+        }
     }
 }
 
@@ -472,9 +611,22 @@ pub trait OperationSpec: Clone + fmt::Debug + Sealed {
 /// Legacy geometry descriptors implement this through `OperationSpec`; exact
 /// catalog descriptors implement it directly. The validation wrapper remains
 /// the seal, so backend authors consume but cannot mint invocations.
-pub trait ExecutionDescriptor: Clone + fmt::Debug {}
+pub trait ExecutionDescriptor: Clone + fmt::Debug {
+    /// Return the validated output shape when the descriptor carries one.
+    ///
+    /// Shape-only executors use this metadata to model storage without
+    /// inventing a second shape calculation. Descriptors whose output is not
+    /// represented by a logical tensor leave the default as `None`.
+    fn output_shape(&self) -> Option<&ShapeBuf> {
+        None
+    }
+}
 
-impl<O: OperationSpec> ExecutionDescriptor for O {}
+impl<O: OperationSpec> ExecutionDescriptor for O {
+    fn output_shape(&self) -> Option<&ShapeBuf> {
+        Some(self.output())
+    }
+}
 
 /// Reject an output that cannot be allocated or indexed.
 ///
@@ -486,22 +638,15 @@ fn check_output(operation: OperationKind, output: &ShapeBuf) -> Result<(), Shape
     output.checked_numel(operation).map(|_| ())
 }
 
-/// Reject a rank that [`AxisMask`] cannot address.
-fn check_rank_ceiling(operation: OperationKind, rank: usize) -> Result<(), ShapeError> {
-    if rank > AxisMask::MAX_AXES {
-        return Err(ShapeError::RankMismatch {
-            operation,
-            expected: RankExpectation::AtMost(AxisMask::MAX_AXES),
-            actual: rank,
-        });
-    }
+/// Reject a rank that cannot be addressed (no-op in rank-independent model).
+fn check_rank_ceiling(_operation: OperationKind, _rank: usize) -> Result<(), ShapeError> {
     Ok(())
 }
 
 /// The checked product of a run of dimensions.
 ///
 /// Routed through [`ShapeBuf::checked_numel`] rather than a local fold so that
-/// the empty-tensor and overflow rules stay in one place — a zero dimension
+/// the empty-tensor and overflow rules stay in one place --- a zero dimension
 /// collapses the product regardless of axis order.
 fn extent(operation: OperationKind, dims: &[usize]) -> Result<usize, ShapeError> {
     ShapeBuf::from_slice(dims).checked_numel(operation)
@@ -536,9 +681,9 @@ pub struct BroadcastSpec {
     /// Right operand strides, normalized to the output rank.
     pub rhs_strides: StrideBuf,
     /// Axes the left operand is stretched along.
-    pub lhs_broadcast_mask: AxisMask,
+    pub lhs_broadcast_mask: AxisSet,
     /// Axes the right operand is stretched along.
-    pub rhs_broadcast_mask: AxisMask,
+    pub rhs_broadcast_mask: AxisSet,
     /// What the kernel folds the paired elements through, if anything.
     ///
     /// `None` is a stretch: the geometry is resolved and the output is the left
@@ -601,7 +746,7 @@ impl BroadcastSpec {
 
     /// The broadcast result of two shapes, without building a descriptor.
     ///
-    /// Exposed because shape resolution is useful on its own — a caller may
+    /// Exposed because shape resolution is useful on its own --- a caller may
     /// want the output dimensions to allocate before it has strides to lower.
     pub fn resolve_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> Result<ShapeBuf, ShapeError> {
         let rank = lhs.rank().max(rhs.rank());
@@ -695,11 +840,11 @@ fn align_operand(
     output: &ShapeBuf,
     operand: &ShapeBuf,
     strides: &StrideBuf,
-) -> Result<(StrideBuf, AxisMask), ShapeError> {
+) -> Result<(StrideBuf, AxisSet), ShapeError> {
     let rank = output.rank();
     let offset = rank - operand.rank();
     let mut aligned = StrideBuf::default();
-    let mut mask = AxisMask::EMPTY;
+    let mut mask = AxisSet::EMPTY;
 
     for axis in 0..rank {
         let out_dim = output.dims()[axis];
@@ -708,11 +853,7 @@ fn align_operand(
             // alignment rule, and therefore stretched unless the output is 1 too.
             aligned.push(0);
             if out_dim != 1 {
-                mask = mask.insert(axis).ok_or(ShapeError::RankMismatch {
-                    operation: OperationKind::Broadcast,
-                    expected: RankExpectation::AtMost(AxisMask::MAX_AXES),
-                    actual: rank,
-                })?;
+                mask = mask.insert(axis);
             }
             continue;
         }
@@ -722,11 +863,7 @@ fn align_operand(
             aligned.push(strides.strides()[axis - offset]);
         } else if dim == 1 {
             aligned.push(0);
-            mask = mask.insert(axis).ok_or(ShapeError::RankMismatch {
-                operation: OperationKind::Broadcast,
-                expected: RankExpectation::AtMost(AxisMask::MAX_AXES),
-                actual: rank,
-            })?;
+            mask = mask.insert(axis);
         } else {
             return Err(ShapeError::DimensionMismatch {
                 operation: OperationKind::Broadcast,
@@ -751,16 +888,16 @@ fn align_operand(
 /// backend from re-deriving them from raw dimension vectors.
 ///
 /// Batch axes broadcast, as they do for elementwise operations, and a broadcast
-/// batch axis gets a stride of 0 — the same convention [`BroadcastSpec`] uses.
+/// batch axis gets a stride of 0 --- the same convention [`BroadcastSpec`] uses.
 /// A GEMM that reuses one operand across the batch therefore needs no separate
 /// code path.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatMulSpec {
     /// Rank of the left operand, matrix axes included.
-    pub lhs_rank: u8,
+    pub lhs_rank: usize,
     /// Rank of the right operand, matrix axes included.
-    pub rhs_rank: u8,
+    pub rhs_rank: usize,
     /// The result dimensions: the broadcast batch shape followed by `m` and `n`.
     pub output: ShapeBuf,
     /// The broadcast batch dimensions, without the two matrix axes.
@@ -835,9 +972,8 @@ impl MatMulSpec {
         let output_batch_strides = batch_strides(&batch, &batch, checked_area(m, n)?)?;
 
         Ok(Self {
-            // Both ranks were bounded by `MAX_AXES`, which is far below `u8::MAX`.
-            lhs_rank: lhs_rank as u8,
-            rhs_rank: rhs_rank as u8,
+            lhs_rank,
+            rhs_rank,
             output,
             batch,
             m,
@@ -857,7 +993,7 @@ impl MatMulSpec {
     /// and output are unchanged, and the flags only tell the backend how to read
     /// storage it has been handed. Lowering (`EXE-003`) sets them from operand
     /// strides, which is why they are a separate step rather than a constructor
-    /// argument — [`new`](Self::new) sees shapes, not layouts.
+    /// argument --- [`new`](Self::new) sees shapes, not layouts.
     #[must_use]
     pub fn transposed(mut self, lhs: bool, rhs: bool) -> Self {
         self.transpose_lhs = lhs;
@@ -954,7 +1090,7 @@ fn batch_strides(
 /// Every reduction over adjacent axes is the same loop nest: `outer`
 /// independent slices, each reducing `reduced` elements into `inner`
 /// accumulators. Expressing it this way is what lets one kernel serve
-/// `sum(dim = 0)` on a matrix and `mean(dim = 2)` on a rank-5 tensor — the ranks
+/// `sum(dim = 0)` on a matrix and `mean(dim = 2)` on a rank-5 tensor --- the ranks
 /// differ, the three extents do not.
 ///
 /// The axes must form one unbroken run. A scattered set such as `{0, 2}` has no
@@ -963,7 +1099,7 @@ fn batch_strides(
 /// a contiguous reduction.
 ///
 /// The three extents are the loop; [`op`](Self::op) is what runs inside it. Both
-/// halves are needed to execute, and neither determines the other — which is why
+/// halves are needed to execute, and neither determines the other --- which is why
 /// the operator is a field the constructors take rather than one they derive.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -973,7 +1109,7 @@ pub struct ReductionSpec {
     /// The accumulation applied across the collapsed axes.
     pub op: ReduceOp,
     /// The axes being collapsed.
-    pub axes: AxisMask,
+    pub axes: AxisSet,
     /// Elements in the region outside the reduced axes.
     pub outer: usize,
     /// Elements collapsed into each result element.
@@ -995,10 +1131,11 @@ impl ReductionSpec {
     /// an axis list dynamically do not need a special case for "no axes given".
     pub fn new(
         input: &ShapeBuf,
-        axes: AxisMask,
+        axes: impl IntoAxisSet,
         keep_dims: bool,
         op: ReduceOp,
     ) -> Result<Self, ShapeError> {
+        let axes = axes.into_axis_set();
         let rank = input.rank();
         check_rank_ceiling(Self::OP, rank)?;
 
@@ -1014,8 +1151,9 @@ impl ReductionSpec {
         if !axes.is_contiguous_run() {
             // The run is described by its endpoints, which is what an axis-range
             // diagnostic already says.
-            let start = axes.axes().next().unwrap_or(0);
-            let end = axes.axes().last().map_or(0, |last| last + 1);
+            let listed: alloc::vec::Vec<_> = axes.axes().collect();
+            let start = listed.first().copied().unwrap_or(0);
+            let end = listed.last().map_or(0, |last| last + 1);
             return Err(ShapeError::InvalidAxisRange {
                 operation: Self::OP,
                 start,
@@ -1024,8 +1162,9 @@ impl ReductionSpec {
             });
         }
 
-        let (start, end) = match (axes.axes().next(), axes.axes().last()) {
-            (Some(first), Some(last)) => (first, last + 1),
+        let listed: alloc::vec::Vec<_> = axes.axes().collect();
+        let (start, end) = match (listed.first(), listed.last()) {
+            (Some(first), Some(last)) => (*first, *last + 1),
             // No axes: an empty run placed at the end, so `outer` is everything.
             _ => (rank, rank),
         };
@@ -1066,17 +1205,13 @@ impl ReductionSpec {
         keep_dims: bool,
         op: ReduceOp,
     ) -> Result<Self, ShapeError> {
-        let mask = AxisMask::try_from_axes(Self::OP, input.rank(), axes)?;
+        let mask = AxisSet::try_from_axes(Self::OP, input.rank(), axes)?;
         Self::new(input, mask, keep_dims, op)
     }
 
     /// Resolve a reduction over every axis, producing a scalar.
     pub fn over_all(input: &ShapeBuf, keep_dims: bool, op: ReduceOp) -> Result<Self, ShapeError> {
-        let mask = AxisMask::all_below(input.rank()).ok_or(ShapeError::RankMismatch {
-            operation: Self::OP,
-            expected: RankExpectation::AtMost(AxisMask::MAX_AXES),
-            actual: input.rank(),
-        })?;
+        let mask = AxisSet::all_below(input.rank());
         Self::new(input, mask, keep_dims, op)
     }
 }
@@ -1403,7 +1538,7 @@ impl OperationSpec for Pool2dSpec {
 /// Reshape is the one descriptor here whose output is an *operand* rather than
 /// a derivation: the caller chooses the target shape, and no rule can compute
 /// it from the input. What the constructor derives is the thing that makes the
-/// pair legal — the element count — and it refuses any pair where the two
+/// pair legal --- the element count --- and it refuses any pair where the two
 /// counts differ. The rest of the "derived, never asserted" property holds
 /// unchanged, because [`elements`](Self::elements) is never an argument.
 ///

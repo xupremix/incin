@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::prelude::{DTypeId, DeviceId, OperationKind};
+use crate::prelude::{DTypeDescriptor, DTypeId, DeviceId, OperationKind, ShapeBuf};
 
 /// Broad classification only. A family is never a capability identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -59,6 +59,8 @@ pub enum DTypeRule {
     Preserve,
     Floating,
     NumericSame,
+    Boolean,
+    BooleanResult,
     IndexResult,
     ExplicitOutput,
     Quantized,
@@ -310,7 +312,7 @@ const fn profile_semantics(
         ),
         Comparison => (
             BroadcastingRule::Numpy,
-            DTypeRule::Preserve,
+            DTypeRule::BooleanResult,
             OutputRule::Broadcast,
             EmptyRule::Allowed,
             NumericRule::IeeePropagate,
@@ -319,7 +321,7 @@ const fn profile_semantics(
         ),
         Logical => (
             BroadcastingRule::Numpy,
-            DTypeRule::Preserve,
+            DTypeRule::Boolean,
             OutputRule::Broadcast,
             EmptyRule::Allowed,
             NumericRule::NotApplicable,
@@ -487,7 +489,7 @@ const fn entry(
     let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, layout) =
         profile_semantics(profile);
     let accepted_ranks = match operation {
-        OperationKind::MatMulExact | OperationKind::QuantizedMatMul => 2..=crate::prelude::MAX_RANK,
+        OperationKind::MatMulExact | OperationKind::QuantizedMatMul => 2..=usize::MAX,
         OperationKind::Dot | OperationKind::Outer => 1..=1,
         OperationKind::BatchedMatMul | OperationKind::Addmm => 2..=3,
         OperationKind::Rnn | OperationKind::Lstm => 2..=3,
@@ -502,8 +504,8 @@ const fn entry(
         | OperationKind::InstanceNorm
         | OperationKind::LayerNorm
         | OperationKind::BatchNorm
-        | OperationKind::RmsNorm => 1..=crate::prelude::MAX_RANK,
-        _ => 0..=crate::prelude::MAX_RANK,
+        | OperationKind::RmsNorm => 1..=usize::MAX,
+        _ => 0..=usize::MAX,
     };
     let output_arity = match operation {
         OperationKind::TopK => 2..=2,
@@ -694,8 +696,8 @@ macro_rules! define_catalog {
 /// Logical metadata used before a backend storage handle exists.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogicalTensorMeta {
-    pub shape: Option<Vec<usize>>,
-    pub dtype: Option<DTypeId>,
+    pub shape: Option<ShapeBuf>,
+    pub dtype: Option<DTypeDescriptor>,
     pub device: Option<DeviceId>,
 }
 
@@ -723,11 +725,11 @@ macro_rules! attributes {
 pub struct NoAttributes;
 
 attributes! {
-    CreationAttributes { shape: Vec<usize>, dtype: DTypeId, device: DeviceId }
-    FullAttributes { shape: Vec<usize>, dtype: DTypeId, device: DeviceId, value: f64 }
-    ArangeAttributes { shape: Vec<usize>, dtype: DTypeId, device: DeviceId, start: f64, step: f64 }
-    LinspaceAttributes { shape: Vec<usize>, dtype: DTypeId, device: DeviceId, start: f64, end: f64 }
-    DistributionAttributes { shape: Vec<usize>, dtype: DTypeId, device: DeviceId, distribution: alloc::string::String, parameters: Vec<u8> }
+    CreationAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
+    FullAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, value: f64 }
+    ArangeAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, start: f64, step: f64 }
+    LinspaceAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, start: f64, end: f64 }
+    DistributionAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, distribution: alloc::string::String, parameters: Vec<u8> }
     AxisAttributes { axis: usize }
     ScalarAttributes { value: f64 }
     ClampAttributes { min: f64, max: f64 }
@@ -749,11 +751,11 @@ attributes! {
     PixelShuffleAttributes { upscale_factor: usize }
     GroupNormAttributes { groups: usize, epsilon: f64 }
     EpsilonAttributes { epsilon: f64 }
-    DTypeAttributes { dtype: DTypeId }
+    DTypeAttributes { dtype: DTypeDescriptor }
     DeviceAttributes { device: DeviceId }
-    IndexReductionAttributes { axis: Option<usize>, dtype: DTypeId }
-    TopKAttributes { k: usize, axis: usize, largest: bool, index_dtype: DTypeId }
-    ArgsortAttributes { axis: usize, descending: bool, index_dtype: DTypeId }
+    IndexReductionAttributes { axis: Option<usize>, dtype: DTypeDescriptor }
+    TopKAttributes { k: usize, axis: usize, largest: bool, index_dtype: DTypeDescriptor }
+    ArgsortAttributes { axis: usize, descending: bool, index_dtype: DTypeDescriptor }
     NormAttributes { order: f64 }
     VarianceAttributes { unbiased: bool }
     AxisVarianceAttributes { axis: usize, unbiased: bool }
@@ -769,7 +771,7 @@ attributes! {
     DropoutAttributes { probability: f64, training: bool }
     RecurrentAttributes { input_size: usize, hidden_size: usize, bias_ih: bool, bias_hh: bool }
     LossAttributes { reduction: LossReduction }
-    QuantizationAttributes { dtype: DTypeId }
+    QuantizationAttributes { dtype: DTypeDescriptor }
     SgdAttributes { learning_rate: f64 }
     AdamAttributes { learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64, step: usize }
     AdamWAttributes { learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64, weight_decay: f64, step: usize }
@@ -823,7 +825,13 @@ pub struct Descriptor<O: CanonicalOperation> {
     marker: PhantomData<fn() -> O>,
 }
 
-impl<O: CanonicalOperation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {}
+impl<O: CanonicalOperation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
+    fn output_shape(&self) -> Option<&ShapeBuf> {
+        self.outputs
+            .first()
+            .and_then(|output| output.shape.as_ref())
+    }
+}
 
 impl<O: CanonicalOperation> Descriptor<O> {
     #[must_use]
@@ -1048,7 +1056,7 @@ pub trait AttributeContract {
     fn declared_shape(&self) -> Option<&[usize]> {
         None
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         None
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1144,9 +1152,9 @@ fn first_shape(inputs: &[LogicalTensorMeta]) -> Option<&[usize]> {
 fn validate_index_dtype(
     operation: OperationKind,
     attribute: &'static str,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
 ) -> Result<(), DescriptorError> {
-    if matches!(dtype, DTypeId::U8 | DTypeId::U32 | DTypeId::I64) {
+    if dtype.is_integer() {
         return Ok(());
     }
     Err(invalid(
@@ -1206,7 +1214,7 @@ impl AttributeContract for CreationAttributes {
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1224,7 +1232,7 @@ impl AttributeContract for FullAttributes {
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1250,7 +1258,7 @@ impl AttributeContract for ArangeAttributes {
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1276,7 +1284,7 @@ impl AttributeContract for LinspaceAttributes {
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1302,7 +1310,7 @@ impl AttributeContract for DistributionAttributes {
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn declared_device(&self) -> Option<DeviceId> {
@@ -1445,7 +1453,7 @@ impl AttributeContract for IndexReductionAttributes {
         }
         Ok(())
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
     fn axis(&self) -> Option<usize> {
@@ -2064,7 +2072,7 @@ impl AttributeContract for TopKAttributes {
         }
         Ok(())
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.index_dtype)
     }
     fn axis(&self) -> Option<usize> {
@@ -2086,7 +2094,7 @@ impl AttributeContract for ArgsortAttributes {
         AxisAttributes { axis: self.axis }.validate(operation, inputs)?;
         validate_index_dtype(operation, "index_dtype", self.index_dtype)
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.index_dtype)
     }
     fn axis(&self) -> Option<usize> {
@@ -2288,7 +2296,7 @@ impl AttributeContract for DTypeAttributes {
     fn validate(&self, _: OperationKind, _: &[LogicalTensorMeta]) -> Result<(), DescriptorError> {
         Ok(())
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
 }
@@ -2304,7 +2312,7 @@ impl AttributeContract for QuantizationAttributes {
     fn validate(&self, _: OperationKind, _: &[LogicalTensorMeta]) -> Result<(), DescriptorError> {
         Ok(())
     }
-    fn declared_dtype(&self) -> Option<DTypeId> {
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
         Some(self.dtype)
     }
 }
@@ -2321,26 +2329,20 @@ fn broadcast_shape(
     operation: OperationKind,
     shapes: &[&[usize]],
 ) -> Result<Vec<usize>, DescriptorError> {
-    let rank = shapes.iter().map(|shape| shape.len()).max().unwrap_or(0);
-    let mut output = vec![1; rank];
+    let mut output = ShapeBuf::scalar();
     for shape in shapes {
-        for (offset, &dim) in shape.iter().rev().enumerate() {
-            let axis = rank - 1 - offset;
-            let current = output[axis];
-            output[axis] = match (current, dim) {
-                (a, b) if a == b => a,
-                (1, b) => b,
-                (a, 1) => a,
-                _ => {
-                    return Err(invalid(
-                        operation,
-                        "shape",
-                        "input shapes are not broadcast-compatible",
-                    ));
-                }
-            };
-        }
+        let next = crate::shapes::broadcast::broadcast_dim_slices(output.as_ref(), shape).map_err(
+            |_| {
+                invalid(
+                    operation,
+                    "shape",
+                    "input shapes are not broadcast-compatible",
+                )
+            },
+        )?;
+        output = ShapeBuf::from_slice(&next);
     }
+    let output = output.as_ref().to_vec();
     validate_shape(operation, &output)?;
     Ok(output)
 }
@@ -2776,7 +2778,9 @@ fn inferred_shape<A: AttributeContract>(
     inputs: &[LogicalTensorMeta],
     output_index: usize,
 ) -> Result<Option<Option<Vec<usize>>>, DescriptorError> {
-    let first = inputs.first().and_then(|input| input.shape.clone());
+    let first = inputs
+        .first()
+        .and_then(|input| input.shape.as_ref().map(|shape| shape.as_ref().to_vec()));
     let inferred = match row.output {
         OutputRule::Created => Some(attributes.declared_shape().map(<[usize]>::to_vec)),
         OutputRule::Preserve | OutputRule::ExplicitDType => Some(first),
@@ -2848,7 +2852,9 @@ fn inferred_shape<A: AttributeContract>(
             ) {
                 match attributes.loss_reduction() {
                     Some(LossReduction::None) if operation == OperationKind::CrossEntropyLoss => {
-                        Some(inputs.get(1).and_then(|input| input.shape.clone()))
+                        Some(inputs.get(1).and_then(|input| {
+                            input.shape.as_ref().map(|shape| shape.as_ref().to_vec())
+                        }))
                     }
                     Some(LossReduction::None) => Some(Some(shape.to_vec())),
                     Some(LossReduction::Mean | LossReduction::Sum) => Some(Some(Vec::new())),
@@ -2898,7 +2904,11 @@ fn inferred_shape<A: AttributeContract>(
         }
         OutputRule::HostValue => Some(None),
         OutputRule::Indexing | OutputRule::TypedInference => match operation {
-            OperationKind::Gather => Some(inputs.get(1).and_then(|input| input.shape.clone())),
+            OperationKind::Gather => Some(
+                inputs
+                    .get(1)
+                    .and_then(|input| input.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
+            ),
             OperationKind::IndexSelect => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
@@ -3038,14 +3048,22 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
-            OperationKind::SgdStep => Some(inputs.first().and_then(|v| v.shape.clone())),
+            OperationKind::SgdStep => Some(
+                inputs
+                    .first()
+                    .and_then(|v| v.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
+            ),
             OperationKind::AdamStep | OperationKind::AdamWStep => {
                 let source = match output_index {
                     0 => 0,
                     1 => 2,
                     _ => 3,
                 };
-                Some(inputs.get(source).and_then(|v| v.shape.clone()))
+                Some(
+                    inputs
+                        .get(source)
+                        .and_then(|v| v.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
+                )
             }
             OperationKind::Quantize
             | OperationKind::Dequantize
@@ -3064,13 +3082,8 @@ fn verify_outputs<A: AttributeContract>(
     outputs: &[LogicalTensorMeta],
 ) -> Result<(), DescriptorError> {
     let first_dtype = inputs.first().and_then(|input| input.dtype);
-    let is_float = |dtype: DTypeId| {
-        matches!(
-            dtype,
-            DTypeId::BF16 | DTypeId::F16 | DTypeId::F32 | DTypeId::F64
-        )
-    };
-    let is_integer = |dtype: DTypeId| matches!(dtype, DTypeId::U8 | DTypeId::U32 | DTypeId::I64);
+    let is_float = |dtype: DTypeDescriptor| dtype.is_float();
+    let is_integer = |dtype: DTypeDescriptor| dtype.is_integer();
 
     if matches!(
         row.profile,
@@ -3173,7 +3186,7 @@ fn verify_outputs<A: AttributeContract>(
     match operation {
         OperationKind::Quantize => {
             if first_dtype.is_some_and(|dtype| !is_float(dtype))
-                || attributes.declared_dtype() != Some(DTypeId::Q8_0)
+                || attributes.declared_dtype() != Some(DTypeId::Q8_0.descriptor())
             {
                 return Err(invalid(
                     operation,
@@ -3183,7 +3196,7 @@ fn verify_outputs<A: AttributeContract>(
             }
         }
         OperationKind::Dequantize => {
-            if first_dtype.is_some_and(|dtype| dtype != DTypeId::Q8_0)
+            if first_dtype.is_some_and(|dtype| dtype != DTypeId::Q8_0.descriptor())
                 || attributes
                     .declared_dtype()
                     .is_some_and(|dtype| !is_float(dtype))
@@ -3199,12 +3212,51 @@ fn verify_outputs<A: AttributeContract>(
             if inputs
                 .iter()
                 .filter_map(|input| input.dtype)
-                .any(|dtype| dtype != DTypeId::Q8_0)
+                .any(|dtype| dtype != DTypeId::Q8_0.descriptor())
             {
                 return Err(invalid(
                     operation,
                     "dtype",
                     "quantized matmul requires q8_0 inputs",
+                ));
+            }
+        }
+        OperationKind::LogicalAnd | OperationKind::LogicalOr | OperationKind::LogicalNot => {
+            if inputs
+                .iter()
+                .filter_map(|input| input.dtype)
+                .any(|dtype| !dtype.is_bool())
+            {
+                return Err(invalid(
+                    operation,
+                    "dtype",
+                    "logical operations require boolean inputs",
+                ));
+            }
+        }
+        OperationKind::WhereCond => {
+            if inputs
+                .first()
+                .and_then(|input| input.dtype)
+                .is_some_and(|dtype| !dtype.is_bool())
+            {
+                return Err(invalid(
+                    operation,
+                    "mask dtype",
+                    "where_cond requires a boolean mask input",
+                ));
+            }
+        }
+        OperationKind::MaskedFill => {
+            if inputs
+                .get(1)
+                .and_then(|input| input.dtype)
+                .is_some_and(|dtype| !dtype.is_bool())
+            {
+                return Err(invalid(
+                    operation,
+                    "mask dtype",
+                    "masked_fill requires a boolean mask input",
                 ));
             }
         }
@@ -3230,7 +3282,7 @@ fn verify_outputs<A: AttributeContract>(
 
         match expected.shape {
             Some(expected_shape) => {
-                if output.shape != expected_shape {
+                if output.shape.as_deref() != expected_shape.as_deref() {
                     return Err(DescriptorError::MetadataMismatch {
                         operation,
                         output: index,
@@ -3269,7 +3321,7 @@ fn inputs_are_known(inputs: &[LogicalTensorMeta]) -> bool {
 /// output can never disagree with a verified one.
 struct ExpectedOutput {
     device: Option<DeviceId>,
-    dtype: Option<DTypeId>,
+    dtype: Option<DTypeDescriptor>,
     shape: Option<Option<Vec<usize>>>,
 }
 
@@ -3291,7 +3343,16 @@ fn expected_output<A: AttributeContract>(
             attributes.declared_dtype()
         }
         OperationKind::TopK => attributes.declared_dtype(),
-        OperationKind::QuantizedMatMul => Some(DTypeId::F32),
+        OperationKind::QuantizedMatMul => Some(DTypeId::F32.descriptor()),
+        OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr
+        | OperationKind::LogicalNot => Some(DTypeId::Bool.descriptor()),
         _ => attributes.declared_dtype().or(first_dtype),
     };
     Ok(ExpectedOutput {
@@ -3328,7 +3389,7 @@ fn infer_outputs<A: AttributeContract>(
             None => None,
         };
         outputs.push(LogicalTensorMeta {
-            shape,
+            shape: shape.map(|shape| ShapeBuf::from_slice(&shape)),
             dtype: expected.dtype,
             device: expected.device,
         });
@@ -3364,7 +3425,7 @@ fn operand_ranks(
         (Conv1dExact | Conv2dExact | ConvTranspose2d, 2) => exact(1),
         // The embedding table is always `[num_embeddings, dim]`; the indices
         // carry whatever batch geometry the caller addresses it with.
-        (EmbeddingExact, 0) => Some(1..=crate::prelude::MAX_RANK),
+        (EmbeddingExact, 0) => Some(1..=usize::MAX),
         (EmbeddingExact, 1) => exact(2),
         // Batch-norm affine parameters and running state are per-channel
         // vectors, never activations. `BatchNormAttributes::validate` already
@@ -3647,19 +3708,55 @@ impl<O: CanonicalOperation> ValidatedInvocation<O> {
 
     /// Validate an invocation whose outputs are derived rather than supplied.
     ///
-    /// The execution path uses this form. `validate` exists for a caller that
-    /// already holds output metadata and needs it checked; here there is no
-    /// such caller, so there is nothing to check against and nothing to forge.
-    pub(crate) fn infer(
+    /// Runtime inference path: infers output metadata with ProofLevel::Dynamic.
+    pub(crate) fn infer_runtime(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
-        proof: crate::exec::ProofLevel,
     ) -> Result<Self, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
         attributes.validate(O::ID, &inputs)?;
         let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
-        Self::validate(attributes, inputs, outputs, proof)
+        Self::validate(
+            attributes,
+            inputs,
+            outputs,
+            crate::exec::ProofLevel::Dynamic,
+        )
+    }
+
+    /// Typed inference path: infers output metadata, validates against the expected `ShapeValue<S>`,
+    /// and only attaches `S`-derived proof after geometry equality is proven.
+    pub(crate) fn infer_typed<S: crate::shapes::Shape>(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        expected: &crate::shapes::ShapeValue<S>,
+    ) -> Result<Self, DescriptorError> {
+        let row = catalog_entry(O::ID)
+            .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
+        attributes.validate(O::ID, &inputs)?;
+        let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
+
+        if outputs.len() != 1 {
+            return Err(DescriptorError::InvalidAttribute {
+                operation: O::ID,
+                attribute: "shape",
+                reason: "infer_typed with a single ShapeValue requires an operation with exactly one output",
+            });
+        }
+        let first_output = &outputs[0];
+        if let Some(inferred_shape) = &first_output.shape {
+            let expected_dims = expected.dims();
+            if inferred_shape != &expected_dims {
+                return Err(DescriptorError::InvalidAttribute {
+                    operation: O::ID,
+                    attribute: "shape",
+                    reason: "inferred output shape does not match expected typed shape",
+                });
+            }
+        }
+
+        Self::validate(attributes, inputs, outputs, expected.proof_level())
     }
 
     #[must_use]
@@ -3913,13 +4010,13 @@ mod tests {
     #[test]
     fn validation_rejects_wrong_arity_and_cross_device_inputs() {
         let cpu = LogicalTensorMeta {
-            shape: Some(vec![2]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let cuda = LogicalTensorMeta {
-            shape: Some(vec![2]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cuda(0)),
         };
         assert!(matches!(
@@ -3944,14 +4041,17 @@ mod tests {
 
     /// Helper for the per-operand rank tests: known shape, f32, CPU.
     fn meta(shape: &[usize]) -> LogicalTensorMeta {
-        typed_meta(shape, DTypeId::F32)
+        typed_meta(shape, DTypeId::F32.descriptor())
     }
 
     /// As [`meta`], for operands whose role fixes a non-float dtype.
-    fn typed_meta(shape: &[usize], dtype: DTypeId) -> LogicalTensorMeta {
+    fn typed_meta(
+        shape: &[usize],
+        dtype: impl crate::tensor::arg_into::ArgInto<DTypeDescriptor>,
+    ) -> LogicalTensorMeta {
         LogicalTensorMeta {
-            shape: Some(shape.to_vec()),
-            dtype: Some(dtype),
+            shape: Some(ShapeBuf::from_slice(shape)),
+            dtype: Some(dtype.into_arg()),
             device: Some(DeviceId::cpu()),
         }
     }
@@ -4264,10 +4364,10 @@ mod tests {
             ValidatedInvocation::<op::ArgMax>::validate(
                 IndexReductionAttributes {
                     axis: Some(1),
-                    dtype: DTypeId::F32,
+                    dtype: DTypeId::F32.descriptor(),
                 },
                 vec![meta(&[2, 3])],
-                vec![typed_meta(&[2], DTypeId::F32)],
+                vec![typed_meta(&[2], DTypeId::F32.descriptor())],
                 crate::exec::ProofLevel::Dynamic,
             ),
             Err(DescriptorError::InvalidAttribute {
@@ -4278,10 +4378,10 @@ mod tests {
         ValidatedInvocation::<op::ArgMax>::validate(
             IndexReductionAttributes {
                 axis: Some(1),
-                dtype: DTypeId::I64,
+                dtype: DTypeId::I64.descriptor(),
             },
             vec![meta(&[2, 3])],
-            vec![typed_meta(&[2], DTypeId::I64)],
+            vec![typed_meta(&[2], DTypeId::I64.descriptor())],
             crate::exec::ProofLevel::Dynamic,
         )
         .expect("an integer index dtype validates");
@@ -4291,10 +4391,10 @@ mod tests {
                 ArgsortAttributes {
                     axis: 0,
                     descending: false,
-                    index_dtype: DTypeId::F64,
+                    index_dtype: DTypeId::F64.descriptor(),
                 },
                 vec![meta(&[4])],
-                vec![typed_meta(&[4], DTypeId::F64)],
+                vec![typed_meta(&[4], DTypeId::F64.descriptor())],
                 crate::exec::ProofLevel::Dynamic,
             ),
             Err(DescriptorError::InvalidAttribute {
@@ -4314,10 +4414,10 @@ mod tests {
                 k: 2,
                 axis: 0,
                 largest: true,
-                index_dtype: DTypeId::I64,
+                index_dtype: DTypeId::I64.descriptor(),
             },
             vec![meta(&[4])],
-            vec![meta(&[2]), typed_meta(&[2], DTypeId::I64)],
+            vec![meta(&[2]), typed_meta(&[2], DTypeId::I64.descriptor())],
             crate::exec::ProofLevel::Dynamic,
         )
         .expect("values in the input dtype, indices in the index dtype");
@@ -4329,7 +4429,7 @@ mod tests {
                     k: 2,
                     axis: 0,
                     largest: true,
-                    index_dtype: DTypeId::I64,
+                    index_dtype: DTypeId::I64.descriptor(),
                 },
                 vec![meta(&[4])],
                 vec![meta(&[2]), meta(&[2])],
@@ -4432,27 +4532,43 @@ mod tests {
         .expect("std_keepdim collapses the reduced axis to one");
     }
 
-    /// A comparison returns a mask in the operand dtype, not a boolean tensor:
-    /// `DTypeId` has no boolean member. `DTypeRule::Preserve` records that
-    /// truthfully, and the output dtype must follow the input.
     #[test]
-    fn a_comparison_mask_keeps_the_operand_dtype() {
+    fn a_comparison_returns_boolean_dtype() {
         ValidatedInvocation::<op::CmpLt>::validate(
             NoAttributes,
             vec![meta(&[3]), meta(&[3])],
-            vec![meta(&[3])],
+            vec![typed_meta(&[3], DTypeId::Bool)],
             crate::exec::ProofLevel::Dynamic,
         )
-        .expect("the mask is encoded in the operand dtype");
+        .expect("comparison produces a boolean output");
 
         assert!(matches!(
             ValidatedInvocation::<op::CmpLt>::validate(
                 NoAttributes,
                 vec![meta(&[3]), meta(&[3])],
-                vec![typed_meta(&[3], DTypeId::U8)],
+                vec![typed_meta(&[3], DTypeId::F32)],
                 crate::exec::ProofLevel::Dynamic,
             ),
             Err(DescriptorError::MetadataMismatch { field: "dtype", .. })
+        ));
+    }
+
+    #[test]
+    fn logical_ops_require_boolean_inputs() {
+        assert!(matches!(
+            ValidatedInvocation::<op::LogicalAnd>::validate(
+                NoAttributes,
+                vec![
+                    typed_meta(&[3], DTypeId::F32),
+                    typed_meta(&[3], DTypeId::F32)
+                ],
+                vec![typed_meta(&[3], DTypeId::Bool)],
+                crate::exec::ProofLevel::Dynamic,
+            ),
+            Err(DescriptorError::InvalidAttribute {
+                attribute: "dtype",
+                ..
+            })
         ));
     }
 
@@ -4555,10 +4671,10 @@ mod tests {
             ValidatedInvocation::<op::ArgMax>::validate(
                 IndexReductionAttributes {
                     axis: None,
-                    dtype: DTypeId::I64,
+                    dtype: DTypeId::I64.descriptor(),
                 },
                 vec![meta(&[2, 3])],
-                vec![typed_meta(&[9, 9], DTypeId::I64)],
+                vec![typed_meta(&[9, 9], DTypeId::I64.descriptor())],
                 crate::exec::ProofLevel::Dynamic,
             ),
             Err(DescriptorError::MetadataMismatch { field: "shape", .. })
@@ -4569,13 +4685,13 @@ mod tests {
         // by the attributes, so it stays known and is still verified.
         let output = LogicalTensorMeta {
             shape: None,
-            dtype: Some(DTypeId::I64),
+            dtype: Some(DTypeId::I64.descriptor()),
             device: None,
         };
         let unknown = ValidatedInvocation::<op::ArgMax>::validate(
             IndexReductionAttributes {
                 axis: None,
-                dtype: DTypeId::I64,
+                dtype: DTypeId::I64.descriptor(),
             },
             vec![LogicalTensorMeta::unknown()],
             vec![output.clone()],
@@ -4628,18 +4744,18 @@ mod tests {
     #[test]
     fn attribute_bearing_descriptor_round_trips_without_storage() {
         let input = LogicalTensorMeta {
-            shape: Some(vec![1, 3, 8, 8]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[1, 3, 8, 8])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let weight = LogicalTensorMeta {
-            shape: Some(vec![4, 3, 3, 3]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[4, 3, 3, 3])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let output = LogicalTensorMeta {
-            shape: Some(vec![1, 4, 8, 8]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[1, 4, 8, 8])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let invocation = ValidatedInvocation::<op::Conv2dExact>::validate(
@@ -4679,8 +4795,8 @@ mod tests {
     #[test]
     fn typed_attributes_fail_before_storage_access() {
         let input = LogicalTensorMeta {
-            shape: Some(vec![2, 3]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, 3])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         assert!(matches!(
@@ -4727,21 +4843,61 @@ mod tests {
         ));
     }
 
+    /// The frontend's shape evidence has to survive `infer` and land on the
+    /// `Validated` a backend actually receives, or reading `Shape::PROOF` at
+    /// the typed surface buys nothing.
+    ///
+    /// `dispatch::execute` passes `ProofLevel::Dynamic` because it has no
+    /// `S` to read; `execute_with_evidence` passes what the typed surface
+    /// knows. This asserts at the layer where both funnel together that the
+    /// supplied value is the one that arrives, rather than being replaced by a
+    /// constant on the way through.
+    #[test]
+    fn frontend_shape_evidence_reaches_the_validated_descriptor() {
+        let created = CreationAttributes {
+            shape: vec![2, 3],
+            dtype: DTypeId::F32.descriptor(),
+            device: DeviceId::cpu(),
+        };
+        type Static23 = crate::shapes::DimCons<
+            typenum::U2,
+            crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
+        >;
+        let sv = crate::shapes::ShapeValue::<Static23>::new(
+            <Static23 as crate::shapes::Shape>::init(((), ((), ()))),
+        );
+        let proven = ValidatedInvocation::<op::Zeros>::infer_typed(created.clone(), vec![], &sv)
+            .expect("a static creation request is legal");
+        assert_eq!(
+            proven.validated().proof_level(),
+            crate::exec::ProofLevel::Static,
+        );
+
+        // The identical request with nothing known about it must not inherit
+        // the proof the previous one earned.
+        let erased = ValidatedInvocation::<op::Zeros>::infer_runtime(created, vec![])
+            .expect("a dynamic creation request is equally legal");
+        assert_eq!(
+            erased.validated().proof_level(),
+            crate::exec::ProofLevel::Dynamic,
+        );
+    }
+
     #[test]
     fn inferred_metadata_cannot_be_fabricated() {
         let lhs = LogicalTensorMeta {
-            shape: Some(vec![2, 1]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, 1])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let rhs = LogicalTensorMeta {
-            shape: Some(vec![1, 3]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[1, 3])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let wrong = LogicalTensorMeta {
-            shape: Some(vec![2, 1]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, 1])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         assert!(matches!(
@@ -4756,7 +4912,7 @@ mod tests {
 
         let created = CreationAttributes {
             shape: vec![2, 3],
-            dtype: DTypeId::F32,
+            dtype: DTypeId::F32.descriptor(),
             device: DeviceId::cpu(),
         };
         assert!(matches!(
@@ -4764,8 +4920,8 @@ mod tests {
                 created,
                 vec![],
                 vec![LogicalTensorMeta {
-                    shape: Some(vec![2, 3]),
-                    dtype: Some(DTypeId::I64),
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: Some(DTypeId::I64.descriptor()),
                     device: Some(DeviceId::cpu()),
                 }],
                 crate::exec::ProofLevel::Static,
@@ -4777,17 +4933,17 @@ mod tests {
     #[test]
     fn multi_output_shapes_and_counts_are_inferred_exactly() {
         let input = LogicalTensorMeta {
-            shape: Some(vec![2, 5]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, 5])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let topk_output = LogicalTensorMeta {
-            shape: Some(vec![2, 3]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, 3])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         let topk_indices = LogicalTensorMeta {
-            dtype: Some(DTypeId::I64),
+            dtype: Some(DTypeId::I64.descriptor()),
             ..topk_output.clone()
         };
         ValidatedInvocation::<op::TopK>::validate(
@@ -4795,7 +4951,7 @@ mod tests {
                 k: 3,
                 axis: 1,
                 largest: true,
-                index_dtype: DTypeId::I64,
+                index_dtype: DTypeId::I64.descriptor(),
             },
             vec![input.clone()],
             vec![topk_output, topk_indices],
@@ -4804,8 +4960,8 @@ mod tests {
         .unwrap();
 
         let output = |extent| LogicalTensorMeta {
-            shape: Some(vec![2, extent]),
-            dtype: Some(DTypeId::F32),
+            shape: Some(ShapeBuf::from_slice(&[2, extent])),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         ValidatedInvocation::<op::Chunk>::validate(
@@ -4828,9 +4984,9 @@ mod tests {
 
     #[test]
     fn recurrent_and_empty_reduction_contracts_are_storage_free() {
-        let tensor = |shape| LogicalTensorMeta {
-            shape: Some(shape),
-            dtype: Some(DTypeId::F32),
+        let tensor = |shape: Vec<usize>| LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&shape)),
+            dtype: Some(DTypeId::F32.descriptor()),
             device: Some(DeviceId::cpu()),
         };
         ValidatedInvocation::<op::Rnn>::validate(

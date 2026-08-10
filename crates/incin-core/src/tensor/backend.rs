@@ -1,11 +1,12 @@
 use crate::dist::placement::{Local, Placement};
 use crate::err::BackendError;
+use crate::exec::capability::Capabilities;
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{OperationSpec, TensorMeta, Validated};
-use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, convert_f64_to_i64};
+use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, ShapeBuf, convert_f64_to_i64};
 use crate::tensor::device::Device;
-use crate::tensor::dtype::{DType, FloatDType, QuantDType};
+use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// A backend-agnostic scalar, tagged by whether it originated as a float or
@@ -34,7 +35,7 @@ impl ScalarValue {
     pub fn to_i64(self, policy: FloatToIntPolicy) -> Result<i64> {
         match self {
             ScalarValue::Float(f) => {
-                convert_f64_to_i64("scalar_value_to_i64", DTypeId::F64, f, policy)
+                convert_f64_to_i64("scalar_value_to_i64", DTypeId::F64.descriptor(), f, policy)
             }
             ScalarValue::Int(i) => Ok(i),
         }
@@ -97,7 +98,18 @@ mod scalar_value_tests {
 
 /// Physical storage ownership, independent of operation execution.
 pub trait StorageBackend<P: Placement = Local>: Sized {
-    type Storage<K: DType>;
+    /// How this backend names itself when it refuses work.
+    ///
+    /// Required rather than defaulted. A capability refusal that cannot say
+    /// who refused is not actionable: "dtype F64 is unsupported for zeros"
+    /// leaves the reader to guess whether their device, their build features
+    /// or their dtype choice is the thing to change. Every refusal routed
+    /// through [`BackendError::Unsupported`] carries this, and there is no
+    /// default to fall back to precisely so that a new backend cannot ship
+    /// anonymous errors by omission.
+    const BACKEND_NAME: &'static str;
+
+    type Storage<K: DType>: Clone;
     type Device: Device;
 
     fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
@@ -121,57 +133,61 @@ where
 {
     type Output;
 
-    fn execute(
+    /// Run the invocation, told the frontend's shape type.
+    ///
+    /// `S` is the shape the caller held before the data existed, not a
+    /// description of the operands. It carries no values --- the extents still
+    /// arrive in the descriptor --- but it carries what the descriptor cannot:
+    /// [`Shape::PROOF`] and [`Shape::STATIC_NUMEL`] as constants. Runtime
+    /// dimensions are supplied by the canonical `ShapeBuf` metadata.
+    ///
+    /// Before this, a `Validated` descriptor carried a runtime
+    /// [`ProofLevel`](crate::exec::ProofLevel) saying the geometry *had been*
+    /// compile-time known, and an executor could do nothing with that: by the
+    /// time it ran, every extent was a `Vec<usize>`. Threading the type is what
+    /// makes "a backend may specialize on a constant extent" a statement about
+    /// this API rather than an aspiration.
+    ///
+    /// Most executors ignore `S` and are correct. Specializing on it is an
+    /// optimization, never a requirement, and an implementation that never
+    /// mentions `S` behaves exactly as it did.
+    ///
+    /// [`Shape::PROOF`]: crate::prelude::Shape::PROOF
+    fn execute_shaped<S: crate::prelude::Shape>(
         &self,
         request: ExecutionRequest<'_, O, Self>,
     ) -> core::result::Result<Self::Output, BackendError>;
+
+    /// [`execute_shaped`](Self::execute_shaped) for a caller holding no shape
+    /// type.
+    ///
+    /// Provided rather than required, and deliberately not the other way round.
+    /// A required `execute` with a defaulted `execute_shaped` would let a
+    /// backend implement only the erased form and silently never specialize,
+    /// which is the shape of default this crate has been bitten by before. Here
+    /// the shape-typed method is the one a backend must write, and this is the
+    /// `Dyn` instantiation of it.
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, O, Self>,
+    ) -> core::result::Result<Self::Output, BackendError> {
+        self.execute_shaped::<crate::prelude::Dyn>(request)
+    }
 }
 
 /// Resolves the dtype represented by `K` for a concrete runtime device.
 pub trait SupportsDType<K: DType> {
     /// Resolve and validate dtype metadata before storage is created.
-    fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeId>;
+    fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeDescriptor>;
 }
 
-/// The framework's single extension point: implement this (plus its
-/// operation sub-traits) to add a new compute backend.
+/// The framework's single extension point: implement this to add a new compute backend.
 ///
 /// `Tensor<S, B, K, G>` is generic over `B: Backend` and stores exactly one
-/// `B::Storage<K>` handle — every tensor operation ultimately dispatches to
-/// a method on this trait or one of the op sub-traits it requires
-/// (`NumericOps`, `FloatOps`, `CreationOps`, `ReductionOps`, `ModuleOps`,
-/// `LossOps`, `QuantizedOps`, `OptimizerOps`, `TensorOps`). Those sub-traits
-/// require every method: an operation a backend does not implement is declared
-/// where that backend is defined, so its coverage is readable without running
-/// it and cannot shrink silently.
+/// `B::Storage<K>` handle.
 pub trait Backend:
-    Sized
-    + Clone
-    + Send
-    + Sync
-    + 'static
-    + TensorOps<Self>
-    + NumericOps<Self>
-    + FloatOps<Self>
-    + CreationOps<Self>
-    + ReductionOps<Self>
-    + QuantizedOps<Self>
-    + OptimizerOps<Self>
-    + crate::tensor::backend::ModuleOps<Self>
-    + crate::tensor::backend::LossOps<Self>
+    StorageBackend + Capabilities + Default + Sized + Clone + Send + Sync + 'static
 {
-    /// The type-level device this backend runs on (`Cpu`, `Wgpu<N>`, `Cuda<N>`, `Dyn`, ...).
-    type Device: Device;
-    /// The floating-point element type this backend instance computes in.
-    type FloatElem: DType;
-    /// The integer element type this backend instance uses for indices
-    /// (embedding lookups, `argmax`/`argmin`, etc.).
-    type IntElem: DType;
-
-    /// The concrete, backend-native handle a `Tensor<_, Self, K>` wraps.
-    /// Every op takes and returns this type directly — there is no shared
-    /// storage representation across backends.
-    type Storage<K: DType>: Clone;
     /// Backend-native handle for a trainable variable (as opposed to a
     /// plain, non-owning tensor view).
     type RawVar: Clone;
@@ -184,21 +200,71 @@ pub trait Backend:
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
 
-    /// Returns the logical shape (dimension sizes) of a storage handle.
-    fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize>;
+    /// Returns the authoritative logical shape of a storage handle.
+    ///
+    /// Runtime dimensions cross the backend boundary as `ShapeBuf`, keeping
+    /// the framework's inline/heap representation and zero/overflow semantics
+    /// canonical. Backends may use any native representation internally.
+    fn shape<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> ShapeBuf;
     /// Returns the physical storage dtype when the backend can inspect it.
-    fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
+    fn storage_dtype<K: DType>(
+        _t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Option<DTypeDescriptor> {
         None
     }
     /// Returns the physical storage device when the backend can inspect it.
-    fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
+    fn storage_device<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Option<DeviceId> {
         None
     }
-    /// Renders a tensor's values for `Display` (concise, human-facing).
-    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
+    /// Renders a tensor's values for `Display` (concise, human-facing), the
+    /// PyTorch-style bracketed grid `Tensor`'s own `Display` wraps in
+    /// `tensor(...)` (`tensor/base.rs`).
+    ///
+    /// The default reads every element back through [`TensorOps::float_to_vec1`]
+    /// or [`TensorOps::int_to_vec1`] (chosen by [`storage_dtype`](Self::storage_dtype))
+    /// and hands them to the crate's own renderer, which stays private because
+    /// the grid format is not something a backend author gets to depend on. A
+    /// backend only needs to override this if reading every element back to the
+    /// host is not how it wants to support printing.
+    fn format_tensor_display<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> alloc::string::String
+    where
+        Self: TensorOps<Self>,
+    {
+        use crate::tensor::display::{Values, render};
+        let shape = Self::shape(t);
+        match Self::storage_dtype(t) {
+            None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
+            Some(dtype) if dtype.is_quantized() => alloc::format!(
+                "<{} tensor: shape={shape:?}, not printable without dequantizing>",
+                dtype.name()
+            ),
+            Some(dtype) if dtype.is_integer() => match Self::int_to_vec1(t) {
+                Ok(values) => render(&shape, &Values::Int(values)),
+                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
+            },
+            Some(_) => match Self::float_to_vec1(t) {
+                Ok(values) => render(&shape, &Values::Float(values)),
+                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
+            },
+        }
+    }
     /// Renders a tensor's values and metadata for `Debug` (verbose,
-    /// diagnostic-facing — shape/dtype/device alongside the data).
-    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
+    /// diagnostic-facing --- shape/dtype/device alongside the data).
+    ///
+    /// `Tensor`'s own `Debug` (`tensor/base.rs`) already prints shape,
+    /// placement and rank on its own line before calling this, so the
+    /// default here is exactly [`format_tensor_display`](Self::format_tensor_display) ---
+    /// the same value grid, not a second copy of the metadata.
+    fn format_tensor_debug<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> alloc::string::String
+    where
+        Self: TensorOps<Self>,
+    {
+        Self::format_tensor_display::<K>(t)
+    }
 
     /// Runs backpropagation from `t` through the backend's recorded tape,
     /// returning the resulting per-tensor gradients.
@@ -208,31 +274,31 @@ pub trait Backend:
     /// [`NanPolicy`](crate::exec::NanPolicy), an ambient execution-policy axis
     /// every backend's walk reads, rather than a second method that also
     /// decided to abort the process on failure.
-    fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
+    fn backward<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads>;
     /// Looks up the gradient computed for `t` in a `Grads` collection
     /// returned by `backward`. `None` if `t` received no gradient (e.g. it
     /// wasn't reachable from the tensor `backward` was called on).
     fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>>;
+    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>>;
 
     /// Serializes storage to a flat, dtype-native byte buffer (row-major,
-    /// no header) — the inverse of `from_bytes`.
-    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
+    /// no header) --- the inverse of `from_bytes`.
+    fn to_bytes<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
     /// Reconstructs storage from raw bytes produced by `to_bytes`,
     /// validating that `bytes.len()` matches `shape`/`dtype`'s expected size.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<Self::Storage<K>>;
+    ) -> Result<<Self as StorageBackend>::Storage<K>>;
 
     /// Views a trainable variable as a plain tensor storage handle.
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>>;
+    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<<Self as StorageBackend>::Storage<K>>;
     /// Promotes a plain tensor storage handle into a trainable variable.
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar>;
+    fn var_from_tensor<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::RawVar>;
     /// Overwrites a variable's value in place (e.g. an optimizer step),
     /// without changing its identity for gradient-tracking purposes.
     ///
@@ -240,7 +306,10 @@ pub trait Backend:
     /// returning `Err` guarantees that `var` still contains its exact prior
     /// bytes. Optimizers rely on that contract to roll back a multi-parameter
     /// commit when a later assignment fails.
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
+    fn assign_var<K: DType>(
+        var: &mut Self::RawVar,
+        tensor: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<()>;
 }
 
 /// Transfers storage and variables from one backend to a backend on `NewD`.
@@ -249,25 +318,26 @@ pub trait Backend:
 /// are compatible across backend families.
 pub trait TransferTo<NewD: Device>: Backend {
     /// Backend selected for the destination device.
-    type Output: Backend<Device = NewD, FloatElem = Self::FloatElem, IntElem = Self::IntElem>;
+    type Output: Backend<Device = NewD>;
 
     /// Transfers tensor storage while preserving shape and dtype.
     fn transfer_storage<K: DType>(
-        storage: &Self::Storage<K>,
+        storage: &<Self as StorageBackend>::Storage<K>,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as Backend>::Storage<K>>
+    ) -> Result<<Self::Output as StorageBackend>::Storage<K>>
     where
         Self::Output: SupportsDType<K>;
 
     /// Transfers a variable into destination-native variable storage.
-    fn transfer_var(
+    /// Generic over K so that non-f32 parameter dtypes are preserved.
+    fn transfer_var<K: DType>(
         variable: &Self::RawVar,
-        dtype: &<Self::FloatElem as DType>::Field,
+        dtype: &K::Field,
         device: &NewD::Field,
     ) -> Result<<Self::Output as Backend>::RawVar>
     where
-        Self::Output: SupportsDType<Self::FloatElem>;
+        Self::Output: SupportsDType<K>;
 }
 
 // FloatOps only requires Backend, operates on FloatTensorPrimitive
@@ -378,7 +448,7 @@ pub trait NumericOps<B: Backend> {
 }
 
 /// Shape, layout, and dtype manipulation that doesn't change element
-/// values (aside from `tensor_to_dtype`'s cast) — reshapes, views,
+/// values (aside from `tensor_to_dtype`'s cast) --- reshapes, views,
 /// concatenation, and host-readback conversions.
 pub trait TensorOps<B: Backend> {
     /// Reinterprets storage under a new `shape` with the same element count
@@ -421,9 +491,9 @@ pub trait TensorOps<B: Backend> {
         _start_dim: usize,
         _end_dim: usize,
     ) -> Result<B::Storage<K>>;
-    /// Selects elements from `on_true` where `mask` is true/non-zero, and `on_false` elsewhere.
-    fn where_cond<K: DType, KMask: DType>(
-        _mask: &B::Storage<KMask>,
+    /// Selects elements from `on_true` where `mask` is true, and `on_false` elsewhere.
+    fn where_cond<K: DType>(
+        _mask: &B::Storage<bool>,
         _on_true: &B::Storage<K>,
         _on_false: &B::Storage<K>,
     ) -> Result<B::Storage<K>>;
@@ -447,9 +517,9 @@ pub trait TensorOps<B: Backend> {
         _index: &B::Storage<KInt>,
     ) -> Result<B::Storage<K>>;
     /// Fills elements of `t` where `mask` is true with scalar `value`.
-    fn masked_fill<K: DType, KMask: DType>(
+    fn masked_fill<K: DType>(
         _t: &B::Storage<K>,
-        _mask: &B::Storage<KMask>,
+        _mask: &B::Storage<bool>,
         _value: f64,
     ) -> Result<B::Storage<K>>;
     /// Inserts a 1-sized dimension at `dim`.
@@ -473,24 +543,24 @@ pub trait TensorOps<B: Backend> {
     fn float_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<f64>;
 
     /// Element-wise equality (`self == rhs`).
-    fn cmp_eq<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_eq<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
     /// Element-wise inequality (`self != rhs`).
-    fn cmp_ne<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_ne<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
     /// Element-wise less-than (`self < rhs`).
-    fn cmp_lt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_lt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
     /// Element-wise less-than-or-equal (`self <= rhs`).
-    fn cmp_le<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_le<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
     /// Element-wise greater-than (`self > rhs`).
-    fn cmp_gt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_gt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
     /// Element-wise greater-than-or-equal (`self >= rhs`).
-    fn cmp_ge<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn cmp_ge<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<bool>>;
 
     /// Logical AND.
-    fn logical_and<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn logical_and(_lhs: &B::Storage<bool>, _rhs: &B::Storage<bool>) -> Result<B::Storage<bool>>;
     /// Logical OR.
-    fn logical_or<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn logical_or(_lhs: &B::Storage<bool>, _rhs: &B::Storage<bool>) -> Result<B::Storage<bool>>;
     /// Logical NOT.
-    fn logical_not<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>>;
+    fn logical_not(_t: &B::Storage<bool>) -> Result<B::Storage<bool>>;
 
     /// Subtract scalar (`self - scalar`).
     fn sub_scalar<K: DType>(_t: &B::Storage<K>, _val: f64) -> Result<B::Storage<K>>;
@@ -559,46 +629,74 @@ pub trait TensorOps<B: Backend> {
     fn int_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<i64>>;
 
     /// Casts storage from dtype `K` to dtype `K2`, converting element
-    /// values (not a bit-reinterpret — see `dtype` for the target's
+    /// values (not a bit-reinterpret --- see `dtype` for the target's
     /// `DTypeId`).
     fn tensor_to_dtype<K: DType, K2: DType>(
         _t: &B::Storage<K>,
-        _dtype: DTypeId,
+        _dtype: DTypeDescriptor,
     ) -> Result<B::Storage<K2>>;
 }
 
-/// Allocates fresh storage and trainable variables — the only place new
+/// Allocates fresh storage and trainable variables --- the only place new
 /// tensor data can originate from (every other op transforms existing
 /// storage).
 pub trait CreationOps<B: Backend> {
     /// Allocates a `shape`-sized tensor of `dtype`, filled with zero.
-    fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId)
-    -> Result<B::Storage<K>>;
+    fn zeros<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::Storage<K>>;
     /// Allocates a `shape`-sized tensor of `dtype`, filled with one.
-    fn ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<B::Storage<K>>;
+    fn ones<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::Storage<K>>;
     /// Allocates a `shape`-sized tensor of `dtype`, filled with samples
     /// from `Uniform(0, 1)`.
-    fn rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<B::Storage<K>>;
+    fn rand<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::Storage<K>>;
     /// Allocates a `shape`-sized tensor of `dtype`, filled with samples
     /// from the standard normal distribution `N(0, 1)`.
-    fn randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId)
-    -> Result<B::Storage<K>>;
+    fn randn<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::Storage<K>>;
 
     /// Same as `zeros`, but returns a trainable `RawVar` directly.
-    fn var_zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId)
-    -> Result<B::RawVar>;
+    fn var_zeros<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::RawVar>;
     /// Same as `ones`, but returns a trainable `RawVar` directly.
-    fn var_ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<B::RawVar>;
+    fn var_ones<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::RawVar>;
     /// Same as `rand`, but returns a trainable `RawVar` directly.
-    fn var_rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<B::RawVar>;
+    fn var_rand<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::RawVar>;
     /// Same as `randn`, but returns a trainable `RawVar` directly.
-    fn var_randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId)
-    -> Result<B::RawVar>;
+    fn var_randn<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<B::RawVar>;
     /// Allocates a `shape`-sized tensor filled with `val`.
     fn full<K: DType>(
         val: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<B::Storage<K>>;
     /// Allocates a 1D tensor with values from `start` with step `step`.
@@ -606,7 +704,7 @@ pub trait CreationOps<B: Backend> {
         start: f64,
         step: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<B::Storage<K>>;
     /// Allocates a 1D tensor of `shape` with linearly spaced values between `start` and `end`.
@@ -614,12 +712,12 @@ pub trait CreationOps<B: Backend> {
         start: f64,
         end: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<B::Storage<K>>;
 }
 
-/// Reductions that collapse a tensor along one or all dimensions —
+/// Reductions that collapse a tensor along one or all dimensions ---
 /// aggregate statistics (`sum`/`mean`/`max`/`min`) and index-producing
 /// selections (`argmax`/`argmin`/`topk`/`argsort`).
 pub trait ReductionOps<B: Backend> {
@@ -685,7 +783,7 @@ pub trait ReductionOps<B: Backend> {
 
 /// Neural-network layer primitives: normalization, embedding lookup,
 /// convolution, and pooling. Each takes plain storage (not `Param`/`Module`
-/// wrappers) — the `nn` layer types call through to these.
+/// wrappers) --- the `nn` layer types call through to these.
 pub trait ModuleOps<B: Backend> {
     /// Layer normalization over the last dimension: normalizes `t` to zero
     /// mean/unit variance (with `eps` added for numerical stability), then
@@ -737,7 +835,7 @@ pub trait ModuleOps<B: Backend> {
         dilation: usize,
         groups: usize,
     ) -> Result<B::Storage<K>>;
-    /// Transposed ("deconvolution") 2-D convolution — the gradient
+    /// Transposed ("deconvolution") 2-D convolution --- the gradient
     /// operation of `conv2d` used as a forward op for upsampling, with an
     /// extra `output_padding` to resolve the otherwise-ambiguous output size.
     fn conv_transpose2d<K: DType>(
@@ -780,7 +878,9 @@ pub trait ModuleOps<B: Backend> {
 /// `NumericOps`/`FloatOps`/`ReductionOps` so a backend implementing those
 /// gets working losses for free (override individually only for a
 /// backend-specific fused kernel).
-pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
+pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
+    NumericOps<B> + FloatOps<B> + ReductionOps<B>
+{
     /// Mean/sum/none-reduced squared error: `(pred - target)^2`.
     fn mse_loss<K: DType>(
         pred: &B::Storage<K>,
@@ -840,7 +940,7 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
     }
 
     /// Cross-entropy loss between raw `pred` logits (softmax applied
-    /// internally) and integer class-index `target`s — no default
+    /// internally) and integer class-index `target`s --- no default
     /// implementation, since it needs a numerically-stable fused
     /// log-softmax rather than composing `softmax` + `log` naively.
     fn cross_entropy_loss<K: DType, KInt: DType>(
@@ -856,7 +956,7 @@ pub trait QuantizedOps<B: Backend> {
     /// Compresses `t` from a float dtype into quantized storage `Q`.
     fn quantize<K: FloatDType, Q: QuantDType>(_t: &B::Storage<K>) -> Result<B::Storage<Q>>;
     /// Expands quantized storage `Q` back into a float dtype `K`
-    /// (lossy — the inverse of `quantize` only up to quantization error).
+    /// (lossy --- the inverse of `quantize` only up to quantization error).
     fn dequantize<Q: QuantDType, K: FloatDType>(_t: &B::Storage<Q>) -> Result<B::Storage<K>>;
     /// Matrix multiplication of two quantized-storage operands, producing
     /// `f32` output without needing to fully dequantize both operands first.
@@ -869,7 +969,7 @@ pub trait QuantizedOps<B: Backend> {
 /// In-place optimizer update rules, applied directly to a backend's
 /// `RawVar` (so the update can be fused/backend-native instead of composed
 /// from generic tensor ops where that matters for performance).
-pub trait OptimizerOps<B: Backend> {
+pub trait OptimizerOps<B: Backend + NumericOps<B> + FloatOps<B>> {
     /// One AdamW step (Adam with decoupled weight decay): updates `var`
     /// in place from `grad`, with `m`/`v` as the first/second moment
     /// running averages (bias-corrected internally using `step`, the
@@ -901,7 +1001,7 @@ pub trait OptimizerOps<B: Backend> {
 /// call the trait default it replaced. The CPU backend's `f32` fast path
 /// delegates here for every other dtype.
 #[allow(clippy::too_many_arguments)]
-pub fn adamw_step_composed<B: Backend, K: DType>(
+pub fn adamw_step_composed<B: Backend + NumericOps<B> + FloatOps<B>, K: DType>(
     var: &mut B::RawVar,
     grad: &B::Storage<K>,
     m: &mut B::Storage<K>,
@@ -959,14 +1059,31 @@ pub mod dummy {
     /// Test-only stand-in `Backend` used by `tensor/base.rs`'s unit tests to
     /// exercise `Tensor`'s generic-over-`Backend` machinery without pulling
     /// in a real compute backend. Its `Storage<K>` is literally the shape
-    /// (`Vec<usize>`) — every op below tracks how an operation would
+    /// (`Vec<usize>`) --- every op below tracks how an operation would
     /// transform the *shape*, using the same arithmetic real backends use,
     /// but performs no actual data computation and holds no element values.
-    pub struct DummyBackend<T, D> {
-        _marker: core::marker::PhantomData<(T, D)>,
+    ///
+    /// Dtype is not part of the backend's identity --- a single `DummyBackend<D>`
+    /// can hold f32, f64, i64, etc. tensors, all represented as shape-only `Vec<usize>`.
+    pub struct DummyBackend<D> {
+        _marker: core::marker::PhantomData<D>,
     }
 
-    impl<T: DType, D: Device + Clone + 'static> Clone for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> Default for DummyBackend<D> {
+        fn default() -> Self {
+            DummyBackend {
+                _marker: core::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<D: Device + Clone + 'static> Capabilities for DummyBackend<D> {
+        fn support(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
+            crate::exec::SupportLevel::Native
+        }
+    }
+
+    impl<D: Device + Clone + 'static> Clone for DummyBackend<D> {
         /// Cheap: the type carries no state beyond its `PhantomData` markers.
         fn clone(&self) -> Self {
             DummyBackend {
@@ -975,48 +1092,90 @@ pub mod dummy {
         }
     }
 
-    impl<T: DType, D: Device + Clone + 'static> Backend for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> StorageBackend for DummyBackend<D> {
+        const BACKEND_NAME: &'static str = "dummy";
         /// The device type this stand-in is parameterized over.
         type Device = D;
-        /// The float element type this stand-in is parameterized over.
-        type FloatElem = T;
-        /// Fixed to `i64`, matching every real backend's `IntElem`.
-        type IntElem = i64;
+        /// Shape-only storage: `Storage<K>` is the tensor's shape, not its
+        /// values, regardless of `K`.
+        type Storage<K: DType> = alloc::vec::Vec<usize>;
+
+        fn metadata<K: DType>(storage: &<Self as StorageBackend>::Storage<K>) -> &TensorMeta {
+            let shape_buf = crate::shapes::ShapeBuf::from_slice(storage);
+            let numel = shape_buf.numel().unwrap_or(0);
+            let dtype = K::descriptor(&K::Field::default());
+            alloc::boxed::Box::leak(alloc::boxed::Box::new(
+                TensorMeta::contiguous(
+                    shape_buf,
+                    dtype,
+                    DeviceId::cpu(),
+                    crate::exec::meta::Alignment::of::<f32>(),
+                    numel,
+                )
+                .expect("valid dummy metadata"),
+            ))
+        }
+    }
+
+    impl<D: Device + Clone + 'static, O: crate::exec::spec::ExecutionDescriptor> Execute<O>
+        for DummyBackend<D>
+    {
+        type Output = alloc::vec::Vec<usize>;
+
+        fn execute_shaped<S: crate::prelude::Shape>(
+            &self,
+            request: ExecutionRequest<'_, O, Self>,
+        ) -> core::result::Result<Self::Output, BackendError> {
+            if let Some(output) = request.operation.descriptor().output_shape() {
+                return Ok(output.dims().to_vec());
+            }
+            if let Some(input) = request.inputs.first() {
+                Ok(input.metadata().shape.dims().to_vec())
+            } else {
+                Ok(alloc::vec![])
+            }
+        }
+    }
+
+    impl<D: Device + Clone + 'static> Backend for DummyBackend<D> {
         /// A trainable variable is just its shape, like `Storage`.
         type RawVar = alloc::vec::Vec<usize>;
         /// No real gradients are tracked, so this carries no data.
         type Grads = ();
-        /// Shape-only storage: `Storage<K>` is the tensor's shape, not its
-        /// values, regardless of `K`.
-        type Storage<K: DType> = alloc::vec::Vec<usize>;
-        /// No dispatch wrapper — this stand-in is always its own inner backend.
+        /// No dispatch wrapper --- this stand-in is always its own inner backend.
         type InnerBackend = Self;
 
         /// Returns the shape, which is exactly what `Storage<K>` already is.
-        fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
-            t.clone()
+        fn shape<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> ShapeBuf {
+            ShapeBuf::from_slice(t)
         }
-        /// Always `"dummy"` — there are no real values to render.
-        fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
+        /// Always `"dummy"` --- there are no real values to render.
+        fn format_tensor_display<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
-        /// Always `"dummy"` — there are no real values to render.
-        fn format_tensor_debug<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
+        /// Always `"dummy"` --- there are no real values to render.
+        fn format_tensor_debug<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
         /// No-op: there is no tape to run backward through.
-        fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
+        fn backward<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
         /// Always `None`: `Grads` carries no data to look a gradient up in.
         fn get_grad<K: DType>(
-            _t: &Self::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _grads: &Self::Grads,
-        ) -> Result<Option<Self::Storage<K>>> {
+        ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
             Ok(None)
         }
         /// Always empty: there are no element values to serialize.
-        fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+        fn to_bytes<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
         /// Ignores `bytes` entirely and reconstructs storage from `shape`
@@ -1024,37 +1183,44 @@ pub mod dummy {
         fn from_bytes<K: DType>(
             _bytes: &[u8],
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// `RawVar` and `Storage<K>` are the same representation, so this
         /// is a plain clone.
-        fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        fn var_as_tensor<K: DType>(
+            var: &Self::RawVar,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(var.clone())
         }
         /// `RawVar` and `Storage<K>` are the same representation, so this
         /// is a plain clone.
-        fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        fn var_from_tensor<K: DType>(
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<Self::RawVar> {
             Ok(t.clone())
         }
         /// Overwrites `var`'s shape with `tensor`'s.
-        fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        fn assign_var<K: DType>(
+            var: &mut Self::RawVar,
+            tensor: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<()> {
             *var = tensor.clone();
             Ok(())
         }
     }
 
-    impl<T: DType, D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<T, D> {
-        fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeId> {
-            Ok(K::to_incin(field))
+    impl<D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<D> {
+        fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeDescriptor> {
+            Ok(K::descriptor(field))
         }
     }
 
     /// Output spatial size for conv/pool shape math:
     /// `(in + 2*pad - dilation*(kernel-1) - 1) / stride + 1`. Uses saturating
-    /// arithmetic throughout (never panics/wraps on pathological inputs —
+    /// arithmetic throughout (never panics/wraps on pathological inputs ---
     /// small `in` with a large `kernel`/`dilation`/`padding` would otherwise
     /// underflow the `usize` subtraction), matching the CPU backend's own
     /// `out_size` (`cpu/ops/pool.rs`), which already uses the same
@@ -1096,52 +1262,52 @@ pub mod dummy {
             .saturating_add(1)
     }
 
-    impl<T: DType, D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
-        for DummyBackend<T, D>
+    impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
+        for DummyBackend<D>
     {
-        type Output = DummyBackend<T, NewD>;
+        type Output = DummyBackend<NewD>;
 
         fn transfer_storage<K: DType>(
-            storage: &Self::Storage<K>,
+            storage: &<Self as StorageBackend>::Storage<K>,
             _dtype: &K::Field,
             _device: &NewD::Field,
-        ) -> Result<<Self::Output as Backend>::Storage<K>>
+        ) -> Result<<Self::Output as StorageBackend>::Storage<K>>
         where
             Self::Output: SupportsDType<K>,
         {
             Ok(storage.clone())
         }
 
-        fn transfer_var(
+        fn transfer_var<K: DType>(
             variable: &Self::RawVar,
-            _dtype: &<Self::FloatElem as DType>::Field,
+            _dtype: &K::Field,
             _device: &NewD::Field,
         ) -> Result<<Self::Output as Backend>::RawVar>
         where
-            Self::Output: SupportsDType<Self::FloatElem>,
+            Self::Output: SupportsDType<K>,
         {
             Ok(variable.clone())
         }
     }
 
     /// Shape is preserved by every allocation, since it's the only thing
-    /// `Storage`/`RawVar` track — no real fill value is ever written.
-    impl<T: DType, D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<T, D> {
+    /// `Storage`/`RawVar` track --- no real fill value is ever written.
+    impl<D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<D> {
         /// Returns `shape` verbatim as the storage handle.
         fn zeros<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
         fn full<K: DType>(
             _val: f64,
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
@@ -1149,9 +1315,9 @@ pub mod dummy {
             _start: f64,
             _step: f64,
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
@@ -1159,39 +1325,39 @@ pub mod dummy {
             _start: f64,
             _end: f64,
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
         fn ones<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
         fn rand<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the storage handle.
         fn randn<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
         fn var_zeros<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
@@ -1199,7 +1365,7 @@ pub mod dummy {
         /// Returns `shape` verbatim as the variable handle.
         fn var_ones<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
@@ -1207,7 +1373,7 @@ pub mod dummy {
         /// Returns `shape` verbatim as the variable handle.
         fn var_rand<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
@@ -1215,7 +1381,7 @@ pub mod dummy {
         /// Returns `shape` verbatim as the variable handle.
         fn var_randn<K: DType>(
             shape: &[usize],
-            _dtype: DTypeId,
+            _dtype: DTypeDescriptor,
             _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
@@ -1231,33 +1397,33 @@ pub mod dummy {
     /// stand-in whose shape arithmetic disagrees with every real backend's is
     /// not a stand-in, and this crate's own documented examples of
     /// `broadcast_add` were the first thing to run into it.
-    impl<T: DType, D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<D> {
         /// Returns the two operands' broadcast shape.
         fn add<K: DType>(
-            lhs: &<Self as Backend>::Storage<K>,
-            rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            lhs: &<Self as StorageBackend>::Storage<K>,
+            rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
         fn sub<K: DType>(
-            lhs: &<Self as Backend>::Storage<K>,
-            rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            lhs: &<Self as StorageBackend>::Storage<K>,
+            rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
         fn mul<K: DType>(
-            lhs: &<Self as Backend>::Storage<K>,
-            rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            lhs: &<Self as StorageBackend>::Storage<K>,
+            rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
         fn div<K: DType>(
-            lhs: &<Self as Backend>::Storage<K>,
-            rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            lhs: &<Self as StorageBackend>::Storage<K>,
+            rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
     }
@@ -1279,33 +1445,33 @@ pub mod dummy {
         ) => {
             $(
                 fn $unary<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    t: &<Self as StorageBackend>::Storage<K>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $exponent<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
+                    t: &<Self as StorageBackend>::Storage<K>,
                     _exponent: f64,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $bounds<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
+                    t: &<Self as StorageBackend>::Storage<K>,
                     _min: f64,
                     _max: f64,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $binary<K: DType>(
-                    lhs: &<Self as Backend>::Storage<K>,
-                    _rhs: &<Self as Backend>::Storage<K>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    lhs: &<Self as StorageBackend>::Storage<K>,
+                    _rhs: &<Self as StorageBackend>::Storage<K>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(lhs.clone())
                 }
             )*
@@ -1314,104 +1480,104 @@ pub mod dummy {
 
     /// Every activation and scalar op is shape-preserving, so each is a
     /// plain clone of the input shape.
-    impl<T: DType, D: Device + Clone + 'static> FloatOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> FloatOps<Self> for DummyBackend<D> {
         /// Returns `t`'s shape unchanged.
         fn add_scalar_float<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             _scalar: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn mul_scalar_float<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             _scalar: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn relu<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn step<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn mish<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn elu<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn gelu<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn abs<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn exp<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn neg<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn sqrt<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn log<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn tanh<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn sigmoid<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn swish<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged (`dim` is not validated).
         fn softmax<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
 
@@ -1427,44 +1593,44 @@ pub mod dummy {
 
     /// `_all` reductions collapse to an (empty) scalar shape; `_dim`
     /// reductions either remove `dim` or clamp it to size 1 (`_keepdim`),
-    /// exactly like a real reduction's shape effect — again with no real
+    /// exactly like a real reduction's shape effect --- again with no real
     /// values behind either result.
-    impl<T: DType, D: Device + Clone + 'static> ReductionOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> ReductionOps<Self> for DummyBackend<D> {
         /// Collapses to an empty (scalar) shape.
         fn sum_all<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
         fn mean_all<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
         fn max_all<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
         fn min_all<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
         fn prod_all<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Removes `dim` from the shape.
         fn prod_dim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s.remove(dim);
@@ -1473,16 +1639,16 @@ pub mod dummy {
         }
         /// A running sum along `dim` leaves the shape unchanged.
         fn cumsum<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Removes `dim` from the shape.
         fn sum_dim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s.remove(dim);
@@ -1491,9 +1657,9 @@ pub mod dummy {
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn sum_keepdim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s[dim] = 1;
@@ -1502,9 +1668,9 @@ pub mod dummy {
         }
         /// Removes `dim` from the shape.
         fn mean_dim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s.remove(dim);
@@ -1513,9 +1679,9 @@ pub mod dummy {
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn mean_keepdim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s[dim] = 1;
@@ -1524,9 +1690,9 @@ pub mod dummy {
         }
         /// Removes `dim` from the shape.
         fn max_dim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s.remove(dim);
@@ -1535,9 +1701,9 @@ pub mod dummy {
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn max_keepdim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s[dim] = 1;
@@ -1546,9 +1712,9 @@ pub mod dummy {
         }
         /// Removes `dim` from the shape.
         fn min_dim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s.remove(dim);
@@ -1557,47 +1723,47 @@ pub mod dummy {
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn min_keepdim<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut s = t.clone();
             if dim < s.len() {
                 s[dim] = 1;
             }
             Ok(s)
         }
-        /// Always an empty shape — no indices are actually computed.
+        /// Always an empty shape --- no indices are actually computed.
         fn argmax<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: Option<usize>,
-        ) -> Result<<Self as Backend>::Storage<KInt>> {
+        ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
-        /// Always an empty shape — no indices are actually computed.
+        /// Always an empty shape --- no indices are actually computed.
         fn argmin<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: Option<usize>,
-        ) -> Result<<Self as Backend>::Storage<KInt>> {
+        ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
         /// Always an empty `(values, indices)` pair.
         fn topk<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _k: usize,
             _dim: usize,
             _largest: bool,
         ) -> Result<(
-            <Self as Backend>::Storage<K>,
-            <Self as Backend>::Storage<KInt>,
+            <Self as StorageBackend>::Storage<K>,
+            <Self as StorageBackend>::Storage<KInt>,
         )> {
             Ok((alloc::vec![], alloc::vec![]))
         }
-        /// Always an empty shape — no indices are actually computed.
+        /// Always an empty shape --- no indices are actually computed.
         fn argsort<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _descending: bool,
-        ) -> Result<<Self as Backend>::Storage<KInt>> {
+        ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
     }
@@ -1614,32 +1780,32 @@ pub mod dummy {
         ) => {
             $(
                 fn $unary<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    t: &<Self as StorageBackend>::Storage<K>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $scalar<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
+                    t: &<Self as StorageBackend>::Storage<K>,
                     _val: f64,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $diagonal<K: DType>(
-                    t: &<Self as Backend>::Storage<K>,
+                    t: &<Self as StorageBackend>::Storage<K>,
                     _k: i64,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
                 fn $binary<K: DType>(
-                    lhs: &<Self as Backend>::Storage<K>,
-                    _rhs: &<Self as Backend>::Storage<K>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    lhs: &<Self as StorageBackend>::Storage<K>,
+                    _rhs: &<Self as StorageBackend>::Storage<K>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(lhs.clone())
                 }
             )*
@@ -1658,10 +1824,10 @@ pub mod dummy {
         ) => {
             $(
                 fn $indexed<K: DType, KInt: DType>(
-                    _t: &<Self as Backend>::Storage<K>,
+                    _t: &<Self as StorageBackend>::Storage<K>,
                     _dim: usize,
-                    _index: &<Self as Backend>::Storage<KInt>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    _index: &<Self as StorageBackend>::Storage<KInt>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Err(crate::err::Error::UnsupportedBackendOperation {
                         op: stringify!($indexed),
                         backend: core::any::type_name::<Self>(),
@@ -1670,9 +1836,9 @@ pub mod dummy {
             )*
             $(
                 fn $dim<K: DType>(
-                    _t: &<Self as Backend>::Storage<K>,
+                    _t: &<Self as StorageBackend>::Storage<K>,
                     _dim: usize,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Err(crate::err::Error::UnsupportedBackendOperation {
                         op: stringify!($dim),
                         backend: core::any::type_name::<Self>(),
@@ -1681,9 +1847,9 @@ pub mod dummy {
             )*
             $(
                 fn $binary<K: DType>(
-                    _lhs: &<Self as Backend>::Storage<K>,
-                    _rhs: &<Self as Backend>::Storage<K>,
-                ) -> Result<<Self as Backend>::Storage<K>> {
+                    _lhs: &<Self as StorageBackend>::Storage<K>,
+                    _rhs: &<Self as StorageBackend>::Storage<K>,
+                ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Err(crate::err::Error::UnsupportedBackendOperation {
                         op: stringify!($binary),
                         backend: core::any::type_name::<Self>(),
@@ -1695,15 +1861,66 @@ pub mod dummy {
 
     /// Each op tracks its real shape-transformation logic (matmul's last
     /// dim, transpose's swap, flatten's dimension collapse, etc.) since
-    /// shape *is* everything this stand-in's storage represents — but
+    /// shape *is* everything this stand-in's storage represents --- but
     /// still no element values exist behind any of it.
-    impl<T: DType, D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<D> {
         shape_preserving_tensor_ops! {
-            unary: logical_not;
+            unary: ;
             scalar: sub_scalar, div_scalar, instance_norm;
             diagonal: triu, tril;
-            binary: cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
-                    logical_and, logical_or, maximum, minimum, abs_diff;
+            binary: maximum, minimum, abs_diff;
+        }
+
+        fn cmp_eq<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn cmp_ne<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn cmp_lt<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn cmp_le<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn cmp_gt<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn cmp_ge<K: DType>(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn logical_and(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn logical_or(
+            lhs: &alloc::vec::Vec<usize>,
+            _rhs: &alloc::vec::Vec<usize>,
+        ) -> Result<alloc::vec::Vec<usize>> {
+            Ok(lhs.clone())
+        }
+        fn logical_not(t: &alloc::vec::Vec<usize>) -> Result<alloc::vec::Vec<usize>> {
+            Ok(t.clone())
         }
 
         unmodeled_tensor_ops! {
@@ -1713,46 +1930,46 @@ pub mod dummy {
         }
 
         /// Returns `on_true`'s shape, which is the branch the output takes.
-        fn where_cond<K: DType, KMask: DType>(
-            _mask: &<Self as Backend>::Storage<KMask>,
-            on_true: &<Self as Backend>::Storage<K>,
-            _on_false: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        fn where_cond<K: DType>(
+            _mask: &<Self as StorageBackend>::Storage<bool>,
+            on_true: &<Self as StorageBackend>::Storage<K>,
+            _on_false: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(on_true.clone())
         }
 
         /// Filling masked positions leaves the shape untouched.
-        fn masked_fill<K: DType, KMask: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _mask: &<Self as Backend>::Storage<KMask>,
+        fn masked_fill<K: DType>(
+            t: &<Self as StorageBackend>::Storage<K>,
+            _mask: &<Self as StorageBackend>::Storage<bool>,
             _value: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
 
         /// Interpolating between two tensors keeps `start`'s shape.
         fn lerp<K: DType>(
-            start: &<Self as Backend>::Storage<K>,
-            _end: &<Self as Backend>::Storage<K>,
+            start: &<Self as StorageBackend>::Storage<K>,
+            _end: &<Self as StorageBackend>::Storage<K>,
             _weight: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(start.clone())
         }
 
         /// Normalizing over groups leaves the shape untouched.
         fn group_norm<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             _groups: usize,
             _eps: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
 
         /// Not modeled: the output tiles each axis by its own factor.
         fn repeat<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _repeats: &[usize],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "repeat",
                 backend: core::any::type_name::<Self>(),
@@ -1761,10 +1978,10 @@ pub mod dummy {
 
         /// Not modeled: the output grows by the padding on each axis.
         fn pad<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _padding: &[(usize, usize)],
             _val: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "pad",
                 backend: core::any::type_name::<Self>(),
@@ -1774,9 +1991,9 @@ pub mod dummy {
         /// Not modeled: `diag` both extracts and constructs, changing rank
         /// in opposite directions depending on the input.
         fn diag<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _k: i64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "diag",
                 backend: core::any::type_name::<Self>(),
@@ -1786,11 +2003,11 @@ pub mod dummy {
         /// Not modeled: writes into a copy of the target, whose shape this
         /// stand-in would have to reconcile against the index and source.
         fn scatter<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-            _index: &<Self as Backend>::Storage<KInt>,
-            _src: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _index: &<Self as StorageBackend>::Storage<KInt>,
+            _src: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "scatter",
                 backend: core::any::type_name::<Self>(),
@@ -1800,12 +2017,12 @@ pub mod dummy {
         /// Not modeled: the fused product's shape follows `mat1 @ mat2`
         /// broadcast against `mat`.
         fn addmm<K: DType>(
-            _mat: &<Self as Backend>::Storage<K>,
-            _mat1: &<Self as Backend>::Storage<K>,
-            _mat2: &<Self as Backend>::Storage<K>,
+            _mat: &<Self as StorageBackend>::Storage<K>,
+            _mat1: &<Self as StorageBackend>::Storage<K>,
+            _mat2: &<Self as StorageBackend>::Storage<K>,
             _beta: f64,
             _alpha: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "addmm",
                 backend: core::any::type_name::<Self>(),
@@ -1814,12 +2031,12 @@ pub mod dummy {
 
         /// Not modeled: the output takes its trailing axis from `v`, not `q`.
         fn scaled_dot_product_attention<K: DType>(
-            _q: &<Self as Backend>::Storage<K>,
-            _k: &<Self as Backend>::Storage<K>,
-            _v: &<Self as Backend>::Storage<K>,
-            _mask: Option<&<Self as Backend>::Storage<K>>,
+            _q: &<Self as StorageBackend>::Storage<K>,
+            _k: &<Self as StorageBackend>::Storage<K>,
+            _v: &<Self as StorageBackend>::Storage<K>,
+            _mask: Option<&<Self as StorageBackend>::Storage<K>>,
             _scale: Option<f64>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "scaled_dot_product_attention",
                 backend: core::any::type_name::<Self>(),
@@ -1828,11 +2045,11 @@ pub mod dummy {
 
         /// Not modeled: sliding windows replace one axis with two.
         fn unfold<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _size: usize,
             _step: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err(crate::err::Error::UnsupportedBackendOperation {
                 op: "unfold",
                 backend: core::any::type_name::<Self>(),
@@ -1842,9 +2059,9 @@ pub mod dummy {
         /// Broadcasts leading batch axes and applies the trailing matrix
         /// contraction, mirroring real matmul's output shape.
         fn matmul<K: DType>(
-            lhs: &<Self as Backend>::Storage<K>,
-            rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            lhs: &<Self as StorageBackend>::Storage<K>,
+            rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             if lhs.len() < 2 || rhs.len() < 2 || lhs[lhs.len() - 1] != rhs[rhs.len() - 2] {
                 return Err(crate::err::Error::ShapeMismatch {
                     op: "matmul",
@@ -1881,23 +2098,23 @@ pub mod dummy {
             out.extend_from_slice(&[lhs[lhs.len() - 2], rhs[rhs.len() - 1]]);
             Ok(out)
         }
-        /// Always `0.0` — there is no real element value to read.
-        fn float_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+        /// Always `0.0` --- there is no real element value to read.
+        fn float_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
             Ok(0.0)
         }
-        /// Always a single `0.0` — there are no real element values to read.
+        /// Always a single `0.0` --- there are no real element values to read.
         fn float_to_vec1<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<f64>> {
             Ok(alloc::vec![0.0])
         }
-        /// Always `0` — there is no real element value to read.
-        fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        /// Always `0` --- there is no real element value to read.
+        fn int_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
             Ok(0)
         }
-        /// Always a single `0` — there are no real element values to read.
+        /// Always a single `0` --- there are no real element values to read.
         fn int_to_vec1<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<i64>> {
             Ok(alloc::vec![0])
         }
@@ -1905,16 +2122,16 @@ pub mod dummy {
         /// Returns the target `shape` verbatim (broadcast compatibility is
         /// not validated).
         fn broadcast_as<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(s.to_vec())
         }
         /// Prepends the target `shape`'s dimensions ahead of `t`'s own.
         fn broadcast_left<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = s.to_vec();
             out.extend_from_slice(t);
             Ok(out)
@@ -1922,17 +2139,17 @@ pub mod dummy {
         /// Returns the target `shape` verbatim (numel compatibility is not
         /// validated).
         fn reshape<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(s.to_vec())
         }
         /// Swaps dimensions `d1`/`d2` in the shape.
         fn transpose<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             d1: usize,
             d2: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             if d1 < out.len() && d2 < out.len() {
                 out.swap(d1, d2);
@@ -1941,10 +2158,10 @@ pub mod dummy {
         }
         /// Collapses dimensions `[s, e]` into their product.
         fn flatten<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             s: usize,
             e: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             if s > e || e >= t.len() {
                 return Ok(t.clone());
             }
@@ -1958,9 +2175,9 @@ pub mod dummy {
         }
         /// Sets each dimension's size to its `(start, end)` window length.
         fn slice<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             ranges: &[(usize, usize)],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             for (dim, &(start, end)) in ranges.iter().enumerate() {
                 if dim < out.len() {
@@ -1971,11 +2188,11 @@ pub mod dummy {
         }
         /// Sets dimension `d`'s size to the requested window length `l`.
         fn narrow<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             d: usize,
             _s: usize,
             l: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             if d < out.len() {
                 out[d] = l;
@@ -1984,9 +2201,9 @@ pub mod dummy {
         }
         /// Removes dimension `d` from the shape.
         fn squeeze<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             d: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             if d < out.len() {
                 out.remove(d);
@@ -1996,9 +2213,9 @@ pub mod dummy {
         /// Inserts a new dimension at `d`, sized to the number of stacked
         /// tensors.
         fn stack<K: DType>(
-            t: &[&<Self as Backend>::Storage<K>],
+            t: &[&<Self as StorageBackend>::Storage<K>],
             d: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             if t.is_empty() {
                 return Ok(alloc::vec![]);
             }
@@ -2011,9 +2228,9 @@ pub mod dummy {
         /// Sets dimension `d`'s size to the sum of every input's size
         /// along `d`.
         fn concat<K: DType>(
-            t: &[&<Self as Backend>::Storage<K>],
+            t: &[&<Self as StorageBackend>::Storage<K>],
             d: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             if t.is_empty() {
                 return Ok(alloc::vec![]);
             }
@@ -2023,11 +2240,11 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Returns `t`'s shape unchanged — no element values exist to cast.
+        /// Returns `t`'s shape unchanged --- no element values exist to cast.
         fn tensor_to_dtype<K: DType, K2: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _dtype: DTypeId,
-        ) -> Result<<Self as Backend>::Storage<K2>> {
+            t: &<Self as StorageBackend>::Storage<K>,
+            _dtype: DTypeDescriptor,
+        ) -> Result<<Self as StorageBackend>::Storage<K2>> {
             Ok(t.clone())
         }
     }
@@ -2036,46 +2253,46 @@ pub mod dummy {
     /// compute their real output spatial size via `conv_out_size`/
     /// `conv_transpose_out_size` (the saturating helpers above) so tests
     /// can assert on shape correctness even though no data is computed.
-    impl<T: DType, D: Device + Clone + 'static> ModuleOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> ModuleOps<Self> for DummyBackend<D> {
         /// Returns `t`'s shape unchanged.
         fn layer_norm<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _w: &<Self as Backend>::Storage<K>,
-            _b: Option<&<Self as Backend>::Storage<K>>,
+            t: &<Self as StorageBackend>::Storage<K>,
+            _w: &<Self as StorageBackend>::Storage<K>,
+            _b: Option<&<Self as StorageBackend>::Storage<K>>,
             _e: f32,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
         fn batch_norm<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _w: Option<&<Self as Backend>::Storage<K>>,
-            _b: Option<&<Self as Backend>::Storage<K>>,
-            _rm: Option<&<Self as Backend>::Storage<K>>,
-            _rv: Option<&<Self as Backend>::Storage<K>>,
+            t: &<Self as StorageBackend>::Storage<K>,
+            _w: Option<&<Self as StorageBackend>::Storage<K>>,
+            _b: Option<&<Self as StorageBackend>::Storage<K>>,
+            _rm: Option<&<Self as StorageBackend>::Storage<K>>,
+            _rv: Option<&<Self as StorageBackend>::Storage<K>>,
             _e: f32,
             _m: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Always an empty shape — no real gather is performed.
+        /// Always an empty shape --- no real gather is performed.
         fn embedding<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<KInt>,
-            _w: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<KInt>,
+            _w: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Computes the real output shape: channel dim from `w[0]`, spatial
         /// dim via `conv_out_size`.
         fn conv1d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            w: &<Self as Backend>::Storage<K>,
-            _b: Option<&<Self as Backend>::Storage<K>>,
+            t: &<Self as StorageBackend>::Storage<K>,
+            w: &<Self as StorageBackend>::Storage<K>,
+            _b: Option<&<Self as StorageBackend>::Storage<K>>,
             s: usize,
             p: usize,
             d: usize,
             _groups: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             let len = out.len();
             if len >= 3 && w.len() >= 3 {
@@ -2090,14 +2307,14 @@ pub mod dummy {
         /// Computes the real output shape: channel dim from `w[0]`, spatial
         /// dims via `conv_out_size`.
         fn conv2d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            w: &<Self as Backend>::Storage<K>,
-            _b: Option<&<Self as Backend>::Storage<K>>,
+            t: &<Self as StorageBackend>::Storage<K>,
+            w: &<Self as StorageBackend>::Storage<K>,
+            _b: Option<&<Self as StorageBackend>::Storage<K>>,
             s: usize,
             p: usize,
             d: usize,
             _groups: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             let len = out.len();
             if len >= 4 && w.len() >= 4 {
@@ -2116,15 +2333,15 @@ pub mod dummy {
         /// (transposed conv's weight layout), spatial dims via
         /// `conv_transpose_out_size`.
         fn conv_transpose2d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            w: &<Self as Backend>::Storage<K>,
-            _b: Option<&<Self as Backend>::Storage<K>>,
+            t: &<Self as StorageBackend>::Storage<K>,
+            w: &<Self as StorageBackend>::Storage<K>,
+            _b: Option<&<Self as StorageBackend>::Storage<K>>,
             s: usize,
             p: usize,
             op: usize,
             d: usize,
             _groups: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             let len = out.len();
             if len >= 4 && w.len() >= 4 {
@@ -2141,12 +2358,12 @@ pub mod dummy {
         }
         /// Computes the real output spatial shape via `conv_out_size`.
         fn max_pool2d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             k: (usize, usize),
             s: (usize, usize),
             p: (usize, usize),
             d: (usize, usize),
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             let len = out.len();
             if len >= 2 {
@@ -2161,11 +2378,11 @@ pub mod dummy {
         /// (dilation fixed to 1, matching `avg_pool2d` having no dilation
         /// parameter).
         fn avg_pool2d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             k: (usize, usize),
             s: (usize, usize),
             p: (usize, usize),
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut out = t.clone();
             let len = out.len();
             if len >= 2 {
@@ -2180,9 +2397,9 @@ pub mod dummy {
         /// pooling's whole point is that the output size is exact,
         /// regardless of input size).
         fn adaptive_avg_pool2d<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
+            t: &<Self as StorageBackend>::Storage<K>,
             out: (usize, usize),
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             let mut shape = t.clone();
             let len = shape.len();
             if len >= 2 {
@@ -2196,63 +2413,63 @@ pub mod dummy {
     /// All four losses reduce to an empty (scalar) shape, ignoring
     /// `reduction`'s actual `None`/`Sum`/`Mean` distinction since there are
     /// no real values to reduce.
-    impl<T: DType, D: Device + Clone + 'static> LossOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> LossOps<Self> for DummyBackend<D> {
         /// Always an empty (scalar) shape.
         fn mse_loss<K: DType>(
-            _pred: &<Self as Backend>::Storage<K>,
-            _target: &<Self as Backend>::Storage<K>,
+            _pred: &<Self as StorageBackend>::Storage<K>,
+            _target: &<Self as StorageBackend>::Storage<K>,
             _r: Reduction,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Always an empty (scalar) shape.
         fn l1_loss<K: DType>(
-            _pred: &<Self as Backend>::Storage<K>,
-            _target: &<Self as Backend>::Storage<K>,
+            _pred: &<Self as StorageBackend>::Storage<K>,
+            _target: &<Self as StorageBackend>::Storage<K>,
             _r: Reduction,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Always an empty (scalar) shape.
         fn bce_with_logits_loss<K: DType>(
-            _pred: &<Self as Backend>::Storage<K>,
-            _target: &<Self as Backend>::Storage<K>,
+            _pred: &<Self as StorageBackend>::Storage<K>,
+            _target: &<Self as StorageBackend>::Storage<K>,
             _r: Reduction,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Always an empty (scalar) shape.
         fn cross_entropy_loss<K: DType, KInt: DType>(
-            _pred: &<Self as Backend>::Storage<K>,
-            _target: &<Self as Backend>::Storage<KInt>,
+            _pred: &<Self as StorageBackend>::Storage<K>,
+            _target: &<Self as StorageBackend>::Storage<KInt>,
             _r: Reduction,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
     }
 
-    /// All quantization ops are no-ops returning an empty shape — there is
+    /// All quantization ops are no-ops returning an empty shape --- there is
     /// no real data to (de)quantize.
-    impl<T: DType, D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<T, D> {
+    impl<D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<D> {
         /// Always an empty shape.
         fn quantize<K: FloatDType, Q: QuantDType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<Q>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<Q>> {
             Ok(alloc::vec![])
         }
         /// Always an empty shape.
         fn dequantize<Q: QuantDType, K: FloatDType>(
-            _t: &<Self as Backend>::Storage<Q>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<Q>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Always an empty shape.
         fn quantized_matmul<Q: QuantDType>(
-            _lhs: &<Self as Backend>::Storage<Q>,
-            _rhs: &<Self as Backend>::Storage<Q>,
-        ) -> Result<<Self as Backend>::Storage<f32>> {
+            _lhs: &<Self as StorageBackend>::Storage<Q>,
+            _rhs: &<Self as StorageBackend>::Storage<Q>,
+        ) -> Result<<Self as StorageBackend>::Storage<f32>> {
             Ok(alloc::vec![])
         }
     }
-    impl<T: DType, D: Device + Clone + 'static> OptimizerOps<Self> for DummyBackend<T, D> {}
+    impl<D: Device + Clone + 'static> OptimizerOps<Self> for DummyBackend<D> {}
 }

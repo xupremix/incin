@@ -92,7 +92,7 @@ impl<Tag: crate::shapes::AxisTag, Extent: Dim> StaticOrNamedDim
 /// records for broadcasting and which applies identically to the matmul
 /// contraction. For a `usize` axis nothing is proven at all.
 ///
-/// Before `SHP-004` no impl checked this — `output_shape` took `lhs.0` and
+/// Before `SHP-004` no impl checked this --- `output_shape` took `lhs.0` and
 /// `rhs.1` and never looked at `K`, so a disagreement produced a confidently
 /// wrong output shape rather than an error.
 #[inline]
@@ -143,7 +143,7 @@ fn checked_batch(axis: usize, lhs: usize, rhs: usize) -> core::result::Result<()
 ///
 /// Before `SHP-007` the five rank-2 impls each required `K` to be the identical
 /// type on both sides, so `(U2, usize)` could not be multiplied by
-/// `(usize, U4)` at all — a contraction nobody can settle statically had no
+/// `(usize, U4)` at all --- a contraction nobody can settle statically had no
 /// rule, rather than a runtime one.
 ///
 /// The impls are disjoint for the same reason [`BroadcastDim`] is: no
@@ -243,7 +243,7 @@ where
 }
 
 // ============================================================================
-// Fully dynamic: Dyn × Dyn → Dyn
+// Fully dynamic: Dyn × Dyn - Dyn
 // ============================================================================
 impl MatMulShape<Dyn> for Dyn {
     /// The resulting shape after multiplying `Self` by `Rhs`.
@@ -353,8 +353,11 @@ impl<
     ) -> Result<Tensor<(), B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
-        B: Execute<Descriptor<op::Mul>>,
+        B: Execute<Descriptor<op::Mul>>
+            + Execute<Descriptor<op::SumAll>>
+            + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
     {
         <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let mul = self.mul(rhs)?;
