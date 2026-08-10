@@ -1,15 +1,20 @@
 //! Backend training demo: trains a small CNN classifier
 //! (conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear) end-to-end
 //! (forward -> cross_entropy_loss -> backward -> optimizer step) for multiple
-//! epochs on `CpuBackendImpl<f32, Cpu>`.
+//! epochs on `CpuBackendImpl<Cpu>`.
 
 #[macro_use]
 extern crate alloc;
 
-use incin::backend_authoring::SupportsDType;
+use incin::backend_authoring::{
+    CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, ReductionOps,
+    SupportsDType, TensorOps,
+};
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
+use incin_core::exec::catalog::{Descriptor, op};
+use incin_core::tensor::backend::Execute;
 
 /// The CPU backend type alias.
 type NB = CpuBackendImpl;
@@ -26,10 +31,17 @@ pub struct SimpleCnn<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<B: Backend> SimpleCnn<B>
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>,
+> SimpleCnn<B>
 where
-    B: SupportsDType<B::FloatElem> + SupportsDType<u32>,
-    B::FloatElem: ConstDType<Elem = f32>,
+    B: SupportsDType<f32> + SupportsDType<u32>,
     B::Device: ConstDevice,
 {
     pub fn new(
@@ -51,7 +63,23 @@ where
     }
 }
 
-impl<B: Backend> SimpleCnn<B> {
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>
+        + incin_core::tensor::backend::Execute<Descriptor<op::MatMulExact>>
+        + Execute<Descriptor<op::Add>>
+        + Execute<Descriptor<op::Relu>>,
+> SimpleCnn<B>
+where
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
+{
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
@@ -105,9 +133,24 @@ fn train<B>(
     lr: f64,
 ) -> (Vec<f32>, std::time::Duration)
 where
-    B: Backend + SupportsDType<B::FloatElem> + SupportsDType<u32>,
-    B::FloatElem: ConstDType<Elem = f32>,
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>
+        + LossOps<B>
+        + OptimizerOps<B>
+        + SupportsDType<f32>
+        + SupportsDType<u32>
+        + Execute<Descriptor<op::MatMulExact>>
+        + Execute<Descriptor<op::Add>>
+        + Execute<Descriptor<op::Relu>>,
     B::Device: ConstDevice,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
 {
     let in_channels = 1;
     let conv_out_channels = 4;

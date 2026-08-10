@@ -4,10 +4,17 @@
 //! or dimensionless tensor) as well as along specific axes. It supports both static type-level
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
-use crate::exec::GradMode;
+use crate::dist::{Local, Placement};
+use crate::exec::catalog::{Descriptor, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::request::TensorHandle;
+use crate::exec::{GradMode, ReduceAtRule, ReduceKeepAtRule, ReductionSpec, ShapeRule, Validated};
 use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
+use crate::shapes::idx::StaticCursor;
+use crate::shapes::shape::shape_buf_from_dims;
+use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
+use crate::tensor::backend::{Execute, FloatOps, NumericOps, ReductionOps, TensorOps};
 
 macro_rules! impl_reduction_op {
     (
@@ -19,7 +26,7 @@ macro_rules! impl_reduction_op {
             let inner = self.under_grad_mode(|| B::$backend_method(&self.inner))?;
             Tensor::from_parts(
                 inner,
-                (), // Scalar shape field
+                crate::shapes::ShapeBuf::scalar(), // Scalar shape buffer
                 self._dtype,
                 self._device,
                 self._grad,
@@ -28,46 +35,209 @@ macro_rules! impl_reduction_op {
     };
 }
 
-macro_rules! impl_reduction_dim_op {
-    (
-        $(#[$meta:meta])*
-        $method:ident, $backend_method:ident, $trait_bound:ident, $keep_dim:expr
-    ) => {
-        $(#[$meta])*
-        pub fn $method<const DIM: usize>(&self) -> Result<Tensor<S::Output, B, K, G>>
-        where
-            S: DynShape + crate::shapes::$trait_bound<DIM>,
-        {
-            let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, DIM))?;
+impl<
+    S: Shape,
+    B: Backend + ReductionOps<B> + FloatOps<B> + NumericOps<B> + TensorOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+> Tensor<S, B, K, G, P>
+{
+    /// Sums over a compile-time structural axis cursor.
+    pub fn sum<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
+    where
+        C: StaticCursor,
+        S: DynShape + ReduceAt<C>,
+        <S as ReduceAt<C>>::Output: DynShape,
+        B: Execute<Descriptor<op::SumDim>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
+    {
+        let validated = <ReduceAtRule<C> as ShapeRule<S>>::lower(
+            &self.shape_buf_value(),
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
+        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(self.shape_buf().len())?
+            .into_iter()
+            .next()
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: C::INDEX.unsigned_abs(),
+                    rank: self.shape_buf().len(),
+                },
+            ))?;
+        let output_shape = crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(
+            validated.descriptor().output.clone(),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<op::SumDim, B, <S as ReduceAt<C>>::Output>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::<<S as ReduceAt<C>>::Output, B, K, G, P>::from_shape_buf_placed(
+            inner,
+            output_shape.shape_buf().clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+            self._placement.clone(),
+        )
+    }
 
-            // We just use from_dyn to construct the resulting shape field dynamically,
-            // since we know it's a dimensional reduction.
-            let mut out_dims = S::dims(&self._shape).into();
-            if $keep_dim {
-                out_dims[DIM] = 1;
-            } else {
-                out_dims.remove(DIM);
-            }
+    /// Sums over a compile-time structural axis cursor while retaining it.
+    pub fn sum_keepdim<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
+    where
+        C: StaticCursor,
+        S: DynShape + ReduceKeepAt<C>,
+        <S as ReduceKeepAt<C>>::Output: DynShape,
+        B: Execute<Descriptor<op::SumKeepDim>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
+    {
+        let validated = <ReduceKeepAtRule<C> as ShapeRule<S>>::lower(
+            &self.shape_buf_value(),
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
+        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(self.shape_buf().len())?
+            .into_iter()
+            .next()
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: C::INDEX.unsigned_abs(),
+                    rank: self.shape_buf().len(),
+                },
+            ))?;
+        let output_shape = crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(
+            validated.descriptor().output.clone(),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<
+                    op::SumKeepDim,
+                    B,
+                    <S as ReduceKeepAt<C>>::Output,
+                >(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::<<S as ReduceKeepAt<C>>::Output, B, K, G, P>::from_shape_buf_placed(
+            inner,
+            output_shape.shape_buf().clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+            self._placement.clone(),
+        )
+    }
 
-            Tensor::from_parts(
-                inner,
-                field_from_dims::<S::Output>(OperationKind::Reduction, &out_dims)?,
-                self._dtype.clone(),
-                self._device.clone(),
-                self._grad.clone(),
-            )
-        }
-    };
+    /// Sums the axis identified by a semantic tag.
+    ///
+    /// Stable Rust cannot currently turn recursive semantic lookup into the
+    /// structural `RemoveAt` output type without overlapping implementations.
+    /// This honest fallback resolves the selector against the current shape
+    /// and returns a runtime-rank shape. Missing and duplicate names remain
+    /// typed shape errors.
+    pub fn sum_named<Tag>(
+        &self,
+        selector: crate::shapes::idx::NamedAxisSelector<Tag>,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    where
+        Tag: crate::shapes::AxisTag,
+        S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
+        B: Execute<ReductionSpec>,
+        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+    {
+        let axis = selector.resolve::<S>()?;
+        let validated = ReductionSpec::new(
+            &self.shape_buf_value(),
+            crate::exec::AxisSet::EMPTY.insert(axis),
+            false,
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
+        self.execute_named_reduction(validated)
+    }
+
+    /// Named-axis sum retaining the selected axis as a runtime length-one
+    /// dimension.
+    pub fn sum_keepdim_named<Tag>(
+        &self,
+        selector: crate::shapes::idx::NamedAxisSelector<Tag>,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    where
+        Tag: crate::shapes::AxisTag,
+        S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
+        B: Execute<ReductionSpec>,
+        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+    {
+        let axis = selector.resolve::<S>()?;
+        let validated = ReductionSpec::new(
+            &self.shape_buf_value(),
+            crate::exec::AxisSet::EMPTY.insert(axis),
+            true,
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
+        self.execute_named_reduction(validated)
+    }
+
+    fn execute_named_reduction(
+        &self,
+        validated: ReductionSpec,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    where
+        B: Execute<ReductionSpec>,
+        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+    {
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                B::default().execute_shaped::<S>(crate::tensor::backend::ExecutionRequest {
+                    operation: &Validated::new(validated.clone(), S::PROOF),
+                    inputs: &[input],
+                    context: &context,
+                })
+            })?
+            .into();
+        Tensor::<crate::prelude::Dyn, B, K, G, P>::from_shape_buf_placed(
+            inner,
+            validated.output.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+            self._placement.clone(),
+        )
+    }
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
+impl<
+    S: Shape,
+    B: Backend + ReductionOps<B> + FloatOps<B> + NumericOps<B> + TensorOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G, Local>
+{
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.
         ///
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
@@ -81,7 +251,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
@@ -95,7 +265,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
@@ -109,7 +279,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()
@@ -117,126 +287,9 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         min_all, min_all
     );
 
-    impl_reduction_dim_op!(
-        /// Sums the tensor along a specific dimension, removing that dimension from the shape.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let s = t.sum_dim::<0>().unwrap(); // shape is [3]
-        /// ```
-        sum_dim, sum_dim, ReduceDim, false
-    );
-
-    impl_reduction_dim_op!(
-        /// Sums the tensor along a specific dimension, keeping it with size 1.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let s = t.sum_keepdim::<0>().unwrap(); // shape is [1, 3]
-        /// ```
-        sum_keepdim, sum_keepdim, ReduceKeepDim, true
-    );
-
-    impl_reduction_dim_op!(
-        /// Averages the tensor along a specific dimension, removing that dimension from the shape.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.mean_dim::<0>().unwrap(); // shape is [3]
-        /// ```
-        mean_dim, mean_dim, ReduceDim, false
-    );
-
-    impl_reduction_dim_op!(
-        /// Averages the tensor along a specific dimension, keeping it with size 1.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.mean_keepdim::<0>().unwrap(); // shape is [1, 3]
-        /// ```
-        mean_keepdim, mean_keepdim, ReduceKeepDim, true
-    );
-
-    impl_reduction_dim_op!(
-        /// Finds the maximum along a specific dimension, removing that dimension from the shape.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.max_dim::<0>().unwrap(); // shape is [3]
-        /// ```
-        max_dim, max_dim, ReduceDim, false
-    );
-
-    impl_reduction_dim_op!(
-        /// Finds the maximum along a specific dimension, keeping it with size 1.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.max_keepdim::<0>().unwrap(); // shape is [1, 3]
-        /// ```
-        max_keepdim, max_keepdim, ReduceKeepDim, true
-    );
-
-    impl_reduction_dim_op!(
-        /// Finds the minimum along a specific dimension, removing that dimension from the shape.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.min_dim::<0>().unwrap(); // shape is [3]
-        /// ```
-        min_dim, min_dim, ReduceDim, false
-    );
-
-    impl_reduction_dim_op!(
-        /// Finds the minimum along a specific dimension, keeping it with size 1.
-        ///
-        /// # Examples
-        /// ```rust
-        /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-        /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-        /// let m = t.min_keepdim::<0>().unwrap(); // shape is [1, 3]
-        /// ```
-        min_keepdim, min_keepdim, ReduceKeepDim, true
-    );
-
     impl_reduction_op!(
         /// Product of all elements in the tensor, reducing it to a scalar tensor.
         prod_all, prod_all
-    );
-
-    impl_reduction_dim_op!(
-        /// Product along a specific dimension, removing that dimension.
-        prod_dim, prod_dim, ReduceDim, false
     );
 
     /// Cumulative sum along dimension `DIM`.
@@ -245,7 +298,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         S: DynShape,
     {
         let inner = self.under_grad_mode(|| B::cumsum::<K>(&self.inner, DIM))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -257,7 +310,14 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
     pub fn norm(&self, p: f64) -> Result<Tensor<(), B, K, G>>
     where
-        B: crate::tensor::backend::FloatOps<B>,
+        G: crate::tensor::grad::GradJoin<G, Output = G>,
+        B: crate::tensor::backend::FloatOps<B>
+            + Execute<Descriptor<op::Mul>>
+            + Execute<Descriptor<op::Abs>>
+            + Execute<Descriptor<op::Sqrt>>,
+        <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::Abs>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
     {
         if (p - 1.0).abs() < 1e-6 {
             self.abs()?.sum_all()
@@ -274,11 +334,20 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
 }
 
 impl<
-    S: crate::prelude::Shape + crate::prelude::DynShape,
-    B: crate::prelude::Backend,
+    S: crate::prelude::Shape + crate::shapes::DynShape,
+    B: crate::prelude::Backend
+        + ReductionOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + Execute<Descriptor<op::Sub>>
+        + Execute<Descriptor<op::Mul>>,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad,
 > Tensor<S, B, K, G>
+where
+    <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the argmax of the tensor.
     /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
@@ -287,6 +356,9 @@ impl<
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
+        if let Some(d) = dim {
+            crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
+        }
         let inner = GradMode::Disabled.restrict(|| match dim {
             Some(d) => B::argmax::<K, u32>(&self.inner, Some(d)),
             None => {
@@ -299,7 +371,7 @@ impl<
                 B::argmax::<K, u32>(&flat, Some(0))
             }
         })?;
-        let mut out_dims = S::dims(&self._shape).into();
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = dim {
             out_dims.remove(d);
         } else {
@@ -308,7 +380,7 @@ impl<
 
         Tensor::from_parts(
             inner,
-            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
+            shape_buf_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
@@ -322,6 +394,9 @@ impl<
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
+        if let Some(d) = dim {
+            crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
+        }
         let inner = GradMode::Disabled.restrict(|| match dim {
             Some(d) => B::argmin::<K, u32>(&self.inner, Some(d)),
             None => {
@@ -334,7 +409,7 @@ impl<
                 B::argmin::<K, u32>(&flat, Some(0))
             }
         })?;
-        let mut out_dims = S::dims(&self._shape).into();
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = dim {
             out_dims.remove(d);
         } else {
@@ -343,7 +418,7 @@ impl<
 
         Tensor::from_parts(
             inner,
-            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
+            shape_buf_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
@@ -361,12 +436,26 @@ impl<
         Tensor<crate::prelude::Dyn, B, K, crate::prelude::NoGrad>,
         Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>,
     )> {
+        let rank = self.rank();
+        crate::shapes::idx::AxisSelector::new(&[dim as isize]).normalize(rank)?;
+        let extent = self.shape_buf().as_ref()[dim];
+        if k > extent {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::DimensionMismatch {
+                    operation: OperationKind::Reduction,
+                    axis: crate::shapes::error::Axis::Index(dim),
+                    lhs: extent,
+                    rhs: k,
+                    constraint: crate::shapes::error::DimensionConstraint::AtLeast,
+                },
+            ));
+        }
         let (values_inner, indices_inner) =
             GradMode::Disabled.restrict(|| B::topk::<K, u32>(&self.inner, k, dim, largest))?;
-        let mut out_dims = S::dims(&self._shape).into();
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims[dim] = k;
         let out_shape =
-            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
+            shape_buf_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
 
         let values = Tensor::from_parts(
             values_inner,
@@ -396,7 +485,7 @@ impl<
         // about what runs, not only about which APIs the result offers.
         let indices_inner =
             GradMode::Disabled.restrict(|| B::argsort::<K, u32>(&self.inner, dim, descending))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             indices_inner,
             self._shape.clone(),
             core::marker::PhantomData,
@@ -413,11 +502,20 @@ impl<
 impl<
     S: crate::prelude::Shape + crate::shapes::DynShape,
     B: crate::prelude::Backend
-        + crate::tensor::backend::ReductionOps<B>
-        + crate::tensor::backend::FloatOps<B>,
+        + ReductionOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + Execute<Descriptor<op::Sub>>
+        + Execute<Descriptor<op::Mul>>
+        + Execute<Descriptor<op::Sqrt>>,
     K: crate::prelude::DType,
-    G: crate::prelude::RequiresGrad,
+    G: crate::prelude::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
 > Tensor<S, B, K, G>
+where
+    <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
     pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
@@ -428,7 +526,7 @@ impl<
         let sq_diff = diff.mul(&diff)?;
         let sum_sq = sq_diff.sum_all()?;
 
-        let n = S::numel(&self._shape) as f32;
+        let n = self.shape_buf().numel().unwrap_or(0) as f32;
         let denom = if unbiased {
             if n <= 1.0 { 0.0 } else { n - 1.0 }
         } else {
@@ -441,91 +539,5 @@ impl<
     /// Computes the standard deviation over all elements.
     pub fn std_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
         self.var_all(unbiased)?.sqrt()
-    }
-
-    /// Computes the variance along a specific dimension, removing that dimension.
-    pub fn var_dim<const DIM: usize>(
-        &self,
-        unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, G>>
-    where
-        S: crate::shapes::DynShape
-            + crate::shapes::ReduceDim<DIM>
-            + crate::shapes::ReduceKeepDim<DIM>,
-        <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
-        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
-    {
-        let mean = self.mean_keepdim::<DIM>()?;
-        let dyn_self = self.clone().into_dyn();
-        let dyn_mean = mean.into_dyn();
-        let diff = dyn_self.broadcast_sub(&dyn_mean)?;
-        let sq_diff = diff.mul(&diff)?;
-        let sum_sq = sq_diff.sum_dim::<DIM>()?;
-
-        let dims = S::dims(&self._shape);
-        let n = dims.as_ref()[DIM] as f32;
-        let denom = if unbiased {
-            if n <= 1.0 { 0.0 } else { n - 1.0 }
-        } else {
-            n
-        };
-        let scalar = if denom > 0.0 { 1.0 / denom } else { 0.0 };
-        let res = sum_sq.mul_scalar(scalar)?;
-        res.into_shape::<<S as crate::shapes::ReduceDim<DIM>>::Output>()
-    }
-
-    /// Computes the standard deviation along a specific dimension, removing that dimension.
-    pub fn std_dim<const DIM: usize>(
-        &self,
-        unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, G>>
-    where
-        S: crate::shapes::DynShape
-            + crate::shapes::ReduceDim<DIM>
-            + crate::shapes::ReduceKeepDim<DIM>,
-        <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
-        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
-    {
-        self.var_dim::<DIM>(unbiased)?.sqrt()
-    }
-
-    /// Computes the variance along a specific dimension, keeping it with size 1.
-    pub fn var_keepdim<const DIM: usize>(
-        &self,
-        unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, G>>
-    where
-        S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
-        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
-    {
-        let mean = self.mean_keepdim::<DIM>()?;
-        let dyn_self = self.clone().into_dyn();
-        let dyn_mean = mean.into_dyn();
-        let diff = dyn_self.broadcast_sub(&dyn_mean)?;
-        let sq_diff = diff.mul(&diff)?;
-        let sum_sq = sq_diff.sum_keepdim::<DIM>()?;
-
-        let dims = S::dims(&self._shape);
-        let n = dims.as_ref()[DIM] as f32;
-        let denom = if unbiased {
-            if n <= 1.0 { 0.0 } else { n - 1.0 }
-        } else {
-            n
-        };
-        let scalar = if denom > 0.0 { 1.0 / denom } else { 0.0 };
-        let res = sum_sq.mul_scalar(scalar)?;
-        res.into_shape::<<S as crate::shapes::ReduceKeepDim<DIM>>::Output>()
-    }
-
-    /// Computes the standard deviation along a specific dimension, keeping it with size 1.
-    pub fn std_keepdim<const DIM: usize>(
-        &self,
-        unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, G>>
-    where
-        S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
-        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
-    {
-        self.var_keepdim::<DIM>(unbiased)?.sqrt()
     }
 }

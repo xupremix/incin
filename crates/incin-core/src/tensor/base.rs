@@ -252,6 +252,32 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         )
     }
 
+    /// Rebuilds placed tensor metadata and verifies that the backend returned
+    /// the same rank-local shape.  Distributed proof construction uses the
+    /// unchecked placement adapter because its local shape is validated
+    /// against the proof separately; ordinary operation results use this
+    /// boundary so storage and `ShapeValue` cannot diverge.
+    pub(crate) fn from_shape_buf_placed_checked<T: Shape>(
+        inner: B::Storage<K>,
+        dims: ShapeBuf,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+        placement: P::Field,
+    ) -> Result<Tensor<T, B, K, G, P>> {
+        let expected = dims.as_ref().to_vec();
+        let got = B::shape(&inner);
+        if expected != got.as_ref() {
+            return Err(crate::err::Error::ShapeMismatch {
+                op: "from_shape_buf_placed_checked",
+                expected,
+                got: got.as_ref().to_vec(),
+                msg: "Backend operation returned storage with an unexpected shape".into(),
+            });
+        }
+        Self::from_shape_buf_placed(inner, dims, dtype, device, grad, placement)
+    }
+
     pub(crate) fn shape_buf_value(&self) -> ShapeBuf {
         self._shape.shape_buf().clone()
     }
@@ -279,7 +305,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     /// [`dims`](Self::dims) reports the global logical shape.
     #[must_use]
     pub fn local_dims(&self) -> alloc::vec::Vec<usize> {
-        B::shape(&self.inner)
+        B::shape(&self.inner).as_ref().to_vec()
     }
 
     /// Returns the logical descriptor for this tensor's dtype.
@@ -357,10 +383,10 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
             });
         };
         let storage_local = B::shape(&inner);
-        if storage_local.as_slice() != expected_local.dims() {
+        if storage_local.as_ref() != expected_local.dims() {
             return Err(PlacedTensorError::LocalShape {
                 rank,
-                storage: storage_local,
+                storage: storage_local.as_ref().to_vec(),
                 proof: expected_local.dims().to_vec(),
             });
         }
@@ -547,6 +573,16 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
+        let expected = shape.shape_buf().as_ref().to_vec();
+        let got = B::shape(&inner);
+        if expected != got.as_ref() {
+            return Err(Error::ShapeMismatch {
+                op: "from_shape_value",
+                expected,
+                got: got.as_ref().to_vec(),
+                msg: "Backend operation returned storage with an unexpected shape".into(),
+            });
+        }
         Ok(Self {
             inner,
             _shape: shape,
@@ -595,11 +631,11 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
     ) -> Result<Self> {
         let expected = shape.as_ref().to_vec();
         let got = B::shape(&inner);
-        if expected != got {
+        if expected != got.as_ref() {
             return Err(Error::ShapeMismatch {
                 op: "from_parts",
                 expected,
-                got,
+                got: got.as_ref().to_vec(),
                 msg: "Runtime shape doesn't match expected static/dynamic shape".to_string(),
             });
         }
@@ -830,7 +866,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
     /// Runs `body` — a backend call producing this tensor's successor — under
     /// the gradient mode `G` derives (`GRD-002`).
     ///
@@ -880,13 +916,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     /// Converts this tensor to a new static shape S2.
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G>> {
         let dims = self._shape.shape_buf();
-        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
-            crate::err::Error::Msg(alloc::format!(
-                "into_shape failed: cannot parse {:?} into {}",
-                dims,
-                core::any::type_name::<S2>()
-            ))
-        })?;
+        let s2_shape = S2::try_from_dyn(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
@@ -911,13 +941,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     /// Copies and converts this tensor to a new static shape S2.
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G>> {
         let dims = self._shape.shape_buf();
-        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
-            crate::err::Error::Msg(alloc::format!(
-                "to_shape failed: cannot parse {:?} into {}",
-                dims,
-                core::any::type_name::<S2>()
-            ))
-        })?;
+        let s2_shape = S2::try_from_dyn(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(
             self.inner.clone(),
             s2_shape,
@@ -1033,7 +1057,7 @@ impl<
             "Tensor({}, global_shape={:?}, local_shape={:?}, placement={:?}, rank={})\n{}",
             core::any::type_name::<B>(),
             self._shape.shape_buf().as_ref(),
-            B::shape(&self.inner),
+            B::shape(&self.inner).as_ref(),
             self.placement(),
             self.rank_index(),
             B::format_tensor_debug(&self.inner)

@@ -1,10 +1,14 @@
 #[macro_use]
 extern crate alloc;
-use incin::backend_authoring::SupportsDType;
+use incin::backend_authoring::{
+    CreationOps, FloatOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
+};
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
+use incin_core::exec::catalog::{Descriptor, op};
 use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
+use incin_core::tensor::backend::Execute;
 use incin_telemetry::events::GraphSnapshotEvent;
 use incin_telemetry::reporter::Reporter;
 
@@ -24,11 +28,23 @@ pub struct SimpleMlp<B: Backend> {
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<B: Backend> SimpleMlp<B>
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ReductionOps<B>
+        + Execute<Descriptor<op::Add>>
+        + Execute<Descriptor<op::Relu>>,
+> SimpleMlp<B>
 where
-    B: SupportsDType<B::FloatElem>,
-    B::FloatElem: ConstDType,
+    B: SupportsDType<f32>,
     B::Device: ConstDevice,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
+    B: Execute<Descriptor<op::MatMulExact>>,
+    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
 {
     /// New.
     pub fn new() -> Result<Self> {

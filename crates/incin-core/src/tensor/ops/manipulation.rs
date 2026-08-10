@@ -4,11 +4,23 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
+use crate::backend_authoring::{Descriptor, Execute};
+use crate::dist::Placement;
+use crate::dist::placement::Local;
+use crate::exec::Capabilities;
+use crate::exec::catalog::{NoAttributes, ScalarAttributes, ShapeAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::prelude::{
-    Backend, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
+    Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
 use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
+use crate::shapes::idx::StaticCursor;
+use crate::shapes::shape::shape_buf_from_dims;
+use crate::shapes::{FlattenAt, SwapAxes};
+use crate::shapes::{ShapeBuf, ShapeValue};
+use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 use crate::tensor::ops::*;
 
 use alloc::string::ToString;
@@ -48,23 +60,28 @@ fn is_valid_scalar_type<E: 'static>() -> bool {
 ///
 /// `Q8_0` is also absent, and matches nothing: a block-quantized element has
 /// no scalar Rust type to be read as without dequantizing first.
-fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeId) -> bool {
+fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeDescriptor) -> bool {
     use crate::tensor::dtype::DTypeId;
     let tid = core::any::TypeId::of::<E>();
-    match dtype {
-        DTypeId::U8 => tid == core::any::TypeId::of::<u8>(),
-        DTypeId::U32 => tid == core::any::TypeId::of::<u32>(),
-        DTypeId::I64 => tid == core::any::TypeId::of::<i64>(),
-        DTypeId::BF16 => tid == core::any::TypeId::of::<half::bf16>(),
-        DTypeId::F16 => tid == core::any::TypeId::of::<half::f16>(),
-        DTypeId::F32 => tid == core::any::TypeId::of::<f32>(),
-        DTypeId::F64 => tid == core::any::TypeId::of::<f64>(),
-        DTypeId::Q8_0 => false,
+    match dtype.builtin_id() {
+        Some(DTypeId::U8) => tid == core::any::TypeId::of::<u8>(),
+        Some(DTypeId::U32) => tid == core::any::TypeId::of::<u32>(),
+        Some(DTypeId::I64) => tid == core::any::TypeId::of::<i64>(),
+        Some(DTypeId::BF16) => tid == core::any::TypeId::of::<half::bf16>(),
+        Some(DTypeId::F16) => tid == core::any::TypeId::of::<half::f16>(),
+        Some(DTypeId::F32) => tid == core::any::TypeId::of::<f32>(),
+        Some(DTypeId::F64) => tid == core::any::TypeId::of::<f64>(),
+        Some(DTypeId::Bool) => tid == core::any::TypeId::of::<bool>(),
+        _ => false,
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -72,7 +89,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
@@ -87,7 +104,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get((0, 1..3, ..))?;
@@ -102,7 +119,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Internal alias for `slice`.
     pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>> {
-        let current_dims = S::dims(&self._shape);
+        let current_dims = self.shape_buf();
         if specs.len() > current_dims.as_ref().len() {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Too many slicing specs ({}) for tensor of rank {}",
@@ -117,34 +134,70 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = self.under_grad_mode(|| -> Result<B::Storage<K>> {
             let mut inner = self.inner.clone();
             for (dim, spec) in specs.iter().enumerate() {
-                let dim_len = current_dims.as_ref()[dim] as isize;
+                let dim_len = current_dims.as_ref()[dim];
 
-                let resolve = |idx: isize| -> usize {
+                let resolve = |idx: isize| -> Result<usize> {
                     if idx < 0 {
-                        (dim_len + idx) as usize
+                        let magnitude = idx.unsigned_abs();
+                        if magnitude > dim_len {
+                            return Err(crate::err::Error::Shape(
+                                crate::shapes::ShapeError::InvalidAxis {
+                                    axis: magnitude,
+                                    rank: dim_len,
+                                },
+                            ));
+                        }
+                        Ok(dim_len - magnitude)
                     } else {
-                        idx as usize
+                        let index = idx as usize;
+                        if index > dim_len {
+                            return Err(crate::err::Error::Shape(
+                                crate::shapes::ShapeError::InvalidAxis {
+                                    axis: index,
+                                    rank: dim_len,
+                                },
+                            ));
+                        }
+                        Ok(index)
                     }
                 };
 
                 match spec {
                     IndexSpec::All => {}
                     IndexSpec::Range(start, end) => {
-                        let r_start = resolve(*start);
-                        let r_end = resolve(*end);
+                        let r_start = resolve(*start)?;
+                        let r_end = resolve(*end)?;
+                        if r_start > r_end {
+                            return Err(crate::err::Error::Shape(
+                                crate::shapes::ShapeError::InvalidAxisRange {
+                                    operation: OperationKind::Slice,
+                                    start: r_start,
+                                    end: r_end,
+                                    rank: dim_len,
+                                },
+                            ));
+                        }
                         inner = B::narrow(&inner, dim, r_start, r_end - r_start)?;
                     }
                     IndexSpec::RangeFrom(start) => {
-                        let r_start = resolve(*start);
-                        let len = (dim_len as usize) - r_start;
+                        let r_start = resolve(*start)?;
+                        let len = dim_len - r_start;
                         inner = B::narrow(&inner, dim, r_start, len)?;
                     }
                     IndexSpec::RangeTo(end) => {
-                        let r_end = resolve(*end);
+                        let r_end = resolve(*end)?;
                         inner = B::narrow(&inner, dim, 0, r_end)?;
                     }
                     IndexSpec::Index(idx) => {
-                        let r_idx = resolve(*idx);
+                        let r_idx = resolve(*idx)?;
+                        if r_idx == dim_len {
+                            return Err(crate::err::Error::Shape(
+                                crate::shapes::ShapeError::InvalidAxis {
+                                    axis: r_idx,
+                                    rank: dim_len,
+                                },
+                            ));
+                        }
                         let narrowed = B::narrow(&inner, dim, r_idx, 1)?;
                         inner = B::squeeze(&narrowed, dim)?;
                     }
@@ -173,32 +226,32 @@ impl<
 > Tensor<S, B, K, G>
 {
     /// Functional `max_pool2d` operation.
-    pub fn max_pool2d<KShape, SShape, P, Dilation>(
+    pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
         &self,
     ) -> Result<
-        Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output, B, K, G>,
+        Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output, B, K, G>,
     >
     where
         KShape: typenum::Unsigned,
         SShape: typenum::Unsigned,
-        P: typenum::Unsigned,
+        Pool: typenum::Unsigned,
         Dilation: typenum::Unsigned,
-        S: crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>,
-        <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output: Shape,
+        S: crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>,
+        <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output: Shape,
     {
         let out = self.under_grad_mode(|| {
             B::max_pool2d::<K>(
                 &self.inner,
                 (KShape::USIZE, KShape::USIZE),
                 (SShape::USIZE, SShape::USIZE),
-                (P::USIZE, P::USIZE),
+                (Pool::USIZE, Pool::USIZE),
                 (Dilation::USIZE, Dilation::USIZE),
             )
         })?;
 
         let shape =
-            <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::compute_output_shape(
-                &self._shape,
+            <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::compute_output_shape(
+                &self.shape_buf_value(),
             )?;
         Tensor::from_parts(
             out,
@@ -214,8 +267,13 @@ impl<
 // Structural Ops (Reshape, Broadcast, Transpose, Flatten)
 // -------------------------------------------------------------
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+> Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -223,26 +281,48 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-    /// let r = t.reshape::<s![6]>(((),)).unwrap();
+    /// let r = t.reshape::<s![6]>(((), ())).unwrap();
     /// ```
-    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
+    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G, P>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::ReshapeShape<S2>,
+        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
+        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
-        let new_shape_field = S2::init(args);
-        let new_dims = S2::dims(&new_shape_field);
+        let new_shape_field = S2::try_init(args).map_err(crate::prelude::Error::Shape)?;
+        let validated = <crate::exec::ReshapeRule as crate::exec::ShapeRule<(S, S2)>>::lower(
+            &(self.shape_buf_value(), new_shape_field.clone()),
+            (),
+        )?;
+        let new_shape_field = validated.descriptor().output.clone();
+        let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
+            .map_err(crate::prelude::Error::Shape)?;
 
-        let inner = self.under_grad_mode(|| B::reshape(&self.inner, new_dims.as_ref()))?;
-        Tensor::from_parts(
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
+                    &context,
+                    ShapeAttributes {
+                        shape: new_shape_field.as_ref().to_vec(),
+                    },
+                    &[input],
+                    &new_shape,
+                )
+            })?
+            .into();
+        Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
-            new_shape_field,
+            new_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+            self._placement.clone(),
         )
     }
 
@@ -251,31 +331,32 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
     /// ```
     pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, G>> {
-        let in_shape_vec = S::dims(&self._shape);
+    ) -> Result<Tensor<T::Output, B, K, G, P>> {
+        let in_shape_vec = self.shape_buf();
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
         let inner = self.under_grad_mode(|| B::reshape(&self.inner, &out_shape_vec))?;
-        Tensor::from_parts(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
             inner,
-            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+            shape_buf_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+            self._placement.clone(),
         )
     }
 
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, G>> {
-        let in_shape_vec = S::dims(&self._shape);
+    ) -> Result<Tensor<T::Output, B, K, G, P>> {
+        let in_shape_vec = self.shape_buf();
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
         let inner = self.under_grad_mode(|| B::slice(&self.inner, &ranges))?;
 
@@ -284,12 +365,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             out_shape_vec.push(end - start);
         }
 
-        Tensor::from_parts(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
             inner,
-            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+            shape_buf_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+            self._placement.clone(),
         )
     }
 
@@ -298,23 +380,50 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn try_narrow(
+        self,
+        dim: usize,
+        start: usize,
+        len: usize,
+    ) -> Result<Tensor<Dyn, B, K, G, P>> {
+        let mut shape = self.shape_buf().as_ref().to_vec();
+        let extent = *shape.get(dim).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                axis: dim,
+                rank: shape.len(),
+            })
+        })?;
+        let end = start.checked_add(len).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Slice,
+                expression: "narrow start + length",
+            })
+        })?;
+        if end > extent {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxisRange {
+                    operation: OperationKind::Slice,
+                    start,
+                    end,
+                    rank: extent,
+                },
+            ));
+        }
         let inner = self.under_grad_mode(|| B::narrow(&self.inner, dim, start, len))?;
-        let mut shape = S::dims(&self._shape).as_ref().to_vec();
         shape[dim] = len;
-        Ok(Tensor {
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
-            _shape: shape,
-            _dtype: self._dtype,
-            _device: self._device,
-            _grad: self._grad,
-            _placement: core::marker::PhantomData,
-        })
+            ShapeBuf::from_slice(&shape),
+            self._dtype,
+            self._device,
+            self._grad,
+            self._placement,
+        )
     }
 
     /// Squeezes the tensor dynamically by removing the dimension `dim` if its size is 1.
@@ -322,36 +431,55 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
     /// ```
-    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G, P>> {
+        let mut shape = self.shape_buf().as_ref().to_vec();
+        let extent = *shape.get(dim).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                axis: dim,
+                rank: shape.len(),
+            })
+        })?;
+        if extent != 1 {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::DimensionMismatch {
+                    operation: OperationKind::Squeeze,
+                    axis: crate::shapes::error::Axis::Index(dim),
+                    lhs: extent,
+                    rhs: 1,
+                    constraint: crate::shapes::error::DimensionConstraint::Equal,
+                },
+            ));
+        }
         let inner = self.under_grad_mode(|| B::squeeze(&self.inner, dim))?;
-        let mut shape = S::dims(&self._shape).as_ref().to_vec();
         shape.remove(dim);
-        Ok(Tensor {
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
-            _shape: shape,
-            _dtype: self._dtype,
-            _device: self._device,
-            _grad: self._grad,
-            _placement: core::marker::PhantomData,
-        })
+            ShapeBuf::from_slice(&shape),
+            self._dtype,
+            self._device,
+            self._grad,
+            self._placement,
+        )
     }
     /// `try_reshape`.
-    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
+    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G, P>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
     {
         let new_shape_field = S2::init(args);
-        let new_dims = S2::dims(&new_shape_field);
+        let new_dims = new_shape_field.clone();
 
         // Runtime boundaries checking
-        let source_numel =
-            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Reshape)?;
+        let source_numel = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Reshape,
+        )?;
         let target_numel = S2::checked_numel(
             &new_shape_field,
             crate::shapes::error::OperationKind::Reshape,
@@ -370,46 +498,75 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let inner = self.under_grad_mode(|| B::reshape(&self.inner, new_dims.as_ref()))?;
-        Tensor::from_parts(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
             inner,
-            new_shape_field,
+            ShapeBuf::from_slice(new_shape_field.as_ref()),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+            self._placement.clone(),
         )
     }
 
     /// Broadcast the tensor to the specific shape `S2`.
-    pub fn broadcast_to<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>> {
+    pub fn broadcast_to<S2: Shape + DynShape>(
+        &self,
+        args: S2::Arg,
+    ) -> Result<Tensor<S2, B, K, G, P>>
+    where
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
+    {
         let new_shape_field = S2::init(args);
-        let new_dims = S2::dims(&new_shape_field);
+        let validated = <crate::exec::BroadcastRule as crate::exec::ShapeRule<(S, S2)>>::lower(
+            &(self.shape_buf_value(), new_shape_field.clone()),
+            None,
+        )?;
+        let new_shape_field = validated.descriptor().output.clone();
+        let new_dims = new_shape_field.clone();
         let inner = self.under_grad_mode(|| B::broadcast_as(&self.inner, new_dims.as_ref()))?;
-        Tensor::from_parts(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
             inner,
-            new_shape_field,
+            ShapeBuf::from_slice(new_shape_field.as_ref()),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+            self._placement.clone(),
         )
     }
+}
 
+impl<
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
+{
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<Tensor<S, B, T2, G>> {
         let field = T2::init(());
-        let incin_dtype = T2::to_incin(&field);
+        let descriptor = T2::descriptor(&field);
         let inner =
-            self.under_grad_mode(|| B::tensor_to_dtype::<K, T2>(&self.inner, incin_dtype))?;
+            self.under_grad_mode(|| B::tensor_to_dtype::<K, T2>(&self.inner, descriptor))?;
         Tensor::from_parts(
             inner,
-            self._shape.clone(),
+            self.shape_buf_value(),
             field,
             self._device.clone(),
             self._grad.clone(),
         )
     }
+}
 
+impl<
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
+{
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
     ///
@@ -431,18 +588,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let bytes = B::to_bytes(&self.inner)?;
-        let dtype = K::to_incin(&self._dtype);
-
-        if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
-            if bytes.is_empty() {
-                return Err(crate::err::Error::Msg(
-                    "cannot convert an empty tensor to a bool scalar".into(),
-                ));
-            }
-            let val = bytes.iter().any(|&byte| byte != 0);
-            // SAFETY: `E` is verified to be exactly `bool` above.
-            return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
-        }
+        let dtype = self.dtype();
 
         if !scalar_type_matches_dtype::<E>(dtype) {
             return Err(crate::err::Error::Msg(alloc::format!(
@@ -452,8 +598,29 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             )));
         }
 
+        if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
+            if bytes.is_empty() {
+                return Err(crate::err::Error::Msg(
+                    "cannot convert an empty tensor to a bool scalar".into(),
+                ));
+            }
+            let byte = bytes[0];
+            let val = match byte {
+                0 => false,
+                1 => true,
+                other => {
+                    return Err(crate::err::Error::Msg(alloc::format!(
+                        "Invalid boolean storage byte: expected 0 or 1, found {}",
+                        other
+                    )));
+                }
+            };
+            // SAFETY: `E` is verified to be exactly `bool` above.
+            return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
+        }
+
         let elem_size = core::mem::size_of::<E>();
-        let expected_size = dtype.element_size();
+        let expected_size = dtype.encoding().scalar_bytes().unwrap_or(0);
         if bytes.len() != elem_size || elem_size != expected_size {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Size mismatch when converting to scalar. Tensor dtype {:?} ({} bytes) vs requested type ({} bytes)",
@@ -468,9 +635,6 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts a 1D vector of scalars from this tensor.
-    ///
-    /// See `to_scalar`'s doc comment for why `bool` is handled as a
-    /// per-element truthy conversion rather than a raw reinterpret.
     pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>> {
         if !is_valid_scalar_type::<E>() {
             return Err(crate::err::Error::Msg(alloc::format!(
@@ -480,28 +644,40 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let bytes = B::to_bytes(&self.inner)?;
-        let num_elements =
-            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Storage)?;
-        let dtype = K::to_incin(&self._dtype);
+        let num_elements = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Storage,
+        )?;
+        let dtype = self.dtype();
+
+        if !scalar_type_matches_dtype::<E>(dtype) {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Type mismatch when converting to vec. Tensor dtype {:?} cannot be extracted as {}: the bytes would be reinterpreted rather than converted",
+                dtype,
+                core::any::type_name::<E>()
+            )));
+        }
 
         if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
-            let elem_size = dtype.element_size();
-            let expected_bytes = num_elements.checked_mul(elem_size).ok_or(
-                crate::shapes::error::ShapeError::ArithmeticOverflow {
-                    operation: crate::shapes::error::OperationKind::Storage,
-                    expression: "element count * scalar byte width",
-                },
-            )?;
-            if bytes.len() != expected_bytes {
+            if bytes.len() != num_elements {
                 return Err(crate::err::Error::Msg(alloc::format!(
                     "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
                     bytes.len(),
-                    expected_bytes
+                    num_elements
                 )));
             }
             let mut out = alloc::vec::Vec::with_capacity(num_elements);
-            for chunk in bytes.chunks_exact(elem_size) {
-                let val = chunk.iter().any(|&byte| byte != 0);
+            for &byte in &bytes {
+                let val = match byte {
+                    0 => false,
+                    1 => true,
+                    other => {
+                        return Err(crate::err::Error::Msg(alloc::format!(
+                            "Invalid boolean storage byte: expected 0 or 1, found {}",
+                            other
+                        )));
+                    }
+                };
                 // SAFETY: `E` is verified to be exactly `bool` above.
                 out.push(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
             }
@@ -517,7 +693,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let elem_size = core::mem::size_of::<E>();
-        let expected_elem_size = dtype.element_size();
+        let expected_elem_size = dtype.encoding().scalar_bytes().unwrap_or(0);
         if elem_size != expected_elem_size {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Element size mismatch converting to vec: Tensor dtype {:?} element size {} vs requested type size {}",
@@ -543,84 +719,120 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         Ok(out)
     }
 
-    /// Permutes the tensor's dimensions by swapping `D1` and `D2`.
-    /// Strongly typed output shape via `Transpose<D1, D2>`.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-    /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
-    /// ```
-    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, K, G>>
+    /// Transposes two compile-time structural axis cursors.
+    pub fn transpose<L, R>(&self) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
     where
-        S: crate::shapes::Transpose<D1, D2>,
+        L: StaticCursor,
+        R: StaticCursor,
+        S: SwapAxes<L, R>,
+        <S as SwapAxes<L, R>>::Output: Shape + DynShape,
     {
-        let inner = self.under_grad_mode(|| B::transpose(&self.inner, D1, D2))?;
-        let mut out_dims = S::dims(&self._shape).into();
-        out_dims.swap(D1, D2);
-
-        Tensor::from_parts(
+        let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
+            .normalize(self.shape_buf().rank())?;
+        let inner = self.under_grad_mode(|| B::transpose(&self.inner, axes[0], axes[1]))?;
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
+        out_dims.swap(axes[0], axes[1]);
+        Tensor::from_shape_buf(
             inner,
-            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
+            ShapeBuf::from_slice(&out_dims),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         )
     }
 
-    /// Flattens dimensions from `START` to `END` inclusive.
-    ///
-    /// The range uses const generics because its values are axis indices, not
-    /// dimension sizes. The shape dimensions remain type-level `Dim` values,
-    /// and `ProdDim` computes the flattened output dimension in the type system.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
-    /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]
-    /// ```
-    pub fn flatten<const START: usize, const END: usize>(
+    /// Runtime-selector transpose. Selectors are normalized before any
+    /// backend operation and the result intentionally carries only `Dyn`.
+    pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>> {
+        let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
+            .normalize(self.shape_buf().rank())?;
+        let inner = self.under_grad_mode(|| B::transpose(&self.inner, axes[0], axes[1]))?;
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
+        out_dims.swap(axes[0], axes[1]);
+        Tensor::from_shape_buf(
+            inner,
+            ShapeBuf::from_slice(&out_dims),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Flattens a range selected by structural cursors.
+    pub fn flatten<Start, End>(
         &self,
-    ) -> Result<Tensor<S::Output, B, K, G>>
+    ) -> Result<Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>>
     where
-        S: crate::shapes::Flatten<START, END>,
+        S: FlattenAt<Start, End>,
+        <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
+        Start: StaticCursor,
+        End: StaticCursor,
     {
-        let in_dims: Vec<usize> = S::dims(&self._shape).into();
-        if START > END || END >= in_dims.len() {
-            return Err(crate::shapes::ShapeError::InvalidAxisRange {
-                operation: OperationKind::Flatten,
-                start: START,
-                end: END,
-                rank: in_dims.len(),
-            }
-            .into());
+        let rank = self.shape_buf().rank();
+        let axes =
+            crate::shapes::idx::AxisSelector::new(&[Start::INDEX, End::INDEX]).normalize(rank)?;
+        if axes[0] > axes[1] {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxisRange {
+                    operation: OperationKind::Flatten,
+                    start: axes[0],
+                    end: axes[1],
+                    rank,
+                },
+            ));
         }
-
-        let inner = self.under_grad_mode(|| B::flatten(&self.inner, START, END))?;
-        let mut out_dims = Vec::new();
-
-        out_dims.extend_from_slice(&in_dims[0..START]);
-
-        let prod = in_dims[START..=END]
+        let inner = self.under_grad_mode(|| B::flatten(&self.inner, axes[0], axes[1]))?;
+        let dims_buf = self.shape_buf();
+        let in_dims = dims_buf.as_ref();
+        let product = in_dims[axes[0]..=axes[1]]
             .iter()
             .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
             .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::Flatten,
                 expression: "flattened dimension product",
             })?;
-        out_dims.push(prod);
-
-        out_dims.extend_from_slice(&in_dims[(END + 1)..]);
-
-        Tensor::from_parts(
+        let mut out_dims = Vec::with_capacity(rank - (axes[1] - axes[0]));
+        out_dims.extend_from_slice(&in_dims[..axes[0]]);
+        out_dims.push(product);
+        out_dims.extend_from_slice(&in_dims[axes[1] + 1..]);
+        Tensor::from_shape_buf(
             inner,
-            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
+            ShapeBuf::from_slice(&out_dims),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Runtime flatten range with checked normalization and a dynamic output.
+    pub fn flatten_runtime(&self, start: usize, end: usize) -> Result<Tensor<Dyn, B, K, G>> {
+        let rank = self.shape_buf().rank();
+        if start > end || end >= rank {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxisRange {
+                    operation: OperationKind::Flatten,
+                    start,
+                    end,
+                    rank,
+                },
+            ));
+        }
+        let inner = self.under_grad_mode(|| B::flatten(&self.inner, start, end))?;
+        let dims = self.shape_buf().as_ref();
+        let product = dims[start..=end]
+            .iter()
+            .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
+            .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Flatten,
+                expression: "flattened dimension product",
+            })?;
+        let mut out = alloc::vec::Vec::with_capacity(rank - (end - start));
+        out.extend_from_slice(&dims[..start]);
+        out.push(product);
+        out.extend_from_slice(&dims[end + 1..]);
+        Tensor::from_shape_buf(
+            inner,
+            ShapeBuf::from_slice(&out),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -640,48 +852,54 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 "Cannot concat empty list".to_string(),
             ));
         }
+        let rank = tensors[0].shape_buf().rank();
+        let dim = isize::try_from(dim)
+            .ok()
+            .and_then(|dim| {
+                crate::shapes::idx::AxisSelector::new(&[dim])
+                    .normalize(rank)
+                    .ok()
+                    .map(|axes| axes[0])
+            })
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
+            ))?;
         let inner = tensors[0].under_grad_mode(|| B::concat(&raw_tensors, dim))?;
-        let mut out_shape = B::shape(&tensors[0].inner);
-        out_shape[dim] = tensors.iter().map(|t| B::shape(&t.inner)[dim]).sum();
+        let mut out_shape = B::shape(&tensors[0].inner).as_ref().to_vec();
+        out_shape[dim] = tensors
+            .iter()
+            .map(|t| B::shape(&t.inner).as_ref()[dim])
+            .sum();
         Tensor::from_parts(
             inner,
-            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
         )
     }
 
-    /// Statically concatenates `self` with `other` along `Axis`.
+    /// Structurally concatenates along a cursor axis, preserving the exact
+    /// recursive shape output at arbitrary rank.
     pub fn concat<S2, Axis>(
         &self,
         other: &Tensor<S2, B, K, G>,
     ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, G>>
     where
         S2: Shape + DynShape,
-        Axis: typenum::Unsigned,
+        Axis: crate::shapes::idx::StaticCursor,
         S: crate::shapes::concat::ConcatShape<S2, Axis>,
+        <S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output: Shape,
     {
-        let dim = Axis::USIZE;
+        let dim = crate::shapes::idx::AxisSelector::new(&[Axis::INDEX])
+            .normalize(self.shape_buf().rank())?[0];
         let inner = self.under_grad_mode(|| B::concat(&[&self.inner, &other.inner], dim))?;
-
-        // Built from the operands' real dims (not `Default::default()`):
-        // for purely-typenum shapes the output `Field` is a zero-sized
-        // `PhantomData` either way, but any runtime-carrying dimension
-        // (a plain `usize` axis, or a `symbolic_dim!` name) needs its
-        // actual value copied through, or the result's declared shape
-        // would silently report `0`/the wrapped type's default instead of
-        // the tensor's real size.
-        let mut out_dims: Vec<usize> = S::dims(&self._shape).into();
-        let other_dims: Vec<usize> = S2::dims(&other._shape).into();
+        let mut out_dims: Vec<usize> = self.shape_buf().as_ref().to_vec();
+        let other_dims: Vec<usize> = other.shape_buf().as_ref().to_vec();
         out_dims[dim] += other_dims[dim];
-
-        Tensor::from_parts(
+        Tensor::from_shape_buf(
             inner,
-            <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::from_dyn(
-                &out_dims,
-            )
-            .unwrap(),
+            ShapeBuf::from_slice(&out_dims),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -697,12 +915,24 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         S2: Shape,
     {
+        let rank = self.shape_buf().rank();
+        let dim = isize::try_from(dim)
+            .ok()
+            .and_then(|dim| {
+                crate::shapes::idx::AxisSelector::new(&[dim])
+                    .normalize(rank)
+                    .ok()
+                    .map(|axes| axes[0])
+            })
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
+            ))?;
         let inner = self.under_grad_mode(|| B::concat(&[&self.inner, &other.inner], dim))?;
-        let mut out_shape = B::shape(&self.inner);
-        out_shape[dim] += B::shape(&other.inner)[dim];
+        let mut out_shape = B::shape(&self.inner).as_ref().to_vec();
+        out_shape[dim] += B::shape(&other.inner).as_ref()[dim];
         Tensor::from_parts(
             inner,
-            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -721,41 +951,51 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 "Cannot stack empty list".to_string(),
             ));
         }
+        let rank = tensors[0].shape_buf().rank();
+        let dim = isize::try_from(dim)
+            .ok()
+            .and_then(|dim| {
+                crate::shapes::idx::AxisSelector::new(&[dim])
+                    .normalize(rank + 1)
+                    .ok()
+                    .map(|axes| axes[0])
+            })
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis {
+                    axis: dim,
+                    rank: rank + 1,
+                },
+            ))?;
         let inner = tensors[0].under_grad_mode(|| B::stack(&raw_tensors, dim))?;
-        let mut out_shape = B::shape(&tensors[0].inner);
+        let mut out_shape = B::shape(&tensors[0].inner).as_ref().to_vec();
         out_shape.insert(dim, tensors.len());
         Tensor::from_parts(
             inner,
-            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
         )
     }
 
-    /// Statically stacks `self` with `other` along `Axis`.
+    /// Structurally inserts a size-two axis at a cursor position.
     pub fn stack<Axis>(
         &self,
         other: &Tensor<S, B, K, G>,
     ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, G>>
     where
-        Axis: typenum::Unsigned,
+        Axis: crate::shapes::idx::StaticCursor,
         S: crate::shapes::stack::StackShape<Axis>,
+        <S as crate::shapes::stack::StackShape<Axis>>::Output: Shape,
     {
-        let dim = Axis::USIZE;
+        let dim = crate::shapes::idx::AxisSelector::new(&[Axis::INDEX])
+            .normalize(self.shape_buf().rank() + 1)?[0];
         let inner = self.under_grad_mode(|| B::stack(&[&self.inner, &other.inner], dim))?;
-
-        // Built from `self`'s real dims (not `Default::default()`) — see
-        // the identical fix and rationale on `concat` above: any
-        // runtime-carrying dimension (a plain `usize` axis, or a
-        // `symbolic_dim!` name) needs its actual value copied through.
-        let mut out_dims: Vec<usize> = S::dims(&self._shape).into();
+        let mut out_dims: Vec<usize> = self.shape_buf().as_ref().to_vec();
         out_dims.insert(dim, 2);
-
-        Tensor::from_parts(
+        Tensor::from_shape_buf(
             inner,
-            <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::from_dyn(&out_dims)
-                .unwrap(),
+            ShapeBuf::from_slice(&out_dims),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -768,65 +1008,45 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         other: &Tensor<S, B, K, G>,
         dim: usize,
     ) -> Result<Tensor<Dyn, B, K, G>> {
+        let rank = self.shape_buf().rank() + 1;
+        let dim = isize::try_from(dim)
+            .ok()
+            .and_then(|dim| {
+                crate::shapes::idx::AxisSelector::new(&[dim])
+                    .normalize(rank)
+                    .ok()
+                    .map(|axes| axes[0])
+            })
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
+            ))?;
         let inner = self.under_grad_mode(|| B::stack(&[&self.inner, &other.inner], dim))?;
-        let mut out_shape = B::shape(&self.inner);
+        let mut out_shape = B::shape(&self.inner).as_ref().to_vec();
         out_shape.insert(dim, 2);
         Tensor::from_parts(
             inner,
-            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         )
     }
 
-    /// Conditional selection: picks elements from `on_true` where `self` is non-zero, and `on_false` elsewhere.
-    pub fn where_cond<S2: Shape, G2: RequiresGrad, G3: RequiresGrad>(
+    /// Fills elements where `mask` is true with `value`.
+    pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,
-        on_true: &Tensor<S2, B, K, G2>,
-        on_false: &Tensor<S2, B, K, G3>,
-    ) -> Result<Tensor<S2, B, K, G2>>
-    where
-        S: ShapeEq<S2>,
-    {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let inner = self.under_grad_mode(|| {
-            B::where_cond::<K, K>(&self.inner, &on_true.inner, &on_false.inner)
-        })?;
-        Tensor::from_parts(
-            inner,
-            on_true._shape.clone(),
-            on_true._dtype.clone(),
-            on_true._device.clone(),
-            on_true._grad.clone(),
-        )
-    }
-
-    /// Fills elements where `mask` is non-zero with `value`.
-    pub fn masked_fill<
-        S2: Shape,
-        KMask: crate::tensor::dtype::DType,
-        G2: RequiresGrad,
-        Sc: Into<crate::tensor::backend::ScalarValue>,
-    >(
-        &self,
-        mask: &Tensor<S2, B, KMask, G2>,
+        mask: &Tensor<S2, B, bool, G2>,
         value: Sc,
     ) -> Result<Self>
     where
         S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::MaskedFill>>,
+        <B as Execute<Descriptor<op::MaskedFill>>>::Output: Into<B::Storage<K>>,
     {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let val_f64 = value.into().to_f64();
-        let inner =
-            self.under_grad_mode(|| B::masked_fill::<K, KMask>(&self.inner, &mask.inner, val_f64))?;
-        Tensor::from_parts(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
-        )
+        self.under_grad_mode(|| {
+            execute_masked_fill_descriptor::<S, S2, B, K, G, G2>(self, mask, val_f64)
+        })
     }
 
     /// Gathers values along `dim` specified by `index`.
@@ -837,7 +1057,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     ) -> Result<Tensor<S2, B, K, G>> {
         let inner =
             self.under_grad_mode(|| B::gather::<K, KInt>(&self.inner, dim, &index.inner))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             index._shape.clone(),
             self._dtype.clone(),
@@ -866,7 +1086,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = self.under_grad_mode(|| {
             B::scatter::<K, KInt>(&self.inner, dim, &index.inner, &src.inner)
         })?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -940,7 +1160,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Returns upper triangular part of matrix.
     pub fn triu(&self, k: i64) -> Result<Self> {
         let inner = self.under_grad_mode(|| B::triu::<K>(&self.inner, k))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -952,7 +1172,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Returns lower triangular part of matrix.
     pub fn tril(&self, k: i64) -> Result<Self> {
         let inner = self.under_grad_mode(|| B::tril::<K>(&self.inner, k))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -980,7 +1200,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         chunks: usize,
         dim: usize,
     ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
-        let dim_size = S::dims(&self._shape).as_ref()[dim];
+        let dim_size = self.shape_buf().as_ref()[dim];
         if chunks == 0 {
             return Err(crate::err::Error::Msg(
                 "chunk expects positive number of chunks".into(),
@@ -1005,7 +1225,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         split_size: usize,
         dim: usize,
     ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
-        let dim_size = S::dims(&self._shape).as_ref()[dim];
+        let dim_size = self.shape_buf().as_ref()[dim];
         if split_size == 0 {
             return Err(crate::err::Error::Msg(
                 "split expects positive split_size".into(),
@@ -1022,7 +1242,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Expands the tensor to target shape `S2`.
-    pub fn expand<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>> {
+    pub fn expand<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
+    where
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
+    {
         self.broadcast_to::<S2>(args)
     }
 
@@ -1055,7 +1278,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Group normalization across `groups`.
     pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self> {
         let inner = self.under_grad_mode(|| B::group_norm::<K>(&self.inner, groups, eps))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -1067,7 +1290,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Instance normalization for 4D (N, C, H, W) tensors.
     pub fn instance_norm(&self, eps: f64) -> Result<Self> {
         let inner = self.under_grad_mode(|| B::instance_norm::<K>(&self.inner, eps))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -1080,7 +1303,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 /// `try_stack_tensors`.
 pub fn try_stack_tensors<
     S: Shape + DynShape,
-    B: Backend,
+    B: Backend + TensorOps<B>,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
 >(
@@ -1100,16 +1323,15 @@ where
     }
     let raw_tensors: alloc::vec::Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
     let inner = tensors[0].under_grad_mode(|| B::stack(&raw_tensors, dim))?;
-    let mut shape = S::dims(&tensors[0]._shape).as_ref().to_vec();
+    let mut shape = tensors[0].shape_buf().as_ref().to_vec();
     shape.insert(dim, tensors.len());
-    Ok(Tensor {
+    Tensor::<Dyn, B, K, G>::from_shape_buf(
         inner,
-        _shape: shape,
-        _dtype: tensors[0]._dtype.clone(),
-        _device: tensors[0]._device.clone(),
-        _grad: tensors[0]._grad.clone(),
-        _placement: core::marker::PhantomData,
-    })
+        ShapeBuf::from_slice(&shape),
+        tensors[0]._dtype.clone(),
+        tensors[0]._device.clone(),
+        tensors[0]._grad.clone(),
+    )
 }
 
 impl<
@@ -1130,6 +1352,103 @@ where
         let field = NewD::init(arg.clone());
         let inner =
             self.under_grad_mode(|| B::transfer_storage(&self.inner, &self._dtype, &field))?;
-        Tensor::from_parts(inner, self._shape, self._dtype, field, self._grad)
+        Tensor::from_shape_value(inner, self._shape, self._dtype, field, self._grad)
+    }
+}
+
+pub(crate) fn execute_where_cond_descriptor<
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    K: DType,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+>(
+    mask: &Tensor<S, B, bool, G1>,
+    on_true: &Tensor<S2, B, K, G2>,
+    on_false: &Tensor<S2, B, K, G2>,
+) -> Result<Tensor<S2, B, K, G2>>
+where
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<op::WhereCond>>,
+    <B as Execute<Descriptor<op::WhereCond>>>::Output: Into<B::Storage<K>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
+    let h_true = TensorHandle::from_storage::<B, K, Local>(&on_true.inner);
+    let h_false = TensorHandle::from_storage::<B, K, Local>(&on_false.inner);
+    let shape_val = on_true._shape.clone();
+    let context = ExecutionContext::from_scope(B::default());
+    let storage = dispatch::execute_shaped::<op::WhereCond, B, S2>(
+        &context,
+        NoAttributes,
+        &[h_mask, h_true, h_false],
+        &shape_val,
+    )
+    .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        on_true._shape.clone(),
+        on_true._dtype.clone(),
+        on_true._device.clone(),
+        on_true._grad.clone(),
+    )
+}
+
+pub(crate) fn execute_masked_fill_descriptor<
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    K: DType,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+>(
+    input: &Tensor<S, B, K, G1>,
+    mask: &Tensor<S2, B, bool, G2>,
+    value: f64,
+) -> Result<Tensor<S, B, K, G1>>
+where
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<op::MaskedFill>>,
+    <B as Execute<Descriptor<op::MaskedFill>>>::Output: Into<B::Storage<K>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_input = TensorHandle::from_storage::<B, K, Local>(&input.inner);
+    let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
+    let shape_val = input._shape.clone();
+    let context = ExecutionContext::from_scope(B::default());
+    let storage = dispatch::execute_shaped::<op::MaskedFill, B, S>(
+        &context,
+        crate::exec::catalog::ScalarAttributes { value },
+        &[h_input, h_mask],
+        &shape_val,
+    )
+    .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        input._shape.clone(),
+        input._dtype.clone(),
+        input._device.clone(),
+        input._grad.clone(),
+    )
+}
+
+impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
+    Tensor<S, B, bool, G>
+{
+    /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
+    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad>(
+        &self,
+        on_true: &Tensor<S2, B, K, G2>,
+        on_false: &Tensor<S2, B, K, G2>,
+    ) -> Result<Tensor<S2, B, K, G2>>
+    where
+        S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::WhereCond>>,
+        <B as Execute<Descriptor<op::WhereCond>>>::Output: Into<B::Storage<K>>,
+    {
+        self.under_grad_mode(|| {
+            execute_where_cond_descriptor::<S, S2, B, K, G, G2>(self, on_true, on_false)
+        })
     }
 }

@@ -70,16 +70,41 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     type Arg;
     /// Converts a user-facing `Arg` into canonical runtime dimensions.
     fn init(arg: Self::Arg) -> ShapeBuf;
+    /// Fallible constructor boundary used by public shape resolution.
+    ///
+    /// Legacy `init` remains available to low-level adapters, but canonical
+    /// callers must not turn a bad runtime/static argument into an internal
+    /// panic. Structural shapes override this method so every dimension is
+    /// checked before its value enters `ShapeBuf`.
+    #[inline]
+    fn try_init(
+        arg: Self::Arg,
+    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        let dims = Self::init(arg);
+        Self::validate_dims(dims.as_ref())?;
+        Ok(dims)
+    }
     /// Attempts to construct canonical runtime dimensions from raw dimensions.
     /// dimensions, returning `None` if `dims` doesn't match `Self`
     /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
     fn from_dyn(dims: &[usize]) -> Option<ShapeBuf>;
+    /// Fallible raw-dimension boundary for callers that need a typed shape
+    /// error instead of an `Option` adapter.
+    #[inline]
+    fn try_from_dyn(
+        dims: &[usize],
+    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
+            operation: crate::shapes::error::OperationKind::Storage,
+            rank: dims.len(),
+        })
+    }
     /// Resolves constructor input into the canonical runtime dimension
     /// storage.  New shape-aware code should use this boundary instead of
     /// retaining a shape-specific field beyond construction.
     #[inline]
     fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let dims = Self::init(arg);
+        let dims = Self::try_init(arg)?;
         Self::validate_dims(dims.as_ref())?;
         Ok(dims)
     }
@@ -87,14 +112,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Validates raw runtime dimensions against this shape's static contract.
     #[inline]
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        if Self::from_dyn(dims).is_some() {
-            Ok(())
-        } else {
-            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: crate::shapes::error::OperationKind::Storage,
-                rank: dims.len(),
-            })
-        }
+        Self::try_from_dyn(dims).map(|_| ())
     }
 }
 
@@ -158,8 +176,8 @@ pub struct DimCons<H, T> {
 
 impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
     const STATIC_VALID: () = {
-        let _ = H::STATIC_VALID;
-        let _ = T::STATIC_VALID;
+        H::STATIC_VALID;
+        T::STATIC_VALID;
     };
     const RANK: Option<usize> = match T::RANK {
         Some(rank) => Some(rank + 1),
@@ -185,6 +203,23 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
             buf.push(d);
         }
         buf
+    }
+
+    #[inline]
+    fn try_init(
+        arg: Self::Arg,
+    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        let head_size =
+            H::resolve_arg(arg.0).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            })?;
+        let tail_dims = T::try_init(arg.1)?;
+        let mut buf = crate::shapes::ShapeBuf::from_slice(&[head_size]);
+        for &d in tail_dims.as_ref() {
+            buf.push(d);
+        }
+        Ok(buf)
     }
 
     #[inline(always)]
@@ -794,7 +829,7 @@ pub fn checked_byte_len_from_dims(
 /// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
 ///
 /// All implementors of `Shape` that support dynamic rank queries also implement `DynShape`.
-/// This includes both `Dyn` and fully static shapes (tuples). Operations that need to introspect
+/// This includes both `Dyn` and fully static structural shapes. Operations that need to introspect
 /// the shape at runtime (e.g., computing strides) require a `DynShape` bound.
 pub trait DynShape: Shape {
     /// Returns the number of dimensions.

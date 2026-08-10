@@ -1,4 +1,7 @@
-use incin::backend_authoring::SupportsDType;
+use incin::backend_authoring::{
+    CreationOps, Execute, FloatOps, ModuleOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
+    operations::{Descriptor, op},
+};
 use incin::prelude::*;
 
 #[module]
@@ -14,10 +17,17 @@ pub struct BasicBlock<B: Backend> {
     pub bn2: incin::BatchNorm2d<s![dyn], B>,
 }
 
-impl<B: Backend> BasicBlock<B>
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>,
+> BasicBlock<B>
 where
-    B: SupportsDType<B::FloatElem>,
-    B::FloatElem: ConstDType,
+    B: SupportsDType<f32>,
     B::Device: ConstDevice,
 {
     /// New.
@@ -42,7 +52,21 @@ where
     }
 }
 
-impl<B: Backend> BasicBlock<B> {
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>
+        + Execute<Descriptor<op::Add>>
+        + Execute<Descriptor<op::Relu>>,
+> BasicBlock<B>
+where
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+{
     /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let out = self.conv1.forward(x.clone())?;
@@ -69,10 +93,17 @@ pub struct ResNet<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<B: Backend> ResNet<B>
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>,
+> ResNet<B>
 where
-    B: SupportsDType<B::FloatElem>,
-    B::FloatElem: ConstDType,
+    B: SupportsDType<f32>,
     B::Device: ConstDevice,
 {
     /// New.
@@ -86,7 +117,23 @@ where
     }
 }
 
-impl<B: Backend> ResNet<B> {
+impl<
+    B: Backend
+        + CreationOps<B>
+        + FloatOps<B>
+        + NumericOps<B>
+        + TensorOps<B>
+        + ModuleOps<B>
+        + ReductionOps<B>
+        + Execute<Descriptor<op::Add>>
+        + Execute<Descriptor<op::Relu>>
+        + Execute<Descriptor<op::MatMulExact>>,
+> ResNet<B>
+where
+    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+{
     /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
