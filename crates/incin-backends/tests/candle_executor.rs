@@ -7,23 +7,34 @@
 #![cfg(feature = "external-candle")]
 
 use incin_backends::external::candle::{CandleBackend, CandleStorage};
+use incin_core::backend_authoring::operations::{NoAttributes, ShapeAttributes};
 use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::exec::catalog::LogicalTensorMeta;
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, ExecutionContext, LayoutClass, MatMulRule, MatMulSpec, MathMode,
-    ReshapeRule, ReshapeSpec, ShapeRule, SupportLevel, TensorHandle, Validated,
+    Capabilities, CapabilityQuery, Descriptor, ExecutionContext, LayoutClass, MathMode,
+    SupportLevel, TensorHandle, Validated, op,
 };
-use incin_core::prelude::{BackendError, Cpu, DTypeId, Dyn, Local, OperationKind, Shape};
-use incin_core::typenum::{U2, U3, U4, U6};
+use incin_core::prelude::{BackendError, Cpu, DTypeId, Local, OperationKind, ShapeBuf};
 
 type TestBackend = CandleBackend<Cpu>;
 
-fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
-    S::try_from_dims(dims).expect("test dimensions must match the shape type")
-}
-
-fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {
-    <MatMulRule as ShapeRule<(Dyn, Dyn)>>::lower(&(field::<Dyn>(lhs), field::<Dyn>(rhs)), ())
-        .expect("test operands must be valid matmul shapes")
+fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<Descriptor<op::MatMulExact>> {
+    Descriptor::<op::MatMulExact>::infer_runtime(
+        NoAttributes,
+        vec![
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(lhs)),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(rhs)),
+                dtype: None,
+                device: None,
+            },
+        ],
+    )
+    .expect("test operands must be valid matmul shapes")
 }
 
 fn storage(shape: &[usize], values: &[f32]) -> CandleStorage {
@@ -33,7 +44,7 @@ fn storage(shape: &[usize], values: &[f32]) -> CandleStorage {
 }
 
 fn execute(
-    validated: &Validated<MatMulSpec>,
+    validated: &Validated<Descriptor<op::MatMulExact>>,
     lhs: &CandleStorage,
     rhs: &CandleStorage,
 ) -> Result<CandleStorage, BackendError> {
@@ -56,7 +67,7 @@ fn a_foreign_tensor_reports_its_own_checked_metadata() {
 
     assert_eq!(meta.shape().dims(), &[2, 3]);
     assert_eq!(meta.strides().strides(), &[3, 1]);
-    assert_eq!(meta.dtype(), DTypeId::F32);
+    assert_eq!(meta.dtype(), DTypeId::F32.into());
     assert_eq!(meta.layout(), LayoutClass::Contiguous);
 }
 
@@ -111,7 +122,7 @@ fn the_binder_requires_exactly_two_inputs() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::MatMul,
+            operation: OperationKind::MatMulExact,
             reason: "matmul expects exactly two tensor inputs"
         }
     ));
@@ -124,7 +135,7 @@ fn capabilities_refuse_a_dtype_candle_cannot_represent() {
     let backend = TestBackend::default();
     let query = CapabilityQuery {
         operation: OperationKind::MatMul,
-        dtype: DTypeId::Q8_0,
+        dtype: DTypeId::Q8_0.into(),
         layout: LayoutClass::Contiguous,
         rank: 2,
         training: false,
@@ -137,16 +148,20 @@ fn capabilities_refuse_a_dtype_candle_cannot_represent() {
     ));
 }
 
-fn lower_reshape_2x6_to_3x4() -> Validated<ReshapeSpec> {
-    <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-        &(field::<(U2, U6)>(&[2, 6]), field::<(U3, U4)>(&[3, 4])),
-        (),
+fn lower_reshape_2x6_to_3x4() -> Validated<Descriptor<op::ReshapeExact>> {
+    Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: vec![3, 4] },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[2, 6])),
+            dtype: None,
+            device: None,
+        }],
     )
     .expect("12 elements either way")
 }
 
 fn execute_reshape(
-    validated: &Validated<ReshapeSpec>,
+    validated: &Validated<Descriptor<op::ReshapeExact>>,
     input: &CandleStorage,
 ) -> Result<CandleStorage, BackendError> {
     let context = ExecutionContext::new(TestBackend::default());
@@ -191,7 +206,7 @@ fn the_reshape_binder_rejects_an_operand_that_disagrees_with_the_descriptor() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Reshape,
+            operation: OperationKind::ReshapeExact,
             reason: "reshape input metadata does not match the validated descriptor"
         }
     ));
@@ -205,7 +220,7 @@ fn capabilities_now_answer_for_the_operations_the_adapter_routes() {
     let backend = TestBackend::default();
     let query = |operation| CapabilityQuery {
         operation,
-        dtype: DTypeId::F32,
+        dtype: DTypeId::F32.into(),
         layout: LayoutClass::Contiguous,
         rank: 2,
         training: false,
@@ -213,7 +228,7 @@ fn capabilities_now_answer_for_the_operations_the_adapter_routes() {
     };
 
     assert!(matches!(
-        backend.support(&query(OperationKind::Reshape)),
+        backend.support(&query(OperationKind::ReshapeExact)),
         SupportLevel::Native
     ));
     assert!(matches!(
