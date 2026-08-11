@@ -70,14 +70,30 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     fn resolve_arg(
         arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
-        Ok(Self::from_arg(arg).size())
+        match Self::STATIC {
+            StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            }),
+            StaticExtent::Value(value) => {
+                if Self::validate_size(value) {
+                    Ok(value)
+                } else {
+                    Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                        operation: crate::shapes::error::OperationKind::Storage,
+                        rank: 1,
+                    })
+                }
+            }
+            StaticExtent::RuntimeUnknown => Ok(Self::from_arg(arg).size()),
+        }
     }
 
     /// Validates a runtime axis value without constructing a second runtime
     /// dimension representation.
     #[inline]
     fn validate_size(size: usize) -> bool {
-        Self::from_size(size).is_some()
+        Self::STATIC.validate_size(size)
     }
 }
 
