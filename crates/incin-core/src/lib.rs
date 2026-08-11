@@ -88,7 +88,7 @@ pub mod backend_authoring {
         CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
         LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
         OperationIdentity, OperationKey, PrecisionSpec, RuntimePrecisionPolicy, SupportLevel,
-        TensorMeta, Validated, ValidatedInvocation, op,
+        TensorMeta, UnsupportedReason, Validated, ValidatedInvocation, op,
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{

@@ -41,6 +41,7 @@ fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
 fn stable_facade_consumer_contracts() {
     check_fixture("default-pass", true, &[]);
     check_fixture("backend-authoring-pass", true, &[]);
+    check_fixture("custom-op-cpu-pass", true, &[]);
     check_fixture("experimental-distributed-pass", true, &[]);
     check_fixture("test-utils-pass", true, &[]);
     check_fixture("no-default-pass", true, &[]);

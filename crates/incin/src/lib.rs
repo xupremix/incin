@@ -222,7 +222,7 @@ pub mod backend_authoring {
         DescriptorError, Execute, ExecutionContext, ExecutionDescriptor, ExecutionRequest,
         LogicalTensorMeta, LossScaling, Operation, OperationIdentity, OperationKey, PrecisionSpec,
         RuntimePrecisionPolicy, ShapeBuf, StorageBackend, SupportLevel, SupportsDType,
-        TensorBackend, TensorMeta, TransferTo, Validated,
+        TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated,
     };
     pub use incin_core::backend_authoring::{
         execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,

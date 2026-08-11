@@ -1,0 +1,11 @@
+[package]
+name = "incin-facade-custom-op-cpu-pass"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+incin = { path = "../../..", default-features = false, features = ["std", "cpu", "backend-authoring"] }
+incin-backends = { path = "../../../../incin-backends", default-features = false, features = ["std", "cpu"] }
+serde = { version = "1", features = ["derive"] }
