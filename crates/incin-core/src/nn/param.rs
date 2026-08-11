@@ -45,6 +45,44 @@ pub trait ParameterInit<K: DType>: Backend + SupportsDType<K> {
     ) -> Result<Self::RawVar>;
 }
 
+fn validate_initialized_var<B, K>(
+    raw_var: &B::RawVar,
+    shape: &ShapeBuf,
+    dtype: &K::Field,
+    device: &<B::Device as Device>::Field,
+    operation: &'static str,
+) -> Result<()>
+where
+    B: Backend + SupportsDType<K>,
+    K: DType,
+{
+    let storage = B::var_as_tensor::<K>(raw_var)?;
+    let meta = B::metadata(&storage);
+    if meta.shape.as_ref() != shape.as_ref() {
+        return Err(Error::ShapeMismatch {
+            op: operation,
+            expected: shape.as_ref().to_vec(),
+            got: meta.shape.as_ref().to_vec(),
+            msg: "Initialized variable shape mismatch".into(),
+        });
+    }
+    let incin_device = <B::Device as Device>::to_incin(device)?;
+    let expected_dtype = B::resolve_dtype(dtype, &incin_device)?;
+    if meta.dtype != expected_dtype {
+        return Err(Error::DTypeStorageMismatch {
+            expected: expected_dtype,
+            got: meta.dtype,
+        });
+    }
+    if meta.device != incin_device {
+        return Err(Error::DeviceStorageMismatch {
+            expected: incin_device,
+            got: meta.device,
+        });
+    }
+    Ok(())
+}
+
 impl<B, K: DType> ParameterInit<K> for B
 where
     B: Backend
@@ -372,6 +410,7 @@ where
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::new_init_raw")?;
 
         Ok(Self {
             inner,
@@ -403,6 +442,7 @@ where
             &_device,
             crate::nn::init::InitPlan::Zeros,
         )?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::zeros_raw")?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -436,6 +476,7 @@ where
                 std: 1.0,
             },
         )?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::randn")?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -457,6 +498,7 @@ where
             &_device,
             crate::nn::init::InitPlan::Ones,
         )?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::ones_raw")?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -764,6 +806,7 @@ where
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Buffer::new_init_raw")?;
 
         Ok(Self {
             inner,
@@ -792,6 +835,7 @@ where
             &_device,
             crate::nn::init::InitPlan::Zeros,
         )?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Buffer::zeros_raw")?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -818,6 +862,7 @@ where
             &_device,
             crate::nn::init::InitPlan::Ones,
         )?;
+        validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Buffer::ones_raw")?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
