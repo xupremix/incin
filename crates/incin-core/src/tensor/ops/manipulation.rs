@@ -190,12 +190,8 @@ fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeDescr
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
