@@ -82,11 +82,13 @@ pub mod experimental {
 pub mod backend_authoring {
     pub use crate::exec::dispatch::{execute, execute_shaped};
     pub use crate::exec::{
-        AttributeContract, CanonicalOperation, Capabilities, CapabilityRegistry, Descriptor,
-        DescriptorError, ExecutionContext, ExecutionDescriptor, LogicalTensorMeta, LossScaling,
-        OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationIdentity, OperationKey,
-        PrecisionSpec, RuntimePrecisionPolicy, TensorMeta, Validated, ValidatedInvocation, op,
+        Alignment, AttributeContract, CanonicalOperation, Capabilities, CapabilityQuery,
+        CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
+        LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
+        OperationIdentity, OperationKey, PrecisionSpec, RuntimePrecisionPolicy, SupportLevel,
+        TensorMeta, Validated, ValidatedInvocation, op,
     };
+    pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
         Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
         OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorBackend,

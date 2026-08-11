@@ -216,11 +216,12 @@ pub mod experimental {
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
-        AttributeContract, Backend, Capabilities, CapabilityRegistry, CreationOps, Execute,
-        ExecutionContext, ExecutionDescriptor, ExecutionRequest, FloatOps, LossOps, LossScaling,
-        ModuleOps, NumericOps, Operation, OperationIdentity, OperationKey, OptimizerOps,
-        PrecisionSpec, QuantizedOps, ReductionOps, RuntimePrecisionPolicy, StorageBackend,
-        SupportsDType, TensorBackend, TensorOps, TransferTo, Validated,
+        Alignment, AttributeContract, Backend, Capabilities, CapabilityQuery, CapabilityRegistry,
+        CreationOps, DescriptorError, Execute, ExecutionContext, ExecutionDescriptor,
+        ExecutionRequest, FloatOps, LogicalTensorMeta, LossOps, LossScaling, ModuleOps, NumericOps,
+        Operation, OperationIdentity, OperationKey, OptimizerOps, PrecisionSpec, QuantizedOps,
+        ReductionOps, RuntimePrecisionPolicy, ShapeBuf, StorageBackend, SupportLevel,
+        SupportsDType, TensorBackend, TensorMeta, TensorOps, TransferTo, Validated,
     };
     pub use incin_core::backend_authoring::{execute, execute_shaped};
 
