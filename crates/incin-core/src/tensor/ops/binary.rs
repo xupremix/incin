@@ -8,12 +8,12 @@
 //! broadcast shape resolution (`BroadcastShape`).
 
 use crate::dist::placement::Local;
+use crate::exec::ExecutionDescriptor;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{CanonicalOperation, Descriptor, NoAttributes, op};
+use crate::exec::catalog::{CanonicalOperation, Descriptor, LogicalTensorMeta, NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::{BroadcastRule, ShapeRule};
 use crate::prelude::{
     Backend, DynShape, GradJoin, JoinedGrad, RequiresGrad, Result, Shape, Tensor,
 };
@@ -83,16 +83,29 @@ where
     <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
 {
     <SOut as Shape>::STATIC_VALID;
-    // Tensor metadata has already crossed the ShapeValue validation boundary;
-    // pass the authoritative ShapeBufs directly to the canonical frontend
-    // rule. Re-parsing them through `S::from_dyn` would recreate the removed
-    // shape-specific runtime representation.
-    let b_shape = <BroadcastRule as ShapeRule<(S1, S2)>>::lower(
-        &(lhs.shape_buf().clone(), rhs.shape_buf().clone()),
-        None,
-    )?
-    .into_descriptor()
-    .output;
+    let descriptor = Descriptor::<O>::infer_runtime(
+        NoAttributes,
+        alloc::vec![
+            LogicalTensorMeta {
+                shape: Some(lhs.shape_buf().clone()),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(rhs.shape_buf().clone()),
+                dtype: None,
+                device: None,
+            },
+        ],
+    )
+    .map_err(|error| crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
+    .into_descriptor();
+    let b_shape = descriptor.output_shape().cloned().ok_or_else(|| {
+        crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+            operation: crate::shapes::error::OperationKind::Broadcast,
+            rank: 0,
+        })
+    })?;
     let h_lhs = TensorHandle::from_storage::<B, K, Local>(&lhs.inner);
     let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
     let shape_val =

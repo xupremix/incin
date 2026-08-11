@@ -9,9 +9,9 @@ use crate::dist::Placement;
 use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::catalog::{
-    AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
-    PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
-    SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
+    AxisAttributes, FlattenAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes,
+    PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes,
+    ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -749,17 +749,26 @@ impl<
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
         <<S as crate::shapes::broadcast::BroadcastShape<S2>>::Output as Shape>::STATIC_VALID;
-        let resolved = <S as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(
-            &self.shape_buf_value(),
-            &new_shape_field,
-        )?;
-        let spec = crate::exec::BroadcastSpec::contiguous(
-            &self.shape_buf_value(),
-            &new_shape_field,
-            None,
-        )?;
-        let new_shape_field = spec.output;
-        debug_assert_eq!(resolved, new_shape_field);
+        let descriptor = Descriptor::<op::BroadcastAs>::infer_runtime(
+            ShapeAttributes {
+                shape: new_shape_field.as_ref().to_vec(),
+            },
+            alloc::vec![LogicalTensorMeta {
+                shape: Some(self.shape_buf_value()),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .map_err(|error| {
+            crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error))
+        })?
+        .into_descriptor();
+        let new_shape_field = descriptor.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: OperationKind::Broadcast,
+                rank: 0,
+            })
+        })?;
         let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
