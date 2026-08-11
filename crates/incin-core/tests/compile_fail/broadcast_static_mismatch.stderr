@@ -1,0 +1,48 @@
+error[E0080]: evaluation panicked: invalid static dimension expression
+ --> $RUST/core/src/panic.rs
+  |
+  |         $crate::panicking::panic_fmt($crate::const_format_args!($($t)+));
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<incin::shapes::BroadcastExtent<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UTerm, incin::typenum::B1>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UInt<incin::typenum::UTerm, incin::typenum::B1>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>, incin::typenum::B0>> as incin::shapes::Dim>::STATIC_VALID` failed here
+  |
+ ::: src/shapes/dim.rs
+  |
+  |             panic!("invalid static dimension expression");
+  |             --------------------------------------------- in this macro invocation
+
+note: erroneous constant encountered
+ --> src/shapes/shape.rs
+  |
+  |         H::STATIC_VALID;
+  |         ^^^^^^^^^^^^^^^
+
+note: erroneous constant encountered
+ --> src/tensor/ops/binary.rs
+  |
+  |     <SOut as Shape>::STATIC_VALID;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: the above error was encountered while instantiating `fn binary::execute_broadcast_binary_descriptor::<incin::exec::op::Add, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>, Nil>, DimCons<BroadcastExtent<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>>, Nil>, DummyBackend<incin::prelude::Cpu>, f32, Grad, Grad, Grad>`
+ --> src/tensor/ops/binary.rs
+  |
+  |                       execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _>(self, rhs, grad_out)
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  | / impl_broadcast_binary_op!(
+  | |     /// Adds two tensors, broadcasting their shapes if necessary according to NumPy semantics.
+  | |     BroadcastAdd, broadcast_add, Add
+  | | );
+  | |_- in this macro invocation
+  |
+  = note: this note originates in the macro `impl_broadcast_binary_op` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+ --> src/exec/rule.rs
+  |
+  |         <Self::Output as Shape>::STATIC_VALID;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: erroneous constant encountered
+ --> src/shapes/broadcast.rs
+  |
+  |         <Self::Output as Shape>::STATIC_VALID;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
