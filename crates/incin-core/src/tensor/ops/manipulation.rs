@@ -813,12 +813,8 @@ impl<
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G>
 {
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(&self) -> Result<Tensor<S, B, T2, G>>
