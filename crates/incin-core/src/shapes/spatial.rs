@@ -288,10 +288,10 @@ impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()
             OP,
             Axis::Named("length"),
             dims[length],
-            K::from_arg(()).size(),
-            S::from_arg(()).size(),
-            P::from_arg(()).size(),
-            D::from_arg(()).size(),
+            K::static_size()?,
+            S::static_size()?,
+            P::static_size()?,
+            D::static_size()?,
         )?;
         Ok(dims)
     }
@@ -341,10 +341,10 @@ impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()
                 OP,
                 axis,
                 dims[index],
-                K::from_arg(()).size(),
-                S::from_arg(()).size(),
-                P::from_arg(()).size(),
-                D::from_arg(()).size(),
+                K::static_size()?,
+                S::static_size()?,
+                P::static_size()?,
+                D::static_size()?,
             )?;
         }
         Ok(dims)
@@ -503,10 +503,10 @@ where
                 expected: RankExpectation::AtLeast(2),
                 actual: input.len(),
             })?,
-            K::from_arg(()).size(),
-            Stride::from_arg(()).size(),
-            Padding::from_arg(()).size(),
-            Dilation::from_arg(()).size(),
+            K::static_size()?,
+            Stride::static_size()?,
+            Padding::static_size()?,
+            Dilation::static_size()?,
         )?;
         append_spatial_suffix(OP, input, &[out_channels, length])
     }
@@ -602,19 +602,19 @@ where
             OP,
             Axis::Named("height"),
             dims[dims.len() - 2],
-            K::from_arg(()).size(),
-            Stride::from_arg(()).size(),
-            Padding::from_arg(()).size(),
-            Dilation::from_arg(()).size(),
+            K::static_size()?,
+            Stride::static_size()?,
+            Padding::static_size()?,
+            Dilation::static_size()?,
         )?;
         let width = spatial_out_size(
             OP,
             Axis::Named("width"),
             dims[dims.len() - 1],
-            K::from_arg(()).size(),
-            Stride::from_arg(()).size(),
-            Padding::from_arg(()).size(),
-            Dilation::from_arg(()).size(),
+            K::static_size()?,
+            Stride::static_size()?,
+            Padding::static_size()?,
+            Dilation::static_size()?,
         )?;
         append_spatial_suffix(OP, input, &[out_channels, height, width])
     }

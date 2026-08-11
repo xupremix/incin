@@ -10,6 +10,15 @@ pub enum StaticExtent {
 }
 
 impl StaticExtent {
+    /// Returns the value only when the extent is a valid static proof.
+    #[inline(always)]
+    pub const fn value(self) -> Option<usize> {
+        match self {
+            StaticExtent::Value(value) => Some(value),
+            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => None,
+        }
+    }
+
     /// Validates whether a runtime `size` is consistent with this static extent.
     #[inline(always)]
     pub const fn validate_size(self, size: usize) -> bool {
@@ -48,6 +57,19 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     #[inline]
     fn static_extent(&self) -> StaticExtent {
         Self::STATIC
+    }
+
+    /// Returns a concrete value for a dimension whose type proves its extent.
+    /// Runtime and invalid symbolic extents are rejected instead of being
+    /// represented by a fabricated dimension value.
+    #[inline]
+    fn static_size() -> Result<usize, crate::shapes::error::ShapeError> {
+        Self::STATIC
+            .value()
+            .ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            })
     }
 
     /// The user-facing constructor argument (e.g. `()` for compile-time-
