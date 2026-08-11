@@ -1,7 +1,7 @@
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;
-use incin_core::shapes::ShapeError;
+use incin_core::prelude::ShapeError;
 
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
 

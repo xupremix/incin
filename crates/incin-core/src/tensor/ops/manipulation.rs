@@ -509,11 +509,11 @@ impl<
     {
         let in_shape_vec = self.shape_buf();
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
-        if ranges.len() > in_shape_vec.as_ref().len() {
+        if ranges.len() != in_shape_vec.as_ref().len() {
             return Err(crate::err::Error::Shape(
                 crate::shapes::ShapeError::RankMismatch {
                     operation: OperationKind::Slice,
-                    expected: crate::shapes::error::RankExpectation::AtMost(
+                    expected: crate::shapes::error::RankExpectation::Exactly(
                         in_shape_vec.as_ref().len(),
                     ),
                     actual: ranges.len(),
