@@ -6,34 +6,202 @@
 //! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard
 //! `core::ops` traits (like `core::ops::Add`) which automatically leverage compile-time
 //! broadcast shape resolution (`BroadcastShape`).
-use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
+
+use crate::dist::placement::Local;
+use crate::exec::capability::Capabilities;
+use crate::exec::catalog::{CanonicalOperation, Descriptor, NoAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
+use crate::exec::{BroadcastRule, ShapeRule};
+use crate::prelude::{
+    Backend, DynShape, GradJoin, JoinedGrad, RequiresGrad, Result, Shape, Tensor,
+};
+use crate::shapes::ShapeValue;
+use crate::tensor::backend::{Execute, FloatOps, NumericOps, TensorOps};
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::NoGrad;
 use crate::tensor::ops::*;
+
+pub(crate) fn execute_binary_descriptor<
+    O,
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    KIn: DType,
+    KOut: DType,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+    GOut: RequiresGrad,
+>(
+    lhs: &Tensor<S, B, KIn, G1>,
+    rhs: &Tensor<S2, B, KIn, G2>,
+    grad_out: GOut::Field,
+) -> Result<Tensor<S, B, KOut, GOut>>
+where
+    O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<O>>,
+    <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<KOut>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_lhs = TensorHandle::from_storage::<B, KIn, Local>(&lhs.inner);
+    let h_rhs = TensorHandle::from_storage::<B, KIn, Local>(&rhs.inner);
+    let shape_val = lhs._shape.clone();
+    let context = ExecutionContext::from_scope(B::default());
+    let storage =
+        dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
+            .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        lhs._shape.clone(),
+        Default::default(),
+        lhs._device.clone(),
+        grad_out,
+    )
+}
+
+pub(crate) fn execute_broadcast_binary_descriptor<
+    O,
+    S1: Shape + DynShape,
+    S2: Shape + DynShape,
+    SOut: Shape + DynShape,
+    B: Backend,
+    K: DType,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+    GOut: RequiresGrad,
+>(
+    lhs: &Tensor<S1, B, K, G1>,
+    rhs: &Tensor<S2, B, K, G2>,
+    grad_out: GOut::Field,
+) -> Result<Tensor<SOut, B, K, GOut>>
+where
+    O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    S1: crate::shapes::broadcast::BroadcastShape<S2, Output = SOut>,
+    B: Execute<Descriptor<O>>,
+    <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
+{
+    <SOut as Shape>::STATIC_VALID;
+    // Tensor metadata has already crossed the ShapeValue validation boundary;
+    // pass the authoritative ShapeBufs directly to the canonical frontend
+    // rule. Re-parsing them through `S::from_dyn` would recreate the removed
+    // shape-specific runtime representation.
+    let b_shape = <BroadcastRule as ShapeRule<(S1, S2)>>::lower(
+        &(lhs.shape_buf().clone(), rhs.shape_buf().clone()),
+        None,
+    )?
+    .into_descriptor()
+    .output;
+    let h_lhs = TensorHandle::from_storage::<B, K, Local>(&lhs.inner);
+    let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
+    let shape_val =
+        ShapeValue::<SOut>::try_new(b_shape.clone()).map_err(crate::prelude::Error::Shape)?;
+    let context = ExecutionContext::from_scope(B::default());
+    let storage =
+        dispatch::execute_shaped::<O, B, SOut>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
+            .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        ShapeValue::<SOut>::try_new(b_shape).map_err(crate::prelude::Error::Shape)?,
+        lhs._dtype.clone(),
+        lhs._device.clone(),
+        grad_out,
+    )
+}
+
+pub(crate) fn execute_cmp_descriptor<
+    O,
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    K: DType,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+>(
+    lhs: &Tensor<S, B, K, G1>,
+    rhs: &Tensor<S2, B, K, G2>,
+) -> Result<Tensor<S, B, bool, NoGrad>>
+where
+    O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<O>>,
+    <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<bool>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_lhs = TensorHandle::from_storage::<B, K, Local>(&lhs.inner);
+    let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
+    let shape_val = lhs._shape.clone();
+    let context =
+        ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
+    let storage =
+        dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
+            .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        lhs._shape.clone(),
+        Default::default(),
+        lhs._device.clone(),
+        Default::default(),
+    )
+}
+
+pub(crate) fn execute_logical_binary_descriptor<
+    O,
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    G1: RequiresGrad,
+    G2: RequiresGrad,
+>(
+    lhs: &Tensor<S, B, bool, G1>,
+    rhs: &Tensor<S2, B, bool, G2>,
+) -> Result<Tensor<S, B, bool, NoGrad>>
+where
+    O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<O>>,
+    <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<bool>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_lhs = TensorHandle::from_storage::<B, bool, Local>(&lhs.inner);
+    let h_rhs = TensorHandle::from_storage::<B, bool, Local>(&rhs.inner);
+    let shape_val = lhs._shape.clone();
+    let context =
+        ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
+    let storage =
+        dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
+            .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        lhs._shape.clone(),
+        Default::default(),
+        lhs._device.clone(),
+        Default::default(),
+    )
+}
 
 macro_rules! impl_binary_op {
     (
         $(#[$meta:meta])*
-        $trait_name:ident, $method:ident, $backend_method:ident
+        $op:ident, $method:ident, $op_marker:ident
     ) => {
-        // Tensor op Tensor → Result<Tensor> (owned)
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G>
-{
+        impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S, B, K, G1> {
             $(#[$meta])*
             pub fn $method<S2: Shape, G2: RequiresGrad>(
                 &self,
                 rhs: &Tensor<S2, B, K, G2>,
-            ) -> Result<Self>
+            ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
             where
                 S: ShapeEq<S2>,
+                G1: GradJoin<G2>,
+                B: Execute<Descriptor<op::$op_marker>>,
+                <B as Execute<Descriptor<op::$op_marker>>>::Output: Into<B::Storage<K>>,
             {
-                let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-                let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, &rhs.inner))?;
-                Tensor::from_parts(
-                    inner,
-                    self._shape.clone(),
-                    self._dtype.clone(),
-                    self._device.clone(),
-                    self._grad.clone(),
-                )
+                let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
+                self.under_grad_mode(|| {
+                    execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _>(self, rhs, grad_out)
+                })
             }
         }
     };
@@ -41,132 +209,147 @@ macro_rules! impl_binary_op {
 
 impl_binary_op!(
     /// Adds another tensor element-wise.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.add(&b).unwrap(); // Elements are 2.0
-    /// ```
-    Add, add, add
+    Add, add, Add
 );
 
 impl_binary_op!(
     /// Subtracts another tensor element-wise.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.sub(&b).unwrap(); // Elements are 0.0
-    /// ```
-    Sub, sub, sub
+    Sub, sub, Sub
 );
 
 impl_binary_op!(
     /// Multiplies by another tensor element-wise.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.mul(&b).unwrap(); // Elements are 1.0
-    /// ```
-    Mul, mul, mul
+    Mul, mul, Mul
 );
 
 impl_binary_op!(
     /// Divides by another tensor element-wise.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.div(&b).unwrap(); // Elements are 1.0
-    /// ```
-    Div, div, div
+    Div, div, Div
 );
 
-impl_binary_op!(
+macro_rules! impl_cmp_op {
+    ($(#[$meta:meta])* $method:ident, $op:ident) => {
+        impl<
+            S: Shape,
+            B: Backend + Capabilities + Default,
+            K: DType,
+            G: RequiresGrad,
+        > Tensor<S, B, K, G> {
+            $(#[$meta])*
+            pub fn $method<S2: Shape, G2: RequiresGrad>(
+                &self,
+                rhs: &Tensor<S2, B, K, G2>,
+            ) -> Result<Tensor<S, B, bool, NoGrad>>
+            where
+                S: ShapeEq<S2>,
+                B: Execute<Descriptor<op::$op>>,
+                <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<bool>>,
+            {
+                self.under_grad_mode(|| {
+                    execute_cmp_descriptor::<op::$op, S, S2, B, K, G, G2>(self, rhs)
+                })
+            }
+        }
+    };
+}
+
+impl_cmp_op!(
     /// Element-wise equality (`self == rhs`).
-    CmpEq, eq, cmp_eq
+    eq, CmpEq
 );
-impl_binary_op!(
+impl_cmp_op!(
     /// Element-wise inequality (`self != rhs`).
-    CmpNe, ne, cmp_ne
+    ne, CmpNe
 );
-impl_binary_op!(
+impl_cmp_op!(
     /// Element-wise less-than (`self < rhs`).
-    CmpLt, lt, cmp_lt
+    lt, CmpLt
 );
-impl_binary_op!(
+impl_cmp_op!(
     /// Element-wise less-than-or-equal (`self <= rhs`).
-    CmpLe, le, cmp_le
+    le, CmpLe
 );
-impl_binary_op!(
+impl_cmp_op!(
     /// Element-wise greater-than (`self > rhs`).
-    CmpGt, gt, cmp_gt
+    gt, CmpGt
 );
-impl_binary_op!(
+impl_cmp_op!(
     /// Element-wise greater-than-or-equal (`self >= rhs`).
-    CmpGe, ge, cmp_ge
+    ge, CmpGe
 );
 
-impl_binary_op!(
+impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad> Tensor<S, B, bool, G> {
     /// Element-wise logical AND.
-    LogicalAnd, logical_and, logical_and
-);
-impl_binary_op!(
+    pub fn logical_and<S2: Shape, G2: RequiresGrad>(
+        &self,
+        rhs: &Tensor<S2, B, bool, G2>,
+    ) -> Result<Tensor<S, B, bool, NoGrad>>
+    where
+        S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::LogicalAnd>>,
+        <B as Execute<Descriptor<op::LogicalAnd>>>::Output: Into<B::Storage<bool>>,
+    {
+        self.under_grad_mode(|| {
+            execute_logical_binary_descriptor::<op::LogicalAnd, S, S2, B, G, G2>(self, rhs)
+        })
+    }
+
     /// Element-wise logical OR.
-    LogicalOr, logical_or, logical_or
-);
+    pub fn logical_or<S2: Shape, G2: RequiresGrad>(
+        &self,
+        rhs: &Tensor<S2, B, bool, G2>,
+    ) -> Result<Tensor<S, B, bool, NoGrad>>
+    where
+        S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::LogicalOr>>,
+        <B as Execute<Descriptor<op::LogicalOr>>>::Output: Into<B::Storage<bool>>,
+    {
+        self.under_grad_mode(|| {
+            execute_logical_binary_descriptor::<op::LogicalOr, S, S2, B, G, G2>(self, rhs)
+        })
+    }
+}
 
 impl_binary_op!(
     /// Element-wise maximum of two tensors.
-    Maximum, maximum, maximum
+    Maximum, maximum, Maximum
 );
 impl_binary_op!(
     /// Element-wise minimum of two tensors.
-    Minimum, minimum, minimum
+    Minimum, minimum, Minimum
 );
 impl_binary_op!(
     /// Element-wise absolute difference `|self - rhs|`.
-    AbsDiff, abs_diff, abs_diff
+    AbsDiff, abs_diff, AbsDiff
 );
 
 impl_binary_op!(
     /// Element-wise 2-argument arctangent `atan2(self, rhs)`.
-    Atan2, atan2, atan2
+    Atan2, atan2, Atan2
 );
 impl_binary_op!(
     /// Element-wise floating point remainder `self % rhs`.
-    Fmod, fmod, fmod
+    Fmod, fmod, Fmod
 );
 impl_binary_op!(
     /// Element-wise IEEE remainder.
-    Remainder, remainder, remainder
+    Remainder, remainder, Remainder
 );
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
+impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
     /// In-place addition: mutates `self` by adding `rhs` element-wise.
     pub fn add_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
     where
         S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::Add>>,
+        <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = self.add(rhs)?;
+        let res = execute_binary_descriptor::<op::Add, S, S2, B, K, K, G, G2, G>(
+            self,
+            rhs,
+            self._grad.clone(),
+        )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -175,9 +358,15 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     pub fn sub_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
     where
         S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::Sub>>,
+        <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = self.sub(rhs)?;
+        let res = execute_binary_descriptor::<op::Sub, S, S2, B, K, K, G, G2, G>(
+            self,
+            rhs,
+            self._grad.clone(),
+        )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -186,9 +375,15 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     pub fn mul_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
     where
         S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::Mul>>,
+        <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = self.mul(rhs)?;
+        let res = execute_binary_descriptor::<op::Mul, S, S2, B, K, K, G, G2, G>(
+            self,
+            rhs,
+            self._grad.clone(),
+        )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -197,31 +392,46 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     pub fn div_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
     where
         S: ShapeEq<S2>,
+        B: Execute<Descriptor<op::Div>>,
+        <B as Execute<Descriptor<op::Div>>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = self.div(rhs)?;
+        let res = execute_binary_descriptor::<op::Div, S, S2, B, K, K, G, G2, G>(
+            self,
+            rhs,
+            self._grad.clone(),
+        )?;
         self.inner = res.inner;
         Ok(())
     }
 
     /// In-place zero: fills all elements with 0.0.
-    pub fn zero_(&mut self) -> Result<()> {
+    pub fn zero_(&mut self) -> Result<()>
+    where
+        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+    {
         let res = self.mul_scalar(0.0)?;
         self.inner = res.inner;
         Ok(())
     }
 
     /// In-place fill: fills all elements with scalar `val`.
-    pub fn fill_(&mut self, val: f64) -> Result<()> {
+    pub fn fill_(&mut self, val: f64) -> Result<()>
+    where
+        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+    {
         let res = self.mul_scalar(0.0)?.add_scalar(val)?;
         self.inner = res.inner;
         Ok(())
     }
 
     /// Subtracts a scalar: `self - scalar`.
-    pub fn sub_scalar(&self, val: f64) -> Result<Self> {
+    pub fn sub_scalar(&self, val: f64) -> Result<Self>
+    where
+        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+    {
         let inner = self.under_grad_mode(|| B::sub_scalar::<K>(&self.inner, val))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -231,9 +441,12 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     }
 
     /// Divides by a scalar: `self / scalar`.
-    pub fn div_scalar(&self, val: f64) -> Result<Self> {
+    pub fn div_scalar(&self, val: f64) -> Result<Self>
+    where
+        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+    {
         let inner = self.under_grad_mode(|| B::div_scalar::<K>(&self.inner, val))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -250,10 +463,11 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     ) -> Result<Self>
     where
         S: ShapeEq<S2>,
+        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let inner = self.under_grad_mode(|| B::lerp::<K>(&self.inner, &end.inner, weight))?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -266,28 +480,26 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
 macro_rules! impl_broadcast_binary_op {
     (
         $(#[$meta:meta])*
-        $trait_name:ident, $method:ident, $backend_method:ident
+        $trait_name:ident, $method:ident, $op:ident
     ) => {
-        impl<S1: Shape + crate::shapes::DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S1, B, K, G>
+        impl<S1: Shape + DynShape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S1, B, K, G1>
         {
             $(#[$meta])*
             #[inline]
-            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>>
+            pub fn $method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
             where
-                S2: Shape + crate::shapes::DynShape,
+                S2: Shape + DynShape,
+                G2: RequiresGrad,
+                G1: GradJoin<G2>,
                 S1: crate::shapes::broadcast::BroadcastShape<S2>,
-                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+                B: Execute<Descriptor<op::$op>>,
+                <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<K>>,
             {
-                let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field())?;
-
-                let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, &rhs.inner))?;
-                Tensor::from_parts(
-                    inner,
-                    b_shape,
-                    self._dtype.clone(),
-                    self._device.clone(),
-                    self._grad.clone(),
-                )
+                let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
+                self.under_grad_mode(|| {
+                    execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _>(self, rhs, grad_out)
+                })
             }
         }
     };
@@ -295,85 +507,51 @@ macro_rules! impl_broadcast_binary_op {
 
 impl_broadcast_binary_op!(
     /// Adds two tensors, broadcasting their shapes if necessary according to NumPy semantics.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.broadcast_add(&b).unwrap(); // shape is [2, 2]
-    /// ```
-    BroadcastAdd, broadcast_add, add
+    BroadcastAdd, broadcast_add, Add
 );
 
 impl_broadcast_binary_op!(
     /// Subtracts the right tensor from the left tensor, broadcasting shapes if necessary.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.broadcast_sub(&b).unwrap(); // shape is [2, 2]
-    /// ```
-    BroadcastSub, broadcast_sub, sub
+    BroadcastSub, broadcast_sub, Sub
 );
 
 impl_broadcast_binary_op!(
     /// Multiplies two tensors element-wise, broadcasting shapes if necessary.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.broadcast_mul(&b).unwrap(); // shape is [2, 2]
-    /// ```
-    BroadcastMul, broadcast_mul, mul
+    BroadcastMul, broadcast_mul, Mul
 );
 
 impl_broadcast_binary_op!(
     /// Divides the left tensor by the right tensor, broadcasting shapes if necessary.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-    /// use incin::prelude::*;
-    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
-    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
-    /// let c = a.broadcast_div(&b).unwrap(); // shape is [2, 2]
-    /// ```
-    BroadcastDiv, broadcast_div, div
+    BroadcastDiv, broadcast_div, Div
 );
 
 macro_rules! impl_std_ops {
-    ($trait:ident, $method:ident, $backend_method:ident) => {
+    ($trait:ident, $method:ident, $backend_method:ident, $op:ident) => {
         // Tensor + Tensor
         impl<
-            S1: Shape + crate::shapes::DynShape,
-            S2: Shape + crate::shapes::DynShape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G>> for Tensor<S1, B, K, G>
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<Descriptor<op::$op>>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
+            G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
-            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+            <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<K>>,
         {
-            /// The broadcast-resolved output shape (via `BroadcastShape`),
-            /// with the same dtype/device/grad-tracking as the operands.
             type Output = crate::prelude::Result<
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
             }
         }
@@ -382,23 +560,29 @@ macro_rules! impl_std_ops {
         impl<
             'a,
             'b,
-            S1: Shape + crate::shapes::DynShape,
-            S2: Shape + crate::shapes::DynShape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::$trait<&'b Tensor<S2, B, K, G>> for &'a Tensor<S1, B, K, G>
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<Descriptor<op::$op>>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
+            G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
-            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+            <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<K>>,
         {
-            /// The broadcast-resolved output shape (via `BroadcastShape`),
-            /// with the same dtype/device/grad-tracking as the operands.
             type Output = crate::prelude::Result<
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
             #[inline]
-            fn $method(self, rhs: &'b Tensor<S2, B, K, G>) -> Self::Output {
+            fn $method(self, rhs: &'b Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
             }
         }
@@ -406,23 +590,29 @@ macro_rules! impl_std_ops {
         // Tensor + &Tensor
         impl<
             'a,
-            S1: Shape + crate::shapes::DynShape,
-            S2: Shape + crate::shapes::DynShape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::$trait<&'a Tensor<S2, B, K, G>> for Tensor<S1, B, K, G>
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<Descriptor<op::$op>>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
+            G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
-            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+            <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<K>>,
         {
-            /// The broadcast-resolved output shape (via `BroadcastShape`),
-            /// with the same dtype/device/grad-tracking as the operands.
             type Output = crate::prelude::Result<
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
             #[inline]
-            fn $method(self, rhs: &'a Tensor<S2, B, K, G>) -> Self::Output {
+            fn $method(self, rhs: &'a Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
             }
         }
@@ -430,30 +620,36 @@ macro_rules! impl_std_ops {
         // &Tensor + Tensor
         impl<
             'a,
-            S1: Shape + crate::shapes::DynShape,
-            S2: Shape + crate::shapes::DynShape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G>> for &'a Tensor<S1, B, K, G>
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<Descriptor<op::$op>>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
+            G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
-            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+            <B as Execute<Descriptor<op::$op>>>::Output: Into<B::Storage<K>>,
         {
-            /// The broadcast-resolved output shape (via `BroadcastShape`),
-            /// with the same dtype/device/grad-tracking as the operands.
             type Output = crate::prelude::Result<
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
             }
         }
     };
 }
 
-impl_std_ops!(Add, add, broadcast_add);
-impl_std_ops!(Sub, sub, broadcast_sub);
-impl_std_ops!(Mul, mul, broadcast_mul);
-impl_std_ops!(Div, div, broadcast_div);
+impl_std_ops!(Add, add, broadcast_add, Add);
+impl_std_ops!(Sub, sub, broadcast_sub, Sub);
+impl_std_ops!(Mul, mul, broadcast_mul, Mul);
+impl_std_ops!(Div, div, broadcast_div, Div);
