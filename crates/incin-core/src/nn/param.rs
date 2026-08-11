@@ -1,324 +1,345 @@
+use crate::backend_authoring::{CreationOps, FloatOps, NumericOps, TensorOps};
+use crate::nn::init::{InitContext, InitPlan, ParameterRole};
 use crate::prelude::*;
+use core::marker::PhantomData;
 
-fn execute_initializer<B>(
+/// Marker struct for trainable parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Trainable;
+
+/// Marker struct for frozen (non-trainable) parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Frozen;
+
+/// Trait defining parameter trainability typestate.
+pub trait TrainState: 'static + Send + Sync + core::fmt::Debug + Clone + Copy {
+    /// The tensor gradient requirement type.
+    type TensorGrad: RequiresGrad<Arg = ()>;
+    /// Whether parameters in this state receive optimizer updates.
+    const TRAINABLE: bool;
+}
+
+impl TrainState for Trainable {
+    type TensorGrad = Grad;
+    const TRAINABLE: bool = true;
+}
+
+impl TrainState for Frozen {
+    type TensorGrad = NoGrad;
+    const TRAINABLE: bool = false;
+}
+
+pub fn execute_plan_raw<B, K: DType>(
     dims: &[usize],
-    dtype_field: &<B::FloatElem as DType>::Field,
+    dtype_field: &<K as DType>::Field,
     device_field: &<B::Device as Device>::Field,
-    init: crate::nn::init::Init,
+    plan: crate::nn::init::InitPlan,
 ) -> Result<B::RawVar>
 where
-    B: Backend + SupportsDType<B::FloatElem>,
+    B: Backend + SupportsDType<K> + FloatOps<B> + NumericOps<B> + CreationOps<B>,
 {
-    use crate::nn::init::Init;
     let device = B::Device::to_incin(device_field)?;
     let dtype = B::resolve_dtype(dtype_field, &device)?;
-    match init {
-        Init::Zeros => B::var_zeros::<B::FloatElem>(dims, dtype, &device),
-        Init::Ones => B::var_ones::<B::FloatElem>(dims, dtype, &device),
-        Init::Rand => B::var_rand::<B::FloatElem>(dims, dtype, &device),
-        Init::Randn => B::var_randn::<B::FloatElem>(dims, dtype, &device),
-        Init::Uniform { bound } => {
-            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
-            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
-            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
-        }
-        Init::Constant(value) => {
-            let ones = B::ones::<B::FloatElem>(dims, dtype, &device)?;
+    match plan {
+        InitPlan::Zeros => B::var_zeros::<K>(dims, dtype, &device),
+        InitPlan::Ones => B::var_ones::<K>(dims, dtype, &device),
+        InitPlan::Constant(value) => {
+            let ones = B::ones::<K>(dims, dtype, &device)?;
             B::var_from_tensor(&B::mul_scalar_float(&ones, value)?)
         }
-        Init::KaimingUniform { fan_in, a } => {
-            let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-            let bound = f64::sqrt(3.0) * std;
-            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
-            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
-            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
+        InitPlan::Uniform { low, high } => {
+            let value = B::rand::<K>(dims, dtype, &device)?;
+            let range = high - low;
+            let value = B::mul_scalar_float(&value, range)?;
+            B::var_from_tensor(&B::add_scalar_float(&value, low)?)
         }
-        Init::KaimingNormal { fan_in, a } => {
-            let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-            let value = B::randn::<B::FloatElem>(dims, dtype, &device)?;
-            B::var_from_tensor(&B::mul_scalar_float(&value, std)?)
-        }
-        Init::XavierUniform { fan_in, fan_out } => {
-            let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
-            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
-            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
-            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
-        }
-        Init::XavierNormal { fan_in, fan_out } => {
-            let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
-            let value = B::randn::<B::FloatElem>(dims, dtype, &device)?;
-            B::var_from_tensor(&B::mul_scalar_float(&value, std)?)
+        InitPlan::Normal { mean, std } => {
+            let value = B::randn::<K>(dims, dtype, &device)?;
+            let value = B::mul_scalar_float(&value, std)?;
+            if mean != 0.0 {
+                B::var_from_tensor(&B::add_scalar_float(&value, mean)?)
+            } else {
+                B::var_from_tensor(&value)
+            }
         }
     }
 }
 
-/// A trainable parameter storing an underlying backend variable that supports gradient computation.
-///
-/// `Param` is the typed wrapper around a backend's gradient-tracking variable (e.g. `candle_core::Var`).
-/// All learnable weights and biases in Incin modules are stored as `Param` values.
-///
-/// Unlike a regular `Tensor`, a `Param` requires gradient tracking. Gradients are accumulated
-/// by the backend during the backward pass and read by the optimizer during a training step.
-///
-/// ## Examples
-/// ```rust
-/// # extern crate incin_core as incin;
-/// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-/// use incin::prelude::*;
-///
-/// // A 128×256 weight matrix initialized with Kaiming uniform
-/// let w: Param<s![128, 256], DefaultBackend> = Param::zeros(())?;
-///
-/// // Convert to a tensor for use in a forward pass
-/// let w_tensor = w.as_tensor()?;
-/// # Ok(()) }
-/// ```
-pub struct Param<S: Shape, B: Backend> {
-    pub(crate) inner: <B as Backend>::RawVar,
-    pub(crate) _shape: S::Field,
-    pub(crate) _dtype: <B::FloatElem as DType>::Field,
-    pub(crate) _device: <B::Device as Device>::Field,
+fn execute_initializer<B, K: DType>(
+    dims: &[usize],
+    dtype_field: &<K as DType>::Field,
+    device_field: &<B::Device as Device>::Field,
+    init: crate::nn::init::Init,
+) -> Result<B::RawVar>
+where
+    B: Backend + SupportsDType<K> + FloatOps<B> + NumericOps<B> + CreationOps<B>,
+{
+    let context = InitContext::new(ParameterRole::Other);
+    let plan = init.plan(context)?;
+    execute_plan_raw::<B, K>(dims, dtype_field, device_field, plan)
 }
 
-impl<S: Shape, B: Backend> Clone for Param<S, B> {
-    /// Clones the underlying backend variable and metadata (cheap: most
-    /// backends' `RawVar` is a reference-counted handle).
+/// A parameter storing an underlying backend variable that supports gradient computation.
+pub struct Param<S: Shape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
+    pub(crate) inner: <B as Backend>::RawVar,
+    pub(crate) _shape: ShapeValue<S>,
+    pub(crate) _dtype: K::Field,
+    pub(crate) _device: <B::Device as Device>::Field,
+    pub(crate) _train: PhantomData<Train>,
+}
+
+impl<S: Shape, B: Backend, K: DType, Train: TrainState> Clone for Param<S, B, K, Train> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
+            _train: PhantomData,
         }
     }
 }
 
-impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
-    /// Redacted `Debug` output: the backend variable's contents aren't
-    /// cheaply inspectable, so only a placeholder is shown for `inner`.
+impl<S: Shape, B: Backend, K: DType, Train: TrainState> core::fmt::Debug for Param<S, B, K, Train> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend> Param<S, B> {
-    /// Extract a functional Tensor from this variable for forward passes
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
+impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
+    /// Checked constructor boundary from parts.
+    pub fn from_parts_checked(
+        raw_var: B::RawVar,
+        shape: ShapeBuf,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+    ) -> Result<Self>
+    where
+        B: SupportsDType<K>,
+    {
+        let storage = B::var_as_tensor::<K>(&raw_var)?;
+        let meta = B::metadata(&storage);
+
+        let expected_shape = shape.as_ref().to_vec();
+        if meta.shape.as_ref() != expected_shape.as_slice() {
+            return Err(Error::ShapeMismatch {
+                op: "Param::from_parts_checked",
+                expected: expected_shape,
+                got: meta.shape.as_ref().to_vec(),
+                msg: alloc::string::ToString::to_string("Parameter shape mismatch"),
+            });
+        }
+
+        let incin_device = <B::Device as Device>::to_incin(&device)?;
+        let expected_dtype = B::resolve_dtype(&dtype, &incin_device)?;
+        if meta.dtype != expected_dtype {
+            return Err(Error::DTypeStorageMismatch {
+                expected: expected_dtype,
+                got: meta.dtype,
+            });
+        }
+
+        if meta.device != incin_device {
+            return Err(Error::DeviceStorageMismatch {
+                expected: incin_device,
+                got: meta.device,
+            });
+        }
+
+        Ok(Self {
+            inner: raw_var,
+            _shape: ShapeValue::new(shape),
+            _dtype: dtype,
+            _device: device,
+            _train: PhantomData,
+        })
+    }
+
+    /// Extract a functional Tensor from this variable for forward passes.
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, K, Train::TensorGrad>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
-            _grad: core::marker::PhantomData,
-            _placement: core::marker::PhantomData,
+            _grad: <Train::TensorGrad as RequiresGrad>::init(()),
+            _placement: PhantomData,
         })
     }
-}
 
-impl<S: Shape + DynShape, B: Backend> Param<S, B> {
-    /// Returns the shape dimensions of this parameter.
-    pub fn shape_dims(&self) -> Vec<usize> {
-        S::dims(&self._shape).as_ref().to_vec()
+    /// Freezes this parameter so it does not participate in optimizer updates.
+    pub fn freeze(self) -> Param<S, B, K, Frozen> {
+        Param {
+            inner: self.inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _train: PhantomData,
+        }
+    }
+
+    /// Unfreezes this parameter so it participates in optimizer updates.
+    pub fn unfreeze(self) -> Param<S, B, K, Trainable> {
+        Param {
+            inner: self.inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _train: PhantomData,
+        }
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
-    for Param<S, B>
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
+    /// Returns the shape dimensions of this parameter.
+    pub fn shape_dims(&self) -> Vec<usize> {
+        self._shape.shape_buf().as_ref().to_vec()
+    }
+}
+
+impl<S: Shape, B: Backend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
+    crate::nn::module::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
     B: TransferTo<NewD>,
-    <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
+    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
 {
-    /// The same parameter, rebuilt on backend `NewD`.
-    type Output = Param<S, <B as TransferTo<NewD>>::Output>;
-    /// Transfers the underlying variable to device `arg`.
+    type Output = Param<S, <B as TransferTo<NewD>>::Output, K, Train>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
+        let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
         Ok(Param {
             inner,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: field,
+            _train: PhantomData,
         })
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Param<S, B>
+impl<
+    S: Shape + DynShape,
+    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K>,
+    K: DType,
+    Train: TrainState,
+> Param<S, B, K, Train>
 where
-    (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
+    (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
-    /// Allocates storage of the given shape/dtype/device and fills it
-    /// according to `init` (e.g. Kaiming/Xavier/zeros/ones/uniform/normal).
+    /// Allocates storage of the given shape/dtype/device and fills it according to `init`.
     pub fn new_init_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self>
     where
-        B: SupportsDType<B::FloatElem>,
+        B: SupportsDType<K>,
     {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
-        let inner = execute_initializer::<B>(dims.as_ref(), &_dtype, &_device, init)?;
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
+        let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
 
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
+            _train: PhantomData,
         })
     }
 
-    /// Same as `new_init_raw`, but accepts any argument type convertible
-    /// via `ArgInto` instead of the exact tuple form.
+    /// Same as `new_init_raw`, but accepts any argument type convertible via `ArgInto`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
-        B: SupportsDType<B::FloatElem>,
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        B: SupportsDType<K>,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
     /// Allocates storage of the given shape/dtype/device, filled with zero.
     pub fn zeros_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_incin(&_dtype);
-        let inner = B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
+            _train: PhantomData,
         })
     }
 
-    /// Same as `zeros_raw`, but accepts any argument type convertible via
-    /// `ArgInto` instead of the exact tuple form.
+    /// Same as `zeros_raw`, but accepts any argument type convertible via `ArgInto`.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::zeros_raw(args.into_arg())
     }
 
-    /// Allocates storage of the given shape/dtype/device, filled with
-    /// samples from the standard normal distribution `N(0, 1)`.
+    /// Allocates storage of the given shape/dtype/device, filled with standard normal samples.
     pub fn randn<A>(args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
-        let dims: S::Dims = S::dims(&_shape);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg());
+        let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_incin(&_dtype);
-        let inner = B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let inner = B::var_randn::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
+            _train: PhantomData,
         })
     }
 
     /// Allocates storage of the given shape/dtype/device, filled with one.
     pub fn ones_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_incin(&_dtype);
-        let inner = B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
+            _train: PhantomData,
         })
     }
 
-    /// Same as `ones_raw`, but accepts any argument type convertible via
-    /// `ArgInto` instead of the exact tuple form.
+    /// Same as `ones_raw`, but accepts any argument type convertible via `ArgInto`.
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::ones_raw(args.into_arg())
     }
 
-    /// Construct a Param directly from a backend's RawVar, typically used when loading checkpoints.
+    /// Construct a Param directly from a backend's RawVar.
     pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg());
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
+            _train: PhantomData,
         })
     }
 
@@ -326,56 +347,51 @@ where
     pub fn to_device<D2: Device>(
         self,
         _device: &D2::Field,
-    ) -> Result<Param<S, <B as TransferTo<D2>>::Output>>
+    ) -> Result<Param<S, <B as TransferTo<D2>>::Output, K, Train>>
     where
         B: TransferTo<D2>,
-        <B as TransferTo<D2>>::Output: SupportsDType<B::FloatElem>,
+        <B as TransferTo<D2>>::Output: SupportsDType<K>,
     {
-        let new_inner = B::transfer_var(&self.inner, &self._dtype, _device)?;
+        let new_inner = B::transfer_var::<K>(&self.inner, &self._dtype, _device)?;
         Ok(Param {
             inner: new_inner,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: _device.clone(),
+            _train: PhantomData,
         })
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
+impl<S: Shape, B: Backend, K: DType, Train: TrainState> Parameters<B> for Param<S, B, K, Train> {
     fn named_parameters(
         &self,
         prefix: &str,
         map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
-        map.insert(prefix.to_string(), self.inner.clone());
+        if Train::TRAINABLE {
+            map.insert(prefix.to_string(), self.inner.clone());
+        }
     }
 }
 
-impl<S1: DynShape, B: Backend> Param<S1, B> {
-    /// Reinterprets a dynamically-shaped parameter as a statically-shaped
-    /// `S2`, checking at runtime that the actual dimensions match `S2`.
-    pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B>>
+impl<S1: DynShape, B: Backend, K: DType, Train: TrainState> Param<S1, B, K, Train> {
+    /// Reinterprets a dynamically-shaped parameter as a statically-shaped `S2`.
+    pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B, K, Train>>
     where
         B: Backend,
     {
-        let current_dims = S1::dims(&self._shape);
-        let new_shape =
-            S2::from_dyn(current_dims.as_ref()).ok_or_else(|| Error::ShapeMismatch {
-                op: "into_shape",
-                expected: alloc::vec![],
-                got: current_dims.as_ref().to_vec(),
-                msg: alloc::format!(
-                    "Cannot convert from {} to new shape.",
-                    current_dims.as_ref().len()
-                ),
-            })?;
+        let current_dims = self._shape.shape_buf();
+        let new_shape = S2::try_from_dims(current_dims.as_ref()).map_err(Error::Shape)?;
 
-        Ok(Param::<S2, B> {
+        let shape_value = ShapeValue::<S2>::try_new(new_shape).map_err(Error::Shape)?;
+
+        Ok(Param::<S2, B, K, Train> {
             inner: self.inner,
-            _shape: new_shape,
+            _shape: shape_value,
             _dtype: self._dtype,
             _device: self._device,
+            _train: PhantomData,
         })
     }
 }
@@ -383,54 +399,73 @@ impl<S1: DynShape, B: Backend> Param<S1, B> {
 use crate::nn::module::StateDict;
 use alloc::collections::BTreeMap;
 
-impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
-    /// Loads parameters from a flat name→tensor map, in-place.
+/// `StateDict` for parameters of any `K: DType`.
+impl<
+    S: Shape,
+    B: Backend + TensorOps<B> + SupportsDType<K> + SupportsDType<f32>,
+    K: DType<Arg = ()>,
+    Train: TrainState,
+> StateDict<B> for Param<S, B, K, Train>
+{
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B, f32>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
             let loaded_dims = t.dims();
-            let expected_dims = S::dims(&self._shape);
-            if loaded_dims.as_slice() != expected_dims.as_ref() {
+            let expected_dims = self._shape.shape_buf();
+            if loaded_dims.as_ref() != expected_dims.as_ref() {
                 return Err(Error::ShapeMismatch {
                     op: "Param::load_state_dict",
                     expected: expected_dims.as_ref().to_vec(),
-                    got: loaded_dims,
+                    got: loaded_dims.as_ref().to_vec(),
                     msg: alloc::format!("Checkpoint parameter shape mismatch for key '{}'", prefix),
                 });
             }
-            self.inner = B::var_from_tensor(&t.inner)?;
+            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
+                let storage: &B::Storage<K> = unsafe { core::mem::transmute(&t.inner) };
+                self.inner = B::var_from_tensor::<K>(storage)?;
+            } else {
+                let converted = t.to_dtype::<K>()?;
+                self.inner = B::var_from_tensor::<K>(&converted.inner)?;
+            }
         }
+
         Ok(())
     }
 
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-        if let Ok(t) = self.as_tensor()
-            && let Ok(dyn_t) = t.into_shape::<Dyn>()
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B, f32>>) {
+        if let Ok(inner) = B::var_as_tensor::<K>(&self.inner)
+            && let Ok(dyn_t) = Tensor::<Dyn, B, K>::from_parts(
+                inner,
+                self._shape.shape_buf().clone(),
+                self._dtype.clone(),
+                self._device.clone(),
+                PhantomData,
+            )
         {
-            tensors.insert(prefix.to_string(), dyn_t);
+            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
+                let f32_t: Tensor<Dyn, B, f32> =
+                    unsafe { core::ptr::read(&dyn_t as *const _ as *const Tensor<Dyn, B, f32>) };
+                core::mem::forget(dyn_t);
+                tensors.insert(prefix.to_string(), f32_t);
+            } else if let Ok(converted) = dyn_t.to_dtype::<f32>() {
+                tensors.insert(prefix.to_string(), converted);
+            }
         }
     }
 }
 
-/// A non-trainable state buffer for values that must persist between passes but do not receive gradients.
-///
-/// `Buffer` has the same internal structure as [`Param`], but [`Parameters::parameters`] returns an
-/// empty vector, preventing the optimizer from ever updating it. Use this for statistics like
-/// `running_mean` and `running_var` in batch normalization layers.
-pub struct Buffer<S: Shape, B: Backend> {
+/// A non-trainable state buffer.
+pub struct Buffer<S: Shape, B: Backend, K: DType = f32> {
     pub(crate) inner: <B as Backend>::RawVar,
-    pub(crate) _shape: S::Field,
-    pub(crate) _dtype: <B::FloatElem as DType>::Field,
+    pub(crate) _shape: ShapeValue<S>,
+    pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
 }
 
-impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
-    /// Clones the underlying backend variable and metadata (cheap: most
-    /// backends' `RawVar` is a reference-counted handle).
+impl<S: Shape, B: Backend, K: DType> Clone for Buffer<S, B, K> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -441,48 +476,89 @@ impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
     }
 }
 
-impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
-    /// Redacted `Debug` output: the backend variable's contents aren't
-    /// cheaply inspectable, so only a placeholder is shown for `inner`.
+impl<S: Shape, B: Backend, K: DType> core::fmt::Debug for Buffer<S, B, K> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend> Buffer<S, B> {
-    /// Extract a functional Tensor from this buffer for forward passes.
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
+impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
+    /// Checked constructor boundary from parts.
+    pub fn from_parts_checked(
+        raw_var: B::RawVar,
+        shape: ShapeBuf,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+    ) -> Result<Self>
+    where
+        B: SupportsDType<K>,
+    {
+        let storage = B::var_as_tensor::<K>(&raw_var)?;
+        let meta = B::metadata(&storage);
+
+        let expected_shape = shape.as_ref().to_vec();
+        if meta.shape.as_ref() != expected_shape.as_slice() {
+            return Err(Error::ShapeMismatch {
+                op: "Buffer::from_parts_checked",
+                expected: expected_shape,
+                got: meta.shape.as_ref().to_vec(),
+                msg: alloc::string::ToString::to_string("Buffer shape mismatch"),
+            });
+        }
+
+        let incin_device = <B::Device as Device>::to_incin(&device)?;
+        let expected_dtype = B::resolve_dtype(&dtype, &incin_device)?;
+        if meta.dtype != expected_dtype {
+            return Err(Error::DTypeStorageMismatch {
+                expected: expected_dtype,
+                got: meta.dtype,
+            });
+        }
+
+        if meta.device != incin_device {
+            return Err(Error::DeviceStorageMismatch {
+                expected: incin_device,
+                got: meta.device,
+            });
+        }
+
+        Ok(Self {
+            inner: raw_var,
+            _shape: ShapeValue::new(shape),
+            _dtype: dtype,
+            _device: device,
+        })
+    }
+
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, K, NoGrad>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
-            _grad: core::marker::PhantomData,
-            _placement: core::marker::PhantomData,
+            _grad: PhantomData,
+            _placement: PhantomData,
         })
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Buffer<S, B> {
-    /// Returns the shape dimensions of this buffer.
+impl<S: Shape + DynShape, B: Backend, K: DType> Buffer<S, B, K> {
     pub fn shape_dims(&self) -> Vec<usize> {
-        S::dims(&self._shape).as_ref().to_vec()
+        self._shape.shape_buf().as_ref().to_vec()
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
-    for Buffer<S, B>
+impl<S: Shape, B: Backend, K: DType, NewD: crate::prelude::Device>
+    crate::nn::module::ToDevice<B, NewD> for Buffer<S, B, K>
 where
     B: TransferTo<NewD>,
-    <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
+    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
 {
-    /// The same buffer, rebuilt on backend `NewD`.
-    type Output = Buffer<S, <B as TransferTo<NewD>>::Output>;
-    /// Transfers the underlying variable to device `arg`.
+    type Output = Buffer<S, <B as TransferTo<NewD>>::Output, K>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
+        let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
         Ok(Buffer {
             inner,
             _shape: self._shape,
@@ -492,135 +568,89 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
+impl<
+    S: Shape + DynShape,
+    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K>,
+    K: DType,
+> Buffer<S, B, K>
 where
-    (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
+    (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
-    /// Allocates storage of the given shape/dtype/device and fills it
-    /// according to `init` (e.g. Kaiming/Xavier/zeros/ones/uniform/normal).
     pub fn new_init_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self>
     where
-        B: SupportsDType<B::FloatElem>,
+        B: SupportsDType<K>,
     {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
-        let inner = execute_initializer::<B>(dims.as_ref(), &_dtype, &_device, init)?;
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
+        let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
 
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
         })
     }
 
-    /// Same as `new_init_raw`, but accepts any argument type convertible
-    /// via `ArgInto` instead of the exact tuple form.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
-        B: SupportsDType<B::FloatElem>,
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        B: SupportsDType<K>,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
-    /// Allocates storage of the given shape/dtype/device, filled with zero.
     pub fn zeros_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_incin(&_dtype);
-        let inner = B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
         })
     }
 
-    /// Same as `zeros_raw`, but accepts any argument type convertible via
-    /// `ArgInto` instead of the exact tuple form.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::zeros_raw(args.into_arg())
     }
 
-    /// Allocates storage of the given shape/dtype/device, filled with one.
     pub fn ones_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-            S,
-            B::FloatElem,
-            B::Device,
-            Grad,
-        >>::Args,
+        args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
-        let dims: S::Dims = S::dims(&_shape);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_incin(&_dtype);
-        let inner = B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape,
+            _shape: ShapeValue::new(_shape),
             _dtype,
             _device,
         })
     }
 
-    /// Same as `ones_raw`, but accepts any argument type convertible via
-    /// `ArgInto` instead of the exact tuple form.
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A:
-            ArgInto<
-                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
-                    S,
-                    B::FloatElem,
-                    B::Device,
-                    Grad,
-                >>::Args,
-            >,
+        A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::ones_raw(args.into_arg())
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
+impl<S: Shape + DynShape, B: Backend, K: DType> Parameters<B> for Buffer<S, B, K> {
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -629,35 +659,58 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
-    /// Loads parameters from a flat name→tensor map, in-place.
+/// `StateDict` for buffers of any `K: DType`.
+impl<
+    S: Shape,
+    B: Backend + TensorOps<B> + SupportsDType<K> + SupportsDType<f32>,
+    K: DType<Arg = ()>,
+> StateDict<B> for Buffer<S, B, K>
+{
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B, f32>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
             let loaded_dims = t.dims();
-            let expected_dims = S::dims(&self._shape);
-            if loaded_dims.as_slice() != expected_dims.as_ref() {
+            let expected_dims = self._shape.shape_buf();
+            if loaded_dims.as_ref() != expected_dims.as_ref() {
                 return Err(Error::ShapeMismatch {
                     op: "Buffer::load_state_dict",
                     expected: expected_dims.as_ref().to_vec(),
-                    got: loaded_dims,
+                    got: loaded_dims.as_ref().to_vec(),
                     msg: alloc::format!("Checkpoint buffer shape mismatch for key '{}'", prefix),
                 });
             }
-            self.inner = B::var_from_tensor(&t.inner)?;
+            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
+                let storage: &B::Storage<K> = unsafe { core::mem::transmute(&t.inner) };
+                self.inner = B::var_from_tensor::<K>(storage)?;
+            } else {
+                let converted = t.to_dtype::<K>()?;
+                self.inner = B::var_from_tensor::<K>(&converted.inner)?;
+            }
         }
         Ok(())
     }
 
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-        if let Ok(t) = self.as_tensor()
-            && let Ok(dyn_t) = t.into_shape::<Dyn>()
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B, f32>>) {
+        if let Ok(inner) = B::var_as_tensor::<K>(&self.inner)
+            && let Ok(dyn_t) = Tensor::<Dyn, B, K>::from_parts(
+                inner,
+                self._shape.shape_buf().clone(),
+                self._dtype.clone(),
+                self._device.clone(),
+                PhantomData,
+            )
         {
-            tensors.insert(prefix.to_string(), dyn_t);
+            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
+                let f32_t: Tensor<Dyn, B, f32> =
+                    unsafe { core::ptr::read(&dyn_t as *const _ as *const Tensor<Dyn, B, f32>) };
+                core::mem::forget(dyn_t);
+                tensors.insert(prefix.to_string(), f32_t);
+            } else if let Ok(converted) = dyn_t.to_dtype::<f32>() {
+                tensors.insert(prefix.to_string(), converted);
+            }
         }
     }
 }

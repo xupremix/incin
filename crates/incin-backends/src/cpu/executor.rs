@@ -5,9 +5,12 @@ use incin_core::backend_authoring::{
 };
 use incin_core::exec::{
     Capabilities, CapabilityQuery, Conv2dSpec, MatMulSpec, MathMode, OperationSpec, Pool2dSpec,
-    PoolOp, ReduceOp, ReductionSpec, ReshapeSpec, SupportLevel, TensorMeta,
+    PoolOp, ReduceOp, ReductionSpec, ReshapeSpec, SupportLevel,
 };
-use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+use incin_core::prelude::{BackendError, DTypeId, Device, DeviceKind, OperationKind, Shape};
+
+#[cfg(test)]
+use incin_core::exec::TensorMeta;
 
 use super::CpuBackendImpl;
 use super::storage::CpuStorage;
@@ -16,15 +19,7 @@ use crate::descriptor_bind::{
     kernel_error, pool2d_window, reduce_axis_run, reduction_run,
 };
 
-impl<T: DType, D: Device> StorageBackend for CpuBackendImpl<T, D> {
-    type Storage<K: DType> = CpuStorage;
-    type Device = D;
-
-    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
-        storage.metadata()
-    }
-}
-impl<T: DType, D: Device> Capabilities for CpuBackendImpl<T, D> {
+impl<D: Device> Capabilities for CpuBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
         crate::capability::support(DeviceKind::Cpu, query)
     }
@@ -32,17 +27,14 @@ impl<T: DType, D: Device> Capabilities for CpuBackendImpl<T, D> {
 
 fn supports_operand(
     shape: &[usize],
-    expected_rank: u8,
+    expected_rank: usize,
     rows: usize,
     columns: usize,
     transposed: bool,
     batch: &[usize],
     batch_strides: &[usize],
 ) -> bool {
-    if shape.len() != usize::from(expected_rank)
-        || shape.len() < 2
-        || batch_strides.len() != batch.len()
-    {
+    if shape.len() != expected_rank || shape.len() < 2 || batch_strides.len() != batch.len() {
         return false;
     }
 
@@ -73,8 +65,8 @@ fn supports_operand(
     })
 }
 
-fn bind_matmul<'a, T: DType, D: Device>(
-    request: &'a ExecutionRequest<'_, MatMulSpec, CpuBackendImpl<T, D>>,
+fn bind_matmul<'a, D: Device>(
+    request: &'a ExecutionRequest<'_, MatMulSpec, CpuBackendImpl<D>>,
 ) -> Result<(&'a CpuStorage, &'a CpuStorage), BackendError> {
     let spec = request.operation.descriptor();
     let operation = spec.operation();
@@ -98,12 +90,14 @@ fn bind_matmul<'a, T: DType, D: Device>(
                 "matmul inputs must use CPU device ordinal 0",
             ));
         }
-        if metadata.dtype() != DTypeId::F32 {
-            return Err(incin_core::exec::UnsupportedReason::DType {
-                operation,
-                dtype: metadata.dtype(),
-            }
-            .into());
+        if metadata.dtype() != DTypeId::F32.descriptor() {
+            return Err(BackendError::unsupported(
+                <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+                incin_core::exec::UnsupportedReason::DType {
+                    operation,
+                    dtype: metadata.dtype(),
+                },
+            ));
         }
         let query = CapabilityQuery {
             operation: spec.operation(),
@@ -114,7 +108,10 @@ fn bind_matmul<'a, T: DType, D: Device>(
             math_mode: MathMode::Precise,
         };
         if let SupportLevel::Unsupported(reason) = request.context.backend().support(&query) {
-            return Err(reason.into());
+            return Err(BackendError::unsupported(
+                <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+                reason,
+            ));
         }
     }
 
@@ -150,10 +147,10 @@ fn bind_matmul<'a, T: DType, D: Device>(
     Ok((lhs, rhs))
 }
 
-impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<MatMulSpec> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, MatMulSpec, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -194,7 +191,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
         } else {
             super::ops::matmul::batched_matmul_impl(lhs, rhs)
         }
-        .map_err(|error| kernel_error(operation, error))?;
+        .map_err(|error| kernel_error(<Self as StorageBackend>::BACKEND_NAME, operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
@@ -214,8 +211,8 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
 /// Asking for trainability anyway would refuse a `u8` or `u32` reshape that the
 /// backend performs exactly right, because no backend registers integer dtypes
 /// as trainable.
-fn bind_reshape<'a, T: DType, D: Device>(
-    request: &'a ExecutionRequest<'_, ReshapeSpec, CpuBackendImpl<T, D>>,
+fn bind_reshape<'a, D: Device>(
+    request: &'a ExecutionRequest<'_, ReshapeSpec, CpuBackendImpl<D>>,
 ) -> Result<&'a CpuStorage, BackendError> {
     let spec = request.operation.descriptor();
     let operation = spec.operation();
@@ -245,7 +242,10 @@ fn bind_reshape<'a, T: DType, D: Device>(
         math_mode: MathMode::Precise,
     };
     if let SupportLevel::Unsupported(reason) = request.context.backend().support(&query) {
-        return Err(reason.into());
+        return Err(BackendError::unsupported(
+            <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+            reason,
+        ));
     }
 
     if metadata.shape().dims() != spec.input.dims() {
@@ -258,10 +258,10 @@ fn bind_reshape<'a, T: DType, D: Device>(
     Ok(input)
 }
 
-impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<ReshapeSpec> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, ReshapeSpec, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -273,8 +273,9 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
         // The legacy entry point, not `CpuStorage::reshape` directly: it is what
         // records the tape entry, so a descriptor-executed reshape is the same
         // graph node the typed frontend produces.
-        let output = <Self as TensorOps<Self>>::reshape::<T>(input, spec.output.dims())
-            .map_err(|error| kernel_error(operation, error))?;
+        let output = <Self as TensorOps<Self>>::reshape::<f32>(input, spec.output.dims()).map_err(
+            |error| kernel_error(<Self as StorageBackend>::BACKEND_NAME, operation, error),
+        )?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
@@ -291,8 +292,8 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
 /// A bias is optional, so the operand count carries meaning: two inputs is a
 /// bias-free convolution and three is a biased one. Any other count is a
 /// malformed request rather than a defaultable one.
-fn bind_conv2d<'a, T: DType, D: Device>(
-    request: &'a ExecutionRequest<'_, Conv2dSpec, CpuBackendImpl<T, D>>,
+fn bind_conv2d<'a, D: Device>(
+    request: &'a ExecutionRequest<'_, Conv2dSpec, CpuBackendImpl<D>>,
 ) -> Result<(&'a CpuStorage, &'a CpuStorage, Option<&'a CpuStorage>), BackendError> {
     let spec = request.operation.descriptor();
     let operation = spec.operation();
@@ -322,12 +323,14 @@ fn bind_conv2d<'a, T: DType, D: Device>(
                 "conv2d inputs must use CPU device ordinal 0",
             ));
         }
-        if metadata.dtype() != DTypeId::F32 {
-            return Err(incin_core::exec::UnsupportedReason::DType {
-                operation,
-                dtype: metadata.dtype(),
-            }
-            .into());
+        if metadata.dtype() != DTypeId::F32.descriptor() {
+            return Err(BackendError::unsupported(
+                <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+                incin_core::exec::UnsupportedReason::DType {
+                    operation,
+                    dtype: metadata.dtype(),
+                },
+            ));
         }
         let query = CapabilityQuery {
             operation: spec.operation(),
@@ -341,7 +344,10 @@ fn bind_conv2d<'a, T: DType, D: Device>(
             math_mode: MathMode::Precise,
         };
         if let SupportLevel::Unsupported(reason) = request.context.backend().support(&query) {
-            return Err(reason.into());
+            return Err(BackendError::unsupported(
+                <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+                reason,
+            ));
         }
     }
 
@@ -355,10 +361,10 @@ fn bind_conv2d<'a, T: DType, D: Device>(
     Ok((input, weight, bias))
 }
 
-impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Conv2dSpec> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Conv2dSpec, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -368,7 +374,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
         let window = conv2d_window(spec)?;
         let (input, weight, bias) = bind_conv2d(&request)?;
 
-        let output = <Self as ModuleOps<Self>>::conv2d::<T>(
+        let output = <Self as ModuleOps<Self>>::conv2d::<f32>(
             input,
             weight,
             bias,
@@ -377,7 +383,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
             window.dilation,
             window.groups,
         )
-        .map_err(|error| kernel_error(operation, error))?;
+        .map_err(|error| kernel_error(<Self as StorageBackend>::BACKEND_NAME, operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
@@ -400,8 +406,8 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
 /// `training: false` for the same reason [`bind_reshape`] gives: a validated
 /// descriptor is a shape proof, and nothing in the request obliges the backend
 /// to differentiate what it produces.
-fn bind_single_operand<'a, O, T: DType, D: Device>(
-    request: &'a ExecutionRequest<'_, O, CpuBackendImpl<T, D>>,
+fn bind_single_operand<'a, O, D: Device>(
+    request: &'a ExecutionRequest<'_, O, CpuBackendImpl<D>>,
     operation: OperationKind,
     wrong_arity: &'static str,
     wrong_device: &'static str,
@@ -429,16 +435,19 @@ where
         math_mode: MathMode::Precise,
     };
     if let SupportLevel::Unsupported(reason) = request.context.backend().support(&query) {
-        return Err(reason.into());
+        return Err(BackendError::unsupported(
+            <CpuBackendImpl<D> as StorageBackend>::BACKEND_NAME,
+            reason,
+        ));
     }
 
     Ok(input)
 }
 
-impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<ReductionSpec> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, ReductionSpec, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -458,53 +467,57 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
         // collapsed a step at a time by the shared helper, which was previously
         // refused outright and left validated descriptors no backend would run.
         let output = match run {
-            Some((start, end)) if end - start > 1 => {
-                reduce_axis_run::<Self, T>(spec, input, input.metadata().shape().dims(), start, end)
-            }
+            Some((start, end)) if end - start > 1 => reduce_axis_run::<Self, f32>(
+                spec,
+                input,
+                input.metadata().shape().dims(),
+                start,
+                end,
+            ),
             _ => {
                 let axis = run.map_or(0, |(start, _)| start);
                 match (spec.op, spec.keep_dims) {
                     (ReduceOp::Sum, false) => {
-                        <Self as ReductionOps<Self>>::sum_dim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::sum_dim::<f32>(input, axis)
                     }
                     (ReduceOp::Sum, true) => {
-                        <Self as ReductionOps<Self>>::sum_keepdim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::sum_keepdim::<f32>(input, axis)
                     }
                     (ReduceOp::Mean, false) => {
-                        <Self as ReductionOps<Self>>::mean_dim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::mean_dim::<f32>(input, axis)
                     }
                     (ReduceOp::Mean, true) => {
-                        <Self as ReductionOps<Self>>::mean_keepdim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::mean_keepdim::<f32>(input, axis)
                     }
                     (ReduceOp::Max, false) => {
-                        <Self as ReductionOps<Self>>::max_dim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::max_dim::<f32>(input, axis)
                     }
                     (ReduceOp::Max, true) => {
-                        <Self as ReductionOps<Self>>::max_keepdim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::max_keepdim::<f32>(input, axis)
                     }
                     (ReduceOp::Min, false) => {
-                        <Self as ReductionOps<Self>>::min_dim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::min_dim::<f32>(input, axis)
                     }
                     (ReduceOp::Min, true) => {
-                        <Self as ReductionOps<Self>>::min_keepdim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::min_keepdim::<f32>(input, axis)
                     }
                     (ReduceOp::Prod, false) => {
-                        <Self as ReductionOps<Self>>::prod_dim::<T>(input, axis)
+                        <Self as ReductionOps<Self>>::prod_dim::<f32>(input, axis)
                     }
                     // `ReductionOps` has no `prod_keepdim`. Composing it is exact rather
                     // than approximate: keeping the axis reinserts a length-1 dimension
                     // and moves no element, which is what the descriptor's own output
                     // shape already says, so the reshape below is the whole difference.
-                    (ReduceOp::Prod, true) => <Self as ReductionOps<Self>>::prod_dim::<T>(
+                    (ReduceOp::Prod, true) => <Self as ReductionOps<Self>>::prod_dim::<f32>(
                         input, axis,
                     )
                     .and_then(|dropped| {
-                        <Self as TensorOps<Self>>::reshape::<T>(&dropped, spec.output.dims())
+                        <Self as TensorOps<Self>>::reshape::<f32>(&dropped, spec.output.dims())
                     }),
                 }
             }
         }
-        .map_err(|error| kernel_error(operation, error))?;
+        .map_err(|error| kernel_error(<Self as StorageBackend>::BACKEND_NAME, operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
@@ -516,10 +529,10 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
     }
 }
 
-impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Pool2dSpec> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Pool2dSpec, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -536,7 +549,7 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
         check_pool2d_operand(spec, input.metadata())?;
 
         let output = match spec.op {
-            PoolOp::Max => <Self as ModuleOps<Self>>::max_pool2d::<T>(
+            PoolOp::Max => <Self as ModuleOps<Self>>::max_pool2d::<f32>(
                 input,
                 window.kernel,
                 window.stride,
@@ -546,14 +559,14 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
             // The dilation is absent from the call rather than dropped:
             // `pool2d_window` has already refused any descriptor that carries a
             // non-trivial one for this operator.
-            PoolOp::Average => <Self as ModuleOps<Self>>::avg_pool2d::<T>(
+            PoolOp::Average => <Self as ModuleOps<Self>>::avg_pool2d::<f32>(
                 input,
                 window.kernel,
                 window.stride,
                 window.padding,
             ),
         }
-        .map_err(|error| kernel_error(operation, error))?;
+        .map_err(|error| kernel_error(<Self as StorageBackend>::BACKEND_NAME, operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
@@ -575,10 +588,10 @@ mod tests {
     use super::*;
     use crate::cpu::storage::CpuBuffer;
 
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
-    fn field<S: Shape>(dims: &[usize]) -> S::Field {
-        S::from_dyn(dims).expect("test dimensions must match the shape type")
+    fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
+        S::try_from_dims(dims).expect("test dimensions must match the shape type")
     }
 
     fn descriptor() -> Validated<MatMulSpec> {
@@ -594,7 +607,7 @@ mod tests {
         let mut lhs = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 6]), vec![2, 3]);
         lhs.meta = TensorMeta::contiguous(
             ShapeBuf::from_slice(&[2, 3]),
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             DeviceId::cuda(0),
             Alignment::BYTE,
             6,

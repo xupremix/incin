@@ -38,7 +38,7 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, LayoutClass, MatMulRule, MatMulSpec, MathMode,
     ReshapeRule, ReshapeSpec, ShapeRule, SupportLevel, TensorHandle, Validated,
 };
-use incin_core::prelude::{DTypeId, Dyn, Local, OperationKind, Shape, StorageBackend};
+use incin_core::prelude::{DTypeId, Dyn, Local, OperationKind, Shape, ShapeBuf, StorageBackend};
 use incin_core::typenum::{U2, U3};
 
 // ============================================================================
@@ -223,7 +223,7 @@ impl Report {
 fn query(operation: OperationKind, rank: usize) -> CapabilityQuery {
     CapabilityQuery {
         operation,
-        dtype: DTypeId::F32,
+        dtype: DTypeId::F32.descriptor(),
         layout: LayoutClass::Contiguous,
         rank,
         training: false,
@@ -231,8 +231,9 @@ fn query(operation: OperationKind, rank: usize) -> CapabilityQuery {
     }
 }
 
-fn field<S: Shape>(dims: &[usize]) -> Result<S::Field, String> {
-    S::from_dyn(dims).ok_or_else(|| format!("the harness could not build the shape {dims:?}"))
+fn field<S: Shape>(dims: &[usize]) -> Result<ShapeBuf, String> {
+    S::try_from_dims(dims)
+        .map_err(|error| format!("the harness could not build the shape {dims:?}: {error}"))
 }
 
 fn matmul_spec(lhs: &[usize], rhs: &[usize]) -> Result<Validated<MatMulSpec>, String> {
@@ -248,8 +249,12 @@ fn matmul_spec(lhs: &[usize], rhs: &[usize]) -> Result<Validated<MatMulSpec>, St
 /// — element count is what reshape has to preserve — and it means the harness
 /// fixes this shape pair rather than taking it as arguments.
 fn reshape_spec() -> Result<Validated<ReshapeSpec>, String> {
-    <ReshapeRule as ShapeRule<((U2, U3), (U3, U2))>>::lower(
-        &(field::<(U2, U3)>(&[2, 3])?, field::<(U3, U2)>(&[3, 2])?),
+    type Lhs =
+        incin_core::shapes::DimCons<U2, incin_core::shapes::DimCons<U3, incin_core::shapes::Nil>>;
+    type Rhs =
+        incin_core::shapes::DimCons<U3, incin_core::shapes::DimCons<U2, incin_core::shapes::Nil>>;
+    <ReshapeRule as ShapeRule<(Lhs, Rhs)>>::lower(
+        &(field::<Lhs>(&[2, 3])?, field::<Rhs>(&[3, 2])?),
         (),
     )
     .map_err(|error| format!("the harness could not lower reshape: {error}"))
@@ -326,7 +331,7 @@ fn metadata_agrees<S: Subject>(subject: &S) -> Result<(), String> {
             meta.shape().dims()
         ));
     }
-    if meta.dtype() != DTypeId::F32 {
+    if meta.dtype() != DTypeId::F32.descriptor() {
         return Err(format!(
             "f32 storage reports dtype {:?}; the descriptor path keys on this",
             meta.dtype()
@@ -593,13 +598,17 @@ fn registry_agrees<S: Subject>(subject: &S) -> Result<(), String> {
 
     // A dtype the adapter cannot represent must be refused by the registry
     // rather than discovered inside a kernel. Every backend has at least one.
-    let unrepresentable = [DTypeId::Q8_0, DTypeId::F64, DTypeId::U8]
-        .into_iter()
-        .find(|dtype| {
-            let mut probe = query(OperationKind::MatMul, 2);
-            probe.dtype = *dtype;
-            !backend.support(&probe).is_supported()
-        });
+    let unrepresentable = [
+        DTypeId::Q8_0.descriptor(),
+        DTypeId::F64.descriptor(),
+        DTypeId::U8.descriptor(),
+    ]
+    .into_iter()
+    .find(|dtype| {
+        let mut probe = query(OperationKind::MatMul, 2);
+        probe.dtype = *dtype;
+        !backend.support(&probe).is_supported()
+    });
     if unrepresentable.is_none() {
         return Err(
             "the registry claims matmul for every dtype probed, including Q8_0; a registry \
