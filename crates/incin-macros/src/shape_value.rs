@@ -152,8 +152,7 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
                             tag,
                             "nested semantic axis names are not supported",
                         )
-                        .to_compile_error()
-                        .into();
+                        .to_compile_error();
                     }
                 };
                 quote! { #path NamedDim<#tag, #extent> }
