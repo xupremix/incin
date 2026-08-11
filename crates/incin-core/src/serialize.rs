@@ -1,5 +1,36 @@
+use crate::backend_authoring::{Execute, op};
+use crate::exec::catalog::DataAttributes;
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
+
+fn decode_bytes<B>(
+    bytes: &[u8],
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+) -> Result<B::Storage<f32>>
+where
+    B: Backend + Execute<op::TensorFromBytes>,
+    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
+{
+    let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(shape)).map_err(Error::Shape)?;
+    let context =
+        ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
+    Ok(dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
+        &context,
+        DataAttributes {
+            shape: shape.to_vec(),
+            dtype,
+            device: device.clone(),
+            bytes: bytes.to_vec(),
+        },
+        &[],
+        &expected,
+    )
+    .map(Into::into)?)
+}
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
@@ -21,12 +52,13 @@ pub trait Deserializer {
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Deserializes the state dict from the given path or stream.
-    fn deserialize<B: Backend>(
+    fn deserialize<B: Backend + Execute<op::TensorFromBytes>>(
         &mut self,
         device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
+        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>;
 }
 
 #[cfg(feature = "std")]
@@ -116,12 +148,13 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
     type Error = anyhow::Error;
 
     /// `deserialize`.
-    fn deserialize<B: Backend>(
+    fn deserialize<B: Backend + Execute<op::TensorFromBytes>>(
         &mut self,
         device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
     {
         let buffer =
             std::fs::read(self.path).map_err(|e| anyhow::anyhow!("Failed to read file: {}", e))?;
@@ -142,13 +175,13 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
                 _ => return Err(anyhow::anyhow!("Unsupported dtype in safetensors")),
             };
 
-            let raw_tensor = <B as Backend>::from_bytes::<f32>(
+            let raw_tensor = decode_bytes::<B>(
                 tensor_view.data(),
                 tensor_view.shape(),
                 dtype.descriptor(),
                 device,
             )
-            .map_err(|e| anyhow::anyhow!("Backend from_bytes failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("TensorFromBytes execution failed: {}", e))?;
 
             let dyn_shape = tensor_view.shape().to_vec();
             let _dtype: <f32 as crate::tensor::dtype::DType>::Field = Default::default();
@@ -260,12 +293,13 @@ impl<'a> Deserializer for PostcardDeserializer<'a> {
     type Error = anyhow::Error;
 
     /// `deserialize`.
-    fn deserialize<B: Backend>(
+    fn deserialize<B: Backend + Execute<op::TensorFromBytes>>(
         &mut self,
         device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
     {
         let limits = crate::io::limits::ResourceLimits::model_load_defaults();
         let metadata = std::fs::metadata(self.path)?;
@@ -305,9 +339,8 @@ impl<'a> Deserializer for PostcardDeserializer<'a> {
                 "Q8_0" => DTypeId::Q8_0,
                 _ => return Err(anyhow::anyhow!("Unsupported dtype in postcard")),
             };
-            let raw_tensor =
-                <B as Backend>::from_bytes(&st.data, &st.shape, dtype.descriptor(), device)
-                    .map_err(|e| anyhow::anyhow!("Backend from_bytes failed: {}", e))?;
+            let raw_tensor = decode_bytes::<B>(&st.data, &st.shape, dtype.descriptor(), device)
+                .map_err(|e| anyhow::anyhow!("TensorFromBytes execution failed: {}", e))?;
 
             let dyn_shape = st.shape.clone();
             let _dtype = Default::default();
@@ -350,7 +383,9 @@ pub trait ModelExt<B: Backend> {
     /// `load`.
     fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
     where
-        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
+        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        B: Execute<op::TensorFromBytes>,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>;
 }
 
 #[cfg(feature = "std")]
@@ -379,6 +414,8 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        B: Execute<op::TensorFromBytes>,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
     {
         match format {
             Format::Safetensors => {

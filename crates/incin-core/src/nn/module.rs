@@ -85,6 +85,10 @@ pub trait StateDict<B: Backend> {
     ) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+        B: crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>,
+        <B as crate::backend_authoring::Execute<
+            crate::backend_authoring::op::TensorFromBytes,
+        >>::Output: Into<B::Storage<f32>>,
     {
         let map = deserializer
             .deserialize(device)
