@@ -155,10 +155,7 @@ impl<
 
 impl<
     S: RMSNormShape,
-    InS: Shape
-        + DynShape
-        + crate::shapes::EndsWith<S::Channels>
-        + ReduceKeepAt<FromEnd<Here>>,
+    InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels> + ReduceKeepAt<FromEnd<Here>>,
     B: Backend
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
@@ -186,16 +183,13 @@ where
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();
 
-        let channels = x
-            .shape_buf()
-            .as_ref()
-            .last()
-            .copied()
-            .ok_or_else(|| Error::Shape(crate::shapes::error::ShapeError::RankMismatch {
+        let channels = x.shape_buf().as_ref().last().copied().ok_or_else(|| {
+            Error::Shape(crate::shapes::error::ShapeError::RankMismatch {
                 operation: crate::shapes::error::OperationKind::MeanDim,
                 expected: crate::shapes::error::RankExpectation::AtLeast(1),
                 actual: 0,
-            }))?;
+            })
+        })?;
         if channels == 0 {
             return Err(Error::Shape(
                 crate::shapes::error::ShapeError::InvalidParameter {
