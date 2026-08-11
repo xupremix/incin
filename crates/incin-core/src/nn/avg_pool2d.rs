@@ -1,5 +1,13 @@
+use crate::backend_authoring::{Descriptor, Execute};
+use crate::dist::placement::Local;
+use crate::exec::Capabilities;
+use crate::exec::catalog::{AvgPool2dAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
+use crate::shapes::ShapeValue;
 
 use typenum::Unsigned;
 
@@ -42,8 +50,11 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + Execute<Descriptor<op::AvgPool2d>>,
 > Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
+where
+    B: Capabilities,
+    <B as Execute<Descriptor<op::AvgPool2d>>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
@@ -53,19 +64,27 @@ impl<
     #[inline]
     /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = B::avg_pool2d(
-            x.inner(),
-            (K::USIZE, K::USIZE),
-            (S::USIZE, S::USIZE),
-            (P::USIZE, P::USIZE),
+        let shape = <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(
+            &x.shape_buf_value(),
         )?;
-
-        let shape =
-            <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field())?;
+        let shape = ShapeValue::<I::Output>::try_new(shape).map_err(Error::Shape)?;
+        let inputs = [TensorHandle::from_storage::<B, f32, Local>(x.inner())];
+        let context = ExecutionContext::from_scope(B::default());
+        let out = dispatch::execute_shaped::<op::AvgPool2d, B, I::Output>(
+            &context,
+            AvgPool2dAttributes {
+                kernel: [K::USIZE; 2],
+                stride: [S::USIZE; 2],
+                padding: [P::USIZE; 2],
+            },
+            &inputs,
+            &shape,
+        )?
+        .into();
         Tensor::from_parts(
             out,
-            shape,
-            x._dtype.clone(),
+            shape.shape_buf().clone(),
+            x._dtype,
             x._device.clone(),
             core::marker::PhantomData,
         )

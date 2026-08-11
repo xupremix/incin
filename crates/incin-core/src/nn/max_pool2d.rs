@@ -1,3 +1,5 @@
+use crate::backend_authoring::{Descriptor, Execute};
+use crate::exec::Capabilities;
 use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
 
@@ -42,8 +44,11 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + Execute<Descriptor<crate::exec::catalog::op::MaxPool2d>>,
 > Module<Tensor<I, B>> for MaxPool2d<K, S, P, D>
+where
+    B: Capabilities,
+    <B as Execute<Descriptor<crate::exec::catalog::op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
@@ -53,22 +58,6 @@ impl<
     #[inline]
     /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = B::max_pool2d(
-            x.inner(),
-            (K::USIZE, K::USIZE),
-            (S::USIZE, S::USIZE),
-            (P::USIZE, P::USIZE),
-            (D::USIZE, D::USIZE),
-        )?;
-
-        let shape =
-            <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field())?;
-        Tensor::from_parts(
-            out,
-            shape,
-            x._dtype.clone(),
-            x._device.clone(),
-            core::marker::PhantomData,
-        )
+        x.max_pool2d::<K, S, P, D>()
     }
 }
