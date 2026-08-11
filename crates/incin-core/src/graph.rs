@@ -326,6 +326,9 @@ pub struct Node {
     pub id: NodeId,
     /// The operation this node represents.
     pub op: OpType,
+    /// Exact canonical execution identity, when the node came from typed dispatch.
+    #[serde(default)]
+    pub identity: Option<crate::exec::OperationIdentity>,
     /// The value ids this node consumes.
     pub inputs: Vec<ValueId>,
     /// The value ids this node produces.
@@ -450,11 +453,24 @@ impl Graph {
         outputs: Vec<ValueId>,
         attributes: BTreeMap<String, AttributeValue>,
     ) -> NodeId {
+        self.add_node_with_identity(op, inputs, outputs, attributes, None)
+    }
+
+    /// Appends a node while retaining the exact execution identity that produced it.
+    pub fn add_node_with_identity(
+        &mut self,
+        op: OpType,
+        inputs: Vec<ValueId>,
+        outputs: Vec<ValueId>,
+        attributes: BTreeMap<String, AttributeValue>,
+        identity: Option<crate::exec::OperationIdentity>,
+    ) -> NodeId {
         let id = self.next_node_id;
         self.next_node_id += 1;
         self.nodes.push(Node {
             id,
             op,
+            identity,
             inputs,
             outputs,
             attributes,

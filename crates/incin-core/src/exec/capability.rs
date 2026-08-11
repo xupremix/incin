@@ -7,7 +7,7 @@ use crate::exec::{LayoutClass, MathMode};
 use crate::prelude::{DTypeDescriptor, OperationKind};
 
 /// The identity of one operation in the unified execution universe.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum OperationIdentity {
     Builtin(OperationKind),
     Custom(OperationKey),

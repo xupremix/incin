@@ -957,12 +957,17 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 /// This is derived from the same canonical operation identity as capability
 /// admission and descriptor execution. It is not a second operation catalog.
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
+    fn trace_identity(&self) -> crate::exec::OperationIdentity;
     fn trace_operation(&self) -> Option<crate::graph::OpType>;
 
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId;
 }
 
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
+    fn trace_identity(&self) -> crate::exec::OperationIdentity {
+        O::IDENTITY.clone()
+    }
+
     fn trace_operation(&self) -> Option<crate::graph::OpType> {
         let OperationIdentity::Builtin(operation) = O::IDENTITY else {
             return None;
