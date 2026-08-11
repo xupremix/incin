@@ -10,6 +10,7 @@ enum Axis {
     StaticLit(syn::LitInt),
     ConstPath(syn::Path),
     Runtime(syn::Expr),
+    Named { tag: syn::Path, extent: Box<Axis> },
 }
 
 struct ShapeInput {
@@ -17,6 +18,19 @@ struct ShapeInput {
 }
 
 fn parse_axis(input: ParseStream) -> syn::Result<Axis> {
+    if input.peek(syn::Ident) || input.peek(syn::token::SelfValue) {
+        let fork = input.fork();
+        if let Ok(_tag) = fork.parse::<syn::Path>()
+            && fork.peek(Token![:])
+        {
+            let tag = input.parse::<syn::Path>()?;
+            input.parse::<Token![:]>()?;
+            return Ok(Axis::Named {
+                tag,
+                extent: Box::new(parse_axis(input)?),
+            });
+        }
+    }
     if input.peek(Token![-]) {
         let minus = input.parse::<Token![-]>()?;
         if input.peek(syn::LitInt) {
@@ -101,10 +115,14 @@ impl Parse for ShapeInput {
 
 pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as ShapeInput);
-    let is_fully_static = parsed
-        .axes
-        .iter()
-        .all(|axis| !matches!(axis, Axis::Runtime(_)));
+    fn is_static(axis: &Axis) -> bool {
+        match axis {
+            Axis::StaticLit(_) | Axis::ConstPath(_) => true,
+            Axis::Runtime(_) => false,
+            Axis::Named { extent, .. } => is_static(extent),
+        }
+    }
+    let is_fully_static = parsed.axes.iter().all(is_static);
 
     let path = quote! { ::incin::prelude:: };
 
@@ -121,6 +139,25 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
             }
             Axis::ConstPath(p) => quote! { #path ConstDim<{ #p }> },
             Axis::Runtime(_) => quote! { usize },
+            Axis::Named { tag, extent } => {
+                let extent = match extent.as_ref() {
+                    Axis::StaticLit(int) => {
+                        let val: usize = int.base10_parse().unwrap_or(0);
+                        crate::shape::lit_to_typenum(val, &path)
+                    }
+                    Axis::ConstPath(p) => quote! { #path ConstDim<{ #p }> },
+                    Axis::Runtime(_) => quote! { usize },
+                    Axis::Named { .. } => {
+                        return syn::Error::new_spanned(
+                            tag,
+                            "nested semantic axis names are not supported",
+                        )
+                        .to_compile_error()
+                        .into();
+                    }
+                };
+                quote! { #path NamedDim<#tag, #extent> }
+            }
         })
         .collect();
 
@@ -131,6 +168,11 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
             Axis::StaticLit(_) => quote! { () },
             Axis::ConstPath(_) => quote! { () },
             Axis::Runtime(expr) => quote! { #expr },
+            Axis::Named { extent, .. } => match extent.as_ref() {
+                Axis::StaticLit(_) | Axis::ConstPath(_) => quote! { () },
+                Axis::Runtime(expr) => quote! { #expr },
+                Axis::Named { .. } => quote! { () },
+            },
         })
         .collect();
 
