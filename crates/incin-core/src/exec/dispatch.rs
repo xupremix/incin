@@ -6,7 +6,7 @@
 //! This module is the missing production consumer, and the properties FND-005
 //! requires of it are all structural rather than conventional:
 //!
-//! - **Support is explicit.** `B: Execute<Descriptor<O>>` is a compile-time
+//! - **Support is explicit.** `B: Execute<O>` is a compile-time
 //!   fact, and the exact capability row is queried before launch. A backend
 //!   that has not implemented an operation cannot be asked to run it, and a
 //!   backend that implements it for one dtype cannot be asked for another.
@@ -134,10 +134,10 @@ pub fn execute<O, B>(
     context: &ExecutionContext<B>,
     attributes: O::Attributes,
     inputs: &[TensorHandle<'_>],
-) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<Descriptor<O>> + Capabilities,
+    B: Execute<O> + Capabilities,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
@@ -192,10 +192,10 @@ pub fn execute_shaped<O, B, S>(
     attributes: O::Attributes,
     inputs: &[TensorHandle<'_>],
     expected: &crate::shapes::ShapeValue<S>,
-) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<Descriptor<O>> + Capabilities,
+    B: Execute<O> + Capabilities,
     S: crate::prelude::Shape,
 {
     let logical: Vec<LogicalTensorMeta> = inputs

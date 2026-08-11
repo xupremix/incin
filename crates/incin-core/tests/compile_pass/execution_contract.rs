@@ -26,12 +26,12 @@ impl StorageBackend for Probe {
     }
 }
 
-impl Execute<Descriptor<op::Add>> for Probe {
+impl Execute<op::Add> for Probe {
     type Output = usize;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Add>, Self>,
+        request: ExecutionRequest<'_, op::Add, Self>,
     ) -> Result<Self::Output, BackendError> {
         assert_eq!(request.operation.descriptor().outputs().len(), 1);
         assert!(request.inputs[0].downcast_ref::<Storage>().is_some());

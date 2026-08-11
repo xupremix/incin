@@ -128,10 +128,10 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
 /// One validated descriptor invocation against checked tensor handles.
 pub struct ExecutionRequest<'a, O, B>
 where
-    O: crate::exec::spec::ExecutionDescriptor,
+    O: crate::exec::catalog::Operation,
     B: StorageBackend,
 {
-    pub operation: &'a Validated<O>,
+    pub operation: &'a Validated<crate::exec::catalog::Descriptor<O>>,
     pub inputs: &'a [TensorHandle<'a>],
     pub context: &'a ExecutionContext<B>,
 }
@@ -139,7 +139,7 @@ where
 /// Executes one descriptor type. Absence of an implementation is a compile-time fact.
 pub trait Execute<O>: StorageBackend + Sized
 where
-    O: crate::exec::spec::ExecutionDescriptor,
+    O: crate::exec::catalog::Operation,
 {
     type Output;
 
@@ -1061,6 +1061,7 @@ pub fn adamw_step_composed<B: Backend + NumericOps<B> + FloatOps<B>, K: DType>(
 pub mod dummy {
     use super::*;
     use crate::nn::Reduction;
+    use crate::exec::spec::ExecutionDescriptor;
     use crate::prelude::Result;
     use crate::tensor::device::Device;
     use crate::tensor::device::DeviceId;
@@ -1127,7 +1128,7 @@ pub mod dummy {
         }
     }
 
-    impl<D: Device + Clone + 'static, O: crate::exec::spec::ExecutionDescriptor> Execute<O>
+    impl<D: Device + Clone + 'static, O: crate::exec::catalog::Operation> Execute<O>
         for DummyBackend<D>
     {
         type Output = alloc::vec::Vec<usize>;

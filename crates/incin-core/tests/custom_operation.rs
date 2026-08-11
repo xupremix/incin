@@ -3,7 +3,7 @@
 extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
-    Descriptor, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
+    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
     OperationKey, StorageBackend, execute, execute_shaped,
 };
 use incin_core::exec::catalog::CreationAttributes;
@@ -60,9 +60,7 @@ impl StorageBackend for CompanyBackend {
 impl Capabilities for CompanyBackend {
     fn support(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
         match &query.operation {
-            OperationIdentity::Custom(key) if *key == CompanyIdentity::KEY => {
-                SupportLevel::Native
-            }
+            OperationIdentity::Custom(key) if *key == CompanyIdentity::KEY => SupportLevel::Native,
             OperationIdentity::Builtin(incin_core::prelude::OperationKind::Zeros) => {
                 SupportLevel::Native
             }
@@ -71,14 +69,14 @@ impl Capabilities for CompanyBackend {
     }
 }
 
-impl Execute<incin_core::backend_authoring::Descriptor<CompanyIdentity>> for CompanyBackend {
+impl Execute<CompanyIdentity> for CompanyBackend {
     type Output = ProofLevel;
 
     fn execute_shaped<S: Shape>(
         &self,
         request: ExecutionRequest<
             '_,
-            incin_core::backend_authoring::Descriptor<CompanyIdentity>,
+            CompanyIdentity,
             Self,
         >,
     ) -> Result<Self::Output, BackendError> {
@@ -86,12 +84,12 @@ impl Execute<incin_core::backend_authoring::Descriptor<CompanyIdentity>> for Com
     }
 }
 
-impl Execute<Descriptor<op::Zeros>> for CompanyBackend {
+impl Execute<op::Zeros> for CompanyBackend {
     type Output = ProofLevel;
 
     fn execute_shaped<S: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Zeros>, Self>,
+        request: ExecutionRequest<'_, op::Zeros, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.operation.proof_level())
     }

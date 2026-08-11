@@ -29,7 +29,7 @@ fn main() {
     ).unwrap().into_descriptor();
     let context = ExecutionContext::new(StorageOnly);
     let inputs = [];
-    let _: ExecutionRequest<'_, Descriptor<op::Add>, StorageOnly> = ExecutionRequest {
+    let _: ExecutionRequest<'_, op::Add, StorageOnly> = ExecutionRequest {
         operation: &descriptor,
         inputs: &inputs,
         context: &context,

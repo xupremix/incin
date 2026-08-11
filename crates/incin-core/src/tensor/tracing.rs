@@ -1,4 +1,6 @@
 use crate::graph::{Graph, OpType, ValueId};
+use crate::exec::catalog::TraceDescriptor;
+use crate::exec::spec::ExecutionDescriptor;
 use crate::prelude::*;
 use crate::tensor::backend::*;
 // removed RefCell
@@ -189,7 +191,10 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
     }
 }
 
-impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::TraceDescriptor>
+impl<
+    B: Backend + crate::tensor::backend::Execute<O>,
+    O: crate::exec::catalog::Operation + crate::exec::catalog::TraceDescriptor,
+>
     crate::tensor::backend::Execute<O> for TracingBackend<B>
 {
     type Output = TracingTensor<B::Output>;

@@ -1,7 +1,7 @@
 //! Merely owning storage does not grant an operation. Concrete descriptor
 //! execution exists only when the backend implements `Execute<O>`.
 
-use incin_core::exec::{Descriptor, TensorMeta, op};
+use incin_core::exec::{TensorMeta, op};
 use incin_core::backend_authoring::{Execute, StorageBackend};
 use incin_core::prelude::{Cpu, DType};
 
@@ -17,7 +17,7 @@ impl StorageBackend for StorageOnly {
     }
 }
 
-fn requires_broadcast<B: Execute<Descriptor<op::Add>>>() {}
+fn requires_broadcast<B: Execute<op::Add>>() {}
 
 fn main() {
     requires_broadcast::<StorageOnly>();
