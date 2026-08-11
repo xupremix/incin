@@ -133,3 +133,25 @@ fn named_static_and_runtime_contractions_use_numeric_validation() {
         })
     ));
 }
+
+#[test]
+fn named_mixed_contractions_preserve_the_known_output_extent() {
+    type NamedRuntimeLhs = s![3, Features: dyn];
+    type NamedStaticRhs = s![Features: 64, 5];
+    type StaticNamedLhs = s![3, Features: 64];
+    type NamedRuntimeRhs = s![Features: dyn, 5];
+    type AnonymousStaticLhs = s![3, 64];
+
+    assert_same::<<NamedRuntimeLhs as MatMulShape<NamedStaticRhs>>::Output, s![3, 5]>();
+    assert_same::<<StaticNamedLhs as MatMulShape<NamedRuntimeRhs>>::Output, s![3, 5]>();
+    assert_same::<<AnonymousStaticLhs as MatMulShape<NamedRuntimeRhs>>::Output, s![3, 5]>();
+
+    let lhs = field::<NamedRuntimeLhs>(&[3, 64]);
+    let rhs = field::<NamedStaticRhs>(&[64, 5]);
+    assert_eq!(
+        <NamedRuntimeLhs as MatMulShape<NamedStaticRhs>>::output_shape(&lhs, &rhs)
+            .unwrap()
+            .as_ref(),
+        &[3, 5]
+    );
+}

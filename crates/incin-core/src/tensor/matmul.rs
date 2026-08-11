@@ -193,6 +193,24 @@ where
 {
 }
 
+/// A raw static extent may contract with the same semantic axis when the
+/// named side remains runtime-valued. The runtime ShapeBuf check still
+/// validates the numeric extent at execution time.
+impl<Tag, N> ContractsWith<crate::shapes::dim::NamedDim<Tag, usize>> for N
+where
+    Tag: crate::shapes::AxisTag,
+    N: StaticDim,
+{
+}
+
+/// The symmetric form of the static and named-runtime contraction rule.
+impl<Tag, N> ContractsWith<N> for crate::shapes::dim::NamedDim<Tag, usize>
+where
+    Tag: crate::shapes::AxisTag,
+    N: StaticDim,
+{
+}
+
 /// Named contraction axes with the same semantic identity are compatible when
 /// their extents differ in static/runtime knowledge. The runtime shape check
 /// remains authoritative for the unresolved extent.
@@ -331,8 +349,8 @@ impl<
         G2: RequiresGrad,
         G1: crate::tensor::grad::GradJoin<G2>,
         S1: MatMulShape<S2>,
-        B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::MatMulExact> + crate::exec::Capabilities,
+        <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     {
         let rhs_grad = &rhs._grad;
         let output_dims = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
@@ -370,11 +388,11 @@ impl<
     ) -> Result<Tensor<(), B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
-        B: Execute<Descriptor<op::Mul>>
-            + Execute<Descriptor<op::SumAll>>
+        B: Execute<op::Mul>
+            + Execute<op::SumAll>
             + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
     {
         <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let mul = self.mul(rhs)?;
@@ -388,11 +406,11 @@ impl<
     ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
-        B: Execute<Descriptor<op::Mul>>
-            + Execute<Descriptor<op::UnsqueezeExact>>
+        B: Execute<op::Mul>
+            + Execute<op::UnsqueezeExact>
             + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::UnsqueezeExact>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         let u1 = self.unsqueeze(1)?;
         let u2 = rhs.unsqueeze(0)?;
@@ -411,8 +429,8 @@ impl<
         S1: DynShape,
         S2: Shape + DynShape,
         S3: Shape + DynShape,
-        B: Execute<Descriptor<op::Addmm>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Addmm>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Addmm> + crate::exec::Capabilities,
+        <B as Execute<op::Addmm>>::Output: Into<B::Storage<K>>,
     {
         let output_shape = crate::shapes::ShapeValue::<S1>::try_new(self.shape_buf_value())
             .map_err(crate::prelude::Error::Shape)?;
@@ -448,8 +466,8 @@ impl<
     where
         S1: DynShape + MatMulShape<S2>,
         S2: DynShape,
-        B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::MatMulExact> + crate::exec::Capabilities,
+        <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     {
         let output_shape = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
             .map_err(crate::prelude::Error::Shape)?;
@@ -490,8 +508,8 @@ impl<
         S2: DynShape,
         S3: DynShape,
         S4: DynShape,
-        B: Execute<Descriptor<op::ScaledDotProductAttention>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::ScaledDotProductAttention>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ScaledDotProductAttention> + crate::exec::Capabilities,
+        <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
     {
         let output_shape = crate::shapes::ShapeValue::<S1>::try_new(q.shape_buf_value())
             .map_err(crate::prelude::Error::Shape)?;
