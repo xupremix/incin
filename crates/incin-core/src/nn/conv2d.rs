@@ -359,8 +359,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv2dExact>>,
+        + Execute<Descriptor<op::Conv2dExact>>
+        + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -383,7 +385,10 @@ where
         let width = x_shape[rank - 1];
 
         let x_inner = if rank > 4 {
-            B::reshape(&x.inner, &[batch_size, in_channels, height, width])?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(
+                &x.inner,
+                &ShapeBuf::from_slice(&[batch_size, in_channels, height, width]),
+            )?
         } else {
             x.inner.clone()
         };
@@ -423,7 +428,7 @@ where
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
-            B::reshape(&out, out_shape.as_ref())?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(&out, &out_shape)?
         } else {
             out
         };
@@ -449,8 +454,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv2dExact>>,
+        + Execute<Descriptor<op::Conv2dExact>>
+        + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -472,7 +479,10 @@ where
         let width = x_shape[rank - 1];
 
         let x_inner = if rank > 4 {
-            B::reshape(&x.inner, &[batch_size, in_channels, height, width])?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(
+                &x.inner,
+                &ShapeBuf::from_slice(&[batch_size, in_channels, height, width]),
+            )?
         } else {
             x.inner.clone()
         };
@@ -511,7 +521,7 @@ where
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
-            B::reshape(&out, out_shape.as_ref())?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(&out, &out_shape)?
         } else {
             out
         };
@@ -537,8 +547,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv2dExact>>,
+        + Execute<Descriptor<op::Conv2dExact>>
+        + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -564,7 +576,10 @@ where
         let width = x_shape[rank - 1];
 
         let x_inner = if rank > 4 {
-            B::reshape(&x.inner, &[batch_size, in_channels, height, width])?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(
+                &x.inner,
+                &ShapeBuf::from_slice(&[batch_size, in_channels, height, width]),
+            )?
         } else {
             x.inner.clone()
         };
@@ -605,7 +620,7 @@ where
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
-            B::reshape(&out, out_shape.as_ref())?
+            crate::tensor::ops::manipulation::reshape_storage_exact::<B, K>(&out, &out_shape)?
         } else {
             out
         };

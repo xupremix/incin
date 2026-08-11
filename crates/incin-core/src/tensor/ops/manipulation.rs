@@ -48,6 +48,29 @@ fn is_valid_scalar_type<E: 'static>() -> bool {
         || tid == core::any::TypeId::of::<half::bf16>()
 }
 
+pub(crate) fn reshape_storage_exact<B, K>(
+    storage: &B::Storage<K>,
+    shape: &ShapeBuf,
+) -> Result<B::Storage<K>>
+where
+    B: Backend + Execute<Descriptor<op::ReshapeExact>>,
+    K: DType,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+{
+    let target = ShapeValue::<Dyn>::try_new(shape.clone()).map_err(crate::prelude::Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = ExecutionContext::from_scope(B::default());
+    Ok(dispatch::execute_shaped::<op::ReshapeExact, B, Dyn>(
+        &context,
+        ShapeAttributes {
+            shape: shape.as_ref().to_vec(),
+        },
+        &[input],
+        &target,
+    )
+    .map(Into::into)?)
+}
+
 /// Whether `E` is the exact Rust type the tensor's `dtype` stores.
 ///
 /// The extraction below reads the tensor's bytes through a `*const E`, so
