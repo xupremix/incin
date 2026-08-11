@@ -1,5 +1,11 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
+use crate::dist::placement::Local;
+use crate::exec::catalog::{Descriptor, LayerNormAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
+use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 
 /// A shape marker trait specifying a [`LayerNorm`] layer's normalized
@@ -10,58 +16,149 @@ pub trait LayerNormShape: Shape + DynShape {
     type Channels: Dim;
     /// The shape argument type used to construct the weight/bias tensors.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
+    /// The static shape type of the weight and bias parameters.
+    type ParamShape: Shape<Arg = Self::BuildArg> + DynShape;
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
-impl<C: Dim> LayerNormShape for (C,) {
-    /// The normalized dimension size.
+impl<C: Dim> LayerNormShape for crate::shapes::shape::DimCons<C, crate::shapes::shape::Nil> {
     type Channels = C;
-    /// A single-element `(channels_arg,)` tuple.
-    type BuildArg = (<C as Dim>::Arg,);
+    type BuildArg = (<C as Dim>::Arg, ());
+    type ParamShape = crate::shapes::shape::DimCons<C, crate::shapes::shape::Nil>;
 
-    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg {
-        (target,)
+        (target, ())
     }
 }
 
 impl LayerNormShape for Dyn {
     type Channels = usize;
-    type BuildArg = (usize,);
+    type BuildArg = alloc::vec::Vec<usize>;
+    type ParamShape = Dyn;
     fn build_args(target: usize) -> Self::BuildArg {
-        (target,)
+        alloc::vec![target]
     }
 }
+
+use crate::nn::param::{Frozen, TrainState, Trainable};
 
 #[derive(Debug)]
 #[incin_macros::module(internal)]
 /// Layer normalization: normalizes the last dimension to zero mean and
 /// unit variance, then applies a learnable affine `weight`/`bias`.
-pub struct LayerNorm<S: LayerNormShape, B: Backend> {
+pub struct LayerNorm<S: LayerNormShape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
     /// The learnable weight matrix parameter.
-    pub weight: Param<(S::Channels,), B>,
+    pub weight: Param<S::ParamShape, B, K, Train>,
     /// The optional learnable bias vector parameter.
-    pub bias: Param<(S::Channels,), B>,
+    pub bias: Param<S::ParamShape, B, K, Train>,
     #[module(ignore)]
     /// Small epsilon added to the denominator for numerical stability.
     pub eps: f32,
     #[module(ignore)]
-    _phantom: PhantomData<(S, B)>,
+    _phantom: PhantomData<(S, B, K, Train)>,
 }
 
-impl<S: LayerNormShape, B: Backend> LayerNorm<S, B>
+impl<S: LayerNormShape, B: Backend, K: DType, Train: TrainState> LayerNorm<S, B, K, Train> {
+    /// Constructs a LayerNorm from raw weight/bias parameters and epsilon.
+    pub fn from_raw_parts(
+        weight: Param<S::ParamShape, B, K, Train>,
+        bias: Param<S::ParamShape, B, K, Train>,
+        eps: f32,
+    ) -> Self {
+        Self {
+            weight,
+            bias,
+            eps,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Freezes this layer's parameters.
+    pub fn freeze(self) -> LayerNorm<S, B, K, Frozen> {
+        LayerNorm {
+            weight: self.weight.freeze(),
+            bias: self.bias.freeze(),
+            eps: self.eps,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Unfreezes this layer's parameters.
+    pub fn unfreeze(self) -> LayerNorm<S, B, K, Trainable> {
+        LayerNorm {
+            weight: self.weight.unfreeze(),
+            bias: self.bias.unfreeze(),
+            eps: self.eps,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+/// A builder for constructing a [`LayerNorm`] layer with a target.
+#[derive(Debug, Clone)]
+pub struct LayerNormBuilder<S: LayerNormShape, Train: TrainState = Trainable> {
+    pub shape: ShapeValue<S>,
+    pub eps: f32,
+    pub weight_init: crate::nn::init::Init,
+    pub bias_init: crate::nn::init::Init,
+    pub _train: PhantomData<Train>,
+}
+
+/// Creates a new builder for a [`LayerNorm`] layer with shape `shape` and epsilon `eps`.
+pub fn layer_norm<S: LayerNormShape>(shape: ShapeValue<S>, eps: f32) -> LayerNormBuilder<S> {
+    LayerNormBuilder {
+        shape,
+        eps,
+        weight_init: crate::nn::init::ones(),
+        bias_init: crate::nn::init::zeros(),
+        _train: PhantomData,
+    }
+}
+
+impl<S: LayerNormShape, Train: TrainState> LayerNormBuilder<S, Train> {
+    /// Configures weight initialization.
+    pub fn weight_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.weight_init = init;
+        self
+    }
+
+    /// Configures bias initialization.
+    pub fn bias_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.bias_init = init;
+        self
+    }
+
+    /// Marks the resulting layer as frozen (non-trainable).
+    pub fn frozen(self) -> LayerNormBuilder<S, Frozen> {
+        LayerNormBuilder {
+            shape: self.shape,
+            eps: self.eps,
+            weight_init: self.weight_init,
+            bias_init: self.bias_init,
+            _train: PhantomData,
+        }
+    }
+}
+
+impl<
+    S: LayerNormShape,
+    B: Backend
+        + crate::tensor::backend::CreationOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>,
+    K: DType,
+> LayerNorm<S, B, K, Trainable>
 where
-    B: SupportsDType<B::FloatElem>,
-    (S::Channels,): Shape<Arg = S::BuildArg>,
-    <B::FloatElem as DType>::Arg: Clone,
+    B: SupportsDType<K>,
+    <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(
                 <S::Channels as Dim>::Arg,
-                <B::FloatElem as DType>::Arg,
+                <K as DType>::Arg,
                 <B::Device as Device>::Arg,
                 f32,
             )>,
@@ -69,20 +166,22 @@ where
         use crate::tensor::arg_into::LayerArgInto;
         let (channels, dtype, device, eps) = args.into_layer_arg();
         let shape = S::build_args(channels);
-        let weight =
-            Param::<(S::Channels,), B>::ones_raw(crate::tensor::arg_into::TensorArgsData {
+        let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(
+            crate::tensor::arg_into::TensorArgsData {
                 shape: shape.clone(),
                 dtype: dtype.clone(),
                 device: device.clone(),
                 grad: (),
-            })?;
-        let bias =
-            Param::<(S::Channels,), B>::zeros_raw(crate::tensor::arg_into::TensorArgsData {
+            },
+        )?;
+        let bias = Param::<S::ParamShape, B, K, Trainable>::zeros_raw(
+            crate::tensor::arg_into::TensorArgsData {
                 shape,
                 dtype,
                 device,
                 grad: (),
-            })?;
+            },
+        )?;
         Ok(Self {
             weight,
             bias,
@@ -95,26 +194,44 @@ where
 impl<
     S: LayerNormShape,
     InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-> Module<Tensor<InS, B>> for LayerNorm<S, B>
+    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::LayerNorm>>,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<InS, B, K>> for LayerNorm<S, B, K, Train>
+where
+    <B as Execute<Descriptor<op::LayerNorm>>>::Output: Into<B::Storage<K>>,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InS, B>;
-    /// The error type returned if the forward pass fails.
+    type Output = Tensor<InS, B, K>;
     type Error = Error;
 
     #[inline]
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
-        let weight = self.weight.as_tensor()?.into_dyn();
-        let bias = self.bias.as_tensor()?.into_dyn();
-        let out = B::layer_norm(x.inner(), weight.inner(), Some(bias.inner()), self.eps)?;
-        Tensor::from_parts(
-            out,
+    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?;
+        let bias = self.bias.as_tensor()?;
+
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(x.inner()),
+            TensorHandle::from_storage::<B, K, Local>(weight.inner()),
+            TensorHandle::from_storage::<B, K, Local>(bias.inner()),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let out_inner = dispatch::execute::<op::LayerNorm, B>(
+            &context,
+            LayerNormAttributes {
+                normalized_shape: weight.shape_buf().as_ref().to_vec(),
+                epsilon: self.eps as f64,
+                has_bias: true,
+            },
+            &inputs,
+        )
+        .map_err(crate::prelude::Error::from)?;
+
+        Tensor::from_shape_value(
+            out_inner.into(),
             x._shape.clone(),
             x._dtype.clone(),
-            x._device.clone(),
-            x._grad,
+            weight._device,
+            *x.grad_field(),
         )
     }
 }
