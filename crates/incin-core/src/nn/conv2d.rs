@@ -2,6 +2,10 @@ use crate::nn::init::{InitContext, ParameterRole};
 use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
 use crate::nn::{Module, Param};
 use crate::prelude::*;
+use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::request::TensorHandle;
+use crate::tensor::backend::Execute;
 use typenum::Unsigned;
 
 /// A shape marker trait specifying a [`Conv2d`] layer's channel counts and
@@ -352,7 +356,11 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
+    B: Backend
+        + crate::tensor::backend::ModuleOps<B>
+        + crate::tensor::backend::TensorOps<B>
+        + Execute<Descriptor<op::Conv2dExact>>,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -380,21 +388,38 @@ where
             x.inner.clone()
         };
 
-        let out = B::conv2d(
-            &x_inner,
-            &weight.inner,
-            Some(bias.inner()),
-            S::S::from_arg(()).size(),
-            S::P::from_arg(()).size(),
-            S::D::from_arg(()).size(),
-            1,
-        )?;
-
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
+
+        let intermediate_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[
+            batch_size,
+            shape[shape.len() - 3],
+            shape[shape.len() - 2],
+            shape[shape.len() - 1],
+        ]))
+        .map_err(Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&x_inner),
+            TensorHandle::from_storage::<B, K, Local>(&weight.inner),
+            TensorHandle::from_storage::<B, K, Local>(&bias.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
+            &context,
+            Conv2dAttributes {
+                stride: [S::S::from_arg(()).size(); 2],
+                padding: [S::P::from_arg(()).size(); 2],
+                dilation: [S::D::from_arg(()).size(); 2],
+                groups: 1,
+                has_bias: true,
+            },
+            &inputs,
+            &intermediate_shape,
+        )?
+        .into();
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
@@ -421,7 +446,11 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
+    B: Backend
+        + crate::tensor::backend::ModuleOps<B>
+        + crate::tensor::backend::TensorOps<B>
+        + Execute<Descriptor<op::Conv2dExact>>,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -448,21 +477,37 @@ where
             x.inner.clone()
         };
 
-        let out = B::conv2d(
-            &x_inner,
-            &weight.inner,
-            None,
-            S::S::from_arg(()).size(),
-            S::P::from_arg(()).size(),
-            S::D::from_arg(()).size(),
-            1,
-        )?;
-
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
+
+        let intermediate_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[
+            batch_size,
+            shape[shape.len() - 3],
+            shape[shape.len() - 2],
+            shape[shape.len() - 1],
+        ]))
+        .map_err(Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&x_inner),
+            TensorHandle::from_storage::<B, K, Local>(&weight.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
+            &context,
+            Conv2dAttributes {
+                stride: [S::S::from_arg(()).size(); 2],
+                padding: [S::P::from_arg(()).size(); 2],
+                dilation: [S::D::from_arg(()).size(); 2],
+                groups: 1,
+                has_bias: false,
+            },
+            &inputs,
+            &intermediate_shape,
+        )?
+        .into();
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
@@ -489,7 +534,11 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
+    B: Backend
+        + crate::tensor::backend::ModuleOps<B>
+        + crate::tensor::backend::TensorOps<B>
+        + Execute<Descriptor<op::Conv2dExact>>,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -520,21 +569,39 @@ where
             x.inner.clone()
         };
 
-        let out = B::conv2d(
-            &x_inner,
-            &weight.inner,
-            bias.as_ref().map(|b| b.inner()),
-            S::S::from_arg(()).size(),
-            S::P::from_arg(()).size(),
-            S::D::from_arg(()).size(),
-            1,
-        )?;
-
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
+
+        let intermediate_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[
+            batch_size,
+            shape[shape.len() - 3],
+            shape[shape.len() - 2],
+            shape[shape.len() - 1],
+        ]))
+        .map_err(Error::Shape)?;
+        let mut inputs = alloc::vec::Vec::with_capacity(3);
+        inputs.push(TensorHandle::from_storage::<B, K, Local>(&x_inner));
+        inputs.push(TensorHandle::from_storage::<B, K, Local>(&weight.inner));
+        if let Some(bias) = bias.as_ref() {
+            inputs.push(TensorHandle::from_storage::<B, K, Local>(&bias.inner));
+        }
+        let context = ExecutionContext::from_scope(B::default());
+        let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
+            &context,
+            Conv2dAttributes {
+                stride: [S::S::from_arg(()).size(); 2],
+                padding: [S::P::from_arg(()).size(); 2],
+                dilation: [S::D::from_arg(()).size(); 2],
+                groups: 1,
+                has_bias: bias.is_some(),
+            },
+            &inputs,
+            &intermediate_shape,
+        )?
+        .into();
 
         let out_shape = shape.clone();
         let out = if rank > 4 {
