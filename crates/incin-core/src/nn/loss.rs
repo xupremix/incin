@@ -288,7 +288,7 @@ impl<R: ReductionMode> L1Loss<R> {
     /// Forward pass computing the L1 Loss between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::tensor::backend::LossOps<B>,
+        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::L1Loss>>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -298,8 +298,24 @@ impl<R: ReductionMode> L1Loss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: L1ReductionShape<S>,
+        <B as Execute<Descriptor<op::L1Loss>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = B::l1_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&pred.inner),
+            TensorHandle::from_storage::<B, K, Local>(&target.inner),
+        ];
+        let reduction = match R::as_enum() {
+            Reduction::None => LossReduction::None,
+            Reduction::Mean => LossReduction::Mean,
+            Reduction::Sum => LossReduction::Sum,
+        };
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute::<op::L1Loss, B>(
+            &context,
+            LossAttributes { reduction },
+            &inputs,
+        )
+        .map_err(crate::prelude::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -307,7 +323,7 @@ impl<R: ReductionMode> L1Loss<R> {
         let out_shape =
             shape_buf_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Tensor::from_parts(
-            inner,
+            inner.into(),
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
@@ -333,7 +349,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::tensor::backend::LossOps<B>,
+        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::BceWithLogitsLoss>>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -343,8 +359,24 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: BceReductionShape<S>,
+        <B as Execute<Descriptor<op::BceWithLogitsLoss>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&pred.inner),
+            TensorHandle::from_storage::<B, K, Local>(&target.inner),
+        ];
+        let reduction = match R::as_enum() {
+            Reduction::None => LossReduction::None,
+            Reduction::Mean => LossReduction::Mean,
+            Reduction::Sum => LossReduction::Sum,
+        };
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute::<op::BceWithLogitsLoss, B>(
+            &context,
+            LossAttributes { reduction },
+            &inputs,
+        )
+        .map_err(crate::prelude::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -352,7 +384,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
         let out_shape =
             shape_buf_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Tensor::from_parts(
-            inner,
+            inner.into(),
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
