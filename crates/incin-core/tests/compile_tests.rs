@@ -43,6 +43,7 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("checked_numel_is_private", "E0423"),
         ("canonical_descriptor_fields_are_private", "private fields"),
         ("construction_witness_is_private", "E0624"),
+        ("shape_value_constructor_is_private", "E0624"),
         ("conv2d_invalid_shape", "error[E0277]"),
         ("forward_batchnorm_mismatch", "E0271"),
         ("forward_conv1d_static_mismatch", "E0271"),

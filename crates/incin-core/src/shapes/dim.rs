@@ -133,6 +133,45 @@ pub trait ConcreteStaticExtent: Dim {
     type Nat: typenum::Unsigned;
 }
 
+#[doc(hidden)]
+pub trait BroadcastChoice<WhenOne, WhenZero> {
+    type Output;
+}
+
+impl<WhenOne, WhenZero> BroadcastChoice<WhenOne, WhenZero> for typenum::B1 {
+    type Output = WhenOne;
+}
+
+impl<WhenOne, WhenZero> BroadcastChoice<WhenOne, WhenZero> for typenum::B0 {
+    type Output = WhenZero;
+}
+
+#[doc(hidden)]
+pub type BroadcastSameNat<L, R> =
+    <<L as typenum::IsEqual<R>>::Output as BroadcastChoice<L, ()>>::Output;
+#[doc(hidden)]
+pub type BroadcastRightNat<L, R> =
+    <<R as typenum::IsEqual<typenum::U1>>::Output as BroadcastChoice<L, BroadcastSameNat<L, R>>>::Output;
+#[doc(hidden)]
+pub type BroadcastStaticNat<L, R> =
+    <<L as typenum::IsEqual<typenum::U1>>::Output as BroadcastChoice<R, BroadcastRightNat<L, R>>>::Output;
+
+impl<L, R> ConcreteStaticExtent for BroadcastExtent<L, R>
+where
+    L: Dim + ConcreteStaticExtent,
+    R: Dim + ConcreteStaticExtent,
+    L::Nat: typenum::Unsigned + typenum::IsEqual<typenum::U1> + typenum::IsEqual<R::Nat>,
+    R::Nat: typenum::Unsigned + typenum::IsEqual<typenum::U1>,
+    <L::Nat as typenum::IsEqual<typenum::U1>>::Output:
+        BroadcastChoice<R::Nat, BroadcastRightNat<L::Nat, R::Nat>>,
+    <R::Nat as typenum::IsEqual<typenum::U1>>::Output:
+        BroadcastChoice<L::Nat, BroadcastSameNat<L::Nat, R::Nat>>,
+    <L::Nat as typenum::IsEqual<R::Nat>>::Output: BroadcastChoice<L::Nat, ()>,
+    BroadcastStaticNat<L::Nat, R::Nat>: typenum::Unsigned,
+{
+    type Nat = BroadcastStaticNat<L::Nat, R::Nat>;
+}
+
 impl<T> ConcreteStaticExtent for T
 where
     T: Dim + typenum::Unsigned,

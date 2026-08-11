@@ -126,3 +126,22 @@ fn axis_set_spills_without_a_semantic_rank_ceiling() {
     assert!(set.contains(70));
     assert_eq!(set.count(), 1);
 }
+
+#[test]
+fn axis_set_mixes_inline_and_spilled_axes_without_losing_semantics() {
+    let set = [0, 64, 65, 129, 65]
+        .into_iter()
+        .fold(AxisSet::EMPTY, AxisSet::insert);
+    assert_eq!(set.axes().collect::<Vec<_>>(), vec![0, 64, 65, 129]);
+    assert_eq!(set.count(), 4);
+    assert!(set.contains(0));
+    assert!(set.contains(64));
+    assert!(set.contains(129));
+    assert!(!set.contains(128));
+    assert!(!set.is_contiguous_run());
+
+    let contiguous = [64, 65, 66]
+        .into_iter()
+        .fold(AxisSet::EMPTY, AxisSet::insert);
+    assert!(contiguous.is_contiguous_run());
+}

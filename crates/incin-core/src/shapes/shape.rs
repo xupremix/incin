@@ -851,13 +851,16 @@ impl<S: Shape> ShapeValue<S> {
     #[inline]
     pub fn try_new(dims: ShapeBuf) -> Result<Self, crate::shapes::error::ShapeError> {
         S::validate_dims(dims.as_ref())?;
-        Ok(Self::new(dims))
+        Ok(Self::from_validated(dims))
     }
 
     /// Constructs a ShapeValue after an internal caller has already validated
     /// the dimensions through a shape rule or tensor construction boundary.
+    /// This constructor is crate-private so downstream code cannot forge the
+    /// relationship between a shape type and incompatible dimensions.
     #[inline]
-    pub(crate) fn new(dims: ShapeBuf) -> Self {
+    pub(crate) fn from_validated(dims: ShapeBuf) -> Self {
+        debug_assert!(S::validate_dims(dims.as_ref()).is_ok());
         Self {
             dims,
             marker: core::marker::PhantomData,
@@ -865,11 +868,12 @@ impl<S: Shape> ShapeValue<S> {
     }
 
     /// Builds the canonical runtime shape value from already validated
-    /// dimensions.  Operation rules use this when their output shape is
+    /// dimensions. Operation rules use this when their output shape is
     /// computed structurally and therefore starts directly from canonical
     /// runtime dimensions rather than a constructor adapter.
     #[inline]
-    pub(crate) fn from_shape_buf(dims: crate::shapes::ShapeBuf) -> Self {
+    pub(crate) fn from_validated_buf(dims: crate::shapes::ShapeBuf) -> Self {
+        debug_assert!(S::validate_dims(dims.as_ref()).is_ok());
         Self {
             dims,
             marker: core::marker::PhantomData,

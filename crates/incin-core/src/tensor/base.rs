@@ -254,7 +254,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         T::validate_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Self::from_shape_value_placed(
             inner,
-            ShapeValue::from_shape_buf(dims),
+            ShapeValue::from_validated_buf(dims),
             dtype,
             device,
             grad,
@@ -430,7 +430,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
 
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(global_shape),
+            _shape: ShapeValue::from_validated(global_shape),
             _dtype: dtype,
             _device: device,
             _grad: grad,
@@ -564,7 +564,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
     ) -> Self {
         Self {
             inner,
-            _shape: ShapeValue::new(shape),
+            _shape: ShapeValue::from_validated(shape),
             _dtype: dtype,
             _device: device,
             _grad: grad,
@@ -628,7 +628,13 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         grad: G::Field,
     ) -> Result<Self> {
         S::validate_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
-        Self::from_shape_value(inner, ShapeValue::from_shape_buf(dims), dtype, device, grad)
+        Self::from_shape_value(
+            inner,
+            ShapeValue::from_validated_buf(dims),
+            dtype,
+            device,
+            grad,
+        )
     }
 
     /// Creates a tensor from parts, checking that storage shape matches expected shape.
@@ -942,7 +948,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
         let s2_shape = crate::shapes::ShapeBuf::from_slice(dims.as_ref());
         Tensor::from_shape_value_unchecked(
             self.inner,
-            ShapeValue::new(s2_shape),
+            ShapeValue::from_validated(s2_shape),
             self._dtype,
             self._device,
             self._grad,

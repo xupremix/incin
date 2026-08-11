@@ -1,0 +1,10 @@
+error[E0624]: associated function `from_validated` is private
+ --> tests/compile_fail/shape_value_constructor_is_private.rs:7:37
+  |
+7 |     let _ = ShapeValue::<s![2, 3]>::from_validated(ShapeBuf::from_slice(&[9, 9]));
+  |                                     ^^^^^^^^^^^^^^ private associated function
+  |
+ ::: src/shapes/shape.rs
+  |
+  |     pub(crate) fn from_validated(dims: ShapeBuf) -> Self {
+  |     ---------------------------------------------------- private associated function defined here

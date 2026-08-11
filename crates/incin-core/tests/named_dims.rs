@@ -3,9 +3,9 @@
 extern crate incin_core as incin;
 
 use incin_core::prelude::*;
-use incin_core::shapes::reshape::{ElementCount, ReshapeShape};
 use incin_core::shapes::StaticExtent;
 use incin_core::shapes::SwapAt;
+use incin_core::shapes::reshape::{ElementCount, ReshapeShape};
 use incin_core::test_utils::DummyBackend;
 use incin_macros::{axis, s};
 use typenum::Unsigned;
@@ -126,6 +126,10 @@ fn named_static_broadcast_retains_static_extent_proof() {
             .unwrap(),
         25
     );
+    assert_same::<
+        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as ConcreteStaticExtent>::Nat,
+        typenum::U25,
+    >();
 }
 
 #[test]
@@ -140,6 +144,18 @@ fn named_static_broadcast_retains_proof_in_reverse_order_and_with_anonymous_one(
 
     assert_same::<NamedOut, NamedExpected>();
     assert_same::<AnonymousOut, AnonymousExpected>();
+    assert_same::<
+        <NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>> as ConcreteStaticExtent>::Nat,
+        typenum::U25,
+    >();
+    assert_same::<
+        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as ConcreteStaticExtent>::Nat,
+        typenum::U25,
+    >();
+    assert_same::<
+        <BroadcastExtent<typenum::U1, typenum::U25> as ConcreteStaticExtent>::Nat,
+        typenum::U25,
+    >();
     assert_eq!(
         <NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>> as Dim>::STATIC,
         StaticExtent::Value(25)

@@ -5161,7 +5161,7 @@ mod tests {
             typenum::U2,
             crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
         >;
-        let sv = crate::shapes::ShapeValue::<Static23>::new(
+        let sv = crate::shapes::ShapeValue::<Static23>::from_validated(
             <Static23 as crate::shapes::Shape>::resolve(((), ((), ()))).unwrap(),
         );
         let proven = ValidatedInvocation::<op::Zeros>::infer_typed(created.clone(), vec![], &sv)

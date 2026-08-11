@@ -148,7 +148,7 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
 
         Ok(Self {
             inner: raw_var,
-            _shape: ShapeValue::new(shape),
+            _shape: ShapeValue::from_validated(shape),
             _dtype: dtype,
             _device: device,
             _train: PhantomData,
@@ -241,7 +241,7 @@ where
 
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
             _train: PhantomData,
@@ -268,7 +268,7 @@ where
         let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
             _train: PhantomData,
@@ -295,7 +295,7 @@ where
         let inner = B::var_randn::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
             _train: PhantomData,
@@ -313,7 +313,7 @@ where
         let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
             _train: PhantomData,
@@ -336,7 +336,7 @@ where
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
             _train: PhantomData,
@@ -524,7 +524,7 @@ impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
 
         Ok(Self {
             inner: raw_var,
-            _shape: ShapeValue::new(shape),
+            _shape: ShapeValue::from_validated(shape),
             _dtype: dtype,
             _device: device,
         })
@@ -589,7 +589,7 @@ where
 
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
         })
@@ -613,7 +613,7 @@ where
         let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
         })
@@ -636,7 +636,7 @@ where
         let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
-            _shape: ShapeValue::new(_shape),
+            _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
         })
