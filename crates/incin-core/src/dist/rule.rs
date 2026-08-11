@@ -10,7 +10,7 @@ use crate::dist::placement::{
     ConstPlacement, Local, Partial, PipelineStage, Placement, PlacementBuf, PlacementKind,
     Replicated, Sharded,
 };
-use crate::exec::OperationSpec;
+use crate::exec::ExecutionDescriptor;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::shape::Shape;
 use alloc::vec::Vec;
@@ -436,7 +436,8 @@ where
     S: Shape,
 {
     operation: O,
-    global_shape: S::Field,
+    marker: PhantomData<fn() -> S>,
+    global_shape: ShapeBuf,
     local_shapes: Vec<ShapeBuf>,
     input_placements: PlacementBuf,
 }
@@ -449,12 +450,13 @@ where
     #[must_use]
     pub fn new(
         operation: O,
-        global_shape: S::Field,
+        global_shape: ShapeBuf,
         local_shapes: Vec<ShapeBuf>,
         input_placements: PlacementBuf,
     ) -> Self {
         Self {
             operation,
+            marker: PhantomData,
             global_shape,
             local_shapes,
             input_placements,
@@ -549,7 +551,7 @@ pub trait DistributedRule<Inputs> {
     /// Proved output placement.
     type OutputPlacement: Placement;
     /// Backend-neutral operation descriptor.
-    type Descriptor: OperationSpec;
+    type Descriptor: ExecutionDescriptor;
 
     /// Validate runtime metadata against the typed placement and shape rules.
     fn lower_distributed(
@@ -566,7 +568,7 @@ impl<From, To> PlacementTransitionRule<From, To> {
         inputs: &DistributedInputs<O, S>,
     ) -> Result<ValidatedDistributed<O>, DistributedError>
     where
-        O: OperationSpec,
+        O: ExecutionDescriptor,
         S: Shape,
         From: LegalTransition<To> + ConstPlacement,
         To: ConstPlacement,
@@ -577,7 +579,7 @@ impl<From, To> PlacementTransitionRule<From, To> {
 
 impl<O, S, From, To> DistributedRule<DistributedInputs<O, S>> for PlacementTransitionRule<From, To>
 where
-    O: OperationSpec,
+    O: ExecutionDescriptor,
     S: Shape,
     From: LegalTransition<To> + ConstPlacement,
     To: ConstPlacement,
@@ -589,8 +591,8 @@ where
     fn lower_distributed(
         inputs: &DistributedInputs<O, S>,
     ) -> Result<ValidatedDistributed<O>, DistributedError> {
-        let global = ShapeBuf::from_slice(S::dims(&inputs.global_shape).as_ref());
-        if inputs.operation.output() != &global {
+        let global = inputs.global_shape.clone();
+        if inputs.operation.output_shape() != Some(&global) {
             return Err(DistributedError::GlobalShapeMismatch);
         }
         if inputs.input_placements.is_empty() {

@@ -3,7 +3,7 @@ use crate::err::BackendError;
 use crate::exec::capability::Capabilities;
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{OperationSpec, TensorMeta, Validated};
+use crate::exec::{TensorMeta, Validated};
 use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, ShapeBuf, convert_f64_to_i64};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};

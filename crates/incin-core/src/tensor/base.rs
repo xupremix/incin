@@ -367,7 +367,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         proof: &crate::dist::ValidatedDistributed<O>,
     ) -> core::result::Result<Self, PlacedTensorError>
     where
-        O: crate::exec::OperationSpec,
+        O: crate::exec::ExecutionDescriptor,
         B: SupportsDType<K>,
     {
         let tensor_global = global_shape.as_ref().to_vec();
@@ -448,7 +448,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         proof: &crate::dist::ValidatedDistributed<O>,
     ) -> core::result::Result<Tensor<S, B, K, G, To>, PlacedTensorError>
     where
-        O: crate::exec::OperationSpec,
+        O: crate::exec::ExecutionDescriptor,
         P: crate::dist::ConstPlacement + crate::dist::LegalTransition<To>,
         To: crate::dist::ConstPlacement,
         B: SupportsDType<K>,
@@ -485,7 +485,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Dyn> {
         proof: &crate::dist::ValidatedDistributed<O>,
     ) -> core::result::Result<Self, PlacedTensorError>
     where
-        O: crate::exec::OperationSpec,
+        O: crate::exec::ExecutionDescriptor,
         B: SupportsDType<K>,
     {
         let from = self.placement();
