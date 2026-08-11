@@ -18,7 +18,7 @@ help: the following other types implement trait `Execute<O>`
    |
   ::: src/tensor/tracing.rs
    |
-   | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::spec::ExecutionDescriptor>
+   | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::TraceDescriptor>
    | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
    | |____________________________________________________________^ `TracingBackend<B>`
 note: required by a bound in `requires_broadcast`

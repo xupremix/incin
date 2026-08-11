@@ -236,7 +236,10 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::T
                     .unwrap_or(crate::shapes::ShapeBuf::SCALAR)
                     .as_ref()
                     .to_vec(),
-                request.operation.descriptor().trace_output_dtype(request.inputs),
+                request
+                    .operation
+                    .descriptor()
+                    .trace_output_dtype(request.inputs),
                 None,
             );
             let inputs = request
