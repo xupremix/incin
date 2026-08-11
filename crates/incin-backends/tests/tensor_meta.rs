@@ -4,6 +4,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
+#[cfg(any(feature = "wgpu", feature = "cuda", feature = "metal"))]
+use incin_core::backend_authoring::Backend;
 #[cfg(feature = "wgpu")]
 use incin_core::backend_authoring::TensorOps;
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
