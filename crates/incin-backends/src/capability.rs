@@ -4,37 +4,60 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
     LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel,
 };
-use incin_core::prelude::{DTypeId, DeviceKind, MAX_RANK, OperationKind};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceKind, OperationKind};
 
-const ALL_DTYPES: &[DTypeId] = &[
-    DTypeId::U8,
-    DTypeId::U32,
-    DTypeId::I64,
-    DTypeId::BF16,
-    DTypeId::F16,
-    DTypeId::F32,
-    DTypeId::F64,
-    DTypeId::Q8_0,
+const ALL_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
+    DTypeId::I64.descriptor(),
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+    DTypeId::Q8_0.descriptor(),
+    DTypeId::Bool.descriptor(),
 ];
-const FLOAT_DTYPES: &[DTypeId] = &[DTypeId::BF16, DTypeId::F16, DTypeId::F32, DTypeId::F64];
-const CUDA_STORAGE_DTYPES: &[DTypeId] = &[
-    DTypeId::I64,
-    DTypeId::BF16,
-    DTypeId::F16,
-    DTypeId::F32,
-    DTypeId::F64,
+const FLOAT_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
 ];
-const F32_ONLY: &[DTypeId] = &[DTypeId::F32];
+const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::I64.descriptor(),
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+];
+const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
 /// The only quantized representation any backend implements today.
-const Q8_ONLY: &[DTypeId] = &[DTypeId::Q8_0];
-const NON_QUANTIZED: &[DTypeId] = &[
-    DTypeId::U8,
-    DTypeId::U32,
-    DTypeId::I64,
-    DTypeId::BF16,
-    DTypeId::F16,
-    DTypeId::F32,
-    DTypeId::F64,
+const Q8_ONLY: &[DTypeDescriptor] = &[DTypeId::Q8_0.descriptor()];
+const NON_QUANTIZED: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
+    DTypeId::I64.descriptor(),
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
+/// The union of an integer index operand's dtypes and an f32 data operand's.
+///
+/// Two operations have exactly this shape: `embedding` (integer indices, f32
+/// weight table) and `cross_entropy_loss` (f32 logits, integer class
+/// targets). Not a claim that either operand may be *either* — the
+/// descriptor's own per-operand contract and `cpu::canonical`'s `f32_only`
+/// both enforce the real, tighter split this row cannot state on its own,
+/// because `dispatch::execute` applies one dtype set to every operand in
+/// turn. See the `embedding` and `composed_reduction_indexed` groups' own
+/// comments in `cpu_descriptor_operations!`.
+const INDEX_AND_F32_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
+    DTypeId::I64.descriptor(),
+    DTypeId::F32.descriptor(),
 ];
 const CONTIGUOUS: &[LayoutClass] = &[LayoutClass::Contiguous];
 const CPU_LAYOUTS: &[LayoutClass] = &[LayoutClass::Contiguous, LayoutClass::Strided];
@@ -42,16 +65,16 @@ const PRECISE: &[MathMode] = &[MathMode::Precise];
 
 const fn native(
     operation: OperationKind,
-    dtypes: &'static [DTypeId],
+    dtypes: &'static [DTypeDescriptor],
     layouts: &'static [LayoutClass],
     training: bool,
 ) -> CapabilityRule {
-    native_ranked(operation, dtypes, layouts, 0, MAX_RANK, training)
+    native_ranked(operation, dtypes, layouts, 0, usize::MAX, training)
 }
 
 const fn native_ranked(
     operation: OperationKind,
-    dtypes: &'static [DTypeId],
+    dtypes: &'static [DTypeDescriptor],
     layouts: &'static [LayoutClass],
     min_rank: usize,
     max_rank: usize,
@@ -77,7 +100,7 @@ const fn native_ranked(
 /// question `ImplementationKind` exists to answer.
 const fn composed_ranked(
     operation: OperationKind,
-    dtypes: &'static [DTypeId],
+    dtypes: &'static [DTypeDescriptor],
     layouts: &'static [LayoutClass],
     min_rank: usize,
     max_rank: usize,
@@ -135,7 +158,7 @@ macro_rules! cpu_descriptor_operations {
             // records nothing on the tape; the `var_*` forms that do are not
             // here, because they return a variable rather than storage.
             filling = [
-                Zeros, Ones, Full, Arange, Linspace,
+                TensorFromData, TensorFromBytes, Zeros, Ones, Full, Arange, Linspace,
                 // The variable forms produce the same allocation and differ
                 // only in what they hand back, which the row does not describe.
                 VariableZeros, VariableOnes
@@ -177,16 +200,20 @@ macro_rules! cpu_descriptor_operations {
             // mean, which is what separates it from `layer_norm`, but the row
             // the two produce is identical.
             normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm],
-            // `embedding` is the module-family operation deliberately absent
-            // from every group above, and it is absent because of the contract
-            // rather than because nobody wrote the executor. Its two operands
-            // have different dtypes by construction: a float table and an
-            // integer index. `dispatch::execute` resolves one capability row and
-            // applies it to each operand in turn, so the row would have to
-            // admit both dtype sets at once. Stating only f32 refuses every
-            // legal call, and widening it to the non-quantized set claims f64
-            // support the kernel answers by narrowing to f32. Per-operand dtype
-            // sets are the change that unblocks it.
+            // `embedding`'s two operands have different dtypes by construction:
+            // an integer index and an f32 weight table (`embedding_impl` always
+            // reads and writes f32, so a wider float claim here would be the
+            // same over-claim FND-005 fixed for `conv1d`/`conv_transpose2d`/
+            // `adaptive_avg_pool2d`). One row cannot state "operand 0 is
+            // integer, operand 1 is f32" — `dispatch::execute` applies the same
+            // dtype set to every operand in turn — so `INDEX_AND_F32_DTYPES` is the
+            // union of both, the loosest set the row can honestly claim, the
+            // same trick `descriptor_min_rank` already uses for rank. The
+            // descriptor's own per-operand contract refuses an integer weight
+            // or a non-integer index before this row is ever consulted, and
+            // `cpu::canonical`'s `f32_only` enforces the real, tighter weight
+            // constraint the row cannot state.
+            embedding = [EmbeddingExact],
             native_tensor = [
                 ArgMax, ArgMin, Argsort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
@@ -225,16 +252,6 @@ macro_rules! cpu_descriptor_operations {
             // name in the one above because the operations there carry no bias,
             // and the rank bound has to admit the rank-one one this has.
             composed_matmul_bias = [Linear],
-            // The losses that `LossOps` supplies as real composed defaults
-            // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
-            // an all-reduce. They inherit the reduction group's f32-only claim
-            // because their `Mean` and `Sum` forms end in `mean_all`/`sum_all`,
-            // and the reduction mode is an attribute rather than part of the
-            // identity, so the row has to hold for the narrowest of the three.
-            //
-            // `cross_entropy_loss` is absent for the reason `embedding` is: its
-            // logits are float and its targets are class indices, and one row
-            // states one dtype set.
             // Two groups rather than one, because the compression and the
             // operations over compressed storage read opposite dtype sets and a
             // row states one. `quantize` reads f32 and writes blocks;
@@ -243,6 +260,12 @@ macro_rules! cpu_descriptor_operations {
             // never consult a stride.
             quantizing = [Quantize],
             quantized = [Dequantize, QuantizedMatMul],
+            // The losses that `LossOps` supplies as real composed defaults
+            // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
+            // an all-reduce. They inherit the reduction group's f32-only claim
+            // because their `Mean` and `Sum` forms end in `mean_all`/`sum_all`,
+            // and the reduction mode is an attribute rather than part of the
+            // identity, so the row has to hold for the narrowest of the three.
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 // Variance, standard deviation and the p-norm have no kernel of
@@ -253,13 +276,30 @@ macro_rules! cpu_descriptor_operations {
                 VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
                 Norm
-            ]
+            ],
+            // The composed reductions whose operands split into a float and an
+            // integer index, which is the one thing keeping them out of the
+            // group above: `cross_entropy_loss` takes f32 logits and integer
+            // class targets, so its row carries `INDEX_AND_F32_DTYPES` — the
+            // union of the two — for exactly the reason `embedding`'s does.
+            // The descriptor's per-operand contract (`operand_ranks` gives
+            // logits rank 2 and targets rank 1, and `index_input` names
+            // operand 1 as the integer one) refuses a swapped or mistyped pair
+            // before this row is consulted, and `cpu::canonical`'s `f32_only`
+            // enforces the logits' real f32-only constraint the row cannot
+            // state. Composed rather than native because the kernel rewrites
+            // into `log_softmax`, `mul`, `sum_dim`, `neg` and an all-reduce.
+            composed_reduction_indexed = [CrossEntropyLoss]
         }
     };
 }
 
 // Re-exported crate-internally so the CPU executor module can prove, at
 // compile time, that it implements every identity this declaration advertises.
+// Gated on the consumer's own feature: the table below is always compiled (a
+// capability claim is data, and the registry reports every backend's), but the
+// module that checks this one is not.
+#[cfg(feature = "cpu")]
 pub(crate) use cpu_descriptor_operations;
 
 macro_rules! cuda_descriptor_operations {
@@ -283,13 +323,15 @@ macro_rules! cuda_descriptor_operations {
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
             normalization = [],
+            embedding = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
             composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
-            composed_reduction = []
+            composed_reduction = [],
+            composed_reduction_indexed = []
         }
     };
 }
@@ -301,7 +343,7 @@ macro_rules! wgpu_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            filling = [],
+            filling = [Zeros, Ones, Full, Arange, Linspace],
             sampling = [],
             readback = [],
             reduction = [
@@ -315,13 +357,15 @@ macro_rules! wgpu_descriptor_operations {
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
             normalization = [],
+            embedding = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
             composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
-            composed_reduction = []
+            composed_reduction = [],
+            composed_reduction_indexed = []
         }
     };
 }
@@ -333,7 +377,7 @@ macro_rules! metal_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            filling = [],
+            filling = [Zeros, Ones, Full, Arange, Linspace],
             sampling = [],
             readback = [],
             reduction = [
@@ -346,16 +390,25 @@ macro_rules! metal_descriptor_operations {
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
             normalization = [],
+            embedding = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
             composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
-            composed_reduction = []
+            composed_reduction = [],
+            composed_reduction_indexed = []
         }
     };
 }
+
+#[allow(unused_imports)]
+pub(crate) use cuda_descriptor_operations;
+#[allow(unused_imports)]
+pub(crate) use metal_descriptor_operations;
+#[allow(unused_imports)]
+pub(crate) use wgpu_descriptor_operations;
 
 macro_rules! descriptor_capability_rules {
     (
@@ -368,6 +421,7 @@ macro_rules! descriptor_capability_rules {
         spatial = $spatial:expr,
         matmul = $matmul:expr,
         normalization_dtypes = $normalization_dtypes:expr,
+        embedding_dtypes = $embedding_dtypes:expr,
         broadcast_training = $broadcast_training:expr,
         reshape_training = $reshape_training:expr,
         elementwise_layouts = $elementwise_layouts:expr,
@@ -391,13 +445,15 @@ macro_rules! descriptor_capability_rules {
         spatial = [$($spatial_op:ident),* $(,)?],
         matmul = [$($matmul_op:ident),* $(,)?],
         normalization = [$($normalization_op:ident),* $(,)?],
+        embedding = [$($embedding_op:ident),* $(,)?],
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
         composed_matmul_bias = [$($composed_matmul_bias_op:ident),* $(,)?],
         quantizing = [$($quantizing_op:ident),* $(,)?],
         quantized = [$($quantized_op:ident),* $(,)?],
-        composed_reduction = [$($composed_reduction_op:ident),* $(,)?]
+        composed_reduction = [$($composed_reduction_op:ident),* $(,)?],
+        composed_reduction_indexed = [$($composed_reduction_indexed_op:ident),* $(,)?]
     ) => {
         &[
             $($legacy,)*
@@ -455,6 +511,17 @@ macro_rules! descriptor_capability_rules {
                 $elementwise_layouts,
                 descriptor_min_rank(OperationKind::$normalization_op),
                 descriptor_max_rank(OperationKind::$normalization_op),
+                true,
+            ),)*
+            // The union of the index operand's integer dtypes and the weight
+            // operand's f32-only one — see `INDEX_AND_F32_DTYPES`'s own doc for why
+            // one row cannot state the tighter, per-operand pair directly.
+            $(native_ranked(
+                OperationKind::$embedding_op,
+                $embedding_dtypes,
+                $elementwise_layouts,
+                descriptor_min_rank(OperationKind::$embedding_op),
+                descriptor_max_rank(OperationKind::$embedding_op),
                 true,
             ),)*
             // The tensor family reads its operands through the stride-aware
@@ -532,6 +599,16 @@ macro_rules! descriptor_capability_rules {
                 $reduction_layouts,
                 descriptor_min_rank(OperationKind::$composed_reduction_op),
                 descriptor_max_rank(OperationKind::$composed_reduction_op),
+                true,
+            ),)*
+            // The same rule, widened to the union of a float operand's dtypes
+            // and an integer index operand's — see `INDEX_AND_F32_DTYPES`.
+            $(composed_ranked(
+                OperationKind::$composed_reduction_indexed_op,
+                $embedding_dtypes,
+                $reduction_layouts,
+                descriptor_min_rank(OperationKind::$composed_reduction_indexed_op),
+                descriptor_max_rank(OperationKind::$composed_reduction_indexed_op),
                 true,
             ),)*
         ]
@@ -628,6 +705,12 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // descriptor validates advertises requests that can never reach it.
         OperationKind::GroupNorm => 2,
         OperationKind::InstanceNorm | OperationKind::PixelShuffle => 4,
+        // The weight table is always rank two; the index operand carries
+        // whatever batch geometry addresses it, down to a single-axis vector
+        // of indices — a scalar index is not accepted. One is therefore the
+        // loosest bound the row can honestly state, matching the per-operand
+        // rank contract the descriptor validates separately.
+        OperationKind::EmbeddingExact => 1,
         _ => 0,
     }
 }
@@ -649,7 +732,7 @@ const fn descriptor_max_rank(operation: OperationKind) -> usize {
         // `pixel_shuffle` reads a four-axis (N, C, H, W) layout by name; no
         // other rank has an interpretation for it.
         OperationKind::PixelShuffle | OperationKind::InstanceNorm => 4,
-        _ => MAX_RANK,
+        _ => usize::MAX,
     }
 }
 
@@ -664,6 +747,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
+    embedding_dtypes = INDEX_AND_F32_DTYPES,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CPU_LAYOUTS,
@@ -682,7 +766,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             ALL_DTYPES,
             &[LayoutClass::Strided],
             0,
-            MAX_RANK,
+            usize::MAX,
             false,
             PRECISE,
             ImplementationKind::Composed,
@@ -697,7 +781,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             F32_ONLY,
             CPU_LAYOUTS,
             1,
-            MAX_RANK,
+            usize::MAX,
             true,
         ),
         native(OperationKind::Broadcast, ALL_DTYPES, CPU_LAYOUTS, false),
@@ -709,7 +793,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             NON_QUANTIZED,
             &[LayoutClass::Strided],
             0,
-            MAX_RANK,
+            usize::MAX,
             false,
             PRECISE,
             ImplementationKind::Composed,
@@ -719,7 +803,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             FLOAT_DTYPES,
             &[LayoutClass::Strided],
             0,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Composed,
@@ -729,7 +813,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             F32_ONLY,
             CPU_LAYOUTS,
             2,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -768,6 +852,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
+    embedding_dtypes = INDEX_AND_F32_DTYPES,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CONTIGUOUS,
@@ -796,7 +881,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             FLOAT_DTYPES,
             CONTIGUOUS,
             1,
-            MAX_RANK,
+            usize::MAX,
             true,
         ),
         native(
@@ -818,7 +903,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             2,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -857,6 +942,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
+    embedding_dtypes = INDEX_AND_F32_DTYPES,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
     elementwise_layouts = CONTIGUOUS,
@@ -880,7 +966,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             1,
-            MAX_RANK,
+            usize::MAX,
             true,
         ),
         CapabilityRule::new(
@@ -888,7 +974,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             0,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -898,7 +984,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             0,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -908,7 +994,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             2,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -938,17 +1024,18 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
 
 pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     descriptor_capability_rules,
-    elementwise = FLOAT_DTYPES,
+    elementwise = F32_ONLY,
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
-    reduction = FLOAT_DTYPES,
+    reduction = F32_ONLY,
     filling_dtypes = NON_QUANTIZED,
-    sampling_dtypes = FLOAT_DTYPES,
+    sampling_dtypes = F32_ONLY,
     spatial = F32_ONLY,
-    matmul = FLOAT_DTYPES,
+    matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
-    broadcast_training = FLOAT_DTYPES,
-    reshape_training = FLOAT_DTYPES,
+    embedding_dtypes = INDEX_AND_F32_DTYPES,
+    broadcast_training = F32_ONLY,
+    reshape_training = F32_ONLY,
     elementwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
@@ -968,14 +1055,14 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
         ),
         native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
-        native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),
-        native(OperationKind::Reduction, FLOAT_DTYPES, CONTIGUOUS, true),
+        native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
+        native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
         native_ranked(
             OperationKind::Normalization,
-            FLOAT_DTYPES,
+            F32_ONLY,
             CONTIGUOUS,
             1,
-            MAX_RANK,
+            usize::MAX,
             true,
         ),
         native(
@@ -997,7 +1084,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
             FLOAT_DTYPES,
             CONTIGUOUS,
             2,
-            MAX_RANK,
+            usize::MAX,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -1107,7 +1194,7 @@ mod catalog_tests {
                 let registered = rules.iter().find(|rule| rule.operation == entry.operation);
                 if let Some(rule) = registered {
                     let query = CapabilityQuery {
-                        operation: entry.operation,
+                        operation: incin_core::exec::OperationIdentity::Builtin(entry.operation),
                         dtype: rule.dtypes[0],
                         layout: rule.layouts[0],
                         rank: rule.min_rank,
@@ -1121,8 +1208,8 @@ mod catalog_tests {
                     );
                 } else {
                     let query = CapabilityQuery {
-                        operation: entry.operation,
-                        dtype: DTypeId::F32,
+                        operation: incin_core::exec::OperationIdentity::Builtin(entry.operation),
+                        dtype: DTypeId::F32.descriptor(),
                         layout: LayoutClass::Contiguous,
                         rank: descriptor_min_rank(entry.operation),
                         training: false,

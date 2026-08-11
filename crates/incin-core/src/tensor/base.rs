@@ -724,7 +724,8 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::Zeros, B, S>(
             &context,
             CreationAttributes {
@@ -750,7 +751,8 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::Ones, B, S>(
             &context,
             CreationAttributes {
@@ -784,7 +786,8 @@ where
         let byte_len = core::mem::size_of_val(data);
         let bytes = unsafe { core::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::TensorFromData, B, S>(
             &context,
             crate::exec::catalog::DataAttributes {
@@ -812,7 +815,8 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, S>(
             &context,
             crate::exec::catalog::DataAttributes {
@@ -839,7 +843,8 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::UniformRandom, B, S>(
             &context,
             CreationAttributes {
@@ -865,7 +870,8 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::NormalRandom, B, S>(
             &context,
             CreationAttributes {
@@ -892,7 +898,8 @@ where
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let scalar_f64 = val.into().to_f64();
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::Full, B, S>(
             &context,
             FullAttributes {
@@ -925,7 +932,8 @@ where
         let s_f64 = start.into().to_f64();
         let st_f64 = step.into().to_f64();
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::Arange, B, S>(
             &context,
             ArangeAttributes {
