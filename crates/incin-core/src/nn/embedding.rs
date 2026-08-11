@@ -191,24 +191,30 @@ where
         let x_handle = TensorHandle::from_storage::<B, InK, Local>(x.inner());
         let weight_handle = TensorHandle::from_storage::<B, K, Local>(weight.inner());
         let context = ExecutionContext::from_scope(B::default());
-        let out = dispatch::execute::<op::EmbeddingExact, B>(
-            &context,
-            NoAttributes,
-            &[x_handle, weight_handle],
-        )
-        .map_err(crate::prelude::Error::from)?;
-
         let mut dims = x.shape_buf().as_ref().to_vec();
         dims.push(<S::Embed as typenum::Unsigned>::USIZE);
-
         let shape = shape_buf_from_dims::<<InS as AppendDim<S::Embed>>::Output>(
             OperationKind::Embedding,
             &dims,
         )?;
+        let output_shape =
+            crate::shapes::ShapeValue::<<InS as AppendDim<S::Embed>>::Output>::try_new(shape)
+                .map_err(crate::prelude::Error::Shape)?;
+        let out = dispatch::execute_shaped::<
+            op::EmbeddingExact,
+            B,
+            <InS as AppendDim<S::Embed>>::Output,
+        >(
+            &context,
+            NoAttributes,
+            &[x_handle, weight_handle],
+            &output_shape,
+        )
+        .map_err(crate::prelude::Error::from)?;
 
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             out.into(),
-            shape,
+            output_shape,
             weight._dtype.clone(),
             x._device.clone(),
             core::marker::PhantomData,

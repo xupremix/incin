@@ -64,21 +64,24 @@ where
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let input = TensorHandle::from_storage::<B, f32, Local>(x.inner());
         let context = ExecutionContext::from_scope(B::default());
-        let out = dispatch::execute::<op::AdaptiveAvgPool2dExact, B>(
+        let shape = <I as crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>>::compute_output_shape(
+            &x.shape_buf_value(),
+        )?;
+        let output_shape = crate::shapes::ShapeValue::<I::Output>::try_new(shape)
+            .map_err(crate::prelude::Error::Shape)?;
+        let out = dispatch::execute_shaped::<op::AdaptiveAvgPool2dExact, B, I::Output>(
             &context,
             AdaptivePool2dAttributes {
                 output: [HOut::USIZE, WOut::USIZE],
             },
             &[input],
+            &output_shape,
         )
         .map_err(crate::prelude::Error::from)?;
 
-        let shape = <I as crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>>::compute_output_shape(
-            &x.shape_buf_value(),
-        )?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             out.into(),
-            shape,
+            output_shape,
             x._dtype,
             x._device.clone(),
             core::marker::PhantomData,
