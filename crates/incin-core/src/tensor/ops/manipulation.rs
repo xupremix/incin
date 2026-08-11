@@ -81,10 +81,28 @@ fn narrow_storage_exact<B, K>(
     length: usize,
 ) -> Result<B::Storage<K>>
 where
-    B: Backend + Capabilities + Execute<Descriptor<op::Narrow>>,
+    B: Backend + Capabilities + Execute<op::Narrow>,
     K: DType,
-    <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
 {
+    crate::shapes::idx::AxisSelector::normalize_unsigned(axis, logical_dims.len())?;
+    let dim_len = logical_dims[axis];
+    let end = start.checked_add(length).ok_or(crate::err::Error::Shape(
+        crate::shapes::ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Narrow,
+            expression: "start + length",
+        },
+    ))?;
+    if end > dim_len {
+        return Err(crate::err::Error::Shape(
+            crate::shapes::ShapeError::InvalidAxisRange {
+                operation: OperationKind::Narrow,
+                start,
+                end,
+                rank: dim_len,
+            },
+        ));
+    }
     let mut output_dims = logical_dims.to_vec();
     output_dims[axis] = length;
     let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
@@ -110,10 +128,22 @@ fn squeeze_storage_exact<B, K>(
     axis: usize,
 ) -> Result<B::Storage<K>>
 where
-    B: Backend + Capabilities + Execute<Descriptor<op::SqueezeExact>>,
+    B: Backend + Capabilities + Execute<op::SqueezeExact>,
     K: DType,
-    <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
 {
+    crate::shapes::idx::AxisSelector::normalize_unsigned(axis, logical_dims.len())?;
+    if logical_dims[axis] != 1 {
+        return Err(crate::err::Error::Shape(
+            crate::shapes::ShapeError::DimensionMismatch {
+                operation: OperationKind::Squeeze,
+                axis: crate::shapes::error::Axis::Index(axis),
+                lhs: logical_dims[axis],
+                rhs: 1,
+                constraint: crate::shapes::error::DimensionConstraint::Equal,
+            },
+        ));
+    }
     let mut output_dims = logical_dims.to_vec();
     output_dims.remove(axis);
     let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
