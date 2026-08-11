@@ -59,11 +59,11 @@ struct PreparedUpdate<S> {
     second_moment: Option<S>,
 }
 
-/// The exact canonical operations used by the generic optimizer fallback.
+/// The canonical execution profile required by generic optimizers.
 ///
-/// Keeping this private preserves the optimizer's public surface while making
-/// its capability requirements explicit at the dispatch boundary.
-trait OptimizerDispatch<K: DType>: Backend {
+/// Backend authors satisfy this profile by implementing the exact operation
+/// descriptors listed in the blanket implementation below.
+pub trait OptimizerBackend<K: DType>: Backend {
     fn optimizer_add(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
     fn optimizer_sub(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
     fn optimizer_mul(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
@@ -73,7 +73,7 @@ trait OptimizerDispatch<K: DType>: Backend {
     fn optimizer_add_scalar(storage: &Self::Storage<K>, value: f64) -> Result<Self::Storage<K>>;
 }
 
-impl<B, K: DType> OptimizerDispatch<K> for B
+impl<B, K: DType> OptimizerBackend<K> for B
 where
     B: Backend
         + Capabilities
@@ -343,7 +343,7 @@ fn commit_parameter_updates<B: Backend, K: DType>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_adam_update<B: OptimizerDispatch<K>, K: DType>(
+fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
     operation: &'static str,
     tensor: &B::Storage<K>,
     grad: &B::Storage<K>,
@@ -446,7 +446,7 @@ impl<B: Backend, K: DType> SGD<B, K> {
     }
 }
 
-impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for SGD<B, K> {
+impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for SGD<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "sgd_step";
@@ -604,7 +604,7 @@ impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for AdamW<
     }
 }
 
-impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for AdamW<B, K> {
+impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for AdamW<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adamw_step";
@@ -796,7 +796,7 @@ impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for Adam<B
     }
 }
 
-impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for Adam<B, K> {
+impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for Adam<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adam_step";

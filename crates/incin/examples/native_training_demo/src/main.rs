@@ -7,12 +7,13 @@
 extern crate alloc;
 
 use incin::backend_authoring::SupportsDType;
+use incin::optim::OptimizerBackend;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::exec::catalog::op;
 use incin_core::nn::param::ParameterInit;
-use incin_core::tensor::backend::{Execute, FloatOps, NumericOps};
+use incin_core::tensor::backend::Execute;
 
 /// The CPU backend type alias.
 type NB = CpuBackendImpl;
@@ -75,7 +76,7 @@ where
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<f32>>,
 {
-    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
+    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B, f32, Grad>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
         let x = x.relu()?;
@@ -132,8 +133,7 @@ where
         + SupportsDType<f32>
         + SupportsDType<u32>
         + ParameterInit<f32>
-        + NumericOps<B>
-        + FloatOps<B>
+        + OptimizerBackend<f32>
         + Execute<op::TensorFromData>
         + Execute<op::MatMulExact>
         + Execute<op::Add>
@@ -177,9 +177,7 @@ where
 
     for _epoch in 0..n_epochs {
         let x = Tensor::<Dyn, B>::from_slice(images, target_shape.clone()).unwrap();
-        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_u32, vec![n_samples])
-            .unwrap()
-            .detach();
+        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_u32, vec![n_samples]).unwrap();
 
         let logits = model.forward(x).unwrap();
 

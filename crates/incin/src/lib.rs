@@ -75,7 +75,9 @@
 extern crate alloc;
 
 pub use incin_backends::IncinBackend;
-pub use incin_core::optim::{Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD};
+pub use incin_core::optim::{
+    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, OptimizerBackend, SGD,
+};
 #[cfg(feature = "std")]
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_core::prelude::{
@@ -287,7 +289,7 @@ pub mod nn {
 /// Optimization algorithms, loss functions, and learning rate schedulers.
 pub mod optim {
     pub use incin_core::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, OptimizerBackend, SGD,
     };
     #[cfg(feature = "std")]
     pub use incin_core::optim::{CosineAnnealingLR, StepLR};

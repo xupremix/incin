@@ -10,7 +10,7 @@ struct MnistCollate;
 
 impl Collate<(Vec<f32>, u8)> for MnistCollate {
     /// Output.
-    type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
+    type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend, f32, Grad>);
 
     /// Collate.
     fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
@@ -23,39 +23,11 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
             labels.push(label as f32); // F32 target tensor for CrossEntropyLoss
         }
 
-        let images_bytes = unsafe {
-            core::slice::from_raw_parts(
-                images.as_ptr() as *const u8,
-                images.len() * core::mem::size_of::<f32>(),
-            )
-        };
-
-        let labels_bytes = unsafe {
-            core::slice::from_raw_parts(
-                labels.as_ptr() as *const u8,
-                labels.len() * core::mem::size_of::<f32>(),
-            )
-        };
-
-        let device = DeviceId::cpu();
-        let images_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
-            images_bytes,
-            &[batch_size, 1, 28, 28],
-            DTypeId::F32.descriptor(),
-            &device,
-        )
-        .unwrap();
-        let labels_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
-            labels_bytes,
-            &[batch_size],
-            DTypeId::F32.descriptor(),
-            &device,
-        )
-        .unwrap();
-
         (
-            Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
-            Tensor::<Dyn, Backend>::from_raw(labels_raw, vec![batch_size]).unwrap(),
+            Tensor::<Dyn, Backend>::from_slice(&images, vec![batch_size, 1, 28, 28]).unwrap(),
+            Tensor::<Dyn, Backend>::from_slice(&labels, vec![batch_size])
+                .unwrap()
+                .require_grad(),
         )
     }
 }

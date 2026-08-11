@@ -25,18 +25,22 @@ impl TrainMode for ReLU {}
 use crate::exec::catalog::{Descriptor, op};
 use crate::tensor::backend::Execute;
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Relu>> Module<Tensor<S, B>> for ReLU
+impl<S: Shape + DynShape, B: Backend + Execute<op::Relu>, G: RequiresGrad>
+    Module<Tensor<S, B, f32, G>> for ReLU
 where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B>;
+    type Output = Tensor<S, B, f32, G>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+    fn forward(
+        &self,
+        x: Tensor<S, B, f32, G>,
+    ) -> core::result::Result<Tensor<S, B, f32, G>, Error> {
         x.relu()
     }
 }
