@@ -212,78 +212,19 @@ unlikely. No ledger task removes them.
 
 ## 4. Rank coverage
 
-`Shape` is implemented for tuples up to rank 8. Rules implemented below that
-ceiling define ranks at which a tensor type is expressible but its operations
-cannot resolve — the frontend accepts the shape and then has no proof to offer.
+Exact known-rank shapes are recursive `DimCons<Head, Tail>` and `Nil` values.
+Shape operations recurse over that structure, so semantic representability has
+no generated rank ladder or small global rank ceiling. `Ranked<R>` supplies the
+separate known-rank runtime shape for typenum rank arithmetic, while `Dyn`
+retains runtime rank.
 
-The RFC names `ElementCount` (rank 4) versus `Shape` (rank 8) as the motivating
-case. `SHP-006` replaces the eighteen hand-written invocation ladders with one
-generator: `MAX_RANK` lives in
-[`incin-macros/src/rank.rs`](../../crates/incin-macros/src/rank.rs) and
-`rank_sweep!` expands each rule's ladder from it, so raising the ceiling is a
-one-line change and no rule can silently drift below it. `incin-core`
-re-exports the value as `shapes::MAX_RANK`; a proc-macro crate cannot export a
-`const`, and a second copy would reintroduce the drift.
+`ShapeBuf` uses an inline storage optimization for short shapes and spills for
+larger ranks. That storage detail is not a framework rank limit. Backend
+capabilities and resource policies remain the independent places where a rank
+may be restricted.
 
-**"N short" is not always a defect.** A rule whose `Output` gains an axis must
-stop one rank below the ceiling, because that `Output` is bounded by `Shape`
-and no tuple above `MAX_RANK` implements `Shape`. `AppendDim` at 7 and
-`StackShape` at 7 are therefore *correct*, not gaps — the earlier reading of
-this table as "14 rules short" counted them as defects. The real target is:
-
-| Rule kind | Correct ceiling | Rules |
-|---|---|---|
-| Rank-preserving | `MAX_RANK` (8) | `Shape`, `ConstShape`, `DynShape`, `PartialDynShape`, `EndsWith`, `ReplaceLastDim`, `ElementCount`, `BroadcastShape`, `ReshapeTarget`, `SliceTarget`, `ConcatShape`, `HasChannels1D`, `HasChannels2D`, `Pool2dShape`, `AdaptiveAvgPool2dShape`, `SpatialConv1d`, `SpatialConv2d` |
-| Rank-increasing | `MAX_RANK - 1` (7) | `AppendDim`, `StackShape` |
-
-### 4.1 Migration status — complete
-
-All 19 rules now sit at their correct ceiling: 17 rank-preserving rules at
-`MAX_RANK`, and the two that *add* an axis at `MAX_RANK - 1`. Nothing sits
-above it.
-
-| Rule | Was | Now | How |
-|---|---:|---:|---|
-| `ReplaceLastDim` | 12 | **8** | four arms above rank 8 deleted — no tuple that wide implements `Shape`, so they could never be selected |
-| `EndsWith` | 6 | **8** | six enumerated arms replaced by one variadic arm |
-| `HasChannels1D` | 3 | **8** | was a *single* arm at rank 3, so `(C, L)` — named as valid by the trait's own docs — did not implement it |
-| `HasChannels2D` | 4 | **8** | same, and `(C, H, W)` likewise did not |
-| `ReshapeTarget`, `SliceTarget` | 4 | **8** | already variadic; simply never invoked above rank 4 |
-| `ElementCount` | 4 | **8** | the RFC's motivating case |
-| `SpatialConv1d`, `SpatialConv2d` | 7 | **8** | ladder generated with the batch-count offset declared |
-| `Pool2dShape`, `AdaptiveAvgPool2dShape` | 4 | **8** | single hand-written rank-4 impls replaced by batch-variadic macros |
-| `BroadcastShape` | 4 | **8** | eight macro families, two of them two-dimensional rank-pair sweeps |
-| `ConcatShape` | 6 | **8** | 21 hand-written per-axis impls replaced by one macro over a rank × axis sweep |
-| `StackShape` | 6 | **7** | 27 hand-written impls likewise; rank-increasing, so 7 is its ceiling |
-| `AppendDim` | 7 | 7 | already correct; now declares `max = 7` explicitly |
-
-Two of these were holes at the *bottom* rather than missing ranks at the top:
-`HasChannels1D` and `HasChannels2D` each held for exactly one rank, so the
-unbatched forms their own documentation names — `(C, L)` and `(C, H, W)` — did
-not implement them.
-
-`ElementCount` is the one family that stayed hand-written, and the reason is
-specific rather than expedient: `rank_sweep!` varies a *parameter list*, but
-each `ElementCount` rank needs a differently-nested `Prod` fold in both the
-associated type and every intermediate `where` bound. Emitting that needs a
-fold over type expressions. Four explicit impls are cheaper to read than the
-macro that would generate them.
-
-### 4.2 A diagnostic cost worth recording
-
-Raising a marker trait from one impl to eight changes what `rustc` prints. With
-a single impl it could say *"but trait `HasChannels2D<U40>` is implemented for
-it — expected `UTerm`, found `UInt<UTerm, B1>`"*, pinpointing the channel count
-that disagreed. With eight candidates it falls back to listing them. The
-`#[diagnostic::on_unimplemented]` note still carries the guidance, and the
-compile failure itself is unchanged — but the error is less specific than it
-was, and that is a real cost of the rank coverage, not a neutral change.
-
-Eleven `compile_fail` expectations were regenerated as a result. Every case
-still fails to compile; the deltas are new ranks appearing in impl lists, one
-parameter rename (`D0_` → `Rhs` in the concat macro), and one *improvement*
-where a prelude re-export shortened `incin::shapes::reshape::SameCount` to
-`SameCount`.
+The generated audit below checks the source for reintroduced semantic rank
+generators. It must remain empty.
 
 ## 5. Generated inventory
 
@@ -311,16 +252,11 @@ themselves.
 | `from_size().unwrap()` | SHP-005 | 0 |
 | `Default::default()` | SHP-005 | 0 |
 
-### Rank ceiling by shape rule
+### Semantic rank generator audit
 
-| Rule | Max rank | vs `Shape` |
-|---|---:|---|
-| `AppendDim` | 0 | aligned |
-| `BroadcastShape` | 0 | aligned |
-| `DynShape` | 0 | aligned |
-| `ElementCount` | 0 | aligned |
-| `PartialDynShape` | 0 | aligned |
-| `Shape` | 0 | aligned |
+| Source area | Remaining generators |
+|---|---:|
+| `crates/incin-core/src/shapes` | 0 |
 
 <!-- END GENERATED: audit-shapes -->
 
