@@ -938,9 +938,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + incin_core::backend_authoring::CreationOps<TargetBackend<T>>
-        + incin_core::backend_authoring::FloatOps<TargetBackend<T>>
-        + incin_core::backend_authoring::NumericOps<TargetBackend<T>>
+        + incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::MulScalar>
+        + incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -955,6 +954,12 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as incin_core::backend_authoring::Execute<
+        incin_core::backend_authoring::op::MulScalar,
+    >>::Output: Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as incin_core::backend_authoring::Execute<
+        incin_core::backend_authoring::op::AddScalar,
+    >>::Output: Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     fn new(in_features: usize, out_features: usize, target: &T) -> Result<Self> {
         let shape_val = incin_core::shapes::ShapeValue::<Dyn>::try_new(

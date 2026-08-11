@@ -1,30 +1,23 @@
 //! Central target-aware parameter materialization and NN layer initialization on [`TensorTarget`].
 
-use alloc::vec;
-use core::marker::PhantomData;
-
-use incin_core::backend_authoring::{CreationOps, FloatOps, NumericOps, SupportsDType};
-use incin_core::nn::batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
-use incin_core::nn::conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
-use incin_core::nn::conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d};
-use incin_core::nn::embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
+use incin_core::backend_authoring::{Execute, SupportsDType, op};
+use incin_core::nn::batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape};
+use incin_core::nn::conv1d::{Conv1d, Conv1dBuilder, Conv1dShape};
+use incin_core::nn::conv2d::{Conv2d, Conv2dBuilder, Conv2dShape};
+use incin_core::nn::embedding::{Embedding, EmbeddingBuilder, EmbeddingShape};
 use incin_core::nn::init::{Init, InitContext, InitPlan, ParameterRole};
-use incin_core::nn::layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm};
+use incin_core::nn::layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape};
 use incin_core::nn::linear::{Linear, LinearBuilder, LinearShape};
 use incin_core::nn::lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape};
 use incin_core::nn::optional::OptionalField;
-use incin_core::nn::param::{Buffer, Param, TrainState, Trainable};
-use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};
+use incin_core::nn::param::{Param, TrainState, Trainable};
+use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
 use incin_core::prelude::{
-    Backend, DType, DynShape, FloatDType, Result, Shape, ShapeBuf, ShapeValue, StorageBackend,
-    Tensor,
+    Backend, DynShape, FloatDType, Result, Shape, ShapeBuf, ShapeValue, StorageBackend,
 };
-use typenum::Unsigned;
 
 use crate::target::{GeneratedFill, TargetBackend, TargetExt, TensorTarget};
-
-type Shape1<A> = incin_core::shapes::DimCons<A, incin_core::shapes::Nil>;
 
 /// Build a target-side shape value from generated dimensions through the
 /// canonical ShapeBuf validation boundary.
@@ -46,9 +39,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -63,6 +55,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     let plan = init.plan(context)?;
     match plan {
@@ -78,42 +74,40 @@ where
         }
         InitPlan::Constant(val) => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Ones)?;
-            let storage = tensor.into_inner();
             if val == 1.0 {
+                let storage = tensor.into_inner();
                 TargetBackend::<T>::var_from_tensor(&storage)
             } else {
-                let scaled = TargetBackend::<T>::mul_scalar_float(&storage, val)?;
+                let scaled = tensor.mul_scalar(val)?.into_inner();
                 TargetBackend::<T>::var_from_tensor(&scaled)
             }
         }
         InitPlan::Uniform { low, high } => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Uniform)?;
-            let storage = tensor.into_inner();
             let range = high - low;
             let scaled = if range != 1.0 {
-                TargetBackend::<T>::mul_scalar_float(&storage, range)?
+                tensor.mul_scalar(range)?
             } else {
-                storage
+                tensor
             };
             let shifted = if low != 0.0 {
-                TargetBackend::<T>::add_scalar_float(&scaled, low)?
+                scaled.add_scalar(low)?.into_inner()
             } else {
-                scaled
+                scaled.into_inner()
             };
             TargetBackend::<T>::var_from_tensor(&shifted)
         }
         InitPlan::Normal { mean, std } => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Normal)?;
-            let storage = tensor.into_inner();
             let scaled = if std != 1.0 {
-                TargetBackend::<T>::mul_scalar_float(&storage, std)?
+                tensor.mul_scalar(std)?
             } else {
-                storage
+                tensor
             };
             let shifted = if mean != 0.0 {
-                TargetBackend::<T>::add_scalar_float(&scaled, mean)?
+                scaled.add_scalar(mean)?.into_inner()
             } else {
-                scaled
+                scaled.into_inner()
             };
             TargetBackend::<T>::var_from_tensor(&shifted)
         }
@@ -134,9 +128,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -151,6 +144,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     // `ShapeValue` has already established the type/value relationship. Keep
     // that canonical ShapeBuf rather than reconstructing another shape
@@ -181,9 +178,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -198,6 +194,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     let shape_buf = shape_val.shape_buf().clone();
     let raw_var = materialize_storage_plan(target, shape_val, init, context)?;
@@ -230,9 +230,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -247,6 +246,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = Linear<S, TargetBackend<T>, Bias, T::ParameterDtype, Train>;
 
@@ -302,9 +305,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -319,6 +321,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output =
         Linear<S, TargetBackend<T>, incin_core::nn::optional::True, T::ParameterDtype, Trainable>;
@@ -336,9 +342,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -353,6 +358,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = Embedding<S, TargetBackend<T>, T::ParameterDtype, Train>;
 
@@ -383,9 +392,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -400,6 +408,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = LayerNorm<S, TargetBackend<T>, T::ParameterDtype, Train>;
 
@@ -437,9 +449,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -454,6 +465,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = RMSNorm<S, TargetBackend<T>, T::ParameterDtype, Train>;
 
@@ -483,9 +498,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -500,6 +514,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = BatchNorm2d<S, TargetBackend<T>, T::ParameterDtype, Train>;
 
@@ -558,9 +576,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -575,6 +592,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = Conv1d<S, TargetBackend<T>, Bias, T::ParameterDtype, Train>;
 
@@ -631,9 +652,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -648,6 +668,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = Conv2d<S, TargetBackend<T>, Bias, T::ParameterDtype, Train>;
 
@@ -713,9 +737,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -730,6 +753,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = RNNCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>;
 
@@ -779,9 +806,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -796,6 +822,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = RNN<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>;
 
@@ -829,9 +859,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -846,6 +875,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = LSTMCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>;
 
@@ -919,9 +952,8 @@ where
     T::ParameterDtype: FloatDType,
     TargetBackend<T>: Backend<Device = T::Device>
         + SupportsDType<T::ParameterDtype>
-        + CreationOps<TargetBackend<T>>
-        + FloatOps<TargetBackend<T>>
-        + NumericOps<TargetBackend<T>>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
         + incin_core::backend_authoring::Execute<
             incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
@@ -936,6 +968,10 @@ where
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
+    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
+    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
+        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
 {
     type Output = LSTM<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>;
 
