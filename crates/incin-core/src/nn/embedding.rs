@@ -135,11 +135,7 @@ impl<S: EmbeddingShape, Train: TrainState> EmbeddingBuilder<S, Train> {
 
 impl<
     S: EmbeddingShape,
-    B: Backend
-        + crate::tensor::backend::CreationOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::nn::param::ParameterInit<K>,
+    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > Embedding<S, B, K, Trainable>
 where

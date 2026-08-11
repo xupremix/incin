@@ -324,9 +324,7 @@ where
     S: LinearShape,
     B: Backend
         + SupportsDType<K>
-        + crate::tensor::backend::CreationOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::SupportsDType<K>
         + crate::nn::param::ParameterInit<K>,
     Bias: crate::nn::optional::OptionalField,
     <K as DType>::Arg: Clone,

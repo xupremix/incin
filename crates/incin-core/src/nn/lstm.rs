@@ -333,9 +333,7 @@ where
     S: LstmShape,
     B: Backend
         + SupportsDType<K>
-        + crate::tensor::backend::CreationOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::SupportsDType<K>
         + crate::nn::param::ParameterInit<K>
         + crate::tensor::backend::TensorOps<B>,
     BiasIh: crate::nn::optional::OptionalField,
@@ -594,9 +592,7 @@ impl<
         S: LstmShape,
         B: Backend
             + SupportsDType<K>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>
-            + crate::tensor::backend::NumericOps<B>
+            + crate::tensor::backend::SupportsDType<K>
             + crate::nn::param::ParameterInit<K>
             + crate::tensor::backend::TensorOps<B>,
         <K as DType>::Arg: Clone,
@@ -618,9 +614,7 @@ impl<
         S: LstmShape,
         B: Backend
             + SupportsDType<K>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>
-            + crate::tensor::backend::NumericOps<B>
+            + crate::tensor::backend::SupportsDType<K>
             + crate::nn::param::ParameterInit<K>
             + crate::tensor::backend::TensorOps<B>,
         <K as DType>::Arg: Clone,

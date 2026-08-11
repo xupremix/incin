@@ -117,11 +117,7 @@ impl<S: RMSNormShape, Train: TrainState> RMSNormBuilder<S, Train> {
 
 impl<
     S: RMSNormShape,
-    B: Backend
-        + crate::tensor::backend::CreationOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::nn::param::ParameterInit<K>,
+    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > RMSNorm<S, B, K, Trainable>
 {

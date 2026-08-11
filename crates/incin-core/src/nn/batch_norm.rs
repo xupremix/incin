@@ -186,11 +186,7 @@ impl<S: BatchNormShape, Train: TrainState> BatchNorm2dBuilder<S, Train> {
 
 impl<
     S: BatchNormShape,
-    B: Backend
-        + crate::tensor::backend::CreationOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::nn::param::ParameterInit<K>,
+    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > BatchNorm2d<S, B, K, Trainable>
 where

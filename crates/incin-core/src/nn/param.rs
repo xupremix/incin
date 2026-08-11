@@ -1,6 +1,4 @@
-use crate::backend_authoring::{
-    Capabilities, CreationOps, Execute, FloatOps, NumericOps, Operation, StorageBackend, TensorOps,
-};
+use crate::backend_authoring::{Capabilities, Execute, Operation, StorageBackend, TensorOps};
 use crate::exec::catalog::{CreationAttributes, FullAttributes, ScalarAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -350,7 +348,7 @@ where
 
 impl<
     S: Shape + DynShape,
-    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K> + ParameterInit<K>,
+    B: Backend + SupportsDType<K> + ParameterInit<K>,
     K: DType,
     Train: TrainState,
 > Param<S, B, K, Train>
@@ -393,9 +391,12 @@ where
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
-        let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
+        let inner = execute_plan_raw::<B, K>(
+            dims.as_ref(),
+            &_dtype,
+            &_device,
+            crate::nn::init::InitPlan::Zeros,
+        )?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -420,9 +421,15 @@ where
     {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         let dims = _shape.clone();
-        let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::var_randn::<K>(dims.as_ref(), dtype, &device)?;
+        let inner = execute_plan_raw::<B, K>(
+            dims.as_ref(),
+            &_dtype,
+            &_device,
+            crate::nn::init::InitPlan::Normal {
+                mean: 0.0,
+                std: 1.0,
+            },
+        )?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -438,9 +445,12 @@ where
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
-        let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
+        let inner = execute_plan_raw::<B, K>(
+            dims.as_ref(),
+            &_dtype,
+            &_device,
+            crate::nn::init::InitPlan::Ones,
+        )?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -706,11 +716,8 @@ where
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K> + ParameterInit<K>,
-    K: DType,
-> Buffer<S, B, K>
+impl<S: Shape + DynShape, B: Backend + SupportsDType<K> + ParameterInit<K>, K: DType>
+    Buffer<S, B, K>
 where
     (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
@@ -746,9 +753,12 @@ where
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
-        let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::var_zeros::<K>(dims.as_ref(), dtype, &device)?;
+        let inner = execute_plan_raw::<B, K>(
+            dims.as_ref(),
+            &_dtype,
+            &_device,
+            crate::nn::init::InitPlan::Zeros,
+        )?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
@@ -769,9 +779,12 @@ where
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
-        let device = <B::Device as Device>::to_incin(&_device)?;
-        let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::var_ones::<K>(dims.as_ref(), dtype, &device)?;
+        let inner = execute_plan_raw::<B, K>(
+            dims.as_ref(),
+            &_dtype,
+            &_device,
+            crate::nn::init::InitPlan::Ones,
+        )?;
         Ok(Self {
             inner,
             _shape: ShapeValue::from_validated(_shape),
