@@ -148,6 +148,10 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CpuBackendImpl
     fn metadata<K: DType>(t: &Self::Storage<K>) -> &incin_core::backend_authoring::TensorMeta {
         &t.meta
     }
+
+    fn fresh_autograd_identity<K: DType>(storage: Self::Storage<K>) -> Self::Storage<K> {
+        storage.with_fresh_autograd_identity()
+    }
 }
 
 impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {

@@ -23,7 +23,7 @@ use std::thread;
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
 use incin_core::exec::{
     AllocatorPolicy, Determinism, ExecutionContext, ExecutionPolicy, FallbackPolicy, GradMode,
-    MathMode,
+    MathMode, TapeStorage,
 };
 use incin_core::prelude::*;
 use incin_macros::s;
@@ -64,6 +64,19 @@ fn combining_two_modes_takes_the_stricter_one() {
     assert_eq!(Enabled.and(Disabled), Disabled);
     assert_eq!(Disabled.and(Enabled), Disabled);
     assert_eq!(Disabled.and(Disabled), Disabled);
+}
+
+#[test]
+fn detach_and_require_grad_mint_fresh_tape_identities() {
+    let tensor: Tensor<s![2], B, f32, Grad> = Tensor::from_slice(&[1.0, 2.0], ()).unwrap();
+    let original_id = tensor.inner().id();
+
+    let detached = tensor.detach();
+    let detached_id = detached.inner().id();
+    let reattached = detached.require_grad();
+
+    assert_ne!(detached_id, original_id);
+    assert_ne!(reattached.inner().id(), detached_id);
 }
 
 // ── The scope ────────────────────────────────────────────────────────────────

@@ -266,6 +266,11 @@ impl CpuStorage {
         &self.meta
     }
 
+    pub(crate) fn with_fresh_autograd_identity(mut self) -> Self {
+        self.id = TensorId::next();
+        self
+    }
+
     /// Build a fresh, contiguous, all-ones `CpuStorage` with the same
     /// shape and dtype variant as `other`. Used by `tape::backward()` to
     /// seed the loss tensor's gradient before walking the tape.

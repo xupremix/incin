@@ -189,6 +189,15 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
         B::metadata(&storage.inner)
     }
 
+    fn fresh_autograd_identity<K: super::dtype::DType>(
+        storage: Self::Storage<K>,
+    ) -> Self::Storage<K> {
+        TracingTensor {
+            inner: B::fresh_autograd_identity(storage.inner),
+            value_id: storage.value_id,
+        }
+    }
+
     fn execution_storage<K: super::dtype::DType>(
         storage: &Self::Storage<K>,
     ) -> (&dyn core::any::Any, Option<usize>)

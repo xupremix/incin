@@ -189,6 +189,10 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for WgpuBackendImp
         let t: &WgpuStorage = t;
         &t.meta
     }
+
+    fn fresh_autograd_identity<K: DType>(storage: Self::Storage<K>) -> Self::Storage<K> {
+        storage.with_fresh_autograd_identity()
+    }
 }
 
 impl<D: Device> Backend for WgpuBackendImpl<D> {

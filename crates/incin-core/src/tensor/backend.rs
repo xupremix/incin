@@ -114,6 +114,17 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
 
     fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
 
+    /// Returns `storage` with a fresh autograd identity after it crosses a
+    /// gradient-tracking boundary.
+    ///
+    /// Backends without tape-addressable storage preserve the handle. Tape
+    /// backends override this to retain the allocation while assigning a new
+    /// [`TensorId`](crate::exec::TensorId), so detached and newly trainable
+    /// tensors cannot alias an existing tape node.
+    fn fresh_autograd_identity<K: DType>(storage: Self::Storage<K>) -> Self::Storage<K> {
+        storage
+    }
+
     #[doc(hidden)]
     fn execution_storage<K: DType>(
         storage: &Self::Storage<K>,

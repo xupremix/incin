@@ -1087,24 +1087,11 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
-    /// Converts this tensor into a `Grad` tensor for autograd graph participation.
-    pub fn into_grad(self) -> Tensor<S, B, K, Grad> {
-        Tensor::from_shape_value_unchecked(
-            self.inner,
-            self._shape,
-            self._dtype,
-            self._device,
-            core::marker::PhantomData,
-        )
-    }
-}
-
 impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
     /// Marks this tensor to require gradient tracking.
     pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
         Tensor::from_shape_value_unchecked(
-            self.inner,
+            B::fresh_autograd_identity(self.inner),
             self._shape,
             self._dtype,
             self._device,
@@ -1117,7 +1104,7 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
     /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
     pub fn detach(self) -> Tensor<S, B, K, NoGrad> {
         Tensor::from_shape_value_unchecked(
-            self.inner,
+            B::fresh_autograd_identity(self.inner),
             self._shape,
             self._dtype,
             self._device,

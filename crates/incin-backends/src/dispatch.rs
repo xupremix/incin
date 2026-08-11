@@ -656,6 +656,32 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for DispatchBacken
             DispatchStorage::Unavailable => unreachable!("dispatch storage unavailable"),
         }
     }
+
+    fn fresh_autograd_identity<K: DType>(storage: Self::Storage<K>) -> Self::Storage<K> {
+        match storage {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => DispatchStorage::Cpu(
+                crate::cpu::CpuBackendImpl::<Cpu>::fresh_autograd_identity::<K>(value),
+            ),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                DispatchStorage::Wgpu(
+                    crate::wgpu::WgpuBackendImpl::<Wgpu>::fresh_autograd_identity::<K>(value),
+                )
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                DispatchStorage::Cuda(
+                    crate::cuda::CudaBackendImpl::<Cuda>::fresh_autograd_identity::<K>(value),
+                )
+            }
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => DispatchStorage::Metal(
+                crate::metal::MetalBackendImpl::<Metal>::fresh_autograd_identity::<K>(value),
+            ),
+            DispatchStorage::Unavailable => DispatchStorage::Unavailable,
+        }
+    }
 }
 
 impl<D: Device> Backend for DispatchBackend<D> {

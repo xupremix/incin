@@ -67,6 +67,11 @@ impl Deref for CudaStorage {
 }
 
 impl CudaStorage {
+    pub(crate) fn with_fresh_autograd_identity(mut self) -> Self {
+        self.id = TensorId::next();
+        self
+    }
+
     /// The alignment guarantee every CUDA allocation carries.
     ///
     /// Infallible despite [`Alignment::new`] being fallible, because

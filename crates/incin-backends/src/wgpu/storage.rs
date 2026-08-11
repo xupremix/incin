@@ -150,6 +150,11 @@ impl Deref for WgpuStorage {
 }
 
 impl WgpuStorage {
+    pub(crate) fn with_fresh_autograd_identity(mut self) -> Self {
+        self.id = incin_core::exec::TensorId::next();
+        self
+    }
+
     pub(crate) fn try_new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
         let capacity = buffer
             .size

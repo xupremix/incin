@@ -73,6 +73,11 @@ impl Debug for MetalStorage {
 }
 
 impl MetalStorage {
+    pub(crate) fn with_fresh_autograd_identity(mut self) -> Self {
+        self.id = TensorId::next();
+        self
+    }
+
     /// Minimum alignment provided by Metal device buffer allocations (256 bytes).
     pub fn alignment() -> Alignment {
         Alignment::new(256).unwrap_or(Alignment::BYTE)
