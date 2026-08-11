@@ -1144,10 +1144,9 @@ impl<
     /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and — not
     /// requiring gradients. That last one is the mirror image of PyTorch's
     /// own rule for the literal reason that `G` defaults to
-    /// [`Grad`](crate::prelude::Grad) here rather than `NoGrad`: printing
+    /// [`NoGrad`](crate::prelude::NoGrad) here rather than `Grad`: printing
     /// `requires_grad=True` whenever `G::requires_grad` is true still means
-    /// "printed exactly when true", it is just true far more often in a
-    /// tensor whose default already tracks gradients.
+    /// "printed exactly when true", while the default tensor remains inert.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let prefix = "tensor(";
         let body = B::format_tensor_display(&self.inner);
