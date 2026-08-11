@@ -73,13 +73,8 @@ macro_rules! impl_reduction_op {
     };
 }
 
-impl<
-    S: Shape,
-    B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    P: Placement,
-> Tensor<S, B, K, G, P>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
+    Tensor<S, B, K, G, P>
 {
     /// Sums over a compile-time structural axis cursor.
     pub fn sum<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
@@ -268,12 +263,8 @@ impl<
     }
 }
 
-impl<
-    S: Shape,
-    B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G, Local>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G, Local>
 {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.
