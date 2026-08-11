@@ -25,14 +25,7 @@ impl TrainMode for ReLU {}
 use crate::exec::catalog::{Descriptor, op};
 use crate::tensor::backend::Execute;
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Relu>,
-> Module<Tensor<S, B>> for ReLU
+impl<S: Shape + DynShape, B: Backend + Execute<op::Relu>> Module<Tensor<S, B>> for ReLU
 where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
@@ -70,14 +63,7 @@ impl<B: Backend> Parameters<B> for GELU {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for GELU {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Gelu>,
-> Module<Tensor<S, B>> for GELU
+impl<S: Shape + DynShape, B: Backend + Execute<op::Gelu>> Module<Tensor<S, B>> for GELU
 where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
@@ -115,14 +101,7 @@ impl<B: Backend> Parameters<B> for Swish {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Swish {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Swish>,
-> Module<Tensor<S, B>> for Swish
+impl<S: Shape + DynShape, B: Backend + Execute<op::Swish>> Module<Tensor<S, B>> for Swish
 where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
@@ -160,14 +139,7 @@ impl<B: Backend> Parameters<B> for Mish {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Mish {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Mish>,
-> Module<Tensor<S, B>> for Mish
+impl<S: Shape + DynShape, B: Backend + Execute<op::Mish>> Module<Tensor<S, B>> for Mish
 where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
@@ -207,14 +179,7 @@ impl<B: Backend> Parameters<B> for ELU {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ELU {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Elu>,
-> Module<Tensor<S, B>> for ELU
+impl<S: Shape + DynShape, B: Backend + Execute<op::Elu>> Module<Tensor<S, B>> for ELU
 where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
@@ -266,11 +231,7 @@ impl TrainMode for Softmax {}
 
 impl<
     S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
+    B: Backend + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
 > Module<Tensor<S, B>> for Softmax
 where
     <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
@@ -309,14 +270,7 @@ impl<B: Backend> Parameters<B> for Sigmoid {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Sigmoid {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Sigmoid>,
-> Module<Tensor<S, B>> for Sigmoid
+impl<S: Shape + DynShape, B: Backend + Execute<op::Sigmoid>> Module<Tensor<S, B>> for Sigmoid
 where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
@@ -353,14 +307,7 @@ impl<B: Backend> Parameters<B> for Tanh {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Tanh {}
 
-impl<
-    S: Shape + DynShape,
-    B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Tanh>,
-> Module<Tensor<S, B>> for Tanh
+impl<S: Shape + DynShape, B: Backend + Execute<op::Tanh>> Module<Tensor<S, B>> for Tanh
 where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
