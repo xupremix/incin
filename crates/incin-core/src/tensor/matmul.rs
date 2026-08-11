@@ -310,11 +310,11 @@ impl MatMulShape<Dyn> for Dyn {
 // The matmul method on Tensor
 // ============================================================================
 
-use crate::tensor::backend::{FloatOps, NumericOps, ReductionOps, TensorOps};
+use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 
 impl<
     S1: Shape,
-    B: Backend + TensorOps<B> + NumericOps<B> + FloatOps<B> + ReductionOps<B>,
+    B: Backend + TensorOps<B> + NumericOps<B> + FloatOps<B>,
     K: crate::tensor::dtype::DType,
     G1: RequiresGrad,
 > Tensor<S1, B, K, G1>
