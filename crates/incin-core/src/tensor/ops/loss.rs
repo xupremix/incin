@@ -4,22 +4,29 @@
 //! Loss functions automatically compute and track their required reduction shape
 //! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
-use crate::nn::loss::{
-    BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
-    Reduction, ReductionMode,
-};
-use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::nn::loss::{
+    BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
+    Reduction, ReductionMode,
+};
+use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
 use alloc::vec::Vec;
 
-fn execute_loss_descriptor<O, S: Shape, S2: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>(
+fn execute_loss_descriptor<
+    O,
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+>(
     prediction: &Tensor<S, B, K, G>,
     target: &Tensor<S2, B, K, G>,
     reduction: Reduction,
@@ -143,11 +150,8 @@ impl<
         B: Execute<Descriptor<op::MseLoss>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::MseLoss>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G>(
-            self,
-            target,
-            R::as_enum(),
-        )?;
+        let inner =
+            execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G>(self, target, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -182,11 +186,8 @@ impl<
         B: Execute<Descriptor<op::L1Loss>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::L1Loss>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G>(
-            self,
-            target,
-            R::as_enum(),
-        )?;
+        let inner =
+            execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G>(self, target, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();

@@ -351,9 +351,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend
-        + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
+    B: Backend + Execute<Descriptor<op::Conv2dExact>> + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {
@@ -444,9 +442,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend
-        + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
+    B: Backend + Execute<Descriptor<op::Conv2dExact>> + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {
@@ -535,9 +531,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend
-        + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
+    B: Backend + Execute<Descriptor<op::Conv2dExact>> + Execute<Descriptor<op::ReshapeExact>>,
     <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
 {

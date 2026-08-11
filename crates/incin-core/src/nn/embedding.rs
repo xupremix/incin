@@ -1,13 +1,13 @@
-use crate::nn::{Module, Param};
-use crate::prelude::*;
 use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::tensor::backend::Execute;
+use crate::nn::{Module, Param};
+use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
+use crate::tensor::backend::Execute;
 
 /// A shape marker trait specifying an [`Embedding`] layer's vocabulary size
 /// and embedding dimension, analogous to [`crate::nn::linear::LinearShape`].

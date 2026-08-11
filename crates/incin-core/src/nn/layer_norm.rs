@@ -1,10 +1,10 @@
-use crate::nn::{Module, Param};
-use crate::prelude::*;
 use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, LayerNormAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::nn::{Module, Param};
+use crate::prelude::*;
 use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 

@@ -89,13 +89,9 @@ where
     let h_rhs = TensorHandle::from_storage::<B, KIn, Local>(&rhs.inner);
     let shape_val = lhs._shape.clone();
     let context = ExecutionContext::from_scope(B::default());
-    let storage = dispatch::execute_shaped::<O, B, S>(
-        &context,
-        attributes,
-        &[h_lhs, h_rhs],
-        &shape_val,
-    )
-    .map_err(crate::prelude::Error::from)?;
+    let storage =
+        dispatch::execute_shaped::<O, B, S>(&context, attributes, &[h_lhs, h_rhs], &shape_val)
+            .map_err(crate::prelude::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -494,10 +490,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
-        >(
-            self,
-            crate::exec::catalog::ScalarAttributes { value: val },
-        )
+        >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 
     /// Divides by a scalar: `self / scalar`.
@@ -512,10 +505,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
-        >(
-            self,
-            crate::exec::catalog::ScalarAttributes { value: val },
-        )
+        >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 
     /// Linear interpolation: `self + weight * (end - self)`.

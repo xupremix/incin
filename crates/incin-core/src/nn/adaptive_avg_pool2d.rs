@@ -1,10 +1,10 @@
-use crate::nn::{Module, Parameters, TrainMode};
-use crate::prelude::*;
 use crate::dist::placement::Local;
 use crate::exec::catalog::{AdaptivePool2dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::nn::{Module, Parameters, TrainMode};
+use crate::prelude::*;
 use crate::tensor::backend::Execute;
 
 use typenum::Unsigned;

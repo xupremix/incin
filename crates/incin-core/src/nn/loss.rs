@@ -1,12 +1,12 @@
-use crate::prelude::*;
 use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::tensor::backend::Execute;
+use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
+use crate::tensor::backend::Execute;
 
 /// Specifies the runtime reduction to apply to the output of a loss function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -172,12 +172,9 @@ impl<R: ReductionMode> MSELoss<R> {
             Reduction::Sum => LossReduction::Sum,
         };
         let context = ExecutionContext::from_scope(B::default());
-        let inner = dispatch::execute::<op::MseLoss, B>(
-            &context,
-            LossAttributes { reduction },
-            &inputs,
-        )
-        .map_err(crate::prelude::Error::from)?;
+        let inner =
+            dispatch::execute::<op::MseLoss, B>(&context, LossAttributes { reduction }, &inputs)
+                .map_err(crate::prelude::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -310,12 +307,9 @@ impl<R: ReductionMode> L1Loss<R> {
             Reduction::Sum => LossReduction::Sum,
         };
         let context = ExecutionContext::from_scope(B::default());
-        let inner = dispatch::execute::<op::L1Loss, B>(
-            &context,
-            LossAttributes { reduction },
-            &inputs,
-        )
-        .map_err(crate::prelude::Error::from)?;
+        let inner =
+            dispatch::execute::<op::L1Loss, B>(&context, LossAttributes { reduction }, &inputs)
+                .map_err(crate::prelude::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
