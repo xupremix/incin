@@ -329,7 +329,6 @@ impl MatMulShape<Dyn> for Dyn {
 // The matmul method on Tensor
 // ============================================================================
 
-use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 
 impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Tensor<S1, B, K, G1> {
     /// Batched matrix multiplication over the trailing two dimensions,

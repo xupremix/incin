@@ -20,7 +20,7 @@ use crate::prelude::{
     Backend, DynShape, GradJoin, JoinedGrad, RequiresGrad, Result, Shape, Tensor,
 };
 use crate::shapes::ShapeValue;
-use crate::tensor::backend::{Execute, FloatOps, NumericOps, TensorOps};
+use crate::tensor::backend::Execute;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::NoGrad;
 use crate::tensor::ops::*;

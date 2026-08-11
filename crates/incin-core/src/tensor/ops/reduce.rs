@@ -16,7 +16,7 @@ use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::shapes::{ShapeBuf, ShapeValue};
-use crate::tensor::backend::{Execute, FloatOps, NumericOps, TensorOps};
+use crate::tensor::backend::Execute;
 use crate::tensor::dtype::DType;
 
 fn reduction_descriptor<O>(shape: &ShapeBuf, axis: usize) -> Result<Descriptor<O>>

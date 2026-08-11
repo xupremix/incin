@@ -26,7 +26,6 @@ use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{FlattenAt, SwapAxes};
 use crate::shapes::{ShapeBuf, ShapeValue};
-use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 use crate::tensor::ops::*;
 
 use alloc::string::ToString;
