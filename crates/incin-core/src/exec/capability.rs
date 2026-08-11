@@ -18,7 +18,7 @@ pub struct CapabilityQuery {
 }
 
 /// Capability query for an operation supplied outside the built-in catalog.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CustomCapabilityQuery {
     pub operation: OperationKey,
     pub dtype: DTypeDescriptor,
@@ -50,7 +50,7 @@ impl ImplementationKind {
 
 /// Stable reason an otherwise valid tensor request cannot execute.
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnsupportedReason {
     Operation {
         operation: OperationKind,
@@ -135,7 +135,7 @@ impl fmt::Display for UnsupportedReason {
 }
 
 /// Result of a capability query.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SupportLevel {
     Native,
     Composed,
@@ -145,12 +145,12 @@ pub enum SupportLevel {
 
 impl SupportLevel {
     #[must_use]
-    pub const fn is_supported(self) -> bool {
+    pub fn is_supported(&self) -> bool {
         matches!(self, Self::Native | Self::Composed | Self::Fallback)
     }
 
     #[must_use]
-    pub const fn is_device_local(self) -> bool {
+    pub fn is_device_local(&self) -> bool {
         matches!(self, Self::Native | Self::Composed)
     }
 }
@@ -263,7 +263,7 @@ pub trait Capabilities {
     /// have not opted into a downstream operation.
     fn support_custom(&self, query: &CustomCapabilityQuery) -> SupportLevel {
         SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
-            operation: query.operation,
+            operation: query.operation.clone(),
         })
     }
 }

@@ -10,6 +10,7 @@
 // harder to audit and does not change generated code.
 #![allow(clippy::collapsible_if, clippy::collapsible_match)]
 
+use alloc::borrow::Cow;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
@@ -791,10 +792,10 @@ pub enum LossReduction {
 }
 
 /// Stable identity for an operation outside the built-in catalog.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct OperationKey {
-    pub namespace: &'static str,
-    pub name: &'static str,
+    pub namespace: Cow<'static, str>,
+    pub name: Cow<'static, str>,
     pub version: u32,
 }
 
@@ -3954,8 +3955,8 @@ mod tests {
     impl Operation for TestCustomOperation {
         type Attributes = NoAttributes;
         const KEY: OperationKey = OperationKey {
-            namespace: "incin.test",
-            name: "identity",
+            namespace: Cow::Borrowed("incin.test"),
+            name: Cow::Borrowed("identity"),
             version: 1,
         };
 
@@ -3994,6 +3995,14 @@ mod tests {
             invocation.validated().proof_level(),
             crate::exec::ProofLevel::of::<crate::prelude::Dyn>()
         );
+    }
+
+    #[test]
+    fn operation_key_round_trips_through_persistence() {
+        let key = TestCustomOperation::KEY;
+        let encoded = serde_json::to_string(&key).unwrap();
+        let decoded: OperationKey = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, key);
     }
 
     #[test]

@@ -23,8 +23,8 @@ impl Operation for CompanyIdentity {
     type Attributes = IdentityAttributes;
 
     const KEY: OperationKey = OperationKey {
-        namespace: "company.example",
-        name: "identity",
+        namespace: std::borrow::Cow::Borrowed("company.example"),
+        name: std::borrow::Cow::Borrowed("identity"),
         version: 1,
     };
 
