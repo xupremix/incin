@@ -1,11 +1,11 @@
 use crate::prelude::{Dim, Dyn};
+use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
-use crate::shapes::ShapeBuf;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Add, Sub};
-use typenum::{Unsigned, U1};
+use typenum::{U1, Unsigned};
 
 /// Forward structural cursors.  Keeping reverse cursors out of the recursive
 /// `FromEnd` adapters prevents the trait solver from exploring an infinite
@@ -1061,9 +1061,9 @@ impl<H: Dim, T: Shape, D: Dim> HasChannels1D<D> for DimCons<H, T> where
 
 impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
     DimCons<H, T>: AtFromEnd<
-        crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
-        Output = D,
-    >
+            crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+            Output = D,
+        >
 {
 }
 
@@ -1222,7 +1222,7 @@ mod tests {
     use crate::io::limits::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
     use crate::tensor::dtype::{
-        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding, Q8_0,
+        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
     };
 
     #[test]

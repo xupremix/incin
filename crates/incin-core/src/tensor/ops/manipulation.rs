@@ -5,17 +5,17 @@
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
 use crate::backend_authoring::{Descriptor, Execute};
-use crate::dist::placement::Local;
 use crate::dist::Placement;
+use crate::dist::placement::Local;
+use crate::exec::Capabilities;
 use crate::exec::catalog::{
-    op, AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
+    AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
     PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
-    SliceAttributes, TransposeAttributes, UnfoldAttributes,
+    SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -160,11 +160,11 @@ fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeDescr
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -332,11 +332,11 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + Execute<Descriptor<op::MaxPool2d>>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + Execute<Descriptor<op::MaxPool2d>>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 where
     B: Capabilities,
     <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<K>>,
@@ -399,12 +399,12 @@ where
 // -------------------------------------------------------------
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        P: Placement,
-    > Tensor<S, B, K, G, P>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+> Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -776,11 +776,11 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
@@ -801,11 +801,11 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
@@ -2031,12 +2031,12 @@ where
 }
 
 impl<
-        S: Shape,
-        B: Backend,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        NewD: crate::prelude::Device,
-    > crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    NewD: crate::prelude::Device,
+> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
