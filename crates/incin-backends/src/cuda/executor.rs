@@ -1,7 +1,7 @@
 //! Descriptor execution for the CUDA backend.
 //!
 //! This mirrors the CPU vertical slice from `EXE-007`: the same sealed
-//! `Validated<MatMulSpec>` binds to CUDA storage through the same
+//! `Validated<Descriptor<op::MatMulExact>>` binds to CUDA storage through the same
 //! `StorageBackend`/`Capabilities`/`Execute` contract, so the descriptor path
 //! is not a CPU-only construction.
 

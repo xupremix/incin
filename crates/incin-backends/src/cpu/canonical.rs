@@ -7,7 +7,7 @@
 //! not provide will not compile.
 //!
 //! This is the FND-005 replacement for the grouped, attribute-polymorphic
-//! `Execute<MatMulSpec>` family: those adapters accept several semantic
+//! `Execute<Descriptor<op::MatMulExact>>` family: those adapters accept several semantic
 //! operations through one descriptor type, so an error or a capability query
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
