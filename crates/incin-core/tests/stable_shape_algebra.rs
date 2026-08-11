@@ -422,3 +422,25 @@ fn exact_tracing_records_boolean_comparison_output_dtype() {
         .expect("comparison output should be traced");
     assert_eq!(output.dtype, DTypeId::Bool);
 }
+
+#[test]
+fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
+    let _guard = TRACE_TEST_LOCK.lock().unwrap();
+    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type S = s![2, 3];
+
+    let _ = incin_core::prelude::extract_graph();
+    let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let relu = input.relu().unwrap();
+    let _reshaped = relu.reshape::<s![3, 2]>(((), ((), ()))).unwrap();
+
+    let graph = incin_core::prelude::extract_graph();
+    assert!(graph
+        .nodes
+        .iter()
+        .any(|node| node.op == incin_core::graph::OpType::Relu));
+    assert!(graph
+        .nodes
+        .iter()
+        .any(|node| node.op == incin_core::graph::OpType::Reshape));
+}

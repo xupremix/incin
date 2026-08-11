@@ -900,14 +900,40 @@ impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
             OperationKind::LogicalAnd => crate::graph::OpType::LogicalAnd,
             OperationKind::LogicalOr => crate::graph::OpType::LogicalOr,
             OperationKind::LogicalNot => crate::graph::OpType::LogicalNot,
+            OperationKind::Relu => crate::graph::OpType::Relu,
+            OperationKind::Step => crate::graph::OpType::Step,
+            OperationKind::Mish => crate::graph::OpType::Mish,
+            OperationKind::Elu => crate::graph::OpType::Elu,
+            OperationKind::Gelu => crate::graph::OpType::Gelu,
+            OperationKind::Abs => crate::graph::OpType::Abs,
+            OperationKind::Exp => crate::graph::OpType::Exp,
+            OperationKind::Neg => crate::graph::OpType::Neg,
+            OperationKind::Sqrt => crate::graph::OpType::Sqrt,
+            OperationKind::Log => crate::graph::OpType::Log,
+            OperationKind::Tanh => crate::graph::OpType::Tanh,
+            OperationKind::Sigmoid => crate::graph::OpType::Sigmoid,
+            OperationKind::Swish => crate::graph::OpType::Swish,
+            OperationKind::Softmax => crate::graph::OpType::Softmax,
+            OperationKind::AddScalar => crate::graph::OpType::AddScalar,
+            OperationKind::MulScalar => crate::graph::OpType::MulScalar,
+            OperationKind::SubScalar => crate::graph::OpType::SubScalar,
+            OperationKind::DivScalar => crate::graph::OpType::DivScalar,
             OperationKind::MatMulExact => crate::graph::OpType::MatMul,
             OperationKind::ReshapeExact => crate::graph::OpType::Reshape,
             OperationKind::TransposeExact => crate::graph::OpType::Transpose,
+            OperationKind::FlattenExact | OperationKind::SqueezeExact => {
+                crate::graph::OpType::Reshape
+            }
             OperationKind::BroadcastAs | OperationKind::BroadcastLeft => {
                 crate::graph::OpType::Broadcast
             }
+            OperationKind::Narrow => crate::graph::OpType::Narrow,
+            OperationKind::SliceExact => crate::graph::OpType::Slice,
             OperationKind::StackExact => crate::graph::OpType::Stack,
             OperationKind::ConcatExact => crate::graph::OpType::Concat,
+            OperationKind::ToDType => crate::graph::OpType::ToDtype,
+            OperationKind::WhereCond => crate::graph::OpType::WhereCond,
+            OperationKind::Gather => crate::graph::OpType::Gather,
             OperationKind::SumAll => crate::graph::OpType::SumAll,
             OperationKind::MeanAll => crate::graph::OpType::MeanAll,
             OperationKind::MaxAll => crate::graph::OpType::MaxAll,
@@ -918,8 +944,12 @@ impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
             OperationKind::MinDim | OperationKind::MinKeepDim => crate::graph::OpType::MinDim,
             OperationKind::Conv1dExact => crate::graph::OpType::Conv1d,
             OperationKind::Conv2dExact => crate::graph::OpType::Conv2d,
+            OperationKind::ConvTranspose2d => crate::graph::OpType::ConvTranspose2d,
             OperationKind::MaxPool2d => crate::graph::OpType::MaxPool2d,
             OperationKind::AvgPool2d => crate::graph::OpType::AvgPool2d,
+            OperationKind::AdaptiveAvgPool2dExact => crate::graph::OpType::AdaptiveAvgPool2d,
+            OperationKind::LayerNorm => crate::graph::OpType::LayerNorm,
+            OperationKind::BatchNorm => crate::graph::OpType::BatchNorm,
             _ => return None,
         })
     }
