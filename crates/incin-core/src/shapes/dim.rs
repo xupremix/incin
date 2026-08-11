@@ -90,7 +90,7 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// the older value constructors remain only for parameter adapters.
     #[inline]
     fn resolve_arg(
-        arg: Self::Arg,
+        _arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
         match Self::STATIC {
             StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
@@ -107,7 +107,12 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
                     })
                 }
             }
-            StaticExtent::RuntimeUnknown => Ok(Self::from_arg(arg).size()),
+            StaticExtent::RuntimeUnknown => {
+                Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    rank: 1,
+                })
+            }
         }
     }
 
@@ -291,6 +296,11 @@ impl Dim for usize {
     }
     fn arg(&self) -> Self::Arg {
         *self
+    }
+    fn resolve_arg(
+        arg: Self::Arg,
+    ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
+        Ok(arg)
     }
 }
 
