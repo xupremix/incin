@@ -14,13 +14,13 @@
 //! adapter being rewritten, which is the property `EXE-010`'s backend-authoring
 //! template needs to document.
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend};
+use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{
-    Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
+    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, SupportLevel, TensorMeta,
     UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, DType, Device, OperationKind, Result, ShapeBuf, StrideBuf,
+    BackendError, DType, Device, OperationKind, Result, Shape, ShapeBuf, StrideBuf,
 };
 
 use super::CandleBackend;
@@ -84,7 +84,9 @@ impl CandleStorage {
     }
 }
 
-impl<T: DType, D: Device> StorageBackend for CandleBackend<T, D> {
+impl<D: Device> StorageBackend for CandleBackend<D> {
+    const BACKEND_NAME: &'static str = "Candle";
+
     type Storage<K: DType> = CandleStorage;
     type Device = D;
 
@@ -93,7 +95,7 @@ impl<T: DType, D: Device> StorageBackend for CandleBackend<T, D> {
     }
 }
 
-impl<T: DType, D: Device> Capabilities for CandleBackend<T, D> {
+impl<D: Device> Capabilities for CandleBackend<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
         // Candle is a third-party backend with no registry of its own. Its
         // dtype coverage is exactly what `to_candle_dtype` accepts, and
@@ -106,7 +108,12 @@ impl<T: DType, D: Device> Capabilities for CandleBackend<T, D> {
             });
         }
         match query.operation {
-            OperationKind::MatMul | OperationKind::Reshape => SupportLevel::Native,
+            OperationKind::MatMul
+            | OperationKind::Reshape
+            | OperationKind::Zeros
+            | OperationKind::Ones
+            | OperationKind::UniformRandom
+            | OperationKind::NormalRandom => SupportLevel::Native,
             operation => SupportLevel::Unsupported(UnsupportedReason::Operation { operation }),
         }
     }
@@ -116,62 +123,48 @@ const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError
     BackendError::InvalidInput { operation, reason }
 }
 
-impl<T: DType, D: Device> Execute<MatMulSpec> for CandleBackend<T, D> {
+impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CandleBackend<D> {
     type Output = CandleStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, MatMulSpec, Self>,
+        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let _ = self;
-        let spec = request.operation.descriptor();
+        let operation = OperationKind::MatMulExact;
         let [lhs_handle, rhs_handle] = request.inputs else {
             return Err(invalid(
-                OperationKind::MatMul,
+                operation,
                 "matmul expects exactly two tensor inputs",
             ));
         };
         let lhs = lhs_handle
             .downcast_ref::<CandleStorage>()
-            .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Candle storage"))?;
+            .ok_or_else(|| invalid(operation, "matmul input is not Candle storage"))?;
         let rhs = rhs_handle
             .downcast_ref::<CandleStorage>()
-            .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Candle storage"))?;
+            .ok_or_else(|| invalid(operation, "matmul input is not Candle storage"))?;
 
         let execution_error = |error: candle_core::Error| BackendError::Execution {
-            operation: OperationKind::MatMul,
+            operation,
             message: alloc::format!("{error}").into(),
         };
-
-        let transposed = |storage: &CandleStorage| {
-            let rank = storage.metadata().shape().rank();
-            storage.tensor().transpose(rank - 2, rank - 1)
-        };
-        let lhs_tensor = if spec.transpose_lhs {
-            transposed(lhs).map_err(execution_error)?
-        } else {
-            lhs.tensor().clone()
-        };
-        let rhs_tensor = if spec.transpose_rhs {
-            transposed(rhs).map_err(execution_error)?
-        } else {
-            rhs.tensor().clone()
-        };
-
-        // `broadcast_matmul` covers both the rank-2 and the batched cases, and
-        // applies the same right-aligned batch broadcasting the descriptor's
-        // batch strides already describe.
-        let output = lhs_tensor
-            .broadcast_matmul(&rhs_tensor)
+        let output = lhs
+            .tensor()
+            .broadcast_matmul(rhs.tensor())
             .map_err(execution_error)?;
         let output = CandleStorage::try_new(output).map_err(|error| BackendError::Execution {
-            operation: OperationKind::MatMul,
+            operation,
             message: alloc::format!("{error}").into(),
         })?;
-
-        if output.metadata().shape().dims() != spec.output.dims() {
+        let expected = request
+            .operation
+            .descriptor()
+            .output_shape()
+            .ok_or_else(|| invalid(operation, "matmul descriptor has no output shape"))?;
+        if output.metadata().shape().dims() != expected.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::MatMul,
+                operation,
                 message: "Candle matmul output disagrees with the validated descriptor".into(),
             });
         }
@@ -179,57 +172,85 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CandleBackend<T, D> {
     }
 }
 
-impl<T: DType, D: Device> Execute<ReshapeSpec> for CandleBackend<T, D> {
+impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CandleBackend<D> {
     type Output = CandleStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, ReshapeSpec, Self>,
+        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let _ = self;
-        let spec = request.operation.descriptor();
+        let operation = OperationKind::ReshapeExact;
         let [handle] = request.inputs else {
             return Err(invalid(
-                OperationKind::Reshape,
+                operation,
                 "reshape expects exactly one tensor input",
             ));
         };
-        let input = handle.downcast_ref::<CandleStorage>().ok_or_else(|| {
-            invalid(
-                OperationKind::Reshape,
-                "reshape input is not Candle storage",
-            )
-        })?;
-
-        if input.metadata().shape().dims() != spec.input.dims() {
-            return Err(invalid(
-                OperationKind::Reshape,
-                "reshape input metadata does not match the validated descriptor",
-            ));
-        }
-
+        let input = handle
+            .downcast_ref::<CandleStorage>()
+            .ok_or_else(|| invalid(operation, "reshape input is not Candle storage"))?;
+        let shape = &request.operation.descriptor().attributes().shape;
         let execution_error = |error: candle_core::Error| BackendError::Execution {
-            operation: OperationKind::Reshape,
+            operation,
             message: alloc::format!("{error}").into(),
         };
-        // Candle refuses to reshape a non-contiguous tensor rather than
-        // materializing one, so a strided operand surfaces as its own error here
-        // instead of being silently copied.
         let output = input
             .tensor()
-            .reshape(spec.output.dims())
+            .reshape(shape.as_slice())
             .map_err(execution_error)?;
         let output = CandleStorage::try_new(output).map_err(|error| BackendError::Execution {
-            operation: OperationKind::Reshape,
+            operation,
             message: alloc::format!("{error}").into(),
         })?;
-
-        if output.metadata().shape().dims() != spec.output.dims() {
+        if output.metadata().shape().dims() != shape {
             return Err(BackendError::Execution {
-                operation: OperationKind::Reshape,
+                operation,
                 message: "Candle reshape output disagrees with the validated descriptor".into(),
             });
         }
         Ok(output)
     }
 }
+
+macro_rules! impl_candle_creation_executors {
+    ($(($op:ident, $func:ident $(, $arg:ident)*)),* $(,)?) => {$(
+        impl<D: Device> Execute<incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::$op>> for CandleBackend<D> {
+            type Output = CandleStorage;
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::$op>, Self>,
+            ) -> core::result::Result<CandleStorage, BackendError> {
+                use incin_core::backend_authoring::CreationOps;
+                if !request.inputs.is_empty() {
+                    return Err(invalid(OperationKind::$op, "an allocation takes no operand"));
+                }
+                let attr = request.operation.descriptor().attributes();
+                let raw = <Self as CreationOps<Self>>::$func::<f32>(
+                    $(attr.$arg,)*
+                    &attr.shape,
+                    attr.dtype,
+                    &attr.device,
+                )
+                .map_err(|err| {
+                    crate::descriptor_bind::kernel_error(
+                        Self::BACKEND_NAME,
+                        OperationKind::$op,
+                        err,
+                    )
+                })?;
+                Ok(raw)
+            }
+        }
+    )*};
+}
+
+impl_candle_creation_executors![
+    (Zeros, zeros),
+    (Ones, ones),
+    (UniformRandom, rand),
+    (NormalRandom, randn),
+    (Full, full, value),
+    (Arange, arange, start, step),
+    (Linspace, linspace, start, end),
+];
