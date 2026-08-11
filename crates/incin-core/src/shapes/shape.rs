@@ -276,7 +276,15 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
                 rank: dims.len(),
             },
         )?;
-        T::validate_dims(&dims[1..])
+        T::validate_dims(&dims[1..]).map_err(|error| match error {
+            crate::shapes::error::ShapeError::TargetShapeRejected { operation, .. } => {
+                crate::shapes::error::ShapeError::TargetShapeRejected {
+                    operation,
+                    rank: dims.len(),
+                }
+            }
+            other => other,
+        })
     }
 }
 
