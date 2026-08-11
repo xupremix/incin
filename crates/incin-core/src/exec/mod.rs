@@ -84,11 +84,11 @@ pub use conformance::{
 pub use context::ExecutionContext;
 pub use dispatch::CanonicalError;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
+#[cfg(feature = "std")]
+pub use policy::check_gradients;
 pub use policy::{
     AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy,
 };
-#[cfg(feature = "std")]
-pub use policy::{check_gradients, no_grad};
 pub use precision::{
     LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,

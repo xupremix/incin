@@ -68,7 +68,8 @@ fn operand<'a>(
 
 /// Whether the request was made in a context that records gradients.
 ///
-/// Read from the context's own policy rather than from the ambient `no_grad`
+/// Read from the context's own policy rather than from an ambient gradient
+/// scope
 /// scope, because that is what `dispatch::execute` reads when it runs the same
 /// query. Two answers to one question would make the executor's re-check
 /// disagree with the dispatch that reached it.
@@ -2915,7 +2916,7 @@ mod tests {
     /// Those rows carry `training = false`, because neither block kernel pushes
     /// a tape entry and a training row would promise a gradient that never
     /// arrives. `dispatch::execute` reads the grad mode off the context's own
-    /// policy rather than off the ambient `no_grad` scope, so the mode has to be
+    /// policy rather than off an ambient gradient scope, so the mode has to be
     /// set on the context.
     fn inference_context() -> ExecutionContext<TestBackend> {
         ExecutionContext::new(TestBackend::new()).with_grad_mode(GradMode::Disabled)

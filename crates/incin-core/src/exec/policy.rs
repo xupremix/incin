@@ -149,7 +149,8 @@ impl AllocatorPolicy {
 ///
 /// `Enabled` is the default and is a permission, not an instruction: an
 /// operation records only if nothing in scope has disabled it. That asymmetry
-/// is what makes [`no_grad`] work — a `Grad` operand inside a `no_grad` scope
+/// is what makes a disabled gradient scope work. A `Grad` operand inside such
+/// a scope
 /// records nothing, while a `NoGrad` operand records nothing anywhere.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GradMode {
@@ -183,7 +184,7 @@ impl GradMode {
     ///
     /// Ordering the combination this way is the whole contract. An operand
     /// that permits recording cannot re-enable it inside a scope that
-    /// disabled it, which is what a `no_grad` block has to mean if it is to be
+    /// disabled it, which is what a disabled gradient scope has to mean if it is to be
     /// usable around code whose operands are `Grad`.
     #[must_use]
     pub const fn and(self, other: Self) -> Self {
@@ -458,7 +459,7 @@ mod scope {
 
     /// Run `body` with every gradient checked for a non-finite value.
     ///
-    /// The debugging counterpart to [`no_grad`]: a backward pass inside this
+    /// The debugging counterpart to [`GradMode::Disabled::scope`]: a backward pass inside this
     /// fails at the operation that first produced a `NaN` instead of at
     /// whatever notices later.
     pub fn check_gradients<R>(body: impl FnOnce() -> R) -> R {
@@ -470,7 +471,7 @@ mod scope {
         /// as it was.
         ///
         /// This installs the mode rather than combining with the enclosing
-        /// one, so `GradMode::Enabled.scope(..)` inside a [`no_grad`] block
+        /// one, so `GradMode::Enabled.scope(..)` inside a disabled scope
         /// records again — the caller who writes that is asking for it by
         /// name. Combining is what an *operand's* mode does, and that happens
         /// where the operand is known, not here.
@@ -483,18 +484,7 @@ mod scope {
             ExecutionPolicy::current().with_grad_mode(self).scope(body)
         }
     }
-
-    /// Run `body` with gradient recording disabled, whatever the operands say.
-    ///
-    /// This is the inference form. Every operation inside records nothing and
-    /// retains no saved tensor, including operations on `Grad` tensors: an
-    /// operand's mode is combined with the ambient one through
-    /// [`GradMode::and`], and a `Grad` operand permits recording rather than
-    /// demanding it.
-    pub fn no_grad<R>(body: impl FnOnce() -> R) -> R {
-        GradMode::Disabled.scope(body)
-    }
 }
 
 #[cfg(feature = "std")]
-pub use scope::{check_gradients, no_grad};
+pub use scope::check_gradients;

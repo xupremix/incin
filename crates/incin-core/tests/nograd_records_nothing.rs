@@ -23,7 +23,7 @@ use std::thread;
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
 use incin_core::exec::{
     AllocatorPolicy, Determinism, ExecutionContext, ExecutionPolicy, FallbackPolicy, GradMode,
-    MathMode, no_grad,
+    MathMode,
 };
 use incin_core::prelude::*;
 use incin_macros::s;
@@ -98,7 +98,7 @@ fn a_no_grad_scope_leaves_the_other_policy_axes_alone() {
         .with_determinism(Determinism::Required);
 
     moved.scope(|| {
-        no_grad(|| {
+        GradMode::Disabled.scope(|| {
             assert_eq!(GradMode::current(), GradMode::Disabled);
             assert_eq!(ExecutionPolicy::current().math_mode, MathMode::Fast);
             assert_eq!(
@@ -115,7 +115,7 @@ fn restrict_tightens_and_never_loosens() {
     // This is the asymmetry the whole design rests on. An operand's mode may
     // switch recording off; it may not switch it back on, or a `no_grad` block
     // would be undone by the first `Grad` tensor inside it.
-    no_grad(|| {
+    GradMode::Disabled.scope(|| {
         assert_eq!(GradMode::current(), GradMode::Disabled);
         GradMode::Enabled.restrict(|| {
             assert_eq!(GradMode::current(), GradMode::Disabled);
@@ -132,7 +132,7 @@ fn an_explicit_scope_does_re_enable_recording() {
     // are separate: a caller who names `GradMode::Enabled` is asking for it,
     // whereas an operand that merely permits recording is not asking for
     // anything.
-    no_grad(|| {
+    GradMode::Disabled.scope(|| {
         GradMode::Enabled.scope(|| assert_eq!(GradMode::current(), GradMode::Enabled));
         assert_eq!(GradMode::current(), GradMode::Disabled);
     });
@@ -140,9 +140,9 @@ fn an_explicit_scope_does_re_enable_recording() {
 
 #[test]
 fn nested_scopes_restore_their_enclosing_mode_not_the_default() {
-    no_grad(|| {
+    GradMode::Disabled.scope(|| {
         GradMode::Enabled.scope(|| {
-            no_grad(|| assert_eq!(GradMode::current(), GradMode::Disabled));
+            GradMode::Disabled.scope(|| assert_eq!(GradMode::current(), GradMode::Disabled));
             assert_eq!(GradMode::current(), GradMode::Enabled);
         });
         assert_eq!(GradMode::current(), GradMode::Disabled);
@@ -153,7 +153,7 @@ fn nested_scopes_restore_their_enclosing_mode_not_the_default() {
 #[test]
 fn a_panic_out_of_a_no_grad_scope_does_not_poison_the_thread() {
     let escaped = panic::catch_unwind(|| {
-        no_grad(|| panic!("unwinding out of a no_grad block"));
+        GradMode::Disabled.scope(|| panic!("unwinding out of a disabled gradient scope"));
     });
     assert!(escaped.is_err());
     assert_eq!(GradMode::current(), GradMode::Enabled);
@@ -165,7 +165,7 @@ fn one_threads_no_grad_scope_is_invisible_to_another() {
     let (release_tx, release_rx) = mpsc::channel();
 
     let worker = thread::spawn(move || {
-        no_grad(|| {
+        GradMode::Disabled.scope(|| {
             entered_tx.send(GradMode::current()).unwrap();
             release_rx.recv().unwrap();
             GradMode::current()
@@ -293,7 +293,10 @@ fn a_no_grad_scope_silences_a_grad_chain() {
     let (a, b) = grad_operands();
 
     assert!(recorded(|| chain(&a, &b).unwrap()) > 0);
-    assert_eq!(recorded(|| no_grad(|| chain(&a, &b).unwrap())), 0);
+    assert_eq!(
+        recorded(|| GradMode::Disabled.scope(|| chain(&a, &b).unwrap())),
+        0
+    );
     // And the scope ends where it says it does.
     assert!(recorded(|| chain(&a, &b).unwrap()) > 0);
 }
@@ -342,7 +345,7 @@ fn silencing_the_tape_does_not_change_what_the_forward_pass_computes() {
 
     let eager = chain(&ga, &gb).unwrap();
     let detached = chain(&na, &nb).unwrap();
-    let scoped = no_grad(|| chain(&ga, &gb).unwrap());
+    let scoped = GradMode::Disabled.scope(|| chain(&ga, &gb).unwrap());
 
     assert_eq!(eager, 54.0);
     assert_eq!(detached, eager);
