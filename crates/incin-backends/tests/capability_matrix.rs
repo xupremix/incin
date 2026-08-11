@@ -1178,29 +1178,36 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let bytes = B::to_bytes::<f32>(&source).unwrap();
             let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new())
                 .with_grad_mode(GradMode::Disabled);
-            let attributes = DataAttributes {
+            let typed_attributes = DataAttributes {
                 shape: vec![2],
                 dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
+                payload: incin_core::exec::catalog::CreationPayload::Typed {
+                    bytes: bytes.clone(),
+                    dtype: DTypeId::F32.descriptor(),
+                },
             };
             match operation {
                 OperationKind::TensorFromData => {
-                    dispatch::execute_shaped_with_payload::<op::TensorFromData, _, Dyn>(
+                    dispatch::execute_shaped::<op::TensorFromData, _, Dyn>(
                         &context,
-                        attributes,
+                        typed_attributes,
                         &[],
                         &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
-                        Some(bytes.as_slice()),
                     )
                     .unwrap()
                 }
                 OperationKind::TensorFromBytes => {
-                    dispatch::execute_shaped_with_payload::<op::TensorFromBytes, _, Dyn>(
+                    dispatch::execute_shaped::<op::TensorFromBytes, _, Dyn>(
                         &context,
-                        attributes,
+                        DataAttributes {
+                            shape: vec![2],
+                            dtype: DTypeId::F32.descriptor(),
+                            device: DeviceId::cpu(),
+                            payload: incin_core::exec::catalog::CreationPayload::Bytes(bytes),
+                        },
                         &[],
                         &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
-                        Some(bytes.as_slice()),
                     )
                     .unwrap()
                 }

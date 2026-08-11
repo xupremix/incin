@@ -249,6 +249,8 @@ impl_transfer!(crate::dispatch::DispatchBackend<D>);
 mod tests {
     use super::*;
     #[cfg(feature = "cpu")]
+    use incin_core::exec::DescriptorError;
+    #[cfg(feature = "cpu")]
     use incin_core::prelude::{
         BackendError, DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind,
         RequiresGrad, Tensor, ToDevice,
@@ -340,7 +342,7 @@ mod tests {
         .unwrap_err();
         assert!(matches!(
             error,
-            Error::Backend(BackendError::Execution {
+            Error::Descriptor(DescriptorError::PayloadByteLength {
                 operation: OperationKind::TensorFromBytes,
                 ..
             })

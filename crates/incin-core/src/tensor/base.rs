@@ -784,16 +784,19 @@ where
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let inner = dispatch::execute_shaped_with_payload::<op::TensorFromData, B, S>(
+        let inner = dispatch::execute_shaped::<op::TensorFromData, B, S>(
             &context,
             crate::exec::catalog::DataAttributes {
                 shape: dims.as_ref().to_vec(),
                 dtype,
                 device,
+                payload: crate::exec::catalog::CreationPayload::Typed {
+                    bytes: bytes.to_vec(),
+                    dtype,
+                },
             },
             &[],
             &expected,
-            Some(bytes),
         )?
         .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
@@ -813,16 +816,16 @@ where
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let inner = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, S>(
+        let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, S>(
             &context,
             crate::exec::catalog::DataAttributes {
                 shape: dims.as_ref().to_vec(),
                 dtype,
                 device,
+                payload: crate::exec::catalog::CreationPayload::Bytes(bytes.to_vec()),
             },
             &[],
             &expected,
-            Some(bytes),
         )?
         .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)

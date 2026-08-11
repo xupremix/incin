@@ -769,7 +769,7 @@ macro_rules! attributes {
 pub struct NoAttributes;
 
 attributes! {
-    DataAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
+    DataAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, payload: CreationPayload }
     CreationAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
     FullAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, value: f64 }
     ArangeAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, start: f64, step: f64 }
@@ -820,6 +820,30 @@ attributes! {
     SgdAttributes { learning_rate: f64 }
     AdamAttributes { learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64, step: usize }
     AdamWAttributes { learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64, weight_decay: f64, step: usize }
+}
+
+/// Owned bytes used by the data-creation descriptors.
+///
+/// `TensorFromData` records the dtype of its native source values, while
+/// `TensorFromBytes` records that its bytes were supplied without a native
+/// scalar type. Both forms remain part of the descriptor so validation occurs
+/// before capability lookup or backend execution.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CreationPayload {
+    Typed {
+        bytes: Vec<u8>,
+        dtype: DTypeDescriptor,
+    },
+    Bytes(Vec<u8>),
+}
+
+impl CreationPayload {
+    #[must_use]
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Typed { bytes, .. } | Self::Bytes(bytes) => bytes,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -1220,6 +1244,20 @@ pub enum DescriptorError {
         output: usize,
         field: &'static str,
     },
+    PayloadKind {
+        operation: OperationKind,
+        expected: &'static str,
+    },
+    PayloadDTypeMismatch {
+        operation: OperationKind,
+        expected: DTypeDescriptor,
+        actual: DTypeDescriptor,
+    },
+    PayloadByteLength {
+        operation: OperationKind,
+        expected: usize,
+        actual: usize,
+    },
 }
 
 impl From<crate::prelude::ShapeError> for DescriptorError {
@@ -1286,6 +1324,26 @@ impl fmt::Display for DescriptorError {
             } => write!(
                 f,
                 "{operation}: output {output} {field} disagrees with inferred metadata"
+            ),
+            Self::PayloadKind {
+                operation,
+                expected,
+            } => write!(f, "{operation}: expected {expected} creation payload"),
+            Self::PayloadDTypeMismatch {
+                operation,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "{operation}: payload dtype {actual:?} does not match {expected:?}"
+            ),
+            Self::PayloadByteLength {
+                operation,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "{operation}: payload byte length {actual} does not match {expected}"
             ),
         }
     }
@@ -1475,7 +1533,48 @@ impl AttributeContract for DataAttributes {
         operation: OperationKind,
         _: &[LogicalTensorMeta],
     ) -> Result<(), DescriptorError> {
-        validate_shape(operation, &self.shape)
+        validate_shape(operation, &self.shape)?;
+        match (operation, &self.payload) {
+            (OperationKind::TensorFromData, CreationPayload::Typed { dtype, .. }) => {
+                if *dtype != self.dtype {
+                    return Err(DescriptorError::PayloadDTypeMismatch {
+                        operation,
+                        expected: self.dtype,
+                        actual: *dtype,
+                    });
+                }
+            }
+            (OperationKind::TensorFromBytes, CreationPayload::Bytes(_)) => {}
+            (OperationKind::TensorFromData, _) => {
+                return Err(DescriptorError::PayloadKind {
+                    operation,
+                    expected: "typed",
+                });
+            }
+            (OperationKind::TensorFromBytes, _) => {
+                return Err(DescriptorError::PayloadKind {
+                    operation,
+                    expected: "byte",
+                });
+            }
+            _ => {}
+        }
+        let expected = self
+            .dtype
+            .size_bytes(
+                ShapeBuf::from_slice(&self.shape).checked_numel(operation)?,
+                operation,
+            )
+            .map_err(DescriptorError::Shape)?;
+        let actual = self.payload.bytes().len();
+        if actual != expected {
+            return Err(DescriptorError::PayloadByteLength {
+                operation,
+                expected,
+                actual,
+            });
+        }
+        Ok(())
     }
     fn declared_shape(&self) -> Option<&[usize]> {
         Some(&self.shape)
@@ -5525,5 +5624,54 @@ mod tests {
             crate::exec::ProofLevel::Dynamic,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn data_creation_rejects_non_exact_payload_byte_length() {
+        let error = ValidatedInvocation::<op::TensorFromBytes>::infer_runtime(
+            DataAttributes {
+                shape: vec![2],
+                dtype: DTypeId::F32.descriptor(),
+                device: DeviceId::cpu(),
+                payload: CreationPayload::Bytes(vec![0; 7]),
+            },
+            Vec::new(),
+        )
+        .expect_err("a payload shorter than the exact storage size must fail");
+
+        assert_eq!(
+            error,
+            DescriptorError::PayloadByteLength {
+                operation: OperationKind::TensorFromBytes,
+                expected: 8,
+                actual: 7,
+            }
+        );
+    }
+
+    #[test]
+    fn typed_data_creation_rejects_a_payload_dtype_mismatch() {
+        let error = ValidatedInvocation::<op::TensorFromData>::infer_runtime(
+            DataAttributes {
+                shape: vec![2],
+                dtype: DTypeId::F32.descriptor(),
+                device: DeviceId::cpu(),
+                payload: CreationPayload::Typed {
+                    bytes: vec![0; 8],
+                    dtype: DTypeId::I64.descriptor(),
+                },
+            },
+            Vec::new(),
+        )
+        .expect_err("a typed payload must agree with the descriptor dtype");
+
+        assert_eq!(
+            error,
+            DescriptorError::PayloadDTypeMismatch {
+                operation: OperationKind::TensorFromData,
+                expected: DTypeId::F32.descriptor(),
+                actual: DTypeId::I64.descriptor(),
+            }
+        );
     }
 }

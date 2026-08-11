@@ -1,5 +1,5 @@
 use crate::backend_authoring::{Execute, op};
-use crate::exec::catalog::DataAttributes;
+use crate::exec::catalog::{CreationPayload, DataAttributes};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::nn::StateDict;
@@ -263,16 +263,16 @@ where
             ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape)).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let inner = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
+        let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
             &context,
             DataAttributes {
                 shape: shape.clone(),
                 dtype: dtype.descriptor(),
                 device: *device,
+                payload: CreationPayload::Bytes(bytes.to_vec()),
             },
             &[],
             &expected,
-            Some(bytes),
         )?
         .into();
         mapped_tensors.insert(name.to_string(), inner);
@@ -514,16 +514,16 @@ where
             ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&final_shape)).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let storage = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
+        let storage = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
             &context,
             DataAttributes {
                 shape: final_shape.clone(),
                 dtype: dtype_id.descriptor(),
                 device: DeviceId::cpu(),
+                payload: CreationPayload::Bytes(final_bytes.clone()),
             },
             &[],
             &expected,
-            Some(final_bytes.as_slice()),
         )?
         .into();
         let tensor = Tensor::<Dyn, B>::from_parts(
