@@ -295,7 +295,8 @@ pub fn __audit_or_panic<O: super::spec::ExecutionDescriptor>(validated: &Validat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exec::spec::BroadcastSpec;
+    use crate::exec::catalog::NoAttributes;
+    use crate::exec::{Descriptor, LogicalTensorMeta, op};
     use crate::prelude::{Dyn, ShapeBuf};
     use typenum::{U2, U3};
     type Static23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<U3, crate::shapes::Nil>>;
@@ -387,12 +388,23 @@ mod tests {
 
     #[test]
     fn a_sealed_descriptor_still_reads_back_exactly() {
-        let spec = BroadcastSpec::contiguous(
-            &ShapeBuf::from_slice(&[2, 3]),
-            &ShapeBuf::from_slice(&[1, 3]),
-            None,
+        let spec = Descriptor::<op::Add>::infer_runtime(
+            NoAttributes,
+            vec![
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: None,
+                    device: None,
+                },
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[1, 3])),
+                    dtype: None,
+                    device: None,
+                },
+            ],
         )
-        .unwrap();
+        .unwrap()
+        .into_descriptor();
         let validated = Validated::new(spec.clone(), ProofLevel::Mixed);
 
         assert_eq!(validated.descriptor(), &spec);
@@ -405,12 +417,23 @@ mod tests {
         // A `Static` stamp on a runtime-built descriptor is a lie the type
         // system cannot catch, which is exactly why `new` is crate-private:
         // only a lowering rule holding the shape types may call it.
-        let spec = BroadcastSpec::contiguous(
-            &ShapeBuf::from_slice(&[2, 3]),
-            &ShapeBuf::from_slice(&[2, 3]),
-            None,
+        let spec = Descriptor::<op::Add>::infer_runtime(
+            NoAttributes,
+            vec![
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: None,
+                    device: None,
+                },
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: None,
+                    device: None,
+                },
+            ],
         )
-        .unwrap();
+        .unwrap()
+        .into_descriptor();
         let validated = Validated::new(spec, ProofLevel::of::<Static23>());
         assert!(validated.proof_level().is_static());
     }
@@ -418,12 +441,23 @@ mod tests {
     #[cfg(feature = "paranoid-validation")]
     #[test]
     fn audit_passes_for_a_descriptor_from_a_checked_constructor() {
-        let spec = BroadcastSpec::contiguous(
-            &ShapeBuf::from_slice(&[2, 3]),
-            &ShapeBuf::from_slice(&[1, 3]),
-            None,
+        let spec = Descriptor::<op::Add>::infer_runtime(
+            NoAttributes,
+            vec![
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: None,
+                    device: None,
+                },
+                LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[1, 3])),
+                    dtype: None,
+                    device: None,
+                },
+            ],
         )
-        .unwrap();
+        .unwrap()
+        .into_descriptor();
         let validated = Validated::new(spec, ProofLevel::Mixed);
         assert!(validated.audit().is_ok());
     }
