@@ -11,7 +11,6 @@ use crate::dist::Local;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{MatMulRule, ShapeRule};
 use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -314,13 +313,13 @@ impl<
         B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
     {
-        let validated = <MatMulRule as ShapeRule<(S1, S2)>>::lower(
-            &(self.shape_buf_value(), rhs.shape_buf_value()),
-            (),
+        let spec = crate::exec::MatMulSpec::new(
+            &self.shape_buf_value(),
+            &rhs.shape_buf_value(),
         )?;
         let rhs_grad = &rhs._grad;
         let output_shape =
-            crate::shapes::ShapeValue::<S1::Output>::try_new(validated.descriptor().output.clone())
+            crate::shapes::ShapeValue::<S1::Output>::try_new(spec.output.clone())
                 .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
@@ -431,11 +430,11 @@ impl<
         B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
     {
-        let validated = <MatMulRule as ShapeRule<(S1, S2)>>::lower(
-            &(self.shape_buf_value(), rhs.shape_buf_value()),
-            (),
+        let spec = crate::exec::MatMulSpec::new(
+            &self.shape_buf_value(),
+            &rhs.shape_buf_value(),
         )?;
-        let output_shape = validated.descriptor().output.clone();
+        let output_shape = spec.output.clone();
         let expected = crate::shapes::ShapeValue::<S1::Output>::try_new(output_shape.clone())
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
