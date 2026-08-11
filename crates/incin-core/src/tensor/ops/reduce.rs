@@ -336,14 +336,23 @@ impl<
         prod_all, ProdAll
     );
 
-    /// Cumulative sum along dimension `DIM`.
-    pub fn cumsum<const DIM: usize>(&self) -> Result<Self>
+    /// Cumulative sum along a compile-time structural axis cursor.
+    pub fn cumsum<C: StaticCursor>(&self) -> Result<Self>
     where
         S: DynShape,
         B: Execute<Descriptor<op::Cumsum>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Cumsum>>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(DIM, self.rank())?;
+        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(self.rank())?
+            .into_iter()
+            .next()
+            .ok_or(crate::prelude::Error::Shape(
+                crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: C::INDEX.unsigned_abs(),
+                    rank: self.rank(),
+                },
+            ))?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);

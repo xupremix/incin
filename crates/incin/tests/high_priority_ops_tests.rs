@@ -60,7 +60,7 @@ fn test_creation_factory_ops() -> Result<()> {
 
 #[test]
 fn test_selection_and_indexing() -> Result<()> {
-    let mask = Tensor::<s![4], DefaultBackend>::from_slice(&[1.0, 0.0, 1.0, 0.0], ())?;
+    let mask = Tensor::<s![4], DefaultBackend, bool>::from_slice(&[true, false, true, false], ())?;
     let on_true = Tensor::<s![4], DefaultBackend>::from_slice(&[10.0, 20.0, 30.0, 40.0], ())?;
     let on_false = Tensor::<s![4], DefaultBackend>::from_slice(&[-1.0, -2.0, -3.0, -4.0], ())?;
 
@@ -90,7 +90,7 @@ fn test_matrix_and_reductions() -> Result<()> {
     let prod = v1.clone().prod_all()?;
     assert_eq!(prod.to_scalar::<f32>()?, 6.0);
 
-    let cum = v1.cumsum::<0>()?;
+    let cum = v1.cumsum::<Here>()?;
     assert_eq!(cum.to_vec1::<f32>()?, vec![1.0, 3.0, 6.0]);
 
     Ok(())
