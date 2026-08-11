@@ -1567,9 +1567,26 @@ impl<
         &self,
         dim: usize,
         index: &Tensor<S2, B, KInt, G2>,
-    ) -> Result<Tensor<S2, B, K, G>> {
-        let inner =
-            self.under_grad_mode(|| B::gather::<K, KInt>(&self.inner, dim, &index.inner))?;
+    ) -> Result<Tensor<S2, B, K, G>>
+    where
+        B: Execute<op::Gather> + Capabilities,
+        <B as Execute<op::Gather>>::Output: Into<B::Storage<K>>,
+    {
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Gather, B, S2>(
+                    &context,
+                    AxisAttributes { axis: dim },
+                    &inputs,
+                    &index._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             index._shape.clone(),
@@ -1613,7 +1630,11 @@ impl<
         &self,
         dim: usize,
         index: &Tensor<S2, B, KInt, G2>,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<op::IndexSelect> + Capabilities,
+        <B as Execute<op::IndexSelect>>::Output: Into<B::Storage<K>>,
+    {
         let mut out_shape = self.shape_buf().as_ref().to_vec();
         if dim >= out_shape.len() {
             return Err(crate::err::Error::Shape(
@@ -1633,11 +1654,26 @@ impl<
             ));
         }
         out_shape[dim] = index.shape_buf().as_ref()[0];
-        let inner =
-            self.under_grad_mode(|| B::index_select::<K, KInt>(&self.inner, dim, &index.inner))?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::IndexSelect, B, Dyn>(
+                    &context,
+                    AxisAttributes { axis: dim },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            ShapeBuf::from_slice(&out_shape),
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
