@@ -21,13 +21,6 @@ use typenum::{U1, U2, U3, U4};
 extern crate incin_core as incin;
 
 incin_core::dim!(Batch, Seq);
-type S1<A> = incin_core::shapes::DimCons<A, incin_core::shapes::Nil>;
-type S2<A, B> =
-    incin_core::shapes::DimCons<A, incin_core::shapes::DimCons<B, incin_core::shapes::Nil>>;
-type S3<A, B, C> = incin_core::shapes::DimCons<
-    A,
-    incin_core::shapes::DimCons<B, incin_core::shapes::DimCons<C, incin_core::shapes::Nil>>,
->;
 type S4<A, B, C, D> = incin_core::shapes::DimCons<
     A,
     incin_core::shapes::DimCons<
