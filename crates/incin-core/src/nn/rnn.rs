@@ -527,6 +527,7 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::TensorOps<B>
         + Execute<Descriptor<op::StackExact>>
+        + Execute<Descriptor<op::Narrow>>
         + crate::exec::Capabilities,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
@@ -539,6 +540,7 @@ impl<
     )> for RNN<S, B, BiasIh, BiasHh, K, Train>
 where
     <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
     S::In: Dim<Arg = ()>,
     S::Out: Dim<Arg = ()>,
     K: ConstDType,

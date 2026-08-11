@@ -9,8 +9,8 @@ use crate::dist::Placement;
 use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::catalog::{
-    FlattenAttributes, NoAttributes, Pool2dAttributes, ScalarAttributes, ShapeAttributes,
-    TransposeAttributes, op,
+    AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
+    Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -71,6 +71,62 @@ where
     .map(Into::into)?)
 }
 
+fn narrow_storage_exact<B, K>(
+    storage: &B::Storage<K>,
+    logical_dims: &[usize],
+    axis: usize,
+    start: usize,
+    length: usize,
+) -> Result<B::Storage<K>>
+where
+    B: Backend + Capabilities + Execute<Descriptor<op::Narrow>>,
+    K: DType,
+    <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+{
+    let mut output_dims = logical_dims.to_vec();
+    output_dims[axis] = length;
+    let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
+        .map_err(crate::prelude::Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = ExecutionContext::from_scope(B::default());
+    Ok(dispatch::execute_shaped::<op::Narrow, B, Dyn>(
+        &context,
+        NarrowAttributes {
+            axis,
+            start,
+            length,
+        },
+        &[input],
+        &target,
+    )
+    .map(Into::into)?)
+}
+
+fn squeeze_storage_exact<B, K>(
+    storage: &B::Storage<K>,
+    logical_dims: &[usize],
+    axis: usize,
+) -> Result<B::Storage<K>>
+where
+    B: Backend + Capabilities + Execute<Descriptor<op::SqueezeExact>>,
+    K: DType,
+    <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+{
+    let mut output_dims = logical_dims.to_vec();
+    output_dims.remove(axis);
+    let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
+        .map_err(crate::prelude::Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = ExecutionContext::from_scope(B::default());
+    Ok(dispatch::execute_shaped::<op::SqueezeExact, B, Dyn>(
+        &context,
+        AxisAttributes { axis },
+        &[input],
+        &target,
+    )
+    .map(Into::into)?)
+}
+
 /// Whether `E` is the exact Rust type the tensor's `dtype` stores.
 ///
 /// The extraction below reads the tensor's bytes through a `*const E`, so
@@ -120,7 +176,12 @@ impl<
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
     /// ```
-    pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    {
         self.dyn_slice(specs)
     }
 
@@ -139,12 +200,22 @@ impl<
     pub fn get<I: crate::tensor::ops::index::IndexArgs>(
         &self,
         index: I,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    {
         self.dyn_slice(&index.into_specs())
     }
 
     /// Internal alias for `slice`.
-    pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    {
         let current_dims = self.shape_buf();
         if specs.len() > current_dims.as_ref().len() {
             return Err(crate::err::Error::Msg(alloc::format!(
@@ -159,8 +230,10 @@ impl<
         // is a property of this tensor, not of an iteration.
         let inner = self.under_grad_mode(|| -> Result<B::Storage<K>> {
             let mut inner = self.inner.clone();
-            for (dim, spec) in specs.iter().enumerate() {
-                let dim_len = current_dims.as_ref()[dim];
+            let mut logical_dims = current_dims.as_ref().to_vec();
+            let mut dim = 0;
+            for spec in specs {
+                let dim_len = logical_dims[dim];
 
                 let resolve = |idx: isize| -> Result<usize> {
                     if idx < 0 {
@@ -203,16 +276,27 @@ impl<
                                 },
                             ));
                         }
-                        inner = B::narrow(&inner, dim, r_start, r_end - r_start)?;
+                        let length = r_end - r_start;
+                        inner = narrow_storage_exact::<B, K>(
+                            &inner,
+                            &logical_dims,
+                            dim,
+                            r_start,
+                            length,
+                        )?;
+                        logical_dims[dim] = length;
                     }
                     IndexSpec::RangeFrom(start) => {
                         let r_start = resolve(*start)?;
                         let len = dim_len - r_start;
-                        inner = B::narrow(&inner, dim, r_start, len)?;
+                        inner =
+                            narrow_storage_exact::<B, K>(&inner, &logical_dims, dim, r_start, len)?;
+                        logical_dims[dim] = len;
                     }
                     IndexSpec::RangeTo(end) => {
                         let r_end = resolve(*end)?;
-                        inner = B::narrow(&inner, dim, 0, r_end)?;
+                        inner = narrow_storage_exact::<B, K>(&inner, &logical_dims, dim, 0, r_end)?;
+                        logical_dims[dim] = r_end;
                     }
                     IndexSpec::Index(idx) => {
                         let r_idx = resolve(*idx)?;
@@ -224,10 +308,14 @@ impl<
                                 },
                             ));
                         }
-                        let narrowed = B::narrow(&inner, dim, r_idx, 1)?;
-                        inner = B::squeeze(&narrowed, dim)?;
+                        inner = narrow_storage_exact::<B, K>(&inner, &logical_dims, dim, r_idx, 1)?;
+                        logical_dims[dim] = 1;
+                        inner = squeeze_storage_exact::<B, K>(&inner, &logical_dims, dim)?;
+                        logical_dims.remove(dim);
+                        continue;
                     }
                 }
+                dim += 1;
             }
             Ok(inner)
         })?;
@@ -445,12 +533,11 @@ impl<
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow(
-        self,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<Tensor<Dyn, B, K, G, P>> {
+    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G, P>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+    {
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -474,7 +561,10 @@ impl<
                 },
             ));
         }
-        let inner = self.under_grad_mode(|| B::narrow(&self.inner, dim, start, len))?;
+        let input_shape = self.shape_buf();
+        let inner = self.under_grad_mode(|| {
+            narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len)
+        })?;
         shape[dim] = len;
         Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
@@ -1439,12 +1529,42 @@ impl<
     }
 
     /// Repeats tensor data along each dimension according to `repeats`.
-    pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>> {
-        let inner = self.under_grad_mode(|| B::repeat::<K>(&self.inner, repeats))?;
-        let out_shape = B::shape(&inner);
+    pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Repeat>>,
+        <B as Execute<Descriptor<op::Repeat>>>::Output: Into<B::Storage<K>>,
+    {
+        let out_shape = self
+            .shape_buf()
+            .iter()
+            .zip(repeats)
+            .map(|(&extent, &repeat)| extent.checked_mul(repeat))
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Repeat,
+                    expression: "repeat output extent",
+                })
+            })?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Repeat, B, Dyn>(
+                    &context,
+                    RepeatAttributes {
+                        repeats: repeats.to_vec(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1456,13 +1576,48 @@ impl<
         &self,
         padding: &[(usize, usize)],
         val: Sc,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Pad>>,
+        <B as Execute<Descriptor<op::Pad>>>::Output: Into<B::Storage<K>>,
+    {
         let val_f64 = val.into().to_f64();
-        let inner = self.under_grad_mode(|| B::pad::<K>(&self.inner, padding, val_f64))?;
-        let out_shape = B::shape(&inner);
+        let out_shape = self
+            .shape_buf()
+            .iter()
+            .zip(padding)
+            .map(|(&extent, &(before, after))| {
+                extent
+                    .checked_add(before)
+                    .and_then(|value| value.checked_add(after))
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Pad,
+                    expression: "padded output extent",
+                })
+            })?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Pad, B, Dyn>(
+                    &context,
+                    PadAttributes {
+                        padding: padding.to_vec(),
+                        value: val_f64,
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1511,7 +1666,11 @@ impl<
         &self,
         chunks: usize,
         dim: usize,
-    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+    {
         let dim_size = self.shape_buf().as_ref()[dim];
         if chunks == 0 {
             return Err(crate::err::Error::Msg(
@@ -1536,7 +1695,11 @@ impl<
         &self,
         split_size: usize,
         dim: usize,
-    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Narrow>>,
+        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+    {
         let dim_size = self.shape_buf().as_ref()[dim];
         if split_size == 0 {
             return Err(crate::err::Error::Msg(
