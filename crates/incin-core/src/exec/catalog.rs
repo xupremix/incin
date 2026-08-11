@@ -16,6 +16,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 
+use crate::exec::OperationIdentity;
 use crate::prelude::{DTypeDescriptor, DTypeId, DeviceId, OperationKind, ShapeBuf};
 
 /// Broad classification only. A family is never a capability identity.
@@ -932,9 +933,12 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId;
 }
 
-impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
+impl<O: Operation> TraceDescriptor for Descriptor<O> {
     fn trace_operation(&self) -> Option<crate::graph::OpType> {
-        Some(match O::ID {
+        let OperationIdentity::Builtin(operation) = O::IDENTITY else {
+            return None;
+        };
+        Some(match operation {
             OperationKind::Add => crate::graph::OpType::Add,
             OperationKind::Sub => crate::graph::OpType::Sub,
             OperationKind::Mul => crate::graph::OpType::Mul,
@@ -1003,7 +1007,12 @@ impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
     }
 
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId {
-        match O::ID {
+        let OperationIdentity::Builtin(operation) = O::IDENTITY else {
+            return inputs.first().map_or(DTypeId::F32, |input| {
+                input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
+            });
+        };
+        match operation {
             OperationKind::CmpEq
             | OperationKind::CmpNe
             | OperationKind::CmpLt
