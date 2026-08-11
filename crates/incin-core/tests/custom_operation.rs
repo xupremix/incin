@@ -3,11 +3,12 @@
 extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
-    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
-    StorageBackend, execute, execute_shaped,
+    Descriptor, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
+    OperationKey, StorageBackend, execute, execute_shaped,
 };
+use incin_core::exec::catalog::CreationAttributes;
 use incin_core::exec::{
-    Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel,
+    Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
 
@@ -58,11 +59,15 @@ impl StorageBackend for CompanyBackend {
 
 impl Capabilities for CompanyBackend {
     fn support(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
-        assert_eq!(
-            query.operation,
-            OperationIdentity::Custom(CompanyIdentity::KEY)
-        );
-        SupportLevel::Native
+        match &query.operation {
+            OperationIdentity::Custom(key) if *key == CompanyIdentity::KEY => {
+                SupportLevel::Native
+            }
+            OperationIdentity::Builtin(incin_core::prelude::OperationKind::Zeros) => {
+                SupportLevel::Native
+            }
+            other => panic!("unexpected capability query: {other:?}"),
+        }
     }
 }
 
@@ -76,6 +81,17 @@ impl Execute<incin_core::backend_authoring::Descriptor<CompanyIdentity>> for Com
             incin_core::backend_authoring::Descriptor<CompanyIdentity>,
             Self,
         >,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(request.operation.proof_level())
+    }
+}
+
+impl Execute<Descriptor<op::Zeros>> for CompanyBackend {
+    type Output = ProofLevel;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Zeros>, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.operation.proof_level())
     }
@@ -110,4 +126,23 @@ fn downstream_custom_operation_uses_unified_runtime_dispatch() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Dynamic);
+}
+
+#[test]
+fn downstream_backend_can_execute_a_builtin_operation() {
+    type S = incin::prelude::s![2, 3];
+    let expected = ShapeValue::<S>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
+    let context = ExecutionContext::new(CompanyBackend);
+    let output = execute_shaped::<op::Zeros, _, S>(
+        &context,
+        CreationAttributes {
+            shape: vec![2, 3],
+            dtype: DTypeId::F32.descriptor(),
+            device: incin_core::prelude::DeviceId::cpu(),
+        },
+        &[],
+        &expected,
+    )
+    .unwrap();
+    assert_eq!(output, ProofLevel::Static);
 }
