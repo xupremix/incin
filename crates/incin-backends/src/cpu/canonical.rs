@@ -96,7 +96,7 @@ fn admitted<D: Device>(
 ) -> Result<(), BackendError> {
     let metadata = storage.metadata();
     let query = CapabilityQuery {
-        operation,
+        operation: incin_core::exec::OperationIdentity::Builtin(operation),
         dtype: metadata.dtype(),
         layout: metadata.layout(),
         rank: metadata.shape().rank(),

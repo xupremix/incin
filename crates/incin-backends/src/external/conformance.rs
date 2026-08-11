@@ -222,7 +222,7 @@ impl Report {
 
 fn query(operation: OperationKind, rank: usize) -> CapabilityQuery {
     CapabilityQuery {
-        operation,
+        operation: incin_core::exec::OperationIdentity::Builtin(operation),
         dtype: DTypeId::F32.descriptor(),
         layout: LayoutClass::Contiguous,
         rank,

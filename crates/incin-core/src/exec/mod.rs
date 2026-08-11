@@ -64,8 +64,8 @@ pub mod spec;
 pub mod tape;
 
 pub use capability::{
-    Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, CustomCapabilityQuery,
-    ImplementationKind, RankSupport, SupportLevel, UnsupportedReason,
+    Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
+    OperationIdentity, RankSupport, SupportLevel, UnsupportedReason,
 };
 pub use catalog::{
     AttributeContract, CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta,

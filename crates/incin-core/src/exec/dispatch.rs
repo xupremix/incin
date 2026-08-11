@@ -24,7 +24,7 @@ use core::fmt;
 
 use crate::err::BackendError;
 use crate::exec::capability::{
-    Capabilities, CapabilityQuery, CustomCapabilityQuery, SupportLevel, UnsupportedReason,
+    Capabilities, CapabilityQuery, OperationIdentity, SupportLevel, UnsupportedReason,
 };
 use crate::exec::catalog::{
     CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, Operation, OperationKey,
@@ -109,7 +109,7 @@ fn admit<B: Capabilities>(
     math_mode: crate::exec::policy::MathMode,
 ) -> Result<SupportLevel, UnsupportedReason> {
     let query = CapabilityQuery {
-        operation,
+        operation: OperationIdentity::Builtin(operation),
         dtype: metadata.dtype,
         layout: metadata.layout,
         rank: metadata.shape.dims().len(),
@@ -129,15 +129,15 @@ fn admit_custom<B: Capabilities>(
     context_training: bool,
     math_mode: crate::exec::policy::MathMode,
 ) -> Result<SupportLevel, UnsupportedReason> {
-    let query = CustomCapabilityQuery {
-        operation,
+    let query = CapabilityQuery {
+        operation: OperationIdentity::Custom(operation),
         dtype: metadata.dtype,
         layout: metadata.layout,
         rank: metadata.shape.dims().len(),
         training: context_training,
         math_mode,
     };
-    match backend.support_custom(&query) {
+    match backend.support(&query) {
         SupportLevel::Unsupported(reason) => Err(reason),
         level => Ok(level),
     }
@@ -152,15 +152,15 @@ fn admit_custom_output<B: Capabilities>(
     context_training: bool,
     math_mode: crate::exec::policy::MathMode,
 ) -> Result<SupportLevel, UnsupportedReason> {
-    let query = CustomCapabilityQuery {
-        operation,
+    let query = CapabilityQuery {
+        operation: OperationIdentity::Custom(operation),
         dtype,
         layout,
         rank,
         training: context_training,
         math_mode,
     };
-    match backend.support_custom(&query) {
+    match backend.support(&query) {
         SupportLevel::Unsupported(reason) => Err(reason),
         level => Ok(level),
     }
@@ -212,7 +212,7 @@ where
                 continue;
             };
             let query = CapabilityQuery {
-                operation: O::ID,
+                operation: OperationIdentity::Builtin(O::ID),
                 dtype,
                 layout: crate::exec::meta::LayoutClass::Contiguous,
                 rank: shape.len(),
@@ -284,7 +284,7 @@ where
                 continue;
             };
             let query = CapabilityQuery {
-                operation: O::ID,
+                operation: OperationIdentity::Builtin(O::ID),
                 dtype,
                 layout: crate::exec::meta::LayoutClass::Contiguous,
                 rank: shape.len(),

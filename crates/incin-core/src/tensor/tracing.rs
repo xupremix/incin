@@ -59,13 +59,6 @@ impl<B: Backend> Capabilities for TracingBackend<B> {
     fn support(&self, query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
         B::default().support(query)
     }
-
-    fn support_custom(
-        &self,
-        query: &crate::exec::CustomCapabilityQuery,
-    ) -> crate::exec::SupportLevel {
-        B::default().support_custom(query)
-    }
 }
 
 #[derive(Clone)]

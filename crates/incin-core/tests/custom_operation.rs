@@ -7,7 +7,7 @@ use incin_core::backend_authoring::{
     StorageBackend, execute_custom_shaped,
 };
 use incin_core::exec::{
-    Capabilities, CustomCapabilityQuery, ExecutionContext, ProofLevel, SupportLevel,
+    Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel,
 };
 use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
 
@@ -56,12 +56,11 @@ impl StorageBackend for CompanyBackend {
 }
 
 impl Capabilities for CompanyBackend {
-    fn support(&self, _query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
-        SupportLevel::Native
-    }
-
-    fn support_custom(&self, query: &CustomCapabilityQuery) -> SupportLevel {
-        assert_eq!(query.operation, CompanyIdentity::KEY);
+    fn support(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+        assert_eq!(
+            query.operation,
+            OperationIdentity::Custom(CompanyIdentity::KEY)
+        );
         SupportLevel::Native
     }
 }

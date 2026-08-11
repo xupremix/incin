@@ -6,21 +6,17 @@ use crate::exec::catalog::OperationKey;
 use crate::exec::{LayoutClass, MathMode};
 use crate::prelude::{DTypeDescriptor, OperationKind};
 
-/// A complete runtime support question for one physical execution path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CapabilityQuery {
-    pub operation: OperationKind,
-    pub dtype: DTypeDescriptor,
-    pub layout: LayoutClass,
-    pub rank: usize,
-    pub training: bool,
-    pub math_mode: MathMode,
+/// The identity of one operation in the unified execution universe.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OperationIdentity {
+    Builtin(OperationKind),
+    Custom(OperationKey),
 }
 
-/// Capability query for an operation supplied outside the built-in catalog.
+/// A complete runtime support question for one physical execution path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CustomCapabilityQuery {
-    pub operation: OperationKey,
+pub struct CapabilityQuery {
+    pub operation: OperationIdentity,
     pub dtype: DTypeDescriptor,
     pub layout: LayoutClass,
     pub rank: usize,
@@ -249,28 +245,26 @@ impl CapabilityRegistry {
     fn operation_matches(rule: &CapabilityRule, query: &CapabilityQuery) -> bool {
         // Families classify work; they do not prove an exact implementation.
         // A backend must register the precise semantic identity it executes.
-        rule.operation == query.operation
+        matches!(query.operation, OperationIdentity::Builtin(operation) if rule.operation == operation)
     }
 }
 
 /// Runtime capability inspection implemented by registries and later contexts.
 pub trait Capabilities {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel;
-
-    /// Answers support for an open operation identity.
-    ///
-    /// The rejecting default preserves fail-closed behavior for backends that
-    /// have not opted into a downstream operation.
-    fn support_custom(&self, query: &CustomCapabilityQuery) -> SupportLevel {
-        SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
-            operation: query.operation.clone(),
-        })
-    }
 }
 
 impl Capabilities for CapabilityRegistry {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-        let mut operation = false;
+        let OperationIdentity::Builtin(operation) = &query.operation else {
+            let OperationIdentity::Custom(operation) = &query.operation else {
+                unreachable!("operation identity matched above")
+            };
+            return SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+                operation: operation.clone(),
+            });
+        };
+        let mut operation_found = false;
         let mut dtype = false;
         let mut layout = false;
         let mut rank = false;
@@ -280,7 +274,7 @@ impl Capabilities for CapabilityRegistry {
             if !Self::operation_matches(rule, query) {
                 continue;
             }
-            operation = true;
+            operation_found = true;
             if !rule.dtypes.contains(&query.dtype) {
                 continue;
             }
@@ -303,18 +297,18 @@ impl Capabilities for CapabilityRegistry {
             return rule.implementation.into();
         }
 
-        let reason = if !operation {
+        let reason = if !operation_found {
             UnsupportedReason::Operation {
-                operation: query.operation,
+                operation: *operation,
             }
         } else if !dtype {
             UnsupportedReason::DType {
-                operation: query.operation,
+                operation: *operation,
                 dtype: query.dtype,
             }
         } else if !layout {
             UnsupportedReason::Layout {
-                operation: query.operation,
+                operation: *operation,
                 layout: query.layout,
             }
         } else if !rank {
@@ -324,22 +318,22 @@ impl Capabilities for CapabilityRegistry {
                     && rule.layouts.contains(&query.layout)
             }) else {
                 return SupportLevel::Unsupported(UnsupportedReason::Operation {
-                    operation: query.operation,
+                    operation: *operation,
                 });
             };
             UnsupportedReason::Rank {
-                operation: query.operation,
+                operation: *operation,
                 rank: query.rank,
                 min: rule.min_rank,
                 max: rule.max_rank,
             }
         } else if !training {
             UnsupportedReason::Training {
-                operation: query.operation,
+                operation: *operation,
             }
         } else {
             UnsupportedReason::MathMode {
-                operation: query.operation,
+                operation: *operation,
                 math_mode: query.math_mode,
             }
         };
@@ -381,7 +375,7 @@ mod tests {
 
     fn query(operation: OperationKind) -> CapabilityQuery {
         CapabilityQuery {
-            operation,
+            operation: OperationIdentity::Builtin(operation),
             dtype: DTypeId::F32.descriptor(),
             layout: LayoutClass::Contiguous,
             rank: 2,

@@ -516,8 +516,8 @@ impl Report {
 
 fn run_probe(kind: DeviceKind, spec: &ProbeSpec) -> Probe {
     let query = CapabilityQuery {
-        operation: spec.operation,
-        dtype: spec.dtype,
+        operation: incin_core::exec::OperationIdentity::Builtin(spec.operation),
+        dtype: spec.dtype.descriptor(),
         layout: LayoutClass::Contiguous,
         rank: spec.rank,
         training: spec.training,
@@ -685,6 +685,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("test-utils", cfg!(feature = "test-utils")),
         Feature::new("backend-authoring", cfg!(feature = "backend-authoring")),
         Feature::new("compiled", cfg!(feature = "compiled")),
+        Feature::new("target-api", cfg!(feature = "target-api")),
     ]
 }
 
