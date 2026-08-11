@@ -8,7 +8,7 @@
 //!
 //! # The binding to the frontend
 //!
-//! Every rule here restates the `Output` its frontend trait already names —
+//! Every rule here restates the `Output` its frontend trait already names.
 //! decision `D-007`, and the reason this module has no shape rules of its own:
 //!
 //! | Rule | Frontend trait | Descriptor |
@@ -39,7 +39,7 @@
 //! only for canonical descriptors, and [`Validated::new`](Validated) is
 //! `pub(crate)`. An outside implementation of
 //! [`ShapeRule`] therefore has no way to mint a descriptor of its own or to
-//! wrap one it did not obtain from a rule here — the most it can do is call one
+//! wrap one it did not obtain from a rule here. The most it can do is call one
 //! of these rules and pass the result along. That is delegation, not forgery,
 //! and there is no reason to forbid it.
 
@@ -69,7 +69,7 @@ pub trait ShapeRule<Inputs>: Sized {
     /// drift apart without failing to compile.
     type Output: Shape;
 
-    /// The runtime half of `Inputs` — each operand's authoritative
+    /// The runtime half of `Inputs`. Each operand's authoritative
     /// [`ShapeBuf`].
     ///
     /// Stated as an associated type rather than written out as
@@ -104,8 +104,8 @@ fn dims_of(dims: &ShapeBuf) -> ShapeBuf {
 
 /// Cross-check the frontend's output shape against the descriptor's.
 ///
-/// The two are computed independently — the frontend from typed operand fields,
-/// the descriptor from erased dimensions — and `D-007` exists because a
+/// The two are computed independently. The frontend uses typed operand fields,
+/// while the descriptor uses erased dimensions. `D-007` exists because a
 /// disagreement between them would otherwise surface inside a kernel. A rank
 /// difference or any differing axis is reported here, at the operation the
 /// caller actually asked for.
@@ -218,7 +218,7 @@ where
     T: Shape + DynShape,
 {
     /// The target shape is the output. `ReshapeShape<Target>` is a marker with
-    /// no `Output` of its own, so restating it means naming `Target` — there is
+    /// no `Output` of its own, so restating it means naming `Target`. There is
     /// no second computation to drift from.
     type Output = T;
     type Operands = (ShapeBuf, ShapeBuf);

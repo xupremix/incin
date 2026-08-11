@@ -12,9 +12,9 @@ use crate::prelude::*;
 /// validated `broadcast_shape` first and propagates its `Err` via `?` before
 /// this value is ever used. It exists as defense-in-depth for any future or
 /// direct caller of `BroadcastShape::output_shape` that doesn't already
-/// validate independently, and — since a `symbolic_dim!` name (unlike
+/// validate independently, and since a `symbolic_dim!` name, unlike
 /// `typenum`) can legitimately hold a *different* runtime value on each operand
-/// even when both share the exact same type — as the actual guard against two
+/// even when both share the exact same type, as the actual guard against two
 /// same-typed named dims whose real sizes happen to disagree.
 ///
 /// `SHP-004` converts it from an `assert!` to a `Result` per decision `D-013`,
@@ -46,7 +46,7 @@ fn checked_broadcast_dim(
 /// runtime per-axis sizes from `lhs`/`rhs`'s own dims, prepending implicit
 /// size-1 axes on whichever operand has fewer dimensions. This one function
 /// backs every `BroadcastShape` impl below instead of each hand-rolling its
-/// own per-arity dimension arithmetic — which is what let a real bug slip in
+/// own per-arity dimension arithmetic. That is what let a real bug slip in
 /// previously (see the module-level history in `docs/growth/03-named-
 /// dimensions.md`): building the output shape from `Default::default()`
 /// happened to be invisible for `typenum` dims (zero-sized `PhantomData`,
@@ -63,7 +63,7 @@ fn broadcast_dims(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<Vec<us
 /// dimensions rather than from a typed `Field`.
 ///
 /// A backend holds `&[usize]`, not an `L::Field`, so without this it would have
-/// to re-derive NumPy's alignment rule — and a second copy of a broadcast rule
+/// to re-derive NumPy's alignment rule, and a second copy of a broadcast rule
 /// is a second answer waiting to disagree with the first. `broadcast_dims`
 /// delegates here so there is exactly one.
 pub fn broadcast_dim_slices(
@@ -82,7 +82,7 @@ pub fn broadcast_dim_slices(
             .len()
             .checked_sub(from_end)
             .map(|idx| rhs_dims[idx]);
-        // An axis the shorter operand does not reach is an implicit 1 — that is
+        // An axis the shorter operand does not reach is an implicit 1. That is
         // exactly NumPy's right-alignment rule, and 1 is the identity for
         // broadcasting. Writing it that way makes the fourth case ("neither
         // operand reaches this axis") disappear rather than be asserted away
@@ -133,7 +133,7 @@ impl BroadcastShape<()> for () {
 /// One axis of the left operand against the axis facing it on the right.
 ///
 /// Broadcasting is a per-axis rule, and lifting it to whole shapes one axis at
-/// a time is what lets `(N, C, H, W)` meet `(U1, C, U1, U1)` — the bias-add
+/// a time is what lets `(N, C, H, W)` meet `(U1, C, U1, U1)`, the bias-add
 /// shape, and the reason this trait exists. Before `SHP-007` the same-rank
 /// family required every axis to be the *identical* type, so that pair did not
 /// typecheck at all and callers reached for a rank-changing spelling or `Dyn`.
@@ -236,12 +236,12 @@ where
 // ============================================================================
 // Fully dynamic: `Dyn` on at least one side. The backend itself independently
 // validates and computes the real result shape before any `Tensor` carrying
-// this `Output` field is used (see `checked_broadcast_dim`'s doc comment) —
+// this `Output` field is used (see `checked_broadcast_dim`'s doc comment).
 // so unlike the families above, cloning whichever side is `Dyn` (or, when
 // neither is, doing the same right-aligned computation) is the existing,
 // intentionally-lightweight contract here, not a shortcut this change needs
 // to correct. Only the bound (`StaticOrNamedDim` instead of `StaticDim`)
-// needed relaxing to admit named dims — the bodies never used
+// needed relaxing to admit named dims. The bodies never used
 // `Default::default()` and don't change.
 // ============================================================================
 
