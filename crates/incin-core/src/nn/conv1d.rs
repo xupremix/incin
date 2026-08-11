@@ -300,7 +300,7 @@ where
         use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
         let (cout, cin, weight_shape_arg, bias_shape_arg) = S::build_args((out_c, in_c));
-        let kernel_size = S::K::from_arg(()).size();
+        let kernel_size = S::K::static_size().map_err(Error::Shape)?;
         let fan_in = cin * kernel_size;
         let fan_out = cout * kernel_size;
 
@@ -343,9 +343,9 @@ where
         Ok(Self {
             weight,
             bias,
-            stride: S::S::from_arg(()).size(),
-            padding: S::P::from_arg(()).size(),
-            dilation: S::D::from_arg(()).size(),
+            stride: S::S::static_size().map_err(Error::Shape)?,
+            padding: S::P::static_size().map_err(Error::Shape)?,
+            dilation: S::D::static_size().map_err(Error::Shape)?,
             groups: 1,
             _phantom: core::marker::PhantomData,
         })
@@ -418,9 +418,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv1dExact, B, Dyn>(
             &context,
             Conv1dAttributes {
-                stride: S::S::from_arg(()).size(),
-                padding: S::P::from_arg(()).size(),
-                dilation: S::D::from_arg(()).size(),
+                stride: S::S::static_size().map_err(Error::Shape)?,
+                padding: S::P::static_size().map_err(Error::Shape)?,
+                dilation: S::D::static_size().map_err(Error::Shape)?,
                 groups: self.groups,
                 has_bias: bias.is_some(),
             },
@@ -509,9 +509,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv1dExact, B, Dyn>(
             &context,
             Conv1dAttributes {
-                stride: S::S::from_arg(()).size(),
-                padding: S::P::from_arg(()).size(),
-                dilation: S::D::from_arg(()).size(),
+                stride: S::S::static_size().map_err(Error::Shape)?,
+                padding: S::P::static_size().map_err(Error::Shape)?,
+                dilation: S::D::static_size().map_err(Error::Shape)?,
                 groups: self.groups,
                 has_bias: false,
             },
@@ -606,9 +606,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv1dExact, B, Dyn>(
             &context,
             Conv1dAttributes {
-                stride: S::S::from_arg(()).size(),
-                padding: S::P::from_arg(()).size(),
-                dilation: S::D::from_arg(()).size(),
+                stride: S::S::static_size().map_err(Error::Shape)?,
+                padding: S::P::static_size().map_err(Error::Shape)?,
+                dilation: S::D::static_size().map_err(Error::Shape)?,
                 groups: self.groups,
                 has_bias: bias.is_some(),
             },

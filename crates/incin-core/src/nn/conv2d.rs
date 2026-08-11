@@ -300,7 +300,7 @@ where
         use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
         let (cout, cin, weight_shape_arg, bias_shape_arg) = S::build_args((out_c, in_c));
-        let kernel_size = S::K::from_arg(()).size();
+        let kernel_size = S::K::static_size().map_err(Error::Shape)?;
         let fan_in = cin * kernel_size * kernel_size;
         let fan_out = cout * kernel_size * kernel_size;
 
@@ -415,9 +415,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
             &context,
             Conv2dAttributes {
-                stride: [S::S::from_arg(()).size(); 2],
-                padding: [S::P::from_arg(()).size(); 2],
-                dilation: [S::D::from_arg(()).size(); 2],
+                stride: [S::S::static_size().map_err(Error::Shape)?; 2],
+                padding: [S::P::static_size().map_err(Error::Shape)?; 2],
+                dilation: [S::D::static_size().map_err(Error::Shape)?; 2],
                 groups: 1,
                 has_bias: true,
             },
@@ -508,9 +508,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
             &context,
             Conv2dAttributes {
-                stride: [S::S::from_arg(()).size(); 2],
-                padding: [S::P::from_arg(()).size(); 2],
-                dilation: [S::D::from_arg(()).size(); 2],
+                stride: [S::S::static_size().map_err(Error::Shape)?; 2],
+                padding: [S::P::static_size().map_err(Error::Shape)?; 2],
+                dilation: [S::D::static_size().map_err(Error::Shape)?; 2],
                 groups: 1,
                 has_bias: false,
             },
@@ -607,9 +607,9 @@ where
         let out = crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, Dyn>(
             &context,
             Conv2dAttributes {
-                stride: [S::S::from_arg(()).size(); 2],
-                padding: [S::P::from_arg(()).size(); 2],
-                dilation: [S::D::from_arg(()).size(); 2],
+                stride: [S::S::static_size().map_err(Error::Shape)?; 2],
+                padding: [S::P::static_size().map_err(Error::Shape)?; 2],
+                dilation: [S::D::static_size().map_err(Error::Shape)?; 2],
                 groups: 1,
                 has_bias: bias.is_some(),
             },
