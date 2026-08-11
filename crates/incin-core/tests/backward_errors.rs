@@ -35,9 +35,9 @@ type B = CpuBackendImpl;
 /// while the forward value is whatever it is. That is the case worth catching:
 /// a loss that still looks like a number, produced by an operation whose
 /// derivative did not.
-fn non_finite_chain() -> (Tensor<s![2, 2], B>, TensorId) {
-    let a = Tensor::<s![2, 2], B>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
-    let zero = Tensor::<s![2, 2], B>::zeros(()).unwrap();
+fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
+    let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
+    let zero = Tensor::<s![2, 2], B, f32, Grad>::zeros(()).unwrap();
     let numerator = TapeStorage::id(a.inner());
     (a.div(&zero).unwrap(), numerator)
 }
@@ -160,8 +160,8 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
     // Values, not counts: a checked pass that quietly returned different
     // numbers would satisfy a length comparison, and the whole promise is that
     // turning the check on changes when a pass fails and nothing else.
-    let a = Tensor::<s![2, 2], B>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
-    let b = Tensor::<s![2, 2], B>::from_slice(&[5.0, 6.0, 7.0, 8.0], ()).unwrap();
+    let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
+    let b = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[5.0, 6.0, 7.0, 8.0], ()).unwrap();
 
     let plain = gradient_of(&a, &a.mul(&b).unwrap().backward().unwrap());
     let checked = gradient_of(
@@ -175,7 +175,7 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
 
 /// `t`'s accumulated gradient, as `f32`s.
 fn gradient_of(
-    t: &Tensor<s![2, 2], B>,
+    t: &Tensor<s![2, 2], B, f32, Grad>,
     grads: &incin_core::optim::Gradients<<B as Backend>::Grads>,
 ) -> Vec<f32> {
     let g = B::get_grad::<f32>(t.inner(), grads.as_backend())
@@ -207,8 +207,8 @@ fn a_recipe_failure_propagates_rather_than_aborting() {
     // cannot produce a gradient returns one error among the others rather
     // than ending the process. Exercised through a real chain, since the
     // recipe type is not something a core test can construct.
-    let a = Tensor::<s![2, 3], B>::ones(()).unwrap();
-    let b = Tensor::<s![2, 3], B>::ones(()).unwrap();
+    let a = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
+    let b = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
     let loss = a.add(&b).unwrap().sum_all().unwrap();
 
     assert!(loss.backward().is_ok());

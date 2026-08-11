@@ -173,7 +173,7 @@ where
     <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K>;
+    type Output = Tensor<InS, B, K, Train::TensorGrad>;
     type Error = Error;
 
     #[inline]

@@ -116,7 +116,7 @@ fn checked_construction_rejects_storage_dtype_mismatch() {
 
 #[test]
 fn metadata_only_retagging_preserves_validated_storage() {
-    let tensor = Tensor::<s![2, 3], B>::ones(()).unwrap();
+    let tensor = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
     let dynamic = tensor.into_dyn();
     assert_eq!(dynamic.dims(), vec![2, 3]);
 
