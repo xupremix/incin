@@ -1,11 +1,11 @@
 //! Canonical-Only Backend Acceptance Contract Test.
 //! Proves that ordinary Tensor methods (add, eq, etc.) do NOT require
 //! legacy backend traits (NumericOps, FloatOps, TensorOps), but execute through
-//! exact `Execute<Descriptor<Op>>` bounds.
+//! exact operation-keyed `Execute<Op>` bounds.
 
 #![cfg(feature = "target-api")]
 
-use incin_core::backend_authoring::operations::{Descriptor, op};
+use incin_core::backend_authoring::operations::op;
 use incin_core::backend_authoring::{
     Backend, Execute, ExecutionRequest, StorageBackend, SupportsDType,
 };
@@ -107,12 +107,12 @@ impl<K: DType> SupportsDType<K> for CanonicalOnlyBackend {
     }
 }
 
-impl Execute<Descriptor<op::Add>> for CanonicalOnlyBackend {
+impl Execute<op::Add> for CanonicalOnlyBackend {
     type Output = CanonicalStorage<f32>;
 
     fn execute_shaped<S: Shape>(
         &self,
-        _request: ExecutionRequest<'_, Descriptor<op::Add>, Self>,
+        _request: ExecutionRequest<'_, op::Add, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let meta = TensorMeta::contiguous(
             ShapeBuf::from_slice(&[3]),
@@ -129,12 +129,12 @@ impl Execute<Descriptor<op::Add>> for CanonicalOnlyBackend {
     }
 }
 
-impl Execute<Descriptor<op::CmpEq>> for CanonicalOnlyBackend {
+impl Execute<op::CmpEq> for CanonicalOnlyBackend {
     type Output = CanonicalStorage<bool>;
 
     fn execute_shaped<S: Shape>(
         &self,
-        _request: ExecutionRequest<'_, Descriptor<op::CmpEq>, Self>,
+        _request: ExecutionRequest<'_, op::CmpEq, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let meta = TensorMeta::contiguous(
             ShapeBuf::from_slice(&[3]),

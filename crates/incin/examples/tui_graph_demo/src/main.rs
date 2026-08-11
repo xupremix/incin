@@ -6,7 +6,7 @@ use incin::backend_authoring::{
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::exec::catalog::{Descriptor, op};
+use incin_core::exec::catalog::op;
 use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
 use incin_core::tensor::backend::Execute;
 use incin_telemetry::events::GraphSnapshotEvent;
@@ -35,18 +35,18 @@ impl<
         + NumericOps<B>
         + TensorOps<B>
         + ReductionOps<B>
-        + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>,
+        + Execute<op::Add>
+        + Execute<op::Relu>,
 > SimpleMlp<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
-    B: Execute<Descriptor<op::TransposeExact>>,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
-    B: Execute<Descriptor<op::MatMulExact>>,
-    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    B: Execute<op::TransposeExact>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<f32>>,
+    B: Execute<op::MatMulExact>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
     /// New.
     pub fn new() -> Result<Self> {

@@ -20,7 +20,7 @@
 //! here wrote, joining the same contract through the same trait.
 
 use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
     TensorMeta, UnsupportedReason,
@@ -30,8 +30,8 @@ use incin_core::prelude::{
     StrideBuf,
 };
 
-type MatMulDescriptor = Descriptor<op::MatMulExact>;
-type ReshapeDescriptor = Descriptor<op::ReshapeExact>;
+type MatMulOperation = op::MatMulExact;
+type ReshapeOperation = op::ReshapeExact;
 
 // ============================================================================
 // The template — copy this module
@@ -175,12 +175,12 @@ pub mod template {
             .ok_or_else(|| invalid(operation, "operand is not this backend's storage"))
     }
 
-    impl Execute<MatMulDescriptor> for TemplateBackend {
+    impl Execute<MatMulOperation> for TemplateBackend {
         type Output = TemplateStorage;
 
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, MatMulDescriptor, Self>,
+            request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             let spec = request.operation.descriptor();
             // Input arity is the executor's to check. `Validated` proves the
@@ -238,12 +238,12 @@ pub mod template {
         }
     }
 
-    impl Execute<ReshapeDescriptor> for TemplateBackend {
+    impl Execute<ReshapeOperation> for TemplateBackend {
         type Output = TemplateStorage;
 
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, ReshapeDescriptor, Self>,
+            request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             let spec = request.operation.descriptor();
             let [handle] = request.inputs else {
@@ -365,11 +365,11 @@ mod broken {
         }
     }
 
-    impl Execute<MatMulDescriptor> for OverclaimingBackend {
+    impl Execute<MatMulOperation> for OverclaimingBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, MatMulDescriptor, Self>,
+            request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             TemplateBackend.execute(ExecutionRequest {
                 operation: request.operation,
@@ -379,11 +379,11 @@ mod broken {
         }
     }
 
-    impl Execute<ReshapeDescriptor> for OverclaimingBackend {
+    impl Execute<ReshapeOperation> for OverclaimingBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, ReshapeDescriptor, Self>,
+            request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             TemplateBackend.execute(ExecutionRequest {
                 operation: request.operation,
@@ -433,11 +433,11 @@ mod broken {
         }
     }
 
-    impl Execute<MatMulDescriptor> for IndexingBackend {
+    impl Execute<MatMulOperation> for IndexingBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, MatMulDescriptor, Self>,
+            request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             // The mistake: trusting the proof to have covered the handles.
             // Slicing to two panics when only one arrived, which is precisely
@@ -451,11 +451,11 @@ mod broken {
         }
     }
 
-    impl Execute<ReshapeDescriptor> for IndexingBackend {
+    impl Execute<ReshapeOperation> for IndexingBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, ReshapeDescriptor, Self>,
+            request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             TemplateBackend.execute(ExecutionRequest {
                 operation: request.operation,
@@ -504,11 +504,11 @@ mod broken {
         }
     }
 
-    impl Execute<MatMulDescriptor> for SwappedBackend {
+    impl Execute<MatMulOperation> for SwappedBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, MatMulDescriptor, Self>,
+            request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             let [lhs, rhs] = request.inputs else {
                 return Err(BackendError::InvalidInput {
@@ -555,11 +555,11 @@ mod broken {
         }
     }
 
-    impl Execute<ReshapeDescriptor> for SwappedBackend {
+    impl Execute<ReshapeOperation> for SwappedBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            request: ExecutionRequest<'_, ReshapeDescriptor, Self>,
+            request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             TemplateBackend.execute(ExecutionRequest {
                 operation: request.operation,
@@ -623,11 +623,11 @@ mod broken {
         }
     }
 
-    impl Execute<MatMulDescriptor> for EmptyBackend {
+    impl Execute<MatMulOperation> for EmptyBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            _request: ExecutionRequest<'_, MatMulDescriptor, Self>,
+            _request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             Err(BackendError::InvalidInput {
                 operation: OperationKind::MatMul,
@@ -636,11 +636,11 @@ mod broken {
         }
     }
 
-    impl Execute<ReshapeDescriptor> for EmptyBackend {
+    impl Execute<ReshapeOperation> for EmptyBackend {
         type Output = TemplateStorage;
         fn execute_shaped<ShapeTy: Shape>(
             &self,
-            _request: ExecutionRequest<'_, ReshapeDescriptor, Self>,
+            _request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
             Err(BackendError::InvalidInput {
                 operation: OperationKind::Reshape,

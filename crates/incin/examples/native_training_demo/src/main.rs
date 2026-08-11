@@ -13,7 +13,7 @@ use incin::backend_authoring::{
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::exec::catalog::{Descriptor, op};
+use incin_core::exec::catalog::op;
 use incin_core::tensor::backend::Execute;
 
 /// The CPU backend type alias.
@@ -71,25 +71,25 @@ impl<
         + TensorOps<B>
         + ModuleOps<B>
         + ReductionOps<B>
-        + Execute<Descriptor<op::TransposeExact>>
-        + Execute<Descriptor<op::ReshapeExact>>
-        + incin_core::tensor::backend::Execute<Descriptor<op::MatMulExact>>
-        + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>
-        + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::MaxPool2d>>
-        + Execute<Descriptor<op::BatchNorm>>
-        + Execute<Descriptor<op::CrossEntropyLoss>>,
+        + Execute<op::TransposeExact>
+        + Execute<op::ReshapeExact>
+        + incin_core::tensor::backend::Execute<op::MatMulExact>
+        + Execute<op::Add>
+        + Execute<op::Relu>
+        + Execute<op::Conv2dExact>
+        + Execute<op::MaxPool2d>
+        + Execute<op::BatchNorm>
+        + Execute<op::CrossEntropyLoss>,
 > SimpleCnn<B>
 where
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<f32>>,
 {
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
@@ -155,27 +155,27 @@ where
         + OptimizerOps<B>
         + SupportsDType<f32>
         + SupportsDType<u32>
-        + Execute<Descriptor<op::TensorFromData>>
-        + Execute<Descriptor<op::MatMulExact>>
-        + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>
-        + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::TransposeExact>>
-        + Execute<Descriptor<op::ReshapeExact>>
-        + Execute<Descriptor<op::MaxPool2d>>
-        + Execute<Descriptor<op::BatchNorm>>
-        + Execute<Descriptor<op::CrossEntropyLoss>>,
+        + Execute<op::TensorFromData>
+        + Execute<op::MatMulExact>
+        + Execute<op::Add>
+        + Execute<op::Relu>
+        + Execute<op::Conv2dExact>
+        + Execute<op::TransposeExact>
+        + Execute<op::ReshapeExact>
+        + Execute<op::MaxPool2d>
+        + Execute<op::BatchNorm>
+        + Execute<op::CrossEntropyLoss>,
     B::Device: ConstDevice,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::CrossEntropyLoss>>>::Output: Into<B::Storage<f32>>,
-    <B as Execute<Descriptor<op::TensorFromData>>>::Output:
+    <B as Execute<op::Add>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::TensorFromData>>::Output:
         Into<B::Storage<f32>> + Into<B::Storage<u32>>,
 {
     let in_channels = 1;
