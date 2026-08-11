@@ -376,11 +376,13 @@ impl<
             + Execute<Descriptor<op::Abs>>
             + Execute<Descriptor<op::Sqrt>>
             + Execute<Descriptor<op::SumAll>>
+            + Execute<Descriptor<op::Powf>>
             + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
         <B as Execute<Descriptor<op::Abs>>>::Output: Into<B::Storage<K>>,
         <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
         <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::Powf>>>::Output: Into<B::Storage<K>>,
     {
         if (p - 1.0).abs() < 1e-6 {
             self.abs()?.sum_all()
