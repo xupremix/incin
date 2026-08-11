@@ -41,24 +41,38 @@ fn checked_construction_rejects_storage_shape_mismatch() {
 }
 
 #[test]
-fn checked_construction_rejects_storage_dtype_mismatch() {
-    let storage = Tensor::<s![2], B>::zeros(()).unwrap().into_inner();
-    let err = Tensor::<Dyn, B, u32>::try_from_storage(
+fn checked_construction_rejects_static_shape_contract_mismatch() {
+    let storage = Tensor::<s![2, 3], B>::zeros(()).unwrap().into_inner();
+    let err = Tensor::<s![2, 2], B>::try_from_storage(
         storage,
-        vec![2],
+        ShapeBuf::from_slice(&[2, 3]),
         Default::default(),
         Default::default(),
         Default::default(),
     )
     .unwrap_err();
 
-    assert!(matches!(
-        err,
-        Error::DTypeStorageMismatch {
-            expected: DTypeId::U32,
-            got: DTypeId::F32,
-        }
-    ));
+    assert!(matches!(err, Error::Shape(_)));
+}
+
+#[test]
+fn checked_construction_rejects_storage_dtype_mismatch() {
+    let storage = Tensor::<s![2], B>::zeros(()).unwrap().into_inner();
+    let err = Tensor::<Dyn, B, u32>::try_from_storage(
+        storage,
+        ShapeBuf::from_slice(&[2]),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap_err();
+
+    if let Error::DTypeStorageMismatch { expected, got } = err {
+        assert_eq!(expected, DTypeId::U32.descriptor());
+        assert_eq!(got, DTypeId::F32.descriptor());
+    } else {
+        panic!("expected Error::DTypeStorageMismatch, got {:?}", err);
+    }
 }
 
 #[test]
