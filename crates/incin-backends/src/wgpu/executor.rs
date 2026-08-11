@@ -42,6 +42,7 @@ impl<D: Device> Capabilities for WgpuBackendImpl<D> {
 }
 
 impl_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
+impl_data_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
 
 /// Whether an operand's physical shape is the one the descriptor promised.
 ///

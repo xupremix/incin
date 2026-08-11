@@ -774,6 +774,8 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         K: PlainDType + BuiltinDType,
+        B: Execute<Descriptor<op::TensorFromData>> + Capabilities,
+        <B as Execute<Descriptor<op::TensorFromData>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
@@ -781,7 +783,20 @@ where
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let byte_len = core::mem::size_of_val(data);
         let bytes = unsafe { core::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
-        let inner = B::from_bytes::<K>(bytes, dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::TensorFromData, B, S>(
+            &context,
+            crate::exec::catalog::DataAttributes {
+                shape: dims.as_ref().to_vec(),
+                dtype,
+                device,
+                bytes: bytes.to_vec(),
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -789,12 +804,27 @@ where
     pub fn from_bytes<A>(bytes: &[u8], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::TensorFromBytes>> + Capabilities,
+        <B as Execute<Descriptor<op::TensorFromBytes>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::from_bytes(bytes, dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, S>(
+            &context,
+            crate::exec::catalog::DataAttributes {
+                shape: dims.as_ref().to_vec(),
+                dtype,
+                device,
+                bytes: bytes.to_vec(),
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 

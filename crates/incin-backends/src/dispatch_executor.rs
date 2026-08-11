@@ -19,6 +19,7 @@ use crate::descriptor_bind::invalid;
 use crate::dispatch::{DispatchBackend, DispatchStorage};
 
 impl_creation_executors!(DispatchBackend<D>, DispatchStorage);
+impl_data_creation_executors!(DispatchBackend<D>, DispatchStorage);
 
 /// Route a one-operand descriptor to the backend that holds its operand.
 ///

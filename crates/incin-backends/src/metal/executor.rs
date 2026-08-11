@@ -18,6 +18,7 @@ impl<D: Device> Capabilities for MetalBackendImpl<D> {
 }
 
 impl_creation_executors!(MetalBackendImpl<D>, MetalStorage);
+impl_data_creation_executors!(MetalBackendImpl<D>, MetalStorage);
 
 macro_rules! impl_metal_canonical {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(

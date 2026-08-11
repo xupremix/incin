@@ -49,6 +49,58 @@ pub(crate) fn kernel_error(
     }
 }
 
+macro_rules! impl_data_creation_executors {
+    ($backend:ty, $storage:ty) => {
+        macro_rules! data_executor {
+            ($operation:ident) => {
+                impl<D: Device>
+                    incin_core::backend_authoring::Execute<
+                        incin_core::backend_authoring::Descriptor<
+                            incin_core::backend_authoring::op::$operation,
+                        >,
+                    > for $backend
+                {
+                    type Output = $storage;
+
+                    fn execute_shaped<ShapeTy: Shape>(
+                        &self,
+                        request: incin_core::backend_authoring::ExecutionRequest<
+                            '_,
+                            incin_core::backend_authoring::Descriptor<
+                                incin_core::backend_authoring::op::$operation,
+                            >,
+                            Self,
+                        >,
+                    ) -> core::result::Result<$storage, BackendError> {
+                        if !request.inputs.is_empty() {
+                            return Err(crate::descriptor_bind::invalid(
+                                incin_core::prelude::OperationKind::$operation,
+                                "data creation takes no operand",
+                            ));
+                        }
+                        let attr = request.operation.descriptor().attributes();
+                        <Self as incin_core::backend_authoring::Backend>::from_bytes::<f32>(
+                            &attr.bytes,
+                            &attr.shape,
+                            attr.dtype,
+                            &attr.device,
+                        )
+                        .map_err(|err| {
+                            crate::descriptor_bind::kernel_error(
+                                Self::BACKEND_NAME,
+                                incin_core::prelude::OperationKind::$operation,
+                                err,
+                            )
+                        })
+                    }
+                }
+            };
+        }
+        data_executor!(TensorFromData);
+        data_executor!(TensorFromBytes);
+    };
+}
+
 #[allow(unused_macros)]
 macro_rules! impl_creation_executors {
     ($backend:ty, $storage:ty) => {

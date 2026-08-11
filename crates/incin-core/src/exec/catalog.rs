@@ -746,6 +746,7 @@ macro_rules! attributes {
 pub struct NoAttributes;
 
 attributes! {
+    DataAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, bytes: Vec<u8> }
     CreationAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
     FullAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, value: f64 }
     ArangeAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, start: f64, step: f64 }
@@ -1390,6 +1391,24 @@ macro_rules! unconstrained_attributes {
 unconstrained_attributes!(NoAttributes, ScalarAttributes, LerpAttributes,);
 
 impl AttributeContract for CreationAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        _: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        validate_shape(operation, &self.shape)
+    }
+    fn declared_shape(&self) -> Option<&[usize]> {
+        Some(&self.shape)
+    }
+    fn declared_dtype(&self) -> Option<DTypeDescriptor> {
+        Some(self.dtype)
+    }
+    fn declared_device(&self) -> Option<DeviceId> {
+        Some(self.device)
+    }
+}
+impl AttributeContract for DataAttributes {
     fn validate(
         &self,
         operation: OperationKind,

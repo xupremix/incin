@@ -10,8 +10,8 @@ macro_rules! incin_operation_catalog {
     ($callback:ident) => {
         $callback! {
             // identity, spelling, family, semantic profile, typed attributes, min/max arity, legacy source
-            (TensorFromData, "tensor_from_data", Storage, Creation, CreationAttributes, 0, 0, "TensorArgsData"),
-            (TensorFromBytes, "tensor_from_bytes", Storage, Creation, CreationAttributes, 0, 0, "Tensor::from_bytes"),
+            (TensorFromData, "tensor_from_data", Storage, Creation, DataAttributes, 0, 0, "TensorArgsData"),
+            (TensorFromBytes, "tensor_from_bytes", Storage, Creation, DataAttributes, 0, 0, "Tensor::from_bytes"),
             (TensorToBytes, "tensor_to_bytes", Storage, Transfer, NoAttributes, 1, 1, "Tensor::to_bytes"),
             (Zeros, "zeros", Fill, Creation, CreationAttributes, 0, 0, "CreationOps::zeros"),
             (Ones, "ones", Fill, Creation, CreationAttributes, 0, 0, "CreationOps::ones"),

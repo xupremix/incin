@@ -249,6 +249,34 @@ allocating_executors![
     (Linspace, linspace_with_total, start, end),
 ];
 
+macro_rules! data_executors {
+    ($($operation:ident),* $(,)?) => {$ (
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+            type Output = CpuStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                if !request.inputs.is_empty() {
+                    return Err(invalid(operation, "data creation takes no operand"));
+                }
+                let attributes = request.operation.descriptor().attributes();
+                <Self as Backend>::from_bytes::<f32>(
+                    &attributes.bytes,
+                    &attributes.shape,
+                    attributes.dtype,
+                    &attributes.device,
+                )
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            }
+        }
+    )*};
+}
+
+data_executors![TensorFromData, TensorFromBytes];
+
 /// The same four allocations, returning a trainable variable.
 ///
 /// A separate macro rather than a fourth column on the one above, because the
