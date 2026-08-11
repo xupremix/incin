@@ -55,10 +55,7 @@ fn named_tags_have_schema_local_identity_ids() {
     assert_eq!(<Channels as AxisIdentity>::Id::USIZE, 1);
     assert_eq!(<Height as AxisIdentity>::Id::USIZE, 2);
     assert_eq!(<Width as AxisIdentity>::Id::USIZE, 3);
-    assert_eq!(
-        core::any::TypeId::of::<<Batch as AxisIdentity>::Schema>(),
-        core::any::TypeId::of::<<Channels as AxisIdentity>::Schema>()
-    );
+    assert_same::<<Batch as AxisIdentity>::Schema, <Channels as AxisIdentity>::Schema>();
 }
 
 #[test]
