@@ -152,6 +152,7 @@ where
         + OptimizerOps<B>
         + SupportsDType<f32>
         + SupportsDType<u32>
+        + Execute<Descriptor<op::TensorFromData>>
         + Execute<Descriptor<op::MatMulExact>>
         + Execute<Descriptor<op::Add>>
         + Execute<Descriptor<op::Relu>>
@@ -167,6 +168,7 @@ where
     <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::TensorFromData>>>::Output: Into<B::Storage<f32>> + Into<B::Storage<u32>>,
 {
     let in_channels = 1;
     let conv_out_channels = 4;
