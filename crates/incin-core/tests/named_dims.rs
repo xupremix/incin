@@ -63,8 +63,8 @@ fn named_tags_have_schema_local_identity_ids() {
 fn named_lookup_resolves_current_position_without_storing_one() {
     type S = s![Batch, Channels, Height, Width];
     assert_eq!(Channels::selector().resolve::<S>().unwrap(), 1);
-    type T = s![Width, Channels, Height, Batch];
-    assert_eq!(Channels::selector().resolve::<T>().unwrap(), 1);
+    type T = s![Width, Height, Batch, Channels];
+    assert_eq!(Channels::selector().resolve::<T>().unwrap(), 3);
 }
 
 #[test]

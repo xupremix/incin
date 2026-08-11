@@ -223,6 +223,16 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         grad: G::Field,
         placement: P::Field,
     ) -> Result<Tensor<T, B, K, G, P>> {
+        let expected = shape.shape_buf().as_ref().to_vec();
+        let got = B::shape(&inner);
+        if expected != got.as_ref() {
+            return Err(crate::err::Error::ShapeMismatch {
+                op: "from_shape_value_placed",
+                expected,
+                got: got.as_ref().to_vec(),
+                msg: "Backend operation returned storage with an unexpected shape".into(),
+            });
+        }
         Ok(Tensor {
             inner,
             _shape: shape,
