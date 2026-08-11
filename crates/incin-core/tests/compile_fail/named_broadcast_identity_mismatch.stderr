@@ -1,0 +1,35 @@
+error[E0277]: Cannot broadcast axis `NamedDim<Batch, usize>` against `NamedDim<Channels, usize>`
+  --> tests/compile_fail/named_broadcast_identity_mismatch.rs:16:25
+   |
+16 |     require_broadcast::<s![Batch], s![Channels]>();
+   |                         ^^^^^^^^^ incompatible axis
+   |
+   = help: the trait `BroadcastDim<NamedDim<Channels, usize>>` is not implemented for `NamedDim<Batch, usize>`
+   = note: two axes broadcast when their types are the same, or one of them is `U1`
+help: `NamedDim<Tag, L>` implements trait `BroadcastDim<Rhs>`
+  --> src/shapes/broadcast.rs
+   |
+   | / impl<Tag, L, R> BroadcastDim<R> for crate::shapes::dim::NamedDim<Tag, L>
+   | | where
+   | |     Tag: crate::shapes::AxisTag,
+   | |     L: Dim,
+   | |     R: AnonymousDim,
+   | |____________________^ `BroadcastDim<R>`
+...
+   | / impl<Tag, L, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>>
+   | |     for crate::shapes::dim::NamedDim<Tag, L>
+   | | where
+   | |     Tag: crate::shapes::AxisTag,
+   | |     L: Dim,
+   | |     R: Dim,
+   | |___________^ `BroadcastDim<NamedDim<Tag, R>>`
+   = note: required for `DimCons<NamedDim<Batch, usize>, Nil>` to implement `broadcast::BroadcastReversed<DimCons<NamedDim<Channels, usize>, Nil>>`
+   = note: required for `DimCons<NamedDim<Batch, usize>, Nil>` to implement `BroadcastShape<DimCons<NamedDim<Channels, usize>, Nil>>`
+note: required by a bound in `require_broadcast`
+  --> tests/compile_fail/named_broadcast_identity_mismatch.rs:10:16
+   |
+ 8 | fn require_broadcast<L, R>()
+   |    ----------------- required by a bound in this function
+ 9 | where
+10 |     L: Shape + BroadcastShape<R>,
+   |                ^^^^^^^^^^^^^^^^^ required by this bound in `require_broadcast`

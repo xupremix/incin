@@ -99,32 +99,18 @@ fn transpose_preserves_the_complete_named_axis_type() {
 }
 
 #[test]
-fn named_broadcast_output_is_a_symbolic_checked_extent() {
+fn named_broadcast_output_preserves_the_semantic_axis() {
     type L = s![Channels];
     type R = s![Channels];
     type Out = <L as BroadcastShape<R>>::Output;
-    type Expected =
-        DimCons<BroadcastExtent<NamedDim<Channels, usize>, NamedDim<Channels, usize>>, Nil>;
+    type Expected = DimCons<
+        NamedDim<
+            Channels,
+            BroadcastExtent<NamedDim<Channels, usize>, NamedDim<Channels, usize>>,
+        >,
+        Nil,
+    >;
     assert_same::<Out, Expected>();
-}
-
-#[test]
-fn positional_broadcast_rejects_conflicting_semantic_names() {
-    type L = s![Batch];
-    type R = s![Channels];
-    let error = <L as BroadcastShape<R>>::output_shape(
-        &ShapeBuf::from_slice(&[4]),
-        &ShapeBuf::from_slice(&[4]),
-    )
-    .unwrap_err();
-    assert!(matches!(
-        error,
-        ShapeError::ConflictingNamedAxes {
-            axis: 0,
-            lhs: "Batch",
-            rhs: "Channels"
-        }
-    ));
 }
 
 #[test]

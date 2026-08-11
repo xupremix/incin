@@ -1,8 +1,6 @@
 //! Compile-time broadcasting shape verification.
 use crate::prelude::*;
-use crate::shapes::dim::NotOne;
 use crate::tensor::matmul::StaticOrNamedDim;
-use typenum::U1;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible
 /// sizes instead of silently fabricating a wrong result via a bare `.max()`.
@@ -56,12 +54,9 @@ fn checked_broadcast_dim(
 /// so "the default" and "the real value" coincide) but would have silently
 /// zeroed any runtime-carrying dimension (a `usize` axis, or a
 /// `symbolic_dim!` name).
-fn broadcast_dims<L: DynShape, R: DynShape>(
-    lhs: &L::Field,
-    rhs: &R::Field,
-) -> core::result::Result<Vec<usize>, ShapeError> {
-    let lhs_dims: Vec<usize> = L::dims(lhs).into();
-    let rhs_dims: Vec<usize> = R::dims(rhs).into();
+fn broadcast_dims(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<Vec<usize>, ShapeError> {
+    let lhs_dims: Vec<usize> = lhs.clone().into();
+    let rhs_dims: Vec<usize> = rhs.clone().into();
     broadcast_dim_slices(&lhs_dims, &rhs_dims)
 }
 
@@ -114,21 +109,21 @@ pub fn broadcast_dim_slices(
 pub trait BroadcastShape<Rhs: Shape>: Shape {
     /// The resulting shape after broadcasting `Self` against `Rhs`.
     type Output: Shape;
-    /// Computes the runtime `Field` (dimension values) of `Output`,
+    /// Computes the runtime `ShapeBuf` of `Output`,
     /// resolving any `usize` (runtime) dimensions via `checked_broadcast_dim`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<Rhs as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError>;
+    fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError>;
 }
 
 impl BroadcastShape<()> for () {
     /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = ();
     #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(_: &(), _: &()) -> core::result::Result<(), ShapeError> {
-        Ok(())
+    /// Computes the runtime `ShapeBuf` of `Output`.
+    fn output_shape(
+        _: &crate::shapes::ShapeBuf,
+        _: &crate::shapes::ShapeBuf,
+    ) -> core::result::Result<crate::shapes::ShapeBuf, ShapeError> {
+        Ok(crate::shapes::ShapeBuf::scalar())
     }
 }
 
@@ -144,33 +139,9 @@ impl BroadcastShape<()> for () {
 /// family required every axis to be the *identical* type, so that pair did not
 /// typecheck at all and callers reached for a rank-changing spelling or `Dyn`.
 ///
-/// # The cases, and why they do not overlap
-///
-/// Coherence is the whole design constraint here: every impl below must be
-/// provably unreachable from every other, and Rust has no negative bounds to
-/// say so with. Two markers stand in. [`NotOne`] excludes the literal type
-/// `U1`, and `StaticOrNamedDim` excludes `usize` — no downstream crate can
-/// implement either for those types, since both trait and type would be
-/// foreign to it, so the compiler can rule the overlaps out.
-///
-/// | Left | Right | Output | Why |
-/// |---|---|---|---|
-/// | `D` | `D` | `D` | identical types, including two `usize` |
-/// | `U1` | `D: NotOne` | `D` | the left stretches |
-/// | `D: NotOne` | `U1` | `D` | the right stretches |
-/// | `usize` | `D: NotOne` | `D` | see below |
-/// | `D: NotOne` | `usize` | `D` | see below |
-/// | `usize` | `U1` | `usize` | `U1` proves nothing about the result |
-/// | `U1` | `usize` | `usize` | likewise |
-///
-/// The two `usize`-against-`NotOne` rows produce the *static* side, which is
-/// stronger than either operand. A `usize` axis that broadcasts against `U3`
-/// is either 3 or 1, and the result is 3 in both cases, so an axis that
-/// arrived unproved leaves proved. `U1` is the one static partner this does
-/// not hold for, which is why it has rows of its own.
-///
-/// Two axes that disagree and are both [`NotOne`] have no row. That absence is
-/// how the rule is enforced.
+/// The output is a symbolic `BroadcastExtent<L, R>`. Its `Dim::STATIC`
+/// classification preserves equal/one facts that can be proved from the
+/// operand types, while runtime construction checks the actual values.
 #[diagnostic::on_unimplemented(
     message = "Cannot broadcast axis `{Self}` against `{Rhs}`",
     label = "incompatible axis",
@@ -181,57 +152,77 @@ pub trait BroadcastDim<Rhs: Dim>: Dim {
     type Output: Dim;
 }
 
-/// Two axes of the same type pass through unchanged. This is also the only
-/// case that relates two `dim!` names, so a `Batch` still cannot silently meet
-/// a `Seq`.
-impl<D: StaticOrNamedDim> BroadcastDim<D> for D {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = D;
+/// Marker for dimensions that carry no semantic axis name.
+///
+/// This is deliberately implemented for Incin's concrete dimension families
+/// instead of using a blanket `Dim` implementation. The disjointness lets a
+/// named axis normalize to `NamedDim<Tag, ...>` without overlapping impls.
+pub trait AnonymousDim: Dim {}
+
+impl AnonymousDim for usize {}
+impl<const N: usize> AnonymousDim for crate::shapes::dim::ConstDim<N> {}
+impl AnonymousDim for typenum::UTerm {}
+impl<U, B> AnonymousDim for typenum::UInt<U, B>
+where
+    typenum::UInt<U, B>: Dim,
+{
+}
+impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::AddDim<A, B> {}
+impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::CheckedSubDim<A, B> {}
+impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::ExactDivDim<A, B> {}
+impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::MulDim<A, B> {}
+impl<A: AnonymousDim, B: AnonymousDim> AnonymousDim
+    for crate::shapes::dim::BroadcastExtent<A, B>
+{
 }
 
-/// A left axis of extent 1 stretches to meet the right.
-impl<D: StaticOrNamedDim + NotOne> BroadcastDim<D> for U1 {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = D;
+/// Anonymous axes retain the symbolic extent expression.
+impl<L: AnonymousDim, R: AnonymousDim> BroadcastDim<R> for L {
+    type Output = crate::shapes::dim::BroadcastExtent<L, R>;
 }
 
-/// A right axis of extent 1 stretches to meet the left.
-impl<D: StaticOrNamedDim + NotOne> BroadcastDim<U1> for D {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = D;
+/// A named axis remains named when it meets an anonymous axis.
+impl<Tag, L, R> BroadcastDim<R> for crate::shapes::dim::NamedDim<Tag, L>
+where
+    Tag: crate::shapes::AxisTag,
+    L: Dim,
+    R: AnonymousDim,
+{
+    type Output = crate::shapes::dim::NamedDim<
+        Tag,
+        crate::shapes::dim::BroadcastExtent<crate::shapes::dim::NamedDim<Tag, L>, R>,
+    >;
 }
 
-/// Two runtime axes: nothing is settled, and the result is settled no further.
-impl BroadcastDim<usize> for usize {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = usize;
+/// An anonymous axis adopts the semantic name of the named operand.
+impl<Tag, L, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>> for L
+where
+    Tag: crate::shapes::AxisTag,
+    L: AnonymousDim,
+    R: Dim,
+{
+    type Output = crate::shapes::dim::NamedDim<
+        Tag,
+        crate::shapes::dim::BroadcastExtent<L, crate::shapes::dim::NamedDim<Tag, R>>,
+    >;
 }
 
-/// A runtime axis meeting a sized one takes the sized one's type. Legal only
-/// if the runtime value is that size or 1, and the result is that size either
-/// way, so the static answer is both correct and stronger.
-impl<D: StaticOrNamedDim + NotOne> BroadcastDim<D> for usize {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = D;
-}
-
-/// The same, with the operands the other way round.
-impl<D: StaticOrNamedDim + NotOne> BroadcastDim<usize> for D {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = D;
-}
-
-/// A runtime axis against `U1` stays runtime: the `U1` side stretches, so the
-/// result is whatever the runtime axis turns out to be.
-impl BroadcastDim<U1> for usize {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = usize;
-}
-
-/// The same, with the operands the other way round.
-impl BroadcastDim<usize> for U1 {
-    /// The resulting axis after broadcasting `Self` against the other operand.
-    type Output = usize;
+/// Equal semantic names remain named. Different tags intentionally have no
+/// implementation, so a statically conflicting pair is rejected.
+impl<Tag, L, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>>
+    for crate::shapes::dim::NamedDim<Tag, L>
+where
+    Tag: crate::shapes::AxisTag,
+    L: Dim,
+    R: Dim,
+{
+    type Output = crate::shapes::dim::NamedDim<
+        Tag,
+        crate::shapes::dim::BroadcastExtent<
+            crate::shapes::dim::NamedDim<Tag, L>,
+            crate::shapes::dim::NamedDim<Tag, R>,
+        >,
+    >;
 }
 
 // ============================================================================
@@ -250,98 +241,17 @@ impl BroadcastDim<usize> for U1 {
 // not talk about one axis at a time.
 // ============================================================================
 
-/// Same rank on both operands, each axis pair related by [`BroadcastDim`].
-macro_rules! impl_broadcast_same_rank {
-    ($($lhs:ident),+ ; $($rhs:ident),+) => {
-        impl<$($lhs: Dim,)+ $($rhs: Dim,)+> BroadcastShape<($($rhs,)+)> for ($($lhs,)+)
-        where
-            $($lhs: BroadcastDim<$rhs>,)+
-        {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($(<$lhs as BroadcastDim<$rhs>>::Output,)+);
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Self as Shape>::Field,
-                rhs: &<($($rhs,)+) as Shape>::Field,
-            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
-            }
-        }
-    };
-}
-// Both operands the same rank, resolved one axis at a time.
-incin_macros::rank_sweep!(operand_pairs => impl_broadcast_same_rank);
+// Exact known-rank broadcasting is handled by the structural DimCons engine
+// below; there is no tuple or generated-rank family.
 
-/// Rank-0 (`()`) on one side, a full static shape on the other, in both directions.
-macro_rules! impl_broadcast_empty_to_full {
-    ($($dim:ident),+) => {
-        impl<$($dim: Dim),+> BroadcastShape<($($dim,)+)> for () {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($dim,)+);
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Self as Shape>::Field,
-                rhs: &<($($dim,)+) as Shape>::Field,
-            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)?)
-            }
-        }
-        impl<$($dim: Dim),+> BroadcastShape<()> for ($($dim,)+) {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($dim,)+);
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Self as Shape>::Field,
-                rhs: &<() as Shape>::Field,
-            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ()>(lhs, rhs)?)
-            }
-        }
-    };
-}
-// Rank 0 against a full shape, in both directions.
-incin_macros::rank_sweep!(letters => impl_broadcast_empty_to_full);
+// Rank-0 (`()`) on one side, a full static shape on the other, in both directions.
+// Rank zero and scalar broadcasting are implemented by Nil/DimCons below.
 
-/// Different ranks: the shorter shape right-aligns against the longer one's
-/// trailing axes, and the leading axes it does not reach pass through. The
-/// overlapping axes are related by [`BroadcastDim`], not required to be
-/// identical, so `(N, C, H, W)` accepts `(C, U1, U1)`. Both directions.
-macro_rules! impl_broadcast_prepend {
-    ( ($($prefix:ident),+) ; ($($lhs:ident),+) ; ($($rhs:ident),+) ) => {
-        impl<$($prefix: Dim,)+ $($lhs: Dim,)+ $($rhs: Dim,)+> BroadcastShape<($($prefix,)+ $($rhs,)+)> for ($($lhs,)+)
-        where
-            ($($lhs,)+): DynShape,
-            $($lhs: BroadcastDim<$rhs>,)+
-        {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($prefix,)+ $(<$lhs as BroadcastDim<$rhs>>::Output,)+);
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Self as Shape>::Field,
-                rhs: &<($($prefix,)+ $($rhs,)+) as Shape>::Field,
-            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($prefix,)+ $($rhs,)+)>(lhs, rhs)?)
-            }
-        }
-        impl<$($prefix: Dim,)+ $($lhs: Dim,)+ $($rhs: Dim,)+> BroadcastShape<($($rhs,)+)> for ($($prefix,)+ $($lhs,)+)
-        where
-            ($($rhs,)+): DynShape,
-            $($lhs: BroadcastDim<$rhs>,)+
-        {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($prefix,)+ $(<$lhs as BroadcastDim<$rhs>>::Output,)+);
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Self as Shape>::Field,
-                rhs: &<($($rhs,)+) as Shape>::Field,
-            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
-            }
-        }
-    };
-}
-// Shorter against longer: one invocation per split of the output rank.
-incin_macros::rank_sweep!(operand_pairs_prepend => impl_broadcast_prepend);
+// Different ranks: the shorter shape right-aligns against the longer one's
+// trailing axes, and the leading axes it does not reach pass through. The
+// overlapping axes are related by `BroadcastDim`, not required to be
+// identical, so `(N, C, H, W)` accepts `(C, U1, U1)`. Both directions.
+// Different-rank alignment is handled by ReverseShape/BroadcastReversed below.
 
 // ============================================================================
 // Fully dynamic: `Dyn` on at least one side. The backend itself independently
@@ -355,122 +265,184 @@ incin_macros::rank_sweep!(operand_pairs_prepend => impl_broadcast_prepend);
 // `Default::default()` and don't change.
 // ============================================================================
 
-impl BroadcastShape<Dyn> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
+/// Runtime-rank broadcast against any shape.  The runtime dimensions are
+/// authoritative; the other shape contributes its actual `Field`, so this
+/// path validates the same right-aligned NumPy rule as the exact structural
+/// implementation without a generated tuple-rank family.
+impl<R: Shape + DynShape> BroadcastShape<R> for Dyn {
     type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-        broadcast_dims::<Dyn, Dyn>(lhs, rhs)
-    }
-}
-impl BroadcastShape<()> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-        Ok(lhs.clone()) // At runtime candle will compute output shape properly
-    }
-}
-impl BroadcastShape<Dyn> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-        Ok(rhs.clone()) // At runtime candle will compute output shape properly
+
+    fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError> {
+        broadcast_dims(lhs, rhs).map(|dims| crate::shapes::ShapeBuf::from_slice(&dims))
     }
 }
 
-/// `Dyn` against a full static shape, in both directions — `Dyn`'s own
-/// field is authoritative (see the module note above), so the static
-/// operand's dims are unused; only its arity (rank) matters for which
-/// impl applies.
-macro_rules! impl_broadcast_dyn_static {
-    ($($dim:ident),+) => {
-        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<($($dim,)+)> for Dyn {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = Dyn;
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Dyn as Shape>::Field,
-                _: &<($($dim,)+) as Shape>::Field,
-            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-                Ok(lhs.clone()) // At runtime candle will compute output shape properly
-            }
-        }
-        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for ($($dim,)+) {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = Dyn;
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                _: &<Self as Shape>::Field,
-                rhs: &<Dyn as Shape>::Field,
-            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-                Ok(rhs.clone()) // At runtime candle will compute output shape properly
-            }
-        }
-    };
-}
-// `Dyn` against a full static shape, in both directions.
-incin_macros::rank_sweep!(letters => impl_broadcast_dyn_static);
+impl BroadcastShape<Dyn> for Nil {
+    type Output = Dyn;
 
-impl BroadcastShape<(usize,)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(usize,) as Shape>::Field,
-    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-        Ok(lhs.clone()) // At runtime candle will compute output shape properly
-    }
-}
-impl BroadcastShape<Dyn> for (usize,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-        Ok(rhs.clone()) // At runtime candle will compute output shape properly
+    fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError> {
+        broadcast_dims(lhs, rhs).map(|dims| crate::shapes::ShapeBuf::from_slice(&dims))
     }
 }
 
-/// `Dyn` against a `(usize, ...)` shape, in both directions.
-macro_rules! impl_broadcast_dyn_usize {
-    ($($dim:ident),+) => {
-        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<(usize, $($dim,)+)> for Dyn {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = Dyn;
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                lhs: &<Dyn as Shape>::Field,
-                _: &<(usize, $($dim,)+) as Shape>::Field,
-            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-                Ok(lhs.clone()) // At runtime candle will compute output shape properly
-            }
-        }
-        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for (usize, $($dim,)+) {
-            /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = Dyn;
-            /// Computes the runtime `Field` (dimension values) of `Output`.
-            fn output_shape(
-                _: &<Self as Shape>::Field,
-                rhs: &<Dyn as Shape>::Field,
-            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
-                Ok(rhs.clone()) // At runtime candle will compute output shape properly
-            }
-        }
-    };
+impl<H: Dim, T: Shape + DynShape + PartialDynShape> BroadcastShape<Dyn> for DimCons<H, T> {
+    type Output = Dyn;
+
+    fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError> {
+        broadcast_dims(lhs, rhs).map(|dims| crate::shapes::ShapeBuf::from_slice(&dims))
+    }
 }
-// Shape is `(usize, Tail..)`, so rank = tail length + 1.
-incin_macros::rank_sweep!(letters_from_b => impl_broadcast_dyn_usize, max = 7);
+
+// ============================================================================
+// DimCons Structural Broadcast
+// ============================================================================
+
+/// Reverses an exact structural shape.  Broadcasting is naturally recursive
+/// from the trailing axis, so reversing lets the type-level algorithm follow
+/// the same right-aligned order as the runtime validator.
+pub trait ReverseShape: Shape {
+    type Output: Shape;
+}
+
+impl ReverseShape for Nil {
+    type Output = Nil;
+}
+
+impl<H: Dim, T: Shape + ReverseShape> ReverseShape for DimCons<H, T>
+where
+    <T as ReverseShape>::Output: crate::shapes::AppendDim<H>,
+{
+    type Output = <<T as ReverseShape>::Output as crate::shapes::AppendDim<H>>::Output;
+}
+
+trait BroadcastReversed<Rhs: Shape>: Shape {
+    type Output: Shape;
+}
+
+trait StaticShapeNames {
+    fn names() -> Vec<Option<&'static str>>;
+}
+
+impl StaticShapeNames for Nil {
+    fn names() -> Vec<Option<&'static str>> {
+        Vec::new()
+    }
+}
+
+impl<H: Dim, T: Shape + StaticShapeNames> StaticShapeNames for DimCons<H, T> {
+    fn names() -> Vec<Option<&'static str>> {
+        let mut names = Vec::with_capacity(1 + T::RANK.unwrap_or(0));
+        names.push(H::NAME);
+        names.extend(T::names());
+        names
+    }
+}
+
+fn validate_static_names<L: StaticShapeNames, R: StaticShapeNames>()
+-> core::result::Result<(), ShapeError> {
+    let lhs = L::names();
+    let rhs = R::names();
+    let rank = lhs.len().max(rhs.len());
+    for output_axis in 0..rank {
+        let lhs_name = output_axis
+            .checked_add(lhs.len())
+            .and_then(|index| index.checked_sub(rank))
+            .and_then(|index| lhs.get(index))
+            .copied()
+            .flatten();
+        let rhs_name = output_axis
+            .checked_add(rhs.len())
+            .and_then(|index| index.checked_sub(rank))
+            .and_then(|index| rhs.get(index))
+            .copied()
+            .flatten();
+        if let (Some(lhs), Some(rhs)) = (lhs_name, rhs_name)
+            && lhs != rhs
+        {
+            return Err(ShapeError::ConflictingNamedAxes {
+                axis: output_axis,
+                lhs,
+                rhs,
+            });
+        }
+    }
+    Ok(())
+}
+
+impl BroadcastReversed<Nil> for Nil {
+    type Output = Nil;
+}
+
+impl<H: Dim, T: Shape> BroadcastReversed<Nil> for DimCons<H, T> {
+    type Output = DimCons<H, T>;
+}
+
+impl<H: Dim, T: Shape> BroadcastReversed<DimCons<H, T>> for Nil {
+    type Output = DimCons<H, T>;
+}
+
+impl<LH: Dim, LT: Shape, RH: Dim, RT: Shape> BroadcastReversed<DimCons<RH, RT>> for DimCons<LH, LT>
+where
+    LH: BroadcastDim<RH>,
+    LT: BroadcastReversed<RT>,
+{
+    type Output = DimCons<<LH as BroadcastDim<RH>>::Output, <LT as BroadcastReversed<RT>>::Output>;
+}
+
+impl BroadcastShape<Nil> for Nil {
+    type Output = Nil;
+
+    fn output_shape(
+        _: &crate::shapes::ShapeBuf,
+        _: &crate::shapes::ShapeBuf,
+    ) -> core::result::Result<crate::shapes::ShapeBuf, ShapeError> {
+        Ok(crate::shapes::ShapeBuf::scalar())
+    }
+}
+
+impl<H: Dim, T: Shape> BroadcastShape<Nil> for DimCons<H, T> {
+    type Output = DimCons<H, T>;
+
+    fn output_shape(
+        lhs: &ShapeBuf,
+        _: &crate::shapes::ShapeBuf,
+    ) -> core::result::Result<ShapeBuf, ShapeError> {
+        Ok(lhs.clone())
+    }
+}
+
+impl<H: Dim, T: Shape> BroadcastShape<DimCons<H, T>> for Nil {
+    type Output = DimCons<H, T>;
+
+    fn output_shape(
+        _: &crate::shapes::ShapeBuf,
+        rhs: &ShapeBuf,
+    ) -> core::result::Result<ShapeBuf, ShapeError> {
+        Ok(rhs.clone())
+    }
+}
+
+impl<LH: Dim, LT, RH: Dim, RT, LRev, RRev, RevOut> BroadcastShape<DimCons<RH, RT>>
+    for DimCons<LH, LT>
+where
+    LT: Shape + crate::shapes::PartialDynShape + crate::shapes::DynShape + StaticShapeNames,
+    RT: Shape + crate::shapes::PartialDynShape + crate::shapes::DynShape + StaticShapeNames,
+    DimCons<LH, LT>: ReverseShape<Output = LRev>,
+    DimCons<RH, RT>: ReverseShape<Output = RRev>,
+    LRev: Shape + BroadcastReversed<RRev>,
+    RRev: Shape,
+    <LRev as BroadcastReversed<RRev>>::Output: ReverseShape<Output = RevOut>,
+    RevOut: Shape,
+{
+    type Output = RevOut;
+
+    fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError> {
+        validate_static_names::<Self, DimCons<RH, RT>>()?;
+        // Force invalid fully-static axis expressions to fail at the public
+        // operation boundary instead of silently degrading to a runtime
+        // broadcast check.
+        <Self::Output as Shape>::STATIC_VALID;
+        let dims = broadcast_dims(lhs, rhs)?;
+        crate::shapes::shape::shape_buf_from_dims::<Self::Output>(OperationKind::Broadcast, &dims)
+    }
+}
