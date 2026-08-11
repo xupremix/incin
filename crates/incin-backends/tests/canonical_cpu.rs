@@ -2061,7 +2061,7 @@ fn a_left_broadcasting_canonical_invocation_matches_the_legacy_result() {
 // These use the `Tensor` surface deliberately, not raw storage: the property under test is
 // that a real user-facing call actually reaches the canonical path with the
 // right autograd behaviour, which raw `dispatch::execute` calls elsewhere in
-// this file cannot exercise (they bypass `Tensor::under_grad_mode` entirely).
+// this file cannot exercise (they bypass the tensor-level gradient wrapper).
 /// `embedding`'s two operands admit different dtypes by construction: the
 /// index operand is integer, and the weight operand is f32 only —
 /// `embedding_impl` always reads and writes f32 regardless of what the
