@@ -483,6 +483,7 @@ where
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         let shape_value = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
         let storage = B::var_as_tensor::<K>(&inner)?;
+        let meta = B::metadata(&storage);
         let actual = B::shape(&storage);
         if actual.as_ref() != _shape.as_ref() {
             return Err(Error::ShapeMismatch {
@@ -490,6 +491,20 @@ where
                 expected: _shape.as_ref().to_vec(),
                 got: actual.as_ref().to_vec(),
                 msg: "Parameter storage shape mismatch".into(),
+            });
+        }
+        let incin_device = <B::Device as Device>::to_incin(&_device)?;
+        let expected_dtype = B::resolve_dtype(&_dtype, &incin_device)?;
+        if meta.dtype != expected_dtype {
+            return Err(Error::DTypeStorageMismatch {
+                expected: expected_dtype,
+                got: meta.dtype,
+            });
+        }
+        if meta.device != incin_device {
+            return Err(Error::DeviceStorageMismatch {
+                expected: incin_device,
+                got: meta.device,
             });
         }
         Ok(Self {
