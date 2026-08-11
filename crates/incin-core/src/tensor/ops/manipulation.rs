@@ -10,7 +10,7 @@ use crate::dist::Placement;
 use crate::exec::catalog::{
     op, AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
     PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
-    TransposeAttributes, UnfoldAttributes,
+    SliceAttributes, TransposeAttributes, UnfoldAttributes,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -502,7 +502,11 @@ impl<
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, G, P>> {
+    ) -> Result<Tensor<T::Output, B, K, G, P>>
+    where
+        B: Capabilities + Execute<Descriptor<op::SliceExact>>,
+        <B as Execute<Descriptor<op::SliceExact>>>::Output: Into<B::Storage<K>>,
+    {
         let in_shape_vec = self.shape_buf();
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
         if ranges.len() > in_shape_vec.as_ref().len() {
@@ -529,16 +533,34 @@ impl<
                 ));
             }
         }
-        let inner = self.under_grad_mode(|| B::slice(&self.inner, &ranges))?;
-
         let mut out_shape_vec = Vec::new();
         for &(start, end) in &ranges {
             out_shape_vec.push(end - start);
         }
 
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
+        let output_shape = ShapeValue::<T::Output>::try_new(shape_buf_from_dims::<T::Output>(
+            OperationKind::Slice,
+            &out_shape_vec,
+        )?)
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::SliceExact, B, T::Output>(
+                    &context,
+                    SliceAttributes {
+                        ranges: ranges.clone(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+
+        Tensor::<T::Output, B, K, G, P>::from_shape_value_placed(
             inner,
-            shape_buf_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
