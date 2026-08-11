@@ -338,10 +338,7 @@ impl<
         <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
-        let spec = crate::exec::ReshapeSpec::new(
-            &self.shape_buf_value(),
-            &new_shape_field,
-        )?;
+        let spec = crate::exec::ReshapeSpec::new(&self.shape_buf_value(), &new_shape_field)?;
         let new_shape_field = spec.output;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;

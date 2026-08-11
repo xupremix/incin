@@ -88,10 +88,9 @@ impl<
             false,
             crate::exec::spec::ReduceOp::Sum,
         )?;
-        let output_shape = crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(
-            spec.output.clone(),
-        )
-        .map_err(crate::prelude::Error::Shape)?;
+        let output_shape =
+            crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(spec.output.clone())
+                .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
         let inner = self

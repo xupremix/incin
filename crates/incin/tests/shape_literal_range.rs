@@ -8,4 +8,3 @@ fn shape_literal_range_uses_raw_static_extent_types() {
         &[0, 1, 64, 4096, 65_536, 1_000_000]
     );
 }
-
