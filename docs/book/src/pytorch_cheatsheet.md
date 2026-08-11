@@ -9,7 +9,7 @@
 | `a @ b` | `a.matmul(&b)?` | |
 | `x.requires_grad_()` | `x.require_grad()` | Changes the type (`G` becomes `Grad`), not just a runtime flag. |
 | `x.detach()` | `x.detach()` | Also a type change, to `NoGrad`. |
-| `with torch.no_grad(): ...` | `incin_core::exec::no_grad(\|\| { ... })` | Not yet re-exported through `incin::prelude` — see [Autograd](./autograd.md). |
+| `with torch.no_grad(): ...` | `incin_core::exec::GradMode::Disabled.scope(\|\| { ... })` | Scoped gradient policy. |
 | `loss.backward()` | `loss.backward()?` | Returns `Gradients` rather than mutating `.grad` on each leaf. |
 | `param.grad` | `Backend::get_grad::<K>(param.inner(), grads.as_backend())?` | Explicit lookup by tensor, not an attribute. |
 | `nn.Linear(768, 256)` | `Linear::<s![768, 256], B>::build(())?` | In/out features are the shape type, not constructor arguments. |

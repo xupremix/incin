@@ -26,10 +26,8 @@ let grad_a = B::get_grad::<f32>(a.inner(), grads.as_backend())?
 
 ## Turning tracking off
 
-> `no_grad` is not currently re-exported through the `incin` facade — only
-> through `incin_core` directly (`incin_core::exec::no_grad`). Add
-> `incin_core` as an explicit dependency to reach it until that's fixed; this
-> is tracked as a known gap.
+> Gradient recording scopes are explicit policy scopes. The facade does not
+> expose a convenience alias for them.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -40,11 +38,11 @@ let b = Tensor::<s![2, 2], B>::ones(())?;
 
 // Nothing inside this closure records a tape entry, regardless of what
 // operations run or what G their operands carry.
-let c = incin_core::exec::no_grad(|| a.mul(&b))?;
+let c = incin_core::exec::GradMode::Disabled.scope(|| a.mul(&b))?;
 # Ok::<(), incin::Error>(())
 ```
 
-`no_grad` is a scoped, thread-local override — it can only *tighten*
+`GradMode::Disabled.scope` is a scoped, thread-local override. It can only *tighten*
 recording, never loosen it. An operation on an already-`NoGrad` tensor reads
 no thread-local at all; the common `Grad`-tensor path is the one that
 consults the scope.

@@ -76,10 +76,10 @@ Disabling gradient tracking or checking non-finite values required ad-hoc backen
 #### New Pattern
 Ambient execution policies govern gradient recording (`GradMode`) and non-finite value detection (`NanPolicy`):
 ```rust
-use incin_core::exec::{no_grad, check_gradients};
+use incin_core::exec::{check_gradients, GradMode};
 
 // Temporarily disable gradient recording (records 0 tape nodes)
-no_grad(|| {
+GradMode::Disabled.scope(|| {
     // Forward pass with zero autograd overhead
 });
 

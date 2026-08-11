@@ -391,8 +391,8 @@ was never tested.
 `Grad`/`NoGrad` are the two static markers for `Tensor`'s gradient parameter;
 `Dyn` is a third, runtime-toggled option for when the choice is not known
 until a value exists. A `Var`/`RawVar` (backend-associated) is the tape-linked
-form a `Param` in a module holds. `no_grad(|| { ... })` scopes gradient
-recording off for a closure; `ExecutionContext::with_grad_mode` is the
+form a `Param` in a module holds. `GradMode::Disabled.scope(|| { ... })`
+scopes gradient recording off for a closure; `ExecutionContext::with_grad_mode` is the
 descriptor-path equivalent §6's `dispatch::execute` reads to build a
 `CapabilityQuery`'s `training` flag — the same policy, read from the same
 place, whichever path a given operation takes, so the two paths cannot

@@ -26,14 +26,14 @@ of repeating a number that won't.
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 
-- **`no_grad`** is only reachable via `incin_core::exec::no_grad`, not
-  through `incin::prelude`.
+- **Scoped gradient policy** is intentionally explicit through
+  `incin_core::exec::GradMode::Disabled.scope` and has no facade alias.
 - **`save_safetensors`/`load_safetensors`** are only reachable via
   `incin_core::nn::save`, not through `incin::prelude` or anywhere in the
   `incin` crate.
 
-Both are one-line re-export fixes; they're listed here because until fixed,
-code following this book verbatim needs the `incin_core`-qualified path.
+The save helpers remain listed because code following this book needs the
+`incin_core`-qualified path for those functions.
 
 ## Architecture in progress (affects contributors more than users)
 
