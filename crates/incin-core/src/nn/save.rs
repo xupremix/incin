@@ -1,3 +1,7 @@
+use crate::backend_authoring::{Execute, op};
+use crate::exec::catalog::DataAttributes;
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
 use crate::nn::StateDict;
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
@@ -213,9 +217,10 @@ pub fn load_safetensors_map<B, P>(
     device: &DeviceId,
 ) -> Result<BTreeMap<String, B::Storage<f32>>>
 where
-    B: Backend,
+    B: Backend + Execute<op::TensorFromBytes>,
     P: AsRef<Path>,
     B: SupportsDType<f32>,
+    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
 {
     let path_ref = path.as_ref();
     let metadata = std::fs::metadata(path_ref)?;
@@ -254,7 +259,22 @@ where
             }
         };
 
-        let inner = B::from_bytes::<f32>(bytes, &shape, dtype.descriptor(), device)?;
+        let expected =
+            ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape)).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
+        let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
+            &context,
+            DataAttributes {
+                shape: shape.clone(),
+                dtype: dtype.descriptor(),
+                device: device.clone(),
+                bytes: bytes.to_vec(),
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         mapped_tensors.insert(name.to_string(), inner);
     }
 
@@ -264,12 +284,13 @@ where
 /// Loads weights into a module from a safetensors file.
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where
-    B: Backend,
+    B: Backend + Execute<op::TensorFromBytes>,
     M: StateDict<B>,
     P: AsRef<Path>,
     B: SupportsDType<f32>,
     <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     <f32 as DType>::Field: Default,
+    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
 {
     let map = load_safetensors_map::<B, _>(path, &DeviceId::cpu())?;
     let mut mapped_tensors = BTreeMap::new();
@@ -396,12 +417,13 @@ pub fn load_resharded_checkpoint<B, M, P>(
     target_world_size: usize,
 ) -> Result<()>
 where
-    B: Backend,
+    B: Backend + Execute<op::TensorFromBytes>,
     M: StateDict<B>,
     P: AsRef<Path>,
     B: SupportsDType<f32>,
     <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     <f32 as DType>::Field: Default,
+    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
 {
     let dir = dir_path.as_ref();
     let manifest_path = dir.join("manifest.json");
@@ -488,12 +510,22 @@ where
             )));
         }
 
-        let storage = B::from_bytes::<f32>(
-            &final_bytes,
-            &final_shape,
-            dtype_id.descriptor(),
-            &DeviceId::cpu(),
-        )?;
+        let expected =
+            ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&final_shape)).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
+        let storage = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
+            &context,
+            DataAttributes {
+                shape: final_shape.clone(),
+                dtype: dtype_id.descriptor(),
+                device: DeviceId::cpu(),
+                bytes: final_bytes,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         let tensor = Tensor::<Dyn, B>::from_parts(
             storage,
             ShapeBuf::from_slice(&final_shape),
