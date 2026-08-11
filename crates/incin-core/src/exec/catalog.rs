@@ -5039,7 +5039,7 @@ mod tests {
             crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
         >;
         let sv = crate::shapes::ShapeValue::<Static23>::new(
-            <Static23 as crate::shapes::Shape>::init(((), ((), ()))),
+            <Static23 as crate::shapes::Shape>::resolve(((), ((), ()))).unwrap(),
         );
         let proven = ValidatedInvocation::<op::Zeros>::infer_typed(created.clone(), vec![], &sv)
             .expect("a static creation request is legal");

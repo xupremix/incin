@@ -68,8 +68,8 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// The user-facing constructor argument type (e.g. a tuple of
     /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
-    /// Converts a user-facing `Arg` into canonical runtime dimensions.
-    fn init(arg: Self::Arg) -> ShapeBuf;
+    /// Resolves a user-facing argument into canonical runtime dimensions.
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError>;
     /// Fallible raw-dimension boundary for callers that need a typed shape
     /// error.
     #[inline]
@@ -78,16 +78,6 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
         Self::validate_dims(dims)?;
         Ok(crate::shapes::ShapeBuf::from_slice(dims))
-    }
-
-    /// Resolves constructor input into the canonical runtime dimension
-    /// storage.  New shape-aware code should use this boundary instead of
-    /// retaining a shape-specific field beyond construction.
-    #[inline]
-    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let dims = Self::init(arg);
-        Self::validate_dims(dims.as_ref())?;
-        Ok(dims)
     }
 
     /// Validates raw runtime dimensions against this shape's static contract.
@@ -101,8 +91,8 @@ impl<const N: usize> Shape for [usize; N] {
     const STATIC_NUMEL: Option<usize> = if N == 0 { Some(1) } else { None };
     type Arg = [usize; N];
     #[inline(always)]
-    fn init(arg: Self::Arg) -> ShapeBuf {
-        crate::shapes::ShapeBuf::from_slice(&arg)
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(&arg)
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -138,8 +128,8 @@ impl Shape for Nil {
     const STATIC_NUMEL: Option<usize> = Some(1);
     type Arg = ();
     #[inline(always)]
-    fn init(_: Self::Arg) -> ShapeBuf {
-        crate::shapes::ShapeBuf::scalar()
+    fn resolve(_: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(&[])
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -181,17 +171,6 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
     };
 
     type Arg = (H::Arg, T::Arg);
-    #[inline(always)]
-    fn init(arg: Self::Arg) -> ShapeBuf {
-        let head_size = H::resolve_arg(arg.0).expect("shape argument violates dimension contract");
-        let tail_dims = T::init(arg.1);
-        let mut buf = crate::shapes::ShapeBuf::from_slice(&[head_size]);
-        for &d in tail_dims.as_ref() {
-            buf.push(d);
-        }
-        buf
-    }
-
     #[inline]
     fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
         let head_size = H::resolve_arg(arg.0)?;
@@ -687,8 +666,8 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
     const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
     const STATIC_NUMEL: Option<usize> = if R::USIZE == 0 { Some(1) } else { None };
     type Arg = crate::shapes::ShapeBuf;
-    fn init(arg: Self::Arg) -> ShapeBuf {
-        arg
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(arg.as_ref()).map(|_| arg)
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -1109,8 +1088,8 @@ impl Shape for Dyn {
     type Arg = Vec<usize>;
     /// Runtime values for this shape are held in `ShapeBuf`.
     /// Converts a user-facing argument into canonical `ShapeBuf` storage.
-    fn init(arg: Self::Arg) -> ShapeBuf {
-        arg.into_iter().collect()
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(&arg).map(|_| arg.into_iter().collect())
     }
     fn validate_dims(_: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         Ok(())
@@ -1167,8 +1146,8 @@ impl Shape for () {
     type Arg = ();
     /// Runtime values for this shape are held in `ShapeBuf`.
     /// Converts a user-facing argument into canonical `ShapeBuf` storage.
-    fn init(_: Self::Arg) -> ShapeBuf {
-        crate::shapes::ShapeBuf::scalar()
+    fn resolve(_: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(&[]).map(|_| crate::shapes::ShapeBuf::scalar())
     }
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.is_empty() {
@@ -1210,8 +1189,9 @@ impl<D: Dim> Shape for Vec<D> {
     type Arg = Self;
     /// Runtime values for this shape are held in `ShapeBuf`.
     /// Converts a user-facing argument into canonical `ShapeBuf` storage.
-    fn init(arg: Self::Arg) -> ShapeBuf {
-        crate::shapes::ShapeBuf::from_iter(arg.into_iter().map(|d| d.size()))
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        let dims = crate::shapes::ShapeBuf::from_iter(arg.into_iter().map(|d| d.size()));
+        Self::try_from_dims(dims.as_ref()).map(|_| dims)
     }
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.iter().all(|&d| D::validate_size(d)) {

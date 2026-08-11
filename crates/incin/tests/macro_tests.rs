@@ -48,21 +48,21 @@ fn test_s_macro() {
 
     // Tail Ellipsis '..' syntax (s![.., 128])
     type TailFeatureShape = s![.., 128];
-    let tail_field = <TailFeatureShape as Shape>::init(vec![32, 16, 128]);
+    let tail_field = <TailFeatureShape as Shape>::resolve(vec![32, 16, 128]).unwrap();
     let tail_dims: Vec<usize> = tail_field.clone().into();
     assert_eq!(tail_dims, vec![32, 16, 128]);
     assert_eq!(<TailFeatureShape as DynShape>::rank(&tail_field), 3);
 
     // Head Ellipsis '..' syntax (s![128, ..])
     type HeadFeatureShape = s![128, ..];
-    let head_field = <HeadFeatureShape as Shape>::init(vec![128, 64, 32]);
+    let head_field = <HeadFeatureShape as Shape>::resolve(vec![128, 64, 32]).unwrap();
     let head_dims: Vec<usize> = head_field.clone().into();
     assert_eq!(head_dims, vec![128, 64, 32]);
     assert_eq!(<HeadFeatureShape as DynShape>::rank(&head_field), 3);
 
     // Span Ellipsis '..' syntax (s![32, .., 128])
     type SpanFeatureShape = s![32, .., 128];
-    let span_field = <SpanFeatureShape as Shape>::init(vec![32, 16, 8, 128]);
+    let span_field = <SpanFeatureShape as Shape>::resolve(vec![32, 16, 8, 128]).unwrap();
     let span_dims: Vec<usize> = span_field.clone().into();
     assert_eq!(span_dims, vec![32, 16, 8, 128]);
     assert_eq!(<SpanFeatureShape as DynShape>::rank(&span_field), 4);

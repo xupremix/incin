@@ -149,7 +149,7 @@ fn test_generic_array_shapes_unlimited_rank() {
 fn test_recursive_fixed_rank_dim_cons() {
     type TestCons = DimCons<ConstDim<32>, DimCons<usize, Nil>>;
 
-    let field = TestCons::init(((), (16, ())));
+    let field = TestCons::resolve(((), (16, ()))).unwrap();
     assert_eq!(field.as_ref(), &[32, 16]);
 
     let resolved = TestCons::try_from_dims(&[32, 16]).unwrap();
