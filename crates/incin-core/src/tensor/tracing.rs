@@ -193,7 +193,7 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
 
 impl<
     B: Backend + crate::tensor::backend::Execute<O>,
-    O: crate::exec::catalog::Operation + crate::exec::catalog::TraceDescriptor,
+    O: crate::exec::catalog::Operation,
 >
     crate::tensor::backend::Execute<O> for TracingBackend<B>
 {

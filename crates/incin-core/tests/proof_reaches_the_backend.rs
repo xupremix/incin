@@ -19,7 +19,7 @@ extern crate incin_core as incin;
 use std::cell::Cell;
 
 use incin_core::backend_authoring::operations::CreationAttributes;
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, GradMode, ProofLevel, SupportLevel, dispatch,
 };
@@ -58,12 +58,12 @@ impl Capabilities for RecordingBackend {
     }
 }
 
-impl Execute<Descriptor<op::Zeros>> for RecordingBackend {
+impl Execute<op::Zeros> for RecordingBackend {
     type Output = ();
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Zeros>, Self>,
+        request: ExecutionRequest<'_, op::Zeros, Self>,
     ) -> Result<Self::Output, incin_core::prelude::BackendError> {
         OBSERVED.with(|slot| slot.set(Some(request.operation.proof_level())));
         OBSERVED_STATIC_NUMEL.with(|slot| slot.set(Some(ShapeTy::STATIC_NUMEL)));
