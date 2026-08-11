@@ -163,6 +163,7 @@ impl<
         + crate::exec::Capabilities
         + Execute<Descriptor<op::Mul>>
         + Execute<Descriptor<op::Div>>
+        + Execute<Descriptor<op::DivScalar>>
         + Execute<Descriptor<op::Sqrt>>
         + Execute<Descriptor<op::SumKeepDim>>,
     K: DType,
@@ -173,6 +174,7 @@ where
     <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Div>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::DivScalar>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InS, B, K>;

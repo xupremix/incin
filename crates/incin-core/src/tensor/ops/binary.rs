@@ -10,7 +10,9 @@
 use crate::dist::placement::Local;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{CanonicalOperation, Descriptor, LogicalTensorMeta, NoAttributes, op};
+use crate::exec::catalog::{
+    AttributeContract, CanonicalOperation, Descriptor, LogicalTensorMeta, NoAttributes, op,
+};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -52,6 +54,48 @@ where
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
             .map_err(crate::prelude::Error::from)?;
+    Tensor::from_shape_value(
+        storage.into(),
+        lhs._shape.clone(),
+        Default::default(),
+        lhs._device.clone(),
+        grad_out,
+    )
+}
+
+pub(crate) fn execute_binary_descriptor_with_attributes<
+    O,
+    S: Shape,
+    S2: Shape,
+    B: Backend,
+    KIn: DType,
+    KOut: DType,
+    GOut: RequiresGrad,
+>(
+    lhs: &Tensor<S, B, KIn, impl RequiresGrad>,
+    rhs: &Tensor<S2, B, KIn, impl RequiresGrad>,
+    attributes: O::Attributes,
+    grad_out: GOut::Field,
+) -> Result<Tensor<S, B, KOut, GOut>>
+where
+    O: CanonicalOperation,
+    O::Attributes: AttributeContract,
+    S: ShapeEq<S2>,
+    B: Execute<Descriptor<O>>,
+    <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<KOut>>,
+{
+    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    let h_lhs = TensorHandle::from_storage::<B, KIn, Local>(&lhs.inner);
+    let h_rhs = TensorHandle::from_storage::<B, KIn, Local>(&rhs.inner);
+    let shape_val = lhs._shape.clone();
+    let context = ExecutionContext::from_scope(B::default());
+    let storage = dispatch::execute_shaped::<O, B, S>(
+        &context,
+        attributes,
+        &[h_lhs, h_rhs],
+        &shape_val,
+    )
+    .map_err(crate::prelude::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -441,30 +485,36 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Self>
     where
-        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::SubScalar>>,
+        <B as Execute<Descriptor<op::SubScalar>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = self.under_grad_mode(|| B::sub_scalar::<K>(&self.inner, val))?;
-        Tensor::from_shape_value(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
+        crate::tensor::ops::unary::execute_unary_descriptor_with_attributes::<
+            op::SubScalar,
+            S,
+            B,
+            K,
+            G,
+        >(
+            self,
+            crate::exec::catalog::ScalarAttributes { value: val },
         )
     }
 
     /// Divides by a scalar: `self / scalar`.
     pub fn div_scalar(&self, val: f64) -> Result<Self>
     where
-        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::DivScalar>>,
+        <B as Execute<Descriptor<op::DivScalar>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = self.under_grad_mode(|| B::div_scalar::<K>(&self.inner, val))?;
-        Tensor::from_shape_value(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
+        crate::tensor::ops::unary::execute_unary_descriptor_with_attributes::<
+            op::DivScalar,
+            S,
+            B,
+            K,
+            G,
+        >(
+            self,
+            crate::exec::catalog::ScalarAttributes { value: val },
         )
     }
 
@@ -476,15 +526,14 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     ) -> Result<Self>
     where
         S: ShapeEq<S2>,
-        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::Lerp>>,
+        <B as Execute<Descriptor<op::Lerp>>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let inner = self.under_grad_mode(|| B::lerp::<K>(&self.inner, &end.inner, weight))?;
-        Tensor::from_shape_value(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
+        execute_binary_descriptor_with_attributes::<op::Lerp, S, S2, B, K, K, G>(
+            self,
+            end,
+            crate::exec::catalog::LerpAttributes { weight },
             self._grad.clone(),
         )
     }
