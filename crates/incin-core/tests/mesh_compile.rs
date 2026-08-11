@@ -85,10 +85,19 @@ fn the_world_constant_is_the_projection_of_the_world_type() {
 /// not merely types that agree about `WORLD`.
 #[test]
 fn an_omitted_axis_is_the_same_type_as_a_degree_of_one() {
-    fn same_mesh<M: ValidMesh, N: ValidMesh<World = M::World>>() {}
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
 
-    same_mesh::<MeshSpec<Data<U3>>, MeshSpec<Data<U3>, TensorParallel<U1>, Pipeline<U1>>>();
-    same_mesh::<MeshSpec<Data<U2>, TensorParallel<U4>>, MeshSpec<Data<U8>>>();
+    fn same_type<M, N>()
+    where
+        M: ValidMesh + Same<N>,
+    {
+    }
+
+    fn same_world<M: ValidMesh, N: ValidMesh<World = M::World>>() {}
+
+    same_type::<MeshSpec<Data<U3>>, MeshSpec<Data<U3>, TensorParallel<U1>, Pipeline<U1>>>();
+    same_world::<MeshSpec<Data<U2>, TensorParallel<U4>>, MeshSpec<Data<U8>>>();
 
     assert_eq!(MeshSpec::<Data<U3>>::WORLD, 3);
     assert_eq!(MeshSpec::<Data<U3>>::TENSOR, 1);
