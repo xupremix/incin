@@ -639,6 +639,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
+        S::validate_dims(shape.as_ref()).map_err(crate::err::Error::Shape)?;
         let expected = shape.as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got.as_ref() {
