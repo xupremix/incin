@@ -11,7 +11,6 @@
 
 extern crate incin_core as incin;
 
-use incin_backends::IncinBackend;
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{LossOps, ModuleOps, NumericOps, TensorOps};
 use incin_core::exec::catalog::{LossAttributes, LossReduction, NoAttributes, ShapeAttributes, op};
