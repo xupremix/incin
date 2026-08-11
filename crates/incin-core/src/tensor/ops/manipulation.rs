@@ -425,13 +425,8 @@ where
 // Structural Ops (Reshape, Broadcast, Transpose, Flatten)
 // -------------------------------------------------------------
 
-impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    P: Placement,
-> Tensor<S, B, K, G, P>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
+    Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -2045,7 +2040,7 @@ impl<
 /// `try_stack_tensors`.
 pub fn try_stack_tensors<
     S: Shape + DynShape,
-    B: Backend + TensorOps<B> + Execute<op::StackExact> + Capabilities,
+    B: Backend + Execute<op::StackExact> + Capabilities,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
 >(
