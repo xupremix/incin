@@ -49,9 +49,6 @@ impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {
 impl<B, K, G> Module<Tensor<Dyn, B, K, G>> for Flatten<Next<Here>, Next<Next<Here>>>
 where
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
@@ -74,9 +71,6 @@ where
     S: Shape + DynShape + FlattenAt<Start, End>,
     <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
