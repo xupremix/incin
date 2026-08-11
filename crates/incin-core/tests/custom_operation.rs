@@ -11,6 +11,7 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
+use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct IdentityAttributes {
@@ -139,4 +140,15 @@ fn downstream_backend_can_execute_a_builtin_operation() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Static);
+}
+
+#[test]
+fn built_in_backend_can_compile_an_open_custom_operation() {
+    fn assert_custom_execution<B>()
+    where
+        B: StorageBackend + Execute<CompanyIdentity>,
+    {
+    }
+
+    assert_custom_execution::<DummyBackend<Cpu>>();
 }
