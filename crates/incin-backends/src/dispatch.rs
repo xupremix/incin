@@ -756,6 +756,7 @@ impl<D: Device> Backend for DispatchBackend<D> {
         }
     }
 
+    #[allow(unreachable_patterns)]
     fn backward_with<K: DType>(
         loss: &Self::Storage<K>,
         seed: &Self::Storage<K>,
