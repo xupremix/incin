@@ -152,6 +152,10 @@ pub enum ExecutionSite {
     /// allocation. Executable for the same reason: `Output` is an associated
     /// type and does not have to be storage.
     HostReadback,
+    /// The frontend composes existing operations or owns the semantic
+    /// execution payload. It is not a single backend allocation kernel and
+    /// therefore does not belong behind `Execute<Descriptor<O>>`.
+    Composed,
     /// The operation writes through one of its operands instead of returning a
     /// fresh result. Not executable: `ExecutionRequest::inputs` is a slice of
     /// shared borrows, so an executor cannot reach a mutable operand at all.
@@ -188,6 +192,7 @@ impl ExecutionSite {
     pub const fn blocking_reason(self) -> Option<&'static str> {
         match self {
             Self::Kernel | Self::Creation | Self::HostReadback => None,
+            Self::Composed => Some("the frontend composition owns the execution semantics"),
             Self::Mutation => Some("writes through an operand; execution borrows operands shared"),
             Self::DeviceTransfer => {
                 Some("produces storage on another backend, which the executor cannot name")
@@ -254,6 +259,7 @@ const fn execution_site(operation: OperationKind) -> ExecutionSite {
         | OperationKind::ToHostFloatVec
         | OperationKind::ToHostIntScalar
         | OperationKind::ToHostIntVec => ExecutionSite::HostReadback,
+        OperationKind::Sample | OperationKind::Rnn | OperationKind::Lstm => ExecutionSite::Composed,
         OperationKind::TensorFromData
         | OperationKind::TensorFromBytes
         | OperationKind::Zeros
@@ -266,8 +272,7 @@ const fn execution_site(operation: OperationKind) -> ExecutionSite {
         | OperationKind::VariableNormalRandom
         | OperationKind::Full
         | OperationKind::Arange
-        | OperationKind::Linspace
-        | OperationKind::Sample => ExecutionSite::Creation,
+        | OperationKind::Linspace => ExecutionSite::Creation,
         _ => ExecutionSite::Kernel,
     }
 }
@@ -4362,6 +4367,14 @@ mod tests {
                     row.output,
                     OutputRule::HostValue,
                     "{} produces a host value but is classified as a kernel",
+                    row.name,
+                ),
+                ExecutionSite::Composed => assert!(
+                    matches!(
+                        row.operation,
+                        OperationKind::Sample | OperationKind::Rnn | OperationKind::Lstm
+                    ),
+                    "{} is classified as composed without a frontend composition",
                     row.name,
                 ),
                 ExecutionSite::Mutation => assert!(

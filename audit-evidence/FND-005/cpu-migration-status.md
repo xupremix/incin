@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**158 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 3 executable operations are still reachable only through the legacy operation-family traits.
+**158 of 158 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 0 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -24,7 +24,6 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `full` | `Creation` | yes | `CreationOps::full` |
 | `arange` | `Creation` | yes | `CreationOps::arange` |
 | `linspace` | `Creation` | yes | `CreationOps::linspace` |
-| `sample` | `Creation` | no | `Tensor::sample` |
 | `relu` | `Kernel` | yes | `FloatOps::relu` |
 | `step` | `Kernel` | yes | `FloatOps::step` |
 | `mish` | `Kernel` | yes | `FloatOps::mish` |
@@ -162,8 +161,6 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `linear` | `Kernel` | yes | `Linear::forward` |
 | `rms_norm` | `Kernel` | yes | `RMSNorm::forward` |
 | `dropout` | `Kernel` | yes | `Dropout::forward` |
-| `rnn` | `Kernel` | no | `RNN::forward` |
-| `lstm` | `Kernel` | no | `LSTM::forward` |
 | `mse_loss` | `Kernel` | yes | `LossOps::mse_loss` |
 | `l1_loss` | `Kernel` | yes | `LossOps::l1_loss` |
 | `bce_with_logits_loss` | `Kernel` | yes | `LossOps::bce_with_logits_loss` |
@@ -178,9 +175,6 @@ None of these is an unwritten function. Each names a limit of the descriptor or 
 
 | Operation | What blocks it |
 |---|---|
-| `sample` | `DistributionAttributes` names its distribution as a string and its parameters as bytes. Executing one needs a registry that maps that pair back to a sampler, and no such registry exists |
-| `rnn` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
-| `lstm` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
 
 ## Operations the execution contract cannot carry
 
@@ -188,6 +182,7 @@ These are not pending migrations. Each one needs a change to `Execute`/`Executio
 
 | Operation | Site | Why | Legacy source |
 |---|---|---|---|
+| `sample` | `Composed` | the frontend composition owns the execution semantics | `Tensor::sample` |
 | `add_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::add_` |
 | `sub_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::sub_` |
 | `mul_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::mul_` |
@@ -198,6 +193,8 @@ These are not pending migrations. Each one needs a change to `Execute`/`Executio
 | `require_grad` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::require_grad` |
 | `detach` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::detach` |
 | `backward` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::backward` |
+| `rnn` | `Composed` | the frontend composition owns the execution semantics | `RNN::forward` |
+| `lstm` | `Composed` | the frontend composition owns the execution semantics | `LSTM::forward` |
 | `sgd_step` | `Mutation` | writes through an operand; execution borrows operands shared | `SGD::step` |
 | `adam_step` | `Mutation` | writes through an operand; execution borrows operands shared | `Adam::step` |
 | `adamw_step` | `Mutation` | writes through an operand; execution borrows operands shared | `OptimizerOps::adamw_step` |
