@@ -13,8 +13,7 @@ fn test_param() -> Result<()> {
 
     // Test getting a tensor out
     let t = param.as_tensor()?;
-    let t_dims: [usize; 2] = t.dims();
-    assert_eq!(t_dims, [10, 10]);
+    assert_eq!(t.dims().dims(), &[10, 10]);
 
     Ok(())
 }
@@ -26,8 +25,7 @@ fn test_linear() -> Result<()> {
     let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;
 
     let out = linear.forward(input)?;
-    let out_dims: [usize; 2] = out.dims();
-    assert_eq!(out_dims, [2, 5]);
+    assert_eq!(out.dims().dims(), &[2, 5]);
 
     Ok(())
 }
@@ -38,23 +36,16 @@ fn test_conv2d() -> Result<()> {
     // 3 InChannels, 16 OutChannels, 3x3 Kernel, Stride=1, Padding=1, Dilation=1
     // (OutC, InC, K, S, P, D)
     /// Conv shape.
-    type ConvShape = (
-        incin::prelude::typenum::U16,
-        incin::prelude::typenum::U3,
-        incin::prelude::typenum::U3,
-        incin::prelude::typenum::U1,
-        incin::prelude::typenum::U1,
-        incin::prelude::typenum::U1,
-    );
+    type ConvShape = s![16, 3, 3, 1, 1, 1];
     let conv = Conv2d::<ConvShape, CpuBackendImpl>::build(())?;
 
     // Input: Batch=2, Channels=3, H=32, W=32
     let input = Tensor::<s![2, 3, 32, 32], CpuBackendImpl>::ones(())?;
 
     let out = conv.forward(input)?;
-    let out_dims: [usize; 4] = out.dims();
+    let out_dims = out.dims();
     // Out: Batch=2, Channels=16, H=32, W=32 (because kernel=3, padding=1, stride=1)
-    assert_eq!(out_dims, [2, 16, 32, 32]);
+    assert_eq!(out_dims.dims(), &[2, 16, 32, 32]);
 
     Ok(())
 }
@@ -66,8 +57,7 @@ fn test_layer_norm() -> Result<()> {
     let input = Tensor::<s![5, 10, 20], CpuBackendImpl>::ones(())?;
 
     let out = ln.forward(input)?;
-    let out_dims: [usize; 3] = out.dims();
-    assert_eq!(out_dims, [5, 10, 20]);
+    assert_eq!(out.dims().dims(), &[5, 10, 20]);
 
     Ok(())
 }
@@ -82,8 +72,7 @@ fn test_batch_norm2d() -> Result<()> {
     let input = Tensor::<s![2, 16, 32, 32], CpuBackendImpl>::ones(())?;
 
     let out = bn.forward(input)?;
-    let out_dims: [usize; 4] = out.dims();
-    assert_eq!(out_dims, [2, 16, 32, 32]);
+    assert_eq!(out.dims().dims(), &[2, 16, 32, 32]);
 
     Ok(())
 }
@@ -100,8 +89,7 @@ fn test_sequential() -> Result<()> {
     let input = Tensor::<s![4, 10], CpuBackendImpl>::ones(())?;
 
     let out = seq.forward(input)?;
-    let out_dims: [usize; 2] = out.dims();
-    assert_eq!(out_dims, [4, 2]);
+    assert_eq!(out.dims().dims(), &[4, 2]);
 
     Ok(())
 }
@@ -152,8 +140,7 @@ fn test_seq_ty_matches_seq_value_type() -> Result<()> {
 
     let input = Tensor::<s![4, 10], CpuBackendImpl>::ones(())?;
     let out = net.forward(input)?;
-    let out_dims: [usize; 2] = out.dims();
-    assert_eq!(out_dims, [4, 2]);
+    assert_eq!(out.dims().dims(), &[4, 2]);
 
     // Parameters still flow through the aliased type exactly like a
     // directly-typed `Sequential`, e.g. for an optimizer.
@@ -204,15 +191,14 @@ fn test_train_mode_propagates_through_sequential_dropout() -> Result<()> {
 fn test_embedding() -> Result<()> {
     // Vocab=100, EmbedDim=32
     /// Embed shape.
-    type EmbedShape = (incin::prelude::typenum::U100, incin::prelude::typenum::U32);
+    type EmbedShape = s![100, 32];
     let weight = Param::<EmbedShape, CpuBackendImpl>::randn(())?;
     let emb = Embedding::<EmbedShape, CpuBackendImpl> { weight };
     // Input: Batch=2, SeqLen=10
-    let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;
+    let input = Tensor::<s![2, 10], CpuBackendImpl, i64>::ones(())?;
 
     let out = emb.forward(input)?;
-    let out_dims: [usize; 3] = out.dims();
-    assert_eq!(out_dims, [2, 10, 32]);
+    assert_eq!(out.dims().dims(), &[2, 10, 32]);
 
     Ok(())
 }
