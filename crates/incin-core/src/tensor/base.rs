@@ -703,8 +703,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -717,8 +716,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -736,8 +734,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         K: PlainDType + BuiltinDType,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -752,8 +749,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -766,8 +762,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -780,8 +775,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -794,8 +788,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -813,8 +806,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -833,8 +825,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -849,8 +840,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         B: SupportsDType<K>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         dist.sample::<S, B, G>(_shape, &_device)
     }
 
@@ -859,8 +849,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         Self::from_parts(raw_tensor, _shape, _dtype, _device, _grad)
     }
 }

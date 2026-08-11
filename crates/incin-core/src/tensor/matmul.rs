@@ -489,11 +489,7 @@ impl<
         let context = ExecutionContext::from_scope(B::default());
         let inner = q
             .under_grad_mode(|| {
-                crate::exec::dispatch::execute_shaped::<
-                    op::ScaledDotProductAttention,
-                    B,
-                    S1,
-                >(
+                crate::exec::dispatch::execute_shaped::<op::ScaledDotProductAttention, B, S1>(
                     &context,
                     AttentionAttributes {
                         scale,

@@ -288,8 +288,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -334,8 +333,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         Ok(Self {
             inner,
             _shape: ShapeValue::new(_shape),

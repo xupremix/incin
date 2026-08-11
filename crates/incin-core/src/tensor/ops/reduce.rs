@@ -415,18 +415,19 @@ where
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = GradMode::Disabled.restrict(|| {
-            crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
-                &context,
-                crate::exec::catalog::IndexReductionAttributes {
-                    axis: dim,
-                    dtype: DTypeId::U32.descriptor(),
-                },
-                &[input],
-                &output_shape,
-            )
-        })?
-        .into();
+        let inner = GradMode::Disabled
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
+                    &context,
+                    crate::exec::catalog::IndexReductionAttributes {
+                        axis: dim,
+                        dtype: DTypeId::U32.descriptor(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
 
         Tensor::from_parts(
             inner,
@@ -463,18 +464,19 @@ where
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = GradMode::Disabled.restrict(|| {
-            crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
-                &context,
-                crate::exec::catalog::IndexReductionAttributes {
-                    axis: dim,
-                    dtype: DTypeId::U32.descriptor(),
-                },
-                &[input],
-                &output_shape,
-            )
-        })?
-        .into();
+        let inner = GradMode::Disabled
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
+                    &context,
+                    crate::exec::catalog::IndexReductionAttributes {
+                        axis: dim,
+                        dtype: DTypeId::U32.descriptor(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
 
         Tensor::from_parts(
             inner,

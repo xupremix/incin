@@ -1,6 +1,5 @@
 //! Compile-time broadcasting shape verification.
 use crate::prelude::*;
-use crate::tensor::matmul::StaticOrNamedDim;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible
 /// sizes instead of silently fabricating a wrong result via a bare `.max()`.
@@ -162,19 +161,12 @@ pub trait AnonymousDim: Dim {}
 impl AnonymousDim for usize {}
 impl<const N: usize> AnonymousDim for crate::shapes::dim::ConstDim<N> {}
 impl AnonymousDim for typenum::UTerm {}
-impl<U, B> AnonymousDim for typenum::UInt<U, B>
-where
-    typenum::UInt<U, B>: Dim,
-{
-}
+impl<U, B> AnonymousDim for typenum::UInt<U, B> where typenum::UInt<U, B>: Dim {}
 impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::AddDim<A, B> {}
 impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::CheckedSubDim<A, B> {}
 impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::ExactDivDim<A, B> {}
 impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::MulDim<A, B> {}
-impl<A: AnonymousDim, B: AnonymousDim> AnonymousDim
-    for crate::shapes::dim::BroadcastExtent<A, B>
-{
-}
+impl<A: AnonymousDim, B: AnonymousDim> AnonymousDim for crate::shapes::dim::BroadcastExtent<A, B> {}
 
 /// Anonymous axes retain the symbolic extent expression.
 impl<L: AnonymousDim, R: AnonymousDim> BroadcastDim<R> for L {

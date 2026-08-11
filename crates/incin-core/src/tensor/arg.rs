@@ -11,7 +11,10 @@ pub trait TensorArgs<S: Shape, K: DType, D: Device, G: RequiresGrad> {
     /// Splits the bundled arguments into validated shape storage and fields.
     fn construct(
         args: Self::Args,
-    ) -> core::result::Result<(ShapeBuf, K::Field, D::Field, G::Field), crate::shapes::error::ShapeError>;
+    ) -> core::result::Result<
+        (ShapeBuf, K::Field, D::Field, G::Field),
+        crate::shapes::error::ShapeError,
+    >;
 }
 
 impl<S, K, D, G> TensorArgs<S, K, D, G> for (S, K, D, G)
@@ -28,7 +31,10 @@ where
     /// Initializes each parameter's `Field` independently from its slot in `args`.
     fn construct(
         args: Self::Args,
-    ) -> core::result::Result<(ShapeBuf, K::Field, D::Field, G::Field), crate::shapes::error::ShapeError> {
+    ) -> core::result::Result<
+        (ShapeBuf, K::Field, D::Field, G::Field),
+        crate::shapes::error::ShapeError,
+    > {
         Ok((
             S::try_init(args.shape)?,
             K::init(args.dtype),
