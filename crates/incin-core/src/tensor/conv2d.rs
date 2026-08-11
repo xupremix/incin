@@ -107,7 +107,7 @@ impl<
 
 impl<
     S1: Shape + DynShape,
-    B: Backend + crate::tensor::backend::ModuleOps<B> + Execute<Descriptor<op::Conv2dExact>>,
+    B: Backend + Execute<Descriptor<op::Conv2dExact>>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S1, B, K, G>

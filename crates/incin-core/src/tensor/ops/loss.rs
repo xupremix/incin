@@ -44,7 +44,7 @@ where
 
 impl<
     S: Shape + crate::prelude::DynShape,
-    B: Backend + crate::tensor::backend::LossOps<B>,
+    B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S, B, K, G>
