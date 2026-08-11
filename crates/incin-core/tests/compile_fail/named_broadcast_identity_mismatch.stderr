@@ -6,39 +6,14 @@ error[E0277]: Cannot broadcast axis `NamedDim<Batch, usize>` against `NamedDim<C
    |
    = help: the trait `BroadcastDim<NamedDim<Channels, usize>>` is not implemented for `NamedDim<Batch, usize>`
    = note: two axes broadcast when their types are the same, or one of them is `U1`
-help: the following other types implement trait `BroadcastDim<Rhs>`
-  --> src/shapes/broadcast.rs
-   |
-   | / impl<Tag, R> BroadcastDim<R> for crate::shapes::dim::NamedDim<Tag, usize>
-   | | where
-   | |     Tag: crate::shapes::AxisTag,
-   | |     R: AnonymousDim,
-   | |____________________^ `NamedDim<Tag, usize>` implements `BroadcastDim<R>`
-...
-   | / impl<Tag, L, R> BroadcastDim<R> for crate::shapes::dim::NamedDim<Tag, L>
-   | | where
-   | |     Tag: crate::shapes::AxisTag,
-   | |     L: StaticNatDim,
-...  |
-   | |     <L as typenum::IsEqual<R>>::Output: crate::shapes::dim::BroadcastChoice<L, ()>,
-   | |     StaticBroadcast<L, R>: Dim,
-   | |_______________________________^ `NamedDim<Tag, L>` implements `BroadcastDim<R>`
-...
-   | / impl<Tag, L, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>>
-   | |     for crate::shapes::dim::NamedDim<Tag, L>
-   | | where
-   | |     Tag: crate::shapes::AxisTag,
-...  |
-   | |     <L as typenum::IsEqual<R>>::Output: crate::shapes::dim::BroadcastChoice<L, ()>,
-   | |     StaticBroadcast<L, R>: Dim,
-   | |_______________________________^ `NamedDim<Tag, L>` implements `BroadcastDim<NamedDim<Tag, R>>`
-...
-   | / impl<Tag, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>>
-   | |     for crate::shapes::dim::NamedDim<Tag, usize>
-   | | where
-   | |     Tag: crate::shapes::AxisTag,
-   | |     R: Dim,
-   | |___________^ `NamedDim<Tag, usize>` implements `BroadcastDim<NamedDim<Tag, R>>`
+   = help: the following other types implement trait `BroadcastDim<Rhs>`:
+             `NamedDim<Tag, L>` implements `BroadcastDim<NamedDim<Tag, R>>`
+             `NamedDim<Tag, L>` implements `BroadcastDim<R>`
+             `NamedDim<Tag, L>` implements `BroadcastDim<usize>`
+             `NamedDim<Tag, usize>` implements `BroadcastDim<NamedDim<Tag, R>>`
+             `NamedDim<Tag, usize>` implements `BroadcastDim<NamedDim<Tag, usize>>`
+             `NamedDim<Tag, usize>` implements `BroadcastDim<R>`
+             `NamedDim<Tag, usize>` implements `BroadcastDim<usize>`
    = note: required for `DimCons<NamedDim<Batch, usize>, Nil>` to implement `broadcast::BroadcastReversed<DimCons<NamedDim<Channels, usize>, Nil>>`
    = note: required for `DimCons<NamedDim<Batch, usize>, Nil>` to implement `BroadcastShape<DimCons<NamedDim<Channels, usize>, Nil>>`
 note: required by a bound in `require_broadcast`

@@ -33,10 +33,7 @@ fn compile_fail() {
 fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         // Shape rules, all unsatisfied trait bounds.
-        (
-            "broadcast_static_mismatch",
-            "invalid static dimension expression",
-        ),
+        ("broadcast_static_mismatch", "E0277"),
         ("named_broadcast_identity_mismatch", "E0277"),
         ("concat_static_mismatch", "E0277"),
         ("checked_byte_len_is_private", "E0423"),
