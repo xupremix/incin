@@ -61,6 +61,9 @@ path_statements = "allow"
 multiple_bound_locations = "allow"
 type_complexity = "allow"
 too_many_arguments = "allow"
+# The public error contract intentionally returns the structured framework
+# error by value. Test and example targets also use that contract directly.
+result_large_err = "allow"
 [workspace.dependencies]
 proc-macro2 = { version = "1.0.106", default-features = false }
 syn = { version = "2.0.118", features = ["full"] }

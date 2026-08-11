@@ -223,12 +223,10 @@ pub mod template {
                 }
             }
 
-            let output_shape = spec
-                .output_shape()
-                .ok_or_else(|| BackendError::InvalidInput {
-                    operation: OperationKind::MatMulExact,
-                    reason: "descriptor has no output",
-                })?;
+            let output_shape = spec.output_shape().ok_or(BackendError::InvalidInput {
+                operation: OperationKind::MatMulExact,
+                reason: "descriptor has no output",
+            })?;
             TemplateStorage::try_new(output_shape.dims(), out).map_err(|message| {
                 BackendError::Execution {
                     operation: OperationKind::MatMul,
@@ -254,7 +252,7 @@ pub mod template {
             };
             let input = operand(handle, OperationKind::Reshape)?;
 
-            if input.metadata().shape().dims() != &[2, 3] {
+            if input.metadata().shape().dims() != [2, 3] {
                 return Err(invalid(
                     OperationKind::Reshape,
                     "operand shape disagrees with the validated descriptor",
@@ -538,14 +536,12 @@ mod broken {
                     out[row * n + column] = sum;
                 }
             }
-            let output_shape = request
-                .operation
-                .descriptor()
-                .output_shape()
-                .ok_or_else(|| BackendError::InvalidInput {
+            let output_shape = request.operation.descriptor().output_shape().ok_or(
+                BackendError::InvalidInput {
                     operation: OperationKind::MatMulExact,
                     reason: "descriptor has no output",
-                })?;
+                },
+            )?;
             TemplateStorage::try_new(output_shape.dims(), out).map_err(|message| {
                 BackendError::Execution {
                     operation: OperationKind::MatMul,
