@@ -1,6 +1,8 @@
 //! Wraps the `candle_core` crate, providing `CandleBackend` as a `Backend`
 //! implementation backed by Candle's own tensor type.
 
+use incin_core::prelude::Cpu;
+
 mod backend;
 pub mod convert;
 mod executor;
@@ -9,14 +11,10 @@ mod ops;
 pub use convert::{from_candle_device, from_candle_dtype, to_candle_device, to_candle_dtype};
 pub use executor::CandleStorage;
 
-/// # Backend Float Element Limitation (B-4)
-/// **Known Limitation:** `CandleBackend` ignores its compile-time `T` generic
-/// for inner allocation precision and relies on the dynamic `DTypeId`
-/// supplied to creation methods.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
+pub struct CandleBackend<D = Cpu>(core::marker::PhantomData<D>);
 
-impl<T, D> CandleBackend<T, D> {
+impl<D> CandleBackend<D> {
     /// Construct the stateless Candle executor.
     #[must_use]
     pub const fn new() -> Self {
@@ -24,7 +22,7 @@ impl<T, D> CandleBackend<T, D> {
     }
 }
 
-impl<T, D> Default for CandleBackend<T, D> {
+impl<D> Default for CandleBackend<D> {
     fn default() -> Self {
         Self::new()
     }
@@ -41,8 +39,14 @@ mod tests {
     /// Checks that `to_candle_dtype` maps `F32` and `I64` to the
     /// corresponding candle dtypes.
     fn test_to_candle_dtype() {
-        assert_eq!(to_candle_dtype(DTypeId::F32).unwrap(), candle::DType::F32);
-        assert_eq!(to_candle_dtype(DTypeId::I64).unwrap(), candle::DType::I64);
+        assert_eq!(
+            to_candle_dtype(DTypeId::F32.into()).unwrap(),
+            candle::DType::F32
+        );
+        assert_eq!(
+            to_candle_dtype(DTypeId::I64.into()).unwrap(),
+            candle::DType::I64
+        );
     }
 
     #[test]

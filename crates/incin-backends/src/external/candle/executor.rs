@@ -108,8 +108,8 @@ impl<D: Device> Capabilities for CandleBackend<D> {
             });
         }
         match query.operation {
-            OperationKind::MatMul
-            | OperationKind::Reshape
+            OperationKind::MatMulExact
+            | OperationKind::ReshapeExact
             | OperationKind::Zeros
             | OperationKind::Ones
             | OperationKind::UniformRandom
@@ -190,6 +190,19 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CandleBackend<D> {
         let input = handle
             .downcast_ref::<CandleStorage>()
             .ok_or_else(|| invalid(operation, "reshape input is not Candle storage"))?;
+        let expected_input = request
+            .operation
+            .descriptor()
+            .inputs()
+            .first()
+            .and_then(|meta| meta.shape.as_ref())
+            .ok_or_else(|| invalid(operation, "reshape descriptor has no input shape"))?;
+        if input.metadata().shape().dims() != expected_input.dims() {
+            return Err(invalid(
+                operation,
+                "reshape input metadata does not match the validated descriptor",
+            ));
+        }
         let shape = &request.operation.descriptor().attributes().shape;
         let execution_error = |error: candle_core::Error| BackendError::Execution {
             operation,

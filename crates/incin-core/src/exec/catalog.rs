@@ -861,6 +861,7 @@ incin_operation_catalog!(seal_operations);
 ))]
 pub struct Descriptor<O: Operation> {
     attributes: O::Attributes,
+    inputs: Vec<LogicalTensorMeta>,
     outputs: Vec<LogicalTensorMeta>,
     marker: PhantomData<fn() -> O>,
 }
@@ -888,6 +889,11 @@ impl<O: Operation> Descriptor<O> {
     pub fn outputs(&self) -> &[LogicalTensorMeta] {
         &self.outputs
     }
+
+    #[must_use]
+    pub fn inputs(&self) -> &[LogicalTensorMeta] {
+        &self.inputs
+    }
 }
 
 impl<O: CanonicalOperation> Descriptor<O>
@@ -897,6 +903,30 @@ where
     #[must_use]
     pub const fn operation(&self) -> OperationKind {
         O::ID
+    }
+
+    /// Validate a runtime invocation and attach the resulting dynamic proof.
+    ///
+    /// This is the public construction seam for backend authors and other
+    /// framework boundaries that need to execute an exact descriptor without
+    /// reaching into frontend shape rules. Typed tensor frontends use their
+    /// stronger proof path; this method intentionally records only dynamic
+    /// knowledge.
+    pub fn infer_runtime(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+    ) -> Result<crate::exec::Validated<Self>, DescriptorError> {
+        attributes.validate(O::ID, &inputs)?;
+        let outputs = O::infer_outputs(&attributes, &inputs)?;
+        Ok(crate::exec::Validated::new(
+            Self {
+                attributes,
+                inputs,
+                outputs,
+                marker: PhantomData,
+            },
+            crate::exec::ProofLevel::Dynamic,
+        ))
     }
 }
 
@@ -3524,6 +3554,7 @@ impl<O: Operation> ValidatedInvocation<O> {
             validated: crate::exec::Validated::new(
                 Descriptor {
                     attributes,
+                    inputs: inputs.clone(),
                     outputs,
                     marker: PhantomData,
                 },
@@ -3568,6 +3599,7 @@ impl<O: Operation> ValidatedInvocation<O> {
             validated: crate::exec::Validated::new(
                 Descriptor {
                     attributes,
+                    inputs: inputs.clone(),
                     outputs,
                     marker: PhantomData,
                 },
@@ -3826,6 +3858,7 @@ where
         verify_outputs(O::ID, row, &attributes, &inputs, &outputs)?;
         let descriptor = Descriptor {
             attributes,
+            inputs: inputs.clone(),
             outputs,
             marker: PhantomData,
         };

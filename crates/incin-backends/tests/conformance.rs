@@ -20,14 +20,18 @@
 //! here wrote, joining the same contract through the same trait.
 
 use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
 use incin_core::exec::{
-    Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
+    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, SupportLevel, TensorMeta,
     UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
+    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, Shape, ShapeBuf, StorageBackend,
+    StrideBuf,
 };
+
+type MatMulSpec = Descriptor<op::MatMulExact>;
+type ReshapeSpec = Descriptor<op::ReshapeExact>;
 
 // ============================================================================
 // The template — copy this module
@@ -82,7 +86,7 @@ pub mod template {
                 shape,
                 StrideBuf::from_slice(&strides),
                 0,
-                DTypeId::F32,
+                DTypeId::F32.descriptor(),
                 DeviceId::cpu(),
                 // Claim only what is true. `Vec` guarantees `align_of::<f32>()`,
                 // and a larger claim is one a kernel may act on.
@@ -109,6 +113,7 @@ pub mod template {
     pub struct TemplateBackend;
 
     impl StorageBackend for TemplateBackend {
+        const BACKEND_NAME: &'static str = "Template";
         type Storage<K: DType> = TemplateStorage;
         type Device = Cpu;
 
@@ -124,7 +129,7 @@ pub mod template {
     /// conformance suite checks that the two agree.
     impl Capabilities for TemplateBackend {
         fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-            if query.dtype != DTypeId::F32 {
+            if query.dtype != DTypeId::F32.descriptor() {
                 return SupportLevel::Unsupported(UnsupportedReason::DType {
                     operation: query.operation,
                     dtype: query.dtype,
@@ -134,14 +139,14 @@ pub mod template {
                 // Rank 2 only, because the matmul below is rank-2 only.
                 // Registering a rank this executor cannot run is the exact
                 // false claim the registry exists to prevent.
-                OperationKind::MatMul if query.rank == 2 => SupportLevel::Native,
-                OperationKind::MatMul => SupportLevel::Unsupported(UnsupportedReason::Rank {
+                OperationKind::MatMulExact if query.rank == 2 => SupportLevel::Native,
+                OperationKind::MatMulExact => SupportLevel::Unsupported(UnsupportedReason::Rank {
                     operation: query.operation,
                     rank: query.rank,
                     min: 2,
                     max: 2,
                 }),
-                OperationKind::Reshape => SupportLevel::Native,
+                OperationKind::ReshapeExact => SupportLevel::Native,
                 operation => SupportLevel::Unsupported(UnsupportedReason::Operation { operation }),
             }
         }
@@ -163,7 +168,7 @@ pub mod template {
     impl Execute<MatMulSpec> for TemplateBackend {
         type Output = TemplateStorage;
 
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, MatMulSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -208,7 +213,13 @@ pub mod template {
                 }
             }
 
-            TemplateStorage::try_new(spec.output.dims(), out).map_err(|message| {
+            let output_shape = spec
+                .output_shape()
+                .ok_or_else(|| BackendError::InvalidInput {
+                    operation: OperationKind::MatMulExact,
+                    reason: "descriptor has no output",
+                })?;
+            TemplateStorage::try_new(output_shape.dims(), out).map_err(|message| {
                 BackendError::Execution {
                     operation: OperationKind::MatMul,
                     message: message.into(),
@@ -220,7 +231,7 @@ pub mod template {
     impl Execute<ReshapeSpec> for TemplateBackend {
         type Output = TemplateStorage;
 
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, ReshapeSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -233,7 +244,7 @@ pub mod template {
             };
             let input = operand(handle, OperationKind::Reshape)?;
 
-            if input.metadata().shape().dims() != spec.input.dims() {
+            if input.metadata().shape().dims() != &[2, 3] {
                 return Err(invalid(
                     OperationKind::Reshape,
                     "operand shape disagrees with the validated descriptor",
@@ -241,7 +252,10 @@ pub mod template {
             }
 
             // Reshape re-addresses; it must not compute.
-            TemplateStorage::try_new(spec.output.dims(), input.values().to_vec()).map_err(
+            let output_shape = spec
+                .output_shape()
+                .ok_or_else(|| invalid(OperationKind::ReshapeExact, "descriptor has no output"))?;
+            TemplateStorage::try_new(output_shape.dims(), input.values().to_vec()).map_err(
                 |message| BackendError::Execution {
                     operation: OperationKind::Reshape,
                     message: message.into(),
@@ -327,6 +341,7 @@ mod broken {
     pub struct OverclaimingBackend;
 
     impl StorageBackend for OverclaimingBackend {
+        const BACKEND_NAME: &'static str = "Overclaiming";
         type Storage<K: DType> = TemplateStorage;
         type Device = Cpu;
         fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
@@ -342,7 +357,7 @@ mod broken {
 
     impl Execute<MatMulSpec> for OverclaimingBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, MatMulSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -356,7 +371,7 @@ mod broken {
 
     impl Execute<ReshapeSpec> for OverclaimingBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, ReshapeSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -394,6 +409,7 @@ mod broken {
     pub struct IndexingBackend;
 
     impl StorageBackend for IndexingBackend {
+        const BACKEND_NAME: &'static str = "Indexing";
         type Storage<K: DType> = TemplateStorage;
         type Device = Cpu;
         fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
@@ -409,7 +425,7 @@ mod broken {
 
     impl Execute<MatMulSpec> for IndexingBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, MatMulSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -427,7 +443,7 @@ mod broken {
 
     impl Execute<ReshapeSpec> for IndexingBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, ReshapeSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -464,6 +480,7 @@ mod broken {
     pub struct SwappedBackend;
 
     impl StorageBackend for SwappedBackend {
+        const BACKEND_NAME: &'static str = "Swapped";
         type Storage<K: DType> = TemplateStorage;
         type Device = Cpu;
         fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
@@ -479,7 +496,7 @@ mod broken {
 
     impl Execute<MatMulSpec> for SwappedBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, MatMulSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -511,18 +528,26 @@ mod broken {
                     out[row * n + column] = sum;
                 }
             }
-            TemplateStorage::try_new(request.operation.descriptor().output.dims(), out).map_err(
-                |message| BackendError::Execution {
+            let output_shape = request
+                .operation
+                .descriptor()
+                .output_shape()
+                .ok_or_else(|| BackendError::InvalidInput {
+                    operation: OperationKind::MatMulExact,
+                    reason: "descriptor has no output",
+                })?;
+            TemplateStorage::try_new(output_shape.dims(), out).map_err(|message| {
+                BackendError::Execution {
                     operation: OperationKind::MatMul,
                     message: message.into(),
-                },
-            )
+                }
+            })
         }
     }
 
     impl Execute<ReshapeSpec> for SwappedBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             request: ExecutionRequest<'_, ReshapeSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -564,6 +589,7 @@ mod broken {
     pub struct EmptyBackend;
 
     impl StorageBackend for EmptyBackend {
+        const BACKEND_NAME: &'static str = "Empty";
         type Storage<K: DType> = TemplateStorage;
         type Device = Cpu;
         fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
@@ -581,7 +607,7 @@ mod broken {
 
     impl Execute<MatMulSpec> for EmptyBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             _request: ExecutionRequest<'_, MatMulSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -594,7 +620,7 @@ mod broken {
 
     impl Execute<ReshapeSpec> for EmptyBackend {
         type Output = TemplateStorage;
-        fn execute(
+        fn execute_shaped<ShapeTy: Shape>(
             &self,
             _request: ExecutionRequest<'_, ReshapeSpec, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -751,10 +777,10 @@ mod candle_subject {
 
     impl Subject for Candle {
         type Storage = CandleStorage;
-        type Backend = CandleBackend<f32, Cpu>;
+        type Backend = CandleBackend<Cpu>;
 
         fn name(&self) -> String {
-            "CandleBackend<f32, Cpu>".to_string()
+            "CandleBackend<Cpu>".to_string()
         }
 
         fn backend(&self) -> Self::Backend {

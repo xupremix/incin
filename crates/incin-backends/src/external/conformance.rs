@@ -33,13 +33,13 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::{format, vec};
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::backend_authoring::operations::{NoAttributes, ShapeAttributes};
+use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, ExecutionContext, LayoutClass, MatMulRule, MatMulSpec, MathMode,
-    ReshapeRule, ReshapeSpec, ShapeRule, SupportLevel, TensorHandle, Validated,
+    Capabilities, CapabilityQuery, ExecutionContext, ExecutionDescriptor, LayoutClass,
+    LogicalTensorMeta, MathMode, SupportLevel, TensorHandle, Validated,
 };
-use incin_core::prelude::{DTypeId, Dyn, Local, OperationKind, Shape, ShapeBuf, StorageBackend};
-use incin_core::typenum::{U2, U3};
+use incin_core::prelude::{DTypeId, Local, OperationKind, ShapeBuf, StorageBackend};
 
 // ============================================================================
 // Numerical tolerance profiles
@@ -114,8 +114,8 @@ pub trait Subject {
     /// The backend itself.
     type Backend: StorageBackend<Storage<f32> = Self::Storage>
         + Capabilities
-        + Execute<MatMulSpec, Output = Self::Storage>
-        + Execute<ReshapeSpec, Output = Self::Storage>;
+        + Execute<Descriptor<op::MatMulExact>, Output = Self::Storage>
+        + Execute<Descriptor<op::ReshapeExact>, Output = Self::Storage>;
 
     /// A name for the report. Usually the backend's type name.
     fn name(&self) -> String;
@@ -138,7 +138,7 @@ pub trait Subject {
     /// re-address bytes, and a short-accumulation profile for the rest.
     fn tolerance(&self, operation: OperationKind) -> Tolerance {
         match operation {
-            OperationKind::Reshape => Tolerance::EXACT,
+            OperationKind::ReshapeExact => Tolerance::EXACT,
             _ => Tolerance::F32_ACCUMULATED,
         }
     }
@@ -231,14 +231,23 @@ fn query(operation: OperationKind, rank: usize) -> CapabilityQuery {
     }
 }
 
-fn field<S: Shape>(dims: &[usize]) -> Result<ShapeBuf, String> {
-    S::try_from_dims(dims)
-        .map_err(|error| format!("the harness could not build the shape {dims:?}: {error}"))
+fn input_meta(dims: &[usize]) -> LogicalTensorMeta {
+    LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(dims)),
+        dtype: Some(DTypeId::F32.descriptor()),
+        device: None,
+    }
 }
 
-fn matmul_spec(lhs: &[usize], rhs: &[usize]) -> Result<Validated<MatMulSpec>, String> {
-    <MatMulRule as ShapeRule<(Dyn, Dyn)>>::lower(&(field::<Dyn>(lhs)?, field::<Dyn>(rhs)?), ())
-        .map_err(|error| format!("the harness could not lower matmul: {error}"))
+fn matmul_spec(
+    lhs: &[usize],
+    rhs: &[usize],
+) -> Result<Validated<Descriptor<op::MatMulExact>>, String> {
+    Descriptor::<op::MatMulExact>::infer_runtime(
+        NoAttributes,
+        vec![input_meta(lhs), input_meta(rhs)],
+    )
+    .map_err(|error| format!("the harness could not validate matmul: {error}"))
 }
 
 /// The suite's reshape fixture, `[2, 3]` reinterpreted as `[3, 2]`.
@@ -248,16 +257,12 @@ fn matmul_spec(lhs: &[usize], rhs: &[usize]) -> Result<Validated<MatMulSpec>, St
 /// a dynamically shaped reshape has nothing to lower. That is the rule working
 /// — element count is what reshape has to preserve — and it means the harness
 /// fixes this shape pair rather than taking it as arguments.
-fn reshape_spec() -> Result<Validated<ReshapeSpec>, String> {
-    type Lhs =
-        incin_core::shapes::DimCons<U2, incin_core::shapes::DimCons<U3, incin_core::shapes::Nil>>;
-    type Rhs =
-        incin_core::shapes::DimCons<U3, incin_core::shapes::DimCons<U2, incin_core::shapes::Nil>>;
-    <ReshapeRule as ShapeRule<(Lhs, Rhs)>>::lower(
-        &(field::<Lhs>(&[2, 3])?, field::<Rhs>(&[3, 2])?),
-        (),
+fn reshape_spec() -> Result<Validated<Descriptor<op::ReshapeExact>>, String> {
+    Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: vec![3, 2] },
+        vec![input_meta(&[2, 3])],
     )
-    .map_err(|error| format!("the harness could not lower reshape: {error}"))
+    .map_err(|error| format!("the harness could not validate reshape: {error}"))
 }
 
 /// Run a check, turning a panic into a failure.
@@ -359,7 +364,7 @@ fn metadata_agrees<S: Subject>(subject: &S) -> Result<(), String> {
 
 fn execute_matmul<S: Subject>(
     subject: &S,
-    spec: &Validated<MatMulSpec>,
+    spec: &Validated<Descriptor<op::MatMulExact>>,
     lhs: &S::Storage,
     rhs: &S::Storage,
 ) -> Result<S::Storage, String> {
@@ -379,7 +384,9 @@ fn execute_matmul<S: Subject>(
 }
 
 fn matmul_checks<S: Subject>(subject: &S) -> Vec<Check> {
-    let support = subject.backend().support(&query(OperationKind::MatMul, 2));
+    let support = subject
+        .backend()
+        .support(&query(OperationKind::MatMulExact, 2));
     if !support.is_supported() {
         let why = match support {
             SupportLevel::Unsupported(reason) => format!("{reason}"),
@@ -415,7 +422,7 @@ fn matmul_checks<S: Subject>(subject: &S) -> Vec<Check> {
                     expected.len()
                 ));
             }
-            let tolerance = subject.tolerance(OperationKind::MatMul);
+            let tolerance = subject.tolerance(OperationKind::MatMulExact);
             for (index, (want, got)) in expected.iter().zip(&actual).enumerate() {
                 if !tolerance.accepts(*want, f64::from(*got)) {
                     return Err(format!(
@@ -431,7 +438,11 @@ fn matmul_checks<S: Subject>(subject: &S) -> Vec<Check> {
             let rhs = subject.storage(&[3, 2], &rhs_values)?;
             let output = execute_matmul(subject, &spec, &lhs, &rhs)?;
             let meta = <S::Backend as StorageBackend>::metadata::<f32>(&output);
-            let declared = spec.descriptor().output.dims();
+            let declared = spec
+                .descriptor()
+                .output_shape()
+                .ok_or_else(|| "descriptor has no output shape".to_string())?
+                .dims();
             if meta.shape().dims() != declared {
                 return Err(format!(
                     "the validated descriptor says {declared:?} and the output reports {:?}; \
@@ -464,7 +475,9 @@ fn matmul_checks<S: Subject>(subject: &S) -> Vec<Check> {
 }
 
 fn reshape_checks<S: Subject>(subject: &S) -> Vec<Check> {
-    let support = subject.backend().support(&query(OperationKind::Reshape, 2));
+    let support = subject
+        .backend()
+        .support(&query(OperationKind::ReshapeExact, 2));
     if !support.is_supported() {
         let why = match support {
             SupportLevel::Unsupported(reason) => format!("{reason}"),
@@ -484,19 +497,20 @@ fn reshape_checks<S: Subject>(subject: &S) -> Vec<Check> {
 
     let values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
 
-    let execute =
-        |spec: &Validated<ReshapeSpec>, input: &S::Storage| -> Result<S::Storage, String> {
-            let context = ExecutionContext::new(subject.backend());
-            let inputs = [TensorHandle::from_storage::<S::Backend, f32, Local>(input)];
-            context
-                .backend()
-                .execute(ExecutionRequest {
-                    operation: spec,
-                    inputs: &inputs,
-                    context: &context,
-                })
-                .map_err(|error| format!("{error}"))
-        };
+    let execute = |spec: &Validated<Descriptor<op::ReshapeExact>>,
+                   input: &S::Storage|
+     -> Result<S::Storage, String> {
+        let context = ExecutionContext::new(subject.backend());
+        let inputs = [TensorHandle::from_storage::<S::Backend, f32, Local>(input)];
+        context
+            .backend()
+            .execute(ExecutionRequest {
+                operation: spec,
+                inputs: &inputs,
+                context: &context,
+            })
+            .map_err(|error| format!("{error}"))
+    };
 
     vec![
         guarded("reshape_preserves_element_order", || {
@@ -504,7 +518,7 @@ fn reshape_checks<S: Subject>(subject: &S) -> Vec<Check> {
             let input = subject.storage(&[2, 3], &values)?;
             let output = execute(&spec, &input)?;
             let actual = subject.values(&output)?;
-            let tolerance = subject.tolerance(OperationKind::Reshape);
+            let tolerance = subject.tolerance(OperationKind::ReshapeExact);
             if actual.len() != values.len() {
                 return Err(format!(
                     "reshape changed the element count from {} to {}",
@@ -551,7 +565,7 @@ fn registry_agrees<S: Subject>(subject: &S) -> Result<(), String> {
     let backend = subject.backend();
 
     let matmul_claimed = backend
-        .support(&query(OperationKind::MatMul, 2))
+        .support(&query(OperationKind::MatMulExact, 2))
         .is_supported();
     let spec = matmul_spec(&[2, 3], &[3, 2])?;
     let lhs = subject.storage(&[2, 3], &values)?;
@@ -570,7 +584,7 @@ fn registry_agrees<S: Subject>(subject: &S) -> Result<(), String> {
     }
 
     let reshape_claimed = backend
-        .support(&query(OperationKind::Reshape, 2))
+        .support(&query(OperationKind::ReshapeExact, 2))
         .is_supported();
     let spec = reshape_spec()?;
     let input = subject.storage(&[2, 3], &values)?;
@@ -605,7 +619,7 @@ fn registry_agrees<S: Subject>(subject: &S) -> Result<(), String> {
     ]
     .into_iter()
     .find(|dtype| {
-        let mut probe = query(OperationKind::MatMul, 2);
+        let mut probe = query(OperationKind::MatMulExact, 2);
         probe.dtype = *dtype;
         !backend.support(&probe).is_supported()
     });
