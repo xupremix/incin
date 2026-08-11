@@ -55,19 +55,10 @@ fn migrated() -> BTreeSet<OperationKind> {
 /// different claims, and only the first is true.
 fn blocking_reason(operation: OperationKind) -> Option<&'static str> {
     Some(match operation {
-        OperationKind::TensorFromData | OperationKind::TensorFromBytes => {
-            "`CreationAttributes` carries a shape, a dtype and a device, and no payload. \
-             The values to allocate from live only in the caller's argument, so the \
-             descriptor cannot describe the request"
-        }
         OperationKind::Sample => {
             "`DistributionAttributes` names its distribution as a string and its \
              parameters as bytes. Executing one needs a registry that maps that pair \
              back to a sampler, and no such registry exists"
-        }
-        OperationKind::EmbeddingExact | OperationKind::CrossEntropyLoss => {
-            "the operands differ in dtype by construction, a float table or logits \
-             against integer indices, and one `CapabilityRule` states one dtype set"
         }
         OperationKind::Rnn | OperationKind::Lstm => {
             "the descriptor carries no weights. Its operand arity admits an input and \

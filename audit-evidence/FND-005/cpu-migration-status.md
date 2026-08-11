@@ -4,14 +4,14 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**156 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 5 executable operations are still reachable only through the legacy operation-family traits.
+**158 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 3 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
 | Operation | Site | Migrated | Legacy source |
 |---|---|:--:|---|
-| `tensor_from_data` | `Creation` | no | `TensorArgsData` |
-| `tensor_from_bytes` | `Creation` | no | `Tensor::from_bytes` |
+| `tensor_from_data` | `Creation` | yes | `TensorArgsData` |
+| `tensor_from_bytes` | `Creation` | yes | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `HostReadback` | yes | `Tensor::to_bytes` |
 | `zeros` | `Creation` | yes | `CreationOps::zeros` |
 | `ones` | `Creation` | yes | `CreationOps::ones` |
@@ -178,8 +178,6 @@ None of these is an unwritten function. Each names a limit of the descriptor or 
 
 | Operation | What blocks it |
 |---|---|
-| `tensor_from_data` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
-| `tensor_from_bytes` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
 | `sample` | `DistributionAttributes` names its distribution as a string and its parameters as bytes. Executing one needs a registry that maps that pair back to a sampler, and no such registry exists |
 | `rnn` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
 | `lstm` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |

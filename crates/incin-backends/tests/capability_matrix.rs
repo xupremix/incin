@@ -13,7 +13,7 @@ use incin_core::backend_authoring::{
 use incin_core::exec::catalog::{
     ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
-    LossAttributes, LossReduction, NoAttributes, NormAttributes, SplitAttributes,
+    DataAttributes, LossAttributes, LossReduction, NoAttributes, NormAttributes, SplitAttributes,
     VarianceAttributes, op,
 };
 use incin_core::exec::{
@@ -525,6 +525,7 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         | OperationKind::VariableNormalRandom => &[2, 2],
         // The ranged fills are one-dimensional by definition.
         OperationKind::Arange | OperationKind::Linspace => &[4],
+        OperationKind::TensorFromData | OperationKind::TensorFromBytes => &[2],
         OperationKind::ToDType => &[2, 2],
         // Probed with `Mean`, so the result is the scalar the reduction
         // produces rather than the elementwise buffer feeding it.
@@ -1172,6 +1173,29 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             )
             .unwrap()
         }
+        OperationKind::TensorFromData | OperationKind::TensorFromBytes => {
+            let source = f32_storage(&[2], &[1.0, 2.0]);
+            let bytes = B::to_bytes::<f32>(&source).unwrap();
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new())
+                .with_grad_mode(GradMode::Disabled);
+            let attributes = DataAttributes {
+                shape: vec![2],
+                dtype: DTypeId::F32.descriptor(),
+                device: DeviceId::cpu(),
+                bytes,
+            };
+            match operation {
+                OperationKind::TensorFromData => {
+                    dispatch::execute::<op::TensorFromData, _>(&context, attributes, &[])
+                        .unwrap()
+                }
+                OperationKind::TensorFromBytes => {
+                    dispatch::execute::<op::TensorFromBytes, _>(&context, attributes, &[])
+                        .unwrap()
+                }
+                _ => unreachable!(),
+            }
+        }
         _ => panic!("missing CPU capability execution probe for {operation}"),
     }
 }
@@ -1627,6 +1651,11 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                         .collect();
                     let borrowed: Vec<&CpuStorage> = operands.iter().collect();
                     cpu_tensor_probe::<Dyn>(rule.operation, &borrowed)
+                }
+                OperationKind::TensorFromData | OperationKind::TensorFromBytes => {
+                    let source = cpu_zeros(dtype, &[2]);
+                    let bytes = B::to_bytes::<Dyn>(&source).unwrap();
+                    B::from_bytes::<Dyn>(&bytes, &[2], dtype, &DeviceId::cpu()).unwrap()
                 }
                 _ => panic!("missing dtype conformance probe for {}", rule.operation),
             };
