@@ -850,6 +850,7 @@ impl<S: Shape> ShapeValue<S> {
     /// Constructs a validated relationship between `S` and runtime dimensions.
     #[inline]
     pub fn try_new(dims: ShapeBuf) -> Result<Self, crate::shapes::error::ShapeError> {
+        S::STATIC_VALID;
         S::validate_dims(dims.as_ref())?;
         Ok(Self::from_validated(dims))
     }
@@ -860,6 +861,7 @@ impl<S: Shape> ShapeValue<S> {
     /// relationship between a shape type and incompatible dimensions.
     #[inline]
     pub(crate) fn from_validated(dims: ShapeBuf) -> Self {
+        S::STATIC_VALID;
         debug_assert!(S::validate_dims(dims.as_ref()).is_ok());
         Self {
             dims,
@@ -873,6 +875,7 @@ impl<S: Shape> ShapeValue<S> {
     /// runtime dimensions rather than a constructor adapter.
     #[inline]
     pub(crate) fn from_validated_buf(dims: crate::shapes::ShapeBuf) -> Self {
+        S::STATIC_VALID;
         debug_assert!(S::validate_dims(dims.as_ref()).is_ok());
         Self {
             dims,
