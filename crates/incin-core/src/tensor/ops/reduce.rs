@@ -5,16 +5,35 @@
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
 use crate::dist::{Local, Placement};
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::{
+    AxisAttributes, CanonicalOperation, Descriptor, LogicalTensorMeta, Operation, op,
+};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{GradMode, ReduceAtRule, ReduceKeepAtRule, ReductionSpec, ShapeRule};
+use crate::exec::{ExecutionDescriptor, GradMode};
 use crate::prelude::{Backend, DTypeId, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
+use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::backend::{Execute, FloatOps, NumericOps, TensorOps};
 use crate::tensor::dtype::DType;
+
+fn reduction_descriptor<O>(shape: &ShapeBuf, axis: usize) -> Result<Descriptor<O>>
+where
+    O: CanonicalOperation + Operation<Attributes = AxisAttributes>,
+{
+    Descriptor::<O>::infer_runtime(
+        AxisAttributes { axis },
+        alloc::vec![LogicalTensorMeta {
+            shape: Some(shape.clone()),
+            dtype: None,
+            device: None,
+        }],
+    )
+    .map(|validated| validated.into_descriptor())
+    .map_err(|error| crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error)))
+}
 
 macro_rules! impl_reduction_op {
     (
@@ -81,13 +100,15 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let spec = <ReduceAtRule<C> as ShapeRule<S>>::lower(
-            &self.shape_buf_value(),
-            crate::exec::spec::ReduceOp::Sum,
-        )?
-        .into_descriptor();
+        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
+        let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::SumDim,
+                rank: 0,
+            })
+        })?;
         let output_shape =
-            crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(spec.output.clone())
+            crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(output_dims)
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
@@ -130,15 +151,16 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let spec = <ReduceKeepAtRule<C> as ShapeRule<S>>::lower(
-            &self.shape_buf_value(),
-            crate::exec::spec::ReduceOp::Sum,
-        )?
-        .into_descriptor();
-        let output_shape = crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(
-            spec.output.clone(),
-        )
-        .map_err(crate::prelude::Error::Shape)?;
+        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
+        let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::SumKeepDim,
+                rank: 0,
+            })
+        })?;
+        let output_shape =
+            crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(output_dims)
+                .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
         let inner = self
@@ -183,13 +205,8 @@ impl<
         <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
-        let validated = ReductionSpec::new(
-            &self.shape_buf_value(),
-            crate::exec::AxisSet::EMPTY.insert(axis),
-            false,
-            crate::exec::spec::ReduceOp::Sum,
-        )?;
-        self.execute_named_reduction::<op::SumDim>(validated)
+        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
+        self.execute_named_reduction(descriptor)
     }
 
     /// Named-axis sum retaining the selected axis as a runtime length-one
@@ -205,18 +222,13 @@ impl<
         <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
-        let validated = ReductionSpec::new(
-            &self.shape_buf_value(),
-            crate::exec::AxisSet::EMPTY.insert(axis),
-            true,
-            crate::exec::spec::ReduceOp::Sum,
-        )?;
-        self.execute_named_reduction::<op::SumKeepDim>(validated)
+        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
+        self.execute_named_reduction(descriptor)
     }
 
     fn execute_named_reduction<O>(
         &self,
-        validated: ReductionSpec,
+        descriptor: Descriptor<O>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
     where
         O: crate::exec::catalog::CanonicalOperation
@@ -224,19 +236,15 @@ impl<
         B: Execute<Descriptor<O>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
     {
-        let axis = validated
-            .axes
-            .axes()
-            .next()
-            .ok_or(crate::err::Error::Shape(
-                crate::shapes::error::ShapeError::InvalidAxis {
-                    axis: 0,
-                    rank: self.shape_buf().len(),
-                },
-            ))?;
-        let output_shape =
-            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(validated.output.clone())
-                .map_err(crate::prelude::Error::Shape)?;
+        let axis = descriptor.attributes().axis;
+        let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: O::ID,
+                rank: 0,
+            })
+        })?;
+        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(output_dims)
+            .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
         let inner = self
