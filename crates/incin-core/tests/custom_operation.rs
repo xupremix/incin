@@ -1,10 +1,14 @@
 //! Public downstream proof for the open custom operation contract.
 
+extern crate incin_core as incin;
+
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey, StorageBackend,
-    execute_custom_shaped,
+    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
+    StorageBackend, execute_custom_shaped,
 };
-use incin_core::exec::{ExecutionContext, ExecutionDescriptor, ProofLevel};
+use incin_core::exec::{
+    Capabilities, CustomCapabilityQuery, ExecutionContext, ProofLevel, SupportLevel,
+};
 use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -27,7 +31,7 @@ impl Operation for CompanyIdentity {
     fn infer_outputs(
         attributes: &Self::Attributes,
         _inputs: &[LogicalTensorMeta],
-    ) -> Result<Vec<LogicalTensorMeta>, incin_core::backend_authoring::DescriptorError> {
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
         Ok(vec![LogicalTensorMeta {
             shape: Some(attributes.shape.clone()),
             dtype: Some(DTypeId::F32.descriptor()),
@@ -51,6 +55,17 @@ impl StorageBackend for CompanyBackend {
     }
 }
 
+impl Capabilities for CompanyBackend {
+    fn support(&self, _query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+        SupportLevel::Native
+    }
+
+    fn support_custom(&self, query: &CustomCapabilityQuery) -> SupportLevel {
+        assert_eq!(query.operation, CompanyIdentity::KEY);
+        SupportLevel::Native
+    }
+}
+
 impl Execute<incin_core::backend_authoring::CustomDescriptor<CompanyIdentity>> for CompanyBackend {
     type Output = ProofLevel;
 
@@ -68,7 +83,7 @@ impl Execute<incin_core::backend_authoring::CustomDescriptor<CompanyIdentity>> f
 
 #[test]
 fn downstream_custom_operation_keeps_static_shape_dispatch() {
-    type S = incin_core::prelude::s![2, 3];
+    type S = incin::prelude::s![2, 3];
     let expected = ShapeValue::<S>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
     let context = ExecutionContext::new(CompanyBackend);
     let output = execute_custom_shaped::<CompanyIdentity, _, S>(

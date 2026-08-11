@@ -2,14 +2,26 @@
 
 use core::fmt;
 
+use crate::exec::catalog::OperationKey;
 use crate::exec::{LayoutClass, MathMode};
-use crate::prelude::{DTypeId, OperationKind};
+use crate::prelude::{DTypeDescriptor, OperationKind};
 
 /// A complete runtime support question for one physical execution path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CapabilityQuery {
     pub operation: OperationKind,
-    pub dtype: DTypeId,
+    pub dtype: DTypeDescriptor,
+    pub layout: LayoutClass,
+    pub rank: usize,
+    pub training: bool,
+    pub math_mode: MathMode,
+}
+
+/// Capability query for an operation supplied outside the built-in catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CustomCapabilityQuery {
+    pub operation: OperationKey,
+    pub dtype: DTypeDescriptor,
     pub layout: LayoutClass,
     pub rank: usize,
     pub training: bool,
@@ -43,9 +55,12 @@ pub enum UnsupportedReason {
     Operation {
         operation: OperationKind,
     },
+    CustomOperation {
+        operation: OperationKey,
+    },
     DType {
         operation: OperationKind,
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
     },
     Layout {
         operation: OperationKind,
@@ -73,8 +88,13 @@ impl fmt::Display for UnsupportedReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Operation { operation } => write!(f, "operation {operation} is not registered"),
+            Self::CustomOperation { operation } => write!(
+                f,
+                "custom operation {}/{} v{} is not registered",
+                operation.namespace, operation.name, operation.version
+            ),
             Self::DType { operation, dtype } => {
-                write!(f, "dtype {dtype:?} is unsupported for {operation}")
+                write!(f, "dtype {} is unsupported for {operation}", dtype.name())
             }
             Self::Layout { operation, layout } => {
                 write!(
@@ -145,11 +165,22 @@ impl From<ImplementationKind> for SupportLevel {
     }
 }
 
+/// Explicit backend rank support capability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum RankSupport {
+    /// Supports arbitrary ranks without a backend ceiling (e.g. CPU generic loop).
+    Any,
+    /// Supports ranks up to `max`.
+    UpTo(usize),
+    /// Supports ranks within `[min, max]`.
+    Range { min: usize, max: usize },
+}
+
 /// One immutable capability registration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapabilityRule {
     pub operation: OperationKind,
-    pub dtypes: &'static [DTypeId],
+    pub dtypes: &'static [DTypeDescriptor],
     pub layouts: &'static [LayoutClass],
     pub min_rank: usize,
     pub max_rank: usize,
@@ -162,7 +193,7 @@ impl CapabilityRule {
     #[must_use]
     pub const fn new(
         operation: OperationKind,
-        dtypes: &'static [DTypeId],
+        dtypes: &'static [DTypeDescriptor],
         layouts: &'static [LayoutClass],
         min_rank: usize,
         max_rank: usize,
@@ -179,6 +210,21 @@ impl CapabilityRule {
             training,
             math_modes,
             implementation,
+        }
+    }
+
+    /// Returns the explicit rank support for this capability rule.
+    #[must_use]
+    pub const fn rank_support(&self) -> RankSupport {
+        if self.min_rank == 0 && self.max_rank == usize::MAX {
+            RankSupport::Any
+        } else if self.min_rank == 0 {
+            RankSupport::UpTo(self.max_rank)
+        } else {
+            RankSupport::Range {
+                min: self.min_rank,
+                max: self.max_rank,
+            }
         }
     }
 }
@@ -210,6 +256,16 @@ impl CapabilityRegistry {
 /// Runtime capability inspection implemented by registries and later contexts.
 pub trait Capabilities {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel;
+
+    /// Answers support for an open operation identity.
+    ///
+    /// The rejecting default preserves fail-closed behavior for backends that
+    /// have not opted into a downstream operation.
+    fn support_custom(&self, query: &CustomCapabilityQuery) -> SupportLevel {
+        SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+            operation: query.operation,
+        })
+    }
 }
 
 impl Capabilities for CapabilityRegistry {
@@ -294,8 +350,10 @@ impl Capabilities for CapabilityRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::DTypeId;
 
-    const F32: &[DTypeId] = &[DTypeId::F32];
+    const F32_DESC: DTypeDescriptor = DTypeId::F32.descriptor();
+    const F32: &[DTypeDescriptor] = &[F32_DESC];
     const CONTIGUOUS: &[LayoutClass] = &[LayoutClass::Contiguous];
     const PRECISE: &[MathMode] = &[MathMode::Precise];
     const RULES: &[CapabilityRule] = &[
@@ -324,7 +382,7 @@ mod tests {
     fn query(operation: OperationKind) -> CapabilityQuery {
         CapabilityQuery {
             operation,
-            dtype: DTypeId::F32,
+            dtype: DTypeId::F32.descriptor(),
             layout: LayoutClass::Contiguous,
             rank: 2,
             training: false,
@@ -361,15 +419,14 @@ mod tests {
     fn rejection_identifies_the_first_unsatisfied_constraint() {
         let registry = CapabilityRegistry::new(RULES);
         let mut q = query(OperationKind::Reduction);
-        q.dtype = DTypeId::F64;
-        assert!(matches!(
-            registry.support(&q),
-            SupportLevel::Unsupported(UnsupportedReason::DType {
-                dtype: DTypeId::F64,
-                ..
-            })
-        ));
-        q.dtype = DTypeId::F32;
+        q.dtype = DTypeId::F64.descriptor();
+        let level = registry.support(&q);
+        if let SupportLevel::Unsupported(UnsupportedReason::DType { dtype, .. }) = level {
+            assert_eq!(dtype, DTypeId::F64.descriptor());
+        } else {
+            panic!("expected DType unsupported, got {:?}", level);
+        }
+        q.dtype = DTypeId::F32.descriptor();
         q.layout = LayoutClass::Strided;
         assert!(matches!(
             registry.support(&q),

@@ -23,10 +23,12 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::err::BackendError;
-use crate::exec::capability::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
+use crate::exec::capability::{
+    Capabilities, CapabilityQuery, CustomCapabilityQuery, SupportLevel, UnsupportedReason,
+};
 use crate::exec::catalog::{
     CanonicalOperation, CustomDescriptor, CustomValidatedInvocation, Descriptor, DescriptorError,
-    LogicalTensorMeta, Operation,
+    LogicalTensorMeta, Operation, OperationKey,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::meta::TensorMeta;
@@ -116,6 +118,50 @@ fn admit<B: Capabilities>(
         math_mode,
     };
     match backend.support(&query) {
+        SupportLevel::Unsupported(reason) => Err(reason),
+        level => Ok(level),
+    }
+}
+
+fn admit_custom<B: Capabilities>(
+    backend: &B,
+    operation: OperationKey,
+    metadata: &TensorMeta,
+    context_training: bool,
+    math_mode: crate::exec::policy::MathMode,
+) -> Result<SupportLevel, UnsupportedReason> {
+    let query = CustomCapabilityQuery {
+        operation,
+        dtype: metadata.dtype,
+        layout: metadata.layout,
+        rank: metadata.shape.dims().len(),
+        training: context_training,
+        math_mode,
+    };
+    match backend.support_custom(&query) {
+        SupportLevel::Unsupported(reason) => Err(reason),
+        level => Ok(level),
+    }
+}
+
+fn admit_custom_output<B: Capabilities>(
+    backend: &B,
+    operation: OperationKey,
+    dtype: crate::prelude::DTypeDescriptor,
+    layout: crate::exec::meta::LayoutClass,
+    rank: usize,
+    context_training: bool,
+    math_mode: crate::exec::policy::MathMode,
+) -> Result<SupportLevel, UnsupportedReason> {
+    let query = CustomCapabilityQuery {
+        operation,
+        dtype,
+        layout,
+        rank,
+        training: context_training,
+        math_mode,
+    };
+    match backend.support_custom(&query) {
         SupportLevel::Unsupported(reason) => Err(reason),
         level => Ok(level),
     }
@@ -271,13 +317,39 @@ pub fn execute_custom<O, B>(
 ) -> Result<<B as Execute<CustomDescriptor<O>>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<CustomDescriptor<O>>,
+    B: Execute<CustomDescriptor<O>> + Capabilities,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
     let invocation = CustomValidatedInvocation::<O>::infer_runtime(attributes, logical)?;
+    let training = context.grad_mode() == GradMode::Enabled;
+    for handle in inputs {
+        admit_custom(
+            context.backend(),
+            O::KEY,
+            handle.metadata(),
+            training,
+            context.math_mode(),
+        )
+        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
+    }
+    for output in invocation.validated().descriptor().outputs() {
+        let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_ref()) else {
+            continue;
+        };
+        admit_custom_output(
+            context.backend(),
+            O::KEY,
+            dtype,
+            crate::exec::meta::LayoutClass::Contiguous,
+            shape.len(),
+            training,
+            context.math_mode(),
+        )
+        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
+    }
     context
         .backend()
         .execute_shaped::<crate::prelude::Dyn>(ExecutionRequest {
@@ -298,7 +370,7 @@ pub fn execute_custom_shaped<O, B, S>(
 ) -> Result<<B as Execute<CustomDescriptor<O>>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<CustomDescriptor<O>>,
+    B: Execute<CustomDescriptor<O>> + Capabilities,
     S: crate::prelude::Shape,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
@@ -306,6 +378,32 @@ where
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
     let invocation = CustomValidatedInvocation::<O>::infer_typed(attributes, logical, expected)?;
+    let training = context.grad_mode() == GradMode::Enabled;
+    for handle in inputs {
+        admit_custom(
+            context.backend(),
+            O::KEY,
+            handle.metadata(),
+            training,
+            context.math_mode(),
+        )
+        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
+    }
+    for output in invocation.validated().descriptor().outputs() {
+        let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_ref()) else {
+            continue;
+        };
+        admit_custom_output(
+            context.backend(),
+            O::KEY,
+            dtype,
+            crate::exec::meta::LayoutClass::Contiguous,
+            shape.len(),
+            training,
+            context.math_mode(),
+        )
+        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
+    }
     context
         .backend()
         .execute_shaped::<S>(ExecutionRequest {
