@@ -5,6 +5,14 @@ use crate::prelude::{
     SupportsDType, TensorArgs, TransferTo,
 };
 use crate::tensor::dtype::PlainDType;
+use crate::backend_authoring::{Descriptor, Execute};
+use crate::exec::catalog::{
+    ArangeAttributes, CreationAttributes, FullAttributes, LinspaceAttributes, op,
+};
+use crate::exec::Capabilities;
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -697,7 +705,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
 
 impl<
     S: Shape + DynShape,
-    B: Backend + crate::tensor::backend::CreationOps<B> + crate::tensor::backend::FloatOps<B>,
+    B: Backend,
     K: DType,
     G: RequiresGrad,
 > Tensor<S, B, K, G>
@@ -709,12 +717,25 @@ where
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::Zeros>> + Capabilities,
+        <B as Execute<Descriptor<op::Zeros>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::zeros(dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::Zeros, B, S>(
+            &context,
+            CreationAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -722,12 +743,25 @@ where
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::Ones>> + Capabilities,
+        <B as Execute<Descriptor<op::Ones>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::ones(dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::Ones, B, S>(
+            &context,
+            CreationAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -768,12 +802,25 @@ where
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::UniformRandom>> + Capabilities,
+        <B as Execute<Descriptor<op::UniformRandom>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::rand(dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::UniformRandom, B, S>(
+            &context,
+            CreationAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -781,12 +828,25 @@ where
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::NormalRandom>> + Capabilities,
+        <B as Execute<Descriptor<op::NormalRandom>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
-        let inner = B::randn(dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::NormalRandom, B, S>(
+            &context,
+            CreationAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -794,13 +854,27 @@ where
     pub fn full<Sc: Into<crate::tensor::backend::ScalarValue>, A>(val: Sc, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::Full>> + Capabilities,
+        <B as Execute<Descriptor<op::Full>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let scalar_f64 = val.into().to_f64();
-        let inner = B::full(scalar_f64, dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::Full, B, S>(
+            &context,
+            FullAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+                value: scalar_f64,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -812,14 +886,29 @@ where
     ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::Arange>> + Capabilities,
+        <B as Execute<Descriptor<op::Arange>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let s_f64 = start.into().to_f64();
         let st_f64 = step.into().to_f64();
-        let inner = B::arange(s_f64, st_f64, dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::Arange, B, S>(
+            &context,
+            ArangeAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+                start: s_f64,
+                step: st_f64,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -831,14 +920,29 @@ where
     ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: Execute<Descriptor<op::Linspace>> + Capabilities,
+        <B as Execute<Descriptor<op::Linspace>>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let s_f64 = start.into().to_f64();
         let e_f64 = end.into().to_f64();
-        let inner = B::linspace(s_f64, e_f64, dims.as_ref(), dtype, &device)?;
+        let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::Linspace, B, S>(
+            &context,
+            LinspaceAttributes {
+                shape: _shape.as_ref().to_vec(),
+                dtype,
+                device,
+                start: s_f64,
+                end: e_f64,
+            },
+            &[],
+            &expected,
+        )?
+        .into();
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -846,6 +950,7 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         B: SupportsDType<K>,
+        B: crate::tensor::backend::CreationOps<B> + crate::tensor::backend::FloatOps<B>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         dist.sample::<S, B, G>(_shape, &_device)
