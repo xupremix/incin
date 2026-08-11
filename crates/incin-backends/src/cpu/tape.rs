@@ -147,11 +147,10 @@ pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
     #[cfg(feature = "telemetry")]
     let n_ops = depth();
 
-    // Drain under the borrow, walk outside it. A convolution backward recipe
-    // records while it runs, and a walk holding this `RefCell` would panic on
-    // its second borrow rather than on anything to do with gradients.
-    let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss)?;
+    // Remove only this loss's graph. A separate live graph on the same thread
+    // must remain available for its own backward call.
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;
 
     #[cfg(feature = "telemetry")]
     {
@@ -504,7 +503,8 @@ mod tests {
     #[test]
     /// `backward_drains_tape_and_second_call_is_not_contaminated`.
     fn backward_drains_tape_and_second_call_is_not_contaminated() {
-        // First independent small graph.
+        // Keep two independent graphs live at the same time. Backward on the
+        // first graph must not consume the second graph's tape node.
         let x1 = scalar(1.0);
         let out1 = scalar(2.0);
         push(TapeEntry {
@@ -514,14 +514,7 @@ mod tests {
                 Ok(vec![scalar((grad_out.get(&[]) * 10.0) as f32)])
             }),
         });
-        let grads1 = backward(&out1).unwrap();
-        assert_eq!(grads1.get(x1.id).unwrap().get(&[]), 10.0);
 
-        // Tape must be empty immediately after backward() returns.
-        assert_eq!(depth(), 0);
-
-        // Second, independent small graph — must not see any entry from
-        // the first call, and must not be contaminated by grads1's map.
         let x2 = scalar(1.0);
         let out2 = scalar(2.0);
         push(TapeEntry {
@@ -531,6 +524,15 @@ mod tests {
                 Ok(vec![scalar((grad_out.get(&[]) * 100.0) as f32)])
             }),
         });
+
+        let grads1 = backward(&out1).unwrap();
+        assert_eq!(grads1.get(x1.id).unwrap().get(&[]), 10.0);
+
+        // The unrelated second graph remains available.
+        assert_eq!(depth(), 1);
+
+        // The second independent graph must not see entries from the first
+        // call, and must not be contaminated by grads1's map.
         let grads2 = backward(&out2).unwrap();
         assert_eq!(grads2.get(x2.id).unwrap().get(&[]), 100.0);
 

@@ -88,8 +88,8 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     #[cfg(feature = "telemetry")]
     let n_ops = depth();
 
-    let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss)?;
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;
 
     #[cfg(feature = "telemetry")]
     {

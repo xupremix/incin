@@ -243,6 +243,34 @@ impl<S> Tape<S> {
     pub fn drain(&mut self) -> Vec<TapeNode<S>> {
         core::mem::take(&mut self.nodes)
     }
+
+    /// Remove only the nodes reachable from `root`, leaving unrelated graphs
+    /// on the tape for their own backward calls.
+    #[must_use]
+    pub fn drain_reachable(&mut self, root: TensorId) -> Vec<TapeNode<S>> {
+        let mut reachable_ids = alloc::vec![root];
+        for node in self.nodes.iter().rev() {
+            if reachable_ids.contains(&node.output_id) {
+                for input in &node.input_ids {
+                    if !reachable_ids.contains(input) {
+                        reachable_ids.push(*input);
+                    }
+                }
+            }
+        }
+
+        let mut reachable = Vec::new();
+        let mut remaining = Vec::new();
+        for node in self.nodes.drain(..) {
+            if reachable_ids.contains(&node.output_id) {
+                reachable.push(node);
+            } else {
+                remaining.push(node);
+            }
+        }
+        self.nodes = remaining;
+        reachable
+    }
 }
 
 /// Walk `nodes` backward from `loss`, returning the accumulated gradients.

@@ -99,8 +99,8 @@ impl CudaGrads {
 }
 
 pub(crate) fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
-    let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss)?;
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;
     Ok(CudaGrads { grads })
 }
 

@@ -65,7 +65,7 @@ impl MetalGrads {
 ///
 /// Returns [`incin_core::prelude::Error`] if tape traversal or gradient accumulation fails.
 pub fn backward(loss: &MetalStorage) -> Result<MetalGrads> {
-    let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss)?;
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;
     Ok(MetalGrads { grads })
 }
