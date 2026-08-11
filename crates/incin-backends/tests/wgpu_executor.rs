@@ -176,7 +176,7 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
             error,
             BackendError::InvalidInput {
                 operation: OperationKind::MatMulExact,
-                reason: "matmul input is not WGPU storage"
+                reason: "lhs is not WGPU storage"
             }
         ));
     }
