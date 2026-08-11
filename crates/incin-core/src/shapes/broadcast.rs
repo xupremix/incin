@@ -169,17 +169,27 @@ impl<A: Dim, B: Dim> AnonymousDim for crate::shapes::dim::MulDim<A, B> {}
 impl<A: AnonymousDim, B: AnonymousDim> AnonymousDim for crate::shapes::dim::BroadcastExtent<A, B> {}
 
 type StaticBroadcast<L, R> = crate::shapes::dim::BroadcastStaticNat<L, R>;
+type RuntimeStatic<R> =
+    <<R as typenum::IsEqual<typenum::U1>>::Output as crate::shapes::dim::BroadcastChoice<
+        usize,
+        R,
+    >>::Output;
+type StaticRuntime<L> =
+    <<L as typenum::IsEqual<typenum::U1>>::Output as crate::shapes::dim::BroadcastChoice<
+        usize,
+        L,
+    >>::Output;
 
 /// Closed local marker for the recursive typenum natural types emitted by
 /// the shape macros. Keeping this marker local lets the runtime `usize` axis
 /// remain disjoint from static broadcast implementations under Stable Rust's
 /// coherence rules.
-trait StaticNatDim: AnonymousDim + typenum::Unsigned {}
+trait StaticNatDim: AnonymousDim + typenum::Unsigned + typenum::IsEqual<typenum::U1> {}
 
 impl StaticNatDim for typenum::UTerm {}
 
 impl<U, B> StaticNatDim for typenum::UInt<U, B> where
-    typenum::UInt<U, B>: AnonymousDim + typenum::Unsigned
+    typenum::UInt<U, B>: AnonymousDim + typenum::Unsigned + typenum::IsEqual<typenum::U1>
 {
 }
 
@@ -207,21 +217,42 @@ impl BroadcastDim<usize> for usize {
     type Output = crate::shapes::dim::BroadcastExtent<Self, usize>;
 }
 
-impl<R: StaticNatDim> BroadcastDim<R> for usize {
-    type Output = crate::shapes::dim::BroadcastExtent<Self, R>;
+impl<R> BroadcastDim<R> for usize
+where
+    R: StaticNatDim,
+    <R as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, R>,
+    RuntimeStatic<R>: Dim,
+{
+    type Output = RuntimeStatic<R>;
 }
 
-impl<L: StaticNatDim> BroadcastDim<usize> for L {
-    type Output = crate::shapes::dim::BroadcastExtent<L, usize>;
+impl<L> BroadcastDim<usize> for L
+where
+    L: StaticNatDim,
+    <L as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, L>,
+    StaticRuntime<L>: Dim,
+{
+    type Output = StaticRuntime<L>;
 }
 
 /// A named runtime axis remains named when it meets an anonymous axis.
 impl<Tag, R> BroadcastDim<R> for crate::shapes::dim::NamedDim<Tag, usize>
 where
     Tag: crate::shapes::AxisTag,
-    R: AnonymousDim,
+    R: StaticNatDim,
+    R: typenum::IsEqual<typenum::U1>,
+    <R as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, R>,
+    RuntimeStatic<R>: Dim,
 {
-    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<usize, R>>;
+    type Output = crate::shapes::dim::NamedDim<Tag, RuntimeStatic<R>>;
+}
+
+impl<Tag> BroadcastDim<usize> for crate::shapes::dim::NamedDim<Tag, usize>
+where
+    Tag: crate::shapes::AxisTag,
+{
+    type Output =
+        crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<usize, usize>>;
 }
 
 /// An anonymous static axis adopts the semantic name of a named static axis.
@@ -246,8 +277,11 @@ impl<Tag, L> BroadcastDim<crate::shapes::dim::NamedDim<Tag, usize>> for L
 where
     Tag: crate::shapes::AxisTag,
     L: StaticNatDim,
+    L: typenum::IsEqual<typenum::U1>,
+    <L as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, L>,
+    StaticRuntime<L>: Dim,
 {
-    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<L, usize>>;
+    type Output = crate::shapes::dim::NamedDim<Tag, StaticRuntime<L>>;
 }
 
 /// A named static axis remains named when it meets an anonymous static axis.
@@ -266,6 +300,17 @@ where
     StaticBroadcast<L, R>: Dim,
 {
     type Output = crate::shapes::dim::NamedDim<Tag, StaticBroadcast<L, R>>;
+}
+
+impl<Tag, L> BroadcastDim<usize> for crate::shapes::dim::NamedDim<Tag, L>
+where
+    Tag: crate::shapes::AxisTag,
+    L: StaticNatDim,
+    L: typenum::IsEqual<typenum::U1>,
+    <L as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, L>,
+    StaticRuntime<L>: Dim,
+{
+    type Output = crate::shapes::dim::NamedDim<Tag, StaticRuntime<L>>;
 }
 
 /// Equal semantic names remain named for static extents. Different tags
@@ -293,9 +338,21 @@ impl<Tag, R> BroadcastDim<crate::shapes::dim::NamedDim<Tag, R>>
     for crate::shapes::dim::NamedDim<Tag, usize>
 where
     Tag: crate::shapes::AxisTag,
-    R: Dim,
+    R: StaticNatDim,
+    R: typenum::IsEqual<typenum::U1>,
+    <R as typenum::IsEqual<typenum::U1>>::Output: crate::shapes::dim::BroadcastChoice<usize, R>,
+    RuntimeStatic<R>: Dim,
 {
-    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<usize, R>>;
+    type Output = crate::shapes::dim::NamedDim<Tag, RuntimeStatic<R>>;
+}
+
+impl<Tag> BroadcastDim<crate::shapes::dim::NamedDim<Tag, usize>>
+    for crate::shapes::dim::NamedDim<Tag, usize>
+where
+    Tag: crate::shapes::AxisTag,
+{
+    type Output =
+        crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<usize, usize>>;
 }
 
 // ============================================================================

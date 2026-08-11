@@ -236,6 +236,23 @@ fn meeting_a_static_axis_recovers_the_size_the_runtime_one_lost() {
 }
 
 #[test]
+fn runtime_static_broadcast_keeps_the_provable_output_extent() {
+    type AnonymousOut = <s![usize] as BroadcastShape<s![64]>>::Output;
+    type NamedOut = <s![Batch] as BroadcastShape<s![64]>>::Output;
+    type ExpectedAnonymous = s![64];
+    type ExpectedNamed = s![Batch: 64];
+
+    assert_same::<AnonymousOut, ExpectedAnonymous>();
+    assert_same::<NamedOut, ExpectedNamed>();
+}
+
+#[test]
+fn runtime_broadcast_with_static_one_remains_runtime() {
+    type Out = <s![usize] as BroadcastShape<s![1]>>::Output;
+    assert_same::<Out, s![usize]>();
+}
+
+#[test]
 fn meeting_a_literal_one_keeps_the_axis_dynamic() {
     // The mirror of the case above, and the reason it cannot be stated as "the
     // static side always wins": `U1` proves nothing about the result, so the
