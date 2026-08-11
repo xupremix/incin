@@ -1,5 +1,12 @@
+use crate::dist::placement::Local;
+use crate::exec::capability::Capabilities;
+use crate::exec::catalog::{Descriptor, DropoutAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
+use crate::tensor::backend::Execute;
 
 /// A Dropout layer.
 ///
@@ -47,45 +54,44 @@ impl TrainMode for Dropout {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Dropout
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: BuiltinDType,
+> Module<Tensor<S, B, K>> for Dropout
 where
-    B::FloatElem: ConstDType,
+    B: SupportsDType<K> + Capabilities + Execute<Descriptor<op::Dropout>>,
     B::Device: ConstDevice,
+    <B as Execute<Descriptor<op::Dropout>>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B>;
+    type Output = Tensor<S, B, K>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+    fn forward(&self, x: Tensor<S, B, K>) -> core::result::Result<Tensor<S, B, K>, Error> {
         if !self.is_training || self.p <= 0.0 {
             return Ok(x);
         }
 
-        if self.p >= 1.0 {
-            return x.mul_scalar(0.0);
-        }
-
-        let scale = 1.0 / (1.0 - self.p);
-
-        // Generate uniform mask in [0, 1)
-        let dtype = <B::FloatElem as ConstDType>::DTYPE;
-        let mask_inner = B::rand(x.dims().as_ref(), dtype, &x.device()?)?;
-        let mask = Tensor::<S, B, B::FloatElem, NoGrad>::from_parts(
-            mask_inner,
+        let input = TensorHandle::from_storage::<B, K, Local>(&x.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let output = dispatch::execute_shaped::<op::Dropout, B, S>(
+            &context,
+            DropoutAttributes {
+                probability: self.p as f64,
+                training: self.is_training,
+            },
+            &[input],
+            &x._shape,
+        )
+        .map_err(Error::from)?
+        .into();
+        Tensor::from_shape_value(
+            output,
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
-            core::marker::PhantomData,
-        )?;
-
-        // mask - p is positive for (1 - p) proportion of elements
-        let mask = mask.add_scalar(-self.p)?;
-
-        // apply step function: 1.0 if (mask - p) > 0.0 else 0.0
-        let binary_mask = mask.step()?;
-
-        // multiply input by mask and scale
-        let out = x.mul(&binary_mask.require_grad())?.mul_scalar(scale)?;
-        Ok(out)
+            x._grad.clone(),
+        )
     }
 }
