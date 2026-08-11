@@ -1,7 +1,12 @@
+use crate::dist::placement::Local;
 use crate::err::{Error, Result};
+use crate::exec::catalog::{QuantizationAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::nn::StateDict;
-use crate::tensor::backend::{Backend, SupportsDType};
-use crate::tensor::dtype::Q8_0;
+use crate::tensor::backend::{Backend, Execute, SupportsDType};
+use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -143,8 +148,11 @@ pub struct GgufExporter<'a, B: Backend, M: StateDict<B>> {
     _phantom: core::marker::PhantomData<B>,
 }
 
-impl<'a, B: Backend + crate::tensor::backend::QuantizedOps<B>, M: StateDict<B>>
-    GgufExporter<'a, B, M>
+impl<'a, B, M> GgufExporter<'a, B, M>
+where
+    B: Backend + Execute<op::Quantize>,
+    M: StateDict<B>,
+    <B as Execute<op::Quantize>>::Output: Into<B::Storage<Q8_0>>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.
     pub fn from_module(module: &'a M) -> Self {
@@ -254,7 +262,16 @@ impl<'a, B: Backend + crate::tensor::backend::QuantizedOps<B>, M: StateDict<B>>
                 self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
 
             let (bytes, ggml_type) = if can_quantize {
-                let quantized = B::quantize::<f32, Q8_0>(var.inner())?;
+                let context = ExecutionContext::from_scope(B::default());
+                let input = TensorHandle::from_storage::<B, f32, Local>(var.inner());
+                let quantized = dispatch::execute::<op::Quantize, B>(
+                    &context,
+                    QuantizationAttributes {
+                        dtype: DTypeId::Q8_0.descriptor(),
+                    },
+                    &[input],
+                )?;
+                let quantized: B::Storage<Q8_0> = quantized.into();
                 (
                     B::to_bytes::<Q8_0>(&quantized)?,
                     QuantScheme::Q8_0.ggml_type_id(),

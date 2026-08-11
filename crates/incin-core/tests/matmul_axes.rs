@@ -3,6 +3,7 @@
 extern crate incin_core as incin;
 
 use incin_core::prelude::*;
+use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 incin_core::dim!(Batch, Contract, Features, Time);
@@ -156,4 +157,19 @@ fn named_batch_broadcast_preserves_name_and_static_extent() {
             .as_ref(),
         &[25, 3, 5]
     );
+}
+
+#[test]
+fn bmm_preserves_named_static_output_type() {
+    type B = DummyBackend<Cpu>;
+    type L = s![Batch: 25, 3, Features: 64];
+    type R = s![Batch: 1, Features: 64, 5];
+    type Expected = s![Batch: 25, 3, 5];
+
+    let lhs: Tensor<L, B> = Tensor::ones(()).unwrap();
+    let rhs: Tensor<R, B> = Tensor::ones(()).unwrap();
+    let output = lhs.bmm(&rhs).unwrap();
+
+    assert_same::<_, Tensor<Expected, B>>();
+    assert_eq!(output.shape_buf().as_ref(), &[25, 3, 5]);
 }

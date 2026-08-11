@@ -56,6 +56,36 @@ fn checked_construction_rejects_static_shape_contract_mismatch() {
 }
 
 #[test]
+fn parameter_checked_construction_validates_static_shape_contract() {
+    let source = Tensor::<s![2], B>::zeros(()).unwrap().into_inner();
+    let storage = B::var_from_tensor::<f32>(&source).unwrap();
+    let err = Param::<s![3], B>::from_parts_checked(
+        storage,
+        ShapeBuf::from_slice(&[2]),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(err, Error::Shape(_)));
+}
+
+#[test]
+fn buffer_checked_construction_validates_static_shape_contract() {
+    let source = Tensor::<s![2], B>::zeros(()).unwrap().into_inner();
+    let storage = B::var_from_tensor::<f32>(&source).unwrap();
+    let err = Buffer::<s![3], B>::from_parts_checked(
+        storage,
+        ShapeBuf::from_slice(&[2]),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(err, Error::Shape(_)));
+}
+
+#[test]
 fn checked_construction_rejects_storage_dtype_mismatch() {
     let storage = Tensor::<s![2], B>::zeros(()).unwrap().into_inner();
     let err = Tensor::<Dyn, B, u32>::try_from_storage(

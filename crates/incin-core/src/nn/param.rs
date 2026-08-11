@@ -250,6 +250,7 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
     where
         B: SupportsDType<K>,
     {
+        let shape_value = ShapeValue::<S>::try_new(shape.clone()).map_err(Error::Shape)?;
         let storage = B::var_as_tensor::<K>(&raw_var)?;
         let meta = B::metadata(&storage);
 
@@ -281,7 +282,7 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
 
         Ok(Self {
             inner: raw_var,
-            _shape: ShapeValue::from_validated(shape),
+            _shape: shape_value,
             _dtype: dtype,
             _device: device,
             _train: PhantomData,
@@ -477,11 +478,23 @@ where
     pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
+        B: SupportsDType<K>,
     {
         let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
+        let shape_value = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
+        let storage = B::var_as_tensor::<K>(&inner)?;
+        let actual = B::shape(&storage);
+        if actual.as_ref() != _shape.as_ref() {
+            return Err(Error::ShapeMismatch {
+                op: "Param::from_raw",
+                expected: _shape.as_ref().to_vec(),
+                got: actual.as_ref().to_vec(),
+                msg: "Parameter storage shape mismatch".into(),
+            });
+        }
         Ok(Self {
             inner,
-            _shape: ShapeValue::from_validated(_shape),
+            _shape: shape_value,
             _dtype,
             _device,
             _train: PhantomData,
@@ -645,6 +658,7 @@ impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
     where
         B: SupportsDType<K>,
     {
+        let shape_value = ShapeValue::<S>::try_new(shape.clone()).map_err(Error::Shape)?;
         let storage = B::var_as_tensor::<K>(&raw_var)?;
         let meta = B::metadata(&storage);
 
@@ -676,7 +690,7 @@ impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
 
         Ok(Self {
             inner: raw_var,
-            _shape: ShapeValue::from_validated(shape),
+            _shape: shape_value,
             _dtype: dtype,
             _device: device,
         })

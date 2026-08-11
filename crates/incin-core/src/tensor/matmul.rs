@@ -450,7 +450,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     /// This compatibility spelling uses the same exact structural matmul
     /// descriptor as `matmul`; it does not call a parallel backend family
     /// implementation.
-    pub fn bmm<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G1>) -> Result<Tensor<Dyn, B, K, G1>>
+    pub fn bmm<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G1>) -> Result<Tensor<S1::Output, B, K, G1>>
     where
         S1: DynShape + MatMulShape<S2>,
         S2: DynShape,
@@ -474,9 +474,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
                 )
             })?
             .into();
-        Tensor::<Dyn, B, K, G1>::from_shape_buf(
+        Tensor::<S1::Output, B, K, G1>::from_shape_value(
             inner,
-            output_shape,
+            expected,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
