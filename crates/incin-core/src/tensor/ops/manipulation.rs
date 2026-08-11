@@ -600,11 +600,18 @@ impl<
             > + Capabilities,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
-        let validated = <crate::exec::BroadcastRule as crate::exec::ShapeRule<(S, S2)>>::lower(
-            &(self.shape_buf_value(), new_shape_field.clone()),
+        <<S as crate::shapes::broadcast::BroadcastShape<S2>>::Output as Shape>::STATIC_VALID;
+        let resolved = <S as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(
+            &self.shape_buf_value(),
+            &new_shape_field,
+        )?;
+        let spec = crate::exec::BroadcastSpec::contiguous(
+            &self.shape_buf_value(),
+            &new_shape_field,
             None,
         )?;
-        let new_shape_field = validated.descriptor().output.clone();
+        let new_shape_field = spec.output;
+        debug_assert_eq!(resolved, new_shape_field);
         let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
