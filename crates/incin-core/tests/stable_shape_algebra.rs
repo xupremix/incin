@@ -286,16 +286,10 @@ use incin_core::shapes::idx::ToAxisIndex;
 use incin_core::test_utils::DummyBackend;
 
 #[test]
-fn test_derived_dimension_from_arg_validation() {
-    // Valid construction matches static extent 128
-    let valid = MulDim::<ConstDim<32>, ConstDim<4>>::from_arg(128);
-    assert_eq!(valid.size(), 128);
-
-    // Contradictory argument panics
-    let res = std::panic::catch_unwind(|| {
-        MulDim::<ConstDim<32>, ConstDim<4>>::from_arg(999);
-    });
-    assert!(res.is_err());
+fn test_derived_dimension_argument_validation_is_fallible() {
+    let valid = MulDim::<ConstDim<32>, ConstDim<4>>::resolve_arg(128).unwrap();
+    assert_eq!(valid, 128);
+    assert!(MulDim::<ConstDim<32>, ConstDim<4>>::resolve_arg(999).is_err());
 }
 
 #[test]
