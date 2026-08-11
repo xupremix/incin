@@ -1,0 +1,19 @@
+error[E0277]: the trait bound `bool: incin::PlainDType` is not satisfied
+ --> tests/target_api_compile_fail/bool_not_plain_dtype.rs:6:22
+  |
+6 |     requires_plain::<bool>();
+  |                      ^^^^ the trait `incin::PlainDType` is not implemented for `bool`
+  |
+  = help: the following other types implement trait `incin::PlainDType`:
+            f32
+            f64
+            i64
+            incin::bf16
+            incin::f16
+            u32
+            u8
+note: required by a bound in `requires_plain`
+ --> tests/target_api_compile_fail/bool_not_plain_dtype.rs:3:22
+  |
+3 | fn requires_plain<T: PlainDType>() {}
+  |                      ^^^^^^^^^^ required by this bound in `requires_plain`

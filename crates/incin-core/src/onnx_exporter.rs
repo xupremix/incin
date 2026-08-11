@@ -110,6 +110,7 @@ fn dtype_to_onnx(dt: DTypeId) -> onnx::tensor_proto::DataType {
         DTypeId::I64 => onnx::tensor_proto::DataType::Int64,
         DTypeId::U8 => onnx::tensor_proto::DataType::Uint8,
         DTypeId::Q8_0 => onnx::tensor_proto::DataType::Undefined,
+        DTypeId::Bool => onnx::tensor_proto::DataType::Bool,
     }
 }
 
@@ -147,7 +148,7 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
         _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
-        <<B as Backend>::Device as Device>::Field: Default,
+        <B::Device as Device>::Field: Default,
     {
         // Try to run export_to_onnx with thread local graph
         let g = crate::tensor::tracing::TRACING_GRAPH.lock();
@@ -177,7 +178,7 @@ impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
         _device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as Backend>::Device as Device>::Field: Default,
+        <B::Device as Device>::Field: Default,
     {
         Err(anyhow::anyhow!(
             "ONNX loading is currently unsupported. Please use Format::Safetensors instead."

@@ -19,5 +19,5 @@ note: required by a bound in `TensorParallelPlanBuilder::<'a>::push_column_stati
   |     pub fn push_column_static<K, Axis, Out>(
   |            ------------------ required by a bound in this associated function
 ...
-  |         K: ConstDType + TensorParallelDType,
-  |                         ^^^^^^^^^^^^^^^^^^^ required by this bound in `TensorParallelPlanBuilder::<'a>::push_column_static`
+  |         K: ConstDType + BuiltinDType + TensorParallelDType,
+  |                                        ^^^^^^^^^^^^^^^^^^^ required by this bound in `TensorParallelPlanBuilder::<'a>::push_column_static`

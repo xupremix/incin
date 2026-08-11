@@ -27,6 +27,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `std` | yes | Enables standard-library functionality, serialization, and filesystem APIs. |
 | `nightly` | no | Enables nightly-only APIs in the core and macro crates. |
 | `cpu` | yes | Enables the built-in CPU backend. This is the only default backend. |
+| `target-api` | no | **Experimental.** Device values as user-facing allocation targets. Additive: it adds a construction surface and removes none. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`. |
 | `cpu-blas` | no | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
 | `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
 | `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
@@ -34,11 +35,14 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `metal-mps` | no | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
 | `autotune` | no | Enables CUDA launch autotuning. |
-| `train` | no | Enables the preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
+| `train` | no | Enables the preview trainer at `incin::experimental::training`. The interface may change without a migration path. |
 | `distributed` | no | Enables typed meshes, static/runtime tensor placements, and distributed lowering proofs. Transports remain separate opt-in backend features. |
 | `distributed-reference` | no | Enables the deterministic in-process collective transport used by conformance tests and local distributed-plan development. |
 | `distributed-nccl` | no | Two-host process-per-rank CUDA transport and its TCP bootstrap. |
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
+| `test-utils` | no | Test-only backends and test utilities. |
+| `backend-authoring` | no | Extension contracts for backend authors. |
+| `compiled` | no | Curated preview types for compiled execution. |
 <!-- END GENERATED: facade-features -->
 
 Examples:
@@ -60,8 +64,8 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
-- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, and `metal`.
+- `incin-backends`: defaults to `std,cpu`; optional `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `test-utils`, and `compiled`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
 - `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.

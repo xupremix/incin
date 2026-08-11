@@ -328,7 +328,7 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
         let shape = shape_tokens(dims);
         let ident = format_ident!("_input_{index}");
         values.insert(input.name.clone(), ident.clone());
-        input_parameters.push(quote! { #ident: ::incin::prelude::Tensor<#shape, B> });
+        input_parameters.push(quote! { #ident: ::incin::prelude::Tensor<#shape, B, K> });
     }
 
     let statements = parse_graph_nodes(model, graph, &mut values)?;
@@ -344,14 +344,14 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
 
     Ok(quote! {
         #[::incin::prelude::module]
-        pub struct #root_name<B: ::incin::prelude::Backend> {
+        pub struct #root_name<B: ::incin::prelude::Backend, K: ::incin::prelude::DType = f32> {
             #[module(ignore)]
-            _marker: ::core::marker::PhantomData<B>,
+            _marker: ::core::marker::PhantomData<(B, K)>,
         }
 
-        impl<B: ::incin::prelude::Backend> #root_name<B>
+        impl<B: ::incin::prelude::Backend, K: ::incin::prelude::ConstDType> #root_name<B, K>
         where
-            B::FloatElem: ::incin::prelude::ConstDType,
+            B: ::incin::prelude::SupportsDType<K>,
             B::Device: ::incin::prelude::ConstDevice,
         {
             /// Creates a stateless imported graph.
@@ -363,7 +363,7 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
             pub fn forward(
                 &self,
                 #(#input_parameters),*
-            ) -> ::incin::prelude::Result<::incin::prelude::Tensor<#output_shape, B>> {
+            ) -> ::incin::prelude::Result<::incin::prelude::Tensor<#output_shape, B, K>> {
                 #(#statements)*
                 #final_output.into_shape::<#output_shape>()
             }

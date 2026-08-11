@@ -194,12 +194,12 @@ where
 impl<
     S: LayerNormShape,
     InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>,
-    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::LayerNorm>>,
+    B: Backend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InS, B, K>> for LayerNorm<S, B, K, Train>
 where
-    <B as Execute<Descriptor<op::LayerNorm>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InS, B, K>;
     type Error = Error;

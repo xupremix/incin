@@ -1,20 +1,18 @@
-error[E0277]: Cannot use shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>)` here: its last dimension must be `UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>`
-  --> tests/compile_fail/forward_model_building_mismatch.rs:16:25
+error[E0277]: Cannot use shape `DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>` here: its last dimension must be `UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>`
+  --> tests/compile_fail/forward_model_building_mismatch.rs:16:17
    |
 16 |     let _y = l2.forward(x).unwrap();
-   |                 ------- ^ wrong trailing dimension
-   |                 |
-   |                 required by a bound introduced by this call
+   |                 ^^^^^^^ wrong trailing dimension
    |
-   = help: the trait `EndsWith<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>)`
+   = help: the trait `EndsWith<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>>` is not implemented for `DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>`
    = note: the input's last dimension must match this layer's expected input size
-   = help: the following other types implement trait `EndsWith<D>`:
-             `(D0, D1)` implements `EndsWith<D1>`
-             `(D0, D1, D2)` implements `EndsWith<D2>`
-             `(D0, D1, D2, D3)` implements `EndsWith<D3>`
-             `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
-             `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
-             `(D0, D1, D2, D3, D4, D5, D6)` implements `EndsWith<D6>`
-             `(D0, D1, D2, D3, D4, D5, D6, D7)` implements `EndsWith<D7>`
-             `(D0,)` implements `EndsWith<D0>`
-   = note: required for `incin::nn::Linear<(UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>, f32>>`
+help: the following other types implement trait `EndsWith<D>`
+  --> src/shapes/shape.rs
+   |
+   |   impl<D: Dim> EndsWith<D> for DimCons<D, Nil> {}
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `DimCons<D, Nil>`
+   | / impl<H: Dim, H2: Dim, T: Shape, D: Dim> EndsWith<D> for DimCons<H, DimCons<H2, T>> where
+   | |     DimCons<H2, T>: EndsWith<D>
+   | |_______________________________^ `DimCons<H, DimCons<H2, T>>`
+   = note: required for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>>` to implement `EndsWith<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>>`
+   = note: required for `incin::nn::Linear<DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, B0>, Nil>>, DummyBackend<incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>>, DummyBackend<incin::prelude::Cpu>>>`

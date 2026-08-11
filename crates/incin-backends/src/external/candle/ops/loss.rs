@@ -1,54 +1,61 @@
 //! Loss operations for the Candle adapter.
 
 use crate::external::candle::CandleBackend;
+use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::backend_authoring::LossOps<Self> for CandleBackend<T, D>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::LossOps<Self>
+    for CandleBackend<D>
 {
     /// Computes L1 (Mean Absolute Error) loss: `|pred - target|` with
     /// the given `reduction` (Mean, Sum, or None).
     fn l1_loss<K: incin_core::prelude::DType>(
-        pred: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        target: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<K>,
         reduction: incin_core::prelude::Reduction,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let diff = pred
-            .broadcast_sub(target)
+            .tensor()
+            .broadcast_sub(target.tensor())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let abs_diff = diff
             .abs()
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        match reduction {
-            incin_core::prelude::Reduction::Mean => Ok(abs_diff
+        let raw = match reduction {
+            incin_core::prelude::Reduction::Mean => abs_diff
                 .mean_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            incin_core::prelude::Reduction::Sum => Ok(abs_diff
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            incin_core::prelude::Reduction::Sum => abs_diff
                 .sum_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            incin_core::prelude::Reduction::None => Ok(abs_diff),
-        }
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            incin_core::prelude::Reduction::None => abs_diff,
+        };
+        CandleStorage::try_new(raw)
     }
 
     /// Computes Binary Cross-Entropy from logits:
     /// `max(x, 0) - x*y + log(1 + exp(-|x|))`
     /// with the given `reduction` (Mean, Sum, or None).
     fn bce_with_logits_loss<K: incin_core::prelude::DType>(
-        pred: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        target: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<K>,
         reduction: incin_core::prelude::Reduction,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // Numerically stable: max(x, 0) - x*y + log(1 + exp(-|x|))
         let zero = pred
+            .tensor()
             .zeros_like()
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let relu_x = pred
+            .tensor()
             .maximum(&zero)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let x_y = pred
-            .broadcast_mul(target)
+            .tensor()
+            .broadcast_mul(target.tensor())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let abs_x = pred
+            .tensor()
             .abs()
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let neg_abs_x = abs_x
@@ -66,41 +73,44 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
             .broadcast_add(&log_term)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        match reduction {
-            incin_core::prelude::Reduction::Mean => Ok(elementwise
+        let raw = match reduction {
+            incin_core::prelude::Reduction::Mean => elementwise
                 .mean_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            incin_core::prelude::Reduction::Sum => Ok(elementwise
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            incin_core::prelude::Reduction::Sum => elementwise
                 .sum_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            incin_core::prelude::Reduction::None => Ok(elementwise),
-        }
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            incin_core::prelude::Reduction::None => elementwise,
+        };
+        CandleStorage::try_new(raw)
     }
 
     /// Computes mean squared error between `pred` and `target`; the
     /// reduction argument is ignored since candle's `mse` always averages.
     fn mse_loss<K: incin_core::prelude::DType>(
-        pred: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        target: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<K>,
         _reduction: incin_core::prelude::Reduction,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        let loss = candle_nn::loss::mse(pred, target)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let loss = candle_nn::loss::mse(pred.tensor(), target.tensor())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        Ok(loss)
+        CandleStorage::try_new(loss)
     }
 
     /// Computes cross-entropy loss between `pred` logits and `target`
     /// class indices, casting `target` to `U32` as candle requires; the
     /// reduction argument is ignored.
     fn cross_entropy_loss<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
-        pred: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        target: &<Self as incin_core::prelude::Backend>::Storage<KInt>,
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<KInt>,
         _reduction: incin_core::prelude::Reduction,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let target_u32 = target
+            .tensor()
             .to_dtype(candle_core::DType::U32)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        candle_nn::loss::cross_entropy(pred, &target_u32)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+        let loss = candle_nn::loss::cross_entropy(pred.tensor(), &target_u32)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(loss)
     }
 }

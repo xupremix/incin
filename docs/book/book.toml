@@ -1,0 +1,10 @@
+[book]
+title = "The Incin Book"
+authors = []
+description = "A hands-on guide to Incin: tensors, autograd, models, training, and deployment, with runnable examples for every chapter."
+src = "src"
+language = "en"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"

@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> tests/target_api_compile_fail/numeric_masked_fill_mask.rs:6:27
+  |
+6 |     let _ = x.masked_fill(&mask, 0.0)?;
+  |               ----------- ^^^^^ expected `&Tensor<(UInt<..., ...>,), ..., bool, _>`, found `&Tensor<(UInt<..., ...>,), ..., u8, ...>`
+  |               |
+  |               arguments to this method are incorrect
+  |
+  = note: expected reference `&incin_core::tensor::base::Tensor<(UInt<UInt<UTerm, B1>, B0>,), incin_backends::cpu::CpuBackendImpl, bool, _>`
+             found reference `&incin_core::tensor::base::Tensor<(UInt<UInt<UTerm, B1>, B0>,), incin_backends::cpu::CpuBackendImpl, u8, NoGrad>`
+note: method defined here
+ --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation.rs
+  |
+  |     pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+  |            ^^^^^^^^^^^

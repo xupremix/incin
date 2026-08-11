@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::ops::Deref;
 
 use incin_core::exec::{Alignment, TensorMeta};
-use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
+use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 /// Byte alignment every CUDA device allocation satisfies.
 ///
@@ -24,7 +24,7 @@ pub use incin_core::exec::TensorId;
 #[derive(Debug)]
 pub struct CudaBuffer {
     pub(crate) len: usize,
-    pub(crate) dtype: DTypeId,
+    pub(crate) dtype: DTypeDescriptor,
     pub(crate) data: Arc<cudarc::driver::CudaSlice<u8>>,
     pub(crate) device: Arc<cudarc::driver::CudaContext>,
     pub(crate) device_id: usize,
@@ -201,7 +201,7 @@ mod tests {
         let stream = context.default_stream();
         let buffer = Arc::new(CudaBuffer {
             len: 64,
-            dtype: DTypeId::F32,
+            dtype: DTypeId::F32.descriptor(),
             data: Arc::new(stream.alloc_zeros::<u8>(16).expect("device allocation")),
             device: context.clone(),
             device_id: 0,
@@ -229,13 +229,13 @@ mod tests {
         assert_eq!(bytes, 68);
         let buffer = Arc::new(CudaBuffer {
             len: 64,
-            dtype: DTypeId::Q8_0,
+            dtype: DTypeId::Q8_0.descriptor(),
             data: Arc::new(stream.alloc_zeros::<u8>(bytes).expect("device allocation")),
             device: context.clone(),
             device_id: 0,
         });
         let storage = CudaStorage::try_new(buffer, vec![2, 32]).expect("packed Q8_0 storage");
-        assert_eq!(storage.metadata().dtype(), DTypeId::Q8_0);
+        assert_eq!(storage.metadata().dtype(), DTypeId::Q8_0.descriptor());
         assert_eq!(storage.metadata().shape().dims(), &[2, 32]);
     }
 }

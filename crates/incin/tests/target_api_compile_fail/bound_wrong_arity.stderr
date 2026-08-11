@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `(usize, usize): incin_core::tensor::arg_into::ArgInto<(usize, ())>` is not satisfied
+ --> tests/target_api_compile_fail/bound_wrong_arity.rs:5:52
+  |
+5 |     let _ = Cpu.zeros(Bound::<s![usize, 784]>::new((5usize, 6usize)));
+  |                       ---------------------------- ^^^^^^^^^^^^^^^^ the trait `Dim` is not implemented for `(usize, usize)`
+  |                       |
+  |                       required by a bound introduced by this call
+  |
+  = help: the following other types implement trait `Dim`:
+            NamedDim<Tag, usize>
+            UInt<U, B>
+            UTerm
+            incin_core::shapes::dim::ProdDim<A, B>
+            usize
+  = note: required for `(usize, usize)` to implement `incin_core::tensor::arg_into::ArgInto<(usize, ())>`
+note: required by a bound in `incin::prelude::Bound::<S>::new`
+ --> $WORKSPACE/crates/incin-backends/src/target.rs
+  |
+  |     pub fn new<A>(runtime_extents: A) -> Self
+  |            --- required by a bound in this associated function
+  |     where
+  |         A: incin_core::prelude::ArgInto<S::Arg>,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Bound::<S>::new`

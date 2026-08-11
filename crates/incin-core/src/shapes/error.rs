@@ -409,6 +409,41 @@ pub enum ShapeError {
         rank: usize,
     },
 
+    /// An axis index reached past the operand's rank.
+    #[error("axis {axis} is invalid for rank {rank}")]
+    InvalidAxis {
+        /// Axis index.
+        axis: usize,
+        /// Rank of the operand.
+        rank: usize,
+    },
+
+    /// An axis selector specified a duplicate axis.
+    #[error("axis {axis} specified multiple times in selector sequence")]
+    DuplicateAxis {
+        /// Axis index that was duplicated.
+        axis: usize,
+    },
+
+    /// A named selector did not occur in the current structural shape.
+    #[error("named axis '{name}' is not present in the shape")]
+    MissingNamedAxis { name: &'static str },
+
+    /// A named selector occurred more than once and cannot be resolved implicitly.
+    #[error("named axis '{name}' is ambiguous: it occurs more than once")]
+    AmbiguousNamedAxis { name: &'static str },
+
+    /// Two positionally paired broadcast axes carry different semantic names.
+    #[error("broadcast axis {axis} has conflicting names '{lhs}' and '{rhs}'")]
+    ConflictingNamedAxes {
+        /// Right-aligned output axis.
+        axis: usize,
+        /// Name from the left operand.
+        lhs: &'static str,
+        /// Name from the right operand.
+        rhs: &'static str,
+    },
+
     /// The rule resolved successfully but produced a zero-length axis.
     ///
     /// This is separate from [`DimensionMismatch`](Self::DimensionMismatch)
@@ -437,6 +472,7 @@ impl ShapeError {
             | Self::ArithmeticOverflow { operation, .. }
             | Self::TargetShapeRejected { operation, .. }
             | Self::EmptyOutput { operation, .. } => *operation,
+            _ => OperationKind::Storage,
         }
     }
 
@@ -445,6 +481,9 @@ impl ShapeError {
     pub const fn axis(&self) -> Option<Axis> {
         match self {
             Self::DimensionMismatch { axis, .. } | Self::EmptyOutput { axis, .. } => Some(*axis),
+            Self::InvalidAxis { axis, .. } | Self::DuplicateAxis { axis } => {
+                Some(Axis::Index(*axis))
+            }
             _ => None,
         }
     }

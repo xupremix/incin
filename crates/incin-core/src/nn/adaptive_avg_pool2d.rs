@@ -49,10 +49,10 @@ impl<
     I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
     HOut: Unsigned,
     WOut: Unsigned,
-    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::AdaptiveAvgPool2dExact>>,
+    B: Backend + crate::exec::Capabilities + Execute<op::AdaptiveAvgPool2dExact>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 where
-    <B as Execute<Descriptor<op::AdaptiveAvgPool2dExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AdaptiveAvgPool2dExact>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;

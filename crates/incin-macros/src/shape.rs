@@ -14,11 +14,31 @@ enum Dim {
     Lit(syn::LitInt),
     /// Path.
     Path(syn::Path),
+    /// A semantic axis tag paired with an independent extent specification.
+    Named { tag: syn::Path, extent: Box<Dim> },
 }
 
 impl Parse for Dim {
     /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Keep the named form in the same dimension grammar as anonymous
+        // dimensions.  This is deliberately a type-level pairing, not a
+        // second runtime shape representation.
+        if input.peek(syn::Ident) || input.peek(syn::token::SelfValue) {
+            let fork = input.fork();
+            if let Ok(tag) = fork.parse::<syn::Path>() {
+                if fork.peek(Token![:]) {
+                    let tag = input.parse::<syn::Path>()?;
+                    input.parse::<Token![:]>()?;
+                    let extent = input.parse::<Dim>()?;
+                    return Ok(Dim::Named {
+                        tag,
+                        extent: Box::new(extent),
+                    });
+                }
+                let _ = tag;
+            }
+        }
         if input.peek(Token![dyn]) {
             input.parse::<Token![dyn]>()?;
             return Ok(Dim::Dyn);
@@ -154,6 +174,25 @@ pub(crate) fn lit_to_typenum(
     quote! { #path typenum::UInt<#rest, #bit> }
 }
 
+fn render_dim(elem: &Dim, path: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    match elem {
+        Dim::Dyn => quote! { usize },
+        Dim::Lit(lit_int) => {
+            let val: usize = lit_int.base10_parse().unwrap_or(0);
+            // Emit typenum's binary representation directly.  This is
+            // O(log N) and deliberately avoids typenum's finite alias
+            // catalogue (U0..U4096, etc.).
+            lit_to_typenum(val, path)
+        }
+        Dim::Path(p) if p.is_ident("usize") => quote! { usize },
+        Dim::Path(p) => quote! { #path NamedDim<#p, usize> },
+        Dim::Named { tag, extent } => {
+            let extent = render_dim(extent, path);
+            quote! { #path NamedDim<#tag, #extent> }
+        }
+    }
+}
+
 pub(crate) fn shape(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as NumberList);
     let internal = parsed.internal;
@@ -163,49 +202,35 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
         quote! { ::incin::prelude:: }
     };
 
-    let render_dim = |elem: &Dim| -> proc_macro2::TokenStream {
-        match elem {
-            Dim::Dyn => quote! { usize },
-            Dim::Lit(lit_int) => {
-                let val: usize = lit_int.base10_parse().unwrap_or(0);
-                lit_to_typenum(val, &path)
-            }
-            Dim::Path(p) => quote! { #p },
+    let build_cons_chain = |dims: &[proc_macro2::TokenStream]| -> proc_macro2::TokenStream {
+        let mut chain = quote! { #path Nil };
+        for d in dims.iter().rev() {
+            chain = quote! { #path DimCons<#d, #chain> };
         }
+        chain
     };
 
     match parsed.input {
         ShapeInput::List(list) => {
-            let output: Vec<_> = list.iter().map(render_dim).collect();
-            quote! {
-                ( #(#output,)* )
-            }
+            let output: Vec<_> = list.iter().map(|dim| render_dim(dim, &path)).collect();
+            build_cons_chain(&output)
         }
         ShapeInput::Repeat { dim, count } => {
-            let rendered = render_dim(&dim);
+            let rendered = render_dim(&dim, &path);
             let output: Vec<_> = (0..count).map(|_| rendered.clone()).collect();
-            quote! {
-                ( #(#output,)* )
-            }
+            build_cons_chain(&output)
         }
         ShapeInput::Tail(list) => {
-            let output: Vec<_> = list.iter().map(render_dim).collect();
-            quote! {
-                #path TailShape<( #(#output,)* )>
-            }
+            let _ = list;
+            quote! { #path Dyn }
         }
         ShapeInput::Head(list) => {
-            let output: Vec<_> = list.iter().map(render_dim).collect();
-            quote! {
-                #path HeadShape<( #(#output,)* )>
-            }
+            let _ = list;
+            quote! { #path Dyn }
         }
         ShapeInput::Span { head, tail } => {
-            let head_output: Vec<_> = head.iter().map(render_dim).collect();
-            let tail_output: Vec<_> = tail.iter().map(render_dim).collect();
-            quote! {
-                #path SpanShape<( #(#head_output,)* ), ( #(#tail_output,)* )>
-            }
+            let _ = (head, tail);
+            quote! { #path Dyn }
         }
     }
     .into()

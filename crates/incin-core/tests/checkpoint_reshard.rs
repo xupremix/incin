@@ -40,7 +40,7 @@ fn test_slice_bytes_for_rank_axis_0() -> Result<()> {
 
     // Slice along axis 0 for rank 0 of 2
     let (rank0_bytes, rank0_shape) =
-        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32, 0, 0, 2)?;
+        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32.descriptor(), 0, 0, 2)?;
     assert_eq!(rank0_shape, vec![2, 8]);
     let rank0_f32s: Vec<f32> = rank0_bytes
         .chunks_exact(4)
@@ -50,7 +50,7 @@ fn test_slice_bytes_for_rank_axis_0() -> Result<()> {
 
     // Slice along axis 0 for rank 1 of 2
     let (rank1_bytes, rank1_shape) =
-        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32, 0, 1, 2)?;
+        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32.descriptor(), 0, 1, 2)?;
     assert_eq!(rank1_shape, vec![2, 8]);
     let rank1_f32s: Vec<f32> = rank1_bytes
         .chunks_exact(4)
@@ -74,7 +74,7 @@ fn test_slice_bytes_for_rank_axis_1() -> Result<()> {
 
     // Slice along axis 1 (cols) for rank 0 of 2 (first 4 cols of each row)
     let (rank0_bytes, rank0_shape) =
-        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32, 1, 0, 2)?;
+        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32.descriptor(), 1, 0, 2)?;
     assert_eq!(rank0_shape, vec![4, 4]);
     let rank0_f32s: Vec<f32> = rank0_bytes
         .chunks_exact(4)
@@ -88,7 +88,7 @@ fn test_slice_bytes_for_rank_axis_1() -> Result<()> {
 
     // Slice along axis 1 (cols) for rank 1 of 2 (last 4 cols of each row)
     let (rank1_bytes, rank1_shape) =
-        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32, 1, 1, 2)?;
+        slice_bytes_for_rank(&bytes, &global_shape, DTypeId::F32.descriptor(), 1, 1, 2)?;
     assert_eq!(rank1_shape, vec![4, 4]);
     let rank1_f32s: Vec<f32> = rank1_bytes
         .chunks_exact(4)

@@ -7,7 +7,7 @@ use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 /// B.
-type B = DummyBackend<f32, incin_core::prelude::Cpu>;
+type B = DummyBackend<incin_core::prelude::Cpu>;
 
 #[test]
 /// Test linear permutations.
@@ -103,12 +103,12 @@ fn test_norm_permutations() {
     // LayerNorm — static
     let _ln1 = LayerNorm::<s![10], B>::build(1e-5).unwrap();
     // LayerNorm — dynamic
-    let _ln2 = LayerNorm::<(usize,), B>::build((10, 1e-5)).unwrap();
+    let _ln2 = LayerNorm::<s![dyn], B>::build((10, 1e-5)).unwrap();
 
     // BatchNorm2d — static
     let _bn1 = BatchNorm2d::<s![16], B>::build((1e-5, 0.1)).unwrap();
     // BatchNorm2d — dynamic
-    let _bn2 = BatchNorm2d::<(usize,), B>::build((16, 1e-5, 0.1)).unwrap();
+    let _bn2 = BatchNorm2d::<s![dyn], B>::build((16, 1e-5, 0.1)).unwrap();
 }
 
 #[test]
@@ -121,8 +121,8 @@ fn test_rnn_permutations() {
     let _rnn1 = RNN::<s![10, 20], B>::new(_cell.clone());
 
     // RNNCell — dynamic
-    let _wi2 = Linear::<(usize, usize), B>::build((10, 20)).unwrap();
-    let _wh2 = Linear::<(usize, usize), B>::build((20, 20)).unwrap();
-    let _cell2 = RNNCell::<Dyn, B>::new(_wi2, _wh2);
-    let _rnn2 = RNN::<Dyn, B>::new(_cell2);
+    let _wi2 = Linear::<s![dyn, dyn], B>::build((10, 20)).unwrap();
+    let _wh2 = Linear::<s![dyn, dyn], B>::build((20, 20)).unwrap();
+    let _cell2 = RNNCell::<s![dyn, dyn], B>::new(_wi2, _wh2);
+    let _rnn2 = RNN::<s![dyn, dyn], B>::new(_cell2);
 }

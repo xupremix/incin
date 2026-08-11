@@ -179,8 +179,8 @@ impl<
 > Module<Tensor<InS, B, InK>> for Embedding<S, B, K, Train>
 where
     S::Embed: typenum::Unsigned,
-    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::EmbeddingExact>>,
-    <B as Execute<Descriptor<op::EmbeddingExact>>>::Output: Into<B::Storage<K>>,
+    B: Backend + crate::exec::Capabilities + Execute<op::EmbeddingExact>,
+    <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B, K>;

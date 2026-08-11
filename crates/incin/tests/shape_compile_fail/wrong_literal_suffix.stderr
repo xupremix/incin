@@ -1,0 +1,5 @@
+error: a shape! dimension may only be suffixed `usize`, not `i32`
+ --> tests/shape_compile_fail/wrong_literal_suffix.rs:4:30
+  |
+4 |     let _ = Cpu.zeros(shape![2i32, 5]);
+  |                              ^^^^

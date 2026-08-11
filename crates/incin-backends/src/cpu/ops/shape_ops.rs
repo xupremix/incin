@@ -21,7 +21,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
 // `reshape`, `broadcast_as` and `matmul` are free functions so that the
-// canonical `Execute<Descriptor<op::ReshapeExact>>` executors in
+// canonical `Execute<op::ReshapeExact>` executors in
 // `cpu::canonical` and the legacy `TensorOps` methods below run the same body.
 // One implementation is the point: a descriptor path that re-derived the view
 // would be a second semantics to keep in agreement.

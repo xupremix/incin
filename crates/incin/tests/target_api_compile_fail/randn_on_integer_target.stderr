@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `i64: FloatDType` is not satisfied
+ --> tests/target_api_compile_fail/randn_on_integer_target.rs:7:17
+  |
+7 |     let _ = idx.randn(shape![4]);
+  |                 ^^^^^ the trait `FloatDType` is not implemented for `i64`
+  |
+help: the following other types implement trait `FloatDType`
+ --> $WORKSPACE/crates/incin-core/src/tensor/dtype.rs
+  |
+  | impl FloatDType for f32 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+  | impl FloatDType for f64 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+note: required by a bound in `incin::prelude::TargetExt::randn`
+ --> $WORKSPACE/crates/incin-backends/src/target.rs
+  |
+  |     fn randn<Sp: ShapeSpec>(&self, spec: Sp) -> Result<TargetTensor<Self, Sp::Shape, Self::Dtype>>
+  |        ----- required by a bound in this associated function
+...
+  |         Self::Dtype: FloatDType,
+  |                      ^^^^^^^^^^ required by this bound in `TargetExt::randn`

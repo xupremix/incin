@@ -4,8 +4,8 @@
 //! rename, and rustfmt tests". This crate had no `tests/` directory at all, so
 //! `cargo test -p incin-macros` ran nothing, and it exited zero doing it.
 //!
-//! The three macros in scope are the ones that exist today: `s!`, `idx!`, and
-//! `#[module]`. The cases themselves are files under `tests/compile_pass/` and
+//! The public macros in scope include `s!`, `axis!`, `idx!`, and `#[module]`.
+//! The cases themselves are files under `tests/compile_pass/` and
 //! `tests/compile_fail/`; this module is the harness and the guards that keep
 //! the cases honest.
 
@@ -40,7 +40,7 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ),
         (
             "idx_rejects_a_qualified_named_dim",
-            "idx! expects simple identifiers for NamedDyn",
+            "idx! expects simple identifiers for named runtime axes",
         ),
         (
             "module_rejects_a_non_struct",

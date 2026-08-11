@@ -327,6 +327,7 @@ pub struct ExecutionPolicy {
     pub allocator: AllocatorPolicy,
     pub grad_mode: GradMode,
     pub nan_policy: NanPolicy,
+    pub precision: crate::exec::RuntimePrecisionPolicy,
 }
 
 impl ExecutionPolicy {
@@ -348,6 +349,7 @@ impl ExecutionPolicy {
             allocator: AllocatorPolicy::Direct,
             grad_mode: GradMode::Enabled,
             nan_policy: NanPolicy::Permit,
+            precision: crate::exec::RuntimePrecisionPolicy::fp32(),
         }
     }
 
@@ -385,6 +387,17 @@ impl ExecutionPolicy {
     pub const fn with_nan_policy(mut self, nan_policy: NanPolicy) -> Self {
         self.nan_policy = nan_policy;
         self
+    }
+
+    #[must_use]
+    pub const fn with_precision(mut self, precision: crate::exec::RuntimePrecisionPolicy) -> Self {
+        self.precision = precision;
+        self
+    }
+
+    #[must_use]
+    pub const fn precision(&self) -> crate::exec::RuntimePrecisionPolicy {
+        self.precision
     }
 }
 

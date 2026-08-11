@@ -23,11 +23,13 @@ use incin_core::prelude::{Cpu, DType, StorageBackend};
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Probe(u32);
 
+#[derive(Clone)]
 struct Storage {
     metadata: TensorMeta,
 }
 
 impl StorageBackend for Probe {
+    const BACKEND_NAME: &'static str = "Probe";
     type Storage<K: DType> = Storage;
     type Device = Cpu;
 

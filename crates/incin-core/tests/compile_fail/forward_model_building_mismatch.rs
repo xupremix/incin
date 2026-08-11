@@ -4,10 +4,10 @@ use incin_core::test_utils::DummyBackend;
 
 
 fn main() {
-    let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::build(()).unwrap();
-    let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::build(()).unwrap();
+    let l1 = Linear::<s![10, 20], DummyBackend<Cpu>>::build(()).unwrap();
+    let l2 = Linear::<s![30, 40], DummyBackend<Cpu>>::build(()).unwrap();
 
-    let input = Tensor::<s![2, 10], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
+    let input = Tensor::<s![2, 10], DummyBackend<Cpu>>::zeros(()).unwrap();
     let x = l1.forward(input).unwrap();
     
     // Output of l1 is Tensor<[2, 20]>.

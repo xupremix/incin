@@ -31,10 +31,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Relu>>,
+        + Execute<op::Relu>,
 > Module<Tensor<S, B>> for ReLU
 where
-    <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -76,10 +76,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Gelu>>,
+        + Execute<op::Gelu>,
 > Module<Tensor<S, B>> for GELU
 where
-    <B as Execute<Descriptor<op::Gelu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -121,10 +121,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Swish>>,
+        + Execute<op::Swish>,
 > Module<Tensor<S, B>> for Swish
 where
-    <B as Execute<Descriptor<op::Swish>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -166,10 +166,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Mish>>,
+        + Execute<op::Mish>,
 > Module<Tensor<S, B>> for Mish
 where
-    <B as Execute<Descriptor<op::Mish>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -213,10 +213,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Elu>>,
+        + Execute<op::Elu>,
 > Module<Tensor<S, B>> for ELU
 where
-    <B as Execute<Descriptor<op::Elu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -270,14 +270,11 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::Execute<
-            crate::exec::catalog::Descriptor<crate::exec::catalog::op::Softmax>,
-        >,
+        + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
 > Module<Tensor<S, B>> for Softmax
 where
-    <B as crate::tensor::backend::Execute<
-        crate::exec::catalog::Descriptor<crate::exec::catalog::op::Softmax>,
-    >>::Output: Into<B::Storage<f32>>,
+    <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
+        Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -318,10 +315,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Sigmoid>>,
+        + Execute<op::Sigmoid>,
 > Module<Tensor<S, B>> for Sigmoid
 where
-    <B as Execute<Descriptor<op::Sigmoid>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -362,10 +359,10 @@ impl<
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Tanh>>,
+        + Execute<op::Tanh>,
 > Module<Tensor<S, B>> for Tanh
 where
-    <B as Execute<Descriptor<op::Tanh>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;

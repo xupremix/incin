@@ -1,45 +1,54 @@
 //! Elementwise arithmetic operations for the Candle adapter.
 
 use crate::external::candle::CandleBackend;
+use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::backend_authoring::NumericOps<Self> for CandleBackend<T, D>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::NumericOps<Self>
+    for CandleBackend<D>
 {
     /// Element-wise addition with broadcasting.
     fn add<K: incin_core::prelude::DType>(
-        lhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        rhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(lhs
-            .broadcast_add(rhs)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t = lhs
+            .tensor()
+            .broadcast_add(rhs.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(t)
     }
     /// Element-wise subtraction with broadcasting.
     fn sub<K: incin_core::prelude::DType>(
-        lhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        rhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(lhs
-            .broadcast_sub(rhs)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t = lhs
+            .tensor()
+            .broadcast_sub(rhs.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(t)
     }
     /// Element-wise multiplication with broadcasting.
     fn mul<K: incin_core::prelude::DType>(
-        lhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        rhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(lhs
-            .broadcast_mul(rhs)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t = lhs
+            .tensor()
+            .broadcast_mul(rhs.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(t)
     }
     /// Element-wise division with broadcasting.
     fn div<K: incin_core::prelude::DType>(
-        lhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        rhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(lhs
-            .broadcast_div(rhs)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t = lhs
+            .tensor()
+            .broadcast_div(rhs.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(t)
     }
 }

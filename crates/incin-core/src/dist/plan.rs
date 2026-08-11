@@ -28,7 +28,7 @@ use crate::dist::rule::{
     DistributedError, LegalTransition, PlacementTransition, ShardDivisible, ShardRemainderPolicy,
 };
 use crate::exec::ReduceOp;
-use crate::prelude::{ConstDType, DTypeId, Dyn, OperationKind};
+use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn, OperationKind};
 use crate::shapes::error::ShapeError;
 
 /// Monotonic position of a collective in one plan.
@@ -275,7 +275,7 @@ impl<'a, M: ValidMesh> CollectivePlanBuilder<'a, M> {
         depends_on: Option<SequenceToken>,
     ) -> Result<SequenceToken, PlanError>
     where
-        K: ConstDType + CollectiveDType,
+        K: ConstDType + BuiltinDType + CollectiveDType,
         From: ConstPlacement + PlannedCollectiveTransition<K, To> + PlacementOn<M>,
         To: ConstPlacement + PlacementOn<M>,
     {
@@ -304,7 +304,7 @@ impl<'a, M: ValidMesh> CollectivePlanBuilder<'a, M> {
         depends_on: Option<SequenceToken>,
     ) -> Result<SequenceToken, PlanError>
     where
-        K: ConstDType + CollectiveDType,
+        K: ConstDType + BuiltinDType + CollectiveDType,
         From: ConstPlacement + PlannedCollectiveTransition<K, To> + PlacementOn<M>,
         To: ConstPlacement + PlacementOn<M>,
     {
@@ -1321,7 +1321,7 @@ impl HybridPlanDType for Dyn {}
 pub const fn validate_hybrid_plan_dtype(dtype: DTypeId) -> Result<(), HybridPlanError> {
     match dtype {
         DTypeId::BF16 | DTypeId::F16 | DTypeId::F32 | DTypeId::F64 => Ok(()),
-        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 => {
+        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(HybridPlanError::UnsupportedDType { dtype })
         }
     }
@@ -1679,7 +1679,7 @@ impl HybridPlanner {
         policy: StaticParallelOptions,
     ) -> Result<HybridPlanReport, HybridPlanError>
     where
-        K: ConstDType + HybridPlanDType,
+        K: ConstDType + BuiltinDType + HybridPlanDType,
         Batch: Unsigned + NonZero + ShardDivisible<U2> + IsLessOrEqual<U4294967295, Output = B1>,
         TensorExtent:
             Unsigned + NonZero + ShardDivisible<U2> + IsLessOrEqual<U4294967295, Output = B1>,
@@ -1722,7 +1722,7 @@ impl HybridPlanner {
         policy: StaticParallelOptions,
     ) -> Result<HybridPlanReport, HybridPlanError>
     where
-        K: ConstDType + HybridPlanDType,
+        K: ConstDType + BuiltinDType + HybridPlanDType,
         Batch: Unsigned + NonZero + ShardDivisible<U2> + IsLessOrEqual<U4294967295, Output = B1>,
         Parameters: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
         Activations: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
@@ -1757,7 +1757,7 @@ impl HybridPlanner {
         policy: StaticParallelOptions,
     ) -> Result<HybridPlanReport, HybridPlanError>
     where
-        K: ConstDType + HybridPlanDType,
+        K: ConstDType + BuiltinDType + HybridPlanDType,
         TensorExtent:
             Unsigned + NonZero + ShardDivisible<U2> + IsLessOrEqual<U4294967295, Output = B1>,
         Parameters:
@@ -1795,7 +1795,7 @@ impl HybridPlanner {
         policy: StaticParallelOptions,
     ) -> Result<HybridPlanReport, HybridPlanError>
     where
-        K: ConstDType + HybridPlanDType,
+        K: ConstDType + BuiltinDType + HybridPlanDType,
         Parameters:
             Unsigned + NonZero + ShardDivisible<U2> + IsLessOrEqual<U4294967295, Output = B1>,
         Activations: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,

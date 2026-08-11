@@ -420,7 +420,7 @@ mod tests {
         let response = json!({
             "jsonrpc": "2.0",
             "id": 7,
-            "result": [{ "position": {"line": 3, "character": 1}, "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>" }]
+            "result": [{ "position": {"line": 3, "character": 1}, "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>" }]
         });
 
         let mut pending = PendingRequests::new();
@@ -432,7 +432,7 @@ mod tests {
         let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
         assert_eq!(
             rewritten["result"][0]["label"],
-            "Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>"
+            "Tensor<[2, 3], CpuBackendImpl<Cpu>>"
         );
 
         // The id is consumed on first use — a second identical response
@@ -445,7 +445,7 @@ mod tests {
         let request = json!({"id": 1, "method": "textDocument/inlayHint"});
         let response = json!({
             "id": 1,
-            "result": [{ "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>" }]
+            "result": [{ "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>" }]
         });
         let mut pending = PendingRequests::new();
         pending.observe_outgoing_to_server(&request);
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn hints_disabled_leaves_inlay_hint_response_unrewritten() {
         let request = json!({"id": 1, "method": "textDocument/inlayHint"});
-        let response = json!({"id": 1, "result": [{ "label": "Tensor<(UInt<UTerm, B1>,), CpuBackendImpl<f32, Cpu>>" }]});
+        let response = json!({"id": 1, "result": [{ "label": "Tensor<(UInt<UTerm, B1>,), CpuBackendImpl<Cpu>>" }]});
         let mut pending = PendingRequests::new();
         pending.observe_outgoing_to_server(&request);
         assert!(rewrite_incoming_from_server(&response, &mut pending, false, false).is_none());
@@ -507,14 +507,14 @@ mod tests {
         let request = json!({"id": 9, "method": "textDocument/inlayHint"});
         let response = json!({
             "id": 9,
-            "result": [{ "label": [{"value": "Tensor<(UInt<UTerm, B1>,), CpuBackendImpl<f32, Cpu>>"}] }]
+            "result": [{ "label": [{"value": "Tensor<(UInt<UTerm, B1>,), CpuBackendImpl<Cpu>>"}] }]
         });
         let mut pending = PendingRequests::new();
         pending.observe_outgoing_to_server(&request);
         let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
         assert_eq!(
             rewritten["result"][0]["label"][0]["value"],
-            "Tensor<[1], CpuBackendImpl<f32, Cpu>>"
+            "Tensor<[1], CpuBackendImpl<Cpu>>"
         );
     }
 

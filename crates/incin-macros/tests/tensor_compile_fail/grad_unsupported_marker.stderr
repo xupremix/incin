@@ -1,0 +1,5 @@
+error: tensor!'s `grad:` clause only supports `Grad` or `NoGrad` — the only gradient-tracking markers with no runtime argument. For `Dyn` (runtime-toggled tracking) construct the tensor directly instead: `Tensor::<S, B, K, Dyn>::from_slice(&data, (.., runtime_bool))`
+ --> tests/tensor_compile_fail/grad_unsupported_marker.rs:4:37
+  |
+4 |     let _ = tensor![1.0, 2.0; grad: Dyn];
+  |                                     ^^^

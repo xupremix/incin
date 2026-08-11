@@ -12,12 +12,12 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use incin_backends::cpu::CpuBackendImpl;
+use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::dist::mesh::{Data, MeshSpec, TensorParallel};
 use incin_core::dist::{
     ConstPlacement, DistributedInputs, Local, Placement, PlacementBuf, PlacementKind,
     PlacementTransitionRule, Replicated, Sharded,
 };
-use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::exec::{Descriptor, LogicalTensorMeta, op};
 use incin_core::prelude::{
     DTypeId, DimCons, Dyn, Grad, Nil, PlacedTensorError, Shape, ShapeBuf, Tensor,
@@ -45,7 +45,9 @@ fn local_placement_metadata_remains_zero_sized() {
 
 fn reshape(input: &[usize], output: &[usize]) -> Descriptor<op::ReshapeExact> {
     Descriptor::<op::ReshapeExact>::infer_runtime(
-        ShapeAttributes { shape: output.to_vec() },
+        ShapeAttributes {
+            shape: output.to_vec(),
+        },
         vec![LogicalTensorMeta {
             shape: Some(ShapeBuf::from_slice(input)),
             dtype: None,

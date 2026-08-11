@@ -1,6 +1,6 @@
 use super::alloc_zeroed_bytes;
-use crate::cpu::storage::BlockQ8_0;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::quant::BlockQ8_0;
 use alloc::sync::Arc;
 use incin_core::prelude::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf};
@@ -43,10 +43,10 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     // two-element allocation, which is what the hardware run rejected.
     let mut out_buf = CudaBuffer {
         len: n,
-        dtype: incin_core::prelude::DTypeId::Q8_0,
+        dtype: incin_core::prelude::DTypeId::Q8_0.descriptor(),
         data: Arc::new(alloc_zeroed_bytes(
             &stream,
-            incin_core::prelude::DTypeId::Q8_0,
+            incin_core::prelude::DTypeId::Q8_0.descriptor(),
             n,
             OperationKind::Storage,
         )?),
@@ -123,10 +123,10 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     let mut out_buf = CudaBuffer {
         len: out_numel,
-        dtype: incin_core::prelude::DTypeId::F32,
+        dtype: incin_core::prelude::DTypeId::F32.descriptor(),
         data: Arc::new(alloc_zeroed_bytes(
             &stream,
-            incin_core::prelude::DTypeId::F32,
+            incin_core::prelude::DTypeId::F32.descriptor(),
             out_numel,
             OperationKind::Storage,
         )?),

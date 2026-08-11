@@ -1,0 +1,5 @@
+error: tensor! rows must be uniformly nested: every element at this depth must either all be nested arrays or all be plain values
+ --> tests/tensor_compile_fail/mixed_nesting.rs:4:33
+  |
+4 |     let _ = tensor![[1.0, 2.0], 3.0];
+  |                                 ^^^

@@ -1,0 +1,25 @@
+error[E0277]: the trait bound `incin_backends::wgpu::backend::WgpuBackendImpl: Execute<incin::backend_authoring::operations::Descriptor<incin::backend_authoring::operations::op::Zeros>>` is not satisfied
+  --> tests/target_api_compile_fail_wgpu/zeros_canonical_is_cpu_only.rs:14:17
+   |
+14 |     let _ = gpu.zeros_canonical(shape![2, 3])?;
+   |                 ^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+   = help: the trait `Execute<incin::backend_authoring::operations::Descriptor<incin::backend_authoring::operations::op::Zeros>>` is not implemented for `incin_backends::wgpu::backend::WgpuBackendImpl`
+   = help: `incin_backends::wgpu::backend::WgpuBackendImpl<T, D>` implements trait `Execute<O>`:
+             Execute<incin_core::exec::spec::Conv2dSpec>
+             Execute<incin_core::exec::spec::MatMulSpec>
+             Execute<incin_core::exec::spec::Pool2dSpec>
+             Execute<incin_core::exec::spec::ReductionSpec>
+             Execute<incin_core::exec::spec::ReshapeSpec>
+note: required by a bound in `zeros_canonical`
+  --> $WORKSPACE/crates/incin-backends/src/target.rs
+   |
+   |       fn zeros_canonical<Sp: ShapeSpec>(
+   |          --------------- required by a bound in this associated function
+...
+   |               + incin_core::backend_authoring::Execute<
+   |  _______________^
+   | |                 incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+   | |                 Output = <TargetBackend<Self> as Backend>::Storage<Self::Dtype>,
+   | |             > + incin_core::exec::Capabilities
+   | |_____________^ required by this bound in `TargetExt::zeros_canonical`

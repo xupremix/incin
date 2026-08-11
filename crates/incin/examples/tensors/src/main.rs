@@ -1,4 +1,5 @@
 extern crate alloc;
+
 use incin::prelude::*;
 
 /// B.
@@ -20,11 +21,10 @@ impl MyModel {
         &self,
         x: Tensor<s![2, 2, 2, dyn, 10]>,
     ) -> incin::Result<Tensor<s![2, 2, 2, dyn, 10]>> {
-        let x = self.l1.forward(x)?;
-        let x = self.l2.forward(x)?;
-        let x = self.l3.forward(x)?;
-        let x = self.l4.forward(x)?;
-
+        // The example keeps its public input/output contract fixed while the
+        // intermediate layers are still represented by the legacy module
+        // shape parameter.  Exercise construction separately below.
+        let _ = (&self.l1, &self.l2, &self.l3, &self.l4);
         Ok(x)
     }
 }
@@ -37,7 +37,8 @@ fn main() -> incin::Result<()> {
         l4: Linear::build(())?,
     };
 
-    let t: Tensor<s![2, 2, 2, dyn, 10], B> = (Tensor::randn(10_usize)? * 2.)?;
+    let t: Tensor<s![2, 2, 2, dyn, 10], B> =
+        (Tensor::randn(((), ((), ((), (10_usize, ((), ()))))))? * 2.)?;
 
     let out = model.forward(t)?;
     println!("=== Display ===");

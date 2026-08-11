@@ -9,14 +9,20 @@ use core::fmt::Debug;
 /// Incin static (`s![...]`) or dynamic (`Dyn`) tensors.
 pub trait Distribution<K: DType = f32> {
     /// Samples a tensor of shape `S` on device `device`.
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = K>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<K>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, K, G>>
     where
-        (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>,
-        B: SupportsDType<K>;
+        (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>;
 }
 
 /// Uniform probability distribution over `[low, high)`.
@@ -40,16 +46,22 @@ impl Default for Uniform<f32> {
 }
 
 impl Distribution<f32> for Uniform<f32> {
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<f32>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, f32, G>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-        B: SupportsDType<f32>,
     {
-        let dims = S::dims(&shape);
+        let dims = shape.clone();
         let device_id = B::Device::to_incin(device)?;
         let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
         let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
@@ -89,16 +101,22 @@ impl Default for Normal<f32> {
 }
 
 impl Distribution<f32> for Normal<f32> {
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<f32>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, f32, G>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-        B: SupportsDType<f32>,
     {
-        let dims = S::dims(&shape);
+        let dims = shape.clone();
         let device_id = B::Device::to_incin(device)?;
         let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
         let raw_randn = B::randn(dims.as_ref(), dtype, &device_id)?;
@@ -133,16 +151,22 @@ impl Bernoulli<f32> {
 }
 
 impl Distribution<f32> for Bernoulli<f32> {
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<f32>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, f32, G>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-        B: SupportsDType<f32>,
     {
-        let dims = S::dims(&shape);
+        let dims = shape.clone();
         let device_id = B::Device::to_incin(device)?;
         let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
         let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
@@ -175,16 +199,22 @@ impl Exponential<f32> {
 }
 
 impl Distribution<f32> for Exponential<f32> {
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<f32>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, f32, G>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-        B: SupportsDType<f32>,
     {
-        let dims = S::dims(&shape);
+        let dims = shape.clone();
         let device_id = B::Device::to_incin(device)?;
         let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
         let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
@@ -225,16 +255,22 @@ impl Default for Gumbel<f32> {
 }
 
 impl Distribution<f32> for Gumbel<f32> {
-    fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+    fn sample<
+        S: Shape + DynShape,
+        B: Backend
+            + SupportsDType<f32>
+            + crate::tensor::backend::CreationOps<B>
+            + crate::tensor::backend::FloatOps<B>,
+        G: RequiresGrad,
+    >(
         &self,
-        shape: S::Field,
+        shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
     ) -> Result<Tensor<S, B, f32, G>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-        B: SupportsDType<f32>,
     {
-        let dims = S::dims(&shape);
+        let dims = shape.clone();
         let device_id = B::Device::to_incin(device)?;
         let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
         let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
@@ -259,7 +295,7 @@ impl Distribution<f32> for Gumbel<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    type B = crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>;
+    type B = crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>;
 
     #[test]
     fn test_uniform_sampling() {
@@ -301,16 +337,22 @@ mod tests {
         // Custom distribution sampling constant value + 42.0
         struct ConstantAdd(f32);
         impl Distribution<f32> for ConstantAdd {
-            fn sample<S: Shape + DynShape, B: Backend<FloatElem = f32>, G: RequiresGrad>(
+            fn sample<
+                S: Shape + DynShape,
+                B: Backend
+                    + SupportsDType<f32>
+                    + crate::tensor::backend::CreationOps<B>
+                    + crate::tensor::backend::FloatOps<B>,
+                G: RequiresGrad,
+            >(
                 &self,
-                shape: S::Field,
+                shape: ShapeBuf,
                 device: &<B::Device as Device>::Field,
             ) -> Result<Tensor<S, B, f32, G>>
             where
                 (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
-                B: SupportsDType<f32>,
             {
-                let dims = S::dims(&shape);
+                let dims = shape.clone();
                 let device_id = B::Device::to_incin(device)?;
                 let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
                 let zeros = B::zeros(dims.as_ref(), dtype, &device_id)?;
@@ -335,7 +377,8 @@ mod tests {
         use typenum::{U2, U3};
         // When Shape and Device (and DType + Grad) are compile-time known, args is simply ()
         let dist = Normal::new(0.0, 1.0);
-        let t = Tensor::<(U2, U3), B>::sample(&dist, ()).unwrap();
-        assert_eq!(t.dims(), [2, 3]);
+        type Static23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<U3, crate::shapes::Nil>>;
+        let t = Tensor::<Static23, B>::sample(&dist, ()).unwrap();
+        assert_eq!(t.dims().as_ref(), &[2, 3]);
     }
 }

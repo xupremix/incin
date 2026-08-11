@@ -7,7 +7,7 @@
 
 use core::fmt;
 
-use crate::prelude::{DTypeId, DeviceId};
+use crate::prelude::{ConstDType, DTypeDescriptor, DTypeId, DeviceId};
 use crate::shapes::{OperationKind, ShapeBuf, ShapeError, StrideBuf};
 
 /// The shared layout vocabulary used by tensor metadata, capability queries,
@@ -180,7 +180,7 @@ pub struct TensorMetaFields {
     /// First addressed element in the allocation.
     pub offset_elements: usize,
     /// Physical element dtype.
-    pub dtype: DTypeId,
+    pub dtype: DTypeDescriptor,
     /// Physical runtime device.
     pub device: DeviceId,
     /// Layout class derived from shape and strides.
@@ -215,7 +215,7 @@ impl TensorMeta {
             shape: ShapeBuf::SCALAR,
             strides: StrideBuf::EMPTY,
             offset_elements: 0,
-            dtype: DTypeId::F32,
+            dtype: <f32 as ConstDType>::DESCRIPTOR,
             device: DeviceId::CPU,
             layout: LayoutClass::Contiguous,
             alignment: Alignment::BYTE,
@@ -227,7 +227,7 @@ impl TensorMeta {
         shape: ShapeBuf,
         strides: StrideBuf,
         offset_elements: usize,
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: DeviceId,
         allocation_alignment: Alignment,
         capacity_elements: usize,
@@ -269,7 +269,7 @@ impl TensorMeta {
     /// Build checked row-major metadata at offset zero.
     pub fn contiguous(
         shape: ShapeBuf,
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: DeviceId,
         allocation_alignment: Alignment,
         capacity_elements: usize,
@@ -306,7 +306,7 @@ impl TensorMeta {
 
     /// Physical element dtype.
     #[must_use]
-    pub const fn dtype(&self) -> DTypeId {
+    pub const fn dtype(&self) -> DTypeDescriptor {
         self.fields.dtype
     }
 
@@ -344,7 +344,7 @@ mod tests {
             ShapeBuf::from_slice(shape),
             StrideBuf::from_slice(strides),
             offset,
-            DTypeId::F32,
+            <f32 as ConstDType>::DESCRIPTOR,
             DeviceId::cpu(),
             Alignment::new(alignment)?,
             capacity,

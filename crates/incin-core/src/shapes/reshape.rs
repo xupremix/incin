@@ -14,118 +14,20 @@ impl ElementCount for () {
     type Count = U1;
 }
 
-impl<A: Unsigned> ElementCount for (A,) {
-    /// `Count`.
-    type Count = A;
+impl ElementCount for crate::shapes::Nil {
+    type Count = U1;
 }
 
-impl<A: Unsigned, B: Unsigned> ElementCount for (A, B)
+/// Type-level product fold for the canonical recursive shape representation.
+/// This is the arbitrary-rank counterpart of the old tuple ladder.
+impl<H, T> ElementCount for crate::shapes::DimCons<H, T>
 where
-    A: Mul<B>,
-    Prod<A, B>: Unsigned,
+    H: crate::shapes::ConcreteStaticExtent,
+    T: crate::shapes::Shape + ElementCount,
+    H::Nat: Mul<<T as ElementCount>::Count>,
+    Prod<H::Nat, <T as ElementCount>::Count>: Unsigned,
 {
-    /// `Count`.
-    type Count = Prod<A, B>;
-}
-
-impl<A: Unsigned, B: Unsigned, C: Unsigned> ElementCount for (A, B, C)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<A, B>, C>;
-}
-
-impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned> ElementCount for (A, B, C, D)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Mul<D>,
-    Prod<Prod<Prod<A, B>, C>, D>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<Prod<A, B>, C>, D>;
-}
-
-// Ranks 5 through `MAX_RANK`. This is the gap `PROPOSALS.md` names as the
-// motivating case for `SHP-006`: `ElementCount` stopped at rank 4 while `Shape`
-// reached 8, so a rank-5 tensor was expressible but could not be reshaped —
-// the frontend accepted the type and then had no proof to offer.
-//
-// These stay hand-written where the rest of the workstream is generated, and
-// the reason is specific: `rank_sweep!` varies a *parameter list*, but each
-// rank here needs a differently-nested `Prod` fold in both the associated type
-// and every intermediate `where` bound. Generating that needs a fold over type
-// expressions, not a longer list. `EXE-003` revisits it when the lowering layer
-// gains a real element-count rule; until then four explicit impls are cheaper
-// to read than the macro that would emit them.
-
-impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned> ElementCount
-    for (A, B, C, D, E)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Mul<D>,
-    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
-    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<Prod<Prod<A, B>, C>, D>, E>;
-}
-
-impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned, F: Unsigned> ElementCount
-    for (A, B, C, D, E, F)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Mul<D>,
-    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
-    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
-    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>;
-}
-
-impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned, F: Unsigned, G: Unsigned>
-    ElementCount for (A, B, C, D, E, F, G)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Mul<D>,
-    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
-    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
-    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Mul<G>,
-    Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>;
-}
-
-impl<
-    A: Unsigned,
-    B: Unsigned,
-    C: Unsigned,
-    D: Unsigned,
-    E: Unsigned,
-    F: Unsigned,
-    G: Unsigned,
-    H: Unsigned,
-> ElementCount for (A, B, C, D, E, F, G, H)
-where
-    A: Mul<B>,
-    Prod<A, B>: Mul<C>,
-    Prod<Prod<A, B>, C>: Mul<D>,
-    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
-    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
-    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Mul<G>,
-    Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>: Mul<H>,
-    Prod<Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>, H>: Unsigned,
-{
-    /// `Count`.
-    type Count = Prod<Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>, H>;
+    type Count = Prod<H::Nat, <T as ElementCount>::Count>;
 }
 
 /// Witness that two type-level element counts are identical. Implemented
@@ -186,9 +88,9 @@ mod tests {
     /// `reshape_same_rank_same_numel`.
     fn reshape_same_rank_same_numel() {
         /// `S1`.
-        type S1 = (U2, U8);
+        type S1 = crate::shapes::DimCons<U2, crate::shapes::DimCons<U8, crate::shapes::Nil>>;
         /// `S2`.
-        type S2 = (U4, U4);
+        type S2 = crate::shapes::DimCons<U4, crate::shapes::DimCons<U4, crate::shapes::Nil>>;
         assert_reshape_eq::<S1, S2>();
     }
 
@@ -196,9 +98,12 @@ mod tests {
     /// `reshape_different_rank_same_numel`.
     fn reshape_different_rank_same_numel() {
         /// `S1`.
-        type S1 = (U2, U2, U4);
+        type S1 = crate::shapes::DimCons<
+            U2,
+            crate::shapes::DimCons<U2, crate::shapes::DimCons<U4, crate::shapes::Nil>>,
+        >;
         /// `S2`.
-        type S2 = (U4, U4);
+        type S2 = crate::shapes::DimCons<U4, crate::shapes::DimCons<U4, crate::shapes::Nil>>;
         assert_reshape_eq::<S1, S2>();
     }
 }

@@ -7,7 +7,7 @@ use std::path::Path;
 fn main() -> Result<()> {
     println!("🔍 Incin Model File Inspector Example");
 
-    let layer = Linear::<s![16, 32], DummyBackend<f32, Cpu>>::build(())?;
+    let layer = Linear::<s![16, 32], DummyBackend<Cpu>>::build(())?;
     let path = Path::new("inspect_demo.gguf");
 
     GgufExporter::from_module(&layer)

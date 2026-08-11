@@ -1,0 +1,11 @@
+error[E0599]: no method named `logical_and_canonical` found for struct `incin_core::tensor::base::Tensor<S, B, K, G, P>` in the current scope
+ --> tests/target_api_compile_fail/logical_and_canonical_absent.rs:6:15
+  |
+6 |     let _ = a.logical_and_canonical(&b);
+  |               ^^^^^^^^^^^^^^^^^^^^^
+  |
+help: there is a method `logical_and` with a similar name
+  |
+6 -     let _ = a.logical_and_canonical(&b);
+6 +     let _ = a.logical_and(&b);
+  |

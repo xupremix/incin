@@ -32,7 +32,7 @@ use incin::prelude::*;
 use incin::typenum::U0;
 use incin_backends::cpu::CpuBackendImpl;
 
-type CudaB = CudaBackendImpl<f32, CudaN<U0>>;
+type CudaB = CudaBackendImpl<CudaN<U0>>;
 type CpuB = CpuBackendImpl;
 
 #[test]

@@ -12,9 +12,17 @@ fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
         .args(["check", "--quiet", "--manifest-path"])
         .arg(&manifest)
         .env("CARGO_TARGET_DIR", target)
+        .env_remove("CARGO_PRIMARY_PACKAGE")
         .output()
         .expect("consumer fixture cargo invocation must start");
     let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.status.success() != should_pass {
+        eprintln!(
+            "=== FIXTURE {name} FAILED (success={}) ===",
+            output.status.success()
+        );
+        eprintln!("{stderr}");
+    }
 
     assert_eq!(
         output.status.success(),

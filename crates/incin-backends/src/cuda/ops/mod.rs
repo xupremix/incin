@@ -17,7 +17,7 @@ pub(crate) mod reduce;
 pub(crate) mod shape;
 
 use alloc::sync::Arc;
-use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
+use incin_core::prelude::{DTypeDescriptor, Error, OperationKind, Result};
 
 /// Allocate a zeroed device buffer sized for `elements` values of `dtype`.
 ///
@@ -29,7 +29,7 @@ use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
 /// multiplication is checked, and the driver's failure is reported.
 pub(crate) fn alloc_zeroed_bytes(
     stream: &Arc<cudarc::driver::CudaStream>,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     elements: usize,
     operation: OperationKind,
 ) -> Result<cudarc::driver::CudaSlice<u8>> {

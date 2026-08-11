@@ -117,7 +117,9 @@ impl<T: ComputeStats> AutorefComputeStats for &T {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend> ComputeStats for Param<S, B> {
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState> ComputeStats
+    for Param<S, B, K, Train>
+{
     /// A parameter's own element count; it has no operation of its own, so
     /// 0 MACs (the layer that *uses* this parameter reports those, if it
     /// has a known formula).
@@ -247,7 +249,7 @@ mod tests {
         fc2: Linear<s![@ 128, 10], Bk>,
     }
 
-    type TestBackend = crate::test_utils::DummyBackend<f32, Cpu>;
+    type TestBackend = crate::test_utils::DummyBackend<Cpu>;
 
     fn build_test_mlp() -> TestMlp<TestBackend> {
         TestMlp {

@@ -34,15 +34,3 @@ note: the above error was encountered while instantiating `fn binary::execute_br
   | |_- in this macro invocation
   |
   = note: this note originates in the macro `impl_broadcast_binary_op` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-note: erroneous constant encountered
- --> src/exec/rule.rs
-  |
-  |         <Self::Output as Shape>::STATIC_VALID;
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-note: erroneous constant encountered
- --> src/shapes/broadcast.rs
-  |
-  |         <Self::Output as Shape>::STATIC_VALID;
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,18 +1,18 @@
-error[E0277]: Cannot apply a `(UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)`-shaped kernel to input shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>)`
+error[E0277]: Cannot apply a `DimCons<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>>`-shaped kernel to input shape `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>>>>`
   --> tests/compile_fail/kernel_conv2d_channel_mismatch.rs:16:16
    |
 16 |     let _c = t.conv2d::<typenum::U1, typenum::U1, s![8, 3, 3, 3]>(&w, None).unwrap();
    |                ^^^^^^ kernel/input shape mismatch
    |
    = note: the input's channel dimension must equal the kernel's input-channel dimension, and the input must be rank 4: (B, C, H, W)
-help: the trait `KernelConv2dShape<(UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>), UInt<UTerm, B1>, UInt<UTerm, B1>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>)`
-      but trait `KernelConv2dShape<(UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, _, _), UInt<UTerm, B1>, UInt<UTerm, B1>>` is implemented for it
+help: the trait `KernelConv2dShape<DimCons<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>>, UInt<UTerm, B1>, UInt<UTerm, B1>>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>>>>`
+      but trait `KernelConv2dShape<DimCons<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<_, DimCons<_, Nil>>>>, UInt<UTerm, B1>, UInt<UTerm, B1>>` is implemented for it
   --> src/tensor/conv2d.rs
    |
    | / impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding>
-   | |     KernelConv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
+   | |     KernelConv2dShape<DimCons<COut, DimCons<CIn, DimCons<KH, DimCons<KW, Nil>>>>, Stride, Padding>
+   | |     for DimCons<B, DimCons<CIn, DimCons<HIn, DimCons<WIn, Nil>>>>
    | | where
-   | |     B: Dim + Default,
 ...  |
    | |     ConvOutDim<HIn, KH, Stride, Padding>: StaticDim,
    | |     ConvOutDim<WIn, KW, Stride, Padding>: StaticDim,

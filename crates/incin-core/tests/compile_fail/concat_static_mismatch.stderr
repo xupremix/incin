@@ -1,18 +1,22 @@
-error[E0277]: Cannot concatenate shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` with `(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>)` along axis `UInt<UTerm, B1>`
+error[E0277]: Cannot concatenate shape `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>` with `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>` along axis `incin::shapes::Next<incin::shapes::Here>`
   --> tests/compile_fail/concat_static_mismatch.rs:11:16
    |
-11 |     let _ = t1.concat::<s![4, 3], typenum::U1>(&t2);
+11 |     let _ = t1.concat::<s![4, 3], Next<Here>>(&t2);
    |                ^^^^^^ Shape mismatch during concatenation
    |
-   = help: the trait `ConcatShape<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>), UInt<UTerm, B1>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)`
+   = help: the trait `ConcatShape<DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>, incin::shapes::Next<incin::shapes::Here>>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>`
    = note: Concatenation requires all dimensions except the given axis to match exactly
-   = help: the following other types implement trait `ConcatShape<S2, Axis>`:
-             `(D0, D1)` implements `ConcatShape<(D0, Rhs), UInt<UTerm, B1>>`
-             `(D0, D1)` implements `ConcatShape<(Rhs, D1), UTerm>`
-             `(D0, D1, D2)` implements `ConcatShape<(D0, D1, Rhs), UInt<UInt<UTerm, B1>, B0>>`
-             `(D0, D1, D2)` implements `ConcatShape<(D0, Rhs, D2), UInt<UTerm, B1>>`
-             `(D0, D1, D2)` implements `ConcatShape<(Rhs, D1, D2), UTerm>`
-             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, D1, D2, Rhs), UInt<UInt<UTerm, B1>, B1>>`
-             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, D1, Rhs, D3), UInt<UInt<UTerm, B1>, B0>>`
-             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, Rhs, D2, D3), UInt<UTerm, B1>>`
-           and $N others
+help: the following other types implement trait `ConcatShape<S2, Axis>`
+  --> src/shapes/concat.rs
+   |
+   | / impl<H1: Dim + Add<H2>, H2: Dim, T: Shape> ConcatShape<DimCons<H2, T>, crate::shapes::idx::Here>
+   | |     for DimCons<H1, T>
+   | | where
+   | |     <H1 as Add<H2>>::Output: Dim,
+   | |_________________________________^ `DimCons<H1, T>` implements `ConcatShape<DimCons<H2, T>, incin::shapes::Here>`
+...
+   | / impl<H: Dim, T1: Shape, T2: Shape, SubCursor>
+   | |     ConcatShape<DimCons<H, T2>, crate::shapes::idx::Next<SubCursor>> for DimCons<H, T1>
+   | | where
+   | |     T1: ConcatShape<T2, SubCursor>,
+   | |___________________________________^ `DimCons<H, T1>` implements `ConcatShape<DimCons<H, T2>, incin::shapes::Next<SubCursor>>`

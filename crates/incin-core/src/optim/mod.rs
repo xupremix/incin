@@ -219,7 +219,10 @@ fn commit_parameter_updates<B: Backend, K: DType>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_adam_update<B: Backend, K: DType>(
+fn prepare_adam_update<
+    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: DType,
+>(
     operation: &'static str,
     tensor: &B::Storage<K>,
     grad: &B::Storage<K>,
@@ -292,7 +295,7 @@ fn prepare_adam_update<B: Backend, K: DType>(
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -320,7 +323,11 @@ impl<B: Backend, K: DType> SGD<B, K> {
     }
 }
 
-impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
+impl<
+    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: DType,
+> Optimizer<B> for SGD<B, K>
+{
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "sgd_step";
@@ -356,7 +363,7 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -424,7 +431,7 @@ impl<B: Backend, K: DType> AdamW<B, K> {
             let shape = B::shape(m_val);
             if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
-                shape,
+                ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
@@ -436,7 +443,7 @@ impl<B: Backend, K: DType> AdamW<B, K> {
             let shape = B::shape(v_val);
             if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
-                shape,
+                ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
@@ -460,7 +467,7 @@ impl<B: Backend, K: DType> AdamW<B, K> {
     }
 }
 
-impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
+impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -478,7 +485,11 @@ impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f
     }
 }
 
-impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
+impl<
+    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: DType,
+> Optimizer<B> for AdamW<B, K>
+{
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adamw_step";
@@ -551,7 +562,7 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -616,7 +627,7 @@ impl<B: Backend, K: DType> Adam<B, K> {
             let shape = B::shape(m_val);
             if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
-                shape,
+                ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
@@ -628,7 +639,7 @@ impl<B: Backend, K: DType> Adam<B, K> {
             let shape = B::shape(v_val);
             if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
-                shape,
+                ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
@@ -652,7 +663,7 @@ impl<B: Backend, K: DType> Adam<B, K> {
     }
 }
 
-impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f32> {
+impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for Adam<B, f32> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -670,7 +681,11 @@ impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f3
     }
 }
 
-impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
+impl<
+    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: DType,
+> Optimizer<B> for Adam<B, K>
+{
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adam_step";

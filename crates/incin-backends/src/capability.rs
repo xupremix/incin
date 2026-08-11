@@ -123,7 +123,7 @@ const fn composed_ranked(
 // `cpu::canonical`. Adding an identity here changes what execution admits and
 // what capability queries report in the same edit, and the canonical module
 // turns the third consumer into a compile-time obligation: a row advertised
-// without an `Execute<Descriptor<op::...>>` implementation does not build.
+// without an `Execute<op::...>` implementation does not build.
 //
 // A group is a *rule shape*, not an operation family. Two identities belong to
 // the same group when they produce an identical `CapabilityRule` apart from the

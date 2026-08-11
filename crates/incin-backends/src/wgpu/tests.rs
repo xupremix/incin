@@ -11,6 +11,14 @@ fn storage(data: Vec<f32>, shape: Vec<usize>) -> WgpuStorage {
     WgpuStorage::new(WgpuBuffer::try_from_slice(&data).unwrap(), shape)
 }
 
+fn storage_bool(data: Vec<bool>, shape: Vec<usize>) -> WgpuStorage {
+    let floats: Vec<f32> = data
+        .into_iter()
+        .map(|b| if b { 1.0 } else { 0.0 })
+        .collect();
+    WgpuStorage::new(WgpuBuffer::try_from_slice(&floats).unwrap(), shape)
+}
+
 /// `readback`.
 fn readback(s: &WgpuStorage) -> Vec<f32> {
     s.buffer.to_vec::<f32>().unwrap()
@@ -27,14 +35,16 @@ fn vec_approx_eq(a: &[f32], b: &[f32], tol: f32) -> bool {
 }
 
 /// `B`.
-type B = WgpuBackendImpl<f32, WgpuN<incin_core::typenum::U0>>;
+type B = WgpuBackendImpl<WgpuN<incin_core::typenum::U0>>;
 
 // ── Creation ──────────────────────────────────────────────────────────────
 
 #[test]
 /// `test_zeros`.
 fn test_zeros() {
-    let s = <B as CreationOps<B>>::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+    let s =
+        <B as CreationOps<B>>::zeros::<f32>(&[2, 3], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+            .unwrap();
     assert_eq!(s.shape, vec![2, 3]);
     assert!(readback(&s).iter().all(|&x| x == 0.0));
 }
@@ -42,14 +52,18 @@ fn test_zeros() {
 #[test]
 /// `test_ones`.
 fn test_ones() {
-    let s = <B as CreationOps<B>>::ones::<f32>(&[3, 2], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+    let s =
+        <B as CreationOps<B>>::ones::<f32>(&[3, 2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+            .unwrap();
     assert!(readback(&s).iter().all(|&x| x == 1.0));
 }
 
 #[test]
 /// `test_rand_shape`.
 fn test_rand_shape() {
-    let s = <B as CreationOps<B>>::rand::<f32>(&[4, 4], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+    let s =
+        <B as CreationOps<B>>::rand::<f32>(&[4, 4], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+            .unwrap();
     assert_eq!(s.shape, vec![4, 4]);
     let data = readback(&s);
     // All values should be in [0, 1)
@@ -59,7 +73,9 @@ fn test_rand_shape() {
 #[test]
 /// `test_randn_shape`.
 fn test_randn_shape() {
-    let s = <B as CreationOps<B>>::randn::<f32>(&[100], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+    let s =
+        <B as CreationOps<B>>::randn::<f32>(&[100], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+            .unwrap();
     assert_eq!(s.shape, vec![100]);
 }
 
@@ -396,32 +412,32 @@ fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
 
 #[test]
 fn test_where_cond_same_shape() {
-    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let mask = storage_bool(vec![true, false, true, false], vec![4]);
     let on_true = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
     let on_false = storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
-    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(readback(&out), vec![10.0, -2.0, 30.0, -4.0]);
 }
 
 #[test]
 fn test_where_cond_broadcasts_on_false_against_on_true() {
     // on_false is a scalar-per-row [2,1] broadcast against on_true's [2,3].
-    let mask = storage(vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0], vec![2, 3]);
+    let mask = storage_bool(vec![true, false, true, false, true, false], vec![2, 3]);
     let on_true = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let on_false = storage(vec![-1.0, -2.0], vec![2, 1]);
-    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, -1.0, 3.0, -2.0, 5.0, -2.0]);
 }
 
 #[test]
 fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
-    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let mask = storage_bool(vec![true, false, true, false], vec![4]);
     let on_true = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     // on_false is a single value broadcast across all 4 positions, so its
     // gradient must sum every position the mask routed to it.
     let on_false = storage(vec![9.0], vec![1]);
-    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g_true = grads
         .get(on_true.id)
@@ -485,16 +501,16 @@ fn test_index_select() {
 #[test]
 fn test_masked_fill() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
-    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).unwrap();
+    let mask = storage_bool(vec![true, false, true, false], vec![4]);
+    let out = <B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
     assert_eq!(readback(&out), vec![-1.0, 2.0, -1.0, 4.0]);
 }
 
 #[test]
 fn masked_fill_rejects_a_mismatched_mask_shape() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
-    let mask = storage(vec![1.0, 0.0], vec![2]);
-    assert!(<B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).is_err());
+    let mask = storage_bool(vec![true, false], vec![2]);
+    assert!(<B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).is_err());
 }
 
 #[test]
@@ -844,16 +860,14 @@ fn test_adamw_step() {
     let mut v = storage(vec![0.0, 0.0, 0.0], vec![3]);
 
     let old_param = readback(&param);
-    let mut var = WgpuVar {
-        storage: param.clone(),
-    };
+    let mut var = WgpuVar::new(param.clone());
 
     <B as OptimizerOps<B>>::adamw_step::<f32>(
         &mut var, &grad, &mut m, &mut v, 1e-3, 0.9, 0.999, 1e-8, 0.01, 1,
     )
     .unwrap();
 
-    let new_param = readback(&var.storage);
+    let new_param = readback(&var.value());
     // Parameters should have moved
     assert!(
         new_param
@@ -898,9 +912,7 @@ fn test_adamw_gpu_matches_reference() {
     let grad = storage(g_init.clone(), vec![3]);
     let mut m = storage(vec![0.0, 0.0, 0.0], vec![3]);
     let mut v = storage(vec![0.0, 0.0, 0.0], vec![3]);
-    let mut var = WgpuVar {
-        storage: param.clone(),
-    };
+    let mut var = WgpuVar::new(param.clone());
 
     <B as OptimizerOps<B>>::adamw_step::<f32>(
         &mut var,
@@ -916,7 +928,7 @@ fn test_adamw_gpu_matches_reference() {
     )
     .unwrap();
 
-    let gpu_p = readback(&var.storage);
+    let gpu_p = readback(&var.value());
     assert!(
         vec_approx_eq(&gpu_p, &ref_p, 1e-5),
         "GPU AdamW mismatch: got {:?}, expected {:?}",
@@ -1030,7 +1042,7 @@ fn test_quantize_dequantize() {
     }
     let s = storage(data.clone(), vec![2, 32]);
     let q_storage = <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
-    assert_eq!(q_storage.dtype, DTypeId::Q8_0);
+    assert_eq!(q_storage.dtype, DTypeId::Q8_0.descriptor());
     assert_eq!(q_storage.device, DeviceId::wgpu(0));
     assert_eq!(q_storage.shape, vec![2, 32]);
     assert_eq!(q_storage.offset_elements, 0);
@@ -1711,71 +1723,71 @@ fn min_keepdim_backward_matches_finite_difference() {
 fn test_cmp_eq() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 3.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::cmp_eq::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![1.0, 0.0, 1.0, 0.0]);
+    let out = <B as TensorOps<B>>::cmp_eq::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_cmp_ne() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![1.0, 0.0, 5.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_ne::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![0.0, 1.0, 1.0]);
+    let out = <B as TensorOps<B>>::cmp_ne::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_cmp_lt() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![1.0, 0.0, 0.0]);
+    let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_cmp_le() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_le::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![1.0, 1.0, 0.0]);
+    let out = <B as TensorOps<B>>::cmp_le::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_cmp_gt() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_gt::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![0.0, 0.0, 1.0]);
+    let out = <B as TensorOps<B>>::cmp_gt::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_cmp_ge() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_ge::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![0.0, 1.0, 1.0]);
+    let out = <B as TensorOps<B>>::cmp_ge::<f32>(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_logical_and() {
     let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_and::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![1.0, 0.0, 0.0, 0.0]);
+    let out = <B as TensorOps<B>>::logical_and(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_logical_or() {
     let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_or::<f32>(&a, &b).unwrap();
-    assert_eq!(readback(&out), vec![1.0, 1.0, 1.0, 0.0]);
+    let out = <B as TensorOps<B>>::logical_or(&a, &b);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_logical_not() {
     let a = storage(vec![1.0, 0.0, 2.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_not::<f32>(&a).unwrap();
-    assert_eq!(readback(&out), vec![0.0, 1.0, 0.0, 1.0]);
+    let out = <B as TensorOps<B>>::logical_not(&a);
+    assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
@@ -1950,5 +1962,101 @@ fn unsqueeze_is_tape_tracked_through_reshapes_backward() {
     assert!(
         max_abs_diff < 2e-3,
         "unsqueeze gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+/// An elementwise binary operation whose operands disagree in shape must
+/// broadcast, not refuse.
+///
+/// `binary_op` used to require an exact shape match, which made every
+/// `broadcast_add`/`broadcast_mul` on this backend fail even though the
+/// frontend had already resolved the output shape at the type level. The
+/// visible consequence was that `Linear::forward` — a matmul plus a rank-one
+/// bias add — could not run on WGPU at all, so no model with a biased linear
+/// layer was trainable here.
+#[test]
+fn binary_operations_broadcast_a_rank_one_operand() {
+    // [2, 3] against [3]: the bias-add shape every Linear layer produces.
+    let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let bias = storage(vec![10.0, 20.0, 30.0], vec![3]);
+
+    let sum = <B as NumericOps<B>>::add::<f32>(&lhs, &bias).unwrap();
+    assert_eq!(sum.shape, vec![2, 3]);
+    assert!(vec_approx_eq(
+        &readback(&sum),
+        &[11.0, 22.0, 33.0, 14.0, 25.0, 36.0],
+        1e-5
+    ));
+
+    // The stretched operand may be either side.
+    let product = <B as NumericOps<B>>::mul::<f32>(&bias, &lhs).unwrap();
+    assert_eq!(product.shape, vec![2, 3]);
+    assert!(vec_approx_eq(
+        &readback(&product),
+        &[10.0, 40.0, 90.0, 40.0, 100.0, 180.0],
+        1e-5
+    ));
+}
+
+/// A pair that cannot align is still refused — broadcasting is not a licence
+/// to accept anything.
+#[test]
+fn binary_operations_still_refuse_an_unbroadcastable_pair() {
+    let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let rhs = storage(vec![1.0, 2.0], vec![2]);
+
+    assert!(<B as NumericOps<B>>::add::<f32>(&lhs, &rhs).is_err());
+}
+
+/// The gradient of a broadcast bias add is the sum over the broadcast axis.
+///
+/// The backward half of this path was always written for broadcasting — both
+/// `add` tape entries call `unbroadcast` — so this asserts the two halves now
+/// agree rather than that a new gradient was added.
+#[test]
+fn a_broadcast_bias_add_unbroadcasts_its_gradient() {
+    let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let bias = storage(vec![10.0, 20.0, 30.0], vec![3]);
+
+    let sum = <B as NumericOps<B>>::add::<f32>(&lhs, &bias).unwrap();
+    let loss = <B as ReductionOps<B>>::sum_all::<f32>(&sum).unwrap();
+    let grads = B::backward::<f32>(&loss).unwrap();
+
+    // Every element contributes once, so d(loss)/d(lhs) is all ones and
+    // d(loss)/d(bias) is the row count on each of its three entries.
+    let grad_lhs = B::get_grad::<f32>(&lhs, &grads).unwrap().unwrap();
+    assert_eq!(grad_lhs.shape, vec![2, 3]);
+    assert!(vec_approx_eq(&readback(&grad_lhs), &[1.0; 6], 1e-5));
+
+    let grad_bias = B::get_grad::<f32>(&bias, &grads).unwrap().unwrap();
+    assert_eq!(grad_bias.shape, vec![3]);
+    assert!(vec_approx_eq(&readback(&grad_bias), &[2.0, 2.0, 2.0], 1e-5));
+}
+
+/// A parameter slot is shared, so an optimizer's assignment is visible to
+/// whoever else holds the same parameter.
+///
+/// `WgpuVar` used to wrap a plain owned `WgpuStorage`. An optimizer holds its
+/// own map of these and commits through `assign_var`, so the model's copy
+/// never saw the update: `optimizer.step()` was a silent no-op and a training
+/// run's loss sat at exactly its initial value. Nothing errored, which is why
+/// it reads as a bad learning rate rather than a broken write.
+#[test]
+fn assigning_a_parameter_is_visible_through_every_clone_of_it() {
+    let initial = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let var = WgpuVar::new(initial);
+    let observer = var.clone();
+
+    let updated = storage(vec![10.0, 20.0, 30.0], vec![3]);
+    let mut assignable = var.clone();
+    <B as Backend>::assign_var::<f32>(&mut assignable, &updated).unwrap();
+
+    assert!(
+        vec_approx_eq(&readback(&observer.value()), &[10.0, 20.0, 30.0], 1e-5),
+        "a clone of the slot must observe the assignment",
+    );
+    assert!(
+        vec_approx_eq(&readback(&var.value()), &[10.0, 20.0, 30.0], 1e-5),
+        "the original slot must observe the assignment",
     );
 }

@@ -24,17 +24,15 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::ops::Deref;
 
+use serde::{Deserialize, Serialize};
+
 use super::error::{OperationKind, RankExpectation, ShapeError};
-use super::shape::MAX_RANK;
 
 /// Ranks up to this bound are stored inline, without allocating.
 ///
-/// It *is* [`MAX_RANK`], the ceiling every rank generator shares since
-/// `SHP-006`, so a shape the typed frontend can express never spills. The alias
-/// stays because the two are different claims that merely coincide — one bounds
-/// what the type system can say, the other bounds what allocates — and a later
-/// change to either should not silently move the other.
-pub const INLINE_RANK: usize = MAX_RANK;
+/// This is a storage optimization only. It is deliberately independent of
+/// framework representability, typed rank, and backend rank capability.
+pub const INLINE_RANK: usize = 8;
 
 /// A short sequence of `T` held inline until it outgrows [`INLINE_RANK`].
 ///
@@ -340,6 +338,27 @@ impl ShapeBuf {
     }
 }
 
+// ShapeBuf is the canonical runtime shape value.  Serialize it as its logical
+// dimension sequence rather than exposing the inline/heap storage choice.
+impl serde::Serialize for ShapeBuf {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.dims().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ShapeBuf {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let dims = alloc::vec::Vec::<usize>::deserialize(deserializer)?;
+        Ok(Self::from_slice(&dims))
+    }
+}
+
 impl PartialEq<Vec<usize>> for ShapeBuf {
     fn eq(&self, other: &Vec<usize>) -> bool {
         self.dims() == other.as_slice()
@@ -349,6 +368,12 @@ impl PartialEq<Vec<usize>> for ShapeBuf {
 impl PartialEq<&[usize]> for ShapeBuf {
     fn eq(&self, other: &&[usize]) -> bool {
         self.dims() == *other
+    }
+}
+
+impl<const N: usize> PartialEq<[usize; N]> for ShapeBuf {
+    fn eq(&self, other: &[usize; N]) -> bool {
+        self.dims() == other.as_slice()
     }
 }
 
@@ -377,6 +402,53 @@ impl FromIterator<usize> for ShapeBuf {
         Self {
             dims: iter.into_iter().collect(),
         }
+    }
+}
+
+impl AsRef<[usize]> for ShapeBuf {
+    fn as_ref(&self) -> &[usize] {
+        self.dims()
+    }
+}
+
+impl AsMut<[usize]> for ShapeBuf {
+    fn as_mut(&mut self) -> &mut [usize] {
+        self.dims_mut()
+    }
+}
+
+impl<I: core::slice::SliceIndex<[usize]>> core::ops::Index<I> for ShapeBuf {
+    type Output = I::Output;
+    fn index(&self, index: I) -> &Self::Output {
+        &self.dims()[index]
+    }
+}
+
+impl<I: core::slice::SliceIndex<[usize]>> core::ops::IndexMut<I> for ShapeBuf {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        &mut self.dims_mut()[index]
+    }
+}
+
+impl From<ShapeBuf> for Vec<usize> {
+    fn from(buf: ShapeBuf) -> Self {
+        buf.dims().to_vec()
+    }
+}
+
+impl IntoIterator for ShapeBuf {
+    type Item = usize;
+    type IntoIter = alloc::vec::IntoIter<usize>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.dims().to_vec().into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ShapeBuf {
+    type Item = &'a usize;
+    type IntoIter = core::slice::Iter<'a, usize>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.dims().iter()
     }
 }
 

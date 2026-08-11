@@ -281,7 +281,9 @@ impl<K: DType> NcclBuffer<K> {
         elements: usize,
         dtype: K::Field,
     ) -> Result<Self, NcclTransportError> {
-        let runtime_dtype = K::to_incin(&dtype);
+        let runtime_dtype = K::descriptor(&dtype).builtin_id().ok_or_else(|| {
+            NcclTransportError::InvalidBuffer("custom dtype not supported".to_string())
+        })?;
         validate_collective_dtype(runtime_dtype)?;
         let expected = runtime_dtype
             .size_bytes(elements, OperationKind::Storage)
@@ -303,7 +305,9 @@ impl<K: DType> NcclBuffer<K> {
     /// Runtime dtype after resolving `K`.
     #[must_use]
     pub fn dtype(&self) -> DTypeId {
-        K::to_incin(&self.dtype)
+        K::descriptor(&self.dtype)
+            .builtin_id()
+            .expect("built-in dtype")
     }
 
     /// Logical element count.
@@ -603,15 +607,14 @@ impl NcclTransport {
     /// this method and its runtime dtype is checked before allocation or
     /// launch. The plan descriptor must carry the same stable [`GradientId`]
     /// and DP=2 `Partial<Mean> -> Replicated` semantics.
-    pub fn synchronize_gradient<S, T, D, K, G, P>(
+    pub fn synchronize_gradient<S, D, K, G, P>(
         &mut self,
         id: GradientId,
-        parameter: &Tensor<S, CudaBackendImpl<T, D>, K, G, P>,
+        parameter: &Tensor<S, CudaBackendImpl<D>, K, G, P>,
         gradients: &mut CudaGrads,
     ) -> Result<NcclEvent, NcclTransportError>
     where
         S: Shape,
-        T: DType,
         D: Device,
         K: DataParallelDType,
         G: RequiresGrad,
@@ -639,15 +642,14 @@ impl NcclTransport {
     /// before allocation or launch. For all-gather, the flat result is ordered
     /// by rank shard; a higher layer must reassemble non-leading tensor axes
     /// before presenting the result as an ordinary row-major tensor.
-    pub fn execute_tensor_parallel_flat<S, T, D, K, G, P>(
+    pub fn execute_tensor_parallel_flat<S, D, K, G, P>(
         &mut self,
         id: TensorParallelId,
         collective: TensorParallelCollective,
-        input: &Tensor<S, CudaBackendImpl<T, D>, K, G, P>,
+        input: &Tensor<S, CudaBackendImpl<D>, K, G, P>,
     ) -> Result<(CudaStorage, NcclEvent), NcclTransportError>
     where
         S: Shape,
-        T: DType,
         D: Device,
         K: TensorParallelDType,
         G: RequiresGrad,
@@ -738,16 +740,15 @@ impl NcclTransport {
     /// NCCL all-gather returns rank-major shards. When the sharded tensor axis
     /// is not leading, this method materializes the required axis movement on
     /// the same CUDA stream before recording the returned completion event.
-    pub fn execute_tensor_parallel<S, T, D, K, G, P>(
+    pub fn execute_tensor_parallel<S, D, K, G, P>(
         &mut self,
         id: TensorParallelId,
         collective: TensorParallelCollective,
-        input: &Tensor<S, CudaBackendImpl<T, D>, K, G, P>,
+        input: &Tensor<S, CudaBackendImpl<D>, K, G, P>,
         global_shape: &[usize],
     ) -> Result<(CudaStorage, NcclEvent), NcclTransportError>
     where
         S: Shape,
-        T: DType,
         D: Device,
         K: TensorParallelDType,
         G: RequiresGrad,
@@ -798,16 +799,15 @@ impl NcclTransport {
     /// placeholder overwritten by `recv`. This symmetric call shape lets `K`
     /// be inferred on both processes while the immutable descriptor carries
     /// one global source/destination contract.
-    pub fn execute_pipeline<S, T, D, K, G, P>(
+    pub fn execute_pipeline<S, D, K, G, P>(
         &mut self,
         boundary: PipelineBoundaryId,
         transfer: PipelineTransfer,
         microbatch: usize,
-        input: &Tensor<S, CudaBackendImpl<T, D>, K, G, P>,
+        input: &Tensor<S, CudaBackendImpl<D>, K, G, P>,
     ) -> Result<(CudaStorage, NcclEvent), NcclTransportError>
     where
         S: Shape,
-        T: DType,
         D: Device,
         K: PipelineDType,
         G: RequiresGrad,
@@ -1184,15 +1184,13 @@ fn validate_tensor_parallel_shapes(
     Ok(expected_local)
 }
 
-fn reassemble_tensor_parallel_storage<T, D, K>(
+fn reassemble_tensor_parallel_storage<D: Device, K: DType>(
     flat: &CudaStorage,
     collective: TensorParallelCollective,
     local_shape: &[usize],
     global_shape: &[usize],
 ) -> Result<CudaStorage, NcclTransportError>
 where
-    T: DType,
-    D: Device,
     K: TensorParallelDType,
 {
     let mut storage = match collective {
@@ -1201,30 +1199,26 @@ where
             let mut rank_major = Vec::with_capacity(local_shape.len() + 1);
             rank_major.push(WORLD);
             rank_major.extend_from_slice(local_shape);
-            let mut storage =
-                <CudaBackendImpl<T, D> as TensorOps<CudaBackendImpl<T, D>>>::reshape::<K>(
-                    flat,
-                    &rank_major,
+            let mut storage = <CudaBackendImpl<D> as TensorOps<CudaBackendImpl<D>>>::reshape::<K>(
+                flat,
+                &rank_major,
+            )
+            .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
+            for position in 0..tensor_axis {
+                storage = <CudaBackendImpl<D> as TensorOps<CudaBackendImpl<D>>>::transpose::<K>(
+                    &storage,
+                    position,
+                    position + 1,
                 )
                 .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
-            for position in 0..tensor_axis {
-                storage =
-                    <CudaBackendImpl<T, D> as TensorOps<CudaBackendImpl<T, D>>>::transpose::<K>(
-                        &storage,
-                        position,
-                        position + 1,
-                    )
-                    .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
             }
             storage
         }
         TensorParallelCollective::RowOutputSum => flat.clone(),
     };
-    storage = <CudaBackendImpl<T, D> as TensorOps<CudaBackendImpl<T, D>>>::reshape::<K>(
-        &storage,
-        global_shape,
-    )
-    .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
+    storage =
+        <CudaBackendImpl<D> as TensorOps<CudaBackendImpl<D>>>::reshape::<K>(&storage, global_shape)
+            .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
     Ok(storage)
 }
 
@@ -2903,7 +2897,7 @@ mod tests {
     #[test]
     #[ignore = "requires one CUDA device"]
     fn tensor_parallel_reassembly_moves_rank_axis_on_cuda_for_static_and_dyn() {
-        type B = CudaBackendImpl<f32, incin_core::prelude::CudaN<incin_core::typenum::U0>>;
+        type B = CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
         type D = incin_core::prelude::CudaN<incin_core::typenum::U0>;
 
         let rank_major = [

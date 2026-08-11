@@ -11,13 +11,13 @@ use std::time::Duration;
 type B = incin::DefaultBackend;
 
 #[cfg(feature = "wgpu")]
-type WgpuB = incin_backends::wgpu::WgpuBackendImpl<f32, incin::WgpuN<incin::typenum::U0>>;
+type WgpuB = incin_backends::wgpu::WgpuBackendImpl<incin::WgpuN<incin::typenum::U0>>;
 
 #[cfg(feature = "cuda")]
-type CudaB = incin_backends::cuda::CudaBackendImpl<f32, incin::CudaN<incin::typenum::U0>>;
+type CudaB = incin_backends::cuda::CudaBackendImpl<incin::CudaN<incin::typenum::U0>>;
 
 #[cfg(feature = "metal")]
-type MetalB = incin_backends::metal::MetalBackendImpl<f32, incin::MetalN<incin::typenum::U0>>;
+type MetalB = incin_backends::metal::MetalBackendImpl<incin::MetalN<incin::typenum::U0>>;
 
 fn capability_baselines(c: &mut Criterion) {
     let mut group = c.benchmark_group("capability");

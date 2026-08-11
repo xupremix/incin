@@ -9,7 +9,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::prelude::OperationKind;
-use incin_core::prelude::{DTypeId, Result, ShapeBuf, ShapeError};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, Result, ShapeBuf, ShapeError};
 
 /// `[N, C, H, W]`-style output spatial size, matching
 /// Uses checked arithmetic and rejects invalid zero parameters.
@@ -70,7 +70,7 @@ fn alloc_zeroed(
     stream: &Arc<cudarc::driver::CudaStream>,
     device: &Arc<cudarc::driver::CudaContext>,
     device_id: usize,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     numel: usize,
 ) -> Result<CudaBuffer> {
     Ok(CudaBuffer {
@@ -131,7 +131,13 @@ pub(crate) fn launch_max_pool2d_forward(
     let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
-    let mut idx_b = alloc_zeroed(&stream, &t_buf.device, device_id, DTypeId::U32, out_total)?;
+    let mut idx_b = alloc_zeroed(
+        &stream,
+        &t_buf.device,
+        device_id,
+        DTypeId::U32.descriptor(),
+        out_total,
+    )?;
 
     let cfg = launch_cfg(out_total)?;
     unsafe {
@@ -169,7 +175,7 @@ pub(crate) fn launch_max_pool2d_forward(
             })?;
     }
 
-    let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let out_strides = crate::layout::contiguous_strides(&out_shape);
     let output =
         CudaStorage::try_from_parts(Arc::new(out_b), out_shape.clone(), out_strides.clone(), 0)?;
     let max_indices = CudaStorage::try_from_parts(Arc::new(idx_b), out_shape, out_strides, 0)?;
@@ -222,7 +228,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape);
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
@@ -282,7 +288,7 @@ pub(crate) fn launch_avg_pool2d_forward(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -345,7 +351,7 @@ pub(crate) fn launch_avg_pool2d_backward(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape);
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
@@ -394,7 +400,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -449,6 +455,6 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape);
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }

@@ -109,7 +109,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     crate::telemetry::emit_scalar(step, "tape/ops", n_ops as f64);
     #[cfg(feature = "std")]
     {
-        if let Some(g) = incin_core::prelude::tracing_graph_snapshot() {
+        if let Some(g) = incin_core::backend_authoring::tracing_graph_snapshot() {
             crate::telemetry::emit_graph_snapshot(g);
         }
     }

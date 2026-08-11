@@ -27,6 +27,10 @@ std = ["incin-core/std", "incin-macros/std", "incin-backends/std"]
 nightly = ["incin-core/nightly", "incin-macros/nightly"]
 # Enables the built-in CPU backend. This is the only default backend.
 cpu = ["incin-backends/cpu"]
+# **Experimental.** Device values as user-facing allocation targets. Additive:
+# it adds a construction surface and removes none. See
+# `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.
+target-api = ["incin-backends/target-api"]
 # Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete
 # without it; see incin-backends for what it does and does not change.
 cpu-blas = ["std", "cpu", "incin-backends/cpu-blas"]

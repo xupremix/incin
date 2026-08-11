@@ -28,7 +28,7 @@ use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::String,
 };
-use incin_core::prelude::{DTypeId, Error, Result};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, Error, Result};
 #[cfg(any(feature = "autotune", test))]
 use std::sync::{Condvar, Mutex, OnceLock};
 
@@ -116,17 +116,17 @@ pub struct LaunchCandidate {
 }
 
 #[allow(dead_code)]
-pub(crate) fn preferred_pointwise_width(dtype: DTypeId) -> u8 {
-    match dtype {
-        DTypeId::F16 | DTypeId::BF16 | DTypeId::F64 => 2,
-        DTypeId::F32 => 4,
+pub(crate) fn preferred_pointwise_width(dtype: DTypeDescriptor) -> u8 {
+    match dtype.builtin_id() {
+        Some(DTypeId::F16 | DTypeId::BF16 | DTypeId::F64) => 2,
+        Some(DTypeId::F32) => 4,
         _ => 1,
     }
 }
 
 #[allow(dead_code)]
 pub(crate) fn pointwise_candidates(
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     elements: usize,
     dense: bool,
     packed_aligned: bool,
@@ -514,7 +514,7 @@ mod tests {
 
     fn test_kernel() -> KernelKey {
         KernelKey::cuda(
-            crate::dtype_policy::OperationKind::Pointwise,
+            incin_core::prelude::OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn candidate_generation_separates_access_and_launch_width() {
-        let aligned = pointwise_candidates(DTypeId::F32, 4096, true, true);
+        let aligned = pointwise_candidates(DTypeId::F32.descriptor(), 4096, true, true);
         assert_eq!(aligned.len(), 9);
         assert!(aligned.iter().any(|candidate| {
             candidate.block_size == 256
@@ -537,7 +537,7 @@ mod tests {
             KernelAccess::Packed { vector_width: 4 }
         );
 
-        let strided = pointwise_candidates(DTypeId::F32, 4096, false, false);
+        let strided = pointwise_candidates(DTypeId::F32.descriptor(), 4096, false, false);
         assert_eq!(strided.len(), 3);
         assert!(
             strided

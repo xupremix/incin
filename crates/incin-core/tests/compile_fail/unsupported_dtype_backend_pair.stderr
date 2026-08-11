@@ -1,17 +1,17 @@
 error[E0277]: the trait bound `WgpuBackendImpl: SupportsDType<f64>` is not satisfied
   --> tests/compile_fail/unsupported_dtype_backend_pair.rs:10:20
    |
-10 |     requires_f64::<WgpuBackendImpl<f32, Wgpu>>();
-   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `SupportsDType<f64>` is not implemented for `WgpuBackendImpl`
+10 |     requires_f64::<WgpuBackendImpl<Wgpu>>();
+   |                    ^^^^^^^^^^^^^^^^^^^^^ the trait `SupportsDType<f64>` is not implemented for `WgpuBackendImpl`
    |
-help: `WgpuBackendImpl<T, D>` implements trait `SupportsDType<K>`
-  --> $WORKSPACE/crates/incin-backends/src/wgpu/backend.rs
-   |
-   | impl<T: DType, D: Device> SupportsDType<f32> for WgpuBackendImpl<T, D> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SupportsDType<f32>`
-...
-   | impl<T: DType, D: Device> SupportsDType<Dyn> for WgpuBackendImpl<T, D> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SupportsDType<Dyn>`
+   = help: `WgpuBackendImpl<D>` implements trait `SupportsDType<K>`:
+             SupportsDType<Dyn>
+             SupportsDType<f32>
+             SupportsDType<i64>
+             SupportsDType<incin_backends::cpu::bf16>
+             SupportsDType<incin_backends::cpu::f16>
+             SupportsDType<u32>
+             SupportsDType<u8>
 note: required by a bound in `requires_f64`
   --> tests/compile_fail/unsupported_dtype_backend_pair.rs:7:20
    |

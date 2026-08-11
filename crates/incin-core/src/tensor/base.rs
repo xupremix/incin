@@ -712,8 +712,8 @@ where
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::Zeros>> + Capabilities,
-        <B as Execute<Descriptor<op::Zeros>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Zeros> + Capabilities,
+        <B as Execute<op::Zeros>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -739,8 +739,8 @@ where
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::Ones>> + Capabilities,
-        <B as Execute<Descriptor<op::Ones>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Ones> + Capabilities,
+        <B as Execute<op::Ones>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -771,8 +771,8 @@ where
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         K: PlainDType + BuiltinDType,
-        B: Execute<Descriptor<op::TensorFromData>> + Capabilities,
-        <B as Execute<Descriptor<op::TensorFromData>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::TensorFromData> + Capabilities,
+        <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
@@ -802,8 +802,8 @@ where
     pub fn from_bytes<A>(bytes: &[u8], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::TensorFromBytes>> + Capabilities,
-        <B as Execute<Descriptor<op::TensorFromBytes>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::TensorFromBytes> + Capabilities,
+        <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let dims = _shape.clone();
@@ -831,8 +831,8 @@ where
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::UniformRandom>> + Capabilities,
-        <B as Execute<Descriptor<op::UniformRandom>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::UniformRandom> + Capabilities,
+        <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -858,8 +858,8 @@ where
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::NormalRandom>> + Capabilities,
-        <B as Execute<Descriptor<op::NormalRandom>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::NormalRandom> + Capabilities,
+        <B as Execute<op::NormalRandom>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -885,8 +885,8 @@ where
     pub fn full<Sc: Into<crate::tensor::backend::ScalarValue>, A>(val: Sc, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::Full>> + Capabilities,
-        <B as Execute<Descriptor<op::Full>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Full> + Capabilities,
+        <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -918,8 +918,8 @@ where
     ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::Arange>> + Capabilities,
-        <B as Execute<Descriptor<op::Arange>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Arange> + Capabilities,
+        <B as Execute<op::Arange>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;
@@ -953,8 +953,8 @@ where
     ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: Execute<Descriptor<op::Linspace>> + Capabilities,
-        <B as Execute<Descriptor<op::Linspace>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Linspace> + Capabilities,
+        <B as Execute<op::Linspace>>::Output: Into<B::Storage<K>>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         let device = B::Device::to_incin(&_device)?;

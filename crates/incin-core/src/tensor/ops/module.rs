@@ -18,8 +18,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         eps: f32,
     ) -> Result<Tensor<S, B, K, G>>
     where
-        B: Execute<Descriptor<op::LayerNorm>>,
-        <B as Execute<Descriptor<op::LayerNorm>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::LayerNorm>,
+        <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,
     {
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
@@ -56,8 +56,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         eps: f32,
     ) -> Result<Tensor<S, B, K, G>>
     where
-        B: Execute<Descriptor<op::BatchNorm>>,
-        <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::BatchNorm>,
+        <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
     {
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),

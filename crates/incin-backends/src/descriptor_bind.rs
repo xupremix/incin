@@ -56,7 +56,6 @@ macro_rules! impl_data_creation_executors {
                 impl<D: Device>
                     incin_core::backend_authoring::Execute<
                         incin_core::backend_authoring::op::$operation,
-
                     > for $backend
                 {
                     type Output = $storage;
@@ -102,9 +101,8 @@ macro_rules! impl_data_creation_executors {
 macro_rules! impl_creation_executors {
     ($backend:ty, $storage:ty) => {
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::Zeros,
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::Zeros>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -138,9 +136,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::Ones,
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::Ones>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -174,10 +171,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::UniformRandom,
-
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::UniformRandom>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -211,10 +206,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::NormalRandom,
-
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::NormalRandom>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -248,9 +241,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::Full,
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::Full>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -285,10 +277,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::Arange,
-
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::Arange>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(
@@ -324,10 +314,8 @@ macro_rules! impl_creation_executors {
         }
 
         impl<D: Device>
-            incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::Linspace,
-
-            > for $backend
+            incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::Linspace>
+            for $backend
         {
             type Output = $storage;
             fn execute_shaped<ShapeTy: Shape>(

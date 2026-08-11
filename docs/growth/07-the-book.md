@@ -69,8 +69,8 @@ ground-truth code is.
    create/inspect tensors on CPU. Artifact: `examples/tensors`, README quickstart.
 
 ### Part II — The Type-Level Shape System (the hard, differentiating core)
-4. **`s!` and the shape type** — what `s![2,3]` expands to, `ConstShape` vs
-   `DynShape` vs `PartialDynShape`. Objective: read a `Tensor<…>` type and know
+4. **`s!` and the shape type** — what `s![2,3]` expands to, `DynShape` and
+   `PartialDynShape`. Objective: read a `Tensor<…>` type and know
    its shape. Artifact: `shapes/shape.rs`, `incin-macros` `s`.
 5. **Reading typenum (and why you rarely have to)** — `UInt`/`UTerm` demystified,
    and the tooling (`cargo incin`, the IDE extension) that means you read

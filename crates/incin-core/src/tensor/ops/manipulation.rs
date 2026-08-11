@@ -55,9 +55,9 @@ pub(crate) fn reshape_storage_exact<B, K>(
     shape: &ShapeBuf,
 ) -> Result<B::Storage<K>>
 where
-    B: Backend + Execute<Descriptor<op::ReshapeExact>>,
+    B: Backend + Execute<op::ReshapeExact>,
     K: DType,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     let target = ShapeValue::<Dyn>::try_new(shape.clone()).map_err(crate::prelude::Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
@@ -244,9 +244,9 @@ impl<
     /// Internal alias for `slice`.
     pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow> + Execute<op::SqueezeExact>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         let current_dims = self.shape_buf();
         if specs.len() > current_dims.as_ref().len() {
@@ -364,13 +364,13 @@ impl<
 
 impl<
     S: Shape + DynShape,
-    B: Backend + Execute<Descriptor<op::MaxPool2d>>,
+    B: Backend + Execute<op::MaxPool2d>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S, B, K, G>
 where
     B: Capabilities,
-    <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<K>>,
 {
     /// Functional `max_pool2d` operation.
     pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
@@ -452,8 +452,8 @@ impl<
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::ReshapeShape<S2>,
-        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
-        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ReshapeExact> + Capabilities,
+        <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
@@ -497,8 +497,8 @@ impl<
         &self,
     ) -> Result<Tensor<T::Output, B, K, G, P>>
     where
-        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
-        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ReshapeExact> + Capabilities,
+        <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
         let in_shape_vec = self.shape_buf();
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
@@ -533,8 +533,8 @@ impl<
         &self,
     ) -> Result<Tensor<T::Output, B, K, G, P>>
     where
-        B: Capabilities + Execute<Descriptor<op::SliceExact>>,
-        <B as Execute<Descriptor<op::SliceExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::SliceExact>,
+        <B as Execute<op::SliceExact>>::Output: Into<B::Storage<K>>,
     {
         let in_shape_vec = self.shape_buf();
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
@@ -609,8 +609,8 @@ impl<
     /// ```
     pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G, P>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
@@ -662,8 +662,8 @@ impl<
     /// ```
     pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G, P>>
     where
-        B: Capabilities + Execute<Descriptor<op::SqueezeExact>>,
-        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::SqueezeExact>,
+        <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
@@ -701,8 +701,8 @@ impl<
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
-        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
-        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ReshapeExact> + Capabilities,
+        <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
 
@@ -762,7 +762,7 @@ impl<
     where
         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
         B: Execute<
-                Descriptor<op::BroadcastAs>,
+                op::BroadcastAs,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1004,8 +1004,8 @@ impl<
         R: StaticCursor,
         S: SwapAxes<L, R>,
         <S as SwapAxes<L, R>>::Output: Shape + DynShape,
-        B: Execute<Descriptor<op::TransposeExact>> + Capabilities,
-        <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::TransposeExact> + Capabilities,
+        <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
             .normalize(self.shape_buf().rank())?;
@@ -1042,8 +1042,8 @@ impl<
     /// backend operation and the result intentionally carries only `Dyn`.
     pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Execute<Descriptor<op::TransposeExact>> + Capabilities,
-        <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::TransposeExact> + Capabilities,
+        <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
             .normalize(self.shape_buf().rank())?;
@@ -1085,7 +1085,7 @@ impl<
         Start: StaticCursor,
         End: StaticCursor,
         B: Execute<
-                Descriptor<op::FlattenExact>,
+                op::FlattenExact,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1145,7 +1145,7 @@ impl<
     pub fn flatten_runtime(&self, start: usize, end: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<
-                Descriptor<op::FlattenExact>,
+                op::FlattenExact,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1203,8 +1203,8 @@ impl<
         dim: usize,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Execute<Descriptor<op::ConcatExact>> + Capabilities,
-        <B as Execute<Descriptor<op::ConcatExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ConcatExact> + Capabilities,
+        <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
         if tensors.is_empty() {
             return Err(crate::err::Error::Msg(
@@ -1282,7 +1282,7 @@ impl<
         S: crate::shapes::concat::ConcatShape<S2, Axis>,
         <S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output: Shape,
         B: Execute<
-                Descriptor<op::ConcatExact>,
+                op::ConcatExact,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1335,8 +1335,8 @@ impl<
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
         S2: Shape,
-        B: Execute<Descriptor<op::ConcatExact>> + Capabilities,
-        <B as Execute<Descriptor<op::ConcatExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::ConcatExact> + Capabilities,
+        <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
         let rank = self.shape_buf().rank();
         let other_rank = other.shape_buf().rank();
@@ -1399,8 +1399,8 @@ impl<
         dim: usize,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Execute<Descriptor<op::StackExact>> + Capabilities,
-        <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::StackExact> + Capabilities,
+        <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
     {
         if tensors.is_empty() {
             return Err(crate::err::Error::Msg(
@@ -1460,7 +1460,7 @@ impl<
         S: crate::shapes::stack::StackShape<Axis>,
         <S as crate::shapes::stack::StackShape<Axis>>::Output: Shape,
         B: Execute<
-                Descriptor<op::StackExact>,
+                op::StackExact,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1502,8 +1502,8 @@ impl<
     /// Dynamically stacks `self` with `other` along `dim`.
     pub fn try_stack(&self, other: &Tensor<S, B, K, G>, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Execute<Descriptor<op::StackExact>> + Capabilities,
-        <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::StackExact> + Capabilities,
+        <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
     {
         let rank = self.shape_buf().rank() + 1;
         let dim = isize::try_from(dim)
@@ -1553,8 +1553,8 @@ impl<
     ) -> Result<Self>
     where
         S: ShapeEq<S2>,
-        B: Execute<Descriptor<op::MaskedFill>>,
-        <B as Execute<Descriptor<op::MaskedFill>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::MaskedFill>,
+        <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
         let val_f64 = value.into().to_f64();
         self.under_grad_mode(|| {
@@ -1647,8 +1647,8 @@ impl<
     /// Inserts a 1-sized dimension at position `dim`.
     pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::UnsqueezeExact>>,
-        <B as Execute<Descriptor<op::UnsqueezeExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::UnsqueezeExact>,
+        <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         let mut out_shape = self.shape_buf().as_ref().to_vec();
         if dim > out_shape.len() {
@@ -1686,8 +1686,8 @@ impl<
     /// Repeats tensor data along each dimension according to `repeats`.
     pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Repeat>>,
-        <B as Execute<Descriptor<op::Repeat>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Repeat>,
+        <B as Execute<op::Repeat>>::Output: Into<B::Storage<K>>,
     {
         let rank = self.shape_buf().len();
         if repeats.len() != rank {
@@ -1743,8 +1743,8 @@ impl<
         val: Sc,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Pad>>,
-        <B as Execute<Descriptor<op::Pad>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Pad>,
+        <B as Execute<op::Pad>>::Output: Into<B::Storage<K>>,
     {
         let val_f64 = val.into().to_f64();
         let out_shape = self
@@ -1829,8 +1829,8 @@ impl<
     /// Splits tensor into `chunks` equal parts along `dim`.
     pub fn chunk(&self, chunks: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
         let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -1863,8 +1863,8 @@ impl<
         dim: usize,
     ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
         let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -1892,7 +1892,7 @@ impl<
     where
         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
         B: Execute<
-                Descriptor<op::BroadcastAs>,
+                op::BroadcastAs,
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
@@ -1902,8 +1902,8 @@ impl<
     /// Extracts sliding window slices along `dim`.
     pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Unfold>>,
-        <B as Execute<Descriptor<op::Unfold>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Unfold>,
+        <B as Execute<op::Unfold>>::Output: Into<B::Storage<K>>,
     {
         let mut out_shape = self.shape_buf().as_ref().to_vec();
         let extent = *out_shape.get(dim).ok_or_else(|| {
@@ -1950,8 +1950,8 @@ impl<
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
     pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::PixelShuffle>>,
-        <B as Execute<Descriptor<op::PixelShuffle>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::PixelShuffle>,
+        <B as Execute<op::PixelShuffle>>::Output: Into<B::Storage<K>>,
     {
         let dims = self.shape_buf();
         if dims.as_ref().len() != 4 || upscale_factor == 0 {
@@ -2041,7 +2041,7 @@ impl<
 /// `try_stack_tensors`.
 pub fn try_stack_tensors<
     S: Shape + DynShape,
-    B: Backend + TensorOps<B> + Execute<Descriptor<op::StackExact>> + Capabilities,
+    B: Backend + TensorOps<B> + Execute<op::StackExact> + Capabilities,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
 >(
@@ -2050,7 +2050,7 @@ pub fn try_stack_tensors<
 ) -> Result<Tensor<Dyn, B, K, G>>
 where
     G::Field: Clone,
-    <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
 {
     if tensors.is_empty() {
         return Err(crate::prelude::Error::ShapeMismatch {
@@ -2136,8 +2136,8 @@ pub(crate) fn execute_where_cond_descriptor<
 ) -> Result<Tensor<S2, B, K, G2>>
 where
     S: ShapeEq<S2>,
-    B: Execute<Descriptor<op::WhereCond>>,
-    <B as Execute<Descriptor<op::WhereCond>>>::Output: Into<B::Storage<K>>,
+    B: Execute<op::WhereCond>,
+    <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
 {
     <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
     let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
@@ -2175,8 +2175,8 @@ pub(crate) fn execute_masked_fill_descriptor<
 ) -> Result<Tensor<S, B, K, G1>>
 where
     S: ShapeEq<S2>,
-    B: Execute<Descriptor<op::MaskedFill>>,
-    <B as Execute<Descriptor<op::MaskedFill>>>::Output: Into<B::Storage<K>>,
+    B: Execute<op::MaskedFill>,
+    <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
 {
     <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
     let h_input = TensorHandle::from_storage::<B, K, Local>(&input.inner);
@@ -2210,8 +2210,8 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
     ) -> Result<Tensor<S2, B, K, G2>>
     where
         S: ShapeEq<S2>,
-        B: Execute<Descriptor<op::WhereCond>>,
-        <B as Execute<Descriptor<op::WhereCond>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::WhereCond>,
+        <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {
         self.under_grad_mode(|| {
             execute_where_cond_descriptor::<S, S2, B, K, G, G2>(self, on_true, on_false)

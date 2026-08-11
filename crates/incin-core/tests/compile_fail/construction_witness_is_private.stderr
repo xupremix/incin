@@ -8,7 +8,7 @@ error[E0624]: associated function `from_parts_witnessed` is private
   |
   | /     fn from_parts_witnessed(
   | |         inner: B::Storage<K>,
-  | |         shape: S::Field,
+  | |         shape: ShapeBuf,
   | |         dtype: K::Field,
 ... |
   | |         _witness: ConstructionWitness,
@@ -28,5 +28,5 @@ note: associated function defined here
   |        ^^^^^^^^^^^^^^^^^^^^
 help: provide the arguments
   |
-5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed(/* CpuStorage */, /* Vec<usize> */, /* PhantomData<f32> */, /* PhantomData<incin_backends::cpu::Cpu> */, /* PhantomData<Grad> */, /* incin_core::tensor::base::ConstructionWitness */);
-  |                                                                 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed(/* CpuStorage */, /* ShapeBuf */, /* PhantomData<f32> */, /* PhantomData<incin_backends::cpu::Cpu> */, /* PhantomData<Grad> */, /* base::ConstructionWitness */);
+  |                                                                 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

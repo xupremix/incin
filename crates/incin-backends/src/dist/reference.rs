@@ -79,7 +79,13 @@ pub struct ReferenceBuffer<K: DType> {
 impl<K: DType> ReferenceBuffer<K> {
     /// Join values to a static/runtime dtype field.
     pub fn try_new(values: ReferenceValues, dtype: K::Field) -> Result<Self, CollectiveError> {
-        let typed = K::to_incin(&dtype);
+        let typed =
+            K::descriptor(&dtype)
+                .builtin_id()
+                .ok_or_else(|| CollectiveError::BufferDType {
+                    values: values.dtype(),
+                    typed: DTypeId::F32,
+                })?;
         if values.dtype() != typed {
             return Err(CollectiveError::BufferDType {
                 values: values.dtype(),
@@ -96,7 +102,9 @@ impl<K: DType> ReferenceBuffer<K> {
     /// Runtime dtype after resolving `K`.
     #[must_use]
     pub fn dtype(&self) -> DTypeId {
-        K::to_incin(&self.dtype)
+        K::descriptor(&self.dtype)
+            .builtin_id()
+            .expect("built-in dtype")
     }
 
     /// Typed values.

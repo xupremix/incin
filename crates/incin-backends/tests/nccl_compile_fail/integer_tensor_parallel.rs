@@ -4,7 +4,7 @@ use incin_core::dist::{TensorParallelCollective, TensorParallelId};
 use incin_core::prelude::{CudaN, Dyn, Tensor};
 use incin_core::typenum::U0;
 
-type Cuda = CudaBackendImpl<f32, CudaN<U0>>;
+type Cuda = CudaBackendImpl<CudaN<U0>>;
 
 fn integer_tensor_parallel(
     transport: &mut NcclTransport,

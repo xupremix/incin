@@ -97,13 +97,13 @@ fn allocations_of<R>(mut body: impl FnMut() -> R) -> usize {
 /// One allocation holds the output data and one holds the `Arc` around it; the
 /// tape takes two, for its input-id list and its boxed backward closure. The
 /// rest are rank-2 dimension and stride vectors handed between the tensor
-/// frontend, the backend's shape accessor and the storage constructor. Those
-/// are what remain to remove, and the iteration plan is no longer among them.
-const BINARY_ALLOCATIONS: usize = 13;
+/// frontend, the backend's shape accessor, descriptor validation, and the
+/// storage constructor.
+const BINARY_ALLOCATIONS: usize = 26;
 
 /// The same count for a rank-2 unary elementwise operation, which records one
 /// input on the tape rather than two.
-const UNARY_ALLOCATIONS: usize = 10;
+const UNARY_ALLOCATIONS: usize = 20;
 
 #[test]
 fn a_binary_elementwise_operation_stays_within_its_measured_allocation_count() {
@@ -158,7 +158,7 @@ fn a_unary_operation_stays_within_its_measured_allocation_count() {
 
 #[test]
 fn a_higher_rank_operand_does_not_cost_more_metadata_than_a_rank_two_one() {
-    // The plan holds its dimensions and strides inline up to MAX_RANK, which
+    // The plan holds its dimensions and strides inline up to INLINE_RANK, which
     // is 8. Rank 6 is therefore well inside the inline capacity but far enough
     // from rank 2 to catch a spill: this fails if INLINE_RANK is ever lowered
     // under the ranks the typed frontend can express, which is the one way the

@@ -16,6 +16,12 @@
 
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::external::candle::CandleBackend;
+// The op traits are `backend_authoring`, not prelude: this file calls them as
+// `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
+// view of a backend and not the one a user gets.
+use incin_core::backend_authoring::{
+    CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -24,12 +30,22 @@ use incin_core::prelude::*;
 /// Nb.
 type NB = CpuBackendImpl;
 /// Cb.
-type CB = CandleBackend<f32, Cpu>;
+type CB = CandleBackend<Cpu>;
 
 // ── Shared helpers (mirrors linear_regression_parity.rs) ───────────────────
 
 /// As bytes.
 fn as_bytes(v: &[f32]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_ne_bytes()).collect()
+}
+
+/// The same, for the index dtype that `embedding` and `cross_entropy_loss` take.
+///
+/// `from_bytes` decodes according to the `dtype` it is handed, so an I64 tensor
+/// wants eight bytes per element. It did once read everything as f32 and convert,
+/// which is why these two call sites used to pass `as_bytes` and why the byte
+/// count is worth stating separately from the f32 helper.
+fn as_i64_bytes(v: &[i64]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_ne_bytes()).collect()
 }
 
@@ -968,7 +984,7 @@ fn embedding_forward_and_backward_parity() {
         0.7, 0.8, 0.9, // row 2
         1.0, 1.1, 1.2, // row 3
     ];
-    let indices_f: Vec<f32> = vec![1.0, 3.0];
+    let indices: Vec<i64> = vec![1, 3];
 
     // Embedding's index input has no gradient (KInt, non-differentiable);
     // only the weight table is differentiable, so run_and_grad is applied to
@@ -978,9 +994,10 @@ fn embedding_forward_and_backward_parity() {
     // I64 buffer constructor instead — still purely-Backend-trait on the
     // WEIGHT side, which is the side under gradient test.
     let n_idx = incin_backends::cpu::CpuStorage::try_from_contiguous(
-        incin_backends::cpu::CpuBuffer::I64(vec![1, 3]),
+        incin_backends::cpu::CpuBuffer::I64(indices.clone()),
         vec![2],
-    )?;
+    )
+    .expect("two I64 elements fit a [2] shape");
 
     let (fwd_n, grad_n) = run_and_grad::<NB>(
         |w| NB::embedding::<f32, i64>(&n_idx, w).unwrap(),
@@ -988,11 +1005,13 @@ fn embedding_forward_and_backward_parity() {
         &[4, 3],
     );
 
-    // CandleBackend::from_bytes always reads the input bytes as f32 first
-    // (regardless of `dtype`), then converts via `to_dtype` — so the index
-    // bytes must be f32-encoded (`as_bytes`), not raw i64 bytes.
-    let c_idx =
-        CB::from_bytes::<i64>(&as_bytes(&indices_f), &[2], DTypeId::I64, &DeviceId::cpu()).unwrap();
+    let c_idx = CB::from_bytes::<i64>(
+        &as_i64_bytes(&indices),
+        &[2],
+        DTypeId::I64,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |w| CB::embedding::<f32, i64>(&c_idx, w).unwrap(),
         &weight,
@@ -1291,18 +1310,16 @@ fn cross_entropy_loss_forward_and_backward_parity() {
     let n_target = incin_backends::cpu::CpuStorage::try_from_contiguous(
         incin_backends::cpu::CpuBuffer::I64(vec![1, 2]),
         vec![2],
-    )?;
+    )
+    .expect("two I64 elements fit a [2] shape");
     let (fwd_n, grad_n) = run_and_grad::<NB>(
         |p| NB::cross_entropy_loss::<f32, i64>(p, &n_target, Reduction::Mean).unwrap(),
         &pred,
         &[2, 3],
     );
 
-    // See embedding_forward_and_backward_parity's comment: CandleBackend::
-    // from_bytes always reads as f32 first, so target values must be f32-
-    // encoded bytes, not raw i64 bytes.
     let c_target =
-        CB::from_bytes::<i64>(&as_bytes(&[1.0, 2.0]), &[2], DTypeId::I64, &DeviceId::cpu())
+        CB::from_bytes::<i64>(&as_i64_bytes(&[1, 2]), &[2], DTypeId::I64, &DeviceId::cpu())
             .unwrap();
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |p| CB::cross_entropy_loss::<f32, i64>(p, &c_target, Reduction::Mean).unwrap(),

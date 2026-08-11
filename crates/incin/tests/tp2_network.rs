@@ -32,7 +32,7 @@ use incin::experimental::distributed::{
 use incin::prelude::*;
 use incin::typenum::{U0, U1, U2, U4, U6};
 
-type CudaB = CudaBackendImpl<f32, CudaN<U0>>;
+type CudaB = CudaBackendImpl<CudaN<U0>>;
 
 const COLUMN_EXPECTED: [f32; 12] = [
     1.0, 2.0, 3.0, 4.0, 3.0, 7.0, //

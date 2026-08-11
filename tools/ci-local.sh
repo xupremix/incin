@@ -37,6 +37,7 @@ cargo xtask ledger || fail "Ledger validation failed!"
 cargo test -p xtask || fail "xtask unit tests failed!"
 cargo xtask budgets || fail "Budgets enforcement failed!"
 cargo xtask docs --check || fail "README feature table check failed!"
+cargo xtask feature-matrix || fail "Backend feature matrix failed!"
 tools/audit-shapes.sh --check || fail "Shape audit check failed!"
 success "Ledger & Governance OK"
 

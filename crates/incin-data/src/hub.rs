@@ -48,7 +48,7 @@ impl HubRepo {
 
     /// Downloads `model.safetensors` (or specified filename) from HuggingFace Hub
     /// and loads the state tensors directly.
-    pub fn load_safetensors<B: Backend<FloatElem = f32> + SupportsDType<f32>>(
+    pub fn load_safetensors<B: Backend + SupportsDType<f32>>(
         &self,
         filename: Option<&str>,
         device: &DeviceId,
@@ -65,7 +65,7 @@ pub fn download(repo_id: &str, filename: &str) -> Result<PathBuf> {
 }
 
 /// Downloads a `safetensors` model file from HuggingFace `repo_id` and loads it directly into a state map.
-pub fn from_pretrained<B: Backend<FloatElem = f32> + SupportsDType<f32>>(
+pub fn from_pretrained<B: Backend + SupportsDType<f32>>(
     repo_id: &str,
     filename: Option<&str>,
     device: &DeviceId,

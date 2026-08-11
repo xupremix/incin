@@ -16,7 +16,7 @@
 //     println!("Weights available at: {:?}", path);
 //
 //     // Initialize our statically-generated struct
-//     let mut model = ResNet18::<CandleBackend<f32, Cpu>>::new();
+//     let mut model = ResNet18::<CandleBackend<Cpu>>::new();
 //
 //     // Load the downloaded weights directly into the struct!
 //     model.load_default_weights()?;

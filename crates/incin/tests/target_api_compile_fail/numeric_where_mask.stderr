@@ -1,0 +1,7 @@
+error[E0599]: no method named `where_cond` found for struct `incin_core::tensor::base::Tensor<(UInt<UInt<UTerm, B1>, B1>,), incin_backends::cpu::CpuBackendImpl, i64, NoGrad>` in the current scope
+ --> tests/target_api_compile_fail/numeric_where_mask.rs:7:18
+  |
+7 |     let _ = mask.where_cond(&yes, &no)?;
+  |                  ^^^^^^^^^^ method not found in `incin_core::tensor::base::Tensor<(UInt<UInt<UTerm, B1>, B1>,), incin_backends::cpu::CpuBackendImpl, i64, NoGrad>`
+  |
+  = note: the method was found for `incin_core::tensor::base::Tensor<S, B, bool, G>`

@@ -6,7 +6,7 @@ use core::fmt::Debug;
 
 pub use incin_core::exec::TensorId;
 use incin_core::exec::{Alignment, TapeStorage, TensorMeta};
-use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
 
 /// Storage access mode for Metal buffers on Apple Silicon and macOS.
@@ -89,12 +89,6 @@ impl MetalStorage {
         mode: MetalStorageMode,
         device_ordinal: usize,
     ) -> Result<Self> {
-        let element_size = metadata.dtype.size_bytes(1, OperationKind::Storage)?;
-        let capacity_elements = if element_size == 0 {
-            0
-        } else {
-            bytes.len() / element_size
-        };
         let span_elements = metadata
             .strides
             .checked_span(&metadata.shape, OperationKind::Storage)?;
@@ -105,9 +99,10 @@ impl MetalStorage {
                 operation: OperationKind::Storage,
                 expression: "offset + span",
             })?;
-        if end > capacity_elements {
+        let required_bytes = metadata.dtype.size_bytes(end, OperationKind::Storage)?;
+        if required_bytes > bytes.len() {
             return Err(Error::InvalidByteLength {
-                expected: end * element_size,
+                expected: required_bytes,
                 got: bytes.len(),
             });
         }
@@ -127,13 +122,12 @@ impl MetalStorage {
     /// Returns [`Error`] if allocation or metadata validation fails.
     pub fn zeros(
         shape: &ShapeBuf,
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         mode: MetalStorageMode,
         device_ordinal: usize,
     ) -> Result<Self> {
         let numel = shape.checked_numel(OperationKind::Storage)?;
-        let elem_size = dtype.size_bytes(1, OperationKind::Storage)?;
-        let byte_len = numel * elem_size;
+        let byte_len = dtype.size_bytes(numel, OperationKind::Storage)?;
         let meta = TensorMeta::contiguous(
             shape.clone(),
             dtype,
@@ -187,14 +181,25 @@ impl MetalStorage {
                 backend: "Metal (Private Storage)",
             });
         }
-        let elem_size = self.metadata.dtype.size_bytes(1, OperationKind::Storage)?;
-        let offset_bytes = self.metadata.offset_elements * elem_size;
+        let offset_bytes = self
+            .metadata
+            .dtype
+            .size_bytes(self.metadata.offset_elements, OperationKind::Storage)?;
         let span_elements = self
             .metadata
             .strides
             .checked_span(&self.metadata.shape, OperationKind::Storage)?;
-        let span_bytes = span_elements * elem_size;
-        Ok(&self.data[offset_bytes..offset_bytes + span_bytes])
+        let end_bytes = self.metadata.dtype.size_bytes(
+            self.metadata
+                .offset_elements
+                .checked_add(span_elements)
+                .ok_or_else(|| incin_core::shapes::ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Storage,
+                    expression: "offset + span",
+                })?,
+            OperationKind::Storage,
+        )?;
+        Ok(&self.data[offset_bytes..end_bytes])
     }
 
     /// Device ID corresponding to this Metal storage handle.
@@ -278,8 +283,8 @@ mod tests {
     fn test_metal_storage_zeros_and_bounds() {
         let shape = ShapeBuf::from_slice(&[2, 3]);
         let storage =
-            MetalStorage::zeros(&shape, DTypeId::F32, MetalStorageMode::Shared, 0).unwrap();
-        assert_eq!(storage.metadata().dtype(), DTypeId::F32);
+            MetalStorage::zeros(&shape, DTypeId::F32.into(), MetalStorageMode::Shared, 0).unwrap();
+        assert_eq!(storage.metadata().dtype(), DTypeId::F32.descriptor());
         assert_eq!(storage.metadata().shape().dims(), &[2, 3]);
         assert_eq!(storage.device(), DeviceId::metal(0));
         assert_eq!(storage.as_bytes().unwrap().len(), 24);
@@ -289,7 +294,7 @@ mod tests {
     fn test_metal_private_storage_guard() {
         let shape = ShapeBuf::from_slice(&[4]);
         let storage =
-            MetalStorage::zeros(&shape, DTypeId::F32, MetalStorageMode::Private, 0).unwrap();
+            MetalStorage::zeros(&shape, DTypeId::F32.into(), MetalStorageMode::Private, 0).unwrap();
         assert!(storage.as_bytes().is_err());
     }
 
@@ -298,7 +303,7 @@ mod tests {
         let shape = ShapeBuf::from_slice(&[100]);
         let meta = TensorMeta::contiguous(
             shape,
-            DTypeId::F32,
+            DTypeId::F32.into(),
             DeviceId::metal(0),
             MetalStorage::alignment(),
             100,

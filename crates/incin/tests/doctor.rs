@@ -167,15 +167,15 @@ telemetry-runs: unset — no XDG data directory could be resolved
 cpu pointwise f32 rank 2 inference: native
 cpu pointwise f32 rank 2 training: native
 cpu matmul f32 rank 2 inference: native
-cpu matmul f16 rank 2 inference: unsupported (dtype F16 is unsupported for matmul)
+cpu matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
 cpu reduction f32 rank 2 inference: native
-cpu reduction f64 rank 2 inference: unsupported (dtype F64 is unsupported for reduction)
+cpu reduction f64 rank 2 inference: unsupported (dtype f64 is unsupported for reduction)
 cpu conv2d f32 rank 4 training: native
 cpu normalization f32 rank 2 training: native
 cuda pointwise f32 rank 2 inference: native
 cuda pointwise f32 rank 2 training: native
 cuda matmul f32 rank 2 inference: native
-cuda matmul f16 rank 2 inference: unsupported (dtype F16 is unsupported for matmul)
+cuda matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
 cuda reduction f32 rank 2 inference: native
 cuda reduction f64 rank 2 inference: native
 cuda conv2d f32 rank 4 training: native

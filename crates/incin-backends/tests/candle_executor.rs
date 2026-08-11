@@ -134,7 +134,7 @@ fn capabilities_refuse_a_dtype_candle_cannot_represent() {
     // than accept a query it would fail to route.
     let backend = TestBackend::default();
     let query = CapabilityQuery {
-        operation: OperationKind::MatMul,
+        operation: incin_core::exec::OperationIdentity::Builtin(OperationKind::MatMul),
         dtype: DTypeId::Q8_0.into(),
         layout: LayoutClass::Contiguous,
         rank: 2,

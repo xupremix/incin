@@ -18,6 +18,16 @@ fn main() -> ExitCode {
         Some("budgets") => budgets::check(),
         Some("ledger") => ledger::check(),
         Some("docs") => docs::run(std::env::args().nth(2).as_deref() == Some("--check")),
+        Some("feature-matrix") => {
+            let status = std::process::Command::new("tools/feature-matrix.sh")
+                .status()
+                .expect("failed to execute tools/feature-matrix.sh");
+            if status.success() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
         Some(other) => {
             eprintln!("unknown task `{other}`");
             usage();
@@ -37,10 +47,11 @@ fn usage() {
     eprintln!("    cargo xtask <TASK>");
     eprintln!();
     eprintln!("TASKS:");
-    eprintln!("    ledger    Validate the PROPOSALS.md execution ledger against");
-    eprintln!("              docs/plan/ledger.toml (GOV-003)");
-    eprintln!("    budgets   Validate regression budgets and the Cargo feature");
-    eprintln!("              inventory (GOV-005)");
-    eprintln!("    docs      Regenerate README.md's feature tables from the Cargo");
-    eprintln!("              manifests; --check fails instead of writing (UX-013)");
+    eprintln!("    ledger          Validate the PROPOSALS.md execution ledger against");
+    eprintln!("                    docs/plan/ledger.toml (GOV-003)");
+    eprintln!("    budgets         Validate regression budgets and the Cargo feature");
+    eprintln!("                    inventory (GOV-005)");
+    eprintln!("    docs            Regenerate README.md's feature tables from the Cargo");
+    eprintln!("                    manifests; --check fails instead of writing (UX-013)");
+    eprintln!("    feature-matrix  Check compilation of all backend feature combinations");
 }

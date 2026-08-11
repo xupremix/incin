@@ -50,6 +50,13 @@ impl<B: StorageBackend> ExecutionContext<B> {
     /// This is the bridge between the scoped convenience form and the explicit
     /// one: it reads the ambient policy once, here, and the resulting context
     /// keeps that value even if the scope it was read from later ends.
+    ///
+    /// Without `std` there is no thread-local to read and no
+    /// [`ExecutionPolicy::scope`] to have installed anything, so the answer is
+    /// the default policy — the same reasoning, and the same resolution, as
+    /// [`GradMode::current`](crate::exec::GradMode::current). Offering it in
+    /// both configurations rather than gating it on `std` keeps a caller like
+    /// `Tensor::add` from having to exist only in one of them.
     #[cfg(feature = "std")]
     #[must_use]
     pub fn from_scope(backend: B) -> Self {
@@ -57,6 +64,13 @@ impl<B: StorageBackend> ExecutionContext<B> {
             backend,
             policy: ExecutionPolicy::current(),
         }
+    }
+
+    /// Own `backend` under the default policy. See the `std` form above.
+    #[cfg(not(feature = "std"))]
+    #[must_use]
+    pub const fn from_scope(backend: B) -> Self {
+        Self::new(backend)
     }
 
     #[must_use]
@@ -136,6 +150,20 @@ impl<B: StorageBackend> ExecutionContext<B> {
     #[must_use]
     pub const fn with_grad_mode(mut self, grad_mode: GradMode) -> Self {
         self.policy.grad_mode = grad_mode;
+        self
+    }
+
+    #[must_use]
+    pub const fn precision_policy(&self) -> crate::exec::RuntimePrecisionPolicy {
+        self.policy.precision
+    }
+
+    #[must_use]
+    pub const fn with_precision_policy(
+        mut self,
+        precision: crate::exec::RuntimePrecisionPolicy,
+    ) -> Self {
+        self.policy.precision = precision;
         self
     }
 }

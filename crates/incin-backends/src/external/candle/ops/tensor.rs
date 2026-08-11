@@ -2,6 +2,7 @@
 
 use crate::external::candle::CandleBackend;
 use crate::external::candle::convert::{from_candle_dtype, to_candle_dtype};
+use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
 fn candle_readback_error(error: candle_core::Error) -> Error {
@@ -12,8 +13,8 @@ fn candle_readback_error(error: candle_core::Error) -> Error {
     .into()
 }
 
-impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::backend_authoring::TensorOps<Self> for CandleBackend<T, D>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::TensorOps<Self>
+    for CandleBackend<D>
 {
     // Candle has native equivalents for most of these, but this adapter does
     // not route them yet. Declaring the gap here keeps it visible instead of
@@ -33,13 +34,15 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     /// manually broadcasts the leading batch dimensions, flattens them into
     /// a single batch axis, multiplies, and reshapes back.
     fn matmul<K: incin_core::prelude::DType>(
-        lhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        rhs: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let lhs_contig = lhs
+            .tensor()
             .contiguous()
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let rhs_contig = rhs
+            .tensor()
             .contiguous()
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
 
@@ -101,120 +104,148 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
             let mut res_shape = out_shape;
             res_shape.push(m);
             res_shape.push(n);
-            return Ok(res_flat
+            let raw = res_flat
                 .reshape(res_shape.as_slice())
-                .map_err(|e| anyhow::anyhow!(e))?);
+                .map_err(|e| anyhow::anyhow!(e))?;
+            return CandleStorage::try_new(raw);
         }
 
-        Ok(lhs_contig
+        let raw = lhs_contig
             .broadcast_matmul(&rhs_contig)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Stacks `tensors` along a new dimension `dim`.
     fn stack<K: incin_core::prelude::DType>(
-        tensors: &[&<Self as incin_core::prelude::Backend>::Storage<K>],
+        tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(candle_core::Tensor::stack(tensors, dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw_tensors: Vec<&candle_core::Tensor> = tensors.iter().map(|s| s.tensor()).collect();
+        let raw = candle_core::Tensor::stack(&raw_tensors, dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Concatenates `tensors` along an existing dimension `dim`.
     fn concat<K: incin_core::prelude::DType>(
-        tensors: &[&<Self as incin_core::prelude::Backend>::Storage<K>],
+        tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(candle_core::Tensor::cat(tensors, dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw_tensors: Vec<&candle_core::Tensor> = tensors.iter().map(|s| s.tensor()).collect();
+        let raw = candle_core::Tensor::cat(&raw_tensors, dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Broadcasts `t` to `shape`.
     fn broadcast_as<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.broadcast_as(shape)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .broadcast_as(shape)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
     /// Broadcasts `t` by prepending dimensions from `shape` on the left.
     fn broadcast_left<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.broadcast_left(shape)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .broadcast_left(shape)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Reshapes `t` to `shape` without changing its underlying data.
     fn reshape<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.reshape(shape)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .reshape(shape)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
     /// Swaps dimensions `dim1` and `dim2`.
     fn transpose<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.transpose(dim1, dim2)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .transpose(dim1, dim2)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
     /// Applies a per-dimension `[start, end)` narrow for each entry in
     /// `ranges`, sequentially, one dimension at a time.
     fn slice<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        let mut out = t.clone();
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mut out = t.tensor().clone();
         for (dim, &(start, end)) in ranges.iter().enumerate() {
             out = out
                 .narrow(dim, start, end - start)
                 .map_err(|e| Error::Msg(format!("Candle narrow failed for slice: {}", e)))?;
         }
-        Ok(out)
+        CandleStorage::try_new(out)
     }
 
     /// Flattens dimensions `start_dim..=end_dim` into a single dimension.
     fn flatten<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         start_dim: usize,
         end_dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.flatten(start_dim, end_dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .flatten(start_dim, end_dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Takes a contiguous sub-range of length `len` starting at `start`
     /// along `dim`.
     fn narrow<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         start: usize,
         len: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.narrow(dim, start, len)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .narrow(dim, start, len)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Removes dimension `dim` if it has size 1.
     fn squeeze<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.squeeze(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let raw = t
+            .tensor()
+            .squeeze(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 
     /// Casts `t` to `f32` and extracts its single element as an `f64`
     /// scalar.
     fn float_to_scalar<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<f64> {
         let v = t
+            .tensor()
             .to_dtype(candle_core::DType::F32)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let s: f32 = v
@@ -224,9 +255,10 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     }
     /// Casts `t` to `f32` and collects it into a flat `Vec<f64>`.
     fn float_to_vec1<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<f64>> {
         let v = t
+            .tensor()
             .to_dtype(candle_core::DType::F32)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         let vec: Vec<f32> = v
@@ -236,52 +268,56 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     }
     /// Extracts one integer without implicit float truncation or saturation.
     fn int_to_scalar<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<i64> {
         let operation = "candle_int_to_scalar";
-        let value = match t.dtype() {
+        let c_tensor = t.tensor();
+        let value = match c_tensor.dtype() {
             candle_core::DType::U8 => {
                 return Ok(i64::from(
-                    t.to_scalar::<u8>().map_err(candle_readback_error)?,
+                    c_tensor.to_scalar::<u8>().map_err(candle_readback_error)?,
                 ));
             }
             candle_core::DType::U32 => {
                 return Ok(i64::from(
-                    t.to_scalar::<u32>().map_err(candle_readback_error)?,
+                    c_tensor.to_scalar::<u32>().map_err(candle_readback_error)?,
                 ));
             }
             candle_core::DType::I64 => {
-                return t.to_scalar::<i64>().map_err(candle_readback_error);
+                return c_tensor.to_scalar::<i64>().map_err(candle_readback_error);
             }
-            candle_core::DType::BF16 => t
+            candle_core::DType::BF16 => c_tensor
                 .to_scalar::<half::bf16>()
                 .map_err(candle_readback_error)?
                 .to_f64(),
-            candle_core::DType::F16 => t
+            candle_core::DType::F16 => c_tensor
                 .to_scalar::<half::f16>()
                 .map_err(candle_readback_error)?
                 .to_f64(),
             candle_core::DType::F32 => {
-                f64::from(t.to_scalar::<f32>().map_err(candle_readback_error)?)
+                f64::from(c_tensor.to_scalar::<f32>().map_err(candle_readback_error)?)
             }
-            candle_core::DType::F64 => t.to_scalar::<f64>().map_err(candle_readback_error)?,
+            candle_core::DType::F64 => {
+                c_tensor.to_scalar::<f64>().map_err(candle_readback_error)?
+            }
         };
         incin_core::prelude::convert_f64_to_i64(
             operation,
-            from_candle_dtype(t.dtype()),
+            from_candle_dtype(c_tensor.dtype()),
             value,
             incin_core::prelude::FloatToIntPolicy::Exact,
         )
     }
     /// Collects integers without implicit float truncation or saturation.
     fn int_to_vec1<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<i64>> {
         let operation = "candle_int_to_vec1";
-        let dtype = from_candle_dtype(t.dtype());
-        let values = match t.dtype() {
+        let c_tensor = t.tensor();
+        let dtype = from_candle_dtype(c_tensor.dtype());
+        let values = match c_tensor.dtype() {
             candle_core::DType::U8 => {
-                return Ok(t
+                return Ok(c_tensor
                     .to_vec1::<u8>()
                     .map_err(candle_readback_error)?
                     .into_iter()
@@ -289,7 +325,7 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
                     .collect());
             }
             candle_core::DType::U32 => {
-                return Ok(t
+                return Ok(c_tensor
                     .to_vec1::<u32>()
                     .map_err(candle_readback_error)?
                     .into_iter()
@@ -297,27 +333,27 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
                     .collect());
             }
             candle_core::DType::I64 => {
-                return t.to_vec1::<i64>().map_err(candle_readback_error);
+                return c_tensor.to_vec1::<i64>().map_err(candle_readback_error);
             }
-            candle_core::DType::BF16 => t
+            candle_core::DType::BF16 => c_tensor
                 .to_vec1::<half::bf16>()
                 .map_err(candle_readback_error)?
                 .into_iter()
                 .map(|value| value.to_f64())
                 .collect(),
-            candle_core::DType::F16 => t
+            candle_core::DType::F16 => c_tensor
                 .to_vec1::<half::f16>()
                 .map_err(candle_readback_error)?
                 .into_iter()
                 .map(|value| value.to_f64())
                 .collect(),
-            candle_core::DType::F32 => t
+            candle_core::DType::F32 => c_tensor
                 .to_vec1::<f32>()
                 .map_err(candle_readback_error)?
                 .into_iter()
                 .map(f64::from)
                 .collect(),
-            candle_core::DType::F64 => t.to_vec1::<f64>().map_err(candle_readback_error)?,
+            candle_core::DType::F64 => c_tensor.to_vec1::<f64>().map_err(candle_readback_error)?,
         };
         values
             .into_iter()
@@ -333,10 +369,13 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     }
     /// Casts `t` to the candle dtype corresponding to `dtype`.
     fn tensor_to_dtype<K: incin_core::prelude::DType, K2: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
-        dtype: DTypeId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K2>> {
-        Ok(t.to_dtype(to_candle_dtype(dtype)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        t: &<Self as StorageBackend>::Storage<K>,
+        dtype: DTypeDescriptor,
+    ) -> Result<<Self as StorageBackend>::Storage<K2>> {
+        let raw = t
+            .tensor()
+            .to_dtype(to_candle_dtype(dtype)?)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(raw)
     }
 }

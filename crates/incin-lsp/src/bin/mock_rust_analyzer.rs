@@ -48,7 +48,7 @@ fn main() -> io::Result<()> {
         "id": id,
         "result": [{
             "position": {"line": 3, "character": 12},
-            "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>"
+            "label": "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>"
         }]
     });
     write_frame(&mut stdout, &serde_json::to_vec(&inlay_hint_response)?)?;

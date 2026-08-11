@@ -70,8 +70,7 @@ pub trait StateDict<B: Backend> {
         serializer: &mut S,
     ) -> core::result::Result<(), S::Error>
     where
-        <<B as Backend>::Device as Device>::Field: Default,
-        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
+        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
         let mut map = BTreeMap::new();
         self.state_dict("", &mut map);
@@ -85,8 +84,7 @@ pub trait StateDict<B: Backend> {
         device: &DeviceId,
     ) -> Result<()>
     where
-        <<B as Backend>::Device as Device>::Field: Default,
-        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
+        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
         let map = deserializer
             .deserialize(device)
@@ -182,8 +180,8 @@ pub trait Parameters<B: Backend> {
 /// A trait to transfer ownership of a module to a new device.
 pub trait ToDevice<B: Backend, NewD: Device> {
     /// The same module type, but rebuilt on backend `NewD` — e.g.
-    /// `Linear<S, IncinBackend<T, Cpu>>` transferred to `Wgpu` becomes
-    /// `Linear<S, IncinBackend<T, Wgpu>>`.
+    /// `Linear<S, NativeBackend<Cpu>>` transferred to `Wgpu` becomes
+    /// `Linear<S, NativeBackend<Wgpu>>`.
     type Output;
     /// Moves every parameter/buffer this module owns onto device `arg`,
     /// returning the module rebuilt on the new backend.
@@ -423,7 +421,7 @@ impl<T: TrainMode> AutorefTrainMode for &mut T {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let mut model = seq!(
@@ -971,14 +969,18 @@ pub trait AutorefShapeInfo {
     /// Renders this field's shape as a debug string, if it has one.
     fn maybe_shape_info(&self) -> Option<String>;
 }
-impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Param<S, B> {
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
+    AutorefShapeInfo for &crate::nn::param::Param<S, B, K, Train>
+{
     #[inline]
     /// Renders the parameter's dimensions, e.g. `[128, 256]`.
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
 }
-impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Buffer<S, B> {
+impl<S: Shape + DynShape, B: Backend, K: DType> AutorefShapeInfo
+    for &crate::nn::param::Buffer<S, B, K>
+{
     #[inline]
     /// Renders the buffer's dimensions, e.g. `[128, 256]`.
     fn maybe_shape_info(&self) -> Option<String> {
@@ -1034,7 +1036,7 @@ macro_rules! seq {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// type Net = SeqTy!(

@@ -1,3 +1,23 @@
+error[E0277]: the trait bound `(UInt<UInt<UTerm, B1>, B0>,): incin_core::shapes::Shape` is not satisfied
+ --> tests/pipeline_compile_fail/zero_microbatches.rs:9:46
+  |
+9 |     PipelinePlanBuilder::build_static::<f32, (U2,), U0, GPipe>(
+  |                                              ^^^^^ the trait `incin_core::shapes::Shape` is not implemented for `(UInt<UInt<UTerm, B1>, B0>,)`
+  |
+help: the trait `incin_core::shapes::Shape` is implemented for `()`
+ --> src/shapes/shape.rs
+  |
+  | impl Shape for () {
+  | ^^^^^^^^^^^^^^^^^
+note: required by a bound in `PipelinePlanBuilder::build_static`
+ --> src/dist/pipeline.rs
+  |
+  |     pub fn build_static<K, S, Microbatches, Schedule>(
+  |            ------------ required by a bound in this associated function
+...
+  |         S: Shape,
+  |            ^^^^^ required by this bound in `PipelinePlanBuilder::build_static`
+
 error[E0277]: the trait bound `UTerm: incin_core::typenum::NonZero` is not satisfied
  --> tests/pipeline_compile_fail/zero_microbatches.rs:9:53
   |

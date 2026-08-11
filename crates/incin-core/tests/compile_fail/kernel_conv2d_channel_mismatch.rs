@@ -4,7 +4,7 @@ use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 /// Backend.
-type Backend = DummyBackend<f32, incin_core::prelude::Cpu>;
+type Backend = DummyBackend<incin_core::prelude::Cpu>;
 
 fn main() {
     let t = Tensor::<s![2, 4, 32, 32], Backend>::zeros(()).unwrap();

@@ -1,14 +1,10 @@
 use incin::prelude::*;
 
-const DYN_VALUE: Dyn = Dyn;
-
 #[module]
 pub struct ConsumerModule {
     layer: Linear<s![3, 4]>,
 }
-
 pub fn tensor_and_module_surface() -> Result<()> {
-    let _marker: Dyn = DYN_VALUE;
     let tensor = Tensor::<Dyn>::zeros(vec![2, 3])?;
     let _module = ConsumerModule {
         layer: Linear::build(())?,

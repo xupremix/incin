@@ -29,33 +29,33 @@ macro_rules! unsupported_float_ops {
     ) => {
         $(
             fn $unary<K: DType>(
-                _t: &<Self as Backend>::Storage<K>,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+                _t: &<Self as StorageBackend>::Storage<K>,
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($unary)))
             }
         )*
         $(
             fn $exponent<K: DType>(
-                _t: &<Self as Backend>::Storage<K>,
+                _t: &<Self as StorageBackend>::Storage<K>,
                 _exponent: f64,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($exponent)))
             }
         )*
         $(
             fn $bounds<K: DType>(
-                _t: &<Self as Backend>::Storage<K>,
+                _t: &<Self as StorageBackend>::Storage<K>,
                 _min: f64,
                 _max: f64,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($bounds)))
             }
         )*
         $(
             fn $binary<K: DType>(
-                _lhs: &<Self as Backend>::Storage<K>,
-                _rhs: &<Self as Backend>::Storage<K>,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+                _lhs: &<Self as StorageBackend>::Storage<K>,
+                _rhs: &<Self as StorageBackend>::Storage<K>,
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($binary)))
             }
         )*
@@ -84,9 +84,9 @@ macro_rules! unsupported_creation_ops {
             fn $fill<K: DType>(
                 _value: f64,
                 _shape: &[usize],
-                _dtype: DTypeId,
+                _dtype: DTypeDescriptor,
                 _device: &DeviceId,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($fill)))
             }
         )*
@@ -95,9 +95,9 @@ macro_rules! unsupported_creation_ops {
                 _from: f64,
                 _to: f64,
                 _shape: &[usize],
-                _dtype: DTypeId,
+                _dtype: DTypeDescriptor,
                 _device: &DeviceId,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($sequence)))
             }
         )*
@@ -120,16 +120,16 @@ macro_rules! unsupported_reduction_ops {
     (all: $($all:ident),* $(,)?; dim: $($dim:ident),* $(,)?;) => {
         $(
             fn $all<K: DType>(
-                _t: &<Self as Backend>::Storage<K>,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+                _t: &<Self as StorageBackend>::Storage<K>,
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($all)))
             }
         )*
         $(
             fn $dim<K: DType>(
-                _t: &<Self as Backend>::Storage<K>,
+                _t: &<Self as StorageBackend>::Storage<K>,
                 _dim: usize,
-            ) -> Result<<Self as Backend>::Storage<K>> {
+            ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($dim)))
             }
         )*
@@ -170,78 +170,78 @@ macro_rules! unsupported_tensor_ops {
     };
 
     (@op where_cond) => {
-        fn where_cond<K: DType, KMask: DType>(
-            _mask: &<Self as Backend>::Storage<KMask>,
-            _on_true: &<Self as Backend>::Storage<K>,
-            _on_false: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        fn where_cond<K: DType>(
+            _mask: &<Self as StorageBackend>::Storage<bool>,
+            _on_true: &<Self as StorageBackend>::Storage<K>,
+            _on_false: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("where_cond"))
         }
     };
     (@op scatter) => {
         fn scatter<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-            _index: &<Self as Backend>::Storage<KInt>,
-            _src: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _index: &<Self as StorageBackend>::Storage<KInt>,
+            _src: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("scatter"))
         }
     };
     (@op masked_fill) => {
-        fn masked_fill<K: DType, KMask: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-            _mask: &<Self as Backend>::Storage<KMask>,
+        fn masked_fill<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+            _mask: &<Self as StorageBackend>::Storage<bool>,
             _value: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("masked_fill"))
         }
     };
     (@op pad) => {
         fn pad<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _padding: &[(usize, usize)],
             _val: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("pad"))
         }
     };
     (@op repeat) => {
         fn repeat<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _repeats: &[usize],
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("repeat"))
         }
     };
     (@op lerp) => {
         fn lerp<K: DType>(
-            _start: &<Self as Backend>::Storage<K>,
-            _end: &<Self as Backend>::Storage<K>,
+            _start: &<Self as StorageBackend>::Storage<K>,
+            _end: &<Self as StorageBackend>::Storage<K>,
             _weight: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("lerp"))
         }
     };
     (@op addmm) => {
         fn addmm<K: DType>(
-            _mat: &<Self as Backend>::Storage<K>,
-            _mat1: &<Self as Backend>::Storage<K>,
-            _mat2: &<Self as Backend>::Storage<K>,
+            _mat: &<Self as StorageBackend>::Storage<K>,
+            _mat1: &<Self as StorageBackend>::Storage<K>,
+            _mat2: &<Self as StorageBackend>::Storage<K>,
             _beta: f64,
             _alpha: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("addmm"))
         }
     };
     (@op scaled_dot_product_attention) => {
         fn scaled_dot_product_attention<K: DType>(
-            _q: &<Self as Backend>::Storage<K>,
-            _k: &<Self as Backend>::Storage<K>,
-            _v: &<Self as Backend>::Storage<K>,
-            _mask: Option<&<Self as Backend>::Storage<K>>,
+            _q: &<Self as StorageBackend>::Storage<K>,
+            _k: &<Self as StorageBackend>::Storage<K>,
+            _v: &<Self as StorageBackend>::Storage<K>,
+            _mask: Option<&<Self as StorageBackend>::Storage<K>>,
             _scale: Option<f64>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(
                 "scaled_dot_product_attention",
             ))
@@ -249,51 +249,51 @@ macro_rules! unsupported_tensor_ops {
     };
     (@op unfold) => {
         fn unfold<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _size: usize,
             _step: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("unfold"))
         }
     };
     (@op group_norm) => {
         fn group_norm<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _groups: usize,
             _eps: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>("group_norm"))
         }
     };
     (@op tensor_to_dtype) => {
         fn tensor_to_dtype<K: DType, K2: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dtype: DTypeId,
-        ) -> Result<<Self as Backend>::Storage<K2>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K2>> {
             Err($crate::unsupported::unsupported::<Self>("tensor_to_dtype"))
         }
     };
     (@op float_to_scalar) => {
-        fn float_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+        fn float_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
             Err($crate::unsupported::unsupported::<Self>("float_to_scalar"))
         }
     };
     (@op float_to_vec1) => {
         fn float_to_vec1<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<f64>> {
             Err($crate::unsupported::unsupported::<Self>("float_to_vec1"))
         }
     };
     (@op int_to_scalar) => {
-        fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        fn int_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
             Err($crate::unsupported::unsupported::<Self>("int_to_scalar"))
         }
     };
     (@op int_to_vec1) => {
         fn int_to_vec1<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<i64>> {
             Err($crate::unsupported::unsupported::<Self>("int_to_vec1"))
         }
@@ -303,7 +303,11 @@ macro_rules! unsupported_tensor_ops {
     // arms are spelled out rather than generated so each one names the exact
     // operation the caller sees in the error.
     (@op logical_not) => {
-        $crate::unsupported::unsupported_tensor_ops!(@unary logical_not);
+        fn logical_not(
+            _t: &<Self as StorageBackend>::Storage<bool>,
+        ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+            Err($crate::unsupported::unsupported::<Self>("logical_not"))
+        }
     };
     (@op gather) => { $crate::unsupported::unsupported_tensor_ops!(@indexed gather); };
     (@op index_select) => { $crate::unsupported::unsupported_tensor_ops!(@indexed index_select); };
@@ -315,64 +319,80 @@ macro_rules! unsupported_tensor_ops {
     (@op sub_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar sub_scalar); };
     (@op div_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar div_scalar); };
     (@op instance_norm) => { $crate::unsupported::unsupported_tensor_ops!(@scalar instance_norm); };
-    (@op cmp_eq) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_eq); };
-    (@op cmp_ne) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_ne); };
-    (@op cmp_lt) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_lt); };
-    (@op cmp_le) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_le); };
-    (@op cmp_gt) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_gt); };
-    (@op cmp_ge) => { $crate::unsupported::unsupported_tensor_ops!(@binary cmp_ge); };
-    (@op logical_and) => { $crate::unsupported::unsupported_tensor_ops!(@binary logical_and); };
-    (@op logical_or) => { $crate::unsupported::unsupported_tensor_ops!(@binary logical_or); };
+    (@op cmp_eq) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_eq); };
+    (@op cmp_ne) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ne); };
+    (@op cmp_lt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_lt); };
+    (@op cmp_le) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_le); };
+    (@op cmp_gt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_gt); };
+    (@op cmp_ge) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ge); };
+    (@op logical_and) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_and); };
+    (@op logical_or) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_or); };
     (@op maximum) => { $crate::unsupported::unsupported_tensor_ops!(@binary maximum); };
     (@op minimum) => { $crate::unsupported::unsupported_tensor_ops!(@binary minimum); };
     (@op abs_diff) => { $crate::unsupported::unsupported_tensor_ops!(@binary abs_diff); };
     (@op bmm) => { $crate::unsupported::unsupported_tensor_ops!(@binary bmm); };
 
+    (@cmp $op:ident) => {
+        fn $op<K: DType>(
+            _lhs: &<Self as StorageBackend>::Storage<K>,
+            _rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+            Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
+        }
+    };
+    (@logical_binary $op:ident) => {
+        fn $op(
+            _lhs: &<Self as StorageBackend>::Storage<bool>,
+            _rhs: &<Self as StorageBackend>::Storage<bool>,
+        ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+            Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
+        }
+    };
     (@unary $op:ident) => {
         fn $op<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };
     (@binary $op:ident) => {
         fn $op<K: DType>(
-            _lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _lhs: &<Self as StorageBackend>::Storage<K>,
+            _rhs: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };
     (@dim $op:ident) => {
         fn $op<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };
     (@scalar $op:ident) => {
         fn $op<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _val: f64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };
     (@diagonal $op:ident) => {
         fn $op<K: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _k: i64,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };
     (@indexed $op:ident) => {
         fn $op<K: DType, KInt: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
-            _index: &<Self as Backend>::Storage<KInt>,
-        ) -> Result<<Self as Backend>::Storage<K>> {
+            _index: &<Self as StorageBackend>::Storage<KInt>,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Err($crate::unsupported::unsupported::<Self>(stringify!($op)))
         }
     };

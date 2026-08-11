@@ -44,6 +44,10 @@
 //! assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 100);
 //! ```
 
+// Data-loader errors retain their complete configuration and source context;
+// boxing them solely to satisfy clippy would weaken the public error contract.
+#![allow(clippy::result_large_err)]
+
 #[macro_use]
 extern crate alloc;
 /// Dataset.

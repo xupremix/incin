@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use core::ops::Deref;
 use incin_core::exec::{Alignment, TensorMeta};
-use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
+use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result, ShapeBuf};
 use wgpu::util::DeviceExt;
 
 use crate::wgpu::device::{get_device_state, try_get_device_state};
@@ -36,12 +36,14 @@ impl WgpuBuffer {
     /// element count whose byte length overflows `usize` is reported instead of
     /// wrapping into an undersized buffer that a shader would then write past.
     pub(crate) fn new_zeros_for(
-        dtype: DTypeId,
+        dtype: impl Into<incin_core::prelude::DTypeDescriptor>,
         elements: usize,
         operation: OperationKind,
     ) -> Result<Arc<Self>> {
         Ok(Self::new_zeros(crate::bytes::byte_len(
-            dtype, elements, operation,
+            dtype.into(),
+            elements,
+            operation,
         )?))
     }
 
@@ -151,9 +153,12 @@ impl WgpuStorage {
     pub(crate) fn try_new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
         let capacity = buffer
             .size
-            .checked_div(DTypeId::F32.element_size())
+            .checked_div(DTypeId::F32.encoding().bytes_per_block())
             .ok_or_else(|| Error::Msg("WGPU element size must be nonzero".into()))?;
-        if !buffer.size.is_multiple_of(DTypeId::F32.element_size()) {
+        if !buffer
+            .size
+            .is_multiple_of(DTypeId::F32.encoding().bytes_per_block())
+        {
             return Err(Error::Msg(format!(
                 "WGPU buffer byte size {} is not a whole number of f32 elements",
                 buffer.size
@@ -161,7 +166,7 @@ impl WgpuStorage {
         }
         let meta = TensorMeta::contiguous(
             shape.as_slice().into(),
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             DeviceId::wgpu(0),
             Alignment::of::<f32>(),
             capacity,
@@ -175,18 +180,14 @@ impl WgpuStorage {
     }
 
     pub(crate) fn try_new_packed_q8(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
-        let logical_elements = shape
-            .iter()
-            .try_fold(1usize, |count, &dim| count.checked_mul(dim))
-            .ok_or_else(|| Error::Msg("WGPU Q8_0 logical element count overflowed".into()))?;
-        if !logical_elements.is_multiple_of(32) {
-            return Err(Error::Msg(format!(
-                "WGPU Q8_0 storage requires a multiple of 32 logical elements, got {logical_elements}"
-            )));
-        }
-        let expected_bytes = (logical_elements / 32)
-            .checked_mul(34)
-            .ok_or_else(|| Error::Msg("WGPU Q8_0 packed byte length overflowed".into()))?;
+        let logical_shape = ShapeBuf::from_slice(&shape);
+        let logical_elements = logical_shape.numel().ok_or_else(|| {
+            Error::Shape(incin_core::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "Q8_0 logical element count",
+            })
+        })?;
+        let expected_bytes = DTypeId::Q8_0.size_bytes(logical_elements, OperationKind::Storage)?;
         if buffer.size != expected_bytes {
             return Err(Error::Msg(format!(
                 "WGPU Q8_0 buffer has {} bytes, expected {expected_bytes}",
@@ -195,7 +196,7 @@ impl WgpuStorage {
         }
         let meta = TensorMeta::contiguous(
             shape.as_slice().into(),
-            DTypeId::Q8_0,
+            DTypeId::Q8_0.descriptor(),
             DeviceId::wgpu(0),
             Alignment::BYTE,
             logical_elements,

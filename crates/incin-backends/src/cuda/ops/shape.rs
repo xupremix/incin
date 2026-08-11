@@ -160,7 +160,7 @@ fn launch_shape_op(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -352,6 +352,6 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
                 })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }

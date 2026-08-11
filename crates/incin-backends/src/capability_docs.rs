@@ -18,7 +18,7 @@ use alloc::vec::Vec;
 use core::fmt::Write as _;
 
 use incin_core::exec::{CapabilityRule, OPERATION_CATALOG};
-use incin_core::prelude::{DeviceKind, MAX_RANK};
+use incin_core::prelude::DeviceKind;
 
 use crate::capability::{CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES};
 
@@ -145,34 +145,32 @@ fn device_section(device: DeviceKind, rules: &[CapabilityRule]) -> String {
 
 /// A rule's rank bound, written the way a reader would say it.
 ///
-/// `0..=MAX_RANK` is "any rank" — printing the number there would invite the
-/// reader to think rank 8 is a property of *this rule* rather than the
-/// workspace-wide ceiling `SHP-006` set.
+/// `0..=usize::MAX` is "any rank" — printing the sentinel would invite the
+/// reader to mistake an unbounded rule for a backend-specific rank limit.
 fn rank_range(rule: &CapabilityRule) -> String {
     match (rule.min_rank, rule.max_rank) {
-        (0, MAX_RANK) => "any".to_string(),
-        (min, MAX_RANK) => alloc::format!("{min}+"),
+        (0, usize::MAX) => "any".to_string(),
+        (min, usize::MAX) => alloc::format!("{min}+"),
         (min, max) if min == max => alloc::format!("{min}"),
         (min, max) => alloc::format!("{min}–{max}"),
     }
 }
 
 fn legend() -> String {
-    alloc::format!(
-        "## Reading this\n\
+    "## Reading this\n\
          \n\
          - **Element types** are the dtypes the rule covers. A dtype absent from \
          every rule for an operation is refused by the registry, which is what \
          lets a planner ask before it allocates.\n\
          - **Layouts** are `LayoutClass` values. `contiguous` is dense row-major; \
          `strided` means the kernel handles a non-dense view without a copy.\n\
-         - **Rank** is the tensor rank the rule accepts. `any` is `0..={MAX_RANK}`, \
+         - **Rank** is the tensor rank the rule accepts. `any` is an unbounded rank rule, \
          the single workspace ceiling.\n\
          - **Training** says whether the rule also covers the backward pass. A \
          rule with `no` still runs under inference.\n\
          - **Implementation** is `native` for a dedicated kernel and `composed` \
          for an operation built from others. Both execute; they differ in cost.\n"
-    )
+        .to_string()
 }
 
 fn code(s: &str) -> String {
@@ -188,26 +186,32 @@ fn join(items: impl Iterator<Item = String>) -> String {
 mod tests {
     use super::*;
     use incin_core::exec::{ImplementationKind, LayoutClass, MathMode};
-    use incin_core::prelude::{DTypeId, OperationKind};
+    use incin_core::prelude::{DTypeDescriptor, DTypeId, OperationKind};
 
     const PRECISE: &[MathMode] = &[MathMode::Precise];
     const CONTIGUOUS: &[LayoutClass] = &[LayoutClass::Contiguous];
 
-    const fn rule(operation: OperationKind, dtypes: &'static [DTypeId]) -> CapabilityRule {
+    const fn rule(operation: OperationKind, dtypes: &'static [DTypeDescriptor]) -> CapabilityRule {
         CapabilityRule::new(
             operation,
             dtypes,
             CONTIGUOUS,
             0,
-            MAX_RANK,
+            usize::MAX,
             false,
             PRECISE,
             ImplementationKind::Native,
         )
     }
 
-    static HAS_MATMUL: &[CapabilityRule] = &[rule(OperationKind::MatMulExact, &[DTypeId::F32])];
-    static HAS_NEITHER: &[CapabilityRule] = &[rule(OperationKind::ReshapeExact, &[DTypeId::F32])];
+    static HAS_MATMUL: &[CapabilityRule] = &[rule(
+        OperationKind::MatMulExact,
+        &[DTypeId::F32.descriptor()],
+    )];
+    static HAS_NEITHER: &[CapabilityRule] = &[rule(
+        OperationKind::ReshapeExact,
+        &[DTypeId::F32.descriptor()],
+    )];
 
     /// The real backends all register the same eleven operations, so the cell
     /// for an operation one backend lacks never renders against them. It is the
@@ -236,8 +240,11 @@ mod tests {
     #[test]
     fn repeated_registrations_are_unioned_rather_than_replaced() {
         static TWICE: &[CapabilityRule] = &[
-            rule(OperationKind::ReshapeExact, &[DTypeId::F32]),
-            rule(OperationKind::ReshapeExact, &[DTypeId::I64, DTypeId::F32]),
+            rule(OperationKind::ReshapeExact, &[DTypeId::F32.descriptor()]),
+            rule(
+                OperationKind::ReshapeExact,
+                &[DTypeId::I64.descriptor(), DTypeId::F32.descriptor()],
+            ),
         ];
         let table = summary(&[(DeviceKind::Cpu, TWICE)]);
         assert!(
@@ -250,15 +257,17 @@ mod tests {
     /// takes rank 8 for a property of the rule.
     #[test]
     fn a_rank_bound_reads_as_a_bound_only_when_it_is_one() {
-        let unbounded = rule(OperationKind::MatMul, &[DTypeId::F32]);
+        const F32_DESC: DTypeDescriptor = DTypeId::F32.descriptor();
+        static F32_DTYPES: &[DTypeDescriptor] = &[F32_DESC];
+        let unbounded = rule(OperationKind::MatMul, F32_DTYPES);
         assert_eq!(rank_range(&unbounded), "any");
 
         let floored = CapabilityRule::new(
             OperationKind::MatMul,
-            &[DTypeId::F32],
+            F32_DTYPES,
             CONTIGUOUS,
             2,
-            MAX_RANK,
+            usize::MAX,
             false,
             PRECISE,
             ImplementationKind::Native,
@@ -267,7 +276,7 @@ mod tests {
 
         let windowed = CapabilityRule::new(
             OperationKind::Conv2d,
-            &[DTypeId::F32],
+            F32_DTYPES,
             CONTIGUOUS,
             3,
             4,

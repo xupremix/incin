@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use crate::dist::collective::CollectiveReductionDType;
 use crate::dist::data_parallel::DataParallelDType;
-use crate::prelude::{ConstDType, DTypeId};
+use crate::prelude::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::OperationKind;
 
 /// Stage of Zero Redundancy Optimizer (ZeRO) / FSDP partitioning.
@@ -235,7 +235,10 @@ impl FsdpPlanBuilder {
         world_size: usize,
     ) -> Result<(), FsdpError>
     where
-        K: ConstDType + DataParallelDType + CollectiveReductionDType<crate::dist::placement::Mean>,
+        K: ConstDType
+            + BuiltinDType
+            + DataParallelDType
+            + CollectiveReductionDType<crate::dist::placement::Mean>,
     {
         self.push_dyn(id, unsharded_elements, K::DTYPE, layer_id, world_size)
     }

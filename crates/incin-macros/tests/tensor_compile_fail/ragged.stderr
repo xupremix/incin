@@ -1,0 +1,5 @@
+error: ragged tensor! literal: dimension 1 has 1 element(s) here but 2 earlier
+ --> tests/tensor_compile_fail/ragged.rs:4:34
+  |
+4 |     let _ = tensor![[1.0, 2.0], [3.0]];
+  |                                  ^^^

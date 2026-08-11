@@ -2,25 +2,34 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
 use incin_core::exec::LayoutClass;
-use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, OperationKind, Result};
 
-use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
 
-fn validate_kernel_abi(kernel: &crate::kernel::RenderedKernel, dtype: DTypeId) -> Result<()> {
-    if kernel.dtype != dtype || kernel.element_size != dtype.element_size() {
+fn validate_kernel_abi(
+    kernel: &crate::kernel::RenderedKernel,
+    dtype: DTypeDescriptor,
+) -> Result<()> {
+    if Some(kernel.dtype) != dtype.builtin_id()
+        || kernel.element_size
+            != dtype
+                .encoding()
+                .scalar_bytes()
+                .ok_or_else(|| Error::Msg("invalid scalar bytes".into()))?
+    {
         return Err(Error::Msg(format!(
-            "CUDA kernel ABI mismatch: rendered {:?}/{} bytes for {:?}/{}-byte storage",
+            "CUDA kernel ABI mismatch: rendered {:?}/{} bytes for {:?}/{:?}-byte storage",
             kernel.dtype,
             kernel.element_size,
             dtype,
-            dtype.element_size()
+            dtype.encoding().scalar_bytes()
         )));
     }
     Ok(())
 }
 
-fn validate_elementwise_dtype(dtype: DTypeId, op: &'static str) -> Result<()> {
-    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op).map(|_| ())
+fn validate_elementwise_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
+    crate::cuda::backend::validate_cuda_storage_dtype(dtype, op)
 }
 
 fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
@@ -64,6 +73,7 @@ impl PointwiseStrategy {
     }
 }
 
+#[derive(Clone, Debug)]
 struct PointwiseLaunchSelection {
     strategy: PointwiseStrategy,
     #[cfg(feature = "autotune")]
@@ -71,7 +81,6 @@ struct PointwiseLaunchSelection {
     candidates: Vec<crate::tuning::LaunchCandidate>,
 }
 
-#[cfg(feature = "cuda")]
 struct PreparedPointwiseKernel {
     candidate: crate::tuning::LaunchCandidate,
     kernel: crate::kernel::RenderedKernel,
@@ -79,7 +88,7 @@ struct PreparedPointwiseKernel {
 }
 
 fn pointwise_strategy(
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     numel: usize,
     dense: bool,
     packed_aligned: bool,
@@ -109,7 +118,7 @@ fn strategy_from_candidate(candidate: crate::tuning::LaunchCandidate) -> Result<
 fn pointwise_launch_selection(
     context: &cudarc::driver::CudaContext,
     kernel: &crate::kernel::RenderedKernel,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     numel: usize,
     dense: bool,
     packed_aligned: bool,
@@ -153,7 +162,7 @@ fn pointwise_launch_selection(
 fn prepare_pointwise_kernels<F>(
     device_id: usize,
     selection: &PointwiseLaunchSelection,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     mut render: F,
 ) -> Result<Vec<PreparedPointwiseKernel>>
 where
@@ -180,11 +189,12 @@ where
                 .tuning_permit
                 .as_ref()
                 .and_then(|permit| permit.key())
-                && kernel.key.tuning_problem_id() != key.problem
             {
-                return Err(Error::Msg(
-                    "CUDA pointwise candidate changed canonical tuning problem".into(),
-                ));
+                if kernel.key.tuning_problem_id() != key.problem {
+                    return Err(Error::Msg(
+                        "CUDA pointwise candidate changed canonical tuning problem".into(),
+                    ));
+                }
             }
         }
         if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel.cache_key).is_none() {
@@ -293,53 +303,55 @@ where
 }
 
 fn render_unary_strategy(
-    op_name: &str,
+    op_name: &'static str,
     op_expr: &str,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
 ) -> Result<crate::kernel::RenderedKernel> {
+    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
             crate::kernel::render_cuda_unary_for_layout(
                 op_name,
                 op_expr,
-                dtype,
+                builtin_id,
                 layout,
                 unroll_width,
             )
         }
         PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_unary_packed(op_name, op_expr, dtype, layout)
+            crate::kernel::render_cuda_unary_packed(op_name, op_expr, builtin_id, layout)
         }
     }
 }
 
 fn render_binary_strategy(
-    op_name: &str,
+    op_name: &'static str,
     op_expr: &str,
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
 ) -> Result<crate::kernel::RenderedKernel> {
+    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
             crate::kernel::render_cuda_binary_for_layout(
                 op_name,
                 op_expr,
-                dtype,
+                builtin_id,
                 layout,
                 unroll_width,
             )
         }
         PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_binary_packed(op_name, op_expr, dtype, layout)
+            crate::kernel::render_cuda_binary_packed(op_name, op_expr, builtin_id, layout)
         }
     }
 }
 
 fn select_unary_strategy(
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     layout: LayoutClass,
     numel: usize,
     offset: usize,
@@ -355,7 +367,7 @@ fn select_unary_strategy(
 }
 
 fn select_binary_strategy(
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     layout: LayoutClass,
     numel: usize,
     lhs_offset: usize,
@@ -410,7 +422,7 @@ fn launch_config(
 #[cfg(feature = "cuda")]
 /// `launch_unary_op`.
 pub(crate) fn launch_unary_op(
-    op_name: &str,
+    op_name: &'static str,
     op_expr: &str,
     t: &CudaStorage,
 ) -> Result<CudaStorage> {
@@ -547,7 +559,7 @@ pub(crate) fn launch_unary_op(
 #[cfg(feature = "cuda")]
 /// `launch_binary_op`.
 pub(crate) fn launch_binary_op(
-    op_name: &str,
+    op_name: &'static str,
     op_expr: &str,
     lhs: &CudaStorage,
     rhs: &CudaStorage,
@@ -741,10 +753,10 @@ mod tests {
     #[test]
     fn elementwise_dtype_gate_matches_rendered_float_family() {
         for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
-            validate_elementwise_dtype(dtype, "test").unwrap();
+            validate_elementwise_dtype(dtype.descriptor(), "test").unwrap();
         }
         assert!(matches!(
-            validate_elementwise_dtype(DTypeId::I64, "test"),
+            validate_elementwise_dtype(DTypeId::I64.descriptor(), "test"),
             Err(Error::UnsupportedDType { .. })
         ));
     }
@@ -753,8 +765,11 @@ mod tests {
     fn rendered_kernel_abi_matches_storage_dtype() {
         for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
             let kernel = crate::kernel::render_cuda_unary("neg", "-x", dtype).unwrap();
-            validate_kernel_abi(&kernel, dtype).unwrap();
-            assert!(validate_kernel_abi(&kernel, DTypeId::F32).is_err() || dtype == DTypeId::F32);
+            validate_kernel_abi(&kernel, dtype.descriptor()).unwrap();
+            assert!(
+                validate_kernel_abi(&kernel, DTypeId::F32.descriptor()).is_err()
+                    || dtype == DTypeId::F32
+            );
         }
     }
 
@@ -767,7 +782,12 @@ mod tests {
             vec![0, 7, 31]
         );
         assert!(
-            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Pointwise).is_err()
+            crate::bytes::byte_len(
+                DTypeId::F16.descriptor(),
+                usize::MAX,
+                OperationKind::Pointwise
+            )
+            .is_err()
         );
     }
 
@@ -786,35 +806,52 @@ mod tests {
     #[test]
     fn strategy_selection_separates_packed_alignment_from_scalar_unrolling() {
         assert_eq!(
-            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 0).unwrap(),
+            select_unary_strategy(DTypeId::F32.descriptor(), LayoutClass::Contiguous, 4096, 0)
+                .unwrap(),
             PointwiseStrategy::Packed {
                 vector_width: 4,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 1).unwrap(),
+            select_unary_strategy(DTypeId::F32.descriptor(), LayoutClass::Contiguous, 4096, 1)
+                .unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 4,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F16, LayoutClass::ScalarLeft, 4096, 1, 2).unwrap(),
+            select_binary_strategy(
+                DTypeId::F16.descriptor(),
+                LayoutClass::ScalarLeft,
+                4096,
+                1,
+                2
+            )
+            .unwrap(),
             PointwiseStrategy::Packed {
                 vector_width: 2,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F64, LayoutClass::Strided, 4096, 0, 0).unwrap(),
+            select_binary_strategy(DTypeId::F64.descriptor(), LayoutClass::Strided, 4096, 0, 0)
+                .unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 1,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F32, LayoutClass::Contiguous, 1023, 0, 0).unwrap(),
+            select_binary_strategy(
+                DTypeId::F32.descriptor(),
+                LayoutClass::Contiguous,
+                1023,
+                0,
+                0
+            )
+            .unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 1,
                 block_size: 256

@@ -255,12 +255,12 @@ where
 impl<
     S: BatchNormShape,
     InS: Shape + HasChannels2D<S::Channels>,
-    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::BatchNorm>>,
+    B: Backend + crate::exec::Capabilities + Execute<op::BatchNorm>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InS, B, K>> for BatchNorm2d<S, B, K, Train>
 where
-    <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InS, B, K>;

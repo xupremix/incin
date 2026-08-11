@@ -53,7 +53,7 @@ where
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::backend_authoring::Execute<
-            crate::backend_authoring::Descriptor<crate::backend_authoring::op::FlattenExact>,
+            crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
         > + crate::exec::Capabilities,
     K: crate::tensor::dtype::DType,
@@ -78,7 +78,7 @@ where
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
         + crate::backend_authoring::Execute<
-            crate::backend_authoring::Descriptor<crate::backend_authoring::op::FlattenExact>,
+            crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
         > + crate::exec::Capabilities,
     K: crate::tensor::dtype::DType,

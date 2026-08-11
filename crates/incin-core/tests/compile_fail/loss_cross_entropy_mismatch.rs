@@ -4,8 +4,8 @@ use incin_core::prelude::*;
 use incin_macros::s;
 
 fn main() {
-    let pred: Tensor<s![16, 10], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
-    let target: Tensor<s![16, 5], DummyBackend<u32, Cpu>> = Tensor::zeros(()).unwrap();
+    let pred: Tensor<s![16, 10], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
+    let target: Tensor<s![16, 5], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
     
     let loss_fn = CrossEntropyLoss::new();
     

@@ -2,6 +2,8 @@
 
 #![cfg(feature = "distributed")]
 
+extern crate incin_core as incin;
+
 mod support;
 
 use std::collections::BTreeMap;
@@ -17,7 +19,7 @@ use incin_core::dist::{
 };
 use incin_core::exec::ReduceOp;
 use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
-use incin_core::prelude::{DTypeId, DeviceId};
+use incin_core::prelude::{DTypeId, DeviceId, s};
 use incin_core::typenum::{U0, U1, U2, U4, U6};
 
 #[derive(Clone)]
@@ -87,7 +89,7 @@ fn static_plan(rank: usize) -> TensorParallelPlan {
 
 #[test]
 fn static_column_row_and_attention_have_exact_tp2_semantics() {
-    type LinearShape = (U4, U6);
+    type LinearShape = s![4, 6];
     assert_eq!(
         <LinearShape as TwoWayColumnLinearShape>::LOCAL_OUT_FEATURES,
         3

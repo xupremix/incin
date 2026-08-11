@@ -12,6 +12,9 @@ pub mod base;
 pub mod conv2d;
 /// The `Device` trait family (`Cpu`, `Cuda<N>`, `Wgpu<N>`, `Dyn`) and `DeviceId`.
 pub mod device;
+/// PyTorch-style rendering of a tensor's values, shared by every backend's
+/// `Backend::format_tensor_display`/`format_tensor_debug` default bodies.
+pub(crate) mod display;
 /// The `DType` trait family (`f32`/`f16`/`bf16`/.../`Dyn`) and `DTypeId`.
 pub mod dtype;
 /// The `RequiresGrad` marker trait (`Grad`/`NoGrad`) controlling autodiff tracking.
@@ -43,10 +46,10 @@ pub mod prelude {
     pub use super::device::{Wgpu, WgpuN};
 
     pub use super::dtype::{
-        BoolDType, ConstDType, DType, DTypeId, FloatDType, IntDType, PlainDType, Q8_0, QuantDType,
-        TensorElement,
+        BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
+        FloatDType, IntDType, PlainDType, Q8_0, QuantDType, StorageEncoding, TensorElement,
     };
-    pub use super::grad::{Grad, NoGrad, RequiresGrad};
+    pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
     pub use super::matmul::MatMulShape;
     pub use super::tracing::{
         TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,

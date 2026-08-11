@@ -3,8 +3,8 @@
 extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
-    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
-    OperationKey, StorageBackend, execute, execute_shaped,
+    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
+    StorageBackend, execute, execute_shaped,
 };
 use incin_core::exec::catalog::CreationAttributes;
 use incin_core::exec::{
@@ -74,11 +74,7 @@ impl Execute<CompanyIdentity> for CompanyBackend {
 
     fn execute_shaped<S: Shape>(
         &self,
-        request: ExecutionRequest<
-            '_,
-            CompanyIdentity,
-            Self,
-        >,
+        request: ExecutionRequest<'_, CompanyIdentity, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.operation.proof_level())
     }

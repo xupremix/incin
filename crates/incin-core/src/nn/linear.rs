@@ -412,10 +412,10 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities
-        + Execute<Descriptor<op::Add>>,
+        + Execute<op::Add>,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
@@ -423,9 +423,9 @@ impl<
 where
     G: GradJoin<Train::TensorGrad>,
     JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad>,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
@@ -451,8 +451,8 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
@@ -460,8 +460,8 @@ impl<
 > Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
@@ -478,17 +478,17 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities
-        + Execute<Descriptor<op::Add>>,
+        + Execute<op::Add>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<Dyn, B, K>> for Linear<Dyn, B, Dyn, K, Train>
 where
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<Dyn, B, K>;
     type Error = Error;
@@ -527,19 +527,19 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities
-        + Execute<Descriptor<op::Add>>,
+        + Execute<op::Add>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InShape, B, K>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
     InShape::Output: DynShape,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;
@@ -587,8 +587,8 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
@@ -596,8 +596,8 @@ impl<
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
     InShape::Output: DynShape,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;
@@ -637,18 +637,18 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::ReductionOps<B>
-        + Execute<LinearMatMulDescriptor>
-        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
         + crate::exec::Capabilities
-        + Execute<Descriptor<op::Add>>,
+        + Execute<op::Add>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InShape, B, K>> for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where
     InShape::Output: DynShape,
-    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<LinearMatMulDescriptor>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;

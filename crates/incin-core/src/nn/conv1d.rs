@@ -364,10 +364,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv1dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
-    <B as Execute<Descriptor<op::Conv1dExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
+    <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -458,10 +458,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv1dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
-    <B as Execute<Descriptor<op::Conv1dExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
+    <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;
@@ -549,10 +549,10 @@ where
     B: Backend
         + crate::tensor::backend::ModuleOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Conv1dExact>>
-        + Execute<Descriptor<op::ReshapeExact>>,
-    <B as Execute<Descriptor<op::Conv1dExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
+    <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B, K>;

@@ -30,7 +30,7 @@ use incin::experimental::distributed::{
 use incin::prelude::*;
 use incin::typenum::{U0, U2, U4};
 
-type CudaB = CudaBackendImpl<f32, CudaN<U0>>;
+type CudaB = CudaBackendImpl<CudaN<U0>>;
 
 const INPUTS: [[f32; 2]; 4] = [[1.0, 2.0], [3.0, 4.0], [-1.0, 2.0], [2.0, -3.0]];
 const OUTPUTS: [f32; 4] = [9.0, 17.0, 11.0, -17.0];

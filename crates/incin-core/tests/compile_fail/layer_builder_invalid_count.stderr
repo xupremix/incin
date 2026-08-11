@@ -1,22 +1,22 @@
-error[E0277]: the trait bound `({integer}, {integer}, {integer}): incin::tensor::arg_into::LayerArgInto<(usize, usize, (), (), ())>` is not satisfied
+error[E0277]: the trait bound `({integer}, {integer}, {integer}): LayerArgInto<(usize, usize, (), (), ())>` is not satisfied
  --> tests/compile_fail/layer_builder_invalid_count.rs:8:37
   |
 8 |     let _ = Linear::<Dyn, B>::build((10, 20, 30));
-  |             ----------------------- ^^^^^^^^^^^^ the trait `incin::tensor::arg_into::LayerArgInto<(usize, usize, (), (), ())>` is not implemented for `({integer}, {integer}, {integer})`
+  |             ----------------------- ^^^^^^^^^^^^ the trait `LayerArgInto<(usize, usize, (), (), ())>` is not implemented for `({integer}, {integer}, {integer})`
   |             |
   |             required by a bound introduced by this call
   |
-  = help: the following other types implement trait `incin::tensor::arg_into::LayerArgInto<Target>`:
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), (), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), (), (), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), (), (), (), (), ())>`
-            `()` implements `incin::tensor::arg_into::LayerArgInto<((), (), (), (), (), (), (), (), ())>`
+  = help: the following other types implement trait `LayerArgInto<Target>`:
+            `()` implements `LayerArgInto<((), ())>`
+            `()` implements `LayerArgInto<((), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), (), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), (), (), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), (), (), (), (), ())>`
+            `()` implements `LayerArgInto<((), (), (), (), (), (), (), (), ())>`
           and $N others
-note: required by a bound in `incin::nn::Linear::<S, B, Bias>::build`
+note: required by a bound in `incin::nn::Linear::<S, B, Bias, K, Train>::build`
  --> src/nn/linear.rs
   |
   |       pub fn build<A>(args: A) -> Result<Self>
@@ -26,8 +26,8 @@ note: required by a bound in `incin::nn::Linear::<S, B, Bias>::build`
   |  ____________^
   | |                 <S::InF as Dim>::Arg,
   | |                 <S::OutF as Dim>::Arg,
-  | |                 <B::FloatElem as DType>::Arg,
+  | |                 <K as DType>::Arg,
   | |                 <B::Device as Device>::Arg,
   | |                 <Bias as crate::nn::optional::OptionalField>::Arg,
   | |             )>,
-  | |______________^ required by this bound in `Linear::<S, B, Bias>::build`
+  | |______________^ required by this bound in `Linear::<S, B, Bias, K, Train>::build`

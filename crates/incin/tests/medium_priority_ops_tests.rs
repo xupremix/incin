@@ -8,16 +8,16 @@ fn test_comparisons_and_logical() -> Result<()> {
     let b = Tensor::<s![3], DefaultBackend>::from_slice(&[1.0, 5.0, 2.0], ())?;
 
     let eq_t = a.eq(&b)?;
-    assert_eq!(eq_t.to_vec1::<f32>()?, vec![1.0, 0.0, 0.0]);
+    assert_eq!(eq_t.to_vec1::<bool>()?, vec![true, false, false]);
 
     let lt_t = a.lt(&b)?;
-    assert_eq!(lt_t.to_vec1::<f32>()?, vec![0.0, 1.0, 0.0]);
+    assert_eq!(lt_t.to_vec1::<bool>()?, vec![false, true, false]);
 
     let gt_t = a.gt(&b)?;
-    assert_eq!(gt_t.to_vec1::<f32>()?, vec![0.0, 0.0, 1.0]);
+    assert_eq!(gt_t.to_vec1::<bool>()?, vec![false, false, true]);
 
     let not_lt = lt_t.logical_not()?;
-    assert_eq!(not_lt.to_vec1::<f32>()?, vec![1.0, 0.0, 1.0]);
+    assert_eq!(not_lt.to_vec1::<bool>()?, vec![true, false, true]);
 
     Ok(())
 }

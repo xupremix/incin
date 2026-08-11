@@ -2,8 +2,10 @@
 //!
 //! The `shapes` module is the type-theoretic core of Incin. It contains:
 //!
-//! * [`dim`] — The [`Dim`] trait, `typenum` implementations, [`ProdDim`], and the `symbolic_dim!` macro.
-//! * [`shape`] — The [`Shape`], [`DynShape`], [`ConstShape`], and [`PartialDynShape`] traits.
+//! * [`dim`] — The [`Dim`] trait, raw typenum static extents, derived extent
+//!   specifications, and semantic named-axis tags.
+//! * [`shape`] — The structural [`Shape`] algebra, runtime [`ShapeBuf`], and
+//!   dynamic-shape adapters.
 //! * [`reshape`] — The [`ReshapeShape`] trait for compile-time element-count preservation.
 //! * [`idx`] — The [`DimIdx`], [`SliceIdx`], [`Slice`], [`InferDim`], and [`Ellipsis`] types.
 //! * [`broadcast`] — The [`BroadcastShape`] trait for verifying broadcasting compatibility.
@@ -37,8 +39,6 @@ pub mod shape_ops;
 pub mod spatial;
 /// `stack`.
 pub mod stack;
-/// `tail_shape`.
-pub mod tail_shape;
 
 pub use arithmetic::*;
 pub use broadcast::BroadcastShape;
@@ -51,7 +51,6 @@ pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
 pub use spatial::*;
-pub use tail_shape::*;
 
 /// `prelude`.
 pub mod prelude {
@@ -66,8 +65,9 @@ pub mod prelude {
     pub use super::named::*;
     pub use super::reshape::*;
     pub use super::shape::*;
+    pub use super::shape_ops::*;
     pub use super::spatial::*;
     pub use super::stack::*;
-    pub use super::tail_shape::*;
+    pub use crate::exec::{AxisSet, RankSupport};
     pub use crate::tensor::matmul::{StaticDim, StaticOrNamedDim};
 }

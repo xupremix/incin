@@ -161,23 +161,23 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::TensorOps<B>
         + crate::exec::Capabilities
-        + Execute<Descriptor<op::Mul>>
-        + Execute<Descriptor<op::Div>>
-        + Execute<Descriptor<op::DivScalar>>
-        + Execute<Descriptor<op::Sqrt>>
-        + Execute<Descriptor<op::SumKeepDim>>
-        + Execute<Descriptor<op::AddScalar>>,
+        + Execute<op::Mul>
+        + Execute<op::Div>
+        + Execute<op::DivScalar>
+        + Execute<op::Sqrt>
+        + Execute<op::SumKeepDim>
+        + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InS, B, K>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
-    <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Div>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::DivScalar>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Div>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InS, B, K>;
     type Error = Error;

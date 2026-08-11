@@ -1,0 +1,7 @@
+error: ragged tensor! literal: dimension 1 has 0 element(s) here but 2 earlier
+ --> tests/tensor_compile_fail/empty_sibling_mismatch.rs:4:13
+  |
+4 |     let _ = tensor![[1.0, 2.0], []];
+  |             ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `tensor` (in Nightly builds, run with -Z macro-backtrace for more info)

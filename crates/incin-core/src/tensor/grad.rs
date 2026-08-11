@@ -5,7 +5,9 @@ use core::marker::PhantomData;
 
 /// A type-level marker for whether a `Tensor` tracks gradients — `Grad`
 /// (always tracks), `NoGrad` (never tracks), or `Dyn` (decided at runtime).
-pub trait RequiresGrad: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
+pub trait RequiresGrad:
+    GradJoin<Self, Output = Self> + 'static + Clone + Debug + Send + Sync + Eq + PartialEq
+{
     /// The user-facing constructor argument (`()` for the compile-time-
     /// fixed markers, `bool` for `Dyn`).
     type Arg;
@@ -105,4 +107,67 @@ impl ConstRequiresGrad for Grad {
 impl ConstRequiresGrad for NoGrad {
     /// Always `false`.
     const REQUIRES_GRAD: bool = false;
+}
+
+/// Type-level gradient capability join rule (`GRD-003`).
+///
+/// Computes the type-level OR join of two `RequiresGrad` markers:
+/// - Grad OR Grad -> Grad
+/// - Grad OR NoGrad -> Grad
+/// - NoGrad OR Grad -> Grad
+/// - NoGrad OR NoGrad -> NoGrad
+/// - Grad OR Dyn -> Grad
+/// - Dyn OR Grad -> Grad
+/// - NoGrad OR Dyn -> Dyn
+/// - Dyn OR NoGrad -> Dyn
+/// - Dyn OR Dyn -> Dyn
+pub trait GradJoin<Rhs: RequiresGrad>: 'static + Send + Sync {
+    /// The joined gradient requirement output type.
+    type Output: RequiresGrad;
+
+    /// Combines the runtime field representation of two operands.
+    fn join_field(
+        lhs: &<Self as RequiresGrad>::Field,
+        rhs: &Rhs::Field,
+    ) -> <<Self as GradJoin<Rhs>>::Output as RequiresGrad>::Field
+    where
+        Self: RequiresGrad;
+}
+
+/// Type alias for joined gradient requirement of `L` and `R`.
+pub type JoinedGrad<L, R> = <L as GradJoin<R>>::Output;
+
+impl<G2: RequiresGrad> GradJoin<G2> for Grad {
+    type Output = Grad;
+    fn join_field(_: &PhantomData<Grad>, _: &G2::Field) -> PhantomData<Grad> {
+        PhantomData
+    }
+}
+
+impl<G2: RequiresGrad> GradJoin<G2> for NoGrad {
+    type Output = G2;
+    fn join_field(_: &PhantomData<NoGrad>, rhs: &G2::Field) -> G2::Field {
+        rhs.clone()
+    }
+}
+
+impl GradJoin<Grad> for Dyn {
+    type Output = Grad;
+    fn join_field(_: &bool, _: &PhantomData<Grad>) -> PhantomData<Grad> {
+        PhantomData
+    }
+}
+
+impl GradJoin<NoGrad> for Dyn {
+    type Output = Dyn;
+    fn join_field(lhs: &bool, _: &PhantomData<NoGrad>) -> bool {
+        *lhs
+    }
+}
+
+impl GradJoin<Dyn> for Dyn {
+    type Output = Dyn;
+    fn join_field(lhs: &bool, rhs: &bool) -> bool {
+        *lhs || *rhs
+    }
 }

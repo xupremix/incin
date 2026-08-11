@@ -26,9 +26,9 @@ use incin_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
 #[cfg(feature = "wgpu")]
-type WgpuB = WgpuBackendImpl<f32, incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
+type WgpuB = WgpuBackendImpl<incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
 #[cfg(feature = "cuda")]
-type CudaB = CudaBackendImpl<f32, incin_core::prelude::CudaN<incin_core::typenum::U0>>;
+type CudaB = CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
 
 fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {
     let bytes = B::to_bytes::<f32>(s).unwrap();
@@ -62,14 +62,14 @@ fn parity_elementwise_add() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -80,14 +80,14 @@ fn parity_elementwise_add() {
     let wgpu_a = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -129,7 +129,7 @@ fn parity_activations_softmax() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -140,7 +140,7 @@ fn parity_activations_softmax() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -178,14 +178,14 @@ fn parity_matmul() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -196,14 +196,14 @@ fn parity_matmul() {
     let wgpu_a = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -244,21 +244,21 @@ fn parity_layer_norm() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -268,21 +268,21 @@ fn parity_layer_norm() {
     let wgpu_x = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_w = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -314,7 +314,7 @@ fn parity_max_pool2d() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -324,7 +324,7 @@ fn parity_max_pool2d() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -365,14 +365,14 @@ fn parity_cross_entropy_loss_nonzero_target() {
     let cpu_pred = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_tgt = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_tgt),
         &shape_tgt,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -383,14 +383,14 @@ fn parity_cross_entropy_loss_nonzero_target() {
     let wgpu_pred = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_tgt = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_tgt),
         &shape_tgt,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -434,14 +434,14 @@ fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     let cpu_pred = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_tgt = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_tgt_f32),
         &shape_tgt,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -453,26 +453,25 @@ fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     let _wgpu_pred = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let error = WgpuB::from_bytes::<u32>(
         bytemuck::cast_slice(&data_tgt),
         &shape_tgt,
-        DTypeId::U32,
+        DTypeId::U32.into(),
         &DeviceId::wgpu(0),
     )
     .err()
     .expect("WGPU must reject U32 storage");
-    assert!(matches!(
-        error,
-        Error::UnsupportedDType {
-            dtype: DTypeId::U32,
-            backend: "Wgpu",
-            op: "from_bytes",
-        }
-    ));
+    if let Error::UnsupportedDType { dtype, backend, op } = error {
+        assert_eq!(dtype, DTypeId::U32.descriptor());
+        assert_eq!(backend, "Wgpu");
+        assert_eq!(op, "from_bytes");
+    } else {
+        panic!("expected UnsupportedDType");
+    }
 }
 
 #[cfg(feature = "wgpu")]
@@ -484,7 +483,7 @@ fn parity_activations_relu() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -494,7 +493,7 @@ fn parity_activations_relu() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -529,7 +528,7 @@ fn parity_activations_gelu() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -539,7 +538,7 @@ fn parity_activations_gelu() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -579,21 +578,21 @@ fn parity_batch_norm() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -603,21 +602,21 @@ fn parity_batch_norm() {
     let wgpu_x = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_w = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -643,7 +642,7 @@ fn parity_reductions_sum_and_mean() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -653,7 +652,7 @@ fn parity_reductions_sum_and_mean() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -719,14 +718,14 @@ fn parity_conv2d() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -736,14 +735,14 @@ fn parity_conv2d() {
     let wgpu_x = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_w = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -795,14 +794,14 @@ fn cuda_parity_elementwise_add() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -812,14 +811,14 @@ fn cuda_parity_elementwise_add() {
     let cuda_a = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
     let cuda_b = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
@@ -851,14 +850,14 @@ fn cuda_parity_matmul() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -868,14 +867,14 @@ fn cuda_parity_matmul() {
     let cuda_a = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
     let cuda_b = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
@@ -907,14 +906,14 @@ fn cuda_parity_conv2d() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -924,14 +923,14 @@ fn cuda_parity_conv2d() {
     let cuda_x = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
     let cuda_w = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
@@ -966,21 +965,21 @@ fn cuda_parity_batch_norm() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -990,21 +989,21 @@ fn cuda_parity_batch_norm() {
     let cuda_x = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
     let cuda_w = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
     let cuda_b = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_c,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
@@ -1027,11 +1026,14 @@ fn cuda_parity_batch_norm() {
 // drains before it invokes anything.
 
 /// A CPU tensor from `data` with `shape`.
-fn cpu(data: &[f32], shape: &[usize]) -> <CpuB as Backend>::Storage<f32> {
+fn cpu(
+    data: &[f32],
+    shape: &[usize],
+) -> <CpuB as incin_core::backend_authoring::StorageBackend>::Storage<f32> {
     CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(data),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap()
@@ -1039,7 +1041,7 @@ fn cpu(data: &[f32], shape: &[usize]) -> <CpuB as Backend>::Storage<f32> {
 
 /// The gradient the backward pass accumulated for `t`.
 fn grad_of(
-    t: &<CpuB as Backend>::Storage<f32>,
+    t: &<CpuB as incin_core::backend_authoring::StorageBackend>::Storage<f32>,
     grads: &<CpuB as Backend>::Grads,
 ) -> Option<Vec<f32>> {
     CpuB::get_grad::<f32>(t, grads)

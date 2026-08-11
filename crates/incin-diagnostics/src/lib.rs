@@ -180,7 +180,7 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 
 /// Rewrites a rust-analyzer inlay-hint (or hover) label for a Incin tensor
 /// type into a compact shape form: `Tensor<(U2, U3), CpuBackendImpl<f32,
-/// Cpu>>` becomes `Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>` — or, with
+/// Cpu>>` becomes `Tensor<[2, 3], CpuBackendImpl<Cpu>>` — or, with
 /// `shorten_backend: true`, `Tensor<[2, 3]>`.
 ///
 /// Falls back to a generic, whole-label typenum-to-decimal rewrite (the same
@@ -1381,16 +1381,18 @@ mod tests {
 
     #[test]
     fn test_humanize_inlay_label_keeps_backend_by_default() {
-        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>";
+        let label =
+            "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>";
         assert_eq!(
             humanize_inlay_label(label, false),
-            "Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>"
+            "Tensor<[2, 3], CpuBackendImpl<Cpu>>"
         );
     }
 
     #[test]
     fn test_humanize_inlay_label_shortens_backend_when_requested() {
-        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>";
+        let label =
+            "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>";
         assert_eq!(humanize_inlay_label(label, true), "Tensor<[2, 3]>");
     }
 
@@ -1400,10 +1402,10 @@ mod tests {
     /// scan must not stop at the first `>` it sees.
     #[test]
     fn test_humanize_inlay_label_handles_nested_angle_brackets_in_backend_param() {
-        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), CpuBackendImpl<f32, Cpu>, f32, Grad>";
+        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), CpuBackendImpl<Cpu>, f32, Grad>";
         assert_eq!(
             humanize_inlay_label(label, false),
-            "Tensor<[2, 4], CpuBackendImpl<f32, Cpu>, f32, Grad>"
+            "Tensor<[2, 4], CpuBackendImpl<Cpu>, f32, Grad>"
         );
         assert_eq!(humanize_inlay_label(label, true), "Tensor<[2, 4]>");
     }
@@ -1412,10 +1414,10 @@ mod tests {
     /// comma inside the parens that must not end up inside the `[...]`.
     #[test]
     fn test_humanize_inlay_label_strips_trailing_comma_on_rank_one_shape() {
-        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>,), CpuBackendImpl<f32, Cpu>>";
+        let label = "Tensor<(UInt<UInt<UTerm, B1>, B0>,), CpuBackendImpl<Cpu>>";
         assert_eq!(
             humanize_inlay_label(label, false),
-            "Tensor<[2], CpuBackendImpl<f32, Cpu>>"
+            "Tensor<[2], CpuBackendImpl<Cpu>>"
         );
         assert_eq!(humanize_inlay_label(label, true), "Tensor<[2]>");
     }
@@ -1468,8 +1470,8 @@ mod tests {
     fn test_humanize_inlay_label_passes_through_non_tensor_labels_unchanged() {
         assert_eq!(humanize_inlay_label("i32", false), "i32");
         assert_eq!(
-            humanize_inlay_label("Tensor<Dyn, CpuBackendImpl<f32, Cpu>>", false),
-            "Tensor<Dyn, CpuBackendImpl<f32, Cpu>>"
+            humanize_inlay_label("Tensor<Dyn, CpuBackendImpl<Cpu>>", false),
+            "Tensor<Dyn, CpuBackendImpl<Cpu>>"
         );
     }
 
@@ -1708,7 +1710,8 @@ mod tests {
     fn test_expand_type_file_notes_reads_and_humanizes_file() {
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("test_type_file_notes.txt");
-        let sample_type = "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<f32, Cpu>>";
+        let sample_type =
+            "Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>";
         std::fs::write(&temp_file, sample_type).unwrap();
 
         let diagnostic = format!(
@@ -1721,7 +1724,7 @@ mod tests {
         assert!(
             translated
                 .text
-                .contains("Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>")
+                .contains("Tensor<[2, 3], CpuBackendImpl<Cpu>>")
         );
         assert!(
             translated

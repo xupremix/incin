@@ -1,10 +1,11 @@
 //! Reduction operations for the Candle adapter.
 
 use crate::external::candle::CandleBackend;
+use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::backend_authoring::ReductionOps<Self> for CandleBackend<T, D>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::ReductionOps<Self>
+    for CandleBackend<D>
 {
     // This adapter does not route candle's product or cumulative sum yet.
     crate::unsupported::unsupported_reduction_ops! {
@@ -14,147 +15,189 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
 
     /// Sums all elements into a scalar tensor.
     fn sum_all<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.sum_all()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .sum_all()
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Averages all elements into a scalar tensor.
     fn mean_all<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.mean_all()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .mean_all()
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the maximum element as a scalar tensor.
     fn max_all<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.max_all()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .max_all()
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the minimum element as a scalar tensor.
     fn min_all<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.min_all()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .min_all()
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
 
     /// Sums along `dim`, removing it from the shape.
     fn sum_dim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.sum(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .sum(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Sums along `dim`, keeping it as a size-1 dimension.
     fn sum_keepdim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.sum_keepdim(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .sum_keepdim(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
 
     /// Averages along `dim`, removing it from the shape.
     fn mean_dim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.mean(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .mean(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Averages along `dim`, keeping it as a size-1 dimension.
     fn mean_keepdim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.mean_keepdim(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .mean_keepdim(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the maximum along `dim`, removing it from the shape.
     fn max_dim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.max(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .max(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the maximum along `dim`, keeping it as a size-1
     /// dimension.
     fn max_keepdim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.max_keepdim(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .max_keepdim(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the minimum along `dim`, removing it from the shape.
     fn min_dim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.min(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .min(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
     /// Reduces to the minimum along `dim`, keeping it as a size-1
     /// dimension.
     fn min_keepdim<K: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        Ok(t.min_keepdim(dim)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let res = t
+            .tensor()
+            .min_keepdim(dim)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        CandleStorage::try_new(res)
     }
 
     /// Returns the index of the maximum element, along `dim` if given,
     /// otherwise over the flattened tensor.
     fn argmax<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<KInt>> {
-        match dim {
-            Some(d) => Ok(t
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
+        let raw = match dim {
+            Some(d) => t
+                .tensor()
                 .argmax(d)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            None => Ok(t
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            None => t
+                .tensor()
                 .flatten_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                 .argmax(0)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-        }
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+        };
+        CandleStorage::try_new(raw)
     }
 
     /// Returns the index of the minimum element, along `dim` if given,
     /// otherwise over the flattened tensor.
     fn argmin<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<KInt>> {
-        match dim {
-            Some(d) => Ok(t
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
+        let raw = match dim {
+            Some(d) => t
+                .tensor()
                 .argmin(d)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            None => Ok(t
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+            None => t
+                .tensor()
                 .flatten_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                 .argmin(0)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-        }
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+        };
+        CandleStorage::try_new(raw)
     }
 
     /// `topk` is not natively available in candle; returns an error
     /// instead of panicking so callers can handle the unsupported case.
     fn topk<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
-        _t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        _t: &<Self as StorageBackend>::Storage<K>,
         _k: usize,
         _dim: usize,
         _largest: bool,
     ) -> Result<(
-        <Self as incin_core::prelude::Backend>::Storage<K>,
-        <Self as incin_core::prelude::Backend>::Storage<KInt>,
+        <Self as StorageBackend>::Storage<K>,
+        <Self as StorageBackend>::Storage<KInt>,
     )> {
         Err(Error::UnsupportedBackendOperation {
             op: "topk",
@@ -166,21 +209,23 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     /// `argsort_last_dim`. For non-last dimensions, transposes to last
     /// and back.
     fn argsort<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
-        t: &<Self as incin_core::prelude::Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         descending: bool,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Storage<KInt>> {
-        let rank = t.rank();
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
+        let rank = t.tensor().rank();
         let last = rank.saturating_sub(1);
         // Candle's arg_sort_last_dim takes `asc: bool`; our API takes `descending: bool`.
         let asc = !descending;
-        if dim == last {
-            Ok(t.arg_sort_last_dim(asc)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        let raw = if dim == last {
+            t.tensor()
+                .arg_sort_last_dim(asc)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
         } else {
             // Transpose target dim to last, sort, transpose back.
             // arg_sort_last_dim requires a contiguous tensor, so make it so.
             let t_swap = t
+                .tensor()
                 .transpose(dim, last)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                 .contiguous()
@@ -188,9 +233,10 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
             let sorted = t_swap
                 .arg_sort_last_dim(asc)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            Ok(sorted
+            sorted
                 .transpose(dim, last)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+        };
+        CandleStorage::try_new(raw)
     }
 }

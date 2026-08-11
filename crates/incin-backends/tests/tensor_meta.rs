@@ -18,13 +18,15 @@ where
 
 #[test]
 fn every_enabled_backend_storage_uses_tensor_meta() {
-    assert_metadata_storage::<<CpuBackendImpl as Backend>::Storage<f32>>();
+    assert_metadata_storage::<
+        <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::Storage<f32>,
+    >();
 
     #[cfg(feature = "wgpu")]
-    assert_metadata_storage::<<incin_backends::wgpu::WgpuBackendImpl as Backend>::Storage<f32>>();
+    assert_metadata_storage::<<incin_backends::wgpu::WgpuBackendImpl as incin_core::backend_authoring::StorageBackend>::Storage<f32>>();
 
     #[cfg(feature = "cuda")]
-    assert_metadata_storage::<<incin_backends::cuda::CudaBackendImpl as Backend>::Storage<f32>>();
+    assert_metadata_storage::<<incin_backends::cuda::CudaBackendImpl as incin_core::backend_authoring::StorageBackend>::Storage<f32>>();
 }
 
 #[test]
@@ -33,7 +35,7 @@ fn contiguous_transpose_and_broadcast_have_one_checked_metadata_source() {
     assert_eq!(&*base.shape, &[2, 3]);
     assert_eq!(&*base.strides, &[3, 1]);
     assert_eq!(base.offset_elements, 0);
-    assert_eq!(base.dtype, DTypeId::F32);
+    assert_eq!(base.dtype, DTypeId::F32.descriptor());
     assert_eq!(base.device, DeviceId::cpu());
     assert_eq!(base.layout, LayoutClass::Contiguous);
     assert!(base.alignment.supports(Alignment::of::<f32>().bytes()));
@@ -58,7 +60,7 @@ fn nonzero_view_offset_weakens_but_never_strengthens_alignment() {
         [8].as_slice().into(),
         [1].as_slice().into(),
         0,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         DeviceId::cpu(),
         base_alignment,
         8,
@@ -70,7 +72,7 @@ fn nonzero_view_offset_weakens_but_never_strengthens_alignment() {
         [2].as_slice().into(),
         [1].as_slice().into(),
         1,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         DeviceId::cpu(),
         base_alignment,
         8,
@@ -105,16 +107,14 @@ fn empty_views_are_valid_but_out_of_bounds_views_are_rejected() {
 #[cfg(feature = "wgpu")]
 #[test]
 fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
-    type WgpuB = incin_backends::wgpu::WgpuBackendImpl<
-        f32,
-        incin_core::prelude::WgpuN<incin_core::typenum::U0>,
-    >;
+    type WgpuB =
+        incin_backends::wgpu::WgpuBackendImpl<incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
 
     let values = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
     let storage = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&values),
         &[2, 3],
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap();
@@ -124,7 +124,7 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
     assert_eq!(&*metadata.strides, &[2, 1]);
     assert_eq!(metadata.offset_elements, 0);
     assert_eq!(metadata.layout, LayoutClass::Contiguous);
-    assert_eq!(metadata.dtype, DTypeId::F32);
+    assert_eq!(metadata.dtype, DTypeId::F32.descriptor());
     assert_eq!(metadata.device, DeviceId::wgpu(0));
 }
 
@@ -150,7 +150,7 @@ fn cuda_metadata_reports_the_measured_device_allocation_alignment() {
     let storage = CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(&values),
         &[8],
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap();
@@ -168,7 +168,7 @@ fn cuda_metadata_reports_the_measured_device_allocation_alignment() {
         [4].as_slice().into(),
         [1].as_slice().into(),
         1,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         DeviceId::cuda(0),
         Alignment::new(256).unwrap(),
         8,
@@ -196,7 +196,7 @@ fn invalid_alignment_rank_and_arithmetic_overflow_are_rejected() {
         [2].as_slice().into(),
         [usize::MAX].as_slice().into(),
         1,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         DeviceId::cpu(),
         Alignment::of::<f32>(),
         usize::MAX,

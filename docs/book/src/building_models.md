@@ -1,0 +1,158 @@
+# Layers and `#[module]`
+
+Every built-in layer follows the same two-step shape: a `Shape` type
+parameter names what's static, and a `build(args)` constructor takes
+whatever isn't. `args` uses the same flexible-argument system as tensor
+constructors — pass exactly the runtime values the static shape didn't
+already pin down, in a tuple if there's more than one, and `()` when there
+are none.
+
+## Linear
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let layer = Linear::<s![768, 256], B>::build(())?;
+let x = Tensor::<s![32, 768], B>::ones(())?;
+let y = layer.forward(x)?;
+assert_eq!(y.dims().as_ref(), &[32, 256]);
+# Ok::<(), incin::Error>(())
+```
+
+## Activations
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let x = Tensor::<s![2, 4], B>::ones(())?;
+let a = ReLU.forward(x.clone())?;
+let b = GELU.forward(x.clone())?;
+let c = Sigmoid.forward(x.clone())?;
+let d = Tanh.forward(x)?;
+# Ok::<(), incin::Error>(())
+```
+
+## Convolution and pooling
+
+`Conv2d`'s shape parameter is six-wide: `(OutChannels, InChannels, Kernel,
+Stride, Padding, Dilation)`.
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+type ConvShape = s![4, 1, 3, 1, 0, 1]; // 1 in -> 4 out, 3x3, stride 1, no padding
+let conv = Conv2d::<ConvShape, B>::build(())?;
+let x = Tensor::<s![1, 1, 8, 8], B>::ones(())?;
+let h = conv.forward(x)?;
+
+let pool = MaxPool2d::<typenum::U2, typenum::U2>::new()?; // kernel 2, stride 2
+let h = pool.forward(h)?;
+assert_eq!(h.dims().as_ref(), &[1, 4, 3, 3]);
+# Ok::<(), incin::Error>(())
+```
+
+## Normalization
+
+`BatchNorm2d`, `LayerNorm`, and `RMSNorm` all take their channel count as a
+one-element shape tuple, `(Channels,)`, and their `build` arguments are
+whatever the static shape didn't already fix — an epsilon (and, for batch
+norm, a momentum):
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let bn = BatchNorm2d::<(typenum::U4,), B>::build((1e-5_f32, 0.1_f32))?; // eps, momentum
+let x = Tensor::<s![1, 4, 8, 8], B>::ones(())?;
+let h = bn.forward(x)?;
+
+let ln = LayerNorm::<(typenum::U8,), B>::build(1e-5_f32)?; // eps
+let x2 = Tensor::<s![2, 8], B>::ones(())?;
+let h2 = ln.forward(x2)?;
+# Ok::<(), incin::Error>(())
+```
+
+## Embedding
+
+`Embedding`'s shape is `(Vocab, EmbedDim)`. Its forward input's element type
+matches its own `K` (the layer's float element by default) rather than an
+integer dtype — the underlying kernel reads any dtype it can convert to an
+exact integer, so an index tensor is written with integer-valued floats:
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let emb = Embedding::<(typenum::U16, typenum::U4), B>::build(())?; // 16 rows, 4-wide
+let idx = Tensor::<s![3], B>::from_slice(&[1.0, 2.0, 3.0], ())?;
+let h = emb.forward(idx)?;
+assert_eq!(h.dims().as_ref(), &[3, 4]);
+# Ok::<(), incin::Error>(())
+```
+
+## LSTM
+
+`LSTM`'s shape is `(InFeatures, OutFeatures)`. Unlike the layers above, its
+`forward` takes the initial hidden and cell state explicitly — there's no
+implicit "start from zero" — and returns both the full output sequence and
+the final state:
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let cell = LSTMCell::<(typenum::U4, typenum::U6), B>::build(())?;
+let lstm = LSTM::new(cell);
+
+let x = Tensor::<s![2, 5, 4], B>::ones(())?;   // [batch, seq, in_features]
+let h0 = Tensor::<s![2, 6], B>::zeros(())?;
+let c0 = Tensor::<s![2, 6], B>::zeros(())?;
+
+let (out, (_h_final, _c_final)) = lstm.forward((x, (h0, c0)))?;
+assert_eq!(out.dims().as_ref(), &[2, 5, 6]);
+# Ok::<(), incin::Error>(())
+```
+
+## Custom modules with `#[module]`
+
+`#[module]` derives `StateDict` and `Parameters` for a struct by walking its
+fields: anything implementing those traits (a built-in layer, or a nested
+`Sequential`) is aggregated recursively; anything else is skipped.
+
+```rust,no_run
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+#[module]
+pub struct MLP {
+    fc1: Linear<s![768, 256], B>,
+    fc2: Linear<s![256, 10], B>,
+}
+
+impl MLP {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            fc1: Linear::build(())?,
+            fc2: Linear::build(())?,
+        })
+    }
+
+    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B>> {
+        let h = self.fc1.forward(x)?;
+        let h = ReLU.forward(h)?;
+        self.fc2.forward(h)
+    }
+}
+# fn main() -> Result<()> {
+let model = MLP::new()?;
+let x = Tensor::<s![2, 768], B>::ones(())?;
+let y = model.forward(x)?;
+assert_eq!(y.dims().as_ref(), &[2, 10]);
+let _ = model.parameters(); // available because of #[module]
+# Ok(())
+# }
+```

@@ -9,7 +9,7 @@
 //! pure overhead against the kernel it precedes, and a `[64, 8] + [64, 1]` add
 //! used to spend six heap allocations describing two operands of rank two.
 //! The dimension and stride lists are [`ShapeBuf`] and [`StrideBuf`], which
-//! `SHP-003` already made inline up to `MAX_RANK`, and the per-operand working
+//! `SHP-003` already made inline up to `INLINE_RANK`, and the per-operand working
 //! storage in `coalesce_dimensions` is a fixed-size array rather than a vector
 //! of vectors, because an iteration plan has exactly one or two operands and
 //! the count is known to the type system.

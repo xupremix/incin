@@ -1,0 +1,5 @@
+error: unknown tensor! clause `backend` (expected `dtype` or `grad`). To place a tensor on a specific backend or device, allocate it from a target instead: `Cpu.tensor(..)`, `Wgpu::new(0).tensor(..)` (see `incin_backends::target`).
+ --> tests/tensor_compile_fail/backend_clause_is_gone.rs:5:31
+  |
+5 |     let _ = tensor![1.0, 2.0; backend: DefaultBackend];
+  |                               ^^^^^^^

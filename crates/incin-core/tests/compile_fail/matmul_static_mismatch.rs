@@ -4,8 +4,8 @@ use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 fn main() {
-    let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
-    let t2: Tensor<s![4, 5], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
+    let t2: Tensor<s![4, 5], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
 
     // Inner dimensions must match: (2, 3) x (4, 5) is invalid because 3 != 4.
     let _ = t1.matmul(&t2);

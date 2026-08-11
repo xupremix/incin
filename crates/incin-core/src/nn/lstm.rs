@@ -497,10 +497,10 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Mul>>
-        + Execute<Descriptor<op::Sigmoid>>
-        + Execute<Descriptor<op::Tanh>>,
+        + Execute<op::Add>
+        + Execute<op::Mul>
+        + Execute<op::Sigmoid>
+        + Execute<op::Tanh>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -515,10 +515,10 @@ where
         Module<Tensor<D2<Batch, In>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
     Linear<D2<Out, Out>, B, BiasHh, K, Train>:
         Module<Tensor<D2<Batch, Out>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
-    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Sigmoid>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Tanh>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>);
@@ -671,9 +671,9 @@ impl<
         + crate::tensor::backend::NumericOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::TensorOps<B>
-        + Execute<Descriptor<op::StackExact>>
-        + Execute<Descriptor<op::Narrow>>
-        + Execute<Descriptor<op::SqueezeExact>>
+        + Execute<op::StackExact>
+        + Execute<op::Narrow>
+        + Execute<op::SqueezeExact>
         + crate::exec::Capabilities,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
@@ -685,9 +685,9 @@ impl<
         (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
     )> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Module<
             (
                 Tensor<D2<Batch, In>, B, K>,

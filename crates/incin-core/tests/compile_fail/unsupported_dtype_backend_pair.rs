@@ -7,5 +7,5 @@ use incin_core::prelude::{SupportsDType, Wgpu};
 fn requires_f64<B: SupportsDType<f64>>() {}
 
 fn main() {
-    requires_f64::<WgpuBackendImpl<f32, Wgpu>>();
+    requires_f64::<WgpuBackendImpl<Wgpu>>();
 }

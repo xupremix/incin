@@ -1,5 +1,6 @@
+extern crate incin_core as incin;
 use incin_core::prelude::*;
-use typenum::{U1, U2, U3, U4, U5};
+use incin_macros::s;
 
 fn requires_matmul<L, R>()
 where
@@ -11,7 +12,7 @@ where
 fn main() {
     // The rank-8 rule exists, but 2 cannot contract with 4.
     requires_matmul::<
-        (U1, U1, U1, U1, U1, U1, U3, U2),
-        (U1, U1, U1, U1, U1, U1, U4, U5),
+        s![1, 1, 1, 1, 1, 1, 3, 2],
+        s![1, 1, 1, 1, 1, 1, 4, 5],
     >();
 }

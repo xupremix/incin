@@ -12,27 +12,35 @@ use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::wgpu::WgpuBackendImpl;
 
 type Native = CpuBackendImpl;
-type Wgpu = WgpuBackendImpl<f32, incin::WgpuN<incin::typenum::U0>>;
+type Wgpu = WgpuBackendImpl<incin::WgpuN<incin::typenum::U0>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn native_storage(data: &[f32], shape: &[usize]) -> <Native as Backend>::Storage<f32> {
+fn native_storage(
+    data: &[f32],
+    shape: &[usize],
+) -> <Native as incin_core::backend_authoring::StorageBackend>::Storage<f32> {
     let bytes = bytemuck::cast_slice(data);
-    Native::from_bytes::<f32>(bytes, shape, DTypeId::F32, &DeviceId::cpu()).unwrap()
+    Native::from_bytes::<f32>(bytes, shape, DTypeId::F32.descriptor(), &DeviceId::cpu()).unwrap()
 }
 
-fn wgpu_storage(data: &[f32], shape: &[usize]) -> <Wgpu as Backend>::Storage<f32> {
+fn wgpu_storage(
+    data: &[f32],
+    shape: &[usize],
+) -> <Wgpu as incin_core::backend_authoring::StorageBackend>::Storage<f32> {
     let bytes = bytemuck::cast_slice(data);
-    Wgpu::from_bytes::<f32>(bytes, shape, DTypeId::F32, &DeviceId::wgpu(0)).unwrap()
+    Wgpu::from_bytes::<f32>(bytes, shape, DTypeId::F32.descriptor(), &DeviceId::wgpu(0)).unwrap()
 }
 
-fn native_vec(s: &<Native as Backend>::Storage<f32>) -> Vec<f64> {
+fn native_vec(
+    s: &<Native as incin_core::backend_authoring::StorageBackend>::Storage<f32>,
+) -> Vec<f64> {
     Native::float_to_vec1::<f32>(s).unwrap()
 }
 
-fn wgpu_vec(s: &<Wgpu as Backend>::Storage<f32>) -> Vec<f64> {
+fn wgpu_vec(s: &<Wgpu as incin_core::backend_authoring::StorageBackend>::Storage<f32>) -> Vec<f64> {
     Wgpu::float_to_vec1::<f32>(s).unwrap()
 }
 

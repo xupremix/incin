@@ -41,14 +41,14 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         let images_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
             images_bytes,
             &[batch_size, 1, 28, 28],
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             &device,
         )
         .unwrap();
         let labels_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
             labels_bytes,
             &[batch_size],
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             &device,
         )
         .unwrap();
@@ -76,7 +76,7 @@ fn main() -> incin::Result<()> {
 
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
-        Flatten::<1, 3>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
+        Flatten::<Next<Here>, Next<Next<Here>>>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
         Linear::<Dyn, Backend>::build((784, 128))?,
         ReLU,
         Linear::<Dyn, Backend>::build((128, 10))?

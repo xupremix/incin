@@ -6,7 +6,7 @@ use alloc::collections::BTreeMap;
 use std::path::Path;
 
 /// B.
-type B = TracingBackend<DummyBackend<f32, Cpu>>;
+type B = TracingBackend<DummyBackend<Cpu>>;
 
 fn main() -> anyhow::Result<()> {
     // Create a simple model

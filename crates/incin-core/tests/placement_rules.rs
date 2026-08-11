@@ -12,6 +12,7 @@ mod support;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::dist::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
 use incin_core::dist::{
     CompletePlacement, ConstPlacement, DistributedError, DistributedInputs, ElementwisePlacement,
@@ -20,7 +21,6 @@ use incin_core::dist::{
     ShardRemainderPolicy, Sharded, Sum, validate_pipeline_stage, validate_shard,
     validate_transition,
 };
-use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::exec::{Descriptor, LogicalTensorMeta, ReduceOp, op};
 use incin_core::prelude::{DimCons, Dyn, Nil, Shape, ShapeBuf};
 use incin_core::typenum::{U0, U1, U2, U3, U4, U10, U12};
@@ -32,7 +32,9 @@ type OtherMesh = MeshSpec<Data<U3>>;
 
 fn reshape(input: &[usize], output: &[usize]) -> Descriptor<op::ReshapeExact> {
     Descriptor::<op::ReshapeExact>::infer_runtime(
-        ShapeAttributes { shape: output.to_vec() },
+        ShapeAttributes {
+            shape: output.to_vec(),
+        },
         vec![LogicalTensorMeta {
             shape: Some(ShapeBuf::from_slice(input)),
             dtype: None,

@@ -4,7 +4,7 @@ use incin_core::prelude::{DTypeId, DeviceId, ShapeBuf};
 fn main() {
     let valid = TensorMeta::contiguous(
         ShapeBuf::scalar(),
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         DeviceId::cpu(),
         Alignment::BYTE,
         1,

@@ -7,7 +7,7 @@ use incin::{
 fn stable_facade_exposes_typed_bounded_failure_contract() {
     let conversion = convert_f64_to_i64(
         "consumer_conversion",
-        DTypeId::F64,
+        DTypeId::F64.descriptor(),
         f64::NAN,
         FloatToIntPolicy::Exact,
     )
@@ -35,7 +35,7 @@ fn tensor_operators_propagate_results_instead_of_panicking() -> incin::Result<()
 
     let lhs = Tensor::<s![2], DefaultBackend>::ones(())?;
     let rhs = Tensor::<s![2], DefaultBackend>::ones(())?;
-    let sum: incin::Result<Tensor<s![2], DefaultBackend>> = lhs + rhs;
+    let sum = lhs + rhs;
     assert_eq!(sum?.to_vec1::<f32>()?, vec![2.0, 2.0]);
     Ok(())
 }

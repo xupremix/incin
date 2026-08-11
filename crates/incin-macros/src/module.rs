@@ -242,6 +242,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut param_calls = Vec::new();
     let mut load_state_calls = Vec::new();
     let mut state_dict_calls = Vec::new();
+    let mut state_dict_field_types = Vec::new();
     let mut to_device_fields = Vec::new();
     let mut named_layer_calls = Vec::new();
     let mut shape_info_calls = Vec::new();
@@ -280,6 +281,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         continue;
                     }
+
+                    state_dict_field_types.push(field.ty.clone());
 
                     param_calls.push(quote! {
                         {
@@ -367,6 +370,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         continue;
                     }
+
+                    state_dict_field_types.push(field.ty.clone());
 
                     param_calls.push(quote! {
                         {
@@ -511,13 +516,39 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl_generics_with_newd
             .params
             .push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
-        impl_generics_with_newd
-            .make_where_clause()
+        let where_clause = impl_generics_with_newd.make_where_clause();
+        where_clause
             .predicates
             .push(syn::parse_quote!(#b_ident: #macro_support::TransferTo<__NewD>));
-        impl_generics_with_newd.make_where_clause().predicates.push(
-            syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<<#b_ident as #k_crate::prelude::Backend>::FloatElem>),
-        );
+
+        let mut dtype_param_found = false;
+        for param in &input.generics.params {
+            if let syn::GenericParam::Type(t) = param {
+                let ident = &t.ident;
+                if t.bounds.iter().any(|b| {
+                    if let syn::TypeParamBound::Trait(tb) = b {
+                        tb.path
+                            .segments
+                            .last()
+                            .map(|s| s.ident == "DType")
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                }) || ident == "K"
+                {
+                    dtype_param_found = true;
+                    where_clause
+                        .predicates
+                        .push(syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<#ident>));
+                }
+            }
+        }
+        if !dtype_param_found {
+            where_clause
+                .predicates
+                .push(syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<f32>));
+        }
         let (impl_g, _, to_device_where_clause) = impl_generics_with_newd.split_for_impl();
         quote! {
             impl #impl_g #k_crate::prelude::ToDevice<#b_ident, __NewD> for #name #ty_generics #to_device_where_clause {
@@ -533,6 +564,15 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    let mut state_dict_where_clause = where_clause
+        .cloned()
+        .unwrap_or_else(|| syn::parse_quote!(where));
+    for fty in &state_dict_field_types {
+        state_dict_where_clause
+            .predicates
+            .push(syn::parse_quote!(#fty: #k_crate::prelude::StateDict<#b_ident>));
+    }
+
     let expanded = quote! {
         #input
 
@@ -544,7 +584,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #where_clause {
+        impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
             /// Load state dict.
             fn load_state_dict(
                 &mut self,

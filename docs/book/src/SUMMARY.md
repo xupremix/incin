@@ -1,0 +1,43 @@
+# Summary
+
+[Introduction](./introduction.md)
+
+# Getting started
+
+- [Installation](./installation.md)
+- [Quickstart](./quickstart.md)
+
+# Core concepts
+
+- [Tensors](./tensors.md)
+- [Shapes: static, dynamic, and mixed](./shapes.md)
+- [Advanced shapes](./advanced_shapes.md)
+- [Autograd](./autograd.md)
+- [Errors](./errors.md)
+
+# Building models
+
+- [Layers and `#[module]`](./building_models.md)
+- [Sequential models](./sequential.md)
+
+# Training
+
+- [Losses, optimizers, and schedulers](./training.md)
+- [Data loading](./data_loading.md)
+- [Metrics](./metrics.md)
+- [Saving and loading](./saving_loading.md)
+
+# Backends
+
+- [CPU, and what actually runs on GPU today](./backends.md)
+- [The target API and canonical dispatch](./target_api.md)
+- [Backend authoring](./backend_authoring.md)
+
+# Reference
+
+- [The macro reference](./macros.md)
+- [Every feature flag](./feature_flags.md)
+- [Invariants and proof types](./invariants.md)
+- [Experimental surfaces](./experimental.md)
+- [Coming from PyTorch](./pytorch_cheatsheet.md)
+- [What's not finished yet](./whats_not_finished.md)

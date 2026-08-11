@@ -92,6 +92,6 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             .map_err(|e| incin_core::prelude::Error::Msg(format!("matmul launch failed: {e:?}")))?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }

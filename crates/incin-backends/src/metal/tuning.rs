@@ -387,7 +387,7 @@ mod tests {
 
         let env = metal_environment_fingerprint("Apple M1 Max", true).unwrap();
         let kernel_key = KernelKey::cuda(
-            crate::dtype_policy::OperationKind::Pointwise,
+            incin_core::prelude::OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,

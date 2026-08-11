@@ -4,7 +4,7 @@ use incin_core::dist::GradientId;
 use incin_core::prelude::{CudaN, Dyn, Tensor};
 use incin_core::typenum::U0;
 
-type Backend = CudaBackendImpl<f32, CudaN<U0>>;
+type Backend = CudaBackendImpl<CudaN<U0>>;
 type IntegerParameter = Tensor<Dyn, Backend, u32>;
 
 fn synchronize(

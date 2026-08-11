@@ -58,7 +58,7 @@ thiserror = { workspace = true, default-features = false }
 half = { workspace = true, default-features = false }
 bytemuck = { workspace = true, default-features = false }
 anyhow = { version = "1.0.103", default-features = false }
-typenum = { version = "1.20.1", default-features = false }
+typenum = { version = "1.20.1", default-features = false, features = ["const-generics"] }
 safetensors = { version = "0.4.1", optional = true } # safetensors requires std
 serde_json = { version = "1.0.120", optional = true }
 postcard = { version = "1.1.3", optional = true, features = ["alloc", "use-std"] }

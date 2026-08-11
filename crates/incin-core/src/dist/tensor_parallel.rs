@@ -18,7 +18,7 @@ use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
 use crate::dist::rule::ShardDivisible;
-use crate::prelude::{ConstDType, DTypeId, Dyn};
+use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn};
 
 /// Exactly two tensor-parallel ranks and no data or pipeline partitioning.
 pub type TwoRankTensorParallel = MeshSpec<Data<U1>, TensorParallel<U2>, Pipeline<U1>>;
@@ -45,7 +45,7 @@ impl<T> TwoWayShard for T where T: ShardDivisible<U2> {}
 pub const fn validate_tensor_parallel_dtype(dtype: DTypeId) -> Result<(), TensorParallelError> {
     match dtype {
         DTypeId::BF16 | DTypeId::F16 | DTypeId::F32 | DTypeId::F64 => Ok(()),
-        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 => {
+        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(TensorParallelError::UnsupportedTensorDType { dtype })
         }
     }
@@ -250,7 +250,7 @@ impl<'a> TensorParallelPlanBuilder<'a> {
         stream: StreamId,
     ) -> Result<SequenceToken, TensorParallelError>
     where
-        K: ConstDType + TensorParallelDType,
+        K: ConstDType + BuiltinDType + TensorParallelDType,
         Axis: PlacementAxis,
         Out: TwoWayShard,
     {
@@ -338,7 +338,7 @@ impl<'a> TensorParallelPlanBuilder<'a> {
         stream: StreamId,
     ) -> Result<SequenceToken, TensorParallelError>
     where
-        K: ConstDType + TensorParallelDType,
+        K: ConstDType + BuiltinDType + TensorParallelDType,
         In: TwoWayShard,
     {
         let _ = <In as ShardDivisible<U2>>::LOCAL;
@@ -416,7 +416,7 @@ impl<'a> TensorParallelPlanBuilder<'a> {
         stream: StreamId,
     ) -> Result<SequenceToken, TensorParallelError>
     where
-        K: ConstDType + TensorParallelDType,
+        K: ConstDType + BuiltinDType + TensorParallelDType,
         Axis: PlacementAxis,
         Heads: TwoWayShard,
     {

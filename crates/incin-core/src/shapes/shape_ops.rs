@@ -14,14 +14,20 @@ pub trait SwapAxes<Left, Right>: Shape {
     {
         let left = crate::shapes::idx::StaticAxis::<Left>::DEFAULT.normalize(dims.len())?;
         let right = crate::shapes::idx::StaticAxis::<Right>::DEFAULT.normalize(dims.len())?;
-        let left = left.first().copied().ok_or(crate::shapes::ShapeError::InvalidAxis {
-            axis: 0,
-            rank: dims.len(),
-        })?;
-        let right = right.first().copied().ok_or(crate::shapes::ShapeError::InvalidAxis {
-            axis: 0,
-            rank: dims.len(),
-        })?;
+        let left = left
+            .first()
+            .copied()
+            .ok_or(crate::shapes::ShapeError::InvalidAxis {
+                axis: 0,
+                rank: dims.len(),
+            })?;
+        let right = right
+            .first()
+            .copied()
+            .ok_or(crate::shapes::ShapeError::InvalidAxis {
+                axis: 0,
+                rank: dims.len(),
+            })?;
         if left >= dims.len() || right >= dims.len() {
             return Err(crate::shapes::ShapeError::InvalidAxis {
                 axis: left.max(right),

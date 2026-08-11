@@ -1,18 +1,17 @@
-error[E0277]: Cannot flatten shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)` from dimension `2` to `1`
+error[E0277]: the trait bound `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>: FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Here>` is not satisfied
  --> tests/compile_fail/flatten_invalid_range.rs:9:20
   |
-9 |     let _ = tensor.flatten::<2, 1>();
-  |                    ^^^^^^^ Invalid flatten range
+9 |     let _ = tensor.flatten::<Next<Next<Here>>, Next<Here>>();
+  |                    ^^^^^^^ unsatisfied trait bound
   |
-  = help: the trait `incin::shapes::Flatten<2, 1>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
-  = note: Flatten requires START <= END and END < the rank of the tensor
-  = help: the following other types implement trait `incin::shapes::Flatten<START, END>`:
-            `(D0, D1)` implements `incin::shapes::Flatten<0, 0>`
-            `(D0, D1)` implements `incin::shapes::Flatten<0, 1>`
-            `(D0, D1)` implements `incin::shapes::Flatten<1, 1>`
-            `(D0, D1, D2)` implements `incin::shapes::Flatten<0, 0>`
-            `(D0, D1, D2)` implements `incin::shapes::Flatten<0, 1>`
-            `(D0, D1, D2)` implements `incin::shapes::Flatten<0, 2>`
-            `(D0, D1, D2)` implements `incin::shapes::Flatten<1, 1>`
-            `(D0, D1, D2)` implements `incin::shapes::Flatten<1, 2>`
-          and $N others
+help: the trait `FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Here>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>`
+      but trait `FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Next<incin::shapes::Here>>` is implemented for it
+ --> src/shapes/shape.rs
+  |
+  | / impl<H: Dim, T: Shape, Start, End>
+  | |     FlattenAt<crate::shapes::idx::Next<Start>, crate::shapes::idx::Next<End>> for DimCons<H, T>
+  | | where
+  | |     T: FlattenAt<Start, End>,
+  | |_____________________________^
+  = help: for that trait implementation, expected `incin::shapes::Next<incin::shapes::Here>`, found `incin::shapes::Here`
+  = note: required for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>>` to implement `FlattenAt<incin::shapes::Next<incin::shapes::Next<incin::shapes::Here>>, incin::shapes::Next<incin::shapes::Here>>`

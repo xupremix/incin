@@ -107,13 +107,13 @@ impl<
 
 impl<
     S1: Shape + DynShape,
-    B: Backend + Execute<Descriptor<op::Conv2dExact>>,
+    B: Backend + Execute<op::Conv2dExact>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S1, B, K, G>
 where
     B: crate::exec::Capabilities,
-    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<K>>,
 {
     /// 2D convolution with compile-time-checked output shape (see
     /// `KernelConv2dShape`). Dilation and groups are fixed to 1.

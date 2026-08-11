@@ -68,7 +68,7 @@ fn test_inplace_operations() -> Result<()> {
 
 #[test]
 fn test_autograd_tape_closures() -> Result<()> {
-    let mask = Tensor::<s![3], DefaultBackend>::from_slice(&[1.0, 0.0, 1.0], ())?;
+    let mask = Tensor::<s![3], DefaultBackend, bool>::from_slice(&[true, false, true], ())?;
     let true_val = Tensor::<s![3], DefaultBackend, f32, Grad>::from_slice(&[10.0, 20.0, 30.0], ())?;
     let false_val = Tensor::<s![3], DefaultBackend, f32, Grad>::from_slice(&[1.0, 2.0, 3.0], ())?;
 

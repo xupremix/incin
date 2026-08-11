@@ -17,7 +17,7 @@ use crate::dist::placement::{Mean, Partial, PlacementKind, Replicated};
 use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
-use crate::prelude::{ConstDType, DTypeId, Dyn};
+use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn};
 
 /// Exactly two data replicas and no tensor or pipeline partitioning.
 pub type TwoRankDataParallel = MeshSpec<Data<U2>, TensorParallel<U1>, Pipeline<U1>>;
@@ -39,7 +39,7 @@ impl DataParallelDType for Dyn {}
 pub const fn validate_data_parallel_dtype(dtype: DTypeId) -> Result<(), DataParallelError> {
     match dtype {
         DTypeId::BF16 | DTypeId::F16 | DTypeId::F32 | DTypeId::F64 => Ok(()),
-        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 => {
+        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(DataParallelError::UnsupportedGradientDType { dtype })
         }
     }
@@ -160,7 +160,7 @@ impl<'a> DataParallelPlanBuilder<'a> {
         stream: StreamId,
     ) -> Result<SequenceToken, DataParallelError>
     where
-        K: ConstDType + DataParallelDType,
+        K: ConstDType + BuiltinDType + DataParallelDType,
     {
         let rank = self.rank;
         self.push_common(id, elements, K::DTYPE, |inner, tag, dependency| {

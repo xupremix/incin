@@ -40,22 +40,28 @@ pub fn from_candle_device(device: &candle::Device) -> Result<DeviceId> {
 ///
 /// The inverse of [`to_candle_dtype`]. Candle has no `Q8_0`, so the mapping is
 /// total in this direction.
-pub fn from_candle_dtype(dtype: candle::DType) -> DTypeId {
+pub fn from_candle_dtype(dtype: candle::DType) -> DTypeDescriptor {
     match dtype {
-        candle::DType::U8 => DTypeId::U8,
-        candle::DType::U32 => DTypeId::U32,
-        candle::DType::I64 => DTypeId::I64,
-        candle::DType::BF16 => DTypeId::BF16,
-        candle::DType::F16 => DTypeId::F16,
-        candle::DType::F32 => DTypeId::F32,
-        candle::DType::F64 => DTypeId::F64,
+        candle::DType::U8 => DTypeId::U8.descriptor(),
+        candle::DType::U32 => DTypeId::U32.descriptor(),
+        candle::DType::I64 => DTypeId::I64.descriptor(),
+        candle::DType::BF16 => DTypeId::BF16.descriptor(),
+        candle::DType::F16 => DTypeId::F16.descriptor(),
+        candle::DType::F32 => DTypeId::F32.descriptor(),
+        candle::DType::F64 => DTypeId::F64.descriptor(),
     }
 }
 
 /// Maps an Incin dtype to Candle, returning a typed error when Candle has
 /// no native representation for it.
-pub fn to_candle_dtype(dtype: DTypeId) -> Result<candle::DType> {
-    match dtype {
+pub fn to_candle_dtype(descriptor: DTypeDescriptor) -> Result<candle::DType> {
+    let Some(id) = descriptor.builtin_id() else {
+        return Err(Error::UnsupportedBackendOperation {
+            op: "to_candle_dtype",
+            backend: "external Candle",
+        });
+    };
+    match id {
         DTypeId::U8 => Ok(candle::DType::U8),
         DTypeId::U32 => Ok(candle::DType::U32),
         DTypeId::I64 => Ok(candle::DType::I64),

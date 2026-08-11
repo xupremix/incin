@@ -16,7 +16,10 @@ use incin_core::dist::{
     PipelineSchedule, PipelineTransfer, PlacementKind, StreamId, TwoRankPipeline, preflight,
 };
 use incin_core::prelude::{DTypeId, DeviceId};
+use incin_core::shapes::shape::{DimCons, Nil};
 use incin_core::typenum::{U2, U3, U4};
+
+type S23 = DimCons<U2, DimCons<U3, Nil>>;
 
 #[derive(Clone)]
 struct TwoNetworkCuda {
@@ -65,7 +68,7 @@ fn mesh(rank: usize) -> DeviceMesh<TwoRankPipeline> {
 }
 
 fn static_gpipe(rank: usize) -> PipelinePlan {
-    PipelinePlanBuilder::build_static::<f32, (U2, U3), U4, GPipe>(
+    PipelinePlanBuilder::build_static::<f32, S23, U4, GPipe>(
         &mesh(rank),
         rank,
         PipelineBoundaryId::new(7).unwrap(),
@@ -128,7 +131,7 @@ fn static_gpipe_has_global_send_recv_descriptors_and_exact_bubbles() {
 
 #[test]
 fn static_one_f_one_b_reduces_peak_activation_residency() {
-    let plan = PipelinePlanBuilder::build_static::<f64, (U2, U3), U4, OneForwardOneBackward>(
+    let plan = PipelinePlanBuilder::build_static::<f64, S23, U4, OneForwardOneBackward>(
         &mesh(0),
         0,
         PipelineBoundaryId::new(8).unwrap(),

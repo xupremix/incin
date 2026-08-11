@@ -92,11 +92,11 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
             }
             Expr::Path(expr_path) => {
                 if let Some(ident) = expr_path.path.get_ident() {
-                    quote! { ::incin::prelude::NamedDyn<#ident> }
+                    quote! { ::incin::prelude::NamedDim<#ident, usize> }
                 } else {
                     return syn::Error::new_spanned(
                         &expr_path,
-                        "idx! expects simple identifiers for NamedDyn",
+                        "idx! expects simple identifiers for named runtime axes",
                     )
                     .to_compile_error()
                     .into();
@@ -198,10 +198,12 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
         });
     }
 
-    if output.len() == 1 {
-        let first = &output[0];
-        quote! { (#first,) }.into()
-    } else {
-        quote! { (#(#output),*) }.into()
+    // Keep indexing and reshape targets on the same canonical structural
+    // engine as tensor shapes.  The macro deliberately hides the cons list;
+    // callers still write the compact `idx![...]` syntax.
+    let mut target = quote! { ::incin::prelude::Nil };
+    for item in output.into_iter().rev() {
+        target = quote! { ::incin::prelude::DimCons<#item, #target> };
     }
+    target.into()
 }

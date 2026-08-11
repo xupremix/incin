@@ -95,7 +95,7 @@ pub fn load_checkpoint_manifest<P: AsRef<Path>>(path: P) -> Result<GlobalCheckpo
 pub fn slice_bytes_for_rank(
     bytes: &[u8],
     global_shape: &[usize],
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     shard_axis: usize,
     rank: usize,
     world_size: usize,
@@ -124,7 +124,14 @@ pub fn slice_bytes_for_rank(
     let mut local_shape = global_shape.to_vec();
     local_shape[shard_axis] = local_shard_dim;
 
-    let elem_bytes = dtype.element_size();
+    let elem_bytes = dtype
+        .encoding()
+        .scalar_bytes()
+        .ok_or_else(|| Error::UnsupportedDType {
+            dtype,
+            backend: "safetensors",
+            op: "shard",
+        })?;
     let outer_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[..shard_axis])
         .checked_numel(crate::shapes::error::OperationKind::Storage)?;
     let inner_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[shard_axis + 1..])
@@ -204,11 +211,11 @@ pub fn slice_bytes_for_rank(
 pub fn load_safetensors_map<B, P>(
     path: P,
     device: &DeviceId,
-) -> Result<BTreeMap<String, B::Storage<B::FloatElem>>>
+) -> Result<BTreeMap<String, B::Storage<f32>>>
 where
     B: Backend,
     P: AsRef<Path>,
-    B: SupportsDType<B::FloatElem>,
+    B: SupportsDType<f32>,
 {
     let path_ref = path.as_ref();
     let metadata = std::fs::metadata(path_ref)?;
@@ -247,7 +254,7 @@ where
             }
         };
 
-        let inner = B::from_bytes::<B::FloatElem>(bytes, &shape, dtype, device)?;
+        let inner = B::from_bytes::<f32>(bytes, &shape, dtype.descriptor(), device)?;
         mapped_tensors.insert(name.to_string(), inner);
     }
 
@@ -260,9 +267,9 @@ where
     B: Backend,
     M: StateDict<B>,
     P: AsRef<Path>,
-    B: SupportsDType<B::FloatElem>,
-    <<B as Backend>::Device as Device>::Field: Default,
-    <<B as Backend>::FloatElem as DType>::Field: Default,
+    B: SupportsDType<f32>,
+    <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+    <f32 as DType>::Field: Default,
 {
     let map = load_safetensors_map::<B, _>(path, &DeviceId::cpu())?;
     let mut mapped_tensors = BTreeMap::new();
@@ -296,27 +303,28 @@ where
     let mut raw_data: Vec<(String, Vec<usize>, safetensors::Dtype, Vec<u8>)> = Vec::new();
 
     for (name, tensor) in mapped_tensors {
-        let bytes = B::to_bytes::<B::FloatElem>(tensor.inner())?;
-        let shape = B::shape::<B::FloatElem>(tensor.inner());
-        let dtype_id = B::storage_dtype::<B::FloatElem>(tensor.inner()).unwrap_or(DTypeId::F32);
+        let bytes = B::to_bytes::<f32>(tensor.inner())?;
+        let shape = B::shape::<f32>(tensor.inner());
+        let dtype_desc =
+            B::storage_dtype::<f32>(tensor.inner()).unwrap_or(<f32 as ConstDType>::DESCRIPTOR);
 
-        let st_dtype = match dtype_id {
-            DTypeId::F32 => safetensors::Dtype::F32,
-            DTypeId::F64 => safetensors::Dtype::F64,
-            DTypeId::F16 => safetensors::Dtype::F16,
-            DTypeId::BF16 => safetensors::Dtype::BF16,
-            DTypeId::I64 => safetensors::Dtype::I64,
-            DTypeId::U32 => safetensors::Dtype::U32,
-            DTypeId::U8 => safetensors::Dtype::U8,
-            other => {
+        let st_dtype = match dtype_desc.builtin_id() {
+            Some(DTypeId::F32) => safetensors::Dtype::F32,
+            Some(DTypeId::F64) => safetensors::Dtype::F64,
+            Some(DTypeId::F16) => safetensors::Dtype::F16,
+            Some(DTypeId::BF16) => safetensors::Dtype::BF16,
+            Some(DTypeId::I64) => safetensors::Dtype::I64,
+            Some(DTypeId::U32) => safetensors::Dtype::U32,
+            Some(DTypeId::U8) => safetensors::Dtype::U8,
+            _ => {
                 return Err(Error::Msg(format!(
-                    "Unsupported DTypeId {:?} for safetensors export",
-                    other
+                    "Unsupported dtype {} for safetensors export",
+                    dtype_desc.name()
                 )));
             }
         };
 
-        raw_data.push((name, shape, st_dtype, bytes));
+        raw_data.push((name, shape.as_ref().to_vec(), st_dtype, bytes));
     }
 
     let mut data_map: BTreeMap<String, safetensors::tensor::TensorView> = BTreeMap::new();
@@ -363,9 +371,11 @@ where
 
     let mut manifest = GlobalCheckpointManifest::new(world_size);
     for (name, tensor) in &mapped_tensors {
-        let shape = B::shape::<B::FloatElem>(tensor.inner());
-        let dtype_id = B::storage_dtype::<B::FloatElem>(tensor.inner()).unwrap_or(DTypeId::F32);
-        manifest.add_tensor(name.clone(), shape, dtype_id, "Local");
+        let shape = B::shape::<f32>(tensor.inner());
+        let dtype_desc =
+            B::storage_dtype::<f32>(tensor.inner()).unwrap_or(<f32 as ConstDType>::DESCRIPTOR);
+        let dtype_id = dtype_desc.builtin_id().unwrap_or(DTypeId::F32);
+        manifest.add_tensor(name.clone(), shape.as_ref().to_vec(), dtype_id, "Local");
     }
 
     let manifest_path = dir.join("manifest.json");
@@ -389,9 +399,9 @@ where
     B: Backend,
     M: StateDict<B>,
     P: AsRef<Path>,
-    B: SupportsDType<B::FloatElem>,
-    <<B as Backend>::Device as Device>::Field: Default,
-    <<B as Backend>::FloatElem as DType>::Field: Default,
+    B: SupportsDType<f32>,
+    <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
+    <f32 as DType>::Field: Default,
 {
     let dir = dir_path.as_ref();
     let manifest_path = dir.join("manifest.json");
@@ -429,7 +439,8 @@ where
             .ok_or_else(|| Error::Msg(format!("Parameter {} missing from manifest", name)))?;
 
         let global_shape = st_view.shape().to_vec();
-        let target_shape = B::shape::<B::FloatElem>(current_param.inner());
+        let target_shape = B::shape::<f32>(current_param.inner());
+        let target_shape = target_shape.as_ref();
         let bytes = st_view.data();
         let dtype_id = meta.dtype;
 
@@ -463,25 +474,29 @@ where
             slice_bytes_for_rank(
                 bytes,
                 &global_shape,
-                dtype_id,
+                dtype_id.descriptor(),
                 shard_axis,
                 rank,
                 target_world_size,
             )?
         };
 
-        if final_shape != target_shape {
+        if final_shape.as_slice() != target_shape {
             return Err(Error::Msg(format!(
                 "Resharded shape {:?} does not match target shape {:?} for parameter {}",
                 final_shape, target_shape, name
             )));
         }
 
-        let storage =
-            B::from_bytes::<B::FloatElem>(&final_bytes, &final_shape, dtype_id, &DeviceId::cpu())?;
+        let storage = B::from_bytes::<f32>(
+            &final_bytes,
+            &final_shape,
+            dtype_id.descriptor(),
+            &DeviceId::cpu(),
+        )?;
         let tensor = Tensor::<Dyn, B>::from_parts(
             storage,
-            final_shape,
+            ShapeBuf::from_slice(&final_shape),
             Default::default(),
             Default::default(),
             core::marker::PhantomData,

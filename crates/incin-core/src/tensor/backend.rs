@@ -1060,8 +1060,8 @@ pub fn adamw_step_composed<B: Backend + NumericOps<B> + FloatOps<B>, K: DType>(
 /// without depending on `incin-backends`. See `DummyBackend`.
 pub mod dummy {
     use super::*;
-    use crate::nn::Reduction;
     use crate::exec::spec::ExecutionDescriptor;
+    use crate::nn::Reduction;
     use crate::prelude::Result;
     use crate::tensor::device::Device;
     use crate::tensor::device::DeviceId;

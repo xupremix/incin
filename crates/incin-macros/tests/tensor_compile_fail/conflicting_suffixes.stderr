@@ -1,0 +1,5 @@
+error: conflicting numeric literal suffixes in tensor!: found `f32` and `f64` — add `; dtype: <Type>` to disambiguate
+ --> tests/tensor_compile_fail/conflicting_suffixes.rs:4:29
+  |
+4 |     let _ = tensor![1.0f32, 2.0f64];
+  |                             ^^^^^^

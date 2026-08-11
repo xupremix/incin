@@ -18,10 +18,7 @@ use proc_macro::TokenStream;
 
 /// Internal helper module for generating ArgInto implementations.
 mod arg_into;
-/// Internal helper module for named axis specification macro.
-mod axes;
-/// Internal helper module for einsum subscript validation macro.
-mod einsum;
+mod axis;
 
 /// Internal helper module for tensor index and slicing macro.
 mod idx;
@@ -39,14 +36,13 @@ mod parallel_block;
 
 /// Helper module for parsing ONNX model graphs into Rust structs.
 mod onnx;
-/// The single rank ceiling and the sweep that generates every rank ladder.
-mod rank;
 /// Helper module for importing model weights from safetensors.
 mod safetensors;
 /// Helper module for static shape macro expansion.
 mod shape;
-/// Internal helper module for shape operation macros.
-mod shape_ops;
+mod shape_value;
+/// Helper module for the tensor literal construction macro.
+mod tensor;
 
 /// A macro to construct static Tensor shapes ergonomically in the type system.
 ///
@@ -75,6 +71,15 @@ mod shape_ops;
 /// type BatchedFeatures = s![BatchSize, 128];
 /// ```
 ///
+/// A semantic tag and extent can also be written together. The extent stays
+/// independent from the tag, so named static axes use the same raw typenum
+/// representation as anonymous static axes:
+/// ```rust
+/// # use incin::prelude::*;
+/// # dim!(Batch, Features);
+/// type FeaturesBatch = s![Batch: 25, Features: 128];
+/// ```
+///
 /// ## Path resolution
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
@@ -91,10 +96,190 @@ pub fn s(input: TokenStream) -> TokenStream {
     shape::shape(input)
 }
 
+/// Builds a `Tensor` directly from a literal, inferring shape and (unless
+/// told otherwise) dtype from how it's written — the macro analogue of
+/// `vec![...]`.
+///
+/// `tensor![data...; dtype: T, grad: G]` — the `; clause, ...` tail is
+/// optional and either clause may appear in either order.
+///
+/// **Scope.** This macro is the convenience form for literal data on the
+/// default CPU backend, and nothing else. It has no `backend:` or `device:`
+/// clause: allocating somewhere specific is the allocation target's job, and
+/// ordinary Rust arrays carry shape and dtype just as well as a literal
+/// does, so the target form is usually the better one anyway:
+///
+/// ```text
+/// let x = Cpu.tensor([[1.0_f32, 2.0], [3.0, 4.0]])?;   // same tensor
+/// let y = Wgpu::new(0).tensor([[1.0_f32, 2.0]])?;      // and this one places it
+/// ```
+///
+/// See `incin_backends::target` (feature `target-api`). An earlier revision
+/// of this macro did take a `device:` clause and inferred the backend from
+/// the *token spelling* of the expression, which could not see through
+/// `let d = Wgpu::new(0);`. That heuristic is gone rather than patched.
+///
+/// The shape comes from nesting depth, exactly like a Rust array literal:
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let v = tensor![1.0, 2.0, 3.0].unwrap();              // shape [3], f32
+/// let m = tensor![[1.0, 2.0], [3.0, 4.0]].unwrap();      // shape [2, 2], f32
+/// let t = tensor![[[1, 2], [3, 4]], [[5, 6], [7, 8]]]    // shape [2, 2, 2], i64
+///     .unwrap();
+///
+/// let empty = tensor![].unwrap();                        // shape [0], f32 — like vec![]
+/// ```
+///
+/// A ragged literal (a row whose length disagrees with its siblings, or a
+/// row mixing nested arrays with plain values) is a macro-expansion error
+/// naming the offending dimension, not a best-effort reshape.
+///
+/// ## Dtype inference
+///
+/// `dtype` is picked in this order:
+/// 1. An explicit `; dtype: T` clause.
+/// 2. A numeric-literal suffix (`2.0f64`, `2u8`), if every leaf that has one
+///    agrees.
+/// 3. `i64` if every leaf is a bare integer literal (`tensor![1, 2, 3]`,
+///    matching PyTorch's own `torch.tensor([1, 2, 3])`); otherwise `f32`.
+///
+/// Rule 3 is a default, not a proof: a leaf that is not a literal at all
+/// (a variable, a call, ...) has no dtype the macro can see at expansion
+/// time, so it is passed through unchanged rather than cast. If it turns out
+/// not to already be the resolved dtype, that surfaces as `rustc`'s own type
+/// mismatch at the `from_slice` call this macro expands to — not a silently
+/// narrowed value.
+///
+/// ## Clauses
+///
+/// An optional `; clause, clause, ...` tail after the data overrides a
+/// default:
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let precise = tensor![1.0, 2.0; dtype: f64].unwrap();
+/// ```
+///
+/// Clauses are matched by name, not position, so they can be written in any
+/// order — `; grad: NoGrad, dtype: f64` and `; dtype: f64, grad: NoGrad` are
+/// the same.
+///
+/// - `dtype: T` — the element type, overriding inference above.
+/// - `grad: G` — `Grad` or `NoGrad`, overriding the default `Grad` (matching
+///   `Tensor`'s own default). Only those two markers are accepted, since
+///   both take no runtime argument; `Dyn` (gradient tracking toggled at
+///   runtime) needs a value alongside the type, and `tensor!` has no
+///   value-carrying clause — construct
+///   directly with `Tensor::<S, B, K, Dyn>::from_slice(&data, (.., flag))`
+///   instead:
+///
+///   ```rust
+///   use incin::prelude::*;
+///
+///   let t = tensor![1.0, 2.0; grad: NoGrad].unwrap();
+///   assert!(!t.requires_grad());
+///   ```
+///
+/// ## Return type
+///
+/// Like every other fallible constructor on `Tensor` (`zeros`, `ones`,
+/// `from_slice`, ...), `tensor!` expands to a `Result<Tensor<...>>`
+/// expression rather than panicking — use `?` or `.unwrap()` at the call
+/// site.
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::prelude::…` absolutely, so it resolves
+/// against the crate rather than against whatever the caller happens to have
+/// in scope — including a module of their own called `incin` (`CI-005`).
+///
+/// The one form it cannot survive is a *package* rename in the caller's
+/// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
+/// names a crate that is not there. Resolving the real name requires reading
+/// the caller's manifest at expansion time, which the macro policy in
+/// `PROPOSALS.md` forbids.
+/// Builds a shape *value* for an allocation target, inferring which axes are
+/// static from how they are written.
+///
+/// The value-level counterpart of [`s!`](crate::s). `s!` names a shape
+/// *type*; `shape!` produces the argument a target's constructors take, and
+/// the shape type comes out of it:
+///
+/// ```text
+/// let w  = gpu.zeros(shape![128, 784])?;    // Tensor<s![128, 784], ..>
+/// let x  = gpu.zeros(shape![batch, 784])?;  // Tensor<s![usize, 784], ..>
+/// let y  = gpu.zeros(shape![rows, cols])?;  // Tensor<s![usize, usize], ..>
+/// ```
+///
+/// # Which axes are static
+///
+/// An integer literal is a static axis; anything else is a runtime axis. This
+/// is the same split `s!` already makes — `s![usize, 784]` — with the `usize`
+/// inferred rather than spelled.
+///
+/// The inference is *syntactic*, so a named constant reads as an expression
+/// and produces a runtime axis:
+///
+/// ```text
+/// const N: usize = 32;
+/// shape![N, 784]        // s![usize, 784], not s![32, 784]
+/// ```
+///
+/// That is a weaker shape than was available, never a wrong one: the extent is
+/// still 32, it is simply carried at runtime instead of in the type. Where the
+/// stronger form matters, name it — `s![32, 784]` — which is
+/// what the explicit constructors remain for.
+///
+/// # What it does not carry
+///
+/// Only geometry. **Dtype comes from elsewhere**: generated tensors take the
+/// target's bound float (`gpu.zeros(..)` is `f32` unless the target was rebound
+/// with `with_float`), and data tensors take the element type of the data
+/// (`gpu.tensor([0_i64, 1])` is `i64`). Nothing in this macro can change
+/// either, which is deliberate — a shape argument that silently decided dtype
+/// would be the same mistake as a device argument that silently decided a
+/// backend.
+///
+/// Gradient tracking is likewise not here: it follows the object being built,
+/// so target constructors give `NoGrad` and parameters give `Grad`.
+///
+/// # Grammar
+///
+/// A comma-separated axis list, and nothing else. `s!`'s repeat, `Head` and
+/// `Tail` forms are not supported; write those with `s!` and the explicit
+/// constructors.
+///
+/// ```text
+/// shape![]                  // rank 0
+/// shape![8]                 // rank 1, static
+/// shape![batch]             // rank 1, runtime
+/// shape![2, 3, 4]           // rank 3, all static
+/// ```
+///
+/// A negative or fractional dimension is a compile error rather than a
+/// confusing `usize` type mismatch further along.
+///
+/// # Availability
+///
+/// Expands to `Static`/`Bound`, which live behind the `target-api` feature. It
+/// will not resolve without it.
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::prelude::…` absolutely, so it resolves
+/// against the crate rather than against whatever the caller happens to have
+/// in scope — including a module of their own called `incin` (`CI-005`).
 #[proc_macro]
-/// Internal helper macro for generating tuple `ArgInto` trait implementations.
-pub fn impl_arg_into(input: TokenStream) -> TokenStream {
-    arg_into::impl_arg_into(input)
+pub fn shape(input: TokenStream) -> TokenStream {
+    shape_value::shape_value(input)
+}
+
+#[proc_macro]
+pub fn tensor(input: TokenStream) -> TokenStream {
+    tensor::tensor(input)
 }
 
 #[proc_macro]
@@ -143,6 +328,12 @@ pub fn impl_layer_args(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn idx(input: TokenStream) -> TokenStream {
     idx::idx(input)
+}
+
+/// Build an arbitrary static or runtime axis selector.
+#[proc_macro]
+pub fn axis(input: TokenStream) -> TokenStream {
+    axis::axis(input)
 }
 
 /// A macro to construct typed logical device mesh specifications ergonomically.
@@ -196,12 +387,6 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     module::module(attr, item)
 }
 
-#[proc_macro]
-/// Internal helper macro for generating backend shape operation glue.
-pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
-    shape_ops::generate_shape_ops(input)
-}
-
 /// Expands a supported `.onnx` graph or imports `.safetensors` metadata.
 ///
 /// ONNX support is intentionally partial and fail-closed. Initializers, unknown
@@ -228,46 +413,6 @@ pub fn import_model(input: TokenStream) -> TokenStream {
     safetensors::import_model(TokenStream::new(), input)
 }
 
-/// The single rank ceiling every shape rule is generated up to.
-///
-/// Expands to a `usize` literal. `incin-core` re-exports it as
-/// `shapes::MAX_RANK`; this macro exists because a proc-macro crate cannot
-/// export a `const`, and duplicating the number would reintroduce exactly the
-/// drift `SHP-006` removed.
-#[proc_macro]
-pub fn max_rank(_input: TokenStream) -> TokenStream {
-    rank::max_rank()
-}
-
-/// Generate a shape rule's rank ladder from `MAX_RANK`.
-///
-/// ```text
-/// rank_sweep!(names => impl_append_dim_for_tuple);
-/// rank_sweep!(ranked_pairs => impl_shape_for_tuple);
-/// rank_sweep!(conv2d => impl_conv2d_shape, min = 1, max = 5);
-/// ```
-///
-/// Expands to one `macro_name!(..);` per rank in `min..=max`, defaulting to
-/// `1..=MAX_RANK`. The forms match the argument shapes the existing
-/// `macro_rules!` families already accept:
-///
-/// | Form | Arguments for rank 3 |
-/// |---|---|
-/// | `names` | `D0, D1, D2` |
-/// | `names_from1` | `D1, D2, D3` |
-/// | `ranked_pairs` | `3, D0 0, D1 1, D2 2` |
-/// | `letters` | `A, B, C` |
-/// | `letters_from_b` | `B, C, D` |
-/// | `conv1d` | `4; B0: 0, B1: 1, B2: 2` |
-/// | `conv2d` | `4, 5; B0: 0, B1: 1, B2: 2` |
-///
-/// A `max` above `MAX_RANK` is rejected rather than honored: the point of the
-/// sweep is that no rule sets its own ceiling.
-#[proc_macro]
-pub fn rank_sweep(input: TokenStream) -> TokenStream {
-    rank::rank_sweep(input)
-}
-
 /// Constructs a compile-time tensor placement.
 ///
 /// Supports `Local`, `Replicated on Mesh`, `Sharded(axis) on Mesh`, `Partial(Op) on Mesh`,
@@ -284,40 +429,6 @@ pub fn rank_sweep(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn placement(input: TokenStream) -> TokenStream {
     placement::placement(input)
-}
-
-/// Constructs a tuple of type-level named axes.
-///
-/// Accepts a comma-separated list of axis tag identifiers.
-///
-/// ## Examples
-/// ```text
-/// type ImageAxes = axes![Batch, Channels, Height, Width];
-/// ```
-#[proc_macro]
-pub fn axes(input: TokenStream) -> TokenStream {
-    axes::axes(input)
-}
-
-/// A macro that validates an einsum subscript at compile time.
-///
-/// Parses the subscript string (e.g., `"ij,jk->ik"`) at expand time,
-/// checking that:
-/// - exactly one `->` separator exists,
-/// - the number of comma-separated input groups matches the operand count,
-/// - every output index appears in the input side.
-///
-/// The macro expands to a tuple `(subscript_str, operand0, operand1, ...)` so
-/// callers can destructure it or pass it to a contraction backend.
-///
-/// ## Examples
-/// ```text
-/// let (sub, a, b) = einsum!("ij,jk->ik"; mat_a, mat_b);
-/// assert_eq!(sub, "ij,jk->ik");
-/// ```
-#[proc_macro]
-pub fn einsum(input: TokenStream) -> TokenStream {
-    einsum::einsum(input)
 }
 
 /// Evaluates a computation block in a parallel mesh context.

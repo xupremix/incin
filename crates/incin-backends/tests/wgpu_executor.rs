@@ -432,7 +432,7 @@ fn execute_one<O>(
 where
     O: CanonicalOperation,
     O::Attributes: AttributeContract,
-    TestBackend: Execute<Descriptor<O>, Output = TestStorage>,
+    TestBackend: Execute<O, Output = TestStorage>,
 {
     let context = ExecutionContext::new(TestBackend::new());
     let inputs = [TensorHandle::from_storage::<TestBackend, f32, Local>(input)];

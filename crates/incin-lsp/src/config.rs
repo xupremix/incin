@@ -10,7 +10,7 @@ pub const RA_PATH_VAR: &str = "INCIN_LSP_RA_PATH";
 pub const HINTS_VAR: &str = "INCIN_LSP_HINTS";
 /// Set to `"1"` to also drop the backend/dtype/grad tail from a rewritten
 /// inlay hint or hover label (`Tensor<[2, 3]>` instead of
-/// `Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>`).
+/// `Tensor<[2, 3], CpuBackendImpl<Cpu>>`).
 pub const SHORTEN_BACKEND_VAR: &str = "INCIN_LSP_SHORTEN_BACKEND";
 
 /// The proxy's resolved configuration for one run.

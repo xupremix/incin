@@ -56,9 +56,9 @@ impl TrainMode for Dropout {
 
 impl<S: Shape + DynShape, B: Backend, K: BuiltinDType> Module<Tensor<S, B, K>> for Dropout
 where
-    B: SupportsDType<K> + Capabilities + Execute<Descriptor<op::Dropout>>,
+    B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
-    <B as Execute<Descriptor<op::Dropout>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<S, B, K>;
     type Error = Error;

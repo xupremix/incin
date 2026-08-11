@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use core::ops::Add;
-use typenum::{U0, U1, U2, U3, U4, U5, U6, U7};
 
 #[diagnostic::on_unimplemented(
     message = "Cannot concatenate shape `{Self}` with `{S2}` along axis `{Axis}`",
@@ -28,29 +27,21 @@ impl<S1: Shape, S2: Shape> TryConcatShape<S2> for S1 {
     type Output = Dyn;
 }
 
-// `$pre` are the axes before the concatenation axis, `$ax` is that axis, and
-// `$post` are the axes after it. Only `$ax` changes: it becomes the sum of both
-// operands' sizes along it. `$u` is the axis index as a `typenum`.
-//
-// This replaced 21 hand-written impls covering ranks 1 through 6. The rule is
-// rank-preserving, so its ceiling is `MAX_RANK`.
-macro_rules! impl_concat_shape {
-    ($($pre:ident),* ; $ax:ident ; $($post:ident),* ; $u:ty) => {
-        impl<$($pre,)* $ax, $($post,)* Rhs> ConcatShape<($($pre,)* Rhs, $($post,)*), $u>
-            for ($($pre,)* $ax, $($post,)*)
-        where
-            $($pre: Dim,)*
-            $ax: Dim,
-            $($post: Dim,)*
-            Rhs: Dim,
-            $ax: Add<Rhs>,
-            <$ax as Add<Rhs>>::Output: Dim,
-        {
-            /// The concatenated shape: the target axis becomes the sum of both
-            /// operands' sizes along it, every other dimension unchanged.
-            type Output = ($($pre,)* <$ax as Add<Rhs>>::Output, $($post,)*);
-        }
-    };
+impl<H1: Dim + Add<H2>, H2: Dim, T: Shape> ConcatShape<DimCons<H2, T>, crate::shapes::idx::Here>
+    for DimCons<H1, T>
+where
+    <H1 as Add<H2>>::Output: Dim,
+{
+    type Output = DimCons<<H1 as Add<H2>>::Output, T>;
 }
 
-incin_macros::rank_sweep!(axis_split => impl_concat_shape);
+impl<H: Dim, T1: Shape, T2: Shape, SubCursor>
+    ConcatShape<DimCons<H, T2>, crate::shapes::idx::Next<SubCursor>> for DimCons<H, T1>
+where
+    T1: ConcatShape<T2, SubCursor>,
+{
+    type Output = DimCons<H, <T1 as ConcatShape<T2, SubCursor>>::Output>;
+}
+
+// Tuple-specific generated implementations were retired. Structural callers
+// use the recursive `DimCons` implementation above.

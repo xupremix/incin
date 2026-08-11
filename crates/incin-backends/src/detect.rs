@@ -28,7 +28,7 @@ use incin_core::prelude::{DeviceId, DeviceKind};
 /// use incin_core::prelude::*;
 ///
 /// let device = incin_backends::detect_device();
-/// let t = Tensor::<Dyn, IncinBackend<Dyn, Dyn>>::zeros(([2, 3], DTypeId::F32, device));
+/// let t = Tensor::<Dyn, IncinBackend<Dyn>>::zeros(([2, 3], device));
 /// ```
 #[must_use]
 pub fn detect_device() -> DeviceId {

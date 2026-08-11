@@ -233,6 +233,8 @@ jobs:
     # checked by `incin-backends`' `generated_docs` suite instead.
     - name: Check README.md's generated feature tables
       run: cargo xtask docs --check
+    - name: Run Backend Feature Matrix
+      run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
 
@@ -318,3 +320,70 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Compile CUDA backend without requiring a GPU
       run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda
+
+  # Every other backend job above enables `cpu` alongside the backend it is
+  # named for, so none of them can see an accelerator reaching into the CPU
+  # backend for code. Three had: `contiguous_strides`, `broadcast_shape` and
+  # `increment_index` were called 95 times from `cuda/`, `wgpu/` and `metal/`,
+  # which `lib.rs` had absorbed by compiling the whole CPU module whenever CUDA
+  # was on. `--features metal` alone did not compile at all, and nothing here
+  # was in a position to say so. Those helpers now live in `crate::layout`.
+  #
+  # `cargo check` per backend rather than a feature powerset: `incin-backends`
+  # has 17 features, so the powerset job's `-p incin-backends` leg is 65k
+  # combinations and is not what caught this. Metal is compile-checked here
+  # rather than only on the macOS runner in hardware.yml because the feature
+  # pulls in no platform-gated dependency, so a Linux runner type-checks it.
+  backend-isolation:
+    name: Each Backend Without The CPU Backend
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [cpu, cuda, wgpu, metal]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libvulkan-dev
+    - name: Compile ${{ matrix.backend }} on its own
+      run: cargo check -p incin-backends --no-default-features --features std,${{ matrix.backend }}
+
+  book:
+    name: Build the mdBook Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+
+    # Cached separately from the main workspace cache: mdbook is a standalone
+    # binary the workspace itself never depends on, and sharing the `test`
+    # job's cache key would tie this job's speed to workspace lockfile
+    # changes that have nothing to do with it.
+    - name: Cache mdbook binary
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/mdbook
+        key: ${{ runner.os }}-mdbook-${{ hashFiles('docs/book/book.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-mdbook-
+
+    - name: Install mdbook
+      run: command -v mdbook || cargo install mdbook --locked
+
+    - name: Build the book
+      run: mdbook build docs/book
+
+    # A self-contained single HTML file with no external CSS/JS/font
+    # requests - inlined from the multi-page build above, not a second
+    # independent render, so it can never drift from it.
+    - name: Build the single-page static version
+      run: |
+        pip install --quiet beautifulsoup4
+        python3 docs/book/make_single_page.py
+
+    # docs/book/book/ is generated output and is gitignored - it must never
+    # be committed. This step makes that explicit rather than relying only
+    # on the runner being torn down: autogen, then clean, every run.
+    - name: Remove generated output
+      run: rm -rf docs/book/book

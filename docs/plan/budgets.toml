@@ -301,6 +301,14 @@ enables = []
 name = "metal"
 enables = []
 
+[[feature_crate.feature]]
+name = "compiled"
+enables = []
+
+[[feature_crate.feature]]
+name = "test-utils"
+enables = []
+
 [[feature_crate]]
 package = "incin-macros"
 manifest = "crates/incin-macros/Cargo.toml"
@@ -389,6 +397,14 @@ enables = ["distributed"]
 name = "distributed-nccl"
 enables = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 
+[[feature_crate.feature]]
+name = "target-api"
+enables = []
+
+[[feature_crate.feature]]
+name = "test-utils"
+enables = ["incin-core/test-utils"]
+
 [[feature_crate]]
 package = "incin"
 manifest = "crates/incin/Cargo.toml"
@@ -454,3 +470,19 @@ enables = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 [[feature_crate.feature]]
 name = "telemetry"
 enables = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
+
+[[feature_crate.feature]]
+name = "backend-authoring"
+enables = []
+
+[[feature_crate.feature]]
+name = "compiled"
+enables = ["incin-core/compiled"]
+
+[[feature_crate.feature]]
+name = "target-api"
+enables = ["incin-backends/target-api"]
+
+[[feature_crate.feature]]
+name = "test-utils"
+enables = ["incin-core/test-utils", "incin-backends/test-utils"]

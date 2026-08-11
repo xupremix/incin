@@ -10,15 +10,22 @@
 //! is the thin backend-facing wrapper that reports its failures as the crate's
 //! [`Error`] type.
 
-use incin_core::prelude::{DTypeId, OperationKind, Result};
+use incin_core::prelude::{DTypeDescriptor, OperationKind, Result};
+
+#[cfg(test)]
+use incin_core::prelude::DTypeId;
 
 /// Bytes needed to hold `elements` values of `dtype`.
 ///
 /// The multiplication is checked, and `dtype` — not the caller — decides the
 /// width, so a block-quantized allocation is sized by its block encoding rather
 /// than by its scalar element width.
-pub(crate) fn byte_len(dtype: DTypeId, elements: usize, operation: OperationKind) -> Result<usize> {
-    Ok(dtype.size_bytes(elements, operation)?)
+pub(crate) fn byte_len(
+    dtype: impl Into<DTypeDescriptor>,
+    elements: usize,
+    operation: OperationKind,
+) -> Result<usize> {
+    Ok(dtype.into().size_bytes(elements, operation)?)
 }
 
 #[cfg(test)]
@@ -51,7 +58,7 @@ mod tests {
         );
         assert_ne!(
             byte_len(DTypeId::Q8_0, 64, OperationKind::Storage).unwrap(),
-            64 * DTypeId::Q8_0.element_size()
+            64 * DTypeId::Q8_0.encoding().scalar_bytes().unwrap_or(1)
         );
     }
 

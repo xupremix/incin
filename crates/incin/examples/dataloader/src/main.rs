@@ -1,4 +1,5 @@
 extern crate alloc;
+
 use incin::prelude::*;
 use rayon::prelude::*;
 use std::time::Instant;

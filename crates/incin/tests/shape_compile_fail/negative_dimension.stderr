@@ -1,0 +1,5 @@
+error: a shape! dimension cannot be negative
+ --> tests/shape_compile_fail/negative_dimension.rs:4:30
+  |
+4 |     let _ = Cpu.zeros(shape![-1, 5]);
+  |                              ^^

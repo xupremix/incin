@@ -1,7 +1,7 @@
 use crate::err::{Error, Result};
 use crate::nn::StateDict;
-use crate::tensor::backend::Backend;
-use crate::tensor::dtype::{FloatDType, Q8_0};
+use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::dtype::Q8_0;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -143,7 +143,9 @@ pub struct GgufExporter<'a, B: Backend, M: StateDict<B>> {
     _phantom: core::marker::PhantomData<B>,
 }
 
-impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
+impl<'a, B: Backend + crate::tensor::backend::QuantizedOps<B>, M: StateDict<B>>
+    GgufExporter<'a, B, M>
+{
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.
     pub fn from_module(module: &'a M) -> Self {
         let full_name = type_name::<M>();
@@ -186,7 +188,7 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
     /// Exports the module and its weights to a `.gguf` file.
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()>
     where
-        B::FloatElem: FloatDType,
+        B: SupportsDType<f32>,
     {
         // Only F32 (passthrough) and Q8_0 (real block quantization) are
         // actually backed by a working conversion right now. Refuse the
@@ -240,7 +242,7 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
         let alignment = 32usize;
 
         for (name, var) in mapped_tensors {
-            let shape = B::shape::<B::FloatElem>(var.inner());
+            let shape = B::shape::<f32>(var.inner());
             let numel = crate::shapes::ShapeBuf::from_slice(&shape)
                 .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
@@ -252,14 +254,14 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
                 self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
 
             let (bytes, ggml_type) = if can_quantize {
-                let quantized = B::quantize::<B::FloatElem, Q8_0>(var.inner())?;
+                let quantized = B::quantize::<f32, Q8_0>(var.inner())?;
                 (
                     B::to_bytes::<Q8_0>(&quantized)?,
                     QuantScheme::Q8_0.ggml_type_id(),
                 )
             } else {
                 (
-                    B::to_bytes::<B::FloatElem>(var.inner())?,
+                    B::to_bytes::<f32>(var.inner())?,
                     QuantScheme::F32.ggml_type_id(),
                 )
             };

@@ -9,8 +9,8 @@ use incin_core::exec::catalog::{
     AxisAttributes, Conv2dAttributes, NoAttributes, Pool2dAttributes, ShapeAttributes,
 };
 use incin_core::exec::{
-    op, CanonicalOperation, Descriptor, DescriptorError, ExecutionDescriptor, LogicalTensorMeta,
-    ProofLevel,
+    CanonicalOperation, Descriptor, DescriptorError, ExecutionDescriptor, LogicalTensorMeta,
+    ProofLevel, op,
 };
 use incin_core::prelude::{OperationKind, ShapeBuf};
 

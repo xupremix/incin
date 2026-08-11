@@ -1,4 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+// Backend errors preserve rich shape/device/dtype context for callers.
+#![allow(clippy::result_large_err)]
 
 #[macro_use]
 extern crate alloc;
@@ -10,7 +12,14 @@ pub mod capability;
 pub mod capability_docs;
 pub mod codegen;
 pub use backend_kind::BackendFor;
-#[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda", feature = "metal"))]
+#[macro_use]
+#[cfg(any(
+    feature = "cpu",
+    feature = "wgpu",
+    feature = "cuda",
+    feature = "metal",
+    feature = "external-candle"
+))]
 pub(crate) mod descriptor_bind;
 pub mod dispatch;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
@@ -35,7 +44,6 @@ pub use detect::{detect_device, detect_device_in};
 // the Candle adapter does use those macros.
 #[cfg(any(feature = "cuda", feature = "wgpu"))]
 pub(crate) mod bytes;
-pub(crate) mod dtype_policy;
 // Every caller of these macros is a GPU or external backend, so a CPU-only
 // build declared four macros it could not use and warned about all of them.
 // Gated the same way `bytes` above it already is.
@@ -49,6 +57,10 @@ pub(crate) mod unsupported;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
 pub mod iteration;
+
+pub(crate) mod layout;
+
+pub(crate) mod quant;
 
 /// Compile-time SIMD lane-width resolution for type-specialized kernels.
 ///
@@ -80,20 +92,42 @@ pub(crate) mod kernel;
 ))]
 pub mod tuning;
 
-/// Unified backend selected by its float element type and device.
+pub type EngineBackend<E, D> = crate::target::EngineBackend<E, D>;
+pub type NativeBackend<D> = crate::target::NativeBackend<D>;
+
+/// Unified backend selected by device.
 ///
-/// Static devices resolve to concrete implementations. `IncinBackend<T, Dyn>`
+/// Static devices resolve to concrete implementations. `IncinBackend<Dyn>`
 /// resolves to [`DispatchBackend`] and selects its implementation at runtime.
-pub type IncinBackend<T = f32, D = incin_core::prelude::Cpu> = <D as BackendFor<T>>::Backend;
+pub type IncinBackend<D = incin_core::prelude::Cpu> = NativeBackend<D>;
+
+#[cfg(feature = "target-api")]
+pub mod nn_target;
+pub mod target;
 
 pub mod prelude {
     #[cfg(feature = "std")]
     pub use super::detect::{detect_device, detect_device_in};
     #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
     pub use super::{BackendFor, IncinBackend};
+    pub use super::{EngineBackend, NativeBackend};
+
+    // Extension methods only resolve when their trait is in scope, so the
+    // traits are exported alongside the types they operate on.
+    #[cfg(feature = "target-api")]
+    pub use super::nn_target::{InitOnTarget, LinearNewOnTarget};
+    #[cfg(all(feature = "target-api", feature = "external-candle"))]
+    pub use super::target::Candle;
+    #[cfg(feature = "target-api")]
+    pub use super::target::{
+        DtypeTarget, EngineOn, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec,
+        RuntimeEngine, Target, TargetExt, TensorData, TensorTarget, precision,
+    };
+    #[cfg(feature = "target-api")]
+    pub use incin_core::shapes::ShapeSpec;
 }
 
-#[cfg(any(feature = "cpu", feature = "cuda"))]
+#[cfg(feature = "cpu")]
 pub mod cpu;
 
 #[cfg(feature = "cuda")]

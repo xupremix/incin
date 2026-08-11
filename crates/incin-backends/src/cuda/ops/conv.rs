@@ -123,7 +123,7 @@ fn alloc_zeroed(
     stream: &Arc<cudarc::driver::CudaStream>,
     device: &Arc<cudarc::driver::CudaContext>,
     device_id: usize,
-    dtype: incin_core::prelude::DTypeId,
+    dtype: incin_core::prelude::DTypeDescriptor,
     numel: usize,
 ) -> Result<CudaBuffer> {
     Ok(CudaBuffer {
@@ -215,7 +215,7 @@ pub(crate) fn launch_im2col_2d(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -293,7 +293,7 @@ pub(crate) fn launch_col2im_2d(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(target_shape);
+    let strides = crate::layout::contiguous_strides(target_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }
 
@@ -348,7 +348,7 @@ pub(crate) fn launch_im2col_1d(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -409,6 +409,6 @@ pub(crate) fn launch_col2im_1d(
             })?;
     }
 
-    let strides = crate::cpu::stride::contiguous_strides(target_shape);
+    let strides = crate::layout::contiguous_strides(target_shape);
     CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }

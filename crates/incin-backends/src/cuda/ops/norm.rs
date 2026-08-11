@@ -1,7 +1,7 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
-use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use alloc::sync::Arc;
-use incin_core::prelude::{Error, Result};
+use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
+use incin_core::prelude::{Error, OperationKind, Result};
 
 fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
     i32::try_from(value).map_err(|_| {
@@ -21,7 +21,7 @@ fn checked_numel(shape: &[usize]) -> Result<usize> {
 
 fn validate_contiguous(storage: &CudaStorage, name: &'static str) -> Result<usize> {
     let numel = checked_numel(&storage.shape)?;
-    if storage.strides != crate::cpu::stride::contiguous_strides(&storage.shape) {
+    if storage.strides != crate::layout::contiguous_strides(&storage.shape) {
         return Err(Error::Msg(format!(
             "CUDA normalization requires contiguous {name} storage"
         )));
@@ -162,6 +162,7 @@ pub(crate) fn launch_layer_norm(
     bias: Option<&CudaStorage>,
     eps: f32,
 ) -> Result<CudaStorage> {
+    let buffer = &*input.buffer;
     let input_numel = validate_contiguous(input, "input")?;
     let norm_size = *input
         .shape
@@ -176,15 +177,26 @@ pub(crate) fn launch_layer_norm(
     if let Some(bias) = bias {
         validate_parameter(input, bias, norm_size, "bias")?;
     }
-    let buffer = &*input.buffer;
-    let policy = resolve_dtype_policy(
-        BackendFamily::Cuda,
-        OperationKind::Normalization,
+    let req = PrecisionRequest::new(
+        incin_core::prelude::OperationKind::Normalization,
         buffer.dtype,
-        "layer_norm",
-    )?;
-    let kernel = crate::kernel::render_cuda_normalization("layer_norm", buffer.dtype)?;
-    if kernel.dtype != buffer.dtype || kernel.element_size != buffer.dtype.element_size() {
+        buffer.dtype,
+        incin_core::exec::LayoutClass::Contiguous,
+        1,
+        false,
+        incin_core::exec::MathMode::Fast,
+    );
+    let policy = crate::cuda::backend::native_precision(&req)?;
+    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, "layer_norm")?;
+    let kernel = crate::kernel::render_cuda_normalization("layer_norm", builtin_id)?;
+    if Some(kernel.dtype) != buffer.dtype.builtin_id()
+        || kernel.element_size
+            != buffer
+                .dtype
+                .encoding()
+                .scalar_bytes()
+                .ok_or_else(|| Error::Msg("invalid scalar bytes".into()))?
+    {
         return Err(Error::Msg(
             "CUDA layer norm kernel/storage ABI mismatch".into(),
         ));
@@ -228,8 +240,13 @@ pub(crate) fn launch_layer_norm(
         let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
             let block_size = u32::from(candidate.block_size);
             let warp_count = (block_size as usize) / 32;
+            let acc_bytes = policy
+                .accumulator
+                .encoding()
+                .scalar_bytes()
+                .ok_or_else(|| Error::Msg("CUDA layer norm invalid accumulator encoding".into()))?;
             let shared_bytes = warp_count
-                .checked_mul(policy.accumulator.element_size())
+                .checked_mul(acc_bytes)
                 .and_then(|bytes| bytes.checked_mul(2))
                 .and_then(|bytes| bytes.checked_add(warp_count * core::mem::size_of::<i32>()))
                 .and_then(|bytes| u32::try_from(bytes).ok())
@@ -276,6 +293,7 @@ pub(crate) fn launch_batch_norm(
     running_variance: Option<&CudaStorage>,
     eps: f32,
 ) -> Result<CudaStorage> {
+    let buffer = &*input.buffer;
     let total_elements = validate_contiguous(input, "input")?;
     if input.shape.is_empty() {
         return Err(Error::Msg("CUDA batch norm requires rank >= 1".into()));
@@ -297,14 +315,9 @@ pub(crate) fn launch_batch_norm(
             validate_parameter(input, parameter, num_channels, name)?;
         }
     }
-    let buffer = &*input.buffer;
-    resolve_dtype_policy(
-        BackendFamily::Cuda,
-        OperationKind::Normalization,
-        buffer.dtype,
-        "batch_norm",
-    )?;
-    let kernel = crate::kernel::render_cuda_normalization("batch_norm", buffer.dtype)?;
+    crate::cuda::backend::validate_cuda_storage_dtype(buffer.dtype, "batch_norm")?;
+    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, "batch_norm")?;
+    let kernel = crate::kernel::render_cuda_normalization("batch_norm", builtin_id)?;
     let selection = normalization_launch_selection(
         &buffer.device,
         &kernel,

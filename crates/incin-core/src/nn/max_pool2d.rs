@@ -44,11 +44,11 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend + Execute<Descriptor<crate::exec::catalog::op::MaxPool2d>>,
+    B: Backend + Execute<crate::exec::catalog::op::MaxPool2d>,
 > Module<Tensor<I, B>> for MaxPool2d<K, S, P, D>
 where
     B: Capabilities,
-    <B as Execute<Descriptor<crate::exec::catalog::op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<crate::exec::catalog::op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;

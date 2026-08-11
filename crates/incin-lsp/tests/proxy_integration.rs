@@ -55,7 +55,7 @@ fn proxy_rewrites_diagnostics_and_hints_but_passes_everything_else_through_byte_
     assert_eq!(inlay["id"], 42);
     assert_eq!(
         inlay["result"][0]["label"],
-        "Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>"
+        "Tensor<[2, 3], CpuBackendImpl<Cpu>>"
     );
 
     assert!(

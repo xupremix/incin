@@ -1,20 +1,55 @@
-error[E0277]: Cannot use shape `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)` here: its last dimension must be `UInt<UInt<UTerm, B1>, B1>`
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:9:19
+error[E0277]: the trait bound `{integer}: ArgInto<(usize, ((), ()))>` is not satisfied
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:8:64
+  |
+8 |     let input = Tensor::<s![dyn, 5], DummyBackend<Cpu>>::zeros(2).unwrap();
+  |                 ---------------------------------------------- ^ the trait `ArgInto<(usize, ((), ()))>` is not implemented for `{integer}`
+  |                 |
+  |                 required by a bound introduced by this call
+  |
+help: the following other types implement trait `ArgInto<Target>`
+ --> src/tensor/arg_into.rs
+  |
+  |               impl ArgInto<$t> for $t {
+  |               ^^^^^^^^^^^^^^^^^^^^^^^
+  |               |
+  |               `f32` implements `ArgInto<f32>`
+  |               `f64` implements `ArgInto<f64>`
+  |               `usize` implements `ArgInto<usize>`
+...
+  | / impl_self_arginto! {
+  | |     f32
+  | |     f64
+  | |     usize
+... |
+  | |     ShapeBuf
+  | | }
+  | |_- in this macro invocation
+  = note: required for `{integer}` to implement `ArgInto<TensorArgsData<(usize, ((), ())), (), (), ()>>`
+note: required by a bound in `incin::prelude::Tensor::<S, B, K, G>::zeros`
+ --> src/tensor/base.rs
+  |
+  |     pub fn zeros<A>(args: A) -> Result<Self>
+  |            ----- required by a bound in this associated function
+  |     where
+  |         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, G>::zeros`
+  = note: this error originates in the macro `impl_self_arginto` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: Cannot use shape `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>` here: its last dimension must be `UInt<UInt<UTerm, B1>, B1>`
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:9:11
   |
 9 |     layer.forward(input).unwrap();
-  |           ------- ^^^^^ wrong trailing dimension
-  |           |
-  |           required by a bound introduced by this call
+  |           ^^^^^^^ wrong trailing dimension
   |
-  = help: the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+  = help: the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>`
   = note: the input's last dimension must match this layer's expected input size
-  = help: the following other types implement trait `EndsWith<D>`:
-            `(D0, D1)` implements `EndsWith<D1>`
-            `(D0, D1, D2)` implements `EndsWith<D2>`
-            `(D0, D1, D2, D3)` implements `EndsWith<D3>`
-            `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
-            `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
-            `(D0, D1, D2, D3, D4, D5, D6)` implements `EndsWith<D6>`
-            `(D0, D1, D2, D3, D4, D5, D6, D7)` implements `EndsWith<D7>`
-            `(D0,)` implements `EndsWith<D0>`
-  = note: required for `incin::nn::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, incin::prelude::Cpu>, f32>>`
+help: the following other types implement trait `EndsWith<D>`
+ --> src/shapes/shape.rs
+  |
+  |   impl<D: Dim> EndsWith<D> for DimCons<D, Nil> {}
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `DimCons<D, Nil>`
+  | / impl<H: Dim, H2: Dim, T: Shape, D: Dim> EndsWith<D> for DimCons<H, DimCons<H2, T>> where
+  | |     DimCons<H2, T>: EndsWith<D>
+  | |_______________________________^ `DimCons<H, DimCons<H2, T>>`
+  = note: required for `DimCons<usize, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>>` to implement `EndsWith<UInt<UInt<UTerm, B1>, B1>>`
+  = note: required for `incin::nn::Linear<DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>, DummyBackend<incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<DimCons<usize, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>>, DummyBackend<incin::prelude::Cpu>>>`

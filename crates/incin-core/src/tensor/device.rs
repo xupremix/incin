@@ -10,7 +10,7 @@
 //! is dispatched at runtime.
 //!
 //! ```text
-//! Tensor::<Dyn, IncinBackend<Dyn, Dyn>>::zeros(([2, 3], DTypeId::F32, DeviceId::cuda(1)))
+//! Tensor::<Dyn, IncinBackend<Dyn>>::zeros(([2, 3], DTypeId::F32, DeviceId::cuda(1)))
 //! ```
 //!
 //! ## Tier 2 — Partial Compile-Time (`Cuda` / `Wgpu`)
@@ -21,8 +21,17 @@
 //! based on e.g. command-line flags.
 //!
 //! ```text
-//! Tensor::<s![2, 3], IncinBackend<f32, Cuda>>::zeros(Cuda::new(2))
+//! Tensor::<s![2, 3], IncinBackend<Cuda>>::zeros(((), Cuda::new(2)))
 //! ```
+//!
+//! The argument is a 2-tuple, not the bare selector. A fully static shape's
+//! `Shape::Arg` is a tuple of units (`((), ())` here), and `arg_into`'s
+//! `NotUnit` marker counts that as an argument the caller supplied, so the
+//! shape slot is already occupied. The leading `()` fills it and the selector
+//! lands in the device slot. Passing `Cuda::new(2)` alone instead makes
+//! `ArgInto` try to read it as the *shape*, and the mismatch surfaces as an
+//! unsatisfied `ArgInto<TensorArgsData<..>>` bound rather than as anything
+//! that names the device.
 //!
 //! ## Tier 3 — Fully Static Selection (`CudaN<N>` / `WgpuN<N>`)
 //!
@@ -33,7 +42,7 @@
 //! validated when the program initializes that device at runtime.
 //!
 //! ```text
-//! Tensor::<s![2, 3], IncinBackend<f32, CudaN<U1>>>::zeros(())  // always GPU 1
+//! Tensor::<s![2, 3], IncinBackend<CudaN<U1>>>::zeros(())  // always GPU 1
 //! ```
 
 use core::fmt::Debug;
@@ -219,10 +228,10 @@ mod cuda_static {
     ///
     /// ```text
     /// // Always on GPU 0 — no runtime arg required
-    /// Tensor::<s![2, 3], IncinBackend<f32, CudaN<U0>>>::zeros(())
+    /// Tensor::<s![2, 3], IncinBackend<CudaN<U0>>>::zeros(())
     ///
     /// // Always on GPU 2
-    /// Tensor::<s![2, 3], IncinBackend<f32, CudaN<U2>>>::zeros(())
+    /// Tensor::<s![2, 3], IncinBackend<CudaN<U2>>>::zeros(())
     /// ```
     pub struct CudaN<N: Unsigned = U0>(PhantomData<N>);
 
@@ -268,7 +277,7 @@ mod wgpu_static {
     ///
     /// ```text
     /// // Always on adapter 0 — no runtime arg required
-    /// Tensor::<s![2, 3], IncinBackend<f32, WgpuN<U0>>>::zeros(())
+    /// Tensor::<s![2, 3], IncinBackend<WgpuN<U0>>>::zeros(())
     /// ```
     pub struct WgpuN<N: Unsigned = U0>(PhantomData<N>);
 

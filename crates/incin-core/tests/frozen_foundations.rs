@@ -30,7 +30,7 @@ fn document() -> String {
 ///
 /// A backticked span is treated as a path when it starts with a known top-level
 /// directory of this repository. That keeps Rust items such as
-/// `Execute<Descriptor<O>>` out of the list without needing to parse them, and
+/// `Execute<O>` out of the list without needing to parse them, and
 /// it means a newly mentioned path is picked up without editing this test.
 fn mentioned_paths(document: &str) -> Vec<String> {
     const ROOTS: [&str; 3] = ["crates/", "docs/", "audit-evidence/"];

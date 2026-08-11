@@ -55,7 +55,8 @@ pub const fn validate_collective_dtype(dtype: DTypeId) -> Result<(), CollectiveE
         | DTypeId::BF16
         | DTypeId::F16
         | DTypeId::F32
-        | DTypeId::F64 => Ok(()),
+        | DTypeId::F64
+        | DTypeId::Bool => Ok(()),
         DTypeId::Q8_0 => Err(CollectiveError::UnsupportedDType { dtype }),
     }
 }

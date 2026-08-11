@@ -92,9 +92,15 @@ impl core::fmt::Display for ConversionFailure {
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 /// Structured failure returned by descriptor executors.
 pub enum BackendError {
-    #[error("{reason}")]
+    #[error("backend '{backend}' refused the request: {reason}")]
     /// A capability query rejected the request before launch.
+    ///
+    /// `backend` is mandatory. See [`StorageBackend::BACKEND_NAME`] for why a
+    /// refusal that does not name its author is not worth returning.
+    ///
+    /// [`StorageBackend::BACKEND_NAME`]: crate::tensor::backend::StorageBackend::BACKEND_NAME
     Unsupported {
+        backend: &'static str,
         reason: crate::exec::capability::UnsupportedReason,
     },
 
@@ -119,9 +125,21 @@ pub enum BackendError {
     },
 }
 
-impl From<crate::exec::capability::UnsupportedReason> for BackendError {
-    fn from(reason: crate::exec::capability::UnsupportedReason) -> Self {
-        Self::Unsupported { reason }
+impl BackendError {
+    /// A refusal attributed to the backend that made it.
+    ///
+    /// This replaces a `From<UnsupportedReason>` conversion. `?` on a bare
+    /// reason used to be enough to produce an unattributed error, which is how
+    /// the canonical path ended up reporting "dtype Q8_0 is unsupported for
+    /// zeros" without ever naming the device. Requiring the name as an
+    /// argument means the only way to build one of these is at a site that
+    /// knows who refused.
+    #[must_use]
+    pub const fn unsupported(
+        backend: &'static str,
+        reason: crate::exec::capability::UnsupportedReason,
+    ) -> Self {
+        Self::Unsupported { backend, reason }
     }
 }
 
@@ -199,6 +217,18 @@ pub enum Error {
     /// A descriptor executor rejected or failed a validated request.
     Backend(#[from] BackendError),
 
+    #[error("{0}")]
+    /// A canonical invocation failed contract validation before any backend ran.
+    ///
+    /// The counterpart to [`Error::Backend`]: together they are the two arms of
+    /// [`CanonicalError`](crate::exec::CanonicalError), and having both here is
+    /// what lets a `dispatch::execute` failure reach a caller unchanged. Without
+    /// this variant the only way to surface a descriptor rejection was to render
+    /// it into a string and post it as some other variant, which is how a dtype
+    /// refusal ended up reported as an execution failure of an operation the
+    /// caller had not asked for.
+    Descriptor(crate::exec::catalog::DescriptorError),
+
     #[error(transparent)]
     /// A backward pass failed (`GRD-005`).
     Backward(#[from] BackwardError),
@@ -210,16 +240,28 @@ pub enum Error {
     #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
     /// The backend or operation cannot represent the requested dtype.
     UnsupportedDType {
-        dtype: crate::prelude::DTypeId,
+        dtype: crate::prelude::DTypeDescriptor,
         backend: &'static str,
         op: &'static str,
+    },
+
+    #[error(
+        "Precision choice {requested:?} for {role:?} role is unsupported for operation '{operation:?}', storage {storage:?} on backend '{backend}'"
+    )]
+    /// Requested precision choice cannot be honored by the backend.
+    UnsupportedPrecision {
+        operation: crate::prelude::OperationKind,
+        storage: crate::prelude::DTypeDescriptor,
+        requested: crate::prelude::DTypeDescriptor,
+        role: crate::exec::PrecisionRole,
+        backend: &'static str,
     },
 
     #[error("Tensor dtype metadata {expected:?} does not match storage {got:?}")]
     /// Logical dtype differs from physical storage.
     DTypeStorageMismatch {
-        expected: crate::prelude::DTypeId,
-        got: crate::prelude::DTypeId,
+        expected: crate::prelude::DTypeDescriptor,
+        got: crate::prelude::DTypeDescriptor,
     },
 
     #[error("{operation}: cannot convert {from:?} to {to:?}: {reason}")]
@@ -229,9 +271,9 @@ pub enum Error {
         /// Stable operation identity.
         operation: &'static str,
         /// Physical source dtype.
-        from: crate::prelude::DTypeId,
+        from: crate::prelude::DTypeDescriptor,
         /// Requested destination dtype.
-        to: crate::prelude::DTypeId,
+        to: crate::prelude::DTypeDescriptor,
         /// Bounded classification of the rejected value.
         reason: ConversionFailure,
     },
@@ -240,8 +282,8 @@ pub enum Error {
     /// An operation received a dtype outside its declared contract.
     DTypeMismatch {
         operation: &'static str,
-        expected: crate::prelude::DTypeId,
-        actual: crate::prelude::DTypeId,
+        expected: crate::prelude::DTypeDescriptor,
+        actual: crate::prelude::DTypeDescriptor,
     },
 
     #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
@@ -400,6 +442,23 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<crate::exec::CanonicalError> for Error {
+    /// Carry a canonical failure across without flattening it.
+    ///
+    /// Both arms have an exact counterpart here, so this loses nothing: the
+    /// distinction between "the request was never legal" and "the backend
+    /// refused a legal request" survives, and a [`BackendError::Unsupported`]
+    /// still names the backend that produced it. Callers that used to render
+    /// the error with `format!` and re-post it under a guessed variant should
+    /// use this instead.
+    fn from(error: crate::exec::CanonicalError) -> Self {
+        match error {
+            crate::exec::CanonicalError::Descriptor(error) => Self::Descriptor(error),
+            crate::exec::CanonicalError::Backend(error) => Self::Backend(error),
+        }
+    }
+}
+
 impl From<crate::exec::MetaError> for Error {
     fn from(err: crate::exec::MetaError) -> Self {
         match err {
@@ -428,7 +487,7 @@ impl From<crate::exec::MetaError> for Error {
 /// must name truncation or saturation when those semantics are intended.
 pub fn convert_f64_to_i64(
     operation: &'static str,
-    from: crate::prelude::DTypeId,
+    from: crate::prelude::DTypeDescriptor,
     value: f64,
     policy: FloatToIntPolicy,
 ) -> Result<i64> {
@@ -436,7 +495,7 @@ pub fn convert_f64_to_i64(
         return Err(Error::InvalidConversion {
             operation,
             from,
-            to: crate::prelude::DTypeId::I64,
+            to: <i64 as crate::tensor::dtype::ConstDType>::DESCRIPTOR,
             reason: ConversionFailure::NonFinite,
         });
     }
@@ -450,7 +509,7 @@ pub fn convert_f64_to_i64(
             FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => Err(Error::InvalidConversion {
                 operation,
                 from,
-                to: crate::prelude::DTypeId::I64,
+                to: <i64 as crate::tensor::dtype::ConstDType>::DESCRIPTOR,
                 reason: ConversionFailure::NonFinite,
             }),
         };
@@ -461,7 +520,7 @@ pub fn convert_f64_to_i64(
             return Err(Error::InvalidConversion {
                 operation,
                 from,
-                to: crate::prelude::DTypeId::I64,
+                to: <i64 as crate::tensor::dtype::ConstDType>::DESCRIPTOR,
                 reason: ConversionFailure::Fractional,
             });
         }
@@ -483,7 +542,7 @@ pub fn convert_f64_to_i64(
             FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => Err(Error::InvalidConversion {
                 operation,
                 from,
-                to: crate::prelude::DTypeId::I64,
+                to: <i64 as crate::tensor::dtype::ConstDType>::DESCRIPTOR,
                 reason: ConversionFailure::OutOfRange,
             }),
         };
@@ -518,7 +577,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "index_readback",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 42.0,
                 FloatToIntPolicy::Exact,
             )
@@ -536,20 +595,25 @@ mod tests {
         ] {
             let err = convert_f64_to_i64(
                 "index_readback",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 value,
                 FloatToIntPolicy::Exact,
             )
             .unwrap_err();
-            assert!(matches!(
-                err,
-                Error::InvalidConversion {
-                    operation: "index_readback",
-                    from: crate::prelude::DTypeId::F64,
-                    to: crate::prelude::DTypeId::I64,
-                    reason,
-                } if reason == expected
-            ));
+            if let Error::InvalidConversion {
+                operation,
+                from,
+                to,
+                reason,
+            } = err
+            {
+                assert_eq!(operation, "index_readback");
+                assert_eq!(from, crate::prelude::DTypeId::F64.descriptor());
+                assert_eq!(to, crate::prelude::DTypeId::I64.descriptor());
+                assert_eq!(reason, expected);
+            } else {
+                panic!("expected Error::InvalidConversion");
+            }
         }
     }
 
@@ -558,7 +622,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_truncate",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 -42.75,
                 FloatToIntPolicy::Truncate,
             )
@@ -568,7 +632,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 f64::INFINITY,
                 FloatToIntPolicy::Saturate,
             )
@@ -578,7 +642,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 f64::NEG_INFINITY,
                 FloatToIntPolicy::Saturate,
             )
@@ -588,7 +652,7 @@ mod tests {
         assert!(matches!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64,
+                crate::prelude::DTypeId::F64.descriptor(),
                 f64::NAN,
                 FloatToIntPolicy::Saturate,
             ),

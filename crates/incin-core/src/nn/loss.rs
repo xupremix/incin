@@ -150,7 +150,7 @@ impl<R: ReductionMode> MSELoss<R> {
     /// Forward pass computing the Mean Squared Error between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::MseLoss>>,
+        B: Backend + crate::exec::Capabilities + Execute<op::MseLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -160,7 +160,7 @@ impl<R: ReductionMode> MSELoss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: MseReductionShape<S>,
-        <B as Execute<Descriptor<op::MseLoss>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&pred.inner),
@@ -221,7 +221,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
     pub fn forward<
         S1,
         S2: Shape,
-        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::CrossEntropyLoss>>,
+        B: Backend + crate::exec::Capabilities + Execute<op::CrossEntropyLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -232,7 +232,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
     where
         S1: Shape + crate::prelude::DynShape + CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
-        <B as Execute<Descriptor<op::CrossEntropyLoss>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.
         let prediction = TensorHandle::from_storage::<B, K, Local>(&pred.inner);
@@ -285,7 +285,7 @@ impl<R: ReductionMode> L1Loss<R> {
     /// Forward pass computing the L1 Loss between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::L1Loss>>,
+        B: Backend + crate::exec::Capabilities + Execute<op::L1Loss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -295,7 +295,7 @@ impl<R: ReductionMode> L1Loss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: L1ReductionShape<S>,
-        <B as Execute<Descriptor<op::L1Loss>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&pred.inner),
@@ -343,7 +343,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::BceWithLogitsLoss>>,
+        B: Backend + crate::exec::Capabilities + Execute<op::BceWithLogitsLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -353,7 +353,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: BceReductionShape<S>,
-        <B as Execute<Descriptor<op::BceWithLogitsLoss>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&pred.inner),

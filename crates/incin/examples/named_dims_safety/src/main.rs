@@ -14,7 +14,7 @@ dim!(Batch, Seq, Feature);
 /// the output of some per-token feature projection, ready to feed into a
 /// classifier head.
 fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
-    x.sum_dim::<1>().unwrap()
+    x.sum::<Next<Here>>().unwrap()
 }
 
 fn main() -> incin::Result<()> {
@@ -48,7 +48,7 @@ fn main() -> incin::Result<()> {
     // this isn't a toy that only works for one hand-picked function.
 
     // Transpose swaps both dims' *types*, not just their runtime values:
-    let transposed: Tensor<s![Feature, Batch]> = projected.transpose::<0, 1>().unwrap();
+    let transposed = projected.transpose_runtime(0, 1).unwrap();
     println!("transposed shape: {:?}", transposed.dims());
 
     // Concatenating two (Batch, 4)-shaped tensors along the literal axis
@@ -56,7 +56,7 @@ fn main() -> incin::Result<()> {
     // an op it never even participates in the arithmetic of:
     let more: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
     let half: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
-    let joined: Tensor<s![Batch, 8]> = half.concat::<s![Batch, 4], typenum::U1>(&more).unwrap();
+    let joined: Tensor<s![Batch, 8]> = half.concat::<s![Batch, 4], Next<Here>>(&more).unwrap();
     println!("joined shape: {:?}", joined.dims());
 
     // matmul carries `Batch` straight through too — batched matrix
@@ -70,7 +70,7 @@ fn main() -> incin::Result<()> {
     // identically-shaped named-dim tensors — same as PyTorch, just checked
     // by the compiler instead of at runtime:
     let bias: Tensor<s![Batch, Feature]> = Tensor::zeros((batch, feature)).unwrap();
-    let biased: Tensor<s![Batch, Feature]> = (&projected + &bias)?;
+    let biased = (&projected + &bias)?;
     println!("biased shape: {:?}", biased.dims());
 
     println!("Compiled successfully — every shape above was checked before this program ran.");

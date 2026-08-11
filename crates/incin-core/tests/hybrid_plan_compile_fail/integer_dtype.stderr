@@ -17,5 +17,5 @@ note: required by a bound in `HybridPlanner::plan_data_static`
   |     pub fn plan_data_static<K, Batch, Parameters, Activations, Microbatches>(
   |            ---------------- required by a bound in this associated function
 ...
-  |         K: ConstDType + HybridPlanDType,
-  |                         ^^^^^^^^^^^^^^^ required by this bound in `HybridPlanner::plan_data_static`
+  |         K: ConstDType + BuiltinDType + HybridPlanDType,
+  |                                        ^^^^^^^^^^^^^^^ required by this bound in `HybridPlanner::plan_data_static`
