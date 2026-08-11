@@ -1,7 +1,13 @@
 //! Conv2d shape verification
 
+use alloc::vec::Vec;
+
+use crate::exec::catalog::{op, Conv2dAttributes, Descriptor};
+use crate::exec::context::ExecutionContext;
+use crate::exec::request::TensorHandle;
 use crate::prelude::*;
 use crate::tensor::matmul::StaticDim;
+use crate::tensor::backend::Execute;
 use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
@@ -16,16 +22,14 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
     /// The convolved output shape.
     type Output: Shape;
-    /// Computes the runtime `Field` of `Output` from the input and kernel fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        kernel: &<K as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field;
+    /// Computes the runtime `ShapeBuf` of `Output` from the input and kernel buffers.
+    fn output_shape(lhs: &ShapeBuf, kernel: &ShapeBuf) -> ShapeBuf;
 }
 
 // Fully static (B, C_in, H_in, W_in) with Kernel (C_out, C_in, K_h, K_w)
 impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding>
-    KernelConv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
+    KernelConv2dShape<DimCons<COut, DimCons<CIn, DimCons<KH, DimCons<KW, Nil>>>>, Stride, Padding>
+    for DimCons<B, DimCons<CIn, DimCons<HIn, DimCons<WIn, Nil>>>>
 where
     B: Dim + Default,
     CIn: StaticDim,
@@ -48,12 +52,16 @@ where
 {
     /// The convolved output shape: batch unchanged, channel dim
     /// replaced by `COut`, spatial dims via `ConvOutDim`.
-    type Output = (
+    type Output = DimCons<
         B,
-        COut,
-        ConvOutDim<HIn, KH, Stride, Padding>,
-        ConvOutDim<WIn, KW, Stride, Padding>,
-    );
+        DimCons<
+            COut,
+            DimCons<
+                ConvOutDim<HIn, KH, Stride, Padding>,
+                DimCons<ConvOutDim<WIn, KW, Stride, Padding>, Nil>,
+            >,
+        >,
+    >;
 
     #[inline(always)]
     /// `COut`/`HOut`/`WOut` come from `Default` — they're all `StaticDim`
@@ -61,16 +69,13 @@ where
     /// (the batch dim) is bounded only by `Dim + Default`, so a `usize` or
     /// `symbolic_dim!` batch needs its real value copied from `lhs`
     /// instead — `Default::default()` would silently produce 0.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(COut, CIn, KH, KW) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            lhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
+    fn output_shape(lhs: &ShapeBuf, _: &ShapeBuf) -> ShapeBuf {
+        ShapeBuf::from_slice(&[
+            lhs[0],
+            COut::default().size(),
+            ConvOutDim::<HIn, KH, Stride, Padding>::default().size(),
+            ConvOutDim::<WIn, KW, Stride, Padding>::default().size(),
+        ])
     }
 }
 
@@ -84,12 +89,9 @@ impl<
     type Output = Dyn;
     /// Computes the convolved output shape from the runtime input/kernel
     /// dims using the standard conv output-size formula.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        kernel: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
+    fn output_shape(lhs: &ShapeBuf, kernel: &ShapeBuf) -> ShapeBuf {
         if lhs.len() != 4 || kernel.len() != 4 {
-            return alloc::vec![];
+            return ShapeBuf::SCALAR;
         }
         let (n, _c_in, h_in, w_in) = (lhs[0], lhs[1], lhs[2], lhs[3]);
         let (c_out, _c_in_k, k_h, k_w) = (kernel[0], kernel[1], kernel[2], kernel[3]);
@@ -100,16 +102,19 @@ impl<
         let h_out = (h_in + 2 * padding - k_h) / stride + 1;
         let w_out = (w_in + 2 * padding - k_w) / stride + 1;
 
-        alloc::vec![n, c_out, h_out, w_out]
+        ShapeBuf::from_slice(&[n, c_out, h_out, w_out])
     }
 }
 
 impl<
     S1: Shape + DynShape,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + crate::tensor::backend::ModuleOps<B> + Execute<Descriptor<op::Conv2dExact>>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S1, B, K, G>
+where
+    B: crate::exec::Capabilities,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<K>>,
 {
     /// 2D convolution with compile-time-checked output shape (see
     /// `KernelConv2dShape`). Dilation and groups are fixed to 1.
@@ -124,22 +129,37 @@ impl<
         KShape: Shape + DynShape,
         S1: KernelConv2dShape<KShape, Stride, Padding>,
     {
-        let inner = self.under_grad_mode(|| {
-            B::conv2d::<K>(
-                &self.inner,
-                &weight.inner,
-                bias.map(|b| b.inner()),
-                <Stride as typenum::Unsigned>::USIZE,
-                <Padding as typenum::Unsigned>::USIZE,
-                1, // Default dilation
-                1, // Default groups
-            )
-        })?;
-
-        let output_shape = S1::output_shape(&self._shape, &weight._shape);
+        let output_shape = S1::output_shape(&self.shape_buf_value(), &weight.shape_buf_value());
+        let output_shape = ShapeValue::<S1::Output>::try_new(output_shape)
+            .map_err(Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let kernel = TensorHandle::from_storage::<B, K, Local>(&weight.inner);
+        let mut inputs = Vec::with_capacity(if bias.is_some() { 3 } else { 2 });
+        inputs.push(input);
+        inputs.push(kernel);
+        if let Some(bias) = bias {
+            inputs.push(TensorHandle::from_storage::<B, K, Local>(&bias.inner));
+        }
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, S1::Output>(
+                    &context,
+                    Conv2dAttributes {
+                        stride: [Stride::USIZE; 2],
+                        padding: [Padding::USIZE; 2],
+                        dilation: [1; 2],
+                        groups: 1,
+                        has_bias: bias.is_some(),
+                    },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            output_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
