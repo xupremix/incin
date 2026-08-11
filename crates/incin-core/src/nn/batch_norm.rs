@@ -280,7 +280,7 @@ where
             TensorHandle::from_storage::<B, K, Local>(running_var.inner()),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let out = dispatch::execute::<op::BatchNorm, B>(
+        let out = dispatch::execute_shaped::<op::BatchNorm, B, InS>(
             &context,
             BatchNormAttributes {
                 epsilon: self.eps as f64,
@@ -292,6 +292,7 @@ where
                 has_running_variance: true,
             },
             &inputs,
+            &x._shape,
         )
         .map_err(crate::prelude::Error::from)?;
         Tensor::from_shape_value(

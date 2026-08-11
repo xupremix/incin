@@ -572,7 +572,7 @@ where
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let (values_inner, indices_inner) = GradMode::Disabled
             .restrict(|| {
-                crate::exec::dispatch::execute::<op::TopK, B>(
+                crate::exec::dispatch::execute_shaped::<op::TopK, B, crate::prelude::Dyn>(
                     &context,
                     crate::exec::catalog::TopKAttributes {
                         k,
@@ -581,6 +581,7 @@ where
                         index_dtype: DTypeId::U32.descriptor(),
                     },
                     &[input],
+                    &out_shape,
                 )
             })?
             .into();

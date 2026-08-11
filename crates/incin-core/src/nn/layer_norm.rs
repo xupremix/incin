@@ -212,7 +212,7 @@ where
             TensorHandle::from_storage::<B, K, Local>(bias.inner()),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let out_inner = dispatch::execute::<op::LayerNorm, B>(
+        let out_inner = dispatch::execute_shaped::<op::LayerNorm, B, InS>(
             &context,
             LayerNormAttributes {
                 normalized_shape: weight.shape_buf().as_ref().to_vec(),
@@ -220,6 +220,7 @@ where
                 has_bias: true,
             },
             &inputs,
+            &x._shape,
         )
         .map_err(crate::prelude::Error::from)?;
 
