@@ -331,13 +331,7 @@ impl MatMulShape<Dyn> for Dyn {
 
 use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 
-impl<
-    S1: Shape,
-    B: Backend + TensorOps<B> + NumericOps<B> + FloatOps<B>,
-    K: crate::tensor::dtype::DType,
-    G1: RequiresGrad,
-> Tensor<S1, B, K, G1>
-{
+impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Tensor<S1, B, K, G1> {
     /// Batched matrix multiplication over the trailing two dimensions,
     /// with the output shape checked at compile time via `MatMulShape`.
     pub fn matmul<S2, G2>(
@@ -388,6 +382,7 @@ impl<
     ) -> Result<Tensor<(), B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
+        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
         B: Execute<op::Mul> + Execute<op::SumAll> + crate::exec::Capabilities,
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
@@ -404,6 +399,7 @@ impl<
     ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
+        B: TensorOps<B> + FloatOps<B> + NumericOps<B>,
         B: Execute<op::Mul> + Execute<op::UnsqueezeExact> + crate::exec::Capabilities,
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,

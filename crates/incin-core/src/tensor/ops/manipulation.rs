@@ -10,9 +10,9 @@ use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, FlattenAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes,
-    PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes,
-    ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
+    AxisAttributes, DTypeAttributes, FlattenAttributes, LogicalTensorMeta, NarrowAttributes,
+    NoAttributes, PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes,
+    ScalarAttributes, ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -821,16 +821,28 @@ impl<
 > Tensor<S, B, K, G>
 {
     /// `to_dtype`.
-    pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
-        &self,
-    ) -> Result<Tensor<S, B, T2, G>> {
+    pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(&self) -> Result<Tensor<S, B, T2, G>>
+    where
+        B: Execute<op::ToDType> + Capabilities,
+        <B as Execute<op::ToDType>>::Output: Into<B::Storage<T2>>,
+    {
         let field = T2::init(());
         let descriptor = T2::descriptor(&field);
-        let inner =
-            self.under_grad_mode(|| B::tensor_to_dtype::<K, T2>(&self.inner, descriptor))?;
-        Tensor::from_parts(
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ToDType, B, S>(
+                    &context,
+                    DTypeAttributes { dtype: descriptor },
+                    &[input],
+                    &self._shape,
+                )
+            })?
+            .into();
+        Tensor::from_shape_value(
             inner,
-            self.shape_buf_value(),
+            self._shape.clone(),
             field,
             self._device.clone(),
             self._grad.clone(),

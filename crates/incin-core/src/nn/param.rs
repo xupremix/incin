@@ -402,10 +402,18 @@ use alloc::collections::BTreeMap;
 /// `StateDict` for parameters of any `K: DType`.
 impl<
     S: Shape,
-    B: Backend + TensorOps<B> + SupportsDType<K> + SupportsDType<f32>,
+    B: Backend
+        + TensorOps<B>
+        + SupportsDType<K>
+        + SupportsDType<f32>
+        + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>
+        + crate::exec::Capabilities,
     K: DType<Arg = ()>,
     Train: TrainState,
 > StateDict<B> for Param<S, B, K, Train>
+where
+    <B as crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>>::Output:
+        Into<B::Storage<K>> + Into<B::Storage<f32>>,
 {
     fn load_state_dict(
         &mut self,
@@ -662,9 +670,17 @@ impl<S: Shape + DynShape, B: Backend, K: DType> Parameters<B> for Buffer<S, B, K
 /// `StateDict` for buffers of any `K: DType`.
 impl<
     S: Shape,
-    B: Backend + TensorOps<B> + SupportsDType<K> + SupportsDType<f32>,
+    B: Backend
+        + TensorOps<B>
+        + SupportsDType<K>
+        + SupportsDType<f32>
+        + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>
+        + crate::exec::Capabilities,
     K: DType<Arg = ()>,
 > StateDict<B> for Buffer<S, B, K>
+where
+    <B as crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>>::Output:
+        Into<B::Storage<K>> + Into<B::Storage<f32>>,
 {
     fn load_state_dict(
         &mut self,
