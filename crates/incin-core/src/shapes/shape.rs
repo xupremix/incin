@@ -1,11 +1,11 @@
 use crate::prelude::{Dim, Dyn};
+use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
-use crate::shapes::ShapeBuf;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Add, Sub};
-use typenum::{Unsigned, U1};
+use typenum::{U1, Unsigned};
 
 /// Forward structural cursors.  Keeping reverse cursors out of the recursive
 /// `FromEnd` adapters prevents the trait solver from exploring an infinite
@@ -70,20 +70,6 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     type Arg;
     /// Converts a user-facing `Arg` into canonical runtime dimensions.
     fn init(arg: Self::Arg) -> ShapeBuf;
-    /// Fallible constructor boundary used by public shape resolution.
-    ///
-    /// Legacy `init` remains available to low-level adapters, but canonical
-    /// callers must not turn a bad runtime/static argument into an internal
-    /// panic. Structural shapes override this method so every dimension is
-    /// checked before its value enters `ShapeBuf`.
-    #[inline]
-    fn try_init(
-        arg: Self::Arg,
-    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let dims = Self::init(arg);
-        Self::validate_dims(dims.as_ref())?;
-        Ok(dims)
-    }
     /// Attempts to construct canonical runtime dimensions from raw dimensions.
     /// dimensions, returning `None` if `dims` doesn't match `Self`
     /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
@@ -114,7 +100,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// retaining a shape-specific field beyond construction.
     #[inline]
     fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let dims = Self::try_init(arg)?;
+        let dims = Self::init(arg);
         Self::validate_dims(dims.as_ref())?;
         Ok(dims)
     }
@@ -239,11 +225,9 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
     }
 
     #[inline]
-    fn try_init(
-        arg: Self::Arg,
-    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
         let head_size = H::resolve_arg(arg.0)?;
-        let tail_dims = T::try_init(arg.1)?;
+        let tail_dims = T::resolve(arg.1)?;
         let mut buf = crate::shapes::ShapeBuf::from_slice(&[head_size]);
         for &d in tail_dims.as_ref() {
             buf.push(d);
@@ -1146,9 +1130,9 @@ impl<H: Dim, T: Shape, D: Dim> HasChannels1D<D> for DimCons<H, T> where
 
 impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
     DimCons<H, T>: AtFromEnd<
-        crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
-        Output = D,
-    >
+            crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+            Output = D,
+        >
 {
 }
 
@@ -1329,7 +1313,7 @@ mod tests {
     use crate::io::limits::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
     use crate::tensor::dtype::{
-        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding, Q8_0,
+        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
     };
 
     #[test]
