@@ -53,6 +53,13 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// Semantic name carried by this axis, when it is named.
     const NAME: Option<&'static str> = None;
 
+    /// Tests semantic tag identity for the runtime named-lookup fallback.
+    /// Untagged dimensions never match a named selector.
+    #[inline]
+    fn matches_tag<Tag: AxisTag>() -> bool {
+        false
+    }
+
     /// Returns the precise semantic static extent classification of this dimension.
     #[inline]
     fn static_extent(&self) -> StaticExtent {
@@ -475,6 +482,11 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     const STATIC: StaticExtent = Extent::STATIC;
     const NAME: Option<&'static str> = Some(Tag::NAME);
     type Arg = Extent::Arg;
+
+    #[inline]
+    fn matches_tag<Other: AxisTag>() -> bool {
+        core::any::TypeId::of::<Tag>() == core::any::TypeId::of::<Other>()
+    }
 
     fn resolve_arg(
         arg: Self::Arg,

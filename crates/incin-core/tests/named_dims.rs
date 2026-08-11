@@ -12,6 +12,14 @@ use typenum::Unsigned;
 
 incin_core::dim!(Batch, Channels, Height, Width, Features);
 
+mod first_schema {
+    incin_core::dim!(Channels);
+}
+
+mod second_schema {
+    incin_core::dim!(Channels);
+}
+
 trait Same<T> {}
 impl<T> Same<T> for T {}
 
@@ -87,6 +95,17 @@ fn named_lookup_rejects_missing_and_duplicate_names() {
             name: "Channels"
         }))
     ));
+}
+
+#[test]
+fn named_lookup_distinguishes_same_spelling_in_different_schemas() {
+    type S = DimCons<
+        NamedDim<first_schema::Channels, usize>,
+        DimCons<NamedDim<second_schema::Channels, usize>, Nil>,
+    >;
+
+    assert_eq!(first_schema::Channels::selector().resolve::<S>().unwrap(), 0);
+    assert_eq!(second_schema::Channels::selector().resolve::<S>().unwrap(), 1);
 }
 
 #[test]

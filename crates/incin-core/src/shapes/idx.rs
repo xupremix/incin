@@ -412,26 +412,26 @@ pub trait NamedAxisLookup<Tag: crate::shapes::AxisTag>: Shape {
 }
 
 trait NamedAxisMetadata {
-    fn collect_named(name: &'static str, offset: usize, matches: &mut Vec<usize>);
+    fn collect_named<Tag: crate::shapes::AxisTag>(offset: usize, matches: &mut Vec<usize>);
 }
 
 impl NamedAxisMetadata for Nil {
-    fn collect_named(_: &'static str, _: usize, _: &mut Vec<usize>) {}
+    fn collect_named<Tag: crate::shapes::AxisTag>(_: usize, _: &mut Vec<usize>) {}
 }
 
 impl<H: Dim, T: Shape + NamedAxisMetadata> NamedAxisMetadata for DimCons<H, T> {
-    fn collect_named(name: &'static str, offset: usize, matches: &mut Vec<usize>) {
-        if H::NAME == Some(name) {
+    fn collect_named<Tag: crate::shapes::AxisTag>(offset: usize, matches: &mut Vec<usize>) {
+        if H::matches_tag::<Tag>() {
             matches.push(offset);
         }
-        T::collect_named(name, offset + 1, matches);
+        T::collect_named::<Tag>(offset + 1, matches);
     }
 }
 
 impl<Tag: crate::shapes::AxisTag, S: Shape + NamedAxisMetadata> NamedAxisLookup<Tag> for S {
     fn lookup_named() -> core::result::Result<usize, crate::shapes::ShapeError> {
         let mut matches = Vec::new();
-        S::collect_named(Tag::NAME, 0, &mut matches);
+        S::collect_named::<Tag>(0, &mut matches);
         match matches.as_slice() {
             [] => Err(crate::shapes::ShapeError::MissingNamedAxis { name: Tag::NAME }),
             [index] => Ok(*index),
