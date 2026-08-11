@@ -23,7 +23,7 @@ type Static23 = s![2, 3];
 
 #[test]
 fn structural_shape_resolution_rejects_bad_runtime_arguments_without_panicking() {
-    let error = <RuntimeStatic as Shape>::try_from_dyn(&[4, 4]).unwrap_err();
+    let error = <RuntimeStatic as Shape>::try_from_dims(&[4, 4]).unwrap_err();
     assert!(matches!(
         error,
         ShapeError::TargetShapeRejected {

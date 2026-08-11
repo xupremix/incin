@@ -926,7 +926,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     /// Converts this tensor to a new static shape S2.
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G>> {
         let dims = self._shape.shape_buf();
-        let s2_shape = S2::try_from_dyn(dims.as_ref()).map_err(crate::err::Error::Shape)?;
+        let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
@@ -951,7 +951,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     /// Copies and converts this tensor to a new static shape S2.
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G>> {
         let dims = self._shape.shape_buf();
-        let s2_shape = S2::try_from_dyn(dims.as_ref()).map_err(crate::err::Error::Shape)?;
+        let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(
             self.inner.clone(),
             s2_shape,

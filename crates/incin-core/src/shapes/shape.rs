@@ -89,15 +89,27 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
     fn from_dyn(dims: &[usize]) -> Option<ShapeBuf>;
     /// Fallible raw-dimension boundary for callers that need a typed shape
-    /// error instead of an `Option` adapter.
+    /// error. This is the canonical validation entry point; `from_dyn` is
+    /// retained only as a low-level compatibility hook for external Shape
+    /// implementations.
     #[inline]
-    fn try_from_dyn(
+    fn try_from_dims(
         dims: &[usize],
     ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
         Self::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
             operation: crate::shapes::error::OperationKind::Storage,
             rank: dims.len(),
         })
+    }
+
+    /// Legacy optional adapter for callers that have not moved to structured
+    /// shape errors yet. New framework code must use `try_from_dims`.
+    #[inline]
+    #[deprecated(note = "use Shape::try_from_dims for structured validation")]
+    fn try_from_dyn(
+        dims: &[usize],
+    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::try_from_dims(dims)
     }
     /// Resolves constructor input into the canonical runtime dimension
     /// storage.  New shape-aware code should use this boundary instead of
@@ -112,7 +124,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Validates raw runtime dimensions against this shape's static contract.
     #[inline]
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        Self::try_from_dyn(dims).map(|_| ())
+        Self::try_from_dims(dims).map(|_| ())
     }
 }
 
@@ -731,9 +743,14 @@ pub fn shape_buf_from_dims<S: Shape>(
     operation: crate::shapes::error::OperationKind,
     dims: &[usize],
 ) -> Result<ShapeBuf, crate::shapes::error::ShapeError> {
-    S::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
-        operation,
-        rank: dims.len(),
+    S::try_from_dims(dims).map_err(|error| match error {
+        crate::shapes::error::ShapeError::TargetShapeRejected { .. } => {
+            crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation,
+                rank: dims.len(),
+            }
+        }
+        other => other,
     })
 }
 
