@@ -3,9 +3,9 @@
 //! This module provides element-wise unary operations (e.g., `abs`, `relu`, `exp`) that act
 //! on a single tensor and return a new tensor with the exact same shape. It also includes
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
-use crate::exec::catalog::{op, Descriptor};
+use crate::exec::catalog::{Descriptor, op};
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
-use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
+use crate::tensor::backend::Execute;
 
 macro_rules! impl_unary_op {
     (
@@ -23,13 +23,7 @@ macro_rules! impl_unary_op {
     };
 }
 
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
-{
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
     impl_unary_op!(
         /// Elementwise tangent.
         tan, Tan
@@ -294,17 +288,14 @@ impl<
         scalar: Sc,
     ) -> Result<Self>
     where
-        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::MulScalar>>,
+        <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
     {
-        let scalar_val = scalar.into();
-        let inner =
-            self.under_grad_mode(|| B::mul_scalar_float(&self.inner, scalar_val.to_f64()))?;
-        Tensor::from_shape_value(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
+        execute_unary_descriptor_with_attributes::<op::MulScalar, S, B, K, G>(
+            self,
+            crate::exec::catalog::ScalarAttributes {
+                value: scalar.into().to_f64(),
+            },
         )
     }
 
@@ -323,17 +314,14 @@ impl<
         scalar: Sc,
     ) -> Result<Self>
     where
-        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::AddScalar>>,
+        <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
     {
-        let scalar_val = scalar.into();
-        let inner =
-            self.under_grad_mode(|| B::add_scalar_float(&self.inner, scalar_val.to_f64()))?;
-        Tensor::from_shape_value(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
+        execute_unary_descriptor_with_attributes::<op::AddScalar, S, B, K, G>(
+            self,
+            crate::exec::catalog::ScalarAttributes {
+                value: scalar.into().to_f64(),
+            },
         )
     }
 }
@@ -345,8 +333,6 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::shapes::ShapeValue;
-use crate::tensor::backend::Execute;
-
 pub(crate) fn execute_unary_descriptor<
     O,
     S: Shape,
@@ -443,12 +429,11 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, bool, G> {
 
 macro_rules! impl_std_scalar_ops {
     ($t:ty) => {
-        impl<
-            S: Shape,
-            B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::Mul<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Mul<$t> for Tensor<S, B, K, G>
+        where
+            B: Execute<Descriptor<op::MulScalar>>,
+            <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
             type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
@@ -459,13 +444,11 @@ macro_rules! impl_std_scalar_ops {
                 self.mul_scalar(rhs)
             }
         }
-        impl<
-            'a,
-            S: Shape,
-            B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::Mul<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Mul<$t> for &'a Tensor<S, B, K, G>
+        where
+            B: Execute<Descriptor<op::MulScalar>>,
+            <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
             type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
@@ -476,12 +459,11 @@ macro_rules! impl_std_scalar_ops {
                 self.mul_scalar(rhs)
             }
         }
-        impl<
-            S: Shape,
-            B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::Add<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Add<$t> for Tensor<S, B, K, G>
+        where
+            B: Execute<Descriptor<op::AddScalar>>,
+            <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
             type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
@@ -492,13 +474,11 @@ macro_rules! impl_std_scalar_ops {
                 self.add_scalar(rhs)
             }
         }
-        impl<
-            'a,
-            S: Shape,
-            B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
-            K: crate::tensor::dtype::DType,
-            G: RequiresGrad,
-        > core::ops::Add<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Add<$t> for &'a Tensor<S, B, K, G>
+        where
+            B: Execute<Descriptor<op::AddScalar>>,
+            <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
             type Output = crate::prelude::Result<Tensor<S, B, K, G>>;

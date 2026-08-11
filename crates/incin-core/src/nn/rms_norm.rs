@@ -165,7 +165,8 @@ impl<
         + Execute<Descriptor<op::Div>>
         + Execute<Descriptor<op::DivScalar>>
         + Execute<Descriptor<op::Sqrt>>
-        + Execute<Descriptor<op::SumKeepDim>>,
+        + Execute<Descriptor<op::SumKeepDim>>
+        + Execute<Descriptor<op::AddScalar>>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InS, B, K>> for RMSNorm<S, B, K, Train>
@@ -176,6 +177,7 @@ where
     <B as Execute<Descriptor<op::Div>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::DivScalar>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
 {
     type Output = Tensor<InS, B, K>;
     type Error = Error;

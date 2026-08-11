@@ -637,6 +637,7 @@ impl<
         + Execute<Descriptor<op::Sqrt>>
         + Execute<Descriptor<op::MeanAll>>
         + Execute<Descriptor<op::SumAll>>
+        + Execute<Descriptor<op::MulScalar>>
         + crate::exec::Capabilities,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
@@ -647,6 +648,7 @@ where
     <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::MeanAll>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
     pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {

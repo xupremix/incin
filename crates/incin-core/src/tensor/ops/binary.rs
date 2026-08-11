@@ -461,7 +461,8 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     /// In-place zero: fills all elements with 0.0.
     pub fn zero_(&mut self) -> Result<()>
     where
-        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::MulScalar>>,
+        <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
     {
         let res = self.mul_scalar(0.0)?;
         self.inner = res.inner;
@@ -471,7 +472,9 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     /// In-place fill: fills all elements with scalar `val`.
     pub fn fill_(&mut self, val: f64) -> Result<()>
     where
-        B: NumericOps<B> + FloatOps<B> + TensorOps<B>,
+        B: Execute<Descriptor<op::MulScalar>> + Execute<Descriptor<op::AddScalar>>,
+        <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::AddScalar>>>::Output: Into<B::Storage<K>>,
     {
         let res = self.mul_scalar(0.0)?.add_scalar(val)?;
         self.inner = res.inner;
