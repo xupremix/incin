@@ -257,7 +257,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         // over three axes is three backend calls, and the mode they run under
         // is a property of this tensor, not of an iteration.
         let mut logical_dims = current_dims.as_ref().to_vec();
-        let inner = self.under_grad_mode(|| -> Result<B::Storage<K>> {
+        let inner = G::grad_mode(&self._grad).restrict(|| -> Result<B::Storage<K>> {
             let mut inner = self.inner.clone();
             let mut dim = 0;
             for spec in specs {
@@ -392,8 +392,8 @@ where
         .map_err(crate::err::Error::Shape)?;
         let inputs = [TensorHandle::from_storage::<B, K, Local>(&self.inner)];
         let context = ExecutionContext::from_scope(B::default());
-        let out = self
-            .under_grad_mode(|| {
+        let out = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<
                     op::MaxPool2d,
                     B,
@@ -452,8 +452,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
                     &context,
                     ShapeAttributes {
@@ -497,8 +497,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ReshapeExact, B, T::Output>(
                     &context,
                     ShapeAttributes {
@@ -565,8 +565,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::SliceExact, B, T::Output>(
                     &context,
                     SliceAttributes {
@@ -627,9 +627,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ));
         }
         let input_shape = self.shape_buf();
-        let inner = self.under_grad_mode(|| {
-            narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len)
-        })?;
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len))?;
         shape[dim] = len;
         Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
@@ -675,8 +674,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ));
         }
         let input_shape = self.shape_buf();
-        let inner =
-            self.under_grad_mode(|| squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim))?;
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim))?;
         shape.remove(dim);
         Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
@@ -723,8 +722,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
                     &context,
                     ShapeAttributes {
@@ -783,7 +782,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad).restrict(|| {
             dispatch::execute_shaped::<op::BroadcastAs, B, S2>(
                 &context,
                 ShapeAttributes {
@@ -817,8 +816,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let descriptor = T2::descriptor(&field);
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ToDType, B, S>(
                     &context,
                     DTypeAttributes { dtype: descriptor },
@@ -1011,8 +1010,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
                     &context,
                     TransposeAttributes {
@@ -1048,8 +1047,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::TransposeExact, B, Dyn>(
                     &context,
                     TransposeAttributes {
@@ -1116,7 +1115,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad).restrict(|| {
             dispatch::execute_shaped::<op::FlattenExact, B, <S as FlattenAt<Start, End>>::Output>(
                 &context,
                 crate::exec::catalog::FlattenAttributes {
@@ -1171,7 +1170,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad).restrict(|| {
             dispatch::execute_shaped::<op::FlattenExact, B, Dyn>(
                 &context,
                 FlattenAttributes {
@@ -1265,8 +1264,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
             .collect::<Vec<_>>();
         let context = ExecutionContext::from_scope(B::default());
-        let inner = tensors[0]
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&tensors[0]._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ConcatExact, B, Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis: dim },
@@ -1320,7 +1319,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad).restrict(|| {
             dispatch::execute_shaped::<
                 op::ConcatExact,
                 B,
@@ -1405,8 +1404,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::ConcatExact, B, Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis: dim },
@@ -1462,8 +1461,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
             .collect::<Vec<_>>();
         let context = ExecutionContext::from_scope(B::default());
-        let inner = tensors[0]
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&tensors[0]._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::StackExact, B, Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis: dim },
@@ -1509,7 +1508,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad).restrict(|| {
             dispatch::execute_shaped::<
                 op::StackExact,
                 B,
@@ -1557,8 +1556,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::StackExact, B, Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis: dim },
@@ -1588,9 +1587,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
         let val_f64 = value.into().to_f64();
-        self.under_grad_mode(|| {
-            execute_masked_fill_descriptor::<S, S2, B, K, G, G2>(self, mask, val_f64)
-        })
+        G::grad_mode(&self._grad)
+            .restrict(|| execute_masked_fill_descriptor::<S, S2, B, K, G, G2>(self, mask, val_f64))
     }
 
     /// Gathers values along `dim` specified by `index`.
@@ -1608,8 +1606,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Gather, B, S2>(
                     &context,
                     AxisAttributes { axis: dim },
@@ -1652,8 +1650,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, K, Local>(&src.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Scatter, B, S>(
                     &context,
                     ScatterAttributes {
@@ -1710,8 +1708,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
         ];
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::IndexSelect, B, Dyn>(
                     &context,
                     AxisAttributes { axis: dim },
@@ -1749,8 +1747,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::UnsqueezeExact, B, Dyn>(
                     &context,
                     AxisAttributes { axis: dim },
@@ -1800,8 +1798,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Repeat, B, Dyn>(
                     &context,
                     RepeatAttributes {
@@ -1852,8 +1850,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Pad, B, Dyn>(
                     &context,
                     PadAttributes {
@@ -1882,8 +1880,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Triu, B, S>(
                     &context,
                     DiagonalAttributes { offset: k },
@@ -1909,8 +1907,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Tril, B, S>(
                     &context,
                     DiagonalAttributes { offset: k },
@@ -1956,8 +1954,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ShapeValue::<Dyn>::try_new(out_shape).map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Diag, B, Dyn>(
                     &context,
                     DiagonalAttributes { offset: k },
@@ -2073,8 +2071,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::Unfold, B, Dyn>(
                     &context,
                     UnfoldAttributes {
@@ -2143,8 +2141,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::PixelShuffle, B, Dyn>(
                     &context,
                     PixelShuffleAttributes { upscale_factor },
@@ -2170,8 +2168,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::GroupNorm, B, S>(
                     &context,
                     GroupNormAttributes {
@@ -2200,8 +2198,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 dispatch::execute_shaped::<op::InstanceNorm, B, S>(
                     &context,
                     EpsilonAttributes { epsilon: eps },
@@ -2263,8 +2261,8 @@ where
         .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
         .collect::<Vec<_>>();
     let context = ExecutionContext::from_scope(B::default());
-    let inner = tensors[0]
-        .under_grad_mode(|| {
+    let inner = G::grad_mode(&tensors[0]._grad)
+        .restrict(|| {
             dispatch::execute_shaped::<op::StackExact, B, Dyn>(
                 &context,
                 crate::exec::catalog::AxisAttributes { axis: dim },
@@ -2298,8 +2296,8 @@ where
     /// Transfers storage to device `arg`, keeping shape/dtype/grad-tracking.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let inner =
-            self.under_grad_mode(|| B::transfer_storage(&self.inner, &self._dtype, &field))?;
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| B::transfer_storage(&self.inner, &self._dtype, &field))?;
         Tensor::from_shape_value(inner, self._shape, self._dtype, field, self._grad)
     }
 }
@@ -2395,7 +2393,7 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
         B: Execute<op::WhereCond>,
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {
-        self.under_grad_mode(|| {
+        G2::grad_mode(&on_true._grad).restrict(|| {
             execute_where_cond_descriptor::<S, S2, B, K, G, G2>(self, on_true, on_false)
         })
     }

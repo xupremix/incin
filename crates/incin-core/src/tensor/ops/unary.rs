@@ -350,8 +350,8 @@ where
     let handle = TensorHandle::from_storage::<B, K, Local>(&tensor.inner);
     let shape_val = tensor._shape.clone();
     let context = ExecutionContext::from_scope(B::default());
-    let storage = tensor
-        .under_grad_mode(|| {
+    let storage = G::grad_mode(&tensor._grad)
+        .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[handle], &shape_val)
         })
         .map_err(crate::prelude::Error::from)?;
@@ -383,8 +383,8 @@ where
     let handle = TensorHandle::from_storage::<B, K, Local>(&tensor.inner);
     let shape_val = tensor._shape.clone();
     let context = ExecutionContext::from_scope(B::default());
-    let storage = tensor
-        .under_grad_mode(|| {
+    let storage = G::grad_mode(&tensor._grad)
+        .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, attributes, &[handle], &shape_val)
         })
         .map_err(crate::prelude::Error::from)?;
@@ -409,8 +409,8 @@ where
     let shape_val = tensor._shape.clone();
     let context =
         ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
-    let storage = tensor
-        .under_grad_mode(|| {
+    let storage = crate::tensor::grad::NoGrad::grad_mode(&Default::default())
+        .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[handle], &shape_val)
         })
         .map_err(crate::prelude::Error::from)?;

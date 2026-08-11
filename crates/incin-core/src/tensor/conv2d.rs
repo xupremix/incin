@@ -139,8 +139,8 @@ where
             inputs.push(TensorHandle::from_storage::<B, K, Local>(&bias.inner));
         }
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, S1::Output>(
                     &context,
                     Conv2dAttributes {

@@ -52,8 +52,8 @@ macro_rules! impl_reduction_op {
             .map_err(crate::prelude::Error::Shape)?;
             let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
             let context = ExecutionContext::from_scope(B::default());
-            let inner = self
-                .under_grad_mode(|| {
+            let inner = G::grad_mode(&self._grad)
+                .restrict(|| {
                     crate::exec::dispatch::execute_shaped::<op::$operation, B, ()>(
                         &context,
                         crate::exec::catalog::NoAttributes,
@@ -107,8 +107,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::SumDim, B, <S as ReduceAt<C>>::Output>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis },
@@ -158,8 +158,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<
                     op::SumKeepDim,
                     B,
@@ -270,8 +270,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<O, B, crate::prelude::Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis },
@@ -376,8 +376,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self
-            .under_grad_mode(|| {
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Cumsum, B, S>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis },

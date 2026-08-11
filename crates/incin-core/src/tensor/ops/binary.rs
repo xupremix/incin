@@ -252,7 +252,7 @@ macro_rules! impl_binary_op {
                 <B as Execute<op::$op_marker>>::Output: Into<B::Storage<K>>,
             {
                 let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
-                self.under_grad_mode(|| {
+                JoinedGrad::<G1, G2>::grad_mode(&grad_out).restrict(|| {
                     execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _>(self, rhs, grad_out)
                 })
             }
@@ -298,7 +298,7 @@ macro_rules! impl_cmp_op {
                 B: Execute<op::$op>,
                 <B as Execute<op::$op>>::Output: Into<B::Storage<bool>>,
             {
-                self.under_grad_mode(|| {
+                NoGrad::grad_mode(&Default::default()).restrict(|| {
                     execute_cmp_descriptor::<op::$op, S, S2, B, K, G, G2>(self, rhs)
                 })
             }
@@ -342,7 +342,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad> Tensor<S, B
         B: Execute<op::LogicalAnd>,
         <B as Execute<op::LogicalAnd>>::Output: Into<B::Storage<bool>>,
     {
-        self.under_grad_mode(|| {
+        NoGrad::grad_mode(&Default::default()).restrict(|| {
             execute_logical_binary_descriptor::<op::LogicalAnd, S, S2, B, G, G2>(self, rhs)
         })
     }
@@ -357,7 +357,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad> Tensor<S, B
         B: Execute<op::LogicalOr>,
         <B as Execute<op::LogicalOr>>::Output: Into<B::Storage<bool>>,
     {
-        self.under_grad_mode(|| {
+        NoGrad::grad_mode(&Default::default()).restrict(|| {
             execute_logical_binary_descriptor::<op::LogicalOr, S, S2, B, G, G2>(self, rhs)
         })
     }
@@ -552,7 +552,7 @@ macro_rules! impl_broadcast_binary_op {
                 <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
             {
                 let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
-                self.under_grad_mode(|| {
+                JoinedGrad::<G1, G2>::grad_mode(&grad_out).restrict(|| {
                     execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _>(self, rhs, grad_out)
                 })
             }

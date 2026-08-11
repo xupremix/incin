@@ -281,6 +281,14 @@ fn a_dyn_tensor_records_according_to_its_runtime_flag() {
 }
 
 #[test]
+fn a_mixed_binary_operation_records_when_any_operand_requires_grad() {
+    let no_grad = Tensor::<s![2, 3], B, f32, NoGrad>::ones(()).unwrap();
+    let grad = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
+
+    assert!(recorded(|| no_grad.add(&grad).unwrap()) > 0);
+}
+
+#[test]
 fn a_no_grad_scope_silences_a_grad_chain() {
     let (a, b) = grad_operands();
 

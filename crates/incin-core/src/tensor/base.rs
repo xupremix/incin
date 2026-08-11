@@ -1034,14 +1034,9 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     /// The mode belongs to the operation's *result*, not to its receiver. The
     /// two coincide for every operation that preserves `G`, which is nearly
     /// all of them; the handful whose result is `NoGrad` whatever they were
-    /// called on — `argmax`, `argmin`, `topk`, `argsort` — call
+    /// called on, such as `argmax`, `argmin`, `topk`, and `argsort`, call
     /// [`GradMode::Disabled.restrict`](crate::exec::GradMode::restrict)
     /// directly rather than this.
-    #[inline]
-    pub(crate) fn under_grad_mode<R>(&self, body: impl FnOnce() -> R) -> R {
-        G::grad_mode(&self._grad).restrict(body)
-    }
-
     /// Computes the backward pass starting from this tensor, returning the gradients.
     pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
         B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
