@@ -303,11 +303,10 @@ before any capability query does, and on an executor-side `f32_only` check
 for whichever operand the union cannot pin down alone. That blocker is now
 closed; none of the remaining 5 is waiting on a dtype set.
 
-**Nothing in the stable tensor surface (§5) is routed through this path yet**,
-except the allocation methods reached through a target (§7) —
-`TargetExt::zeros_canonical` and its siblings are, as of this writing, the
-first non-test callers `dispatch::execute[_shaped]` has ever had. Every other
-`Tensor` method still reaches its kernel through the family traits.
+Backend-executable operations in the stable tensor surface now use this path.
+The remaining family-trait references are backend-local adapters for fused
+kernels, host readback, tracing, and special execution sites. They do not form
+an alternate stable tensor execution path.
 
 ## 7. The target API: allocation targets
 

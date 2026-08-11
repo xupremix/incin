@@ -18,22 +18,17 @@ stops existing, so this file cannot rot into a list of deleted files.
 |---|---|---|---|
 | The operation declaration | `crates/incin-core/src/operation_catalog.rs` | One authoritative declaration of every operation the library has. 174 rows, each naming an identity, a semantic profile, an attribute type, an operand arity and a legacy source | Every consumer is generated from it; a row cannot be added to one consumer only |
 | The descriptor vocabulary | `crates/incin-core/src/exec/catalog.rs` | `op::X` markers, `Descriptor<O>`, typed attributes, `OperationCatalogEntry` and its classification enums are all expanded from the declaration above | `incin_operation_catalog!(define_catalog)`; the sealed `CanonicalOperation` trait keeps new identities inside the crate |
-| The dispatch path | `crates/incin-core/src/exec/dispatch.rs` | `execute::<O, B>` is the *intended* single route from an operation to a kernel: validate the descriptor against real storage metadata, query the exact capability row per operand, then dispatch. It is finished; what is not finished is its adoption — see the note below | `B: Execute<Descriptor<O>>` is a compile-time bound, and there is no default method to fall through |
+| The dispatch path | `crates/incin-core/src/exec/dispatch.rs` | `execute::<O, B>` is the single route from an operation to a kernel: validate the descriptor against real storage metadata, query the exact capability row per operand, then dispatch | `B: Execute<Descriptor<O>>` is a compile-time bound, and there is no default method to fall through |
 | The execution contract | `crates/incin-core/src/exec/request.rs`, `crates/incin-core/src/tensor/backend.rs` | `Execute<O>` carries an associated `Output`, so an operation returning a pair is expressible without a special case. `TensorHandle` carries checked metadata, so an executor never re-derives it | Type-checked at every call site |
 | The capability declaration | `crates/incin-backends/src/capability.rs` | Groups are rule *shapes*, not operation families. Migrating an operation is one more name in an existing list, not a new group and a new arm in every consumer | One declaration feeds the capability rows, the legacy executors and the canonical executors |
 | The completeness proof | `crates/incin-backends/src/cpu/canonical.rs` | A capability row advertised without an `Execute<Descriptor<op::X>>` behind it does not compile | `assert_every_advertised_row_executes!`, driven by the same declaration that generates the rows |
 | The generated evidence | `docs/capabilities.md`, `docs/OPERATION_SEMANTICS.md`, `audit-evidence/FND-005/cpu-migration-status.md` | Every number in them is derived from the Rust source rather than written by hand | A test fails when the committed file and the regenerated one differ; `docs/README.md` lists the regeneration command for each |
 
-> **Adoption, as distinct from design.** Calling this "the single production
-> route" overstated it for a long time, and the wording above is corrected.
-> Until the `target-api` prototype landed, **every** call site of
-> `dispatch::execute` in the tree was test code; the stable tensor surface
-> reached kernels through the nine operation-family supertraits instead, which
-> `audit-evidence/FND-005/cpu-migration-status.md` has always said plainly.
-> `incin_backends::target::TargetExt::zeros_canonical` is now the first
-> non-test caller. Everything else still goes through the family traits.
-> `docs/plan/UX-ARCHITECTURE-HANDOFF.md` has the counts, the reproduction
-> command, and the remaining steps.
+> **Adoption, as distinct from design.** The stable tensor methods now route
+> backend-executable operations through `dispatch::execute` and its shaped
+> variants. The old operation-family traits remain only for backend-local
+> helpers, fused special execution sites, tracing adapters, and compatibility
+> tests. They are not a second stable tensor path.
 
 The shape of that table is the point. Each row is a decision made once and then
 made unrepeatable, so the cost of migrating operation number 118 is the same as
@@ -46,8 +41,8 @@ treated as settled.
 
 | Surface | Why it still moves |
 |---|---|
-| The per-operation executor bodies in `cpu/canonical.rs` | 158 of 161 migrated. The remaining 3 executable operations are recorded in `cpu-migration-status.md`; non-executable catalog entries are tracked separately |
-| The nine operation-family supertraits on `Backend` | Removing them is FND-005's completion condition. It is source-breaking for every backend |
+| The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Thirteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
+| The nine operation-family traits | They remain only as backend-local implementation adapters and special execution sites. The stable tensor surface no longer depends on them |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot state the tight per-operand pair directly, and no longer needs to: `INDEX_AND_F32_DTYPES` states the *union* the row can honestly claim, the same trick `descriptor_min_rank` already used for rank, and the descriptor's own per-operand contract (already `TypedContract`/hand-cased in `validate`, not something this added) rejects the wrong combination before any capability query runs. Both operations that needed it — `embedding` and `cross_entropy_loss` — are migrated on that technique, so no struct change to `CapabilityRule` was needed or made |
 | `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
@@ -58,9 +53,9 @@ treated as settled.
 Each step is blocked by the one above it, and the reason is stated rather than
 implied.
 
-The migration is no longer the bottleneck. 158 of the 161 backend-executable
-operations have an executor, and the remaining 3 are explicitly tracked rather
-than omitted from the catalog.
+The canonical CPU migration is complete for all 158 backend-executable
+operations. Thirteen catalog entries remain at explicit non-backend execution
+sites and are not counted as missing kernel executors.
 
 The dtype-set blocker is closed. `embedding` and `cross_entropy_loss` were the
 only two operations whose operands differ in dtype by construction, and both

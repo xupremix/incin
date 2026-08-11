@@ -3,23 +3,17 @@
 Recorded from the FND-005 checkout. Every item is a limitation of this task's
 result, not a deferred promise the result already satisfies.
 
-## The task is incomplete, and this is the headline limitation
+## Remaining limitations after canonical CPU migration
 
-FND-005 passes only when "stable CPU tensor methods no longer rely on the old
-monolithic operation supertrait architecture". They still do:
+All 158 backend-executable catalog operations now use exact descriptor
+execution from the stable tensor path. The old operation-family traits remain
+only as backend-local adapters for fused kernels, host readback, tracing, and
+compatibility tests. They are not a second stable tensor execution path.
 
-- `Backend` still requires all nine operation-family supertraits.
-- 1,035 references to those traits remain across 76 files. The count rose rather
-  than fell, because each new canonical executor still reaches its kernel
-  through the family trait it is replacing. The reference count only starts
-  falling once the kernel bodies move down, which is the step after this one.
-- 154 of the 161 backend-executable catalog operations have a canonical CPU
-  executor, out of 174 operations in total.
-- The stable `Tensor` methods call the family traits, not `dispatch::execute`.
-
-The canonical path is real, exercised and verified, but it is a second path
-that runs alongside the legacy one rather than a replacement for it. Anything
-that reads this task as ending the dual architecture is reading it wrong.
+Thirteen catalog entries use execution sites that the current `Execute` contract
+cannot carry. They mutate through an operand, produce storage on another
+backend, or act on autograd state. Their blocking reasons are recorded in the
+generated CPU migration status and are not counted as missing CPU executors.
 
 ## What the gradient checks prove, and what they do not
 

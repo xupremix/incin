@@ -1,10 +1,10 @@
 # CPU canonical migration status
 
-Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<op::...>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
+Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<op::...>` for it. The legacy operation-family traits remain only as backend-local adapters for special kernels and compatibility tests; they are not the stable tensor execution path.
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**158 of 158 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 0 executable operations are still reachable only through the legacy operation-family traits.
+**158 of 158 backend-executable operations migrated**, out of 174 catalog operations in total.
 
 ## Backend-executable operations
 

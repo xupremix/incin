@@ -87,9 +87,9 @@ fn document() -> String {
          `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. \
          \"Migrated\" means the CPU backend advertises the exact identity and therefore, \
          by the compile-time proof in `cpu::canonical`, implements \
-         `Execute<op::...>` for it. It does not mean the operation is \
-         unreachable through the legacy operation-family traits: those remain the path \
-         the stable tensor surface uses.\n\nThe denominator is the number of operations \
+         `Execute<op::...>` for it. The legacy operation-family traits remain only as \
+         backend-local adapters for special kernels and compatibility tests; they are not \
+         the stable tensor execution path.\n\nThe denominator is the number of operations \
          that `Execute<O>` can carry at all, not the whole catalog. An \
          operation whose `ExecutionSite` is not backend-executable is listed separately \
          with the reason: it is a gap in the execution trait rather than an unwritten \
@@ -99,10 +99,8 @@ fn document() -> String {
     let _ = writeln!(
         out,
         "**{done} of {} backend-executable operations migrated**, out of {total} catalog \
-         operations in total. The remaining {} executable operations are still reachable \
-         only through the legacy operation-family traits.\n",
+         operations in total.\n",
         executable.len(),
-        executable.len() - done
     );
 
     out.push_str("## Backend-executable operations\n\n");
