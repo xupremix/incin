@@ -686,8 +686,28 @@ macro_rules! define_catalog {
         }
 
         $(
-            impl CanonicalOperation for op::$variant {
+            impl Operation for op::$variant {
                 type Attributes = $attrs;
+                const KEY: OperationKey = OperationKey {
+                    namespace: Cow::Borrowed("incin"),
+                    name: Cow::Borrowed($name),
+                    version: 1,
+                };
+
+                fn infer_outputs(
+                    attributes: &Self::Attributes,
+                    inputs: &[LogicalTensorMeta],
+                ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+                    let row = catalog_entry(OperationKind::$variant).ok_or(
+                        DescriptorError::MissingCatalogEntry {
+                            operation: OperationKind::$variant,
+                        },
+                    )?;
+                    infer_outputs(OperationKind::$variant, row, attributes, inputs)
+                }
+            }
+
+            impl CanonicalOperation for op::$variant {
                 const ID: OperationKind = OperationKind::$variant;
             }
         )*
@@ -801,7 +821,8 @@ pub struct OperationKey {
 
 /// Open operation contract for downstream static execution.
 pub trait Operation: Clone + fmt::Debug + 'static {
-    type Attributes: Clone
+    type Attributes: AttributeContract
+        + Clone
         + fmt::Debug
         + PartialEq
         + serde::Serialize
@@ -821,13 +842,7 @@ mod private {
 }
 
 /// A catalog operation with its exact typed attribute set.
-pub trait CanonicalOperation: private::Sealed + Clone + fmt::Debug + 'static {
-    type Attributes: AttributeContract
-        + Clone
-        + fmt::Debug
-        + PartialEq
-        + serde::Serialize
-        + for<'de> serde::Deserialize<'de>;
+pub trait CanonicalOperation: private::Sealed + Operation {
     const ID: OperationKind;
 }
 
@@ -845,25 +860,13 @@ incin_operation_catalog!(seal_operations);
     serialize = "O::Attributes: serde::Serialize",
     deserialize = "O::Attributes: serde::Deserialize<'de>"
 ))]
-pub struct Descriptor<O: CanonicalOperation> {
+pub struct Descriptor<O: Operation> {
     attributes: O::Attributes,
     outputs: Vec<LogicalTensorMeta>,
     marker: PhantomData<fn() -> O>,
 }
 
-/// Descriptor for an operation supplied outside the built-in catalog.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(bound(
-    serialize = "O::Attributes: serde::Serialize",
-    deserialize = "O::Attributes: serde::Deserialize<'de>"
-))]
-pub struct CustomDescriptor<O: Operation> {
-    attributes: O::Attributes,
-    outputs: Vec<LogicalTensorMeta>,
-    marker: PhantomData<fn() -> O>,
-}
-
-impl<O: Operation> crate::exec::spec::ExecutionDescriptor for CustomDescriptor<O> {
+impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
     fn output_shape(&self) -> Option<&ShapeBuf> {
         self.outputs
             .first()
@@ -871,7 +874,7 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for CustomDescriptor<O
     }
 }
 
-impl<O: Operation> CustomDescriptor<O> {
+impl<O: Operation> Descriptor<O> {
     #[must_use]
     pub const fn key(&self) -> OperationKey {
         O::KEY
@@ -882,29 +885,6 @@ impl<O: Operation> CustomDescriptor<O> {
         &self.attributes
     }
 
-    #[must_use]
-    pub fn outputs(&self) -> &[LogicalTensorMeta] {
-        &self.outputs
-    }
-}
-
-impl<O: CanonicalOperation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
-    fn output_shape(&self) -> Option<&ShapeBuf> {
-        self.outputs
-            .first()
-            .and_then(|output| output.shape.as_ref())
-    }
-}
-
-impl<O: CanonicalOperation> Descriptor<O> {
-    #[must_use]
-    pub const fn operation(&self) -> OperationKind {
-        O::ID
-    }
-    #[must_use]
-    pub const fn attributes(&self) -> &O::Attributes {
-        &self.attributes
-    }
     #[must_use]
     pub fn outputs(&self) -> &[LogicalTensorMeta] {
         &self.outputs
@@ -3514,35 +3494,31 @@ fn operand_ranks(
 
 /// Opaque proof that exact input/output metadata was validated without storage.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ValidatedInvocation<O: CanonicalOperation> {
+pub struct ValidatedInvocation<O: Operation> {
     validated: crate::exec::Validated<Descriptor<O>>,
     inputs: Vec<LogicalTensorMeta>,
 }
 
-/// Sealed invocation produced by the open operation inference contract.
-pub struct CustomValidatedInvocation<O: Operation> {
-    validated: crate::exec::Validated<CustomDescriptor<O>>,
-}
-
-impl<O: Operation> CustomValidatedInvocation<O> {
-    pub(crate) fn infer_runtime(
+impl<O: Operation> ValidatedInvocation<O> {
+    pub(crate) fn infer_custom_runtime(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
     ) -> Result<Self, DescriptorError> {
         let outputs = O::infer_outputs(&attributes, &inputs)?;
         Ok(Self {
             validated: crate::exec::Validated::new(
-                CustomDescriptor {
+                Descriptor {
                     attributes,
                     outputs,
                     marker: PhantomData,
                 },
                 crate::exec::ProofLevel::Dynamic,
             ),
+            inputs,
         })
     }
 
-    pub(crate) fn infer_typed<S: crate::prelude::Shape>(
+    pub(crate) fn infer_custom_typed<S: crate::prelude::Shape>(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
         expected: &crate::shapes::ShapeValue<S>,
@@ -3560,17 +3536,18 @@ impl<O: Operation> CustomValidatedInvocation<O> {
         }
         Ok(Self {
             validated: crate::exec::Validated::new(
-                CustomDescriptor {
+                Descriptor {
                     attributes,
                     outputs,
                     marker: PhantomData,
                 },
                 crate::exec::ProofLevel::of::<S>(),
             ),
+            inputs,
         })
     }
 
-    pub(crate) const fn validated(&self) -> &crate::exec::Validated<CustomDescriptor<O>> {
+    pub(crate) const fn validated(&self) -> &crate::exec::Validated<Descriptor<O>> {
         &self.validated
     }
 }
@@ -3883,10 +3860,6 @@ impl<O: CanonicalOperation> ValidatedInvocation<O> {
         self.validated.descriptor()
     }
     #[must_use]
-    pub const fn validated(&self) -> &crate::exec::Validated<Descriptor<O>> {
-        &self.validated
-    }
-    #[must_use]
     pub fn inputs(&self) -> &[LogicalTensorMeta] {
         &self.inputs
     }
@@ -3980,7 +3953,7 @@ mod tests {
                 2, 3,
             ]))
             .unwrap();
-        let invocation = CustomValidatedInvocation::<TestCustomOperation>::infer_typed(
+        let invocation = ValidatedInvocation::<TestCustomOperation>::infer_custom_typed(
             NoAttributes,
             vec![input],
             &expected,

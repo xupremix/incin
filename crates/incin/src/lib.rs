@@ -216,11 +216,11 @@ pub mod experimental {
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
-        Backend, Capabilities, CapabilityRegistry, CreationOps, CustomCapabilityQuery, Execute,
-        ExecutionContext, ExecutionDescriptor, ExecutionRequest, FloatOps, LossOps, LossScaling,
-        ModuleOps, NumericOps, Operation, OperationKey, OperationSpec, OptimizerOps, PrecisionSpec,
-        QuantizedOps, ReductionOps, RuntimePrecisionPolicy, StorageBackend, SupportsDType,
-        TensorOps, TransferTo, Validated,
+        AttributeContract, Backend, Capabilities, CapabilityRegistry, CreationOps,
+        CustomCapabilityQuery, Execute, ExecutionContext, ExecutionDescriptor, ExecutionRequest,
+        FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, Operation, OperationKey,
+        OperationSpec, OptimizerOps, PrecisionSpec, QuantizedOps, ReductionOps,
+        RuntimePrecisionPolicy, StorageBackend, SupportsDType, TensorOps, TransferTo, Validated,
     };
     pub use incin_core::backend_authoring::{execute_custom, execute_custom_shaped};
 
@@ -231,18 +231,17 @@ pub mod backend_authoring {
             ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
             AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
             ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
-            ConvTranspose2dAttributes, CreationAttributes, CustomDescriptor, DTypeAttributes,
-            Descriptor, DescriptorError, DeviceAttributes, DiagonalAttributes,
-            DistributionAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
-            FlattenAttributes, FullAttributes, GroupNormAttributes, IndexReductionAttributes,
-            LayerNormAttributes, LerpAttributes, LinearAttributes, LinspaceAttributes,
-            LogicalTensorMeta, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
-            NormAttributes, OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey,
-            PadAttributes, PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes,
-            RecurrentAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes,
-            SgdAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
-            TransposeAttributes, UnfoldAttributes, ValidatedInvocation, VarianceAttributes,
-            catalog_entry, op,
+            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
+            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
+            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
+            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
+            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
+            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
+            OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, PadAttributes,
+            PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes, RecurrentAttributes,
+            RepeatAttributes, ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes,
+            SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes,
+            UnfoldAttributes, ValidatedInvocation, VarianceAttributes, catalog_entry, op,
         };
         // Mirrors the core tier exactly: the classification enums every field
         // of the re-exported `OperationCatalogEntry` is typed as.

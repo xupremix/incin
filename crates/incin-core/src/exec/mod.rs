@@ -73,7 +73,7 @@ pub use capability::{
     ImplementationKind, RankSupport, SupportLevel, UnsupportedReason,
 };
 pub use catalog::{
-    CanonicalOperation, CustomDescriptor, Descriptor, DescriptorError, LogicalTensorMeta,
+    AttributeContract, CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta,
     OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, ValidatedInvocation,
     catalog_entry, op, operation_semantics_document,
 };

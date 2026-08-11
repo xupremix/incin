@@ -27,8 +27,7 @@ use crate::exec::capability::{
     Capabilities, CapabilityQuery, CustomCapabilityQuery, SupportLevel, UnsupportedReason,
 };
 use crate::exec::catalog::{
-    CanonicalOperation, CustomDescriptor, CustomValidatedInvocation, Descriptor, DescriptorError,
-    LogicalTensorMeta, Operation, OperationKey,
+    CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, Operation, OperationKey,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::meta::TensorMeta;
@@ -309,21 +308,22 @@ where
 /// Execute an operation supplied by a downstream crate through static Rust
 /// dispatch. Built-in catalog capabilities remain on the canonical path;
 /// custom operations provide their own inference contract and backend
-/// implementations use `Execute<CustomDescriptor<O>>`.
+/// implementations use `Execute<Descriptor<O>>`.
 pub fn execute_custom<O, B>(
     context: &ExecutionContext<B>,
     attributes: O::Attributes,
     inputs: &[TensorHandle<'_>],
-) -> Result<<B as Execute<CustomDescriptor<O>>>::Output, CanonicalError>
+) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<CustomDescriptor<O>> + Capabilities,
+    B: Execute<Descriptor<O>> + Capabilities,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
-    let invocation = CustomValidatedInvocation::<O>::infer_runtime(attributes, logical)?;
+    let invocation =
+        crate::exec::catalog::ValidatedInvocation::<O>::infer_custom_runtime(attributes, logical)?;
     let training = context.grad_mode() == GradMode::Enabled;
     for handle in inputs {
         admit_custom(
@@ -367,17 +367,19 @@ pub fn execute_custom_shaped<O, B, S>(
     attributes: O::Attributes,
     inputs: &[TensorHandle<'_>],
     expected: &crate::shapes::ShapeValue<S>,
-) -> Result<<B as Execute<CustomDescriptor<O>>>::Output, CanonicalError>
+) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<CustomDescriptor<O>> + Capabilities,
+    B: Execute<Descriptor<O>> + Capabilities,
     S: crate::prelude::Shape,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
-    let invocation = CustomValidatedInvocation::<O>::infer_typed(attributes, logical, expected)?;
+    let invocation = crate::exec::catalog::ValidatedInvocation::<O>::infer_custom_typed(
+        attributes, logical, expected,
+    )?;
     let training = context.grad_mode() == GradMode::Enabled;
     for handle in inputs {
         admit_custom(

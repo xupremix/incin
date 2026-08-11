@@ -82,8 +82,8 @@ pub mod experimental {
 pub mod backend_authoring {
     pub use crate::exec::dispatch::{execute_custom, execute_custom_shaped};
     pub use crate::exec::{
-        CanonicalOperation, Capabilities, CapabilityRegistry, CustomCapabilityQuery,
-        CustomDescriptor, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
+        AttributeContract, CanonicalOperation, Capabilities, CapabilityRegistry,
+        CustomCapabilityQuery, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
         LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
         OperationKey, OperationSpec, PrecisionSpec, RuntimePrecisionPolicy, TensorMeta, Validated,
         ValidatedInvocation, op,
@@ -110,18 +110,17 @@ pub mod backend_authoring {
             ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
             AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
             ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
-            ConvTranspose2dAttributes, CreationAttributes, CustomDescriptor, DTypeAttributes,
-            Descriptor, DescriptorError, DeviceAttributes, DiagonalAttributes,
-            DistributionAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
-            FlattenAttributes, FullAttributes, GroupNormAttributes, IndexReductionAttributes,
-            LayerNormAttributes, LerpAttributes, LinearAttributes, LinspaceAttributes,
-            LogicalTensorMeta, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
-            NormAttributes, OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey,
-            PadAttributes, PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes,
-            RecurrentAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes,
-            SgdAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
-            TransposeAttributes, UnfoldAttributes, ValidatedInvocation, VarianceAttributes,
-            catalog_entry, op,
+            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
+            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
+            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
+            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
+            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
+            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
+            OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, PadAttributes,
+            PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes, RecurrentAttributes,
+            RepeatAttributes, ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes,
+            SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes,
+            UnfoldAttributes, ValidatedInvocation, VarianceAttributes, catalog_entry, op,
         };
         // The enums that every classification field of `OperationCatalogEntry`
         // is typed as. The entry is re-exported above, so without these a
