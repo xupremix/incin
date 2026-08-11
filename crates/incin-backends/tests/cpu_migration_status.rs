@@ -87,10 +87,10 @@ fn document() -> String {
          `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. \
          \"Migrated\" means the CPU backend advertises the exact identity and therefore, \
          by the compile-time proof in `cpu::canonical`, implements \
-         `Execute<Descriptor<op::...>>` for it. It does not mean the operation is \
+         `Execute<op::...>` for it. It does not mean the operation is \
          unreachable through the legacy operation-family traits: those remain the path \
          the stable tensor surface uses.\n\nThe denominator is the number of operations \
-         that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An \
+         that `Execute<O>` can carry at all, not the whole catalog. An \
          operation whose `ExecutionSite` is not backend-executable is listed separately \
          with the reason: it is a gap in the execution trait rather than an unwritten \
          executor, and counting it here would describe work that cannot be done without \
@@ -209,7 +209,7 @@ fn every_migrated_identity_is_a_catalog_operation() {
 /// Nothing migrated may sit at a site the execution contract cannot carry.
 ///
 /// A backend that advertises an exact identity has, by the compile-time proof
-/// in `cpu::canonical`, an `Execute<Descriptor<op::X>>` for it. If the catalog
+/// in `cpu::canonical`, an `Execute<op::X>` for it. If the catalog
 /// also says that operation's result cannot be carried by `Execute`, one of the
 /// two is lying, and the classification is the more likely of the pair to be
 /// wrong because it is the newer claim.

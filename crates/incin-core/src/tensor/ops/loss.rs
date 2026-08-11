@@ -30,10 +30,10 @@ fn execute_loss_descriptor<
     prediction: &Tensor<S, B, K, G>,
     target: &Tensor<S2, B, K, G>,
     reduction: Reduction,
-) -> Result<<B as Execute<Descriptor<O>>>::Output>
+) -> Result<<B as Execute<O>>::Output>
 where
     O: crate::exec::catalog::Operation<Attributes = crate::exec::catalog::LossAttributes>,
-    B: Execute<Descriptor<O>> + crate::exec::Capabilities,
+    B: Execute<O> + crate::exec::Capabilities,
 {
     let inputs = [
         TensorHandle::from_storage::<B, K, Local>(&prediction.inner),
@@ -65,7 +65,7 @@ impl<
     /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
-    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+    /// let target = Tensor::<s![2], DefaultBackend, i64>::zeros(()).unwrap();
     /// let loss = pred.cross_entropy_loss(&target).unwrap();
     /// ```
     pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType>(
@@ -73,8 +73,8 @@ impl<
         target: &Tensor<S2, B, KT, G>,
     ) -> Result<Tensor<(), B, K, G>>
     where
-        B: Execute<Descriptor<op::CrossEntropyLoss>>,
-        <B as Execute<Descriptor<op::CrossEntropyLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::CrossEntropyLoss>,
+        <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
         self.cross_entropy_loss_with::<Mean, S2, KT>(target)
     }
@@ -86,8 +86,8 @@ impl<
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + CrossEntropyReductionShape<S>,
-        B: Execute<Descriptor<op::CrossEntropyLoss>>,
-        <B as Execute<Descriptor<op::CrossEntropyLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::CrossEntropyLoss>,
+        <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
         let prediction = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let target_handle = TensorHandle::from_storage::<B, KT, Local>(&target.inner);
@@ -134,8 +134,8 @@ impl<
     /// ```
     pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>>
     where
-        B: Execute<Descriptor<op::MseLoss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::MseLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::MseLoss> + crate::exec::Capabilities,
+        <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
         self.mse_loss_with::<Mean, S2>(target)
     }
@@ -147,8 +147,8 @@ impl<
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + MseReductionShape<S>,
-        B: Execute<Descriptor<op::MseLoss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::MseLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::MseLoss> + crate::exec::Capabilities,
+        <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
         let inner =
             execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G>(self, target, R::as_enum())?;
@@ -170,8 +170,8 @@ impl<
     /// `l1_loss`.
     pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>>
     where
-        B: Execute<Descriptor<op::L1Loss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::L1Loss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::L1Loss> + crate::exec::Capabilities,
+        <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
         self.l1_loss_with::<Mean, S2>(target)
     }
@@ -183,8 +183,8 @@ impl<
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + L1ReductionShape<S>,
-        B: Execute<Descriptor<op::L1Loss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::L1Loss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::L1Loss> + crate::exec::Capabilities,
+        <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
         let inner =
             execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G>(self, target, R::as_enum())?;
@@ -209,8 +209,8 @@ impl<
         target: &Tensor<S2, B, K, G>,
     ) -> Result<Tensor<(), B, K, G>>
     where
-        B: Execute<Descriptor<op::BceWithLogitsLoss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::BceWithLogitsLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
+        <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
         self.bce_with_logits_loss_with::<Mean, S2>(target)
     }
@@ -222,8 +222,8 @@ impl<
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + BceReductionShape<S>,
-        B: Execute<Descriptor<op::BceWithLogitsLoss>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::BceWithLogitsLoss>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
+        <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
         let inner = execute_loss_descriptor::<op::BceWithLogitsLoss, S, S2, B, K, G>(
             self,
