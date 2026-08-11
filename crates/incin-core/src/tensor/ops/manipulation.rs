@@ -1193,6 +1193,18 @@ impl<
             ));
         }
         let rank = tensors[0].shape_buf().rank();
+        if let Some(tensor) = tensors
+            .iter()
+            .find(|tensor| tensor.shape_buf().rank() != rank)
+        {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::RankMismatch {
+                    operation: OperationKind::Concat,
+                    expected: crate::shapes::RankExpectation::Exactly(rank),
+                    actual: tensor.shape_buf().rank(),
+                },
+            ));
+        }
         let dim = isize::try_from(dim)
             .ok()
             .and_then(|dim| {
@@ -1308,6 +1320,16 @@ impl<
         <B as Execute<Descriptor<op::ConcatExact>>>::Output: Into<B::Storage<K>>,
     {
         let rank = self.shape_buf().rank();
+        let other_rank = other.shape_buf().rank();
+        if other_rank != rank {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::RankMismatch {
+                    operation: OperationKind::Concat,
+                    expected: crate::shapes::RankExpectation::Exactly(rank),
+                    actual: other_rank,
+                },
+            ));
+        }
         let dim = isize::try_from(dim)
             .ok()
             .and_then(|dim| {
