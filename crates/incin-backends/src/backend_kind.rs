@@ -250,10 +250,12 @@ mod tests {
     use super::*;
     #[cfg(feature = "cpu")]
     use incin_core::exec::DescriptorError;
+    #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
+    use incin_core::prelude::BackendError;
     #[cfg(feature = "cpu")]
     use incin_core::prelude::{
-        BackendError, DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind,
-        RequiresGrad, Tensor, ToDevice,
+        DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind, RequiresGrad, Tensor,
+        ToDevice,
     };
     #[cfg(feature = "cpu")]
     type Linear23 = incin_core::shapes::shape::DimCons<
