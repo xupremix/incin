@@ -842,6 +842,12 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         repeats: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if repeats.len() != t.shape.len() {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Repeat,
+                reason: "repeat factors must match tensor rank",
+            }));
+        }
         let mut out_shape = vec![];
         for (a, b) in t.shape.iter().zip(repeats.iter()) {
             out_shape.push(a * b);

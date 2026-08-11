@@ -37,6 +37,21 @@ fn test_const_dim_and_extent_classification() {
 }
 
 #[test]
+fn repeat_rejects_a_repeat_vector_with_the_wrong_rank() {
+    type B = incin_core::test_utils::DummyBackend<Cpu>;
+    let tensor: Tensor<s![2, 3], B> = Tensor::ones(()).unwrap();
+
+    assert!(matches!(
+        tensor.repeat(&[2]),
+        Err(Error::Shape(ShapeError::RankMismatch {
+            operation: OperationKind::Repeat,
+            expected: RankExpectation::Exactly(2),
+            actual: 1,
+        }))
+    ));
+}
+
+#[test]
 fn test_derived_symbolic_dimensions() {
     let m = MulDim::<ConstDim<32>, ConstDim<4>>::default();
     assert_eq!(m.static_extent(), StaticExtent::Value(128));

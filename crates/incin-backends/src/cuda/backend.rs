@@ -1,15 +1,14 @@
 use crate::cuda::storage::CudaStorage;
-use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
+use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
 use incin_core::prelude::*;
 
-/// Type alias for `IncinBackend<T, D>` with a CUDA device. Kept for backwards
-/// compatibility — prefer `IncinBackend<T, Cuda>` in new code.
+/// CUDA compute backend implementation for Incin.
 #[derive(Clone)]
-pub struct CudaBackendImpl<T = f32, D = Cuda>(core::marker::PhantomData<(T, D)>);
+pub struct CudaBackendImpl<D = Cuda>(core::marker::PhantomData<D>);
 
-impl<T, D> CudaBackendImpl<T, D> {
+impl<D> CudaBackendImpl<D> {
     /// Construct the stateless CUDA executor.
     #[must_use]
     pub const fn new() -> Self {
@@ -17,7 +16,7 @@ impl<T, D> CudaBackendImpl<T, D> {
     }
 }
 
-impl<T, D> Default for CudaBackendImpl<T, D> {
+impl<D> Default for CudaBackendImpl<D> {
     fn default() -> Self {
         Self::new()
     }
@@ -26,12 +25,14 @@ impl<T, D> Default for CudaBackendImpl<T, D> {
 macro_rules! impl_cuda_storage_dtype {
     ($($dtype:ty),+ $(,)?) => {
         $(
-            impl<T: DType, D: Device> SupportsDType<$dtype> for CudaBackendImpl<T, D> {
+            impl<D: Device> SupportsDType<$dtype> for CudaBackendImpl<D> {
                 fn resolve_dtype(
                     field: &<$dtype as DType>::Field,
                     _device: &DeviceId,
-                ) -> Result<DTypeId> {
-                    Ok(<$dtype as DType>::to_incin(field))
+                ) -> Result<DTypeDescriptor> {
+                    let descriptor = <$dtype as DType>::descriptor(field);
+                    validate_cuda_storage_dtype(descriptor, "resolve_dtype")?;
+                    Ok(descriptor)
                 }
             }
         )+
@@ -40,15 +41,85 @@ macro_rules! impl_cuda_storage_dtype {
 
 impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64);
 
-impl<T: DType, D: Device> SupportsDType<Dyn> for CudaBackendImpl<T, D> {
-    fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        resolve_dtype_policy(
-            BackendFamily::Cuda,
-            OperationKind::Storage,
-            *field,
-            "storage",
+pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
+    let is_supported = matches!(
+        dtype.builtin_id(),
+        Some(
+            DTypeId::F32
+                | DTypeId::F64
+                | DTypeId::F16
+                | DTypeId::BF16
+                | DTypeId::I64
+                | DTypeId::Q8_0
         )
-        .map(|_| *field)
+    );
+    if is_supported {
+        Ok(())
+    } else {
+        Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op,
+        })
+    }
+}
+
+pub(crate) fn require_cuda_builtin_dtype(
+    descriptor: DTypeDescriptor,
+    op: &'static str,
+) -> Result<DTypeId> {
+    validate_cuda_storage_dtype(descriptor, op)?;
+    descriptor.builtin_id().ok_or(Error::UnsupportedDType {
+        dtype: descriptor,
+        backend: "Cuda",
+        op,
+    })
+}
+
+pub(crate) fn native_precision(
+    request: &incin_core::exec::PrecisionRequest,
+) -> Result<incin_core::exec::ResolvedPrecision> {
+    validate_cuda_storage_dtype(request.storage, "native_precision")?;
+
+    let compute = match request.storage.builtin_id() {
+        Some(DTypeId::F16 | DTypeId::BF16) => DTypeId::F32.descriptor(),
+        _ => request.storage,
+    };
+
+    let accumulator = match request.operation {
+        OperationKind::Reduction | OperationKind::Normalization
+            if matches!(
+                request.storage.builtin_id(),
+                Some(DTypeId::F16 | DTypeId::BF16)
+            ) =>
+        {
+            DTypeId::F32.descriptor()
+        }
+        _ => compute,
+    };
+
+    Ok(incin_core::exec::ResolvedPrecision::new(
+        request.storage,
+        compute,
+        accumulator,
+        request.output,
+        incin_core::exec::LossScaling::None,
+    ))
+}
+
+impl<D: Device> incin_core::exec::PrecisionCapabilities for CudaBackendImpl<D> {
+    fn native_precision(
+        &self,
+        request: &incin_core::exec::PrecisionRequest,
+    ) -> Result<incin_core::exec::ResolvedPrecision> {
+        native_precision(request)
+    }
+}
+
+impl<D: Device> SupportsDType<Dyn> for CudaBackendImpl<D> {
+    fn resolve_dtype(field: &DTypeDescriptor, _device: &DeviceId) -> Result<DTypeDescriptor> {
+        validate_cuda_storage_dtype(*field, "resolve_dtype")?;
+        Ok(*field)
     }
 }
 
@@ -59,7 +130,7 @@ pub struct CudaVar {
 
 pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
-impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     // No CUDA kernels exist for these yet.
     /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
     /// shape via the already tape-wired `broadcast_as` (a real CUDA kernel,
@@ -75,17 +146,16 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `mask` itself gets no gradient, matching CPU. All three operands
     /// required to be F32-physical, for the same reason `index_select`'s
     /// index is.
-    fn where_cond<K: DType, KMask: DType>(
-        mask: &<Self as Backend>::Storage<KMask>,
-        on_true: &<Self as Backend>::Storage<K>,
-        on_false: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<KMask>(mask, &out_shape)?;
+    fn where_cond<K: DType>(
+        mask: &<Self as StorageBackend>::Storage<bool>,
+        on_true: &<Self as StorageBackend>::Storage<K>,
+        on_false: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out_shape = crate::layout::broadcast_shape(&on_true.shape, &on_false.shape)?;
+        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<bool>(mask, &out_shape)?;
         let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
         let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
 
-        cuda_require_f32(mask_b.buffer.dtype, "where_cond")?;
         cuda_require_f32(true_b.buffer.dtype, "where_cond")?;
         cuda_require_f32(false_b.buffer.dtype, "where_cond")?;
         let mask_data = download_f32_host(&mask_b)?;
@@ -137,58 +207,62 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// itself gets no gradient, matching CPU. `index` is also required to
     /// be F32-physical, for the same reason `index_select`'s is.
     fn gather<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-        index: &<Self as Backend>::Storage<KInt>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        index: &<Self as StorageBackend>::Storage<KInt>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, index): (&CudaStorage, &CudaStorage) = (t, index);
         cuda_require_f32(t.buffer.dtype, "gather")?;
         cuda_require_f32(index.buffer.dtype, "gather")?;
         let data = download_f32_host(t)?;
         let index_data = download_f32_host(index)?;
-        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let strides = crate::layout::contiguous_strides(&t.shape);
         let out_shape = index.shape.to_vec();
         let total = checked_numel(&out_shape)?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for &target in index_data.iter().take(total) {
             let target_i = target as usize;
-            let mut src_flat = 0usize;
+            let mut flat_src = 0usize;
             for (axis, &stride) in strides.iter().enumerate() {
                 let coord = if axis == dim { target_i } else { idx[axis] };
-                src_flat += coord * stride;
+                flat_src += coord * stride;
             }
-            out.push(data[src_flat]);
-            if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            out.push(data[flat_src]);
+            if !index.shape.is_empty() {
+                crate::layout::increment_index(&mut idx, &index.shape);
             }
         }
-        let out_storage = upload_f32_from_host(&t.buffer, out_shape.clone(), out)?;
+        let out_storage = upload_f32_from_host(&t.buffer, out_shape, out)?;
 
-        let t_shape = t.shape.to_vec();
+        let t_cap = t.clone();
+        let index_cap = index.clone();
         let (t_id, out_id) = (t.id, out_storage.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
                 let grad_out_data = download_f32_host(grad_out)?;
-                let t_total = checked_numel(&t_shape)?;
-                let mut grad_t_data = vec![0.0f32; t_total];
-                let index_total = checked_numel(&out_shape)?;
-                let mut idx = vec![0usize; out_shape.len()];
-                for i in 0..index_total {
+                let index_data = download_f32_host(&index_cap)?;
+                let mut grad_t = vec![0.0f32; t_cap.buffer.len];
+                let strides = crate::layout::contiguous_strides(&t_cap.shape);
+                let total = checked_numel(&index_cap.shape)?;
+                let mut idx = vec![0usize; index_cap.shape.len()];
+                for i in 0..total {
                     let target_i = index_data[i] as usize;
-                    let mut flat_dst = 0usize;
+                    let mut flat_dest = 0usize;
                     for (axis, &stride) in strides.iter().enumerate() {
                         let coord = if axis == dim { target_i } else { idx[axis] };
-                        flat_dst += coord * stride;
+                        flat_dest += coord * stride;
                     }
-                    grad_t_data[flat_dst] += grad_out_data[i];
-                    if !out_shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut idx, &out_shape);
+                    if flat_dest < grad_t.len() {
+                        grad_t[flat_dest] += grad_out_data[i];
+                    }
+                    if !index_cap.shape.is_empty() {
+                        crate::layout::increment_index(&mut idx, &index_cap.shape);
                     }
                 }
-                upload_f32_from_host(&grad_out.buffer, t_shape.clone(), grad_t_data)
-                    .map(|s| vec![s])
+                upload_f32_from_host(&t_cap.buffer, t_cap.shape.to_vec(), grad_t).map(|g| vec![g])
             }),
         });
         Ok(out_storage)
@@ -200,18 +274,19 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// required to be F32-physical, for the same reason `index_select`'s do.
     /// Not autograd-wired, matching CPU.
     fn scatter<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-        index: &<Self as Backend>::Storage<KInt>,
-        src: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        index: &<Self as StorageBackend>::Storage<KInt>,
+        src: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, index, src): (&CudaStorage, &CudaStorage, &CudaStorage) = (t, index, src);
         cuda_require_f32(t.buffer.dtype, "scatter")?;
         cuda_require_f32(index.buffer.dtype, "scatter")?;
         cuda_require_f32(src.buffer.dtype, "scatter")?;
         let mut out_data = download_f32_host(t)?;
         let index_data = download_f32_host(index)?;
         let src_data = download_f32_host(src)?;
-        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let strides = crate::layout::contiguous_strides(&t.shape);
         let index_total = checked_numel(&index.shape)?;
         let mut idx = vec![0usize; index.shape.len()];
         for i in 0..index_total {
@@ -225,7 +300,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 out_data[flat_dest] = src_data[i];
             }
             if !index.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &index.shape);
+                crate::layout::increment_index(&mut idx, &index.shape);
             }
         }
         upload_f32_from_host(&t.buffer, t.shape.to_vec(), out_data)
@@ -239,10 +314,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// simplification WGPU's own port of this method has. Not
     /// autograd-wired, matching CPU.
     fn group_norm<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         groups: usize,
         eps: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if groups == 0 {
             return Err(Error::Msg("group_norm: groups must be non-zero".into()));
         }
@@ -280,9 +356,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `instance_norm`. `group_norm` with one group per channel, matching
     /// CPU's and WGPU's own composition exactly.
     fn instance_norm<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         eps: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
         <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
     }
@@ -290,11 +367,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `unfold`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
     fn unfold<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         size: usize,
         step: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let dim_len = t.shape[dim];
         if size > dim_len {
             return Err(Error::Msg(
@@ -303,7 +381,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         }
         cuda_require_f32(t.buffer.dtype, "unfold")?;
         let data = download_f32_host(t)?;
-        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let in_strides = crate::layout::contiguous_strides(&t.shape);
         let n_windows = (dim_len - size) / step + 1;
         let mut out_shape = t.shape.to_vec();
         out_shape[dim] = n_windows;
@@ -324,7 +402,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 src_flat += coord * stride;
             }
             out.push(data[src_flat]);
-            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            crate::layout::increment_index(&mut idx, &out_shape);
         }
         upload_f32_from_host(&t.buffer, out_shape, out)
     }
@@ -332,9 +410,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `pixel_shuffle`. Same host round-trip as `repeat`. Not
     /// autograd-wired, matching CPU.
     fn pixel_shuffle<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         upscale_factor: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if t.shape.len() != 4 {
             return Err(Error::Msg(
                 "pixel_shuffle expects a 4D tensor (N, C, H, W)".into(),
@@ -350,7 +429,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         }
         cuda_require_f32(t.buffer.dtype, "pixel_shuffle")?;
         let data = download_f32_host(t)?;
-        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let in_strides = crate::layout::contiguous_strides(&t.shape);
         let out_c = c / r_sq;
         let out_shape = vec![n, out_c, h * r, w * r];
         let total = checked_numel(&out_shape)?;
@@ -368,7 +447,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 + h_in * in_strides[2]
                 + w_in * in_strides[3];
             out.push(data[src_flat]);
-            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            crate::layout::increment_index(&mut idx, &out_shape);
         }
         upload_f32_from_host(&t.buffer, out_shape, out)
     }
@@ -382,15 +461,16 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// matter). A dtype-generic version that accepts a real integer index
     /// tensor is future work. Not autograd-wired, matching CPU.
     fn index_select<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-        index: &<Self as Backend>::Storage<KInt>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        index: &<Self as StorageBackend>::Storage<KInt>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, index): (&CudaStorage, &CudaStorage) = (t, index);
         cuda_require_f32(t.buffer.dtype, "index_select")?;
         cuda_require_f32(index.buffer.dtype, "index_select")?;
         let data = download_f32_host(t)?;
         let index_data = download_f32_host(index)?;
-        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let in_strides = crate::layout::contiguous_strides(&t.shape);
         let mut out_shape = t.shape.to_vec();
         out_shape[dim] = index_data.len();
         let total = checked_numel(&out_shape)?;
@@ -405,7 +485,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             }
             out.push(data[src_flat]);
             if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
+                crate::layout::increment_index(&mut out_idx, &out_shape);
             }
         }
         upload_f32_from_host(&t.buffer, out_shape, out)
@@ -417,11 +497,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// shapes match exactly rather than silently assuming it — CPU walks
     /// `t`'s shape and indexes `mask` with it regardless, which produces
     /// nonsense on a mismatch instead of an error.
-    fn masked_fill<K: DType, KMask: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        mask: &<Self as Backend>::Storage<KMask>,
+    fn masked_fill<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        mask: &<Self as StorageBackend>::Storage<bool>,
         value: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, mask): (&CudaStorage, &CudaStorage) = (t, mask);
         if t.shape != mask.shape {
             return Err(Error::ShapeMismatch {
                 op: "masked_fill",
@@ -431,7 +512,6 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             });
         }
         cuda_require_f32(t.buffer.dtype, "masked_fill")?;
-        cuda_require_f32(mask.buffer.dtype, "masked_fill")?;
         let data = download_f32_host(t)?;
         let mask_data = download_f32_host(mask)?;
         let value = value as f32;
@@ -445,16 +525,23 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// `repeat`. No CUDA kernel: downloads the F32 operand, repeats it with
     /// the same row-major walk CPU's own `repeat` uses (reusing
-    /// `crate::cpu::stride::contiguous_strides` and
-    /// `crate::cpu::storage::increment_index`, both `pub(crate)` already),
+    /// `crate::layout::contiguous_strides` and
+    /// `crate::layout::increment_index`, both `pub(crate)` already),
     /// re-uploads. Not autograd-wired, matching CPU.
     fn repeat<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         repeats: &[usize],
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
+        if repeats.len() != t.shape.len() {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Repeat,
+                reason: "repeat factors must match tensor rank",
+            }));
+        }
         cuda_require_f32(t.buffer.dtype, "repeat")?;
         let data = download_f32_host(t)?;
-        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let in_strides = crate::layout::contiguous_strides(&t.shape);
         let out_shape: Vec<usize> = t.shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
         let total = checked_numel(&out_shape)?;
         let mut out = Vec::with_capacity(total);
@@ -468,7 +555,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 .sum();
             out.push(data[src_flat]);
             if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+                crate::layout::increment_index(&mut idx, &out_shape);
             }
         }
         upload_f32_from_host(&t.buffer, out_shape, out)
@@ -477,13 +564,14 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `pad`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
     fn pad<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         padding: &[(usize, usize)],
         val: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "pad")?;
         let data = download_f32_host(t)?;
-        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let in_strides = crate::layout::contiguous_strides(&t.shape);
         let out_shape: Vec<usize> = t
             .shape
             .iter()
@@ -507,7 +595,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             }
             out.push(if inside { data[src_flat] } else { val });
             if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+                crate::layout::increment_index(&mut idx, &out_shape);
             }
         }
         upload_f32_from_host(&t.buffer, out_shape, out)
@@ -516,9 +604,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `triu`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
     fn triu<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "triu")?;
         let data = download_f32_host(t)?;
         let rank = t.shape.len();
@@ -533,7 +622,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             };
             out.push(if c >= r + k { value } else { 0.0 });
             if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+                crate::layout::increment_index(&mut idx, &t.shape);
             }
         }
         upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
@@ -542,9 +631,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `tril`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
     fn tril<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "tril")?;
         let data = download_f32_host(t)?;
         let rank = t.shape.len();
@@ -559,7 +649,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             };
             out.push(if c <= r + k { value } else { 0.0 });
             if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+                crate::layout::increment_index(&mut idx, &t.shape);
             }
         }
         upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
@@ -570,9 +660,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// diagonal, an operand of rank 2+ extracts its `k`-th diagonal into a
     /// 1D result. Not autograd-wired, matching CPU.
     fn diag<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "diag")?;
         let data = download_f32_host(t)?;
         let rank = t.shape.len();
@@ -612,119 +703,142 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// elementwise, re-uploads. Matches CPU's own encoding (1.0/0.0 in the
     /// same dtype) and CPU's lack of a gradient for comparisons.
     fn cmp_eq<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_eq", lhs, rhs, |a, b| if a == b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_eq",
+        })
     }
-    /// `cmp_ne`.
     fn cmp_ne<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_ne", lhs, rhs, |a, b| if a != b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_ne",
+        })
     }
-    /// `cmp_lt`.
     fn cmp_lt<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_lt", lhs, rhs, |a, b| if a < b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_lt",
+        })
     }
-    /// `cmp_le`.
     fn cmp_le<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_le", lhs, rhs, |a, b| if a <= b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_le",
+        })
     }
-    /// `cmp_gt`.
     fn cmp_gt<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_gt", lhs, rhs, |a, b| if a > b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_gt",
+        })
     }
-    /// `cmp_ge`.
     fn cmp_ge<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("cmp_ge", lhs, rhs, |a, b| if a >= b { 1.0 } else { 0.0 })
+        _lhs: &<Self as StorageBackend>::Storage<K>,
+        _rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "cmp_ge",
+        })
     }
 
-    /// `logical_and`. Same host round-trip, matching CPU's lack of a
-    /// gradient for logical ops.
-    fn logical_and<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("logical_and", lhs, rhs, |a, b| {
-            if a != 0.0 && b != 0.0 { 1.0 } else { 0.0 }
+    fn logical_and(
+        _lhs: &<Self as StorageBackend>::Storage<bool>,
+        _rhs: &<Self as StorageBackend>::Storage<bool>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "logical_and",
         })
     }
-    /// `logical_or`.
-    fn logical_or<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_binary_f32_elementwise("logical_or", lhs, rhs, |a, b| {
-            if a != 0.0 || b != 0.0 { 1.0 } else { 0.0 }
+    fn logical_or(
+        _lhs: &<Self as StorageBackend>::Storage<bool>,
+        _rhs: &<Self as StorageBackend>::Storage<bool>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "logical_or",
         })
     }
-    /// `logical_not`.
-    fn logical_not<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        cuda_unary_f32_elementwise("logical_not", t, |v| if v == 0.0 { 1.0 } else { 0.0 })
+    fn logical_not(
+        _t: &<Self as StorageBackend>::Storage<bool>,
+    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
+        Err(Error::UnsupportedDType {
+            dtype: <bool as ConstDType>::DESCRIPTOR,
+            backend: "Cuda",
+            op: "logical_not",
+        })
     }
 
     /// `sub_scalar`. Same host round-trip; not autograd-wired, matching
     /// CPU's `TensorOps` scalar methods (as opposed to `FloatOps`'s
     /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
     fn sub_scalar<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_scalar_f32_elementwise("sub_scalar", t, val, |v, s| v - s)
     }
     /// `div_scalar`.
     fn div_scalar<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_scalar_f32_elementwise("div_scalar", t, val, |v, s| v / s)
     }
 
     /// `maximum`. Same host round-trip; not autograd-wired, matching CPU.
     fn maximum<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_binary_f32_elementwise("maximum", lhs, rhs, f32::max)
     }
     /// `minimum`.
     fn minimum<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_binary_f32_elementwise("minimum", lhs, rhs, f32::min)
     }
     /// `abs_diff`.
     fn abs_diff<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_binary_f32_elementwise("abs_diff", lhs, rhs, |a, b| (a - b).abs())
     }
 
     /// `lerp`. `start + weight * (end - start)`; not autograd-wired,
     /// matching CPU.
     fn lerp<K: DType>(
-        start: &<Self as Backend>::Storage<K>,
-        end: &<Self as Backend>::Storage<K>,
+        start: &<Self as StorageBackend>::Storage<K>,
+        end: &<Self as StorageBackend>::Storage<K>,
         weight: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let weight = weight as f32;
         cuda_binary_f32_elementwise("lerp", start, end, move |s, e| s + weight * (e - s))
     }
@@ -733,9 +847,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// so inherits gradient wiring from), matching CPU's/WGPU's own
     /// `unsqueeze`.
     fn unsqueeze<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let mut target_shape = t.shape.to_vec();
         if dim <= target_shape.len() {
             target_shape.insert(dim, 1);
@@ -749,7 +864,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `topk`/`argsort` already use, restricted to F32 like those (a
     /// dtype-generic version is a separate, larger piece of work tracked
     /// apart from this pass — see `docs/PROJECT_STATUS.md`).
-    fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+    fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
+        let t: &CudaStorage = t;
         let numel = checked_numel(&t.shape)?;
         if numel != 1 {
             return Err(Error::Shape(ShapeError::InvalidParameter {
@@ -767,13 +883,15 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         Ok(f64::from(value))
     }
     /// `float_to_vec1`.
-    fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<f64>> {
+    fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "float_to_vec1")?;
         let data = download_f32_host(t)?;
         Ok(data.iter().map(|&x| x as f64).collect())
     }
     /// `int_to_scalar`.
-    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+    fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "int_to_scalar")?;
         let data = download_f32_host(t)?;
         let value = data.first().copied().ok_or(Error::InvalidByteLength {
@@ -788,7 +906,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         )
     }
     /// `int_to_vec1`.
-    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
+    fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
+        let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "int_to_vec1")?;
         let data = download_f32_host(t)?;
         data.into_iter()
@@ -806,9 +925,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// physical storage does not vary with the requested logical dtype in a
     /// way this call needs to touch.
     fn tensor_to_dtype<K: DType, K2: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        _dtype: DTypeId,
-    ) -> Result<<Self as Backend>::Storage<K2>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+        _dtype: DTypeDescriptor,
+    ) -> Result<<Self as StorageBackend>::Storage<K2>> {
+        let t: &CudaStorage = t;
         CudaStorage::try_new(t.buffer.clone(), t.shape.to_vec())
     }
 
@@ -817,12 +937,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// and WGPU's own composition exactly — no new kernel, just reuse of
     /// already-implemented ones.
     fn addmm<K: DType>(
-        mat: &<Self as Backend>::Storage<K>,
-        mat1: &<Self as Backend>::Storage<K>,
-        mat2: &<Self as Backend>::Storage<K>,
+        mat: &<Self as StorageBackend>::Storage<K>,
+        mat1: &<Self as StorageBackend>::Storage<K>,
+        mat2: &<Self as StorageBackend>::Storage<K>,
         beta: f64,
         alpha: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
         let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
@@ -831,9 +951,9 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU
     /// and WGPU.
     fn bmm<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
     }
 
@@ -841,19 +961,20 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
     /// CPU's and WGPU's own composition exactly, no new kernel.
     fn scaled_dot_product_attention<K: DType>(
-        q: &<Self as Backend>::Storage<K>,
-        k: &<Self as Backend>::Storage<K>,
-        v: &<Self as Backend>::Storage<K>,
-        mask: Option<&<Self as Backend>::Storage<K>>,
+        q: &<Self as StorageBackend>::Storage<K>,
+        k: &<Self as StorageBackend>::Storage<K>,
+        v: &<Self as StorageBackend>::Storage<K>,
+        mask: Option<&<Self as StorageBackend>::Storage<K>>,
         scale: Option<f64>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (q, k, v): (&CudaStorage, &CudaStorage, &CudaStorage) = (q, k, v);
         let k_rank = k.shape.len();
         let k_t = if k_rank >= 2 {
             <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
         } else {
             k.clone()
         };
-        let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let scores: CudaStorage = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
@@ -867,10 +988,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     }
 
     fn concat<K: DType>(
-        tensors: &[&<Self as Backend>::Storage<K>],
+        tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        crate::cuda::ops::shape::launch_concat(tensors, dim)
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let storage_refs: Vec<&CudaStorage> = tensors.iter().map(|&t| t as &CudaStorage).collect();
+        crate::cuda::ops::shape::launch_concat(&storage_refs, dim)
     }
 
     /// Metadata-only: every `CudaStorage` this backend produces is always
@@ -880,9 +1002,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// contiguous memory), so reshaping never needs to touch the data or
     /// check contiguity first, unlike CPU's `reshape`.
     fn reshape<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let old_numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Reshape)?;
         let new_numel = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Reshape)?;
         if old_numel != new_numel {
@@ -912,10 +1035,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// Materializes (see `reshape`'s doc for why CUDA can't use CPU's
     /// metadata-only strided-view approach here).
     fn transpose<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if dim1 >= t.shape.len() || dim2 >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "transpose",
@@ -945,9 +1069,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// Matmul is only wired for unbatched 2D operands so far — falls through to the `Backend`
     /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
     fn matmul<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (lhs, rhs): (&CudaStorage, &CudaStorage) = (lhs, rhs);
         if lhs.shape.len() != 2 || rhs.shape.len() != 2 || lhs.shape[1] != rhs.shape[0] {
             return Err(Error::ShapeMismatch {
                 op: "matmul",
@@ -979,12 +1104,13 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// Materializes (see `reshape`'s doc for why).
     fn broadcast_as<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         // Validates compatibility before dispatch — an invalid broadcast
         // must error, not silently read garbage/OOB indices in the kernel.
-        crate::cpu::stride::broadcast_shape(&t.shape, shape)?;
+        crate::layout::broadcast_shape(&t.shape, shape)?;
 
         let out = crate::cuda::ops::shape::launch_broadcast(t, shape)?;
         let original_shape = t.shape.to_vec();
@@ -1004,11 +1130,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// Materializes (see `reshape`'s doc for why).
     fn narrow<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         start: usize,
         len: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if dim >= t.shape.len() || start + len > t.shape[dim] {
             return Err(Error::ShapeMismatch {
                 op: "narrow",
@@ -1041,9 +1168,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
     fn squeeze<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if dim >= t.shape.len() || t.shape[dim] != 1 {
             return Err(Error::ShapeMismatch {
                 op: "squeeze",
@@ -1065,10 +1193,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     /// CPU/WGPU: `TensorOps` has no dedicated `unsqueeze`, so each input is
     /// reshaped to insert a size-1 axis at `dim`, then concatenated there).
     fn stack<K: DType>(
-        tensors: &[&<Self as Backend>::Storage<K>],
+        tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        if tensors.is_empty() {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let storage_refs: Vec<&CudaStorage> = tensors.iter().map(|&t| t as &CudaStorage).collect();
+        if storage_refs.is_empty() {
             return Err(Error::ShapeMismatch {
                 op: "stack",
                 expected: vec![],
@@ -1076,46 +1205,47 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 msg: "stack requires at least one input tensor".to_string(),
             });
         }
-        let rank = tensors[0].shape.len();
+        let rank = storage_refs[0].shape.len();
         if dim > rank {
             return Err(Error::ShapeMismatch {
                 op: "stack",
-                expected: tensors[0].shape.to_vec(),
+                expected: storage_refs[0].shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
-                    tensors[0].shape
+                    storage_refs[0].shape
                 ),
             });
         }
-        for t in tensors.iter().skip(1) {
-            if t.shape != tensors[0].shape {
+        for t in storage_refs.iter().skip(1) {
+            if t.shape != storage_refs[0].shape {
                 return Err(Error::ShapeMismatch {
                     op: "stack",
-                    expected: tensors[0].shape.to_vec(),
+                    expected: storage_refs[0].shape.to_vec(),
                     got: t.shape.to_vec(),
                     msg: format!(
                         "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
-                        tensors[0].shape, t.shape
+                        storage_refs[0].shape, t.shape
                     ),
                 });
             }
         }
-        let mut unsqueezed = Vec::with_capacity(tensors.len());
-        for t in tensors.iter() {
+        let mut unsqueezed = Vec::with_capacity(storage_refs.len());
+        for t in storage_refs.iter() {
             let mut target_shape = t.shape.to_vec();
             target_shape.insert(dim, 1);
             unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
         }
-        let refs: Vec<&<Self as Backend>::Storage<K>> = unsqueezed.iter().collect();
+        let refs: Vec<&<Self as StorageBackend>::Storage<K>> = unsqueezed.iter().collect();
         Self::concat::<K>(&refs, dim)
     }
 
     /// Composed from `narrow` (zero new tape entries — matches CPU/WGPU).
     fn slice<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let mut out = t.clone();
         for (dim, &(start, end)) in ranges.iter().enumerate() {
             out = Self::narrow::<K>(&out, dim, start, end - start)?;
@@ -1125,10 +1255,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
     fn flatten<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         start_dim: usize,
         end_dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         if start_dim > end_dim || end_dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "flatten",
@@ -1151,164 +1282,176 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
 
     /// Composed from `broadcast_as` (zero new tape entries — matches CPU/WGPU).
     fn broadcast_left<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
         let mut target_shape = shape.to_vec();
         target_shape.extend_from_slice(&t.shape);
         Self::broadcast_as::<K>(t, &target_shape)
     }
 }
 
-impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
+pub(crate) fn cuda_add_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out =
+        crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", lhs, rhs, &out_shape)?;
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(grad_out, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+pub(crate) fn cuda_sub_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out =
+        crate::cuda::ops::elementwise::launch_binary_op("sub", "a - b", lhs, rhs, &out_shape)?;
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let neg_grad = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(&neg_grad, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+pub(crate) fn cuda_mul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out =
+        crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", lhs, rhs, &out_shape)?;
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let grad_lhs_shape =
+                crate::layout::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
+            let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &rhs_capture,
+                &grad_lhs_shape,
+            )?;
+            let grad_rhs_shape =
+                crate::layout::broadcast_shape(&grad_out.shape, &lhs_capture.shape)?;
+            let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &lhs_capture,
+                &grad_rhs_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+pub(crate) fn cuda_div_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out =
+        crate::cuda::ops::elementwise::launch_binary_op("div", "a / b", lhs, rhs, &out_shape)?;
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let grad_lhs_shape =
+                crate::layout::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
+            let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "div",
+                "a / b",
+                grad_out,
+                &rhs_capture,
+                &grad_lhs_shape,
+            )?;
+            let rhs_sq_shape =
+                crate::layout::broadcast_shape(&rhs_capture.shape, &rhs_capture.shape)?;
+            let rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &rhs_capture,
+                &rhs_capture,
+                &rhs_sq_shape,
+            )?;
+            let ratio_shape = crate::layout::broadcast_shape(&lhs_capture.shape, &rhs_sq.shape)?;
+            let lhs_over_rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "div",
+                "a / b",
+                &lhs_capture,
+                &rhs_sq,
+                &ratio_shape,
+            )?;
+            let neg_ratio =
+                crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &lhs_over_rhs_sq)?;
+            let grad_rhs_shape = crate::layout::broadcast_shape(&grad_out.shape, &neg_ratio.shape)?;
+            let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &neg_ratio,
+                &grad_rhs_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+impl<D: Device> NumericOps<Self> for CudaBackendImpl<D> {
     fn add<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out =
-            crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", lhs, rhs, &out_shape)?;
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CudaStorage| {
-                Ok(vec![
-                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
-                    crate::cuda::tape::unbroadcast(grad_out, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        cuda_add_storage(lhs, rhs)
     }
 
     fn sub<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out =
-            crate::cuda::ops::elementwise::launch_binary_op("sub", "a - b", lhs, rhs, &out_shape)?;
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CudaStorage| {
-                let neg_grad =
-                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)?;
-                Ok(vec![
-                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
-                    crate::cuda::tape::unbroadcast(&neg_grad, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        cuda_sub_storage(lhs, rhs)
     }
 
     fn mul<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out =
-            crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", lhs, rhs, &out_shape)?;
-        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CudaStorage| {
-                let grad_lhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
-                let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
-                    "mul",
-                    "a * b",
-                    grad_out,
-                    &rhs_capture,
-                    &grad_lhs_shape,
-                )?;
-                let grad_rhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &lhs_capture.shape)?;
-                let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
-                    "mul",
-                    "a * b",
-                    grad_out,
-                    &lhs_capture,
-                    &grad_rhs_shape,
-                )?;
-                Ok(vec![
-                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        cuda_mul_storage(lhs, rhs)
     }
 
     fn div<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out =
-            crate::cuda::ops::elementwise::launch_binary_op("div", "a / b", lhs, rhs, &out_shape)?;
-        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CudaStorage| {
-                // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-                let grad_lhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
-                let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
-                    "div",
-                    "a / b",
-                    grad_out,
-                    &rhs_capture,
-                    &grad_lhs_shape,
-                )?;
-                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-                let rhs_sq_shape =
-                    crate::cpu::stride::broadcast_shape(&rhs_capture.shape, &rhs_capture.shape)?;
-                let rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
-                    "mul",
-                    "a * b",
-                    &rhs_capture,
-                    &rhs_capture,
-                    &rhs_sq_shape,
-                )?;
-                let ratio_shape =
-                    crate::cpu::stride::broadcast_shape(&lhs_capture.shape, &rhs_sq.shape)?;
-                let lhs_over_rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
-                    "div",
-                    "a / b",
-                    &lhs_capture,
-                    &rhs_sq,
-                    &ratio_shape,
-                )?;
-                let neg_ratio =
-                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &lhs_over_rhs_sq)?;
-                let grad_rhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &neg_ratio.shape)?;
-                let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
-                    "mul",
-                    "a * b",
-                    grad_out,
-                    &neg_ratio,
-                    &grad_rhs_shape,
-                )?;
-                Ok(vec![
-                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        cuda_div_storage(lhs, rhs)
     }
 }
 
@@ -1324,7 +1467,7 @@ fn push_unary_tape_entry(
     });
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
     // No CUDA kernel is launched for these yet. They are declared rather than
     // inherited so the gap is visible from the backend that has it.
     crate::unsupported::unsupported_float_ops! {
@@ -1344,7 +1487,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 "x > 0.0f ? 1.0f : 0.0f",
                 &t_capture,
             )?;
-            let out_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)?;
+            let out_shape = crate::layout::broadcast_shape(&grad_out.shape, &deriv.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul", "a * b", grad_out, &deriv, &out_shape,
             )
@@ -1365,7 +1508,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
             let one_minus_out =
                 crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out)?;
             let deriv_shape =
-                crate::cpu::stride::broadcast_shape(&out_capture.shape, &one_minus_out.shape)?;
+                crate::layout::broadcast_shape(&out_capture.shape, &one_minus_out.shape)?;
             let deriv = crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1373,7 +1516,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 &one_minus_out,
                 &deriv_shape,
             )?;
-            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &deriv.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1390,7 +1533,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let out_sq_shape =
-                crate::cpu::stride::broadcast_shape(&out_capture.shape, &out_capture.shape)?;
+                crate::layout::broadcast_shape(&out_capture.shape, &out_capture.shape)?;
             let out_sq = crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1401,7 +1544,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
             let neg_out_sq = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &out_sq)?;
             let deriv =
                 crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out_sq)?;
-            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &deriv.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1428,8 +1571,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &out_capture)?;
             let one_minus_out =
                 crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out)?;
-            let sig_term_shape =
-                crate::cpu::stride::broadcast_shape(&sig.shape, &one_minus_out.shape)?;
+            let sig_term_shape = crate::layout::broadcast_shape(&sig.shape, &one_minus_out.shape)?;
             let sig_term = crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1437,8 +1579,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 &one_minus_out,
                 &sig_term_shape,
             )?;
-            let deriv_shape =
-                crate::cpu::stride::broadcast_shape(&out_capture.shape, &sig_term.shape)?;
+            let deriv_shape = crate::layout::broadcast_shape(&out_capture.shape, &sig_term.shape)?;
             let deriv = crate::cuda::ops::elementwise::launch_binary_op(
                 "add",
                 "a + b",
@@ -1446,7 +1587,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 &sig_term,
                 &deriv_shape,
             )?;
-            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &deriv.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1586,8 +1727,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)?;
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let grad_shape =
-                crate::cpu::stride::broadcast_shape(&grad_out.shape, &out_capture.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &out_capture.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1603,8 +1743,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("log", "logf(x)", t)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let grad_shape =
-                crate::cpu::stride::broadcast_shape(&grad_out.shape, &t_capture.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &t_capture.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "div",
                 "a / b",
@@ -1620,8 +1759,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("sqrt", "sqrtf(x)", t)?;
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let ratio_shape =
-                crate::cpu::stride::broadcast_shape(&grad_out.shape, &out_capture.shape)?;
+            let ratio_shape = crate::layout::broadcast_shape(&grad_out.shape, &out_capture.shape)?;
             let ratio = crate::cuda::ops::elementwise::launch_binary_op(
                 "div",
                 "a / b",
@@ -1651,7 +1789,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
                 "x > 0.0f ? 1.0f : (x < 0.0f ? -1.0f : 0.0f)",
                 &t_capture,
             )?;
-            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &sign.shape)?;
+            let grad_shape = crate::layout::broadcast_shape(&grad_out.shape, &sign.shape)?;
             crate::cuda::ops::elementwise::launch_binary_op(
                 "mul",
                 "a * b",
@@ -1690,24 +1828,24 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
     }
 
     fn softmax<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
-        let ls = log_softmax::<T, K>(t, dim)?;
+        let ls = log_softmax::<K, D>(t, dim)?;
         Self::exp::<K>(&ls)
     }
 }
 
 /// Helper function to compute log_softmax composed from primitives on CUDA backend.
-pub(crate) fn log_softmax<T: DType, K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
-    let max = CudaBackendImpl::<T>::max_keepdim::<K>(t, dim)?;
-    let max_b = CudaBackendImpl::<T>::broadcast_as::<K>(&max, &t.shape)?;
-    let diff = CudaBackendImpl::<T>::sub::<K>(t, &max_b)?;
-    let exp_diff = CudaBackendImpl::<T>::exp::<K>(&diff)?;
-    let sum_exp = CudaBackendImpl::<T>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let sum_exp_b = CudaBackendImpl::<T>::broadcast_as::<K>(&sum_exp, &t.shape)?;
-    let log_sum = CudaBackendImpl::<T>::log::<K>(&sum_exp_b)?;
-    CudaBackendImpl::<T>::sub::<K>(&diff, &log_sum)
+pub(crate) fn log_softmax<K: DType, D: Device>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    let max = CudaBackendImpl::<D>::max_keepdim::<K>(t, dim)?;
+    let max_b = CudaBackendImpl::<D>::broadcast_as::<K>(&max, &t.shape)?;
+    let diff = CudaBackendImpl::<D>::sub::<K>(t, &max_b)?;
+    let exp_diff = CudaBackendImpl::<D>::exp::<K>(&diff)?;
+    let sum_exp = CudaBackendImpl::<D>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let sum_exp_b = CudaBackendImpl::<D>::broadcast_as::<K>(&sum_exp, &t.shape)?;
+    let log_sum = CudaBackendImpl::<D>::log::<K>(&sum_exp_b)?;
+    CudaBackendImpl::<D>::sub::<K>(&diff, &log_sum)
 }
 
-impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
     // No kernel fills an arbitrary value or generates a sequence yet.
     /// `full`. Same host-fill-then-upload pattern `zeros`/`ones` above
     /// already use — `cuda_from_f32` reinterprets a `Vec<f32>`'s bytes as
@@ -1719,7 +1857,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     fn full<K: DType>(
         val: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<CudaStorage> {
         cuda_from_f32(
@@ -1735,7 +1873,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         start: f64,
         step: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<CudaStorage> {
         let n = checked_numel(shape)?;
@@ -1747,7 +1885,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         start: f64,
         end: f64,
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<CudaStorage> {
         let n = checked_numel(shape)?;
@@ -1762,7 +1900,11 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         cuda_from_f32(shape, dtype, device, values, "linspace")
     }
 
-    fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+    fn zeros<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
         cuda_from_f32(
             shape,
             dtype,
@@ -1772,7 +1914,11 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         )
     }
 
-    fn ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+    fn ones<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
         cuda_from_f32(
             shape,
             dtype,
@@ -1782,14 +1928,22 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         )
     }
 
-    fn rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+    fn rand<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
         use rand::Rng;
         let mut rng = rand::thread_rng();
         let values = (0..checked_numel(shape)?).map(|_| rng.r#gen()).collect();
         cuda_from_f32(shape, dtype, device, values, "rand")
     }
 
-    fn randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+    fn randn<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
         use rand_distr::{Distribution, StandardNormal};
         let mut rng = rand::thread_rng();
         let values = (0..checked_numel(shape)?)
@@ -1798,23 +1952,39 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         cuda_from_f32(shape, dtype, device, values, "randn")
     }
 
-    fn var_zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+    fn var_zeros<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaVar> {
         Self::zeros::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+    fn var_ones<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaVar> {
         Self::ones::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+    fn var_rand<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaVar> {
         Self::rand::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+    fn var_randn<K: DType>(
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<CudaVar> {
         Self::randn::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 }
-impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
     // No product-reduction or prefix-scan kernel exists yet.
     /// `prod_all`. No CUDA kernel: not touching the real reduction
     /// kernel-rendering machinery `sum_all`/`max_all`/etc below use, for
@@ -1837,7 +2007,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         keep_shape[dim] = 1;
         let out_total = checked_numel(&keep_shape)?;
         let mut prods = vec![1.0f32; out_total];
-        let out_strides = crate::cpu::stride::contiguous_strides(&keep_shape);
+        let out_strides = crate::layout::contiguous_strides(&keep_shape);
         let src_total = checked_numel(&t.shape)?;
         let mut idx = vec![0usize; t.shape.len()];
         for &value in data.iter().take(src_total) {
@@ -1849,7 +2019,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                 .map(|(&i, &s)| i * s)
                 .sum();
             prods[flat_out] *= value;
-            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            crate::layout::increment_index(&mut idx, &t.shape);
         }
         upload_f32_from_host(&t.buffer, out_shape, prods)
     }
@@ -1859,7 +2029,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         let data = download_f32_host(t)?;
         let total = checked_numel(&t.shape)?;
         let dim_len = t.shape[dim];
-        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let strides = crate::layout::contiguous_strides(&t.shape);
         let mut out = vec![0.0f32; total];
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -1877,7 +2047,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                     out[flat] = current;
                 }
             }
-            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            crate::layout::increment_index(&mut idx, &t.shape);
         }
         upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
     }
@@ -2082,7 +2252,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         cuda_argsort_host(t, dim, descending)
     }
 }
-impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
     fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
         crate::cuda::ops::quant::launch_quantize(t)
     }
@@ -2153,7 +2323,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
         <Self as TensorOps<Self>>::reshape::<f32>(&out_2d, &out_shape)
     }
 }
-impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
+impl<D: Device> OptimizerOps<Self> for CudaBackendImpl<D> {}
 
 /// Tape-tracked wrapper pairing `launch_im2col_2d`/`launch_col2im_2d` as each
 /// other's forward/backward (they are exact inverses of one another). Once
@@ -2304,7 +2474,7 @@ fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: usize
     Ok(())
 }
 
-impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     fn layer_norm<K: DType>(
         input: &CudaStorage,
         weight: &CudaStorage,
@@ -2337,9 +2507,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// — `t` (integer indices) is not part of the tape's `input_ids`,
     /// matching CPU's `embedding_impl` (`cpu/ops/embedding.rs`) exactly.
     fn embedding<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<KInt>,
-        w: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<KInt>,
+        w: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, w): (&CudaStorage, &CudaStorage) = (t, w);
         if w.shape.len() != 2 {
             return Err(Error::ShapeMismatch {
                 op: "embedding",
@@ -2376,12 +2547,12 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// through `scatter_pool_grad_2d` — no forward recomputation needed,
     /// mirrors CPU's `max_window_2d`/`scatter_pool_grad_2d` pairing exactly.
     fn max_pool2d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
         padding: (usize, usize),
         dilation: (usize, usize),
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let (out, max_indices) = crate::cuda::ops::pool::launch_max_pool2d_forward(
             t,
             kernel_size,
@@ -2409,11 +2580,11 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// WGPU's host-readback-and-Rust-loop approach — see this file's
     /// module doc.
     fn avg_pool2d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
         padding: (usize, usize),
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out =
             crate::cuda::ops::pool::launch_avg_pool2d_forward(t, kernel_size, stride, padding)?;
         let input_shape = t.shape.to_vec();
@@ -2435,9 +2606,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     }
 
     fn adaptive_avg_pool2d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         output_size: (usize, usize),
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = crate::cuda::ops::pool::launch_adaptive_avg_pool2d_forward(t, output_size)?;
         let input_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -2463,14 +2634,16 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// new hand-derived backward math in a compile-verified-only environment
     /// (no CUDA hardware here to gradcheck against).
     fn conv1d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        w: &<Self as Backend>::Storage<K>,
-        bias: Option<&<Self as Backend>::Storage<K>>,
+        t: &<Self as StorageBackend>::Storage<K>,
+        w: &<Self as StorageBackend>::Storage<K>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
         stride: usize,
         padding: usize,
         dilation: usize,
         groups: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, w): (&CudaStorage, &CudaStorage) = (t, w);
+        let bias = bias.map(|b| b as &CudaStorage);
         let (batch, cin, len) = (t.shape[0], t.shape[1], t.shape[2]);
         let (cout, cin_g, k) = (w.shape[0], w.shape[1], w.shape[2]);
         validate_conv_groups("conv1d", cin, cout, groups)?;
@@ -2535,14 +2708,16 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// transpose of either operand needed (unlike CPU/WGPU's
     /// spatial-major `cols @ weight_mat^T`).
     fn conv2d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        w: &<Self as Backend>::Storage<K>,
-        bias: Option<&<Self as Backend>::Storage<K>>,
+        t: &<Self as StorageBackend>::Storage<K>,
+        w: &<Self as StorageBackend>::Storage<K>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
         stride: usize,
         padding: usize,
         dilation: usize,
         groups: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, w): (&CudaStorage, &CudaStorage) = (t, w);
+        let bias = bias.map(|b| b as &CudaStorage);
         let (batch, cin, h, wid) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
         let (cout, cin_g, kh, kw) = (w.shape[0], w.shape[1], w.shape[2], w.shape[3]);
         validate_conv_groups("conv2d", cin, cout, groups)?;
@@ -2612,15 +2787,17 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// never folded into `padding`'s symmetric arithmetic. Only `groups ==
     /// 1` is supported, matching CPU/WGPU's own documented scope.
     fn conv_transpose2d<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        w: &<Self as Backend>::Storage<K>,
-        bias: Option<&<Self as Backend>::Storage<K>>,
+        t: &<Self as StorageBackend>::Storage<K>,
+        w: &<Self as StorageBackend>::Storage<K>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
         stride: usize,
         padding: usize,
         output_padding: usize,
         dilation: usize,
         groups: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let (t, w): (&CudaStorage, &CudaStorage) = (t, w);
+        let bias = bias.map(|b| b as &CudaStorage);
         if groups != 1 {
             return Err(Error::ShapeMismatch {
                 op: "conv_transpose2d",
@@ -2708,7 +2885,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
         }
     }
 }
-impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
+impl<D: Device> LossOps<Self> for CudaBackendImpl<D> {
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
@@ -2730,42 +2907,50 @@ impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
     }
 }
 
-impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
+impl<D: Device> incin_core::backend_authoring::StorageBackend for CudaBackendImpl<D> {
     type Device = D;
-    type FloatElem = T;
-    type IntElem = i64;
-
+    const BACKEND_NAME: &'static str = "Cuda";
     type Storage<K: DType> = CudaStorage;
+
+    fn metadata<K: DType>(t: &Self::Storage<K>) -> &incin_core::backend_authoring::TensorMeta {
+        let t: &CudaStorage = t;
+        &t.meta
+    }
+}
+
+impl<D: Device> Backend for CudaBackendImpl<D> {
     type RawVar = CudaVar;
     type Grads = CudaGrads;
 
     type InnerBackend = Self;
 
-    fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
-        t.shape.to_vec()
+    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
+        let t: &CudaStorage = t;
+        ShapeBuf::from_slice(t.shape.as_ref())
     }
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
+    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
+        let t: &CudaStorage = t;
         Some(t.buffer.dtype)
     }
     fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
+        let t: &CudaStorage = t;
         Some(DeviceId::cuda(t.buffer.device_id))
     }
-    fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
-        "CudaTensor(...)".to_string()
-    }
-    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
-        format!("CudaTensor(shape={:?})", t.shape)
-    }
+    // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
+    // which reads real values back through `float_to_vec1`/`int_to_vec1`.
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+        let loss: &CudaStorage = loss;
         crate::cuda::tape::backward(loss)
     }
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
+        let t: &CudaStorage = t;
         Ok(grads.get(t.id).cloned())
     }
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+        let t: &CudaStorage = t;
         let bytes = t
             .buffer
             .device
@@ -2784,7 +2969,7 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
         validate_cuda_storage(dtype, device, "from_bytes")?;
@@ -2796,32 +2981,52 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
                 got: bytes.len(),
             });
         }
-        cuda_from_bytes(shape, dtype, device.ordinal(), bytes)
+        let context =
+            crate::cuda::gpu::cuda_cache::try_get_cuda_device(device.ordinal()).map_err(|_| {
+                Error::InvalidDeviceOrdinal {
+                    backend: "Cuda",
+                    ordinal: device.ordinal(),
+                }
+            })?;
+        let data = context
+            .default_stream()
+            .clone_htod(bytes)
+            .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
+        let buffer = crate::cuda::storage::CudaBuffer {
+            len: numel,
+            dtype,
+            data: Arc::new(data),
+            device: context,
+            device_id: device.ordinal(),
+        };
+        Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
     }
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
     }
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        let t: &CudaStorage = t;
         Ok(CudaVar { storage: t.clone() })
     }
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        let tensor: &CudaStorage = tensor;
         var.storage = tensor.clone();
         Ok(())
     }
 }
 
-fn validate_cuda(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
-    validate_cuda_device(device)?;
-    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Fill, dtype, op).map(|_| ())
-}
-
-fn validate_cuda_storage(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+fn validate_cuda(dtype: DTypeDescriptor, device: &DeviceId, op: &'static str) -> Result<()> {
     validate_cuda_device(device)?;
     validate_cuda_storage_dtype(dtype, op)
 }
 
-fn validate_cuda_storage_dtype(dtype: DTypeId, op: &'static str) -> Result<()> {
-    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Storage, dtype, op).map(|_| ())
+fn validate_cuda_storage(
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+    op: &'static str,
+) -> Result<()> {
+    validate_cuda_device(device)?;
+    validate_cuda_storage_dtype(dtype, op)
 }
 
 fn validate_cuda_device(device: &DeviceId) -> Result<()> {
@@ -2842,18 +3047,15 @@ fn checked_numel(shape: &[usize]) -> Result<usize> {
     })
 }
 
-fn checked_storage_byte_len(numel: usize, dtype: DTypeId) -> Result<usize> {
-    numel.checked_mul(dtype.element_size()).ok_or_else(|| {
-        Error::Msg(format!(
-            "CUDA storage byte length overflow: {numel} {:?} elements",
-            dtype
-        ))
-    })
+fn checked_storage_byte_len(numel: usize, dtype: DTypeDescriptor) -> Result<usize> {
+    dtype
+        .size_bytes(numel, incin_core::shapes::error::OperationKind::Storage)
+        .map_err(Error::from)
 }
 
 fn cuda_from_f32(
     shape: &[usize],
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     device: &DeviceId,
     values: Vec<f32>,
     op: &'static str,
@@ -2867,9 +3069,9 @@ fn cuda_from_f32(
     )
 }
 
-fn cuda_from_bytes(
+pub(crate) fn cuda_from_bytes(
     shape: &[usize],
-    dtype: DTypeId,
+    dtype: DTypeDescriptor,
     ordinal: usize,
     bytes: &[u8],
 ) -> Result<CudaStorage> {
@@ -2916,8 +3118,8 @@ fn cuda_from_bytes(
 /// have this exact gap already and are tracked separately; every new
 /// F32-only host-round-trip op added in this pass checks first instead of
 /// repeating it.
-fn cuda_require_f32(dtype: DTypeId, op: &'static str) -> Result<()> {
-    if dtype != DTypeId::F32 {
+fn cuda_require_f32(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
+    if dtype != DTypeId::F32.descriptor() {
         return Err(Error::UnsupportedDType {
             dtype,
             backend: "cuda",
@@ -3016,7 +3218,7 @@ fn upload_f32_from_host(
         })?;
     let buffer = crate::cuda::storage::CudaBuffer {
         len: values.len(),
-        dtype: DTypeId::F32,
+        dtype: DTypeId::F32.descriptor(),
         data: Arc::new(data),
         device: t_buf.device.clone(),
         device_id: t_buf.device_id,
@@ -3040,7 +3242,7 @@ fn upload_u32_from_host(
         })?;
     let buffer = crate::cuda::storage::CudaBuffer {
         len: values.len(),
-        dtype: DTypeId::U32,
+        dtype: DTypeId::U32.descriptor(),
         data: Arc::new(data),
         device: t_buf.device.clone(),
         device_id: t_buf.device_id,
@@ -3242,7 +3444,7 @@ mod tests {
     // only locally. `#[ignore]`d so `cargo test` stays green everywhere; run with
     // `cargo test --features cuda,std -- --ignored` on real hardware.
 
-    type B = CudaBackendImpl<f32, Cuda>;
+    type B = CudaBackendImpl<Cuda>;
 
     fn cuda_f32(shape: &[usize], values: Vec<f32>) -> CudaStorage {
         cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
@@ -4260,10 +4462,10 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_where_cond_same_shape() {
-        let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let mask = cuda_bool(&[4], vec![true, false, true, false]);
         let on_true = cuda_f32(&[4], vec![10.0, 20.0, 30.0, 40.0]);
         let on_false = cuda_f32(&[4], vec![-1.0, -2.0, -3.0, -4.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![10.0, -2.0, 30.0, -4.0]
@@ -4273,10 +4475,10 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_where_cond_broadcasts_on_false_against_on_true() {
-        let mask = cuda_f32(&[2, 3], vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
+        let mask = cuda_bool(&[2, 3], vec![true, false, true, false, true, false]);
         let on_true = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let on_false = cuda_f32(&[2, 1], vec![-1.0, -2.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4287,10 +4489,10 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
-        let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let mask = cuda_bool(&[4], vec![true, false, true, false]);
         let on_true = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let on_false = cuda_f32(&[1], vec![9.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g_true = grads
             .get(on_true.id)

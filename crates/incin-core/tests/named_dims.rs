@@ -104,8 +104,14 @@ fn named_lookup_distinguishes_same_spelling_in_different_schemas() {
         DimCons<NamedDim<second_schema::Channels, usize>, Nil>,
     >;
 
-    assert_eq!(first_schema::Channels::selector().resolve::<S>().unwrap(), 0);
-    assert_eq!(second_schema::Channels::selector().resolve::<S>().unwrap(), 1);
+    assert_eq!(
+        first_schema::Channels::selector().resolve::<S>().unwrap(),
+        0
+    );
+    assert_eq!(
+        second_schema::Channels::selector().resolve::<S>().unwrap(),
+        1
+    );
 }
 
 #[test]

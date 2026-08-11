@@ -1648,6 +1648,16 @@ impl<
         B: Capabilities + Execute<Descriptor<op::Repeat>>,
         <B as Execute<Descriptor<op::Repeat>>>::Output: Into<B::Storage<K>>,
     {
+        let rank = self.shape_buf().len();
+        if repeats.len() != rank {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::RankMismatch {
+                    operation: OperationKind::Repeat,
+                    expected: crate::shapes::RankExpectation::Exactly(rank),
+                    actual: repeats.len(),
+                },
+            ));
+        }
         let out_shape = self
             .shape_buf()
             .iter()
