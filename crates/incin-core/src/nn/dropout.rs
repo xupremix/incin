@@ -87,7 +87,7 @@ where
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
-            x._grad.clone(),
+            x._grad,
         )
     }
 }
