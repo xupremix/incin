@@ -24,7 +24,13 @@ pub struct SimpleMlp<B: Backend> {
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<B: Backend + Execute<op::Add> + Execute<op::Relu> + Execute<op::TransposeExact>> SimpleMlp<B>
+impl<
+    B: Backend
+        + incin_core::nn::param::ParameterInit<f32>
+        + Execute<op::Add>
+        + Execute<op::Relu>
+        + Execute<op::TransposeExact>,
+> SimpleMlp<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,

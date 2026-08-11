@@ -11,7 +11,8 @@ use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::exec::catalog::op;
-use incin_core::tensor::backend::Execute;
+use incin_core::nn::param::ParameterInit;
+use incin_core::tensor::backend::{Execute, FloatOps, NumericOps};
 
 /// The CPU backend type alias.
 type NB = CpuBackendImpl;
@@ -130,6 +131,9 @@ where
     B: Backend
         + SupportsDType<f32>
         + SupportsDType<u32>
+        + ParameterInit<f32>
+        + NumericOps<B>
+        + FloatOps<B>
         + Execute<op::TensorFromData>
         + Execute<op::MatMulExact>
         + Execute<op::Add>
