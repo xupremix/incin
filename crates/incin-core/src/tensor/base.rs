@@ -1,18 +1,18 @@
+use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::{Local, Placement, PlacementKind};
+use crate::exec::Capabilities;
+use crate::exec::catalog::{
+    ArangeAttributes, CreationAttributes, FullAttributes, LinspaceAttributes, op,
+};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
     DynShape, Error, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
     SupportsDType, TensorArgs, TransferTo,
 };
 use crate::tensor::dtype::PlainDType;
-use crate::backend_authoring::{Descriptor, Execute};
-use crate::exec::catalog::{
-    ArangeAttributes, CreationAttributes, FullAttributes, LinspaceAttributes, op,
-};
-use crate::exec::Capabilities;
-use crate::exec::context::ExecutionContext;
-use crate::exec::dispatch;
-use crate::exec::request::TensorHandle;
 use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -703,12 +703,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G>
 where
     (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>,
     B: SupportsDType<K>,

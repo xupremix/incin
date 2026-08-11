@@ -1,17 +1,13 @@
 //! Module operations (LayerNorm, BatchNorm, etc) for neural networks.
 use crate::exec::catalog::{BatchNormAttributes, Descriptor, LayerNormAttributes, op};
-use crate::exec::dispatch;
 use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::{Backend, Dyn, DynShape, Local, RequiresGrad, Result, Shape, Tensor};
 use crate::tensor::backend::Execute;
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G>
 {
     #[inline]
     /// `layer_norm`.
@@ -37,10 +33,9 @@ impl<
         };
         let shape = self._shape.clone();
         let context = ExecutionContext::from_scope(B::default());
-        let inner = dispatch::execute_shaped::<op::LayerNorm, B, S>(
-            &context, attributes, &inputs, &shape,
-        )
-        .map_err(crate::prelude::Error::from)?;
+        let inner =
+            dispatch::execute_shaped::<op::LayerNorm, B, S>(&context, attributes, &inputs, &shape)
+                .map_err(crate::prelude::Error::from)?;
         Tensor::from_shape_value(
             inner.into(),
             shape,
@@ -82,10 +77,9 @@ impl<
         };
         let shape = self._shape.clone();
         let context = ExecutionContext::from_scope(B::default());
-        let inner = dispatch::execute_shaped::<op::BatchNorm, B, S>(
-            &context, attributes, &inputs, &shape,
-        )
-        .map_err(crate::prelude::Error::from)?;
+        let inner =
+            dispatch::execute_shaped::<op::BatchNorm, B, S>(&context, attributes, &inputs, &shape)
+                .map_err(crate::prelude::Error::from)?;
         Tensor::from_shape_value(
             inner.into(),
             shape,

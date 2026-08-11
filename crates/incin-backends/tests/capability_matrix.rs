@@ -11,9 +11,9 @@ use incin_core::backend_authoring::{
     TensorOps,
 };
 use incin_core::exec::catalog::{
-    ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes,
+    ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes, DataAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
-    DataAttributes, LossAttributes, LossReduction, NoAttributes, NormAttributes, SplitAttributes,
+    LossAttributes, LossReduction, NoAttributes, NormAttributes, SplitAttributes,
     VarianceAttributes, op,
 };
 use incin_core::exec::{
@@ -1186,12 +1186,10 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             };
             match operation {
                 OperationKind::TensorFromData => {
-                    dispatch::execute::<op::TensorFromData, _>(&context, attributes, &[])
-                        .unwrap()
+                    dispatch::execute::<op::TensorFromData, _>(&context, attributes, &[]).unwrap()
                 }
                 OperationKind::TensorFromBytes => {
-                    dispatch::execute::<op::TensorFromBytes, _>(&context, attributes, &[])
-                        .unwrap()
+                    dispatch::execute::<op::TensorFromBytes, _>(&context, attributes, &[]).unwrap()
                 }
                 _ => unreachable!(),
             }

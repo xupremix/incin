@@ -435,12 +435,16 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let _reshaped = relu.reshape::<s![3, 2]>(((), ((), ()))).unwrap();
 
     let graph = incin_core::prelude::extract_graph();
-    assert!(graph
-        .nodes
-        .iter()
-        .any(|node| node.op == incin_core::graph::OpType::Relu));
-    assert!(graph
-        .nodes
-        .iter()
-        .any(|node| node.op == incin_core::graph::OpType::Reshape));
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|node| node.op == incin_core::graph::OpType::Relu)
+    );
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|node| node.op == incin_core::graph::OpType::Reshape)
+    );
 }
