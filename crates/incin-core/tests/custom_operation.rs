@@ -2,6 +2,7 @@
 
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
     StorageBackend, execute, execute_shaped,
@@ -92,6 +93,17 @@ impl Execute<op::Zeros> for CompanyBackend {
     }
 }
 
+impl Execute<CompanyIdentity> for CpuBackendImpl<Cpu> {
+    type Output = ProofLevel;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, CompanyIdentity, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(request.operation.proof_level())
+    }
+}
+
 #[test]
 fn downstream_custom_operation_keeps_static_shape_dispatch() {
     type S = incin::prelude::s![2, 3];
@@ -151,4 +163,21 @@ fn built_in_backend_can_compile_an_open_custom_operation() {
     }
 
     assert_custom_execution::<DummyBackend<Cpu>>();
+}
+
+#[test]
+fn built_in_cpu_backend_executes_a_downstream_operation() {
+    type S = incin::prelude::s![2, 3];
+    let expected = ShapeValue::<S>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
+    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::default());
+    let output = execute_shaped::<CompanyIdentity, _, S>(
+        &context,
+        IdentityAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+        &expected,
+    )
+    .unwrap();
+    assert_eq!(output, ProofLevel::Static);
 }
