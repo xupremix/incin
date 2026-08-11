@@ -3,29 +3,11 @@
 Feature `backend-authoring`. This chapter is for someone adding a new device
 to Incin, not for someone using it.
 
-Be aware going in that the library currently has **two** execution
-architectures, and a new backend has to reckon with both. That is a known,
-in-progress state, not a design you should imitate for its own sake —
-[What's not finished](./whats_not_finished.md) tracks the convergence.
-
-## The two paths
-
-**The legacy path**: `Backend` requires nine operation-family supertraits —
-`CreationOps`, `NumericOps`, `FloatOps`, `TensorOps`, `ReductionOps`,
-`ModuleOps`, `LossOps`, `QuantizedOps`, `OptimizerOps`. Implementing `Backend`
-means implementing all nine. This is what the stable `Tensor` surface calls
-today, so a backend that skips it cannot run most user code.
-
-**The canonical path**: one `Execute<Descriptor<op::X>>` implementation per
-exact operation identity, dispatched through
-`incin_core::exec::dispatch::execute_shaped`. Narrower, checked, and where the
-library is heading — but adoption is still partial.
-
-A caution the trait signatures will not tell you: **some default methods on
-the op-family traits are real implementations and some are unsupported
-stubs.** An empty `impl NumericOps for MyBackend {}` compiles and tells you
-nothing about what actually works. Read the default bodies before relying on
-them.
+The backend authoring contract is the descriptor executor. Implement one
+`Execute<Descriptor<op::X>>` instance for each operation the backend advertises.
+The older operation-family traits remain internal implementation details while
+the tensor surface finishes moving to descriptors. They are not part of the
+facade authoring contract.
 
 ## `StorageBackend`: the minimum
 
@@ -128,9 +110,8 @@ without a wrapper that gets immediately unwrapped.
 1. `StorageBackend` — name, storage type, device type, metadata accessor.
 2. Your storage type produces a valid `TensorMeta`.
 3. `Capabilities` — claim exactly what you execute, refuse with typed reasons.
-4. The nine op-family traits, for the stable surface to work at all.
-5. `Execute<Descriptor<op::X>>` for whatever you want on the canonical path.
-6. A capability-matrix test that *runs* each advertised row rather than
+4. `Execute<Descriptor<op::X>>` for each advertised operation.
+5. A capability-matrix test that *runs* each advertised row rather than
    asserting the table against itself.
 
 Step 6 is the one that catches real mistakes. The repository's own

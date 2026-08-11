@@ -217,11 +217,10 @@ pub mod experimental {
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
         Alignment, AttributeContract, Backend, Capabilities, CapabilityQuery, CapabilityRegistry,
-        CreationOps, DescriptorError, Execute, ExecutionContext, ExecutionDescriptor,
-        ExecutionRequest, FloatOps, LogicalTensorMeta, LossOps, LossScaling, ModuleOps, NumericOps,
-        Operation, OperationIdentity, OperationKey, OptimizerOps, PrecisionSpec, QuantizedOps,
-        ReductionOps, RuntimePrecisionPolicy, ShapeBuf, StorageBackend, SupportLevel,
-        SupportsDType, TensorBackend, TensorMeta, TensorOps, TransferTo, Validated,
+        DescriptorError, Execute, ExecutionContext, ExecutionDescriptor, ExecutionRequest,
+        LogicalTensorMeta, LossScaling, Operation, OperationIdentity, OperationKey, PrecisionSpec,
+        RuntimePrecisionPolicy, ShapeBuf, StorageBackend, SupportLevel, SupportsDType,
+        TensorBackend, TensorMeta, TransferTo, Validated,
     };
     pub use incin_core::backend_authoring::{
         execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,
