@@ -13,7 +13,7 @@ extern crate incin_core as incin;
 
 use incin_backends::IncinBackend;
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::{Backend, LossOps, ModuleOps, NumericOps, TensorOps};
+use incin_core::backend_authoring::{LossOps, ModuleOps, NumericOps, TensorOps};
 use incin_core::exec::catalog::{LossAttributes, LossReduction, NoAttributes, ShapeAttributes, op};
 use incin_core::exec::dispatch::{self, CanonicalError};
 use incin_core::exec::{
@@ -2063,8 +2063,6 @@ fn a_left_broadcasting_canonical_invocation_matches_the_legacy_result() {
 // that a real user-facing call actually reaches the canonical path with the
 // right autograd behaviour, which raw `dispatch::execute` calls elsewhere in
 // this file cannot exercise (they bypass `Tensor::under_grad_mode` entirely).
-type StableBackend = IncinBackend<Cpu>;
-
 /// `embedding`'s two operands admit different dtypes by construction: the
 /// index operand is integer, and the weight operand is f32 only —
 /// `embedding_impl` always reads and writes f32 regardless of what the
