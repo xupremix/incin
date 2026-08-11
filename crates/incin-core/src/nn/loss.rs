@@ -150,7 +150,7 @@ impl<R: ReductionMode> MSELoss<R> {
     /// Forward pass computing the Mean Squared Error between predictions and targets.
     pub fn forward<
         S: Shape + crate::prelude::DynShape,
-        B: Backend + crate::tensor::backend::LossOps<B>,
+        B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::MseLoss>>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
     >(
@@ -160,8 +160,24 @@ impl<R: ReductionMode> MSELoss<R> {
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: MseReductionShape<S>,
+        <B as Execute<Descriptor<op::MseLoss>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = B::mse_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&pred.inner),
+            TensorHandle::from_storage::<B, K, Local>(&target.inner),
+        ];
+        let reduction = match R::as_enum() {
+            Reduction::None => LossReduction::None,
+            Reduction::Mean => LossReduction::Mean,
+            Reduction::Sum => LossReduction::Sum,
+        };
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute::<op::MseLoss, B>(
+            &context,
+            LossAttributes { reduction },
+            &inputs,
+        )
+        .map_err(crate::prelude::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -169,7 +185,7 @@ impl<R: ReductionMode> MSELoss<R> {
         let out_shape =
             shape_buf_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Tensor::from_parts(
-            inner,
+            inner.into(),
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
