@@ -3,34 +3,46 @@
 #![cfg(feature = "metal")]
 
 use incin_backends::metal::{MetalBackendImpl, MetalStorage, MetalStorageMode};
-use incin_core::exec::{
-    ExecutionContext, MatMulRule, MatMulSpec, ReshapeRule, ReshapeSpec, ShapeRule, TapeStorage,
-    TensorHandle, Validated,
-};
+use incin_core::backend_authoring::operations::{NoAttributes, ShapeAttributes};
+use incin_core::exec::catalog::LogicalTensorMeta;
+use incin_core::exec::{Descriptor, ExecutionContext, TapeStorage, TensorHandle, Validated, op};
 // The op traits and the descriptor execution contract are `backend_authoring`,
 // not prelude. This file asked the prelude for them, which never had them, and
 // nothing noticed because no CI job compiles the Metal test targets.
 use incin_core::backend_authoring::{
     Execute, ExecutionRequest, FloatOps, NumericOps, ReductionOps,
 };
-use incin_core::prelude::{Backend, DTypeId, DeviceId, Dyn, Local};
-use incin_core::typenum::{U2, U3, U4, U6};
+use incin_core::prelude::{Backend, DTypeId, DeviceId, Local, ShapeBuf};
 
 type TestBackend = MetalBackendImpl<incin_core::prelude::Metal>;
 
-fn field<S: incin_core::shapes::Shape>(dims: &[usize]) -> incin_core::shapes::ShapeBuf {
-    S::try_from_dims(dims).expect("test dimensions must match shape")
+fn lower_matmul(lhs: &[usize], rhs: &[usize]) -> Validated<Descriptor<op::MatMulExact>> {
+    Descriptor::<op::MatMulExact>::infer_runtime(
+        NoAttributes,
+        vec![
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(lhs)),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(rhs)),
+                dtype: None,
+                device: None,
+            },
+        ],
+    )
+    .expect("test operands must be valid matmul shapes")
 }
 
-fn lower_matmul(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {
-    <MatMulRule as ShapeRule<(Dyn, Dyn)>>::lower(&(field::<Dyn>(lhs), field::<Dyn>(rhs)), ())
-        .expect("test operands must be valid matmul shapes")
-}
-
-fn lower_reshape() -> Validated<ReshapeSpec> {
-    <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-        &(field::<(U2, U6)>(&[2, 6]), field::<(U3, U4)>(&[3, 4])),
-        (),
+fn lower_reshape() -> Validated<Descriptor<op::ReshapeExact>> {
+    Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: vec![3, 4] },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[2, 6])),
+            dtype: None,
+            device: None,
+        }],
     )
     .expect("12 elements either way")
 }
@@ -39,7 +51,7 @@ fn create_storage(shape: &[usize], values: &[f32]) -> MetalStorage {
     TestBackend::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.into(),
         &DeviceId::metal(0),
     )
     .expect("test buffer must match its shape")
@@ -70,7 +82,7 @@ fn test_metal_storage_tagging_and_tape_storage_invariants() {
 fn test_metal_private_storage_host_readback_error() {
     let meta = incin_core::exec::TensorMeta::contiguous(
         incin_core::shapes::ShapeBuf::from_slice(&[2, 2]),
-        DTypeId::F32,
+        DTypeId::F32.into(),
         DeviceId::metal(0),
         MetalStorage::alignment(),
         4,
