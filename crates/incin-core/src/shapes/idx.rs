@@ -83,13 +83,10 @@ impl DimIdx for InferDim {
     }
 }
 
-// Implement for NamedDyn
-impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> DimIdx
-    for NamedDyn<Tag>
-{
-    /// A named-dynamic dimension resolves to itself.
-    type Resolved = NamedDyn<Tag>;
-    /// Always `None` — not a static known size, but handled specially.
+// A named runtime extent is a normal canonical `NamedDim`; its semantic tag
+// does not change reshape's runtime inference rules.
+impl<Tag: crate::shapes::AxisTag> DimIdx for NamedDim<Tag, usize> {
+    type Resolved = NamedDim<Tag, usize>;
     fn size() -> Option<usize> {
         None
     }
@@ -111,81 +108,94 @@ pub trait ReshapeTarget<In: Shape> {
     ) -> core::result::Result<Vec<usize>, crate::shapes::error::ShapeError>;
 }
 
-// Generate implementations for tuples up to 4D for now to match the user's common cases
-macro_rules! impl_reshape_target {
-    ($($D:ident),*) => {
-        impl<In: Shape, $($D: DimIdx),*> ReshapeTarget<In> for ($($D,)*)
-        where
-            ($($D::Resolved,)*): Shape,
-        {
-            /// The resolved output shape.
-            type Output = ($($D::Resolved,)*);
+/// Internal recursive collector for structural reshape targets.
+#[doc(hidden)]
+pub trait ReshapeSpec {
+    type Output: Shape;
 
-            /// Computes the concrete output dimensions from the input's runtime shape.
-
-            fn calculate_shape(in_shape_vec: &[usize]) -> core::result::Result<Vec<usize>, crate::shapes::error::ShapeError> {
-                let total_elements = crate::shapes::ShapeBuf::from_slice(in_shape_vec)
-                    .checked_numel(crate::shapes::error::OperationKind::Reshape)?;
-                let mut resolved_sizes = vec![];
-                let mut infer_idx = None;
-
-                // Collect specified sizes and find the InferDim
-                let mut _current_idx = 0usize;
-                $(
-                    let size = $D::size();
-                    if let Some(size) = size {
-                        resolved_sizes.push(size);
-                    } else {
-                        // Both InferDim and NamedDyn can lack a statically known size (returning None).
-                        // In Reshape contexts, InferDim acts as the unique auto-inferred dimension.
-
-                        if infer_idx.is_some() {
-                            return Err(crate::shapes::error::ShapeError::InvalidParameter {
-                                operation: crate::shapes::error::OperationKind::Reshape,
-                                parameter: "inferred dimensions",
-                                value: 2,
-                            });
-                        }
-                        infer_idx = Some(_current_idx);
-                        resolved_sizes.push(0); // placeholder
-                    }
-                    _current_idx += 1;
-                )*
-
-                if let Some(idx) = infer_idx {
-                    let known_product = resolved_sizes
-                        .iter()
-                        .filter(|&&size| size != 0)
-                        .try_fold(1usize, |product, &size| product.checked_mul(size))
-                        .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
-                            operation: crate::shapes::error::OperationKind::Reshape,
-                            expression: "product of specified reshape dimensions",
-                        })?;
-                    if known_product > 0 {
-                        if !total_elements.is_multiple_of(known_product) {
-                            return Err(crate::shapes::error::ShapeError::DimensionMismatch {
-                                operation: crate::shapes::error::OperationKind::Reshape,
-                                axis: crate::shapes::error::Axis::Index(idx),
-                                lhs: total_elements,
-                                rhs: known_product,
-                                constraint: crate::shapes::error::DimensionConstraint::DivisibleBy,
-                            });
-                        }
-                        resolved_sizes[idx] = total_elements / known_product;
-                    } else {
-                        resolved_sizes[idx] = 0;
-                    }
-                }
-
-                Ok(resolved_sizes)
-            }
-        }
-    };
+    fn collect(
+        sizes: &mut Vec<usize>,
+        inferred: &mut Option<usize>,
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError>;
 }
 
-// Already variadic; it was simply never invoked above rank 4, so a rank-5
-// reshape target had no impl while the rank-5 shape it targeted did.
-incin_macros::rank_sweep!(names_from1 => impl_reshape_target);
+impl ReshapeSpec for Nil {
+    type Output = Nil;
+
+    fn collect(
+        _sizes: &mut Vec<usize>,
+        _inferred: &mut Option<usize>,
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        Ok(())
+    }
+}
+
+impl<D: DimIdx, T: ReshapeSpec> ReshapeSpec for DimCons<D, T>
+where
+    D::Resolved: Dim,
+{
+    type Output = DimCons<D::Resolved, T::Output>;
+
+    fn collect(
+        sizes: &mut Vec<usize>,
+        inferred: &mut Option<usize>,
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        let index = sizes.len();
+        if let Some(size) = D::size() {
+            sizes.push(size);
+        } else {
+            if inferred.is_some() {
+                return Err(crate::shapes::error::ShapeError::InvalidParameter {
+                    operation: crate::shapes::error::OperationKind::Reshape,
+                    parameter: "inferred dimensions",
+                    value: 2,
+                });
+            }
+            *inferred = Some(index);
+            sizes.push(0);
+        }
+        T::collect(sizes, inferred)
+    }
+}
+
+impl<In: Shape, Target: ReshapeSpec> ReshapeTarget<In> for Target {
+    type Output = Target::Output;
+
+    fn calculate_shape(
+        in_shape_vec: &[usize],
+    ) -> core::result::Result<Vec<usize>, crate::shapes::error::ShapeError> {
+        let total_elements = crate::shapes::ShapeBuf::from_slice(in_shape_vec)
+            .checked_numel(crate::shapes::error::OperationKind::Reshape)?;
+        let mut sizes = Vec::new();
+        let mut inferred = None;
+        Target::collect(&mut sizes, &mut inferred)?;
+        if let Some(index) = inferred {
+            let known_product = sizes
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != index)
+                .try_fold(1usize, |product, (_, &size)| product.checked_mul(size))
+                .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+                    operation: crate::shapes::error::OperationKind::Reshape,
+                    expression: "product of specified reshape dimensions",
+                })?;
+            if known_product == 0 {
+                sizes[index] = 0;
+            } else if !total_elements.is_multiple_of(known_product) {
+                return Err(crate::shapes::error::ShapeError::DimensionMismatch {
+                    operation: crate::shapes::error::OperationKind::Reshape,
+                    axis: crate::shapes::error::Axis::Index(index),
+                    lhs: total_elements,
+                    rhs: known_product,
+                    constraint: crate::shapes::error::DimensionConstraint::DivisibleBy,
+                });
+            } else {
+                sizes[index] = total_elements / known_product;
+            }
+        }
+        Ok(sizes)
+    }
+}
 
 /// A trait for types that describe a slicing operation along a single tensor axis in the `idx![]` macro.
 ///
@@ -268,53 +278,290 @@ pub trait SliceTarget<In: Shape> {
     fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)>;
 }
 
-macro_rules! impl_slice_target {
-    ($($D:ident),*) => {
-        impl<In: Shape, $($D: SliceIdx),*> SliceTarget<In> for ($($D,)*)
-        where
-            ($($D::Resolved,)*): Shape,
-        {
-            /// The resolved output shape.
-            type Output = ($($D::Resolved,)*);
-
-            /// Computes each dimension's `(start, end)` bounds from the input's runtime shape.
-
-            fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
-                let mut bounds = vec![];
-                let mut _current_idx = 0usize;
-                $(
-                    let size = in_shape_vec.get(_current_idx).copied().unwrap_or(0);
-                    bounds.push($D::bounds(size));
-                    _current_idx += 1;
-                )*
-                bounds
-            }
-        }
-    };
+#[doc(hidden)]
+pub trait SliceSpec {
+    type Output: Shape;
+    fn collect(input: &[usize], axis: &mut usize, output: &mut Vec<(usize, usize)>);
 }
 
-// Already variadic; same four-rank invocation ceiling as the reshape target.
-incin_macros::rank_sweep!(names_from1 => impl_slice_target);
+impl SliceSpec for Nil {
+    type Output = Nil;
+    fn collect(_input: &[usize], _axis: &mut usize, _output: &mut Vec<(usize, usize)>) {}
+}
+
+impl<D: SliceIdx, T: SliceSpec> SliceSpec for DimCons<D, T>
+where
+    D::Resolved: Dim,
+{
+    type Output = DimCons<D::Resolved, T::Output>;
+    fn collect(input: &[usize], axis: &mut usize, output: &mut Vec<(usize, usize)>) {
+        let size = input.get(*axis).copied().unwrap_or(0);
+        output.push(D::bounds(size));
+        *axis += 1;
+        T::collect(input, axis, output);
+    }
+}
+
+impl<In: Shape, Target: SliceSpec> SliceTarget<In> for Target {
+    type Output = Target::Output;
+    fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
+        let mut bounds = Vec::new();
+        let mut axis = 0;
+        Target::collect(in_shape_vec, &mut axis, &mut bounds);
+        bounds
+    }
+}
+
+/// Structural cursor for axis 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct Here;
+
+impl Here {
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
+        AxisSelector::new(&[0]).normalize(rank)
+    }
+}
+
+/// Structural cursor for axis `I + 1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct Next<I>(pub core::marker::PhantomData<I>);
+
+impl<I> Next<I> {
+    pub const DEFAULT: Self = Next(core::marker::PhantomData);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>>
+    where
+        Self: StaticCursor,
+    {
+        AxisSelector::new(&[Self::INDEX]).normalize(rank)
+    }
+}
+
+/// Structural cursor for axis counting from end `-(I + 1)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct FromEnd<I>(pub core::marker::PhantomData<I>);
+
+impl<I> FromEnd<I> {
+    pub const DEFAULT: Self = FromEnd(core::marker::PhantomData);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>>
+    where
+        Self: StaticCursor,
+    {
+        AxisSelector::new(&[Self::INDEX]).normalize(rank)
+    }
+}
+
+/// Trait for static axis cursors with compile-time evaluated signed index.
+pub trait StaticCursor:
+    'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+{
+    const INDEX: isize;
+}
+
+impl StaticCursor for Here {
+    const INDEX: isize = 0;
+}
+
+impl<I: StaticCursor> StaticCursor for Next<I> {
+    const INDEX: isize = 1 + I::INDEX;
+}
+
+impl<I: StaticCursor> StaticCursor for FromEnd<I> {
+    const INDEX: isize = -(1 + I::INDEX);
+}
+
+/// Value-level spelling of a compile-time axis cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct StaticAxis<I: StaticCursor>(core::marker::PhantomData<I>);
+
+impl<I: StaticCursor> StaticAxis<I> {
+    pub const DEFAULT: Self = Self(core::marker::PhantomData);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
+        AxisSelector::new(&[I::INDEX]).normalize(rank)
+    }
+}
+
+/// A semantic named-axis selector. It carries only the tag and never stores a
+/// structural position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NamedAxisSelector<Tag: crate::shapes::AxisTag>(core::marker::PhantomData<Tag>);
+
+impl<Tag: crate::shapes::AxisTag> Default for NamedAxisSelector<Tag> {
+    fn default() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<Tag: crate::shapes::AxisTag> NamedAxisSelector<Tag> {
+    /// Resolves this selector against the current exact shape.
+    pub fn resolve<S>(&self) -> crate::err::Result<usize>
+    where
+        S: NamedAxisLookup<Tag>,
+    {
+        S::lookup_named().map_err(crate::err::Error::Shape)
+    }
+}
+
+/// Runtime fallback for named lookup when Stable Rust cannot prove a unique
+/// recursive type-level match without overlapping implementations.
+pub trait NamedAxisLookup<Tag: crate::shapes::AxisTag>: Shape {
+    /// Resolves the semantic name against the current structural shape.
+    fn lookup_named() -> core::result::Result<usize, crate::shapes::ShapeError>;
+}
+
+trait NamedAxisMetadata {
+    fn collect_named(name: &'static str, offset: usize, matches: &mut Vec<usize>);
+}
+
+impl NamedAxisMetadata for Nil {
+    fn collect_named(_: &'static str, _: usize, _: &mut Vec<usize>) {}
+}
+
+impl<H: Dim, T: Shape + NamedAxisMetadata> NamedAxisMetadata for DimCons<H, T> {
+    fn collect_named(name: &'static str, offset: usize, matches: &mut Vec<usize>) {
+        if H::NAME == Some(name) {
+            matches.push(offset);
+        }
+        T::collect_named(name, offset + 1, matches);
+    }
+}
+
+impl<Tag: crate::shapes::AxisTag, S: Shape + NamedAxisMetadata> NamedAxisLookup<Tag> for S {
+    fn lookup_named() -> core::result::Result<usize, crate::shapes::ShapeError> {
+        let mut matches = Vec::new();
+        S::collect_named(Tag::NAME, 0, &mut matches);
+        match matches.as_slice() {
+            [] => Err(crate::shapes::ShapeError::MissingNamedAxis { name: Tag::NAME }),
+            [index] => Ok(*index),
+            _ => Err(crate::shapes::ShapeError::AmbiguousNamedAxis { name: Tag::NAME }),
+        }
+    }
+}
+
+/// Canonical runtime/static axis selector sequence.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AxisSelector {
+    pub raw_axes: Vec<isize>,
+}
+
+impl AxisSelector {
+    pub fn new(axes: &[isize]) -> Self {
+        Self {
+            raw_axes: axes.to_vec(),
+        }
+    }
+
+    /// Normalizes signed relative axis indices against input `rank`, rejecting out-of-range or duplicate indices.
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
+        let mut normalized = Vec::with_capacity(self.raw_axes.len());
+        for &raw in &self.raw_axes {
+            let norm = if raw >= 0 {
+                let u = raw as usize;
+                if u >= rank {
+                    return Err(crate::err::Error::Shape(
+                        crate::shapes::error::ShapeError::InvalidAxis { axis: u, rank },
+                    ));
+                }
+                u
+            } else {
+                let neg = raw.unsigned_abs();
+                if neg > rank {
+                    return Err(crate::err::Error::Shape(
+                        crate::shapes::error::ShapeError::InvalidAxis { axis: rank, rank },
+                    ));
+                }
+                rank - neg
+            };
+            if normalized.contains(&norm) {
+                return Err(crate::err::Error::Shape(
+                    crate::shapes::error::ShapeError::DuplicateAxis { axis: norm },
+                ));
+            }
+            normalized.push(norm);
+        }
+        Ok(normalized)
+    }
+}
+
+/// Trait allowing numbers and static cursors to be converted to signed axis indices.
+pub trait ToAxisIndex {
+    fn to_axis_index(&self) -> isize;
+}
+
+impl ToAxisIndex for isize {
+    fn to_axis_index(&self) -> isize {
+        *self
+    }
+}
+
+impl ToAxisIndex for usize {
+    fn to_axis_index(&self) -> isize {
+        *self as isize
+    }
+}
+
+impl ToAxisIndex for i32 {
+    fn to_axis_index(&self) -> isize {
+        *self as isize
+    }
+}
+
+impl ToAxisIndex for Here {
+    fn to_axis_index(&self) -> isize {
+        Here::INDEX
+    }
+}
+
+impl<I: StaticCursor> ToAxisIndex for Next<I> {
+    fn to_axis_index(&self) -> isize {
+        Next::<I>::INDEX
+    }
+}
+
+impl<I: StaticCursor> ToAxisIndex for FromEnd<I> {
+    fn to_axis_index(&self) -> isize {
+        FromEnd::<I>::INDEX
+    }
+}
+
+impl<I: StaticCursor> ToAxisIndex for StaticAxis<I> {
+    fn to_axis_index(&self) -> isize {
+        I::INDEX
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::Shape;
+    use crate::prelude::{DimCons, Nil, Shape};
     use typenum::{U0, U1, U2, U3, U4};
 
-    fn assert_shape_eq<S1: Shape, S2: Shape>() {}
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
+
+    fn assert_shape_eq<S1: Shape, S2: Shape>()
+    where
+        S1: Same<S2>,
+    {
+    }
 
     #[test]
     fn slice_range_output_shape() {
-        // idx![1..3, .., 0..2] on (U4, U4, U3) → (U2, usize, U2)
-        type IdxT = (Slice<U1, U3, U2>, Ellipsis, Slice<U0, U2, U2>);
-        assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (U2, usize, U2)>();
+        // idx![1..3, .., 0..2] on [4, 4, 3] → [2, runtime, 2].
+        type Input = DimCons<U4, DimCons<U4, DimCons<U3, Nil>>>;
+        type IdxT = DimCons<Slice<U1, U3, U2>, DimCons<Ellipsis, DimCons<Slice<U0, U2, U2>, Nil>>>;
+        type Expected = DimCons<U2, DimCons<usize, DimCons<U2, Nil>>>;
+        assert_shape_eq::<<IdxT as SliceTarget<Input>>::Output, Expected>();
     }
 
     #[test]
     fn slice_full_passthrough() {
-        // idx![.., .., ..] on (U4, U4, U3) → (usize, usize, usize)
-        type IdxT = (Ellipsis, Ellipsis, Ellipsis);
-        assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (usize, usize, usize)>();
+        // idx![.., .., ..] on [4, 4, 3] → [runtime, runtime, runtime].
+        type Input = DimCons<U4, DimCons<U4, DimCons<U3, Nil>>>;
+        type IdxT = DimCons<Ellipsis, DimCons<Ellipsis, DimCons<Ellipsis, Nil>>>;
+        type Expected = DimCons<usize, DimCons<usize, DimCons<usize, Nil>>>;
+        assert_shape_eq::<<IdxT as SliceTarget<Input>>::Output, Expected>();
     }
 }

@@ -32,13 +32,17 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// consumed by a shape operation.  Keeping this on the dimension trait
     /// lets symbolic expressions remain representable for diagnostics while
     /// preventing them from being silently downgraded to runtime checks.
-    const STATIC_VALID: () = match Self::STATIC {
-        StaticExtent::Invalid => panic!("invalid static dimension expression"),
-        _ => (),
+    const STATIC_VALID: () = {
+        if matches!(Self::STATIC, StaticExtent::Invalid) {
+            panic!("invalid static dimension expression");
+        }
     };
 
     /// This axis's size, when the type fixes it.
     const STATIC: StaticExtent = StaticExtent::RuntimeUnknown;
+
+    /// Semantic name carried by this axis, when it is named.
+    const NAME: Option<&'static str> = None;
 
     /// Returns the precise semantic static extent classification of this dimension.
     #[inline]
@@ -100,6 +104,19 @@ pub trait AxisTag:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
     const NAME: &'static str;
+
+    /// Creates the canonical semantic selector for this axis tag.
+    ///
+    /// The selector contains only the tag. It resolves its current position
+    /// against the shape at the operation boundary, so transposing a named
+    /// axis cannot leave a stale position behind.
+    #[inline]
+    fn selector() -> crate::shapes::idx::NamedAxisSelector<Self>
+    where
+        Self: Sized,
+    {
+        crate::shapes::idx::NamedAxisSelector::default()
+    }
 }
 
 /// Namespace marker used by a group of tags declared in one `dim!` call.
@@ -125,16 +142,14 @@ pub trait DimCompatible<Rhs: Dim>: Dim {
             panic!("Invalid static dimension expression");
         }
         (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => {
-            if lhs != rhs {
-                panic!("Statically incompatible dimensions");
-            }
+            assert!(lhs == rhs, "Statically incompatible dimensions");
         }
         _ => (),
     };
 
     /// Runtime compatibility check between two dimension instances.
     fn check_compatible(&self, _rhs: &Rhs) -> Result<(), crate::shapes::error::ShapeError> {
-        let _ = Self::STATIC_ASSERT;
+        Self::STATIC_ASSERT;
         // Runtime extents are compared by ShapeBuf, where both values are
         // available. A dimension specification cannot compare values it does
         // not own.
@@ -144,24 +159,6 @@ pub trait DimCompatible<Rhs: Dim>: Dim {
 
 impl<L: Dim, R: Dim> DimCompatible<R> for L {}
 
-/// A dimension whose *type* is not the literal `U1`.
-///
-/// Broadcasting stretches an axis of extent 1 to meet its partner, so the rule
-/// relating a pair of axes has three cases: the two types agree, the left is
-/// `U1`, or the right is `U1`. Those cases only stay disjoint — and the impls
-/// expressing them only stay coherent — if "not `U1`" is sayable, and Rust has
-/// no negative bound to say it with. This marker says it structurally instead.
-///
-/// A canonical `typenum` value is either `UTerm`, which is zero, or a
-/// `UInt<U, B>`, and `U1` is the single shape `UInt<UTerm, B1>`. So everything
-/// that is not `U1` is either `UTerm` or has a nested `UInt` in its high bits,
-/// which is exactly what the two impls below name. A `dim!` name carries a
-/// runtime size and is never the type `U1`, so the macro implements this for
-/// each name it defines.
-///
-/// A `usize` axis is deliberately absent: it is not the type `U1`, but neither
-/// is it statically sized, and the mixed broadcast families relate it by their
-/// own rules.
 const fn broadcast_static(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent {
     match (lhs, rhs) {
         (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => StaticExtent::Invalid,
@@ -449,6 +446,7 @@ impl<Tag: AxisTag, Extent: Dim> NamedDim<Tag, Extent> {
 impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     type KeepDim = NamedDim<Tag, typenum::U1>;
     const STATIC: StaticExtent = Extent::STATIC;
+    const NAME: Option<&'static str> = Some(Tag::NAME);
     type Arg = Extent::Arg;
 
     #[inline(always)]
