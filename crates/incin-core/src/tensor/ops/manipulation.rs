@@ -10,10 +10,10 @@ use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, DTypeAttributes, EpsilonAttributes, FlattenAttributes, GroupNormAttributes,
-    LogicalTensorMeta, NarrowAttributes, NoAttributes, PadAttributes, PixelShuffleAttributes,
-    Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes, SliceAttributes,
-    TransposeAttributes, UnfoldAttributes, op,
+    AxisAttributes, DTypeAttributes, DiagonalAttributes, EpsilonAttributes, FlattenAttributes,
+    GroupNormAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes, PadAttributes,
+    PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
+    SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -1790,8 +1790,23 @@ impl<
     }
 
     /// Returns upper triangular part of matrix.
-    pub fn triu(&self, k: i64) -> Result<Self> {
-        let inner = self.under_grad_mode(|| B::triu::<K>(&self.inner, k))?;
+    pub fn triu(&self, k: i64) -> Result<Self>
+    where
+        B: Execute<op::Triu> + Capabilities,
+        <B as Execute<op::Triu>>::Output: Into<B::Storage<K>>,
+    {
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Triu, B, S>(
+                    &context,
+                    DiagonalAttributes { offset: k },
+                    &[input],
+                    &self._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             self._shape.clone(),
@@ -1802,8 +1817,23 @@ impl<
     }
 
     /// Returns lower triangular part of matrix.
-    pub fn tril(&self, k: i64) -> Result<Self> {
-        let inner = self.under_grad_mode(|| B::tril::<K>(&self.inner, k))?;
+    pub fn tril(&self, k: i64) -> Result<Self>
+    where
+        B: Execute<op::Tril> + Capabilities,
+        <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
+    {
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Tril, B, S>(
+                    &context,
+                    DiagonalAttributes { offset: k },
+                    &[input],
+                    &self._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             self._shape.clone(),
