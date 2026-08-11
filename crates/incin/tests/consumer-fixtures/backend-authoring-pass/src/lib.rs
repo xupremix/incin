@@ -1,11 +1,13 @@
-use incin::backend_authoring::operations::{Descriptor, NoAttributes, OPERATION_CATALOG, op};
+use incin::backend_authoring::operations::{
+    CreationAttributes, Descriptor, NoAttributes, OPERATION_CATALOG, op,
+};
 use incin::backend_authoring::{
     Alignment, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
     ExecutionRequest, Operation, OperationIdentity, OperationKey, ShapeBuf, StorageBackend,
     SupportLevel, TensorBackend, TensorMeta,
 };
 use incin::prelude::{
-    BackendError, Cpu, DType, DTypeDescriptor, DeviceId, Shape,
+    BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, Shape,
 };
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -74,7 +76,22 @@ impl Execute<CompanyOp> for CompanyBackend {
         &self,
         request: ExecutionRequest<'_, CompanyOp, Self>,
     ) -> Result<Self::Output, BackendError> {
-        Ok(request.operation.descriptor().attributes().shape.clone())
+        Ok(ShapeBuf::from_slice(
+            &request.operation.descriptor().attributes().shape,
+        ))
+    }
+}
+
+impl Execute<op::Zeros> for CompanyBackend {
+    type Output = ShapeBuf;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::Zeros, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(ShapeBuf::from_slice(
+            &request.operation.descriptor().attributes().shape,
+        ))
     }
 }
 
@@ -158,6 +175,17 @@ pub fn custom_backend_contract() -> ShapeBuf {
     };
     incin::backend_authoring::execute::<CompanyOp, _>(&context, attributes, &[])
         .expect("custom backend operation")
+}
+
+pub fn custom_backend_runs_builtin_operation() -> ShapeBuf {
+    let context = incin::backend_authoring::ExecutionContext::new(CompanyBackend);
+    let attributes = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    incin::backend_authoring::execute::<op::Zeros, _>(&context, attributes, &[])
+        .expect("custom backend built-in operation")
 }
 
 pub fn built_in_operation_contract<B>()
