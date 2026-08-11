@@ -586,7 +586,11 @@ impl<
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
     /// ```
-    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G, P>> {
+    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G, P>>
+    where
+        B: Capabilities + Execute<Descriptor<op::SqueezeExact>>,
+        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+    {
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -605,7 +609,10 @@ impl<
                 },
             ));
         }
-        let inner = self.under_grad_mode(|| B::squeeze(&self.inner, dim))?;
+        let input_shape = self.shape_buf();
+        let inner = self.under_grad_mode(|| {
+            squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim)
+        })?;
         shape.remove(dim);
         Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
             inner,
@@ -1516,12 +1523,38 @@ impl<
     }
 
     /// Inserts a 1-sized dimension at position `dim`.
-    pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>> {
-        let inner = self.under_grad_mode(|| B::unsqueeze::<K>(&self.inner, dim))?;
-        let out_shape = B::shape(&inner);
+    pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::UnsqueezeExact>>,
+        <B as Execute<Descriptor<op::UnsqueezeExact>>>::Output: Into<B::Storage<K>>,
+    {
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        if dim > out_shape.len() {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis {
+                    axis: dim,
+                    rank: out_shape.len() + 1,
+                },
+            ));
+        }
+        out_shape.insert(dim, 1);
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::UnsqueezeExact, B, Dyn>(
+                    &context,
+                    AxisAttributes { axis: dim },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

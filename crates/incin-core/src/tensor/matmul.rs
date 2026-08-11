@@ -386,8 +386,11 @@ impl<
     ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
-        B: Execute<Descriptor<op::Mul>>,
+        B: Execute<Descriptor<op::Mul>>
+            + Execute<Descriptor<op::UnsqueezeExact>>
+            + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<Descriptor<op::UnsqueezeExact>>>::Output: Into<B::Storage<K>>,
     {
         let u1 = self.unsqueeze(1)?;
         let u2 = rhs.unsqueeze(0)?;

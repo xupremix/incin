@@ -673,6 +673,7 @@ impl<
         + crate::tensor::backend::TensorOps<B>
         + Execute<Descriptor<op::StackExact>>
         + Execute<Descriptor<op::Narrow>>
+        + Execute<Descriptor<op::SqueezeExact>>
         + crate::exec::Capabilities,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
@@ -686,6 +687,7 @@ impl<
 where
     <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
     <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
     LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Module<
             (
                 Tensor<D2<Batch, In>, B, K>,
