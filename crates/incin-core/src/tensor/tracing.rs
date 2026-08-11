@@ -83,6 +83,15 @@ pub struct TracingVar<V> {
     pub value_id: ValueId,
 }
 
+impl<V> From<TracingTensor<V>> for TracingVar<V> {
+    fn from(storage: TracingTensor<V>) -> Self {
+        Self {
+            inner: storage.inner,
+            value_id: storage.value_id,
+        }
+    }
+}
+
 impl<B: Backend> TracingBackend<B> {
     fn traced_dtype<K: super::dtype::DType>(storage: &B::Storage<K>) -> DTypeId {
         B::storage_dtype(storage)

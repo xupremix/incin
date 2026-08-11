@@ -536,6 +536,102 @@ macro_rules! create_var_dispatch {
     };
 }
 
+macro_rules! variable_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$ (
+        impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
+            type Output = DispatchVar;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, op::$operation, Self>,
+            ) -> core::result::Result<DispatchVar, BackendError> {
+                let attributes = request.operation.descriptor().attributes();
+                create_var_execute_dispatch!($method, &attributes.shape, attributes.dtype, &attributes.device)
+                    .map_err(|error| BackendError::Execution {
+                        operation: OperationKind::$operation,
+                        message: alloc::format!("{error}").into(),
+                    })
+            }
+        }
+    )*};
+}
+
+macro_rules! create_var_execute_dispatch {
+    ($method:ident, $shape:expr, $dtype:expr, $device:expr) => {
+        match $device.kind() {
+            DeviceKind::Cpu => {
+                #[cfg(feature = "cpu")]
+                {
+                    crate::cpu::CpuBackendImpl::<Cpu>::$method::<Dyn>($shape, $dtype, $device)
+                        .map(DispatchVar::Cpu)
+                }
+                #[cfg(not(feature = "cpu"))]
+                Err(unavailable(DeviceKind::Cpu))
+            }
+            DeviceKind::Wgpu => {
+                #[cfg(feature = "wgpu")]
+                {
+                    crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<Dyn>($shape, $dtype, $device)
+                        .map(DispatchVar::Wgpu)
+                }
+                #[cfg(not(feature = "wgpu"))]
+                Err(unavailable(DeviceKind::Wgpu))
+            }
+            DeviceKind::Cuda => {
+                #[cfg(feature = "cuda")]
+                {
+                    crate::cuda::CudaBackendImpl::<Cuda>::$method::<Dyn>($shape, $dtype, $device)
+                        .map(DispatchVar::Cuda)
+                }
+                #[cfg(not(feature = "cuda"))]
+                Err(unavailable(DeviceKind::Cuda))
+            }
+            other => Err(unavailable(other)),
+        }
+    };
+}
+
+variable_executors![
+    (VariableZeros, var_zeros),
+    (VariableOnes, var_ones),
+    (VariableUniformRandom, var_rand),
+    (VariableNormalRandom, var_randn),
+];
+
+macro_rules! scalar_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$ (
+        impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
+            type Output = DispatchStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, op::$operation, Self>,
+            ) -> core::result::Result<DispatchStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = request.inputs.first().ok_or(BackendError::InvalidInput {
+                    operation,
+                    reason: "scalar operation requires one tensor input",
+                })?;
+                let input = input.downcast_ref::<DispatchStorage>().ok_or(
+                    BackendError::InvalidInput {
+                        operation,
+                        reason: "input is not DispatchStorage",
+                    },
+                )?;
+                let value = request.operation.descriptor().attributes().value;
+                <Self as FloatOps<Self>>::$method::<Dyn>(input, value).map_err(|error| {
+                    BackendError::Execution {
+                        operation,
+                        message: alloc::format!("{error}").into(),
+                    }
+                })
+            }
+        }
+    )*};
+}
+
+scalar_executors![(AddScalar, add_scalar_float), (MulScalar, mul_scalar_float),];
+
 impl<D: Device> incin_core::backend_authoring::StorageBackend for DispatchBackend<D> {
     type Device = D;
     const BACKEND_NAME: &'static str = "Dispatch";

@@ -143,7 +143,10 @@ where
     B: Backend + Execute<O> + Capabilities,
     <B as Execute<O>>::Output: Into<B::RawVar>,
 {
-    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    // Parameter allocation is outside the differentiable graph. The returned
+    // variable becomes a graph input only when the caller uses it later.
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
     dispatch::execute::<O, B>(
         &context,
         CreationAttributes {
@@ -166,7 +169,8 @@ where
 {
     let shape = ShapeBuf::from_slice(dims);
     let expected = ShapeValue::<Dyn>::try_new(shape).map_err(Error::Shape)?;
-    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
     dispatch::execute_shaped::<O, B, Dyn>(&context, attributes, &[], &expected)
         .map(Into::into)
         .map_err(crate::prelude::Error::from)
@@ -182,7 +186,8 @@ where
     let shape = B::shape(storage);
     let expected = ShapeValue::<Dyn>::try_new(shape).map_err(Error::Shape)?;
     let handle = TensorHandle::from_storage::<B, K, Local>(storage);
-    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
     dispatch::execute_shaped::<O, B, Dyn>(
         &context,
         ScalarAttributes { value },
