@@ -4,7 +4,7 @@ extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
-    StorageBackend, execute_custom_shaped,
+    StorageBackend, execute_shaped,
 };
 use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel,
@@ -27,6 +27,7 @@ impl Operation for CompanyIdentity {
         name: std::borrow::Cow::Borrowed("identity"),
         version: 1,
     };
+    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
 
     fn infer_outputs(
         attributes: &Self::Attributes,
@@ -85,7 +86,7 @@ fn downstream_custom_operation_keeps_static_shape_dispatch() {
     type S = incin::prelude::s![2, 3];
     let expected = ShapeValue::<S>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
     let context = ExecutionContext::new(CompanyBackend);
-    let output = execute_custom_shaped::<CompanyIdentity, _, S>(
+    let output = execute_shaped::<CompanyIdentity, _, S>(
         &context,
         IdentityAttributes {
             shape: ShapeBuf::from_slice(&[2, 3]),

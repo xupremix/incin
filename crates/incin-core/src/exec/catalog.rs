@@ -693,6 +693,8 @@ macro_rules! define_catalog {
                     name: Cow::Borrowed($name),
                     version: 1,
                 };
+                const IDENTITY: crate::exec::OperationIdentity =
+                    crate::exec::OperationIdentity::Builtin(OperationKind::$variant);
 
                 fn infer_outputs(
                     attributes: &Self::Attributes,
@@ -704,6 +706,21 @@ macro_rules! define_catalog {
                         },
                     )?;
                     infer_outputs(OperationKind::$variant, row, attributes, inputs)
+                }
+
+                fn infer_invocation(
+                    attributes: Self::Attributes,
+                    inputs: Vec<LogicalTensorMeta>,
+                ) -> Result<ValidatedInvocation<Self>, DescriptorError> {
+                    ValidatedInvocation::<Self>::infer_runtime(attributes, inputs)
+                }
+
+                fn infer_invocation_typed<S: crate::prelude::Shape>(
+                    attributes: Self::Attributes,
+                    inputs: Vec<LogicalTensorMeta>,
+                    expected: &crate::shapes::ShapeValue<S>,
+                ) -> Result<ValidatedInvocation<Self>, DescriptorError> {
+                    ValidatedInvocation::<Self>::infer_typed(attributes, inputs, expected)
                 }
             }
 
@@ -830,11 +847,41 @@ pub trait Operation: Clone + fmt::Debug + 'static {
 
     const KEY: OperationKey;
 
+    /// Runtime capability identity for this exact operation.
+    ///
+    /// Built-ins use their compact catalog identity. Downstream operations
+    /// use their persistent `OperationKey`. Both forms share one descriptor
+    /// and execution path.
+    const IDENTITY: crate::exec::OperationIdentity;
+
     /// Infers output metadata from checked logical input metadata.
     fn infer_outputs(
         attributes: &Self::Attributes,
         inputs: &[LogicalTensorMeta],
     ) -> Result<Vec<LogicalTensorMeta>, DescriptorError>;
+
+    /// Infer a validated invocation through the open operation contract.
+    fn infer_invocation(
+        attributes: Self::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+    ) -> Result<ValidatedInvocation<Self>, DescriptorError>
+    where
+        Self: Sized,
+    {
+        ValidatedInvocation::<Self>::infer_custom_runtime(attributes, inputs)
+    }
+
+    /// Shape-specialized form of [`Self::infer_invocation`].
+    fn infer_invocation_typed<S: crate::prelude::Shape>(
+        attributes: Self::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        expected: &crate::shapes::ShapeValue<S>,
+    ) -> Result<ValidatedInvocation<Self>, DescriptorError>
+    where
+        Self: Sized,
+    {
+        ValidatedInvocation::<Self>::infer_custom_typed(attributes, inputs, expected)
+    }
 }
 
 mod private {
@@ -3729,6 +3776,16 @@ impl<O: Operation> ValidatedInvocation<O> {
     pub(crate) const fn validated(&self) -> &crate::exec::Validated<Descriptor<O>> {
         &self.validated
     }
+
+    #[must_use]
+    pub const fn descriptor(&self) -> &Descriptor<O> {
+        self.validated.descriptor()
+    }
+
+    #[must_use]
+    pub fn inputs(&self) -> &[LogicalTensorMeta] {
+        &self.inputs
+    }
 }
 
 impl<O: CanonicalOperation> ValidatedInvocation<O>
@@ -4037,15 +4094,6 @@ where
 
         Self::validate(attributes, inputs, outputs, expected.proof_level())
     }
-
-    #[must_use]
-    pub const fn descriptor(&self) -> &Descriptor<O> {
-        self.validated.descriptor()
-    }
-    #[must_use]
-    pub fn inputs(&self) -> &[LogicalTensorMeta] {
-        &self.inputs
-    }
 }
 
 #[must_use]
@@ -4115,6 +4163,8 @@ mod tests {
             name: Cow::Borrowed("identity"),
             version: 1,
         };
+        const IDENTITY: crate::exec::OperationIdentity =
+            crate::exec::OperationIdentity::Custom(Self::KEY);
 
         fn infer_outputs(
             _: &Self::Attributes,
@@ -4165,6 +4215,8 @@ mod tests {
                     name: Cow::Borrowed($key),
                     version: 1,
                 };
+                const IDENTITY: crate::exec::OperationIdentity =
+                    crate::exec::OperationIdentity::Custom(Self::KEY);
 
                 fn infer_outputs(
                     _: &Self::Attributes,

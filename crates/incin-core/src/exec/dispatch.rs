@@ -26,9 +26,7 @@ use crate::err::BackendError;
 use crate::exec::capability::{
     Capabilities, CapabilityQuery, OperationIdentity, SupportLevel, UnsupportedReason,
 };
-use crate::exec::catalog::{
-    CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, Operation, OperationKey,
-};
+use crate::exec::catalog::{Descriptor, DescriptorError, LogicalTensorMeta, Operation};
 use crate::exec::context::ExecutionContext;
 use crate::exec::meta::TensorMeta;
 use crate::exec::policy::GradMode;
@@ -103,13 +101,13 @@ pub fn logical_meta(metadata: &TensorMeta) -> LogicalTensorMeta {
 /// one concrete operand.
 fn admit<B: Capabilities>(
     backend: &B,
-    operation: crate::prelude::OperationKind,
+    operation: &OperationIdentity,
     metadata: &TensorMeta,
     context_training: bool,
     math_mode: crate::exec::policy::MathMode,
 ) -> Result<SupportLevel, UnsupportedReason> {
     let query = CapabilityQuery {
-        operation: OperationIdentity::Builtin(operation),
+        operation: operation.clone(),
         dtype: metadata.dtype,
         layout: metadata.layout,
         rank: metadata.shape.dims().len(),
@@ -122,55 +120,10 @@ fn admit<B: Capabilities>(
     }
 }
 
-fn admit_custom<B: Capabilities>(
-    backend: &B,
-    operation: OperationKey,
-    metadata: &TensorMeta,
-    context_training: bool,
-    math_mode: crate::exec::policy::MathMode,
-) -> Result<SupportLevel, UnsupportedReason> {
-    let query = CapabilityQuery {
-        operation: OperationIdentity::Custom(operation),
-        dtype: metadata.dtype,
-        layout: metadata.layout,
-        rank: metadata.shape.dims().len(),
-        training: context_training,
-        math_mode,
-    };
-    match backend.support(&query) {
-        SupportLevel::Unsupported(reason) => Err(reason),
-        level => Ok(level),
-    }
-}
-
-fn admit_custom_output<B: Capabilities>(
-    backend: &B,
-    operation: OperationKey,
-    dtype: crate::prelude::DTypeDescriptor,
-    layout: crate::exec::meta::LayoutClass,
-    rank: usize,
-    context_training: bool,
-    math_mode: crate::exec::policy::MathMode,
-) -> Result<SupportLevel, UnsupportedReason> {
-    let query = CapabilityQuery {
-        operation: OperationIdentity::Custom(operation),
-        dtype,
-        layout,
-        rank,
-        training: context_training,
-        math_mode,
-    };
-    match backend.support(&query) {
-        SupportLevel::Unsupported(reason) => Err(reason),
-        level => Ok(level),
-    }
-}
-
-/// Validate and run one canonical operation on `context`'s backend.
+/// Validate and run one operation on `context`'s backend.
 ///
-/// `O` names the exact catalog identity, so the descriptor type, the capability
-/// row and the `Execute` implementation are all selected by the same token; a
-/// mismatch between them is a compile error rather than a runtime surprise.
+/// `O` names the exact operation identity, so the descriptor, capability query
+/// and `Execute` implementation are selected by the same token.
 ///
 /// # Errors
 ///
@@ -183,8 +136,7 @@ pub fn execute<O, B>(
     inputs: &[TensorHandle<'_>],
 ) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
-    O: CanonicalOperation,
-    O::Attributes: crate::exec::AttributeContract,
+    O: Operation,
     B: Execute<Descriptor<O>> + Capabilities,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
@@ -192,14 +144,13 @@ where
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
 
-    let invocation =
-        crate::exec::catalog::ValidatedInvocation::<O>::infer_runtime(attributes, logical)?;
+    let invocation = O::infer_invocation(attributes, logical)?;
 
     let training = context.grad_mode() == GradMode::Enabled;
     for handle in inputs {
         admit(
             context.backend(),
-            O::ID,
+            &O::IDENTITY,
             handle.metadata(),
             training,
             context.math_mode(),
@@ -212,7 +163,7 @@ where
                 continue;
             };
             let query = CapabilityQuery {
-                operation: OperationIdentity::Builtin(O::ID),
+                operation: O::IDENTITY.clone(),
                 dtype,
                 layout: crate::exec::meta::LayoutClass::Contiguous,
                 rank: shape.len(),
@@ -243,8 +194,7 @@ pub fn execute_shaped<O, B, S>(
     expected: &crate::shapes::ShapeValue<S>,
 ) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
-    O: CanonicalOperation,
-    O::Attributes: crate::exec::AttributeContract,
+    O: Operation,
     B: Execute<Descriptor<O>> + Capabilities,
     S: crate::prelude::Shape,
 {
@@ -253,14 +203,13 @@ where
         .map(|handle| logical_meta(handle.metadata()))
         .collect();
 
-    let invocation =
-        crate::exec::catalog::ValidatedInvocation::<O>::infer_typed(attributes, logical, expected)?;
+    let invocation = O::infer_invocation_typed(attributes, logical, expected)?;
 
     let training = context.grad_mode() == GradMode::Enabled;
     for handle in inputs {
         admit(
             context.backend(),
-            O::ID,
+            &O::IDENTITY,
             handle.metadata(),
             training,
             context.math_mode(),
@@ -284,7 +233,7 @@ where
                 continue;
             };
             let query = CapabilityQuery {
-                operation: OperationIdentity::Builtin(O::ID),
+                operation: O::IDENTITY.clone(),
                 dtype,
                 layout: crate::exec::meta::LayoutClass::Contiguous,
                 rank: shape.len(),
@@ -297,117 +246,6 @@ where
         }
     }
 
-    context
-        .backend()
-        .execute_shaped::<S>(ExecutionRequest {
-            operation: invocation.validated(),
-            inputs,
-            context,
-        })
-        .map_err(CanonicalError::Backend)
-}
-
-/// Execute an operation supplied by a downstream crate through static Rust
-/// dispatch. Built-in catalog capabilities remain on the canonical path;
-/// custom operations provide their own inference contract and backend
-/// implementations use `Execute<Descriptor<O>>`.
-pub fn execute_custom<O, B>(
-    context: &ExecutionContext<B>,
-    attributes: O::Attributes,
-    inputs: &[TensorHandle<'_>],
-) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
-where
-    O: Operation,
-    B: Execute<Descriptor<O>> + Capabilities,
-{
-    let logical: Vec<LogicalTensorMeta> = inputs
-        .iter()
-        .map(|handle| logical_meta(handle.metadata()))
-        .collect();
-    let invocation =
-        crate::exec::catalog::ValidatedInvocation::<O>::infer_custom_runtime(attributes, logical)?;
-    let training = context.grad_mode() == GradMode::Enabled;
-    for handle in inputs {
-        admit_custom(
-            context.backend(),
-            O::KEY,
-            handle.metadata(),
-            training,
-            context.math_mode(),
-        )
-        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-    }
-    for output in invocation.validated().descriptor().outputs() {
-        let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_ref()) else {
-            continue;
-        };
-        admit_custom_output(
-            context.backend(),
-            O::KEY,
-            dtype,
-            crate::exec::meta::LayoutClass::Contiguous,
-            shape.len(),
-            training,
-            context.math_mode(),
-        )
-        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-    }
-    context
-        .backend()
-        .execute_shaped::<crate::prelude::Dyn>(ExecutionRequest {
-            operation: invocation.validated(),
-            inputs,
-            context,
-        })
-        .map_err(CanonicalError::Backend)
-}
-
-/// Shape-specialized custom operation execution. The backend receives the
-/// caller's exact `S`, preserving the same specialization seam as built-ins.
-pub fn execute_custom_shaped<O, B, S>(
-    context: &ExecutionContext<B>,
-    attributes: O::Attributes,
-    inputs: &[TensorHandle<'_>],
-    expected: &crate::shapes::ShapeValue<S>,
-) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
-where
-    O: Operation,
-    B: Execute<Descriptor<O>> + Capabilities,
-    S: crate::prelude::Shape,
-{
-    let logical: Vec<LogicalTensorMeta> = inputs
-        .iter()
-        .map(|handle| logical_meta(handle.metadata()))
-        .collect();
-    let invocation = crate::exec::catalog::ValidatedInvocation::<O>::infer_custom_typed(
-        attributes, logical, expected,
-    )?;
-    let training = context.grad_mode() == GradMode::Enabled;
-    for handle in inputs {
-        admit_custom(
-            context.backend(),
-            O::KEY,
-            handle.metadata(),
-            training,
-            context.math_mode(),
-        )
-        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-    }
-    for output in invocation.validated().descriptor().outputs() {
-        let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_ref()) else {
-            continue;
-        };
-        admit_custom_output(
-            context.backend(),
-            O::KEY,
-            dtype,
-            crate::exec::meta::LayoutClass::Contiguous,
-            shape.len(),
-            training,
-            context.math_mode(),
-        )
-        .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-    }
     context
         .backend()
         .execute_shaped::<S>(ExecutionRequest {
@@ -433,13 +271,12 @@ pub fn support_for<O, B>(
     metadata: &TensorMeta,
 ) -> Result<SupportLevel, UnsupportedReason>
 where
-    O: CanonicalOperation,
-    O::Attributes: crate::exec::AttributeContract,
+    O: Operation,
     B: Capabilities + crate::tensor::backend::StorageBackend,
 {
     admit(
         context.backend(),
-        O::ID,
+        &O::IDENTITY,
         metadata,
         context.grad_mode() == GradMode::Enabled,
         context.math_mode(),

@@ -80,7 +80,7 @@ pub mod experimental {
 
 /// Extension traits and operation descriptor contracts for backend authors.
 pub mod backend_authoring {
-    pub use crate::exec::dispatch::{execute_custom, execute_custom_shaped};
+    pub use crate::exec::dispatch::{execute, execute_shaped};
     pub use crate::exec::{
         AttributeContract, CanonicalOperation, Capabilities, CapabilityRegistry, Descriptor,
         DescriptorError, ExecutionContext, ExecutionDescriptor, LogicalTensorMeta, LossScaling,

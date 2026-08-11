@@ -222,7 +222,7 @@ pub mod backend_authoring {
         PrecisionSpec, QuantizedOps, ReductionOps, RuntimePrecisionPolicy, StorageBackend,
         SupportsDType, TensorOps, TransferTo, Validated,
     };
-    pub use incin_core::backend_authoring::{execute_custom, execute_custom_shaped};
+    pub use incin_core::backend_authoring::{execute, execute_shaped};
 
     /// Canonical exact operation descriptors and typed attributes.
     pub mod operations {
