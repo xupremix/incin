@@ -67,10 +67,10 @@ pub(crate) fn validated_numel(shape: &[usize]) -> usize {
 /// static instead of walked from `shape` at run time.
 ///
 /// This is only sound because a caller reaches `shape` through a descriptor
-/// already checked against `S`: the shape a canonical executor receives is
-/// the one `S::from_dyn` would have produced, so `S::STATIC_NUMEL` and a
-/// fresh product over `shape` cannot disagree unless that checking was
-/// skipped, which nothing in this crate does. The `debug_assert_eq!` verifies
+/// already checked against `S`: the canonical executor receives the validated
+/// runtime shape for `S`, so `S::STATIC_NUMEL` and a fresh product over
+/// `shape` cannot disagree unless that checking was skipped, which nothing in
+/// this crate does. The `debug_assert_eq!` verifies
 /// exactly that on every test run and costs nothing in release, matching the
 /// pattern `resolved_output_shape` in `cpu::canonical` already uses for the
 /// pointwise family.

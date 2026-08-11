@@ -304,9 +304,9 @@ impl Dim for usize {
     }
 }
 
-/// Generates a Named Tensor dimension (symbolic dimension).
-/// This creates a strong type that wraps `usize` for runtime shape tracking,
-/// ensuring that symbolic dimensions match at compile time.
+/// Generates zero-sized semantic tags for named tensor dimensions.
+/// Runtime extents remain in `ShapeBuf`, while the generated tags provide
+/// stable schema identity for compile-time metadata and lookup.
 ///
 /// ```rust
 /// incin_core::dim!(Batch, Seq);
