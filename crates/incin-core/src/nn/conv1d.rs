@@ -1,8 +1,8 @@
-use crate::exec::catalog::{op, Conv1dAttributes, Descriptor};
+use crate::exec::catalog::{Conv1dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, ParameterRole};
-use crate::nn::param::{execute_plan_raw, Frozen, TrainState, Trainable};
+use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 use crate::tensor::backend::Execute;
@@ -72,14 +72,8 @@ impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, 
 }
 */
 
-impl<
-        OutC: Dim,
-        InC: Dim,
-        K: Dim<Arg = ()>,
-        S: Dim<Arg = ()>,
-        P: Dim<Arg = ()>,
-        D: Dim<Arg = ()>,
-    > Conv1dShape
+impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
+    Conv1dShape
     for crate::shapes::shape::DimCons<
         OutC,
         crate::shapes::shape::DimCons<
@@ -164,12 +158,12 @@ pub struct Conv1d<
 }
 
 impl<
-        S: Conv1dShape,
-        B: Backend,
-        Bias: crate::nn::optional::OptionalField,
-        K: DType,
-        Train: TrainState,
-    > Conv1d<S, B, Bias, K, Train>
+    S: Conv1dShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> Conv1d<S, B, Bias, K, Train>
 {
     /// Constructs a Conv1d from raw parts.
     pub fn from_raw_parts(
@@ -296,12 +290,12 @@ where
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(
-            <S::OutC as Dim>::Arg,
-            <S::InC as Dim>::Arg,
-            <K as DType>::Arg,
-            <B::Device as Device>::Arg,
-            <Bias as crate::nn::optional::OptionalField>::Arg,
-        )>,
+                <S::OutC as Dim>::Arg,
+                <S::InC as Dim>::Arg,
+                <K as DType>::Arg,
+                <B::Device as Device>::Arg,
+                <Bias as crate::nn::optional::OptionalField>::Arg,
+            )>,
     {
         use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
@@ -313,9 +307,9 @@ where
         let dtype_field = <K as DType>::init(dtype_arg);
         let device_field = <B::Device as Device>::init(device_arg);
         let weight_shape_field =
-            <S::WeightShape as Shape>::try_init(weight_shape_arg).map_err(Error::Shape)?;
+            <S::WeightShape as Shape>::resolve(weight_shape_arg).map_err(Error::Shape)?;
         let bias_shape_field =
-            <S::BiasShape as Shape>::try_init(bias_shape_arg).map_err(Error::Shape)?;
+            <S::BiasShape as Shape>::resolve(bias_shape_arg).map_err(Error::Shape)?;
 
         let init = crate::nn::init::kaiming_uniform();
         let context_w = InitContext::new(ParameterRole::Weight).with_fan(fan_in, fan_out);

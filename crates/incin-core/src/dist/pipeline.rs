@@ -390,7 +390,7 @@ impl PipelinePlanBuilder {
         Microbatches: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
         Schedule: StaticPipelineSchedule,
     {
-        let shape_field = S::try_init(Default::default()).map_err(PipelineError::Shape)?;
+        let shape_field = S::resolve(Default::default()).map_err(PipelineError::Shape)?;
         let dims = shape_field.clone();
         let elements = S::STATIC_NUMEL.ok_or_else(|| {
             PipelineError::Shape(ShapeError::TargetShapeRejected {

@@ -36,7 +36,7 @@ where
         crate::shapes::error::ShapeError,
     > {
         Ok((
-            S::try_init(args.shape)?,
+            S::resolve(args.shape)?,
             K::init(args.dtype),
             D::init(args.device),
             G::init(args.grad),
