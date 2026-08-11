@@ -10,10 +10,10 @@ use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, DTypeAttributes, DiagonalAttributes, EpsilonAttributes, FlattenAttributes,
-    GroupNormAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes, PadAttributes,
-    PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
-    SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
+    AxisAttributes, DTypeAttributes, DiagonalAttributes, DuplicateIndexRule, EpsilonAttributes,
+    FlattenAttributes, GroupNormAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes,
+    PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes,
+    ScatterAttributes, ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -1611,11 +1611,29 @@ impl<
     ) -> Result<Self>
     where
         S2: ShapeEq<S3>,
+        B: Execute<op::Scatter> + Capabilities,
+        <B as Execute<op::Scatter>>::Output: Into<B::Storage<K>>,
     {
         <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
-        let inner = self.under_grad_mode(|| {
-            B::scatter::<K, KInt>(&self.inner, dim, &index.inner, &src.inner)
-        })?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
+            TensorHandle::from_storage::<B, K, Local>(&src.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Scatter, B, S>(
+                    &context,
+                    ScatterAttributes {
+                        axis: dim,
+                        duplicate_indices: DuplicateIndexRule::LastWriteWins,
+                    },
+                    &inputs,
+                    &self._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             self._shape.clone(),
