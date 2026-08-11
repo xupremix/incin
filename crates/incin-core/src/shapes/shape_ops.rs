@@ -14,8 +14,23 @@ pub trait SwapAxes<Left, Right>: Shape {
     {
         let left = crate::shapes::idx::StaticAxis::<Left>::DEFAULT.normalize(dims.len())?;
         let right = crate::shapes::idx::StaticAxis::<Right>::DEFAULT.normalize(dims.len())?;
+        let left = left.first().copied().ok_or(crate::shapes::ShapeError::InvalidAxis {
+            axis: 0,
+            rank: dims.len(),
+        })?;
+        let right = right.first().copied().ok_or(crate::shapes::ShapeError::InvalidAxis {
+            axis: 0,
+            rank: dims.len(),
+        })?;
+        if left >= dims.len() || right >= dims.len() {
+            return Err(crate::shapes::ShapeError::InvalidAxis {
+                axis: left.max(right),
+                rank: dims.len(),
+            }
+            .into());
+        }
         let mut output = dims.clone();
-        output.dims_mut().swap(left[0], right[0]);
+        output.dims_mut().swap(left, right);
         Ok(output)
     }
 }
@@ -37,7 +52,21 @@ pub trait ReduceAt<Cursor>: Shape {
     where
         Cursor: crate::shapes::idx::StaticCursor,
     {
-        let axis = crate::shapes::idx::StaticAxis::<Cursor>::DEFAULT.normalize(dims.len())?[0];
+        let axis = crate::shapes::idx::StaticAxis::<Cursor>::DEFAULT
+            .normalize(dims.len())?
+            .first()
+            .copied()
+            .ok_or(crate::shapes::ShapeError::InvalidAxis {
+                axis: 0,
+                rank: dims.len(),
+            })?;
+        if axis >= dims.len() {
+            return Err(crate::shapes::ShapeError::InvalidAxis {
+                axis,
+                rank: dims.len(),
+            }
+            .into());
+        }
         let mut output = dims.as_ref().to_vec();
         output.remove(axis);
         Ok(crate::shapes::ShapeBuf::from_slice(&output))
