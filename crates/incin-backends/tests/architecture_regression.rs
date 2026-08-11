@@ -157,9 +157,21 @@ fn test_8e_minimal_backend_extension() {
             &self,
             query: &incin_core::exec::CapabilityQuery,
         ) -> incin_core::exec::SupportLevel {
+            let incin_core::exec::OperationIdentity::Builtin(operation) = &query.operation else {
+                return incin_core::exec::SupportLevel::Unsupported(
+                    incin_core::exec::UnsupportedReason::CustomOperation {
+                        operation: match &query.operation {
+                            incin_core::exec::OperationIdentity::Custom(operation) => {
+                                operation.clone()
+                            }
+                            incin_core::exec::OperationIdentity::Builtin(_) => unreachable!(),
+                        },
+                    },
+                );
+            };
             incin_core::exec::SupportLevel::Unsupported(
                 incin_core::exec::UnsupportedReason::Operation {
-                    operation: query.operation,
+                    operation: *operation,
                 },
             )
         }

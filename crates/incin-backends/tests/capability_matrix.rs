@@ -13,26 +13,30 @@ use incin_core::backend_authoring::{
 use incin_core::exec::catalog::{
     ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
-    NormAttributes, SplitAttributes, VarianceAttributes, op,
+    LossAttributes, LossReduction, NoAttributes, NormAttributes, SplitAttributes,
+    VarianceAttributes, op,
 };
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, GradMode, ImplementationKind,
-    LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason,
-    dispatch,
+    LayoutClass, MathMode, OPERATION_CATALOG, OperationIdentity, SupportLevel, TensorHandle,
+    UnsupportedReason, dispatch,
 };
 use incin_core::prelude::{
-    Cpu, DType, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0, Reduction,
+    Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0,
+    Reduction,
 };
+
+use incin_core::tensor::arg_into::ArgInto;
 
 fn query(
     operation: OperationKind,
-    dtype: DTypeId,
+    dtype: impl ArgInto<DTypeDescriptor>,
     layout: LayoutClass,
     rank: usize,
 ) -> CapabilityQuery {
     CapabilityQuery {
-        operation,
-        dtype,
+        operation: OperationIdentity::Builtin(operation),
+        dtype: dtype.into_arg(),
         layout,
         rank,
         training: false,
@@ -104,13 +108,12 @@ fn unsupported_matrix_cells_return_the_documented_constraint() {
         LayoutClass::Contiguous,
         2,
     );
-    assert!(matches!(
-        support(DeviceKind::Cpu, &case),
-        SupportLevel::Unsupported(UnsupportedReason::DType {
-            dtype: DTypeId::F64,
-            ..
-        })
-    ));
+    let level = support(DeviceKind::Cpu, &case);
+    if let SupportLevel::Unsupported(UnsupportedReason::DType { dtype, .. }) = level {
+        assert_eq!(dtype, DTypeId::F64.descriptor());
+    } else {
+        panic!("expected UnsupportedReason::DType, got {:?}", level);
+    }
 
     case = query(
         OperationKind::Pointwise,
@@ -218,7 +221,7 @@ fn unsupported_matrix_cells_return_the_documented_constraint() {
             operation: OperationKind::Normalization,
             rank: 0,
             min: 1,
-            max: incin_core::prelude::MAX_RANK,
+            max: usize::MAX,
         })
     );
 }
@@ -306,17 +309,17 @@ fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]
         OperationKind::Minimum => B::minimum::<K>(first, operands[1]).unwrap(),
         OperationKind::AbsDiff => B::abs_diff::<K>(first, operands[1]).unwrap(),
         OperationKind::Lerp => B::lerp::<K>(first, operands[1], 0.5).unwrap(),
-        OperationKind::MaskedFill => B::masked_fill::<K, K>(first, operands[1], 0.0).unwrap(),
-        OperationKind::WhereCond => B::where_cond::<K, K>(first, operands[1], operands[2]).unwrap(),
+        OperationKind::MaskedFill => B::masked_fill::<K>(first, operands[1], 0.0).unwrap(),
+        OperationKind::WhereCond => B::where_cond::<K>(first, operands[1], operands[2]).unwrap(),
         OperationKind::CmpEq => B::cmp_eq::<K>(first, operands[1]).unwrap(),
         OperationKind::CmpNe => B::cmp_ne::<K>(first, operands[1]).unwrap(),
         OperationKind::CmpLt => B::cmp_lt::<K>(first, operands[1]).unwrap(),
         OperationKind::CmpLe => B::cmp_le::<K>(first, operands[1]).unwrap(),
         OperationKind::CmpGt => B::cmp_gt::<K>(first, operands[1]).unwrap(),
         OperationKind::CmpGe => B::cmp_ge::<K>(first, operands[1]).unwrap(),
-        OperationKind::LogicalAnd => B::logical_and::<K>(first, operands[1]).unwrap(),
-        OperationKind::LogicalOr => B::logical_or::<K>(first, operands[1]).unwrap(),
-        OperationKind::LogicalNot => B::logical_not::<K>(first).unwrap(),
+        OperationKind::LogicalAnd => B::logical_and(first, operands[1]).unwrap(),
+        OperationKind::LogicalOr => B::logical_or(first, operands[1]).unwrap(),
+        OperationKind::LogicalNot => B::logical_not(first).unwrap(),
         OperationKind::SubScalar => B::sub_scalar::<K>(first, 1.0).unwrap(),
         OperationKind::DivScalar => B::div_scalar::<K>(first, 2.0).unwrap(),
         OperationKind::TransposeExact => B::transpose::<K>(first, 0, 1).unwrap(),
@@ -538,6 +541,14 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::VarianceDim | OperationKind::StdDim => &[2],
         OperationKind::VarianceKeepDim | OperationKind::StdKeepDim => &[2, 1],
         OperationKind::BatchNorm => &[1, 2, 2],
+        // The probe's index vector is `[2]` and its weight table is `[3, 2]`;
+        // the gather appends the weight's hidden axis to the index shape.
+        OperationKind::EmbeddingExact => &[2, 2],
+        // The probe reduces with `Mean`, which is a scalar. The `None` form
+        // would be `[batch]`, but the reduction is an attribute rather than
+        // part of the identity, so one shape is stated and the probe picks
+        // the mode that produces it.
+        OperationKind::CrossEntropyLoss => &[],
         _ => panic!("missing CPU expected shape for {operation}"),
     }
 }
@@ -600,9 +611,10 @@ fn cpu_float_probe(operation: OperationKind, input: &CpuStorage) -> CpuStorage {
 /// Separate from the probe below because it is the only family with no operand
 /// to build, so it shares none of that function's setup, and because both the
 /// layout probe and the dtype probe need it.
-fn allocation_probe(operation: OperationKind, dtype: DTypeId) -> CpuStorage {
+fn allocation_probe(operation: OperationKind, dtype: impl ArgInto<DTypeDescriptor>) -> CpuStorage {
+    let dtype = dtype.into_arg();
     let context =
-        ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new()).with_grad_mode(GradMode::Disabled);
+        ExecutionContext::new(CpuBackendImpl::<Cpu>::new()).with_grad_mode(GradMode::Disabled);
     let shape = cpu_probe_shape(operation).to_vec();
     let device = DeviceId::cpu();
     let plain = CreationAttributes {
@@ -646,19 +658,19 @@ fn allocation_probe(operation: OperationKind, dtype: DTypeId) -> CpuStorage {
         // before the shared assertions see it. That the executor's output type
         // differs at all is the point of `Execute` naming it as an associated
         // type; the probe just has to follow.
-        OperationKind::VariableZeros => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+        OperationKind::VariableZeros => CpuBackendImpl::<Cpu>::var_as_tensor::<Dyn>(
             &dispatch::execute::<op::VariableZeros, _>(&context, plain, &[]).unwrap(),
         )
         .unwrap(),
-        OperationKind::VariableOnes => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+        OperationKind::VariableOnes => CpuBackendImpl::<Cpu>::var_as_tensor::<Dyn>(
             &dispatch::execute::<op::VariableOnes, _>(&context, plain, &[]).unwrap(),
         )
         .unwrap(),
-        OperationKind::VariableUniformRandom => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+        OperationKind::VariableUniformRandom => CpuBackendImpl::<Cpu>::var_as_tensor::<Dyn>(
             &dispatch::execute::<op::VariableUniformRandom, _>(&context, plain, &[]).unwrap(),
         )
         .unwrap(),
-        OperationKind::VariableNormalRandom => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+        OperationKind::VariableNormalRandom => CpuBackendImpl::<Cpu>::var_as_tensor::<Dyn>(
             &dispatch::execute::<op::VariableNormalRandom, _>(&context, plain, &[]).unwrap(),
         )
         .unwrap(),
@@ -687,8 +699,12 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             assert_eq!(B::to_bytes::<f32>(&storage).unwrap().len(), 16);
             storage
         }
-        OperationKind::Fill => B::zeros::<f32>(&[2, 2], DTypeId::F32, &device).unwrap(),
-        OperationKind::Random => B::rand::<f32>(&[2, 2], DTypeId::F32, &device).unwrap(),
+        OperationKind::Fill => {
+            B::zeros::<f32>(&[2, 2], DTypeId::F32.descriptor(), &device).unwrap()
+        }
+        OperationKind::Random => {
+            B::rand::<f32>(&[2, 2], DTypeId::F32.descriptor(), &device).unwrap()
+        }
         OperationKind::Pointwise => {
             let lhs = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
             let rhs = transpose_if_requested(f32_storage(&[2, 2], &[4.0, 3.0, 2.0, 1.0]), layout);
@@ -822,9 +838,9 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         // and a dtype against a random result would be asserting the same two
         // things while pretending to have checked more.
         OperationKind::Dropout => {
-            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
-            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
             dispatch::execute::<op::Dropout, _>(
                 &context,
                 DropoutAttributes {
@@ -840,15 +856,15 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         // over typed tensors, and the executor is the first place either one
         // exists over storage.
         OperationKind::Linear | OperationKind::RmsNorm => {
-            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
             // Square, so the strided case transposes without moving the
             // trailing extent that both weights are sized against.
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
             let weight = f32_storage(&[2, 2], &[1.0, 0.0, 0.0, 1.0]);
             let input_handle =
-                TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
             let weight_handle =
-                TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&weight);
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&weight);
             if operation == OperationKind::Linear {
                 dispatch::execute::<op::Linear, _>(
                     &context,
@@ -860,7 +876,7 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
                 // The weight is per-feature for this one, so it is rank one.
                 let scale = f32_storage(&[2], &[1.0, 1.0]);
                 let scale_handle =
-                    TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&scale);
+                    TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&scale);
                 dispatch::execute::<op::RmsNorm, _>(
                     &context,
                     EpsilonAttributes { epsilon: 1e-5 },
@@ -871,7 +887,7 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         }
         OperationKind::ToDType => {
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
-            B::tensor_to_dtype::<f32, f32>(&input, DTypeId::F32).unwrap()
+            B::tensor_to_dtype::<f32, f32>(&input, DTypeId::F32.descriptor()).unwrap()
         }
         // The variance family and the p-norm have no method on any backend
         // trait: the composition exists in the canonical executor and in
@@ -882,9 +898,9 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         // hands back the first piece, because its caller asserts against one
         // storage.
         OperationKind::Chunk | OperationKind::Split => {
-            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
-            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
             let pieces = if operation == OperationKind::Chunk {
                 dispatch::execute::<op::Chunk, _>(
                     &context,
@@ -951,9 +967,9 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         | OperationKind::StdDim
         | OperationKind::StdKeepDim
         | OperationKind::Norm => {
-            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
-            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
             let axis = AxisVarianceAttributes {
                 axis: 1,
                 unbiased: false,
@@ -1120,6 +1136,42 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let borrowed: Vec<&CpuStorage> = operands.iter().collect();
             cpu_tensor_probe::<f32>(operation, &borrowed)
         }
+        // The index operand is not part of `layout`'s probe matrix — it is a
+        // rank-one integer vector, not the strided-vs-contiguous tensor the
+        // row's layout claim is actually about — so only the weight table is
+        // built through `laid_out`.
+        OperationKind::EmbeddingExact => {
+            let indices = CpuStorage::try_from_contiguous(CpuBuffer::I64(vec![0, 1]), vec![2])
+                .expect("a two-element i64 index vector must be constructible");
+            let weight = laid_out(&[3, 2], layout);
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+            let handles = [
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&indices),
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&weight),
+            ];
+            dispatch::execute::<op::EmbeddingExact, _>(&context, NoAttributes, &handles).unwrap()
+        }
+        // Same split as `embedding` for the same reason: the class-target
+        // vector is a rank-one integer operand, not the tensor whose layout
+        // the row's claim is about, so only the logits go through `laid_out`.
+        OperationKind::CrossEntropyLoss => {
+            let logits = laid_out(&[2, 3], layout);
+            let targets = CpuStorage::try_from_contiguous(CpuBuffer::I64(vec![0, 1]), vec![2])
+                .expect("a two-element i64 target vector must be constructible");
+            let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+            let handles = [
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&logits),
+                TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&targets),
+            ];
+            dispatch::execute::<op::CrossEntropyLoss, _>(
+                &context,
+                LossAttributes {
+                    reduction: LossReduction::Mean,
+                },
+                &handles,
+            )
+            .unwrap()
+        }
         _ => panic!("missing CPU capability execution probe for {operation}"),
     }
 }
@@ -1155,8 +1207,8 @@ fn generated_cpu_rows_match_real_execution_and_output_metadata() {
             // rows over compressed storage do not admit it, and querying them
             // with f32 would assert support they never claimed, so the query
             // follows the row rather than the probe's usual choice.
-            let probe_dtype = if rule.dtypes.contains(&DTypeId::F32) {
-                DTypeId::F32
+            let probe_dtype = if rule.dtypes.contains(&DTypeId::F32.descriptor()) {
+                DTypeId::F32.descriptor()
             } else {
                 rule.dtypes[0]
             };
@@ -1227,9 +1279,9 @@ fn cpu_float_probe_dyn(operation: OperationKind, input: &CpuStorage) -> CpuStora
     }
 }
 
-fn cpu_zeros(dtype: DTypeId, shape: &[usize]) -> CpuStorage {
+fn cpu_zeros(dtype: DTypeDescriptor, shape: &[usize]) -> CpuStorage {
     type B = CpuBackendImpl;
-    if dtype == DTypeId::Q8_0 {
+    if dtype == DTypeId::Q8_0.descriptor() {
         assert_eq!(shape.iter().product::<usize>(), 32);
         B::from_bytes::<Dyn>(&[0u8; 34], shape, dtype, &DeviceId::cpu()).unwrap()
     } else {
@@ -1244,7 +1296,7 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
         for &dtype in rule.dtypes {
             let output = match rule.operation {
                 OperationKind::Storage => {
-                    let shape = if dtype == DTypeId::Q8_0 {
+                    let shape = if dtype == DTypeId::Q8_0.descriptor() {
                         &[32][..]
                     } else {
                         &[2][..]
@@ -1270,12 +1322,12 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                     B::layer_norm::<Dyn>(&input, &weight, None, 1e-5).unwrap()
                 }
                 OperationKind::Broadcast | OperationKind::BroadcastAs => {
-                    let shape = if dtype == DTypeId::Q8_0 {
+                    let shape = if dtype == DTypeId::Q8_0.descriptor() {
                         &[1, 32][..]
                     } else {
                         &[1, 2][..]
                     };
-                    let target = if dtype == DTypeId::Q8_0 {
+                    let target = if dtype == DTypeId::Q8_0.descriptor() {
                         &[2, 32][..]
                     } else {
                         &[2, 2][..]
@@ -1283,12 +1335,12 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                     B::broadcast_as::<Dyn>(&cpu_zeros(dtype, shape), target).unwrap()
                 }
                 OperationKind::Reshape | OperationKind::ReshapeExact => {
-                    let shape = if dtype == DTypeId::Q8_0 {
+                    let shape = if dtype == DTypeId::Q8_0.descriptor() {
                         &[32][..]
                     } else {
                         &[2, 2][..]
                     };
-                    let target = if dtype == DTypeId::Q8_0 {
+                    let target = if dtype == DTypeId::Q8_0.descriptor() {
                         &[1, 32][..]
                     } else {
                         &[4][..]
@@ -1358,10 +1410,10 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 // shared assertion below can only speak for one storage, and
                 // then hands back the first piece for it to check.
                 OperationKind::Chunk | OperationKind::Split => {
-                    let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+                    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
                     let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
                     let handle =
-                        TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, Dyn, Local>(&input);
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&input);
                     let pieces = if rule.operation == OperationKind::Chunk {
                         dispatch::execute::<op::Chunk, _>(
                             &context,
@@ -1411,10 +1463,10 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 // is the one row here that has to answer for every float dtype
                 // the elementwise group advertises rather than for f32 alone.
                 OperationKind::Dropout => {
-                    let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+                    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
                     let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
                     let handle =
-                        TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, Dyn, Local>(&input);
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&input);
                     dispatch::execute::<op::Dropout, _>(
                         &context,
                         DropoutAttributes {
@@ -1430,7 +1482,54 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 // probed across every dtype it admits, converting each to f32.
                 OperationKind::ToDType => {
                     let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
-                    B::tensor_to_dtype::<Dyn, Dyn>(&input, DTypeId::F32).unwrap()
+                    B::tensor_to_dtype::<Dyn, Dyn>(&input, DTypeId::F32.descriptor()).unwrap()
+                }
+                // `INDEX_AND_F32_DTYPES` is the union of the index operand's
+                // integer dtypes and the weight operand's f32-only one, so
+                // `dtype` here names whichever position it actually belongs
+                // to; the other operand takes a fixed dtype from its own real
+                // set rather than the one under test.
+                OperationKind::EmbeddingExact => {
+                    let (index_dtype, weight_dtype) = if dtype.is_integer() {
+                        (dtype, DTypeId::F32.descriptor())
+                    } else {
+                        (DTypeId::I64.descriptor(), dtype)
+                    };
+                    let indices = B::zeros::<Dyn>(&[2], index_dtype, &DeviceId::cpu()).unwrap();
+                    let weight = B::ones::<Dyn>(&[3, 2], weight_dtype, &DeviceId::cpu()).unwrap();
+                    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+                    let handles = [
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&indices),
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&weight),
+                    ];
+                    dispatch::execute::<op::EmbeddingExact, _>(&context, NoAttributes, &handles)
+                        .unwrap()
+                }
+                // The same union, read the other way round: here the float
+                // position is the logits and the integer one is the class
+                // target, so `dtype` selects whichever it names and the other
+                // operand takes a fixed dtype from its own real set.
+                OperationKind::CrossEntropyLoss => {
+                    let (logit_dtype, target_dtype) = if dtype.is_integer() {
+                        (DTypeId::F32.descriptor(), dtype)
+                    } else {
+                        (dtype, DTypeId::I64.descriptor())
+                    };
+                    let logits = B::ones::<Dyn>(&[2, 3], logit_dtype, &DeviceId::cpu()).unwrap();
+                    let targets = B::zeros::<Dyn>(&[2], target_dtype, &DeviceId::cpu()).unwrap();
+                    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+                    let handles = [
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&logits),
+                        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, Local>(&targets),
+                    ];
+                    dispatch::execute::<op::CrossEntropyLoss, _>(
+                        &context,
+                        LossAttributes {
+                            reduction: LossReduction::Mean,
+                        },
+                        &handles,
+                    )
+                    .unwrap()
                 }
                 OperationKind::Relu
                 | OperationKind::Step
@@ -1563,7 +1662,7 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
 /// uniform: `argmax` and `argmin` build `i64` buffers and `argsort` and `topk`
 /// build `u32` ones. That inconsistency is the backend's, and it is recorded
 /// rather than smoothed over.
-fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId {
+fn expected_result_dtype(operation: OperationKind, operand: DTypeDescriptor) -> DTypeDescriptor {
     if operation == OperationKind::TopK {
         return operand;
     }
@@ -1571,19 +1670,47 @@ fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId 
     // result dtype of a conversion is whatever the caller asked for. This
     // mirrors the target the probes above pass.
     if operation == OperationKind::ToDType {
-        return DTypeId::F32;
+        return DTypeId::F32.descriptor();
     }
     // The three rows whose result dtype is not the operand's. `quantize`
     // compresses into blocks; the other two read blocks and answer in f32, so
     // for them the operand dtype is exactly the wrong answer.
     if operation == OperationKind::Quantize {
-        return DTypeId::Q8_0;
+        return DTypeId::Q8_0.descriptor();
     }
     if matches!(
         operation,
         OperationKind::Dequantize | OperationKind::QuantizedMatMul
     ) {
-        return DTypeId::F32;
+        return DTypeId::F32.descriptor();
+    }
+    // `embedding`'s weight operand is f32 whatever `operand` names — it is the
+    // probe's fixed choice when `operand` belongs to the index position
+    // instead. The gathered result always carries the weight's dtype.
+    //
+    // `cross_entropy_loss` is the same shape of answer read the other way
+    // round: its logits are the f32 position and its targets the integer one,
+    // and the loss it computes is a float whichever of the two `operand`
+    // happens to name.
+    if matches!(
+        operation,
+        OperationKind::EmbeddingExact | OperationKind::CrossEntropyLoss
+    ) {
+        return DTypeId::F32.descriptor();
+    }
+    if matches!(
+        operation,
+        OperationKind::CmpEq
+            | OperationKind::CmpNe
+            | OperationKind::CmpLt
+            | OperationKind::CmpLe
+            | OperationKind::CmpGt
+            | OperationKind::CmpGe
+            | OperationKind::LogicalAnd
+            | OperationKind::LogicalOr
+            | OperationKind::LogicalNot
+    ) {
+        return DTypeId::Bool.descriptor();
     }
     let entry = OPERATION_CATALOG
         .iter()
@@ -1595,7 +1722,7 @@ fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId 
         // so this used to have to split by operation to describe the
         // inconsistency. They honour it now, and every probe above asks for
         // `i64`, so that is what every index result has to be.
-        Some(DTypeRule::IndexResult) => DTypeId::I64,
+        Some(DTypeRule::IndexResult) => DTypeId::I64.descriptor(),
         _ => operand,
     }
 }
@@ -1613,14 +1740,14 @@ fn the_topk_outputs_carry_the_dtypes_the_caller_named() {
     let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
 
     let (values, indices) = B::topk::<f32, u32>(&input, 1, 1, true).unwrap();
-    assert_eq!(values.dtype, DTypeId::F32);
-    assert_eq!(indices.dtype, DTypeId::U32);
+    assert_eq!(values.dtype, DTypeId::F32.descriptor());
+    assert_eq!(indices.dtype, DTypeId::U32.descriptor());
     assert_eq!(&*indices.shape, &[2, 1]);
 
     let (_, indices) = B::topk::<f32, i64>(&input, 1, 1, true).unwrap();
-    assert_eq!(indices.dtype, DTypeId::I64);
+    assert_eq!(indices.dtype, DTypeId::I64.descriptor());
     let (_, indices) = B::topk::<f32, u8>(&input, 1, 1, true).unwrap();
-    assert_eq!(indices.dtype, DTypeId::U8);
+    assert_eq!(indices.dtype, DTypeId::U8.descriptor());
 
     // The value half used to be built as `f32` regardless of the operand, so
     // an `f64` operand came back relabelled and narrowed.
@@ -1628,22 +1755,34 @@ fn the_topk_outputs_carry_the_dtypes_the_caller_named() {
         CpuStorage::try_from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2])
             .unwrap();
     let (values, _) = B::topk::<f64, i64>(&wide, 1, 1, true).unwrap();
-    assert_eq!(values.dtype, DTypeId::F64);
+    assert_eq!(values.dtype, DTypeId::F64.descriptor());
 }
 
 #[cfg(feature = "wgpu")]
 type WgpuB =
-    incin_backends::wgpu::WgpuBackendImpl<f32, incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
+    incin_backends::wgpu::WgpuBackendImpl<incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
 
 #[cfg(feature = "wgpu")]
-fn wgpu_f32(shape: &[usize], values: &[f32]) -> <WgpuB as Backend>::Storage<f32> {
+fn wgpu_f32(
+    shape: &[usize],
+    values: &[f32],
+) -> <WgpuB as incin_core::backend_authoring::StorageBackend>::Storage<f32> {
     WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
     )
     .unwrap()
+}
+
+#[cfg(feature = "wgpu")]
+fn wgpu_bool(
+    shape: &[usize],
+    values: &[bool],
+) -> <WgpuB as incin_core::backend_authoring::StorageBackend>::Storage<bool> {
+    let floats: Vec<f32> = values.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect();
+    wgpu_f32(shape, &floats)
 }
 
 #[cfg(feature = "wgpu")]
@@ -1651,9 +1790,19 @@ fn wgpu_probe_shape(operation: OperationKind) -> &'static [usize] {
     match operation {
         OperationKind::Storage
         | OperationKind::Fill
+        | OperationKind::Zeros
+        | OperationKind::Ones
+        | OperationKind::Full
+        | OperationKind::Arange
+        | OperationKind::Linspace
         | OperationKind::Random
-        | OperationKind::Pointwise => &[2],
-        OperationKind::Add | OperationKind::Sub | OperationKind::Mul | OperationKind::Div => &[2],
+        | OperationKind::Pointwise
+        | OperationKind::Add
+        | OperationKind::Sub
+        | OperationKind::Mul
+        | OperationKind::Div
+        | OperationKind::WhereCond
+        | OperationKind::MaskedFill => &[2],
         OperationKind::Reduction
         | OperationKind::SumAll
         | OperationKind::MeanAll
@@ -1682,12 +1831,38 @@ fn wgpu_probe_shape(operation: OperationKind) -> &'static [usize] {
 }
 
 #[cfg(feature = "wgpu")]
-fn execute_wgpu_probe(operation: OperationKind) -> <WgpuB as Backend>::Storage<f32> {
+fn execute_wgpu_probe(
+    operation: OperationKind,
+) -> <WgpuB as incin_core::backend_authoring::StorageBackend>::Storage<f32> {
     match operation {
         OperationKind::Storage => wgpu_f32(&[2], &[1.0, 2.0]),
-        OperationKind::Fill => WgpuB::zeros::<f32>(&[2], DTypeId::F32, &DeviceId::wgpu(0)).unwrap(),
+        OperationKind::Fill | OperationKind::Zeros => {
+            WgpuB::zeros::<f32>(&[2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0)).unwrap()
+        }
+        OperationKind::Ones => {
+            WgpuB::ones::<f32>(&[2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0)).unwrap()
+        }
+        OperationKind::Full => {
+            WgpuB::full::<f32>(1.0, &[2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0)).unwrap()
+        }
+        OperationKind::Arange => WgpuB::arange::<f32>(
+            0.0,
+            1.0,
+            &[2],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .unwrap(),
+        OperationKind::Linspace => WgpuB::linspace::<f32>(
+            0.0,
+            1.0,
+            &[2],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .unwrap(),
         OperationKind::Random => {
-            WgpuB::rand::<f32>(&[2], DTypeId::F32, &DeviceId::wgpu(0)).unwrap()
+            WgpuB::rand::<f32>(&[2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0)).unwrap()
         }
         OperationKind::Pointwise => {
             let lhs = wgpu_f32(&[2], &[1.0, 2.0]);
@@ -1704,6 +1879,17 @@ fn execute_wgpu_probe(operation: OperationKind) -> <WgpuB as Backend>::Storage<f
                 OperationKind::Div => WgpuB::div::<f32>(&lhs, &rhs).unwrap(),
                 _ => unreachable!(),
             }
+        }
+        OperationKind::WhereCond => {
+            let mask = wgpu_bool(&[2], &[true, false]);
+            let on_true = wgpu_f32(&[2], &[10.0, 20.0]);
+            let on_false = wgpu_f32(&[2], &[-1.0, -2.0]);
+            WgpuB::where_cond::<f32>(&mask, &on_true, &on_false).unwrap()
+        }
+        OperationKind::MaskedFill => {
+            let input = wgpu_f32(&[2], &[10.0, 20.0]);
+            let mask = wgpu_bool(&[2], &[true, false]);
+            WgpuB::masked_fill::<f32>(&input, &mask, 0.0).unwrap()
         }
         OperationKind::Reduction => WgpuB::sum_all::<f32>(&wgpu_f32(&[2], &[1.0, 2.0])).unwrap(),
         OperationKind::SumAll
@@ -1778,28 +1964,28 @@ fn every_generated_wgpu_row_matches_real_execution() {
     for rule in WGPU_CAPABILITIES {
         let case = query(
             rule.operation,
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             LayoutClass::Contiguous,
             rule.min_rank,
         );
         assert_eq!(support(DeviceKind::Wgpu, &case), rule.implementation.into());
         let output = execute_wgpu_probe(rule.operation);
         assert_eq!(&*output.shape, wgpu_probe_shape(rule.operation));
-        assert_eq!(output.dtype, DTypeId::F32);
+        assert_eq!(output.dtype, DTypeId::F32.descriptor());
         assert_eq!(output.device, DeviceId::wgpu(0));
     }
 }
 
 #[cfg(feature = "cuda")]
 type CudaB =
-    incin_backends::cuda::CudaBackendImpl<f32, incin_core::prelude::CudaN<incin_core::typenum::U0>>;
+    incin_backends::cuda::CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
 
 #[cfg(feature = "cuda")]
 fn cuda_f32(shape: &[usize], values: &[f32]) -> <CudaB as Backend>::Storage<f32> {
     CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cuda(0),
     )
     .unwrap()
@@ -1821,9 +2007,11 @@ fn execute_cuda_probe(
 
     match operation {
         OperationKind::Storage => storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]),
-        OperationKind::Fill => CudaB::zeros::<f32>(&[2], DTypeId::F32, &DeviceId::cuda(0)).unwrap(),
+        OperationKind::Fill => {
+            CudaB::zeros::<f32>(&[2], DTypeId::F32.descriptor(), &DeviceId::cuda(0)).unwrap()
+        }
         OperationKind::Random => {
-            CudaB::rand::<f32>(&[2], DTypeId::F32, &DeviceId::cuda(0)).unwrap()
+            CudaB::rand::<f32>(&[2], DTypeId::F32.descriptor(), &DeviceId::cuda(0)).unwrap()
         }
         OperationKind::Pointwise => {
             let lhs = storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
@@ -1868,10 +2056,15 @@ fn execute_cuda_probe(
 fn every_generated_cuda_row_matches_real_execution_on_hardware() {
     for rule in CUDA_CAPABILITIES {
         for &layout in rule.layouts {
-            let case = query(rule.operation, DTypeId::F32, layout, rule.min_rank);
+            let case = query(
+                rule.operation,
+                DTypeId::F32.descriptor(),
+                layout,
+                rule.min_rank,
+            );
             assert_eq!(support(DeviceKind::Cuda, &case), rule.implementation.into());
             let output = execute_cuda_probe(rule.operation, layout);
-            assert_eq!(output.dtype, DTypeId::F32);
+            assert_eq!(output.dtype, DTypeId::F32.descriptor());
             assert_eq!(output.device, DeviceId::cuda(0));
         }
     }
@@ -1991,13 +2184,11 @@ fn the_readback_rows_return_host_values_through_dispatch() {
     // carry `training = false` and refusing a training request is the claim,
     // not an inconvenience around it.
     let context =
-        ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new()).with_grad_mode(GradMode::Disabled);
+        ExecutionContext::new(CpuBackendImpl::<Cpu>::new()).with_grad_mode(GradMode::Disabled);
     let scalar = f32_storage(&[1], &[7.5]);
     let vector = f32_storage(&[3], &[1.0, 2.0, 3.0]);
-    let scalar_handle =
-        || TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&scalar);
-    let vector_handle =
-        || TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&vector);
+    let scalar_handle = || TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&scalar);
+    let vector_handle = || TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&vector);
 
     let value = dispatch::execute::<op::ToHostFloatScalar, _>(
         &context,
@@ -2033,11 +2224,7 @@ fn the_readback_rows_return_host_values_through_dispatch() {
     let whole = dispatch::execute::<op::ToHostIntScalar, _>(
         &context,
         incin_core::exec::catalog::NoAttributes,
-        &[TensorHandle::from_storage::<
-            CpuBackendImpl<f32, Cpu>,
-            f32,
-            Local,
-        >(&integral)],
+        &[TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&integral)],
     )
     .unwrap();
     assert_eq!(whole, 7);

@@ -22,8 +22,8 @@
 use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
 use incin_core::exec::{
-    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, SupportLevel, TensorMeta,
-    UnsupportedReason,
+    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
+    TensorMeta, UnsupportedReason,
 };
 use incin_core::prelude::{
     BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, Shape, ShapeBuf, StorageBackend,
@@ -129,25 +129,35 @@ pub mod template {
     /// conformance suite checks that the two agree.
     impl Capabilities for TemplateBackend {
         fn support(&self, query: &CapabilityQuery) -> SupportLevel {
+            let OperationIdentity::Builtin(operation) = &query.operation else {
+                return SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+                    operation: match &query.operation {
+                        OperationIdentity::Custom(operation) => operation.clone(),
+                        OperationIdentity::Builtin(_) => unreachable!(),
+                    },
+                });
+            };
             if query.dtype != DTypeId::F32.descriptor() {
                 return SupportLevel::Unsupported(UnsupportedReason::DType {
-                    operation: query.operation,
+                    operation: *operation,
                     dtype: query.dtype,
                 });
             }
-            match query.operation {
+            match operation {
                 // Rank 2 only, because the matmul below is rank-2 only.
                 // Registering a rank this executor cannot run is the exact
                 // false claim the registry exists to prevent.
                 OperationKind::MatMulExact if query.rank == 2 => SupportLevel::Native,
                 OperationKind::MatMulExact => SupportLevel::Unsupported(UnsupportedReason::Rank {
-                    operation: query.operation,
+                    operation: *operation,
                     rank: query.rank,
                     min: 2,
                     max: 2,
                 }),
                 OperationKind::ReshapeExact => SupportLevel::Native,
-                operation => SupportLevel::Unsupported(UnsupportedReason::Operation { operation }),
+                operation => SupportLevel::Unsupported(UnsupportedReason::Operation {
+                    operation: *operation,
+                }),
             }
         }
     }
@@ -599,8 +609,16 @@ mod broken {
 
     impl Capabilities for EmptyBackend {
         fn support(&self, query: &CapabilityQuery) -> SupportLevel {
+            let OperationIdentity::Builtin(operation) = &query.operation else {
+                return SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+                    operation: match &query.operation {
+                        OperationIdentity::Custom(operation) => operation.clone(),
+                        OperationIdentity::Builtin(_) => unreachable!(),
+                    },
+                });
+            };
             SupportLevel::Unsupported(UnsupportedReason::Operation {
-                operation: query.operation,
+                operation: *operation,
             })
         }
     }
