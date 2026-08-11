@@ -5,7 +5,7 @@ extern crate incin_core as incin;
 use incin_core::prelude::*;
 use incin_macros::s;
 
-incin_core::dim!(Batch, Contract);
+incin_core::dim!(Batch, Contract, Features, Time);
 
 trait Same<T> {}
 impl<T> Same<T> for T {}
@@ -104,4 +104,38 @@ fn matching_named_static_contractions_preserve_the_matrix_result() {
     type Expected = s![2, 5];
 
     assert_same::<Out, Expected>();
+}
+
+#[test]
+fn named_static_and_runtime_contractions_use_numeric_validation() {
+    type StaticLhs = s![3, Features: 64];
+    type StaticRhs = s![Features: 64, 5];
+    type RuntimeLhs = s![3, Features: dyn];
+    type RuntimeRhs = s![Features: dyn, 5];
+    type ReverseRuntimeLhs = s![3, Features: 64];
+    type ReverseRuntimeRhs = s![Features: dyn, 5];
+    type Expected = s![3, 5];
+
+    assert_same::<<StaticLhs as MatMulShape<StaticRhs>>::Output, Expected>();
+    assert_same::<<RuntimeLhs as MatMulShape<RuntimeRhs>>::Output, Expected>();
+    assert_same::<<ReverseRuntimeLhs as MatMulShape<ReverseRuntimeRhs>>::Output, Expected>();
+
+    let lhs = field::<RuntimeLhs>(&[3, 64]);
+    let rhs = field::<RuntimeRhs>(&[64, 5]);
+    assert_eq!(
+        <RuntimeLhs as MatMulShape<RuntimeRhs>>::output_shape(&lhs, &rhs)
+            .unwrap()
+            .as_ref(),
+        &[3, 5]
+    );
+
+    let mismatched_rhs = field::<RuntimeRhs>(&[63, 5]);
+    assert!(matches!(
+        <RuntimeLhs as MatMulShape<RuntimeRhs>>::output_shape(&lhs, &mismatched_rhs),
+        Err(ShapeError::DimensionMismatch {
+            operation: OperationKind::MatMul,
+            axis: Axis::Named("k"),
+            ..
+        })
+    ));
 }

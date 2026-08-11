@@ -157,8 +157,16 @@ fn checked_batch(axis: usize, lhs: usize, rhs: usize) -> core::result::Result<()
 )]
 pub trait ContractsWith<Rhs: Dim>: Dim {}
 
-/// Two axes of the same type contract, and the compiler has already agreed.
-impl<D: StaticOrNamedDim> ContractsWith<D> for D {}
+/// Two raw static axes of the same type contract, and the compiler has already
+/// agreed. Named axes use the semantic-name implementation below so that a
+/// runtime extent can still contract against a concrete extent of the same
+/// semantic axis.
+impl<D: StaticDim> ContractsWith<D> for D {}
+
+impl<const N: usize> ContractsWith<crate::shapes::dim::ConstDim<N>>
+    for crate::shapes::dim::ConstDim<N>
+{
+}
 
 /// A runtime axis contracts against a sized one if their values agree.
 impl<D: StaticOrNamedDim> ContractsWith<D> for usize {}
@@ -181,6 +189,18 @@ impl<Tag, N> ContractsWith<N> for crate::shapes::dim::NamedDim<Tag, N>
 where
     Tag: crate::shapes::AxisTag,
     N: StaticDim,
+{
+}
+
+/// Named contraction axes with the same semantic identity are compatible when
+/// their extents differ in static/runtime knowledge. The runtime shape check
+/// remains authoritative for the unresolved extent.
+impl<Tag, L, R> ContractsWith<crate::shapes::dim::NamedDim<Tag, R>>
+    for crate::shapes::dim::NamedDim<Tag, L>
+where
+    Tag: crate::shapes::AxisTag,
+    L: Dim,
+    R: Dim,
 {
 }
 
