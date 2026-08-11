@@ -101,6 +101,10 @@ impl Parse for ShapeInput {
 
 pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as ShapeInput);
+    let is_fully_static = parsed
+        .axes
+        .iter()
+        .all(|axis| !matches!(axis, Axis::Runtime(_)));
 
     let path = quote! { ::incin::prelude:: };
 
@@ -140,8 +144,18 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
         tuple_arg = quote! { (#arg, #tuple_arg) };
     }
 
-    quote! {
-        #path ShapeArgs::<#shape_ty>::new(<#shape_ty as #path Shape>::init(#tuple_arg))
+    if is_fully_static {
+        quote! {
+            #path ShapeValue::<#shape_ty>::try_new(
+                <#shape_ty as #path Shape>::resolve(#tuple_arg)
+                    .expect("shape! generated an invalid static shape")
+            ).expect("shape! generated an invalid static shape")
+        }
+        .into()
+    } else {
+        quote! {
+            #path ShapeArgs::<#shape_ty>::new(#tuple_arg)
+        }
+        .into()
     }
-    .into()
 }

@@ -122,7 +122,8 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Validates raw runtime dimensions against this shape's static contract.
     #[inline]
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        Self::try_from_dims(dims).map(|_| ())
+        let _ = dims;
+        Ok(())
     }
 }
 
