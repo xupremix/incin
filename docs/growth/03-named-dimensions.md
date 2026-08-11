@@ -1,8 +1,8 @@
 # 03 — Named Dimensions (make the hidden feature a headline)
 
-> **Depends on:** `01` (readable errors make this usable). **Effort:** Low-Medium
-> — most of the machinery already exists; this is promotion + ergonomics +
-> errors + docs.
+> **Depends on:** `01` (readable errors make this usable). **Effort:** Low-Medium.
+> The canonical machinery exists; this document records the promotion,
+> ergonomics, error, and documentation work.
 
 ## Goal
 
@@ -17,14 +17,15 @@ opt-in, perpetually "experimental", and silently drop names through most ops.
 
 ## Grounding (what exists today)
 
-- The `symbolic_dim!` macro (`crates/incin-core/src/shapes/dim.rs:60`) already
-  generates a distinct `pub struct <Name>(pub usize)` implementing `Dim`.
-- A working example exists but is buried:
-  `crates/incin/examples/named_tensors/src/main.rs` uses
-  `symbolic_dim!(Batch, Seq, Feature)` and shows a wrong `.add` failing to
-  compile.
-- `Dim` is the trait (`shapes/dim.rs`), and `s![Batch, 10]` already accepts a
-  named dim mixed with a literal.
+- The `dim!` macro generates zero-sized semantic axis tags implementing
+  `AxisTag` and `AxisIdentity`. A tag never stores a position or runtime size.
+- `NamedDim<Tag, Extent>` carries the semantic tag and extent specification;
+  runtime extent values live in `ShapeBuf`.
+- `s![Batch, 10]` accepts a named axis mixed with a literal, and named selector
+  lookup resolves the current position at the operation boundary.
+- The `named_dims_safety` example and `named_dims.rs` tests exercise the public
+  contract, including transpose, reduction, broadcast, concat, stack, and
+  matmul.
 
 ## The gap to close
 
