@@ -30,6 +30,7 @@ thread_local! {
     /// field because `execute` takes `&self` through a context the dispatch
     /// layer owns, so there is no `&mut` to write through.
     static OBSERVED: Cell<Option<ProofLevel>> = const { Cell::new(None) };
+    static OBSERVED_STATIC_NUMEL: Cell<Option<Option<usize>>> = const { Cell::new(None) };
 }
 
 /// Records the proof level it is dispatched with and produces no storage.
@@ -65,6 +66,7 @@ impl Execute<Descriptor<op::Zeros>> for RecordingBackend {
         request: ExecutionRequest<'_, Descriptor<op::Zeros>, Self>,
     ) -> Result<Self::Output, incin_core::prelude::BackendError> {
         OBSERVED.with(|slot| slot.set(Some(request.operation.proof_level())));
+        OBSERVED_STATIC_NUMEL.with(|slot| slot.set(Some(ShapeTy::STATIC_NUMEL)));
         Ok(())
     }
 }
@@ -73,6 +75,7 @@ impl Execute<Descriptor<op::Zeros>> for RecordingBackend {
 /// proof level that reached the backend.
 fn observed_proof_for<S: Shape>(expected: &incin::prelude::ShapeValue<S>) -> ProofLevel {
     OBSERVED.with(|slot| slot.set(None));
+    OBSERVED_STATIC_NUMEL.with(|slot| slot.set(None));
     let context = ExecutionContext::new(RecordingBackend).with_grad_mode(GradMode::Disabled);
     dispatch::execute_shaped::<op::Zeros, _, S>(
         &context,
@@ -90,6 +93,13 @@ fn observed_proof_for<S: Shape>(expected: &incin::prelude::ShapeValue<S>) -> Pro
         .expect("execute must have been reached")
 }
 
+fn observed_static_numel_for<S: Shape>(expected: &incin::prelude::ShapeValue<S>) -> Option<usize> {
+    observed_proof_for(expected);
+    OBSERVED_STATIC_NUMEL
+        .with(Cell::get)
+        .expect("execute must have recorded the shape constants")
+}
+
 /// A fully static shape reaches the backend as `Static`.
 #[test]
 fn a_static_shape_reaches_the_backend_as_static() {
@@ -99,6 +109,7 @@ fn a_static_shape_reaches_the_backend_as_static() {
     )
     .unwrap();
     assert_eq!(observed_proof_for(&sv), ProofLevel::Static);
+    assert_eq!(observed_static_numel_for(&sv), Some(6));
 }
 
 /// One runtime axis weakens the whole shape to `Mixed`.
@@ -117,6 +128,7 @@ fn a_partial_shape_reaches_the_backend_as_mixed() {
 fn a_dynamic_shape_reaches_the_backend_as_dynamic() {
     let sv = incin::prelude::ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
     assert_eq!(observed_proof_for(&sv), ProofLevel::Dynamic);
+    assert_eq!(observed_static_numel_for(&sv), None);
 }
 
 /// `execute` — the evidence-free entry point — must keep claiming nothing.
