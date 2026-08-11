@@ -62,14 +62,14 @@ pub struct DescriptorSchemaVersion(u32);
 impl DescriptorSchemaVersion {
     /// The schema the descriptors in this module are currently frozen at.
     ///
-    /// v2 gave [`ReductionSpec`] and [`Pool2dSpec`] the operator that runs
-    /// inside their geometry. A v1 cache entry keyed on either records a window
-    /// without saying what accumulated in it, so it cannot be replayed.
+    /// v2 added the operator identity to reduction and pooling geometry. A v1
+    /// cache entry keyed on either records a window without saying what
+    /// accumulated in it, so it cannot be replayed.
     ///
-    /// v3 gave [`BroadcastSpec`] the same treatment, with an operator that may
-    /// be absent. A v2 entry keyed on one cannot say whether it described a
-    /// stretch or the geometry of a binary operation, and the two produce
-    /// different output storage from identical strides.
+    /// v3 added optional operator identity to broadcast geometry. A v2 entry
+    /// cannot say whether it described a stretch or the geometry of a binary
+    /// operation, and the two produce different output storage from identical
+    /// strides.
     pub const CURRENT: Self = Self(3);
 
     /// Name a specific version, for reading a cache entry or plan back.
@@ -104,7 +104,7 @@ impl fmt::Display for DescriptorSchemaVersion {
 
 // --- operators --------------------------------------------------------------
 
-/// Which accumulation a [`ReductionSpec`] performs.
+/// Which accumulation a distributed reduction performs.
 ///
 /// The geometry of a reduction says how many elements collapse into each result
 /// element. It does not say what happens to them, and a backend cannot execute
@@ -112,7 +112,7 @@ impl fmt::Display for DescriptorSchemaVersion {
 /// different answers. This is the part the descriptor names.
 ///
 /// The set is closed at the five accumulations whose result has the shape
-/// [`ReductionSpec`] derives. `argmax` and `argmin` collapse the same axes but
+/// the exact reduction descriptor derives. `argmax` and `argmin` collapse the same axes but
 /// return indices, so their result dtype differs from their input's and they are
 /// a different operation; `cumsum` and `topk` do not collapse an axis at all.
 /// None of the three is expressible here, deliberately.
@@ -309,9 +309,8 @@ impl AxisMask {
 
     /// Whether the set is a single unbroken run of axes.
     ///
-    /// Descriptors whose geometry collapses a shape into contiguous regions ---
-    /// [`ReductionSpec`] is the one here --- are only expressible when the axes
-    /// they act on are adjacent.
+    /// Descriptors whose geometry collapses a shape into contiguous regions are
+    /// only expressible when the axes they act on are adjacent.
     #[must_use]
     pub const fn is_contiguous_run(self) -> bool {
         if self.0 == 0 {

@@ -1,10 +1,10 @@
 use incin::backend_authoring::operations::{Descriptor, NoAttributes, OPERATION_CATALOG, op};
-use incin::backend_authoring::{Backend, Execute, OperationSpec, StorageBackend};
+use incin::backend_authoring::{Backend, Execute, ExecutionDescriptor, StorageBackend};
 
 pub fn accepts_backend_contract<B, O>()
 where
     B: Backend + StorageBackend + Execute<O>,
-    O: OperationSpec,
+    O: ExecutionDescriptor,
 {
 }
 
