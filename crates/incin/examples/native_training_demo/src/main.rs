@@ -77,7 +77,9 @@ impl<
         + Execute<Descriptor<op::Add>>
         + Execute<Descriptor<op::Relu>>
         + Execute<Descriptor<op::Conv2dExact>>
-        + Execute<Descriptor<op::MaxPool2d>>,
+        + Execute<Descriptor<op::MaxPool2d>>
+        + Execute<Descriptor<op::BatchNorm>>
+        + Execute<Descriptor<op::CrossEntropyLoss>>,
 > SimpleCnn<B>
 where
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
@@ -87,6 +89,7 @@ where
     <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<f32>>,
 {
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
@@ -159,7 +162,9 @@ where
         + Execute<Descriptor<op::Conv2dExact>>
         + Execute<Descriptor<op::TransposeExact>>
         + Execute<Descriptor<op::ReshapeExact>>
-        + Execute<Descriptor<op::MaxPool2d>>,
+        + Execute<Descriptor<op::MaxPool2d>>
+        + Execute<Descriptor<op::BatchNorm>>
+        + Execute<Descriptor<op::CrossEntropyLoss>>,
     B::Device: ConstDevice,
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
@@ -168,6 +173,8 @@ where
     <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::CrossEntropyLoss>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::TensorFromData>>>::Output:
         Into<B::Storage<f32>> + Into<B::Storage<u32>>,
 {
