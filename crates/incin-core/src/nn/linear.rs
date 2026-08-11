@@ -42,33 +42,6 @@ pub trait LinearShape: Shape + DynShape {
     ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError>;
 }
 
-/* legacy tuple LinearShape implementation removed: use DimCons/Nil */
-/*
-    /// The number of input features (last dimension of the input tensor).
-    type InF = InF;
-    /// The number of output features (last dimension of the output tensor).
-    type OutF = OutF;
-    /// The shape argument type used to construct the weight tensor.
-    type WeightArg = (<OutF as Dim>::Arg, <InF as Dim>::Arg);
-    /// The shape argument type used to construct the bias tensor.
-    type BiasArg = (<OutF as Dim>::Arg,);
-    /// The static shape type of the weight parameter tensor.
-    type WeightShape = (OutF, InF);
-    /// The static shape type of the bias parameter tensor.
-    type BiasShape = (OutF,);
-
-    #[inline]
-    /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(
-        target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
-        let in_f = InF::from_arg(target.0.clone()).size();
-        let out_f = OutF::from_arg(target.1.clone()).size();
-        (in_f, out_f, (target.1.clone(), target.0), (target.1,))
-    }
-}
-*/
-
 impl<InF: Dim, OutF: Dim> LinearShape
     for crate::shapes::shape::DimCons<
         InF,
