@@ -336,6 +336,7 @@ where
         + crate::tensor::backend::CreationOps<B>
         + crate::tensor::backend::FloatOps<B>
         + crate::tensor::backend::NumericOps<B>
+        + crate::nn::param::ParameterInit<K>
         + crate::tensor::backend::TensorOps<B>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
@@ -596,6 +597,7 @@ impl<
             + crate::tensor::backend::CreationOps<B>
             + crate::tensor::backend::FloatOps<B>
             + crate::tensor::backend::NumericOps<B>
+            + crate::nn::param::ParameterInit<K>
             + crate::tensor::backend::TensorOps<B>,
         <K as DType>::Arg: Clone,
         <S::In as Dim>::Arg: Clone,
@@ -619,6 +621,7 @@ impl<
             + crate::tensor::backend::CreationOps<B>
             + crate::tensor::backend::FloatOps<B>
             + crate::tensor::backend::NumericOps<B>
+            + crate::nn::param::ParameterInit<K>
             + crate::tensor::backend::TensorOps<B>,
         <K as DType>::Arg: Clone,
         <S::In as Dim>::Arg: Clone,

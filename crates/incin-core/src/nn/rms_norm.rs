@@ -120,7 +120,8 @@ impl<
     B: Backend
         + crate::tensor::backend::CreationOps<B>
         + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>,
+        + crate::tensor::backend::NumericOps<B>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > RMSNorm<S, B, K, Trainable>
 {

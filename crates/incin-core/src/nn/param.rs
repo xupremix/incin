@@ -1,4 +1,9 @@
-use crate::backend_authoring::{CreationOps, FloatOps, NumericOps, TensorOps};
+use crate::backend_authoring::{
+    Capabilities, CreationOps, Execute, FloatOps, NumericOps, Operation, StorageBackend, TensorOps,
+};
+use crate::exec::catalog::{CreationAttributes, FullAttributes, ScalarAttributes, op};
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, InitPlan, ParameterRole};
 use crate::prelude::*;
 use core::marker::PhantomData;
@@ -29,6 +34,95 @@ impl TrainState for Frozen {
     const TRAINABLE: bool = false;
 }
 
+/// Canonical parameter initialization capability.
+///
+/// This is implemented automatically for backends that provide the exact
+/// variable-creation and scalar operation descriptors used by `InitPlan`.
+pub trait ParameterInit<K: DType>: Backend + SupportsDType<K> {
+    fn execute_plan_raw(
+        dims: &[usize],
+        dtype_field: &<K as DType>::Field,
+        device_field: &<Self::Device as Device>::Field,
+        plan: crate::nn::init::InitPlan,
+    ) -> Result<Self::RawVar>;
+}
+
+impl<B, K: DType> ParameterInit<K> for B
+where
+    B: Backend
+        + SupportsDType<K>
+        + Capabilities
+        + Execute<op::VariableZeros>
+        + Execute<op::VariableOnes>
+        + Execute<op::Full>
+        + Execute<op::UniformRandom>
+        + Execute<op::NormalRandom>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>,
+    <B as Execute<op::VariableZeros>>::Output: Into<B::RawVar>,
+    <B as Execute<op::VariableOnes>>::Output: Into<B::RawVar>,
+    <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::NormalRandom>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
+{
+    fn execute_plan_raw(
+        dims: &[usize],
+        dtype_field: &<K as DType>::Field,
+        device_field: &<B::Device as Device>::Field,
+        plan: crate::nn::init::InitPlan,
+    ) -> Result<B::RawVar> {
+        let device = B::Device::to_incin(device_field)?;
+        let dtype = B::resolve_dtype(dtype_field, &device)?;
+        match plan {
+            InitPlan::Zeros => execute_variable::<op::VariableZeros, B>(dims, dtype, device),
+            InitPlan::Ones => execute_variable::<op::VariableOnes, B>(dims, dtype, device),
+            InitPlan::Constant(value) => {
+                let storage = execute_storage::<op::Full, B, K>(
+                    FullAttributes {
+                        shape: dims.to_vec(),
+                        dtype,
+                        device,
+                        value,
+                    },
+                    dims,
+                )?;
+                B::var_from_tensor(&storage)
+            }
+            InitPlan::Uniform { low, high } => {
+                let storage = execute_storage::<op::UniformRandom, B, K>(
+                    CreationAttributes {
+                        shape: dims.to_vec(),
+                        dtype,
+                        device,
+                    },
+                    dims,
+                )?;
+                let storage = execute_scalar::<op::MulScalar, B, K>(&storage, high - low)?;
+                let storage = execute_scalar::<op::AddScalar, B, K>(&storage, low)?;
+                B::var_from_tensor(&storage)
+            }
+            InitPlan::Normal { mean, std } => {
+                let storage = execute_storage::<op::NormalRandom, B, K>(
+                    CreationAttributes {
+                        shape: dims.to_vec(),
+                        dtype,
+                        device,
+                    },
+                    dims,
+                )?;
+                let storage = execute_scalar::<op::MulScalar, B, K>(&storage, std)?;
+                if mean != 0.0 {
+                    B::var_from_tensor(&execute_scalar::<op::AddScalar, B, K>(&storage, mean)?)
+                } else {
+                    B::var_from_tensor(&storage)
+                }
+            }
+        }
+    }
+}
+
 pub fn execute_plan_raw<B, K: DType>(
     dims: &[usize],
     dtype_field: &<K as DType>::Field,
@@ -36,33 +130,69 @@ pub fn execute_plan_raw<B, K: DType>(
     plan: crate::nn::init::InitPlan,
 ) -> Result<B::RawVar>
 where
-    B: Backend + SupportsDType<K> + FloatOps<B> + NumericOps<B> + CreationOps<B>,
+    B: ParameterInit<K>,
 {
-    let device = B::Device::to_incin(device_field)?;
-    let dtype = B::resolve_dtype(dtype_field, &device)?;
-    match plan {
-        InitPlan::Zeros => B::var_zeros::<K>(dims, dtype, &device),
-        InitPlan::Ones => B::var_ones::<K>(dims, dtype, &device),
-        InitPlan::Constant(value) => {
-            let ones = B::ones::<K>(dims, dtype, &device)?;
-            B::var_from_tensor(&B::mul_scalar_float(&ones, value)?)
-        }
-        InitPlan::Uniform { low, high } => {
-            let value = B::rand::<K>(dims, dtype, &device)?;
-            let range = high - low;
-            let value = B::mul_scalar_float(&value, range)?;
-            B::var_from_tensor(&B::add_scalar_float(&value, low)?)
-        }
-        InitPlan::Normal { mean, std } => {
-            let value = B::randn::<K>(dims, dtype, &device)?;
-            let value = B::mul_scalar_float(&value, std)?;
-            if mean != 0.0 {
-                B::var_from_tensor(&B::add_scalar_float(&value, mean)?)
-            } else {
-                B::var_from_tensor(&value)
-            }
-        }
-    }
+    B::execute_plan_raw(dims, dtype_field, device_field, plan)
+}
+
+fn execute_variable<O, B>(
+    dims: &[usize],
+    dtype: DTypeDescriptor,
+    device: DeviceId,
+) -> Result<B::RawVar>
+where
+    O: Operation<Attributes = CreationAttributes>,
+    B: Backend + Execute<O> + Capabilities,
+    <B as Execute<O>>::Output: Into<B::RawVar>,
+{
+    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    dispatch::execute::<O, B>(
+        &context,
+        CreationAttributes {
+            shape: dims.to_vec(),
+            dtype,
+            device,
+        },
+        &[],
+    )
+    .map(Into::into)
+    .map_err(crate::prelude::Error::from)
+}
+
+fn execute_storage<O, B, K>(attributes: O::Attributes, dims: &[usize]) -> Result<B::Storage<K>>
+where
+    O: Operation,
+    B: Backend + Execute<O> + Capabilities,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let shape = ShapeBuf::from_slice(dims);
+    let expected = ShapeValue::<Dyn>::try_new(shape).map_err(Error::Shape)?;
+    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    dispatch::execute_shaped::<O, B, Dyn>(&context, attributes, &[], &expected)
+        .map(Into::into)
+        .map_err(crate::prelude::Error::from)
+}
+
+fn execute_scalar<O, B, K>(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>>
+where
+    O: Operation<Attributes = ScalarAttributes>,
+    B: Backend + Execute<O> + Capabilities,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let shape = B::shape(storage);
+    let expected = ShapeValue::<Dyn>::try_new(shape).map_err(Error::Shape)?;
+    let handle = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = crate::exec::ExecutionContext::from_scope(B::default());
+    dispatch::execute_shaped::<O, B, Dyn>(
+        &context,
+        ScalarAttributes { value },
+        &[handle],
+        &expected,
+    )
+    .map(Into::into)
+    .map_err(crate::prelude::Error::from)
 }
 
 fn execute_initializer<B, K: DType>(
@@ -72,7 +202,7 @@ fn execute_initializer<B, K: DType>(
     init: crate::nn::init::Init,
 ) -> Result<B::RawVar>
 where
-    B: Backend + SupportsDType<K> + FloatOps<B> + NumericOps<B> + CreationOps<B>,
+    B: ParameterInit<K>,
 {
     let context = InitContext::new(ParameterRole::Other);
     let plan = init.plan(context)?;
@@ -220,7 +350,7 @@ where
 
 impl<
     S: Shape + DynShape,
-    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K>,
+    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K> + ParameterInit<K>,
     K: DType,
     Train: TrainState,
 > Param<S, B, K, Train>
@@ -578,7 +708,7 @@ where
 
 impl<
     S: Shape + DynShape,
-    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K>,
+    B: Backend + CreationOps<B> + FloatOps<B> + NumericOps<B> + SupportsDType<K> + ParameterInit<K>,
     K: DType,
 > Buffer<S, B, K>
 where

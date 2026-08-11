@@ -146,7 +146,8 @@ impl<
     B: Backend
         + crate::tensor::backend::CreationOps<B>
         + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>,
+        + crate::tensor::backend::NumericOps<B>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > LayerNorm<S, B, K, Trainable>
 where
