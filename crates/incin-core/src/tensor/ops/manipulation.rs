@@ -180,9 +180,9 @@ impl<
     /// ```
     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow> + Execute<op::SqueezeExact>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         self.dyn_slice(specs)
     }
@@ -204,9 +204,9 @@ impl<
         index: I,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Capabilities + Execute<Descriptor<op::Narrow>> + Execute<Descriptor<op::SqueezeExact>>,
-        <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::SqueezeExact>>>::Output: Into<B::Storage<K>>,
+        B: Capabilities + Execute<op::Narrow> + Execute<op::SqueezeExact>,
+        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     {
         self.dyn_slice(&index.into_specs())
     }
