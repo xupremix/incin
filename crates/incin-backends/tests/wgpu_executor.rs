@@ -79,6 +79,7 @@ fn execute(
         operation: validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     })
 }
 
@@ -107,6 +108,7 @@ fn the_binder_requires_exactly_two_inputs() {
         operation: &validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     }) else {
         panic!("a one-operand matmul request must not execute");
     };
@@ -168,6 +170,7 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
             operation: &validated,
             inputs: &inputs,
             context: &context,
+            payload: None,
         }) else {
             panic!("CPU storage must not bind to the WGPU executor");
         };
@@ -204,6 +207,7 @@ fn execute_reshape(
         operation: validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     })
 }
 
@@ -237,6 +241,7 @@ fn the_reshape_binder_requires_exactly_one_input() {
         operation: &validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     }) else {
         panic!("a two-operand reshape request must not execute");
     };
@@ -332,6 +337,7 @@ fn conv2d_descriptor_execution_matches_the_legacy_path() {
             operation: &validated,
             inputs: &inputs,
             context: &context,
+            payload: None,
         })
         .expect("a valid conv2d descriptor must execute");
 
@@ -363,6 +369,7 @@ fn the_conv2d_binder_rejects_a_weight_that_disagrees_with_the_descriptor() {
         operation: &validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     }) else {
         panic!("a weight of the wrong output width must not execute");
     };
@@ -405,6 +412,7 @@ fn a_conv2d_bias_actually_reaches_every_output_element() {
                 operation: &validated,
                 inputs: &inputs,
                 context: &context,
+                payload: None,
             })
             .expect("a valid conv2d descriptor must execute");
         read(&output)
@@ -440,6 +448,7 @@ where
         operation: validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     })
 }
 

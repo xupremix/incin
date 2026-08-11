@@ -69,6 +69,7 @@ fn main() {
         operation: &validated,
         inputs: &handles,
         context: &context,
+        payload: None,
     };
     assert_eq!(Execute::execute(context.backend(), request).unwrap(), 1);
 }

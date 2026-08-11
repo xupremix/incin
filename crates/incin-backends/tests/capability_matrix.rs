@@ -23,7 +23,7 @@ use incin_core::exec::{
 };
 use incin_core::prelude::{
     Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0,
-    Reduction,
+    Reduction, ShapeBuf, ShapeValue,
 };
 
 use incin_core::tensor::arg_into::ArgInto;
@@ -1182,14 +1182,27 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
                 shape: vec![2],
                 dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
-                bytes,
             };
             match operation {
                 OperationKind::TensorFromData => {
-                    dispatch::execute::<op::TensorFromData, _>(&context, attributes, &[]).unwrap()
+                    dispatch::execute_shaped_with_payload::<op::TensorFromData, _, Dyn>(
+                        &context,
+                        attributes,
+                        &[],
+                        &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
+                        Some(bytes.as_slice()),
+                    )
+                    .unwrap()
                 }
                 OperationKind::TensorFromBytes => {
-                    dispatch::execute::<op::TensorFromBytes, _>(&context, attributes, &[]).unwrap()
+                    dispatch::execute_shaped_with_payload::<op::TensorFromBytes, _, Dyn>(
+                        &context,
+                        attributes,
+                        &[],
+                        &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
+                        Some(bytes.as_slice()),
+                    )
+                    .unwrap()
                 }
                 _ => unreachable!(),
             }

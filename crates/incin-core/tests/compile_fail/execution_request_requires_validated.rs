@@ -33,5 +33,6 @@ fn main() {
         operation: &descriptor,
         inputs: &inputs,
         context: &context,
+        payload: None,
     };
 }

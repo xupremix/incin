@@ -2,6 +2,7 @@
 
 use incin::backend_authoring::*;
 use incin::prelude::*;
+use incin_core::tensor::backend::TensorOps;
 
 #[test]
 fn test_trigonometric_and_transcendental_ops() -> Result<()> {

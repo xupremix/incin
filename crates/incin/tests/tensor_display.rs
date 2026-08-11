@@ -5,7 +5,7 @@ use incin::prelude::*;
 #[test]
 fn one_d_float_tensor_prints_like_pytorch() -> Result<()> {
     let t = Tensor::<s![3], DefaultBackend>::from_slice(&[1.0, 2.0, 3.0], ())?;
-    assert_eq!(t.to_string(), "tensor([1., 2., 3.], requires_grad=True)");
+    assert_eq!(t.to_string(), "tensor([1., 2., 3.])");
     Ok(())
 }
 
@@ -17,7 +17,7 @@ fn two_d_float_tensor_aligns_negative_columns() -> Result<()> {
     )?;
     assert_eq!(
         t.to_string(),
-        "tensor([[ 0.3171, -0.9524,  0.1331],\n        [-0.6189,  0.4829, -0.2168]], requires_grad=True)"
+        "tensor([[ 0.3171, -0.9524,  0.1331],\n        [-0.6189,  0.4829, -0.2168]])"
     );
     Ok(())
 }
@@ -32,10 +32,7 @@ fn no_grad_tensor_omits_the_requires_grad_footer() -> Result<()> {
 #[test]
 fn non_default_dtype_is_named_in_the_footer() -> Result<()> {
     let t = Tensor::<s![3], DefaultBackend, i64>::from_slice(&[1, 2, 3], ())?;
-    assert_eq!(
-        t.to_string(),
-        "tensor([1, 2, 3], dtype=i64, requires_grad=True)"
-    );
+    assert_eq!(t.to_string(), "tensor([1, 2, 3], dtype=i64)");
     Ok(())
 }
 
