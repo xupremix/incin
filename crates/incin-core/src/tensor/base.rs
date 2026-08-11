@@ -967,7 +967,8 @@ where
         let s_f64 = start.into().to_f64();
         let e_f64 = end.into().to_f64();
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
         let inner = dispatch::execute_shaped::<op::Linspace, B, S>(
             &context,
             LinspaceAttributes {
