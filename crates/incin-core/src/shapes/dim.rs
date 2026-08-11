@@ -295,14 +295,6 @@ macro_rules! __incin_dim_declare {
     };
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! sym_dim {
-    ($($tokens:tt)*) => {
-        $crate::dim!($($tokens)*);
-    };
-}
-
 /// A const-generic adapter for fixed extents that Stable Rust cannot expose as
 /// a proc-macro literal (for example `shape![const Model::WIDTH]`).
 ///
