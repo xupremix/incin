@@ -1,7 +1,4 @@
-use incin::backend_authoring::{
-    CreationOps, Execute, FloatOps, ModuleOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
-    operations::op,
-};
+use incin::backend_authoring::{Execute, SupportsDType, operations::op};
 use incin::prelude::*;
 use incin_core::nn::param::ParameterInit;
 
@@ -18,16 +15,7 @@ pub struct BasicBlock<B: Backend> {
     pub bn2: incin::BatchNorm2d<s![dyn], B>,
 }
 
-impl<
-    B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
-        + ParameterInit<f32>,
-> BasicBlock<B>
+impl<B: Backend + ParameterInit<f32>> BasicBlock<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
@@ -56,12 +44,6 @@ where
 
 impl<
     B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
         + Execute<op::Add>
         + Execute<op::Relu>
         + Execute<op::Conv2dExact>
@@ -101,16 +83,7 @@ pub struct ResNet<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<
-    B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
-        + ParameterInit<f32>,
-> ResNet<B>
+impl<B: Backend + ParameterInit<f32>> ResNet<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
@@ -128,12 +101,6 @@ where
 
 impl<
     B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
         + Execute<op::Add>
         + Execute<op::Relu>
         + Execute<op::Conv2dExact>

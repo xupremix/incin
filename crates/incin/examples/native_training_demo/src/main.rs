@@ -6,10 +6,7 @@
 #[macro_use]
 extern crate alloc;
 
-use incin::backend_authoring::{
-    CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, ReductionOps,
-    SupportsDType, TensorOps,
-};
+use incin::backend_authoring::SupportsDType;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
@@ -31,15 +28,7 @@ pub struct SimpleCnn<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<
-    B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>,
-> SimpleCnn<B>
+impl<B: Backend + incin_core::nn::param::ParameterInit<f32>> SimpleCnn<B>
 where
     B: SupportsDType<f32> + SupportsDType<u32>,
     B::Device: ConstDevice,
@@ -65,12 +54,6 @@ where
 
 impl<
     B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
         + Execute<op::TransposeExact>
         + Execute<op::ReshapeExact>
         + incin_core::tensor::backend::Execute<op::MatMulExact>
@@ -145,14 +128,6 @@ fn train<B>(
 ) -> (Vec<f32>, std::time::Duration)
 where
     B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ModuleOps<B>
-        + ReductionOps<B>
-        + LossOps<B>
-        + OptimizerOps<B>
         + SupportsDType<f32>
         + SupportsDType<u32>
         + Execute<op::TensorFromData>
