@@ -100,7 +100,7 @@ fn structural_operations_compile_at_rank_16_64_and_200() {
 
 #[test]
 fn test_named_dim_tag_extent_orthogonality() {
-    let named_runtime = NamedDim::<ChannelsTag, usize>::new(64);
+    let named_runtime = NamedDim::<ChannelsTag, usize>::new();
     assert_eq!(
         <NamedDim<ChannelsTag, usize> as Dim>::resolve_arg(64),
         Ok(64)
@@ -108,12 +108,12 @@ fn test_named_dim_tag_extent_orthogonality() {
     assert_eq!(core::mem::size_of_val(&named_runtime), 0);
     assert_eq!(named_runtime.static_extent(), StaticExtent::RuntimeUnknown);
 
-    let named_static = NamedDim::<ChannelsTag, ConstDim<64>>::new(ConstDim::<64>);
+    let named_static = NamedDim::<ChannelsTag, ConstDim<64>>::new();
     assert_eq!(named_static.size(), 64);
     assert_eq!(named_static.static_extent(), StaticExtent::Value(64));
 
     // keepdim preserves ChannelsTag while replacing extent with ConstDim<1>
-    let keepdim_named = NamedDim::<ChannelsTag, ConstDim<1>>::new(ConstDim::<1>);
+    let keepdim_named = NamedDim::<ChannelsTag, ConstDim<1>>::new();
     assert_eq!(keepdim_named.size(), 1);
     assert_eq!(keepdim_named.static_extent(), StaticExtent::Value(1));
 }

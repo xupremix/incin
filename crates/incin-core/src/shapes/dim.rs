@@ -447,8 +447,12 @@ where
 }
 
 impl<Tag: AxisTag, Extent: Dim> NamedDim<Tag, Extent> {
-    pub fn new(extent: Extent) -> Self {
-        let _ = extent;
+    /// Constructs the zero-sized semantic axis marker.
+    ///
+    /// Runtime extents are carried by `ShapeBuf`, not by this type. Static
+    /// extents remain part of `Extent` and therefore remain available to the
+    /// type system without storing a duplicate value.
+    pub const fn new() -> Self {
         Self {
             _tag: core::marker::PhantomData,
         }
