@@ -51,7 +51,7 @@ macro_rules! impl_reduction_op {
             )
             .map_err(crate::prelude::Error::Shape)?;
             let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-            let context = ExecutionContext::from_scope(B::default());
+            let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
             let inner = G::grad_mode(&self._grad)
                 .restrict(|| {
                     crate::exec::dispatch::execute_shaped::<op::$operation, B, ()>(
@@ -106,7 +106,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(output_dims)
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::SumDim, B, <S as ReduceAt<C>>::Output>(
@@ -157,7 +157,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(output_dims)
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<
@@ -269,7 +269,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(output_dims)
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<O, B, crate::prelude::Dyn>(
@@ -375,7 +375,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Cumsum, B, S>(
@@ -460,7 +460,7 @@ where
         )
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let inner = GradMode::Disabled
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
@@ -509,7 +509,7 @@ where
         )
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let inner = GradMode::Disabled
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
@@ -569,7 +569,7 @@ where
         )
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let (values_inner, indices_inner) = GradMode::Disabled
             .restrict(|| {
                 crate::exec::dispatch::execute::<op::TopK, B>(
@@ -619,7 +619,7 @@ where
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let indices_inner = GradMode::Disabled
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Argsort, B, S>(

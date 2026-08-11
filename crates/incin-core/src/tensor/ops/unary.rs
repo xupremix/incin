@@ -349,7 +349,7 @@ where
 {
     let handle = TensorHandle::from_storage::<B, K, Local>(&tensor.inner);
     let shape_val = tensor._shape.clone();
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, G>(&tensor._grad);
     let storage = G::grad_mode(&tensor._grad)
         .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[handle], &shape_val)
@@ -382,7 +382,7 @@ where
 {
     let handle = TensorHandle::from_storage::<B, K, Local>(&tensor.inner);
     let shape_val = tensor._shape.clone();
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, G>(&tensor._grad);
     let storage = G::grad_mode(&tensor._grad)
         .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, attributes, &[handle], &shape_val)

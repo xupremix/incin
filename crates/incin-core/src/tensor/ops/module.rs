@@ -1,6 +1,5 @@
 //! Module operations (LayerNorm, BatchNorm, etc) for neural networks.
 use crate::exec::catalog::{BatchNormAttributes, Descriptor, LayerNormAttributes, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::{Backend, Dyn, DynShape, Local, RequiresGrad, Result, Shape, Tensor};
@@ -32,7 +31,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             has_bias: true,
         };
         let shape = self._shape.clone();
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner =
             dispatch::execute_shaped::<op::LayerNorm, B, S>(&context, attributes, &inputs, &shape)
                 .map_err(crate::prelude::Error::from)?;
@@ -76,7 +75,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             has_running_variance: true,
         };
         let shape = self._shape.clone();
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner =
             dispatch::execute_shaped::<op::BatchNorm, B, S>(&context, attributes, &inputs, &shape)
                 .map_err(crate::prelude::Error::from)?;

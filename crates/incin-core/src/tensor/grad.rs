@@ -1,5 +1,7 @@
+use crate::exec::context::ExecutionContext;
 use crate::exec::policy::GradMode;
 use crate::prelude::Dyn;
+use crate::tensor::backend::StorageBackend;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
@@ -33,6 +35,22 @@ pub trait RequiresGrad:
             GradMode::Disabled
         }
     }
+}
+
+/// Builds an eager execution context whose recording permission is limited by
+/// the output gradient field.
+///
+/// The scoped policy remains the outer ceiling. The output marker supplies the
+/// operation-local ceiling, so dispatch exposes `training: false` whenever an
+/// eager operation produces a non-differentiable result.
+pub(crate) fn execution_context<B, G>(grad: &G::Field) -> ExecutionContext<B>
+where
+    B: StorageBackend + Default,
+    G: RequiresGrad,
+{
+    let context = ExecutionContext::from_scope(B::default());
+    let mode = context.grad_mode().and(G::grad_mode(grad));
+    context.with_grad_mode(mode)
 }
 
 /// Marker for `RequiresGrad` implementors whose value is resolved at

@@ -10,7 +10,6 @@
 use crate::dist::Local;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::prelude::*;
 use crate::shapes::error::OperationKind;
@@ -352,7 +351,10 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
             <G1 as crate::tensor::grad::GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<
+            B,
+            crate::tensor::grad::JoinedGrad<G1, G2>,
+        >(&joined_grad);
         let inner = crate::tensor::grad::JoinedGrad::<G1, G2>::grad_mode(&joined_grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::MatMulExact, B, S1::Output>(
@@ -424,7 +426,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         let bias = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let lhs = TensorHandle::from_storage::<B, K, Local>(&mat1.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&mat2.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G1>(&self._grad);
         let inner = G1::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Addmm, B, S1>(
@@ -462,7 +464,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G1>(&self._grad);
         let inner = G1::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::MatMulExact, B, S1::Output>(
@@ -508,7 +510,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         if let Some(mask_handle) = mask_handle {
             inputs.push(mask_handle);
         }
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G1>(&q._grad);
         let inner = G1::grad_mode(&q._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::ScaledDotProductAttention, B, S1>(

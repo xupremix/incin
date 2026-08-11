@@ -3,7 +3,6 @@
 use alloc::vec::Vec;
 
 use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::prelude::*;
 use crate::tensor::backend::Execute;
@@ -138,7 +137,7 @@ where
         if let Some(bias) = bias {
             inputs.push(TensorHandle::from_storage::<B, K, Local>(&bias.inner));
         }
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
                 crate::exec::dispatch::execute_shaped::<op::Conv2dExact, B, S1::Output>(

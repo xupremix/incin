@@ -6,7 +6,6 @@
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::loss::{
@@ -44,7 +43,7 @@ where
         Reduction::Mean => LossReduction::Mean,
         Reduction::Sum => LossReduction::Sum,
     };
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, G>(&prediction._grad);
     dispatch::execute::<O, B>(&context, LossAttributes { reduction }, &inputs)
         .map_err(crate::prelude::Error::from)
 }
@@ -96,7 +95,7 @@ impl<
             Reduction::Mean => LossReduction::Mean,
             Reduction::Sum => LossReduction::Sum,
         };
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = dispatch::execute::<op::CrossEntropyLoss, B>(
             &context,
             LossAttributes { reduction },

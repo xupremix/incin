@@ -50,7 +50,7 @@ where
     let h_lhs = TensorHandle::from_storage::<B, KIn, Local>(&lhs.inner);
     let h_rhs = TensorHandle::from_storage::<B, KIn, Local>(&rhs.inner);
     let shape_val = lhs._shape.clone();
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
             .map_err(crate::prelude::Error::from)?;
@@ -88,7 +88,7 @@ where
     let h_lhs = TensorHandle::from_storage::<B, KIn, Local>(&lhs.inner);
     let h_rhs = TensorHandle::from_storage::<B, KIn, Local>(&rhs.inner);
     let shape_val = lhs._shape.clone();
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, attributes, &[h_lhs, h_rhs], &shape_val)
             .map_err(crate::prelude::Error::from)?;
@@ -150,7 +150,7 @@ where
     let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
     let shape_val =
         ShapeValue::<SOut>::try_new(b_shape.clone()).map_err(crate::prelude::Error::Shape)?;
-    let context = ExecutionContext::from_scope(B::default());
+    let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, SOut>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
             .map_err(crate::prelude::Error::from)?;
