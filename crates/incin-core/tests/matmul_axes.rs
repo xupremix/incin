@@ -139,3 +139,21 @@ fn named_mixed_contractions_preserve_the_known_output_extent() {
         &[3, 5]
     );
 }
+
+#[test]
+fn named_batch_broadcast_preserves_name_and_static_extent() {
+    type L = s![Batch: 25, 3, Features: 64];
+    type R = s![Batch: 1, Features: 64, 5];
+    type Out = <L as MatMulShape<R>>::Output;
+    type Expected = s![Batch: 25, 3, 5];
+
+    assert_same::<Out, Expected>();
+    let lhs = field::<L>(&[25, 3, 64]);
+    let rhs = field::<R>(&[1, 64, 5]);
+    assert_eq!(
+        <L as MatMulShape<R>>::output_shape(&lhs, &rhs)
+            .unwrap()
+            .as_ref(),
+        &[25, 3, 5]
+    );
+}
