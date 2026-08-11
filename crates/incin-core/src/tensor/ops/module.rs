@@ -1,9 +1,14 @@
 //! Module operations (LayerNorm, BatchNorm, etc) for neural networks.
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::exec::catalog::{BatchNormAttributes, Descriptor, LayerNormAttributes, op};
+use crate::exec::dispatch;
+use crate::exec::context::ExecutionContext;
+use crate::exec::request::TensorHandle;
+use crate::prelude::{Backend, Dyn, DynShape, Local, RequiresGrad, Result, Shape, Tensor};
+use crate::tensor::backend::Execute;
 
 impl<
     S: Shape + DynShape,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S, B, K, G>
@@ -15,14 +20,30 @@ impl<
         weight: &Tensor<Dyn, B, K, G>,
         bias: &Tensor<Dyn, B, K, G>,
         eps: f32,
-    ) -> Result<Tensor<S, B, K, G>> {
-        // weight and bias should technically be 1D tensors matching the last dimension, but we use DynShape for now
-        let inner = self.under_grad_mode(|| {
-            B::layer_norm::<K>(&self.inner, &weight.inner, Some(&bias.inner), eps)
-        })?;
-        Tensor::from_parts(
-            inner,
-            self._shape.clone(),
+    ) -> Result<Tensor<S, B, K, G>>
+    where
+        B: Execute<Descriptor<op::LayerNorm>>,
+        <B as Execute<Descriptor<op::LayerNorm>>>::Output: Into<B::Storage<K>>,
+    {
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&weight.inner),
+            TensorHandle::from_storage::<B, K, Local>(&bias.inner),
+        ];
+        let attributes = LayerNormAttributes {
+            normalized_shape: weight.dims().into(),
+            epsilon: eps as f64,
+            has_bias: true,
+        };
+        let shape = self._shape.clone();
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::LayerNorm, B, S>(
+            &context, attributes, &inputs, &shape,
+        )
+        .map_err(crate::prelude::Error::from)?;
+        Tensor::from_shape_value(
+            inner.into(),
+            shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -38,21 +59,36 @@ impl<
         running_mean: &Tensor<Dyn, B, K, G>,
         running_var: &Tensor<Dyn, B, K, G>,
         eps: f32,
-    ) -> Result<Tensor<S, B, K, G>> {
-        let inner = self.under_grad_mode(|| {
-            B::batch_norm::<K>(
-                &self.inner,
-                Some(&weight.inner),
-                Some(&bias.inner),
-                Some(&running_mean.inner),
-                Some(&running_var.inner),
-                eps,
-                0.1,
-            )
-        })?;
-        Tensor::from_parts(
-            inner,
-            self._shape.clone(),
+    ) -> Result<Tensor<S, B, K, G>>
+    where
+        B: Execute<Descriptor<op::BatchNorm>>,
+        <B as Execute<Descriptor<op::BatchNorm>>>::Output: Into<B::Storage<K>>,
+    {
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&weight.inner),
+            TensorHandle::from_storage::<B, K, Local>(&bias.inner),
+            TensorHandle::from_storage::<B, K, Local>(&running_mean.inner),
+            TensorHandle::from_storage::<B, K, Local>(&running_var.inner),
+        ];
+        let attributes = BatchNormAttributes {
+            epsilon: eps as f64,
+            momentum: 0.1,
+            training: true,
+            has_weight: true,
+            has_bias: true,
+            has_running_mean: true,
+            has_running_variance: true,
+        };
+        let shape = self._shape.clone();
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = dispatch::execute_shaped::<op::BatchNorm, B, S>(
+            &context, attributes, &inputs, &shape,
+        )
+        .map_err(crate::prelude::Error::from)?;
+        Tensor::from_shape_value(
+            inner.into(),
+            shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
