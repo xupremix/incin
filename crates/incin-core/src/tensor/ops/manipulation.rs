@@ -1844,12 +1844,46 @@ impl<
     }
 
     /// Extracts or constructs diagonal tensor.
-    pub fn diag(&self, k: i64) -> Result<Tensor<Dyn, B, K, G>> {
-        let inner = self.under_grad_mode(|| B::diag::<K>(&self.inner, k))?;
-        let out_shape = B::shape(&inner);
-        Tensor::from_parts(
+    pub fn diag(&self, k: i64) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<op::Diag> + Capabilities,
+        <B as Execute<op::Diag>>::Output: Into<B::Storage<K>>,
+    {
+        let descriptor = Descriptor::<op::Diag>::infer_runtime(
+            DiagonalAttributes { offset: k },
+            alloc::vec![LogicalTensorMeta {
+                shape: Some(self.shape_buf().clone()),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .map_err(|error| {
+            crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error))
+        })?
+        .into_descriptor();
+        let out_shape = descriptor.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
+                operation: OperationKind::Diag,
+                rank: self.rank(),
+            })
+        })?;
+        let output_shape =
+            ShapeValue::<Dyn>::try_new(out_shape).map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Diag, B, Dyn>(
+                    &context,
+                    DiagonalAttributes { offset: k },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::from_shape_value(
             inner,
-            out_shape,
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
