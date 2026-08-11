@@ -1,4 +1,4 @@
-use crate::prelude::{DType, Device, RequiresGrad, Shape};
+use crate::prelude::{DType, Device, RequiresGrad, Shape, ShapeBuf};
 
 /// Connects a tensor's type parameters to the runtime arguments
 /// needed for construction. For each parameter (Shape, DType, Device, Grad),
@@ -8,8 +8,10 @@ use crate::prelude::{DType, Device, RequiresGrad, Shape};
 pub trait TensorArgs<S: Shape, K: DType, D: Device, G: RequiresGrad> {
     /// The bundled constructor argument type combining all four parameters' `Arg`s.
     type Args;
-    /// Splits the bundled `Args` into each parameter's stored `Field` representation.
-    fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field);
+    /// Splits the bundled arguments into validated shape storage and fields.
+    fn construct(
+        args: Self::Args,
+    ) -> core::result::Result<(ShapeBuf, K::Field, D::Field, G::Field), crate::shapes::error::ShapeError>;
 }
 
 impl<S, K, D, G> TensorArgs<S, K, D, G> for (S, K, D, G)
@@ -24,12 +26,14 @@ where
 
     #[inline]
     /// Initializes each parameter's `Field` independently from its slot in `args`.
-    fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field) {
-        (
-            S::init(args.shape),
+    fn construct(
+        args: Self::Args,
+    ) -> core::result::Result<(ShapeBuf, K::Field, D::Field, G::Field), crate::shapes::error::ShapeError> {
+        Ok((
+            S::try_init(args.shape)?,
             K::init(args.dtype),
             D::init(args.device),
             G::init(args.grad),
-        )
+        ))
     }
 }

@@ -235,7 +235,7 @@ where
     where
         B: SupportsDType<K>,
     {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
 
@@ -261,7 +261,7 @@ where
     pub fn zeros_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -288,7 +288,8 @@ where
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) =
+            <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -306,7 +307,7 @@ where
     pub fn ones_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -333,7 +334,8 @@ where
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) =
+            <(S, K, B::Device, Grad)>::construct(args.into_arg())?;
         Ok(Self {
             inner,
             _shape: ShapeValue::new(_shape),
@@ -583,7 +585,7 @@ where
     where
         B: SupportsDType<K>,
     {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
 
@@ -606,7 +608,7 @@ where
     pub fn zeros_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
@@ -629,7 +631,7 @@ where
     pub fn ones_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, K, B::Device, Grad)>::construct(args)?;
         let dims = _shape.clone();
         let device = <B::Device as Device>::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
