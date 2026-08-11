@@ -26,17 +26,7 @@ fn arbitrary_batch_rank_retains_matrix_output_type() {
     type L = s![1; 8];
     type R = s![1; 8];
     type Out = <L as MatMulShape<R>>::Output;
-    type E = BroadcastExtent<typenum::U1, typenum::U1>;
-    type Expected = DimCons<
-        E,
-        DimCons<
-            E,
-            DimCons<
-                E,
-                DimCons<E, DimCons<E, DimCons<E, DimCons<typenum::U1, DimCons<typenum::U1, Nil>>>>>,
-            >,
-        >,
-    >;
+    type Expected = s![1; 8];
     assert_same::<Out, Expected>();
 }
 
@@ -54,10 +44,7 @@ fn structural_matmul_accepts_matching_runtime_contraction() {
     type L = s![2, dyn, 4];
     type R = s![2, dyn, 5];
     type Out = <L as MatMulShape<R>>::Output;
-    type Expected = DimCons<
-        BroadcastExtent<typenum::U2, typenum::U2>,
-        DimCons<usize, DimCons<typenum::U5, Nil>>,
-    >;
+    type Expected = s![2, dyn, 5];
     assert_same::<Out, Expected>();
     let out = <L as MatMulShape<R>>::output_shape(&field::<L>(&[2, 3, 4]), &field::<R>(&[2, 4, 5]))
         .unwrap();
@@ -69,10 +56,7 @@ fn static_matmul_output_type_preserves_batch_and_matrix_axes() {
     type L = s![2, 3, 4];
     type R = s![2, 4, 5];
     type Out = <L as MatMulShape<R>>::Output;
-    type Expected = DimCons<
-        BroadcastExtent<typenum::U2, typenum::U2>,
-        DimCons<typenum::U3, DimCons<typenum::U5, Nil>>,
-    >;
+    type Expected = s![2, 3, 5];
 
     assert_same::<Out, Expected>();
 }

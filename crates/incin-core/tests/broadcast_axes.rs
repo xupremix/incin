@@ -16,7 +16,7 @@
 //! bias shaped `(U1, C, U1, U1)` — did not typecheck at all.
 
 use incin::prelude::s;
-use incin_core::prelude::{BroadcastExtent, BroadcastShape, Dyn, Shape, ShapeBuf};
+use incin_core::prelude::{BroadcastShape, Dyn, Shape, ShapeBuf};
 use typenum::{U1, U2, U3, U4};
 extern crate incin_core as incin;
 
@@ -66,12 +66,7 @@ fn a_bias_shaped_like_the_channel_axis_broadcasts_over_a_batch() {
     type Tensor4 = S4<U2, U3, U4, U4>;
     type Bias = S4<U1, U3, U1, U1>;
     type Output = <Tensor4 as BroadcastShape<Bias>>::Output;
-    type Expected = S4<
-        BroadcastExtent<U2, U1>,
-        BroadcastExtent<U3, U3>,
-        BroadcastExtent<U4, U1>,
-        BroadcastExtent<U4, U1>,
-    >;
+    type Expected = S4<U2, U3, U4, U4>;
     assert_same::<Output, Expected>();
     assert_eq!(
         resolved::<Tensor4, Bias>(&[2, 3, 4, 4], &[1, 3, 1, 1]),
@@ -93,12 +88,9 @@ fn both_operands_may_stretch_at_different_axes() {
 }
 
 #[test]
-fn broadcast_output_is_the_symbolic_extent_expression() {
+fn broadcast_output_normalizes_static_extents() {
     type Output = <s![3, 1] as BroadcastShape<s![1, 4]>>::Output;
-    type Expected = incin_core::shapes::DimCons<
-        BroadcastExtent<U3, U1>,
-        incin_core::shapes::DimCons<BroadcastExtent<U1, U4>, incin_core::shapes::Nil>,
-    >;
+    type Expected = s![3, 4];
 
     assert_same::<Output, Expected>();
 }

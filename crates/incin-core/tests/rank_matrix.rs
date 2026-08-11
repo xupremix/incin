@@ -41,25 +41,13 @@ fn structural_broadcast_and_matmul_retain_output_types() {
     type L = s![1, 3, 1, 8];
     type R = s![2, 3, 4, 8];
     type B = <L as BroadcastShape<R>>::Output;
-    type ExpectedB = DimCons<
-        BroadcastExtent<typenum::U1, typenum::U2>,
-        DimCons<
-            BroadcastExtent<typenum::U3, typenum::U3>,
-            DimCons<
-                BroadcastExtent<typenum::U1, typenum::U4>,
-                DimCons<BroadcastExtent<typenum::U8, typenum::U8>, Nil>,
-            >,
-        >,
-    >;
+    type ExpectedB = s![2, 3, 4, 8];
     assert_same::<B, ExpectedB>();
 
     type M1 = s![2, 3, 4];
     type M2 = s![2, 4, 5];
     type MOut = <M1 as MatMulShape<M2>>::Output;
-    type ExpectedM = DimCons<
-        BroadcastExtent<typenum::U2, typenum::U2>,
-        DimCons<typenum::U3, DimCons<typenum::U5, Nil>>,
-    >;
+    type ExpectedM = s![2, 3, 5];
     assert_same::<MOut, ExpectedM>();
 }
 

@@ -136,22 +136,18 @@ fn named_static_broadcast_retains_static_extent_proof() {
     type Left = s![Batch: 25];
     type Right = s![Batch: 1];
     type Out = <Left as BroadcastShape<Right>>::Output;
-    type Expected = DimCons<NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>>, Nil>;
+    type Expected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
 
     assert_same::<Out, Expected>();
     assert_eq!(
-        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as Dim>::STATIC,
+        <NamedDim<Batch, typenum::U25> as Dim>::STATIC,
         StaticExtent::Value(25)
     );
     assert_eq!(
-        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as Dim>::static_size()
-            .unwrap(),
+        <NamedDim<Batch, typenum::U25> as Dim>::static_size().unwrap(),
         25
     );
-    assert_same::<
-        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as ConcreteStaticExtent>::Nat,
-        typenum::U25,
-    >();
+    assert_same::<<NamedDim<Batch, typenum::U25> as ConcreteStaticExtent>::Nat, typenum::U25>();
 }
 
 #[test]
@@ -160,26 +156,19 @@ fn named_static_broadcast_retains_proof_in_reverse_order_and_with_anonymous_one(
     type NamedTwentyFive = s![Batch: 25];
     type NamedOut = <NamedOne as BroadcastShape<NamedTwentyFive>>::Output;
     type AnonymousOut = <s![1] as BroadcastShape<s![Batch: 25]>>::Output;
-    type NamedExpected = DimCons<NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>>, Nil>;
-    type AnonymousExpected =
-        DimCons<NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>>, Nil>;
+    type NamedExpected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
+    type AnonymousExpected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
 
     assert_same::<NamedOut, NamedExpected>();
     assert_same::<AnonymousOut, AnonymousExpected>();
-    assert_same::<
-        <NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>> as ConcreteStaticExtent>::Nat,
-        typenum::U25,
-    >();
-    assert_same::<
-        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as ConcreteStaticExtent>::Nat,
-        typenum::U25,
-    >();
+    assert_same::<<NamedDim<Batch, typenum::U25> as ConcreteStaticExtent>::Nat, typenum::U25>();
+    assert_same::<<NamedDim<Batch, typenum::U25> as ConcreteStaticExtent>::Nat, typenum::U25>();
     assert_same::<
         <BroadcastExtent<typenum::U1, typenum::U25> as ConcreteStaticExtent>::Nat,
         typenum::U25,
     >();
     assert_eq!(
-        <NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>> as Dim>::STATIC,
+        <NamedDim<Batch, typenum::U25> as Dim>::STATIC,
         StaticExtent::Value(25)
     );
 }
