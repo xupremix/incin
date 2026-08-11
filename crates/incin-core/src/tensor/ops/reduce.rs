@@ -9,12 +9,13 @@ use crate::exec::catalog::{Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{GradMode, ReduceAtRule, ReduceKeepAtRule, ReductionSpec, ShapeRule, Validated};
-use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::prelude::{Backend, DTypeId, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::tensor::backend::{Execute, FloatOps, NumericOps, ReductionOps, TensorOps};
+use crate::tensor::dtype::DType;
 
 macro_rules! impl_reduction_op {
     (
@@ -394,33 +395,43 @@ where
     pub fn argmax(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
+    where
+        B: Execute<Descriptor<op::ArgMax>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::ArgMax>>>::Output: Into<B::Storage<u32>>,
+    {
         if let Some(d) = dim {
             crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
         }
-        let inner = GradMode::Disabled.restrict(|| match dim {
-            Some(d) => B::argmax::<K, u32>(&self.inner, Some(d)),
-            None => {
-                let rank = self.rank();
-                let flat = if rank == 0 {
-                    self.inner.clone()
-                } else {
-                    B::flatten::<K>(&self.inner, 0, rank - 1)?
-                };
-                B::argmax::<K, u32>(&flat, Some(0))
-            }
-        })?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = dim {
             out_dims.remove(d);
         } else {
             out_dims = alloc::vec![];
         }
+        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(
+            crate::shapes::ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = GradMode::Disabled.restrict(|| {
+            crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
+                &context,
+                crate::exec::catalog::IndexReductionAttributes {
+                    axis: dim,
+                    dtype: DTypeId::U32.descriptor(),
+                },
+                &[input],
+                &output_shape,
+            )
+        })?
+        .into();
 
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
-            core::marker::PhantomData,
+            output_shape.shape_buf().clone(),
+            u32::init(()),
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
         )
@@ -432,33 +443,43 @@ where
     pub fn argmin(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
+    where
+        B: Execute<Descriptor<op::ArgMin>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::ArgMin>>>::Output: Into<B::Storage<u32>>,
+    {
         if let Some(d) = dim {
             crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
         }
-        let inner = GradMode::Disabled.restrict(|| match dim {
-            Some(d) => B::argmin::<K, u32>(&self.inner, Some(d)),
-            None => {
-                let rank = self.rank();
-                let flat = if rank == 0 {
-                    self.inner.clone()
-                } else {
-                    B::flatten::<K>(&self.inner, 0, rank - 1)?
-                };
-                B::argmin::<K, u32>(&flat, Some(0))
-            }
-        })?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = dim {
             out_dims.remove(d);
         } else {
             out_dims = alloc::vec![];
         }
+        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(
+            crate::shapes::ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = GradMode::Disabled.restrict(|| {
+            crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
+                &context,
+                crate::exec::catalog::IndexReductionAttributes {
+                    axis: dim,
+                    dtype: DTypeId::U32.descriptor(),
+                },
+                &[input],
+                &output_shape,
+            )
+        })?
+        .into();
 
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
-            core::marker::PhantomData,
+            output_shape.shape_buf().clone(),
+            u32::init(()),
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
         )
