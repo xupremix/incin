@@ -131,7 +131,7 @@ pub enum LayoutRule {
 /// migration's remainder used to be one number. One number implies every
 /// unmigrated operation is the same kind of missing work. It is not: most are a
 /// kernel nobody has routed yet, but thirteen of them cannot be an
-/// `Execute<Descriptor<O>>` implementation as that trait is currently written,
+/// `Execute<O>` implementation as that trait is currently written,
 /// so counting them beside a missing kernel describes a task that does not
 /// exist and hides one that does.
 ///
@@ -139,7 +139,7 @@ pub enum LayoutRule {
 /// two. Every variant states its own reason rather than deferring to prose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExecutionSite {
-    /// Operands in, one allocation out. `Execute<Descriptor<O>>` expresses this
+    /// Operands in, one allocation out. `Execute<O>` expresses this
     /// directly, so an unmigrated operation here is unfinished work rather than
     /// an unfinished contract.
     Kernel,
@@ -154,7 +154,7 @@ pub enum ExecutionSite {
     HostReadback,
     /// The frontend composes existing operations or owns the semantic
     /// execution payload. It is not a single backend allocation kernel and
-    /// therefore does not belong behind `Execute<Descriptor<O>>`.
+    /// therefore does not belong behind `Execute<O>`.
     Composed,
     /// The operation writes through one of its operands instead of returning a
     /// fresh result. Not executable: `ExecutionRequest::inputs` is a slice of
@@ -176,7 +176,7 @@ pub enum ExecutionSite {
 }
 
 impl ExecutionSite {
-    /// Whether `Execute<Descriptor<O>>` on the executing backend can carry this
+    /// Whether `Execute<O>` on the executing backend can carry this
     /// operation's result.
     ///
     /// A `false` here is a contract gap, not a backlog item. Closing one means
@@ -683,7 +683,7 @@ macro_rules! define_catalog {
             ),)*
         ];
 
-        /// Exact marker types used by `Descriptor<O>` and `Execute<Descriptor<O>>`.
+        /// Exact marker types used by `Descriptor<O>` and `Execute<O>`.
         pub mod op {
             $(
                 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -4122,7 +4122,7 @@ pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatal
 pub fn operation_semantics_document() -> alloc::string::String {
     use core::fmt::Write as _;
     let mut out = alloc::string::String::from(
-        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<Descriptor<O>>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
+        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
     );
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
@@ -4309,6 +4309,21 @@ mod tests {
         let encoded = serde_json::to_string(&key).unwrap();
         let decoded: OperationKey = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, key);
+    }
+
+    #[test]
+    fn operation_key_persistence_accepts_runtime_owned_identity() {
+        let key = OperationKey {
+            namespace: Cow::Owned("external.runtime".to_owned()),
+            name: Cow::Owned("custom_op".to_owned()),
+            version: 7,
+        };
+        let encoded = serde_json::to_string(&key).unwrap();
+        let decoded: OperationKey = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded, key);
+        assert!(matches!(decoded.namespace, Cow::Owned(_)));
+        assert!(matches!(decoded.name, Cow::Owned(_)));
     }
 
     #[test]
