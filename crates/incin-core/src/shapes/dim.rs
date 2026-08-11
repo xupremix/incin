@@ -67,8 +67,10 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// dimension value. This is the canonical path used by structural shapes;
     /// the older value constructors remain only for parameter adapters.
     #[inline]
-    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
-        Some(Self::from_arg(arg).size())
+    fn resolve_arg(
+        arg: Self::Arg,
+    ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
+        Ok(Self::from_arg(arg).size())
     }
 
     /// Validates a runtime axis value without constructing a second runtime
@@ -215,11 +217,20 @@ impl<L: Dim, R: Dim> Dim for BroadcastExtent<L, R> {
     fn arg(&self) -> Self::Arg {
         self.size()
     }
-    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+    fn resolve_arg(
+        arg: Self::Arg,
+    ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
         match Self::STATIC {
-            StaticExtent::Invalid => None,
-            StaticExtent::Value(value) => (value == arg).then_some(value),
-            StaticExtent::RuntimeUnknown => Some(arg),
+            StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            }),
+            StaticExtent::Value(value) if value == arg => Ok(value),
+            StaticExtent::Value(_) => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            }),
+            StaticExtent::RuntimeUnknown => Ok(arg),
         }
     }
 }
@@ -395,11 +406,20 @@ macro_rules! static_op_dim {
             fn arg(&self) -> Self::Arg {
                 Default::default()
             }
-            fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+            fn resolve_arg(
+                arg: Self::Arg,
+            ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
                 match Self::STATIC {
-                    StaticExtent::Invalid => None,
-                    StaticExtent::Value(value) => (value == arg).then_some(value),
-                    StaticExtent::RuntimeUnknown => Some(arg),
+                    StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                        operation: crate::shapes::error::OperationKind::Storage,
+                        rank: 1,
+                    }),
+                    StaticExtent::Value(value) if value == arg => Ok(value),
+                    StaticExtent::Value(_) => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                        operation: crate::shapes::error::OperationKind::Storage,
+                        rank: 1,
+                    }),
+                    StaticExtent::RuntimeUnknown => Ok(arg),
                 }
             }
         }
@@ -462,7 +482,9 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     fn arg(&self) -> Self::Arg {
         Default::default()
     }
-    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+    fn resolve_arg(
+        arg: Self::Arg,
+    ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
         Extent::resolve_arg(arg)
     }
 }
@@ -513,11 +535,20 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
     fn arg(&self) -> Self::Arg {
         Default::default()
     }
-    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+    fn resolve_arg(
+        arg: Self::Arg,
+    ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
         match Self::STATIC {
-            StaticExtent::Invalid => None,
-            StaticExtent::Value(value) => (value == arg).then_some(value),
-            StaticExtent::RuntimeUnknown => Some(arg),
+            StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            }),
+            StaticExtent::Value(value) if value == arg => Ok(value),
+            StaticExtent::Value(_) => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 1,
+            }),
+            StaticExtent::RuntimeUnknown => Ok(arg),
         }
     }
 }

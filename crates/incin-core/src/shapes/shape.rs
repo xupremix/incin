@@ -221,11 +221,7 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
     fn try_init(
         arg: Self::Arg,
     ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let head_size =
-            H::resolve_arg(arg.0).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: crate::shapes::error::OperationKind::Storage,
-                rank: 1,
-            })?;
+        let head_size = H::resolve_arg(arg.0)?;
         let tail_dims = T::try_init(arg.1)?;
         let mut buf = crate::shapes::ShapeBuf::from_slice(&[head_size]);
         for &d in tail_dims.as_ref() {
