@@ -148,6 +148,30 @@ impl fmt::Display for ProofLevel {
     }
 }
 
+/// A [`ProofLevel`] that came from a shape *type* rather than from a caller's
+/// claim about one.
+///
+/// [`dispatch::execute`](crate::exec::dispatch::execute) is generic over the
+/// operation and the backend but not over the operand shapes, so it has no `S`
+/// to read [`Shape::PROOF`] from and passes [`Dynamic`](ProofLevel::Dynamic)
+/// for everything. The typed tensor frontend *does* hold `S`, and this is the
+/// value that carries what it knows across that boundary.
+///
+/// The reason it is a distinct type rather than a bare `ProofLevel` parameter
+/// is provenance. A plain enum argument would let any caller write
+/// `ProofLevel::Static` beside whatever metadata it liked, which is precisely
+/// the forgery [`Validated`] exists to prevent one layer down. The only
+/// constructors here are [`of`](Self::of), which reads the level off a shape
+/// type and cannot be told a different answer, and
+/// [`dynamic`](Self::dynamic), which claims nothing.
+///
+/// A `Shape` implemented outside this crate can still overstate its own
+/// `PROOF`, exactly as it can today — the trait's default is
+/// [`Dynamic`](ProofLevel::Dynamic) so silence is never credited, and a wrong
+/// override is a wrong specialization rather than unsoundness. What this type
+/// removes is the ability to assert a level with *no* type behind it at all.
+///
+/// [`Shape::PROOF`]: crate::prelude::Shape::PROOF
 /// A descriptor together with the proof that produced it.
 ///
 /// The only way to obtain one outside `incin-core` is from a lowering rule,
@@ -223,13 +247,17 @@ impl<O: fmt::Debug> fmt::Display for Validated<O> {
 /// constructor, which is a bug in the lowering layer rather than in the
 /// caller's shapes.
 #[cfg(feature = "paranoid-validation")]
-impl<O: super::spec::OperationSpec> Validated<O> {
+impl<O: super::spec::ExecutionDescriptor> Validated<O> {
     /// Re-derive the descriptor's own invariants and report disagreement.
     ///
     /// Available only under the `paranoid-validation` feature, so a release
     /// build cannot pay for it by accident.
     pub fn audit(&self) -> Result<(), ShapeError> {
-        self.descriptor.output_elements().map(|_| ())
+        self.descriptor.output_shape().map_or(Ok(()), |shape| {
+            shape
+                .checked_numel(crate::shapes::error::OperationKind::Storage)
+                .map(|_| ())
+        })
     }
 }
 
@@ -258,7 +286,7 @@ macro_rules! paranoid_audit {
 /// descriptor is already in flight and there is no correct way to continue.
 #[cfg(feature = "paranoid-validation")]
 #[doc(hidden)]
-pub fn __audit_or_panic<O: super::spec::OperationSpec>(validated: &Validated<O>) {
+pub fn __audit_or_panic<O: super::spec::ExecutionDescriptor>(validated: &Validated<O>) {
     if let Err(error) = validated.audit() {
         panic!("paranoid-validation: descriptor failed its own invariants: {error:?}");
     }
@@ -270,6 +298,11 @@ mod tests {
     use crate::exec::spec::BroadcastSpec;
     use crate::prelude::{Dyn, ShapeBuf};
     use typenum::{U2, U3};
+    type Static23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<U3, crate::shapes::Nil>>;
+    type Mixed23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<usize, crate::shapes::Nil>>;
+    type Mixed32 = crate::shapes::DimCons<usize, crate::shapes::DimCons<U3, crate::shapes::Nil>>;
+    type MixedDyn =
+        crate::shapes::DimCons<usize, crate::shapes::DimCons<usize, crate::shapes::Nil>>;
 
     // These live inside the module rather than in `tests/` because
     // `Validated::new` is `pub(crate)`. That is the point of the type, so the
@@ -277,15 +310,15 @@ mod tests {
 
     #[test]
     fn a_fully_typed_shape_proves_itself_statically() {
-        assert_eq!(ProofLevel::of::<(U2, U3)>(), ProofLevel::Static);
+        assert_eq!(ProofLevel::of::<Static23>(), ProofLevel::Static);
         assert_eq!(ProofLevel::of::<()>(), ProofLevel::Static);
     }
 
     #[test]
     fn one_runtime_axis_weakens_the_whole_shape() {
-        assert_eq!(ProofLevel::of::<(U2, usize)>(), ProofLevel::Mixed);
-        assert_eq!(ProofLevel::of::<(usize, U3)>(), ProofLevel::Mixed);
-        assert_eq!(ProofLevel::of::<(usize, usize)>(), ProofLevel::Mixed);
+        assert_eq!(ProofLevel::of::<Mixed23>(), ProofLevel::Mixed);
+        assert_eq!(ProofLevel::of::<Mixed32>(), ProofLevel::Mixed);
+        assert_eq!(ProofLevel::of::<MixedDyn>(), ProofLevel::Mixed);
     }
 
     #[test]
@@ -306,7 +339,15 @@ mod tests {
         crate::dim!(Batch);
         // Naming an axis is what lets the compiler reject mixing it with a
         // different name. It says nothing about how large it is.
-        assert_eq!(ProofLevel::of::<(Batch, U3)>(), ProofLevel::Mixed);
+        assert_eq!(
+            ProofLevel::of::<
+                crate::shapes::DimCons<
+                    crate::shapes::dim::NamedDim<Batch, usize>,
+                    crate::shapes::DimCons<U3, crate::shapes::Nil>,
+                >,
+            >(),
+            ProofLevel::Mixed
+        );
     }
 
     #[test]
@@ -370,7 +411,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let validated = Validated::new(spec, ProofLevel::of::<(U2, U3)>());
+        let validated = Validated::new(spec, ProofLevel::of::<Static23>());
         assert!(validated.proof_level().is_static());
     }
 
