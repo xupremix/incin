@@ -165,3 +165,10 @@ where
     B: TensorBackend<f32> + StorageBackend + Execute<op::Zeros>,
 {
 }
+
+pub fn external_device_identity_contract() -> DeviceId {
+    let device = DeviceId::custom(0x434f_4d50_414e_5901, 7);
+    assert_eq!(device.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+    assert_eq!(device.ordinal(), 7);
+    device
+}
