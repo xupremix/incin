@@ -321,6 +321,7 @@ fn every_fallible_shape_path_routes_into_the_crate_error() {
     // The whole point of making these fallible is that a caller can use `?`.
     use incin_core::prelude::Error;
 
+    #[allow(clippy::result_large_err)]
     fn caller() -> Result<ShapeBuf, Error> {
         Ok(<RuntimeMatrix as MatMulShape<RuntimeMatrix>>::output_shape(
             &ShapeBuf::from_slice(&[2, 3]),

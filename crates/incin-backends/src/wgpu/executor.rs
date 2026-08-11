@@ -27,10 +27,9 @@ fn verify_operand_shape<O: CanonicalOperation>(
         .inputs()
         .get(index)
         .and_then(|input| input.shape.as_ref())
+        && expected != actual.shape()
     {
-        if expected != actual.shape() {
-            return Err(invalid(operation, reason));
-        }
+        return Err(invalid(operation, reason));
     }
     Ok(())
 }
@@ -49,7 +48,6 @@ impl_data_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
 /// The descriptor states the contracted extents and the broadcast batch; a
 /// stride of 0 on a batch axis is the descriptor's own record that the operand
 /// is broadcast along it, so that axis is required to be 1 rather than equal.
-
 macro_rules! impl_wgpu_canonical {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<Descriptor<op::$op>> for WgpuBackendImpl<D> {

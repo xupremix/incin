@@ -4,6 +4,7 @@ use incin_core::io::MlxExporter;
 use incin_core::prelude::*;
 use std::path::Path;
 
+#[allow(clippy::result_large_err)]
 fn main() -> Result<()> {
     println!("🍎 Incin Apple MLX Export Example");
 

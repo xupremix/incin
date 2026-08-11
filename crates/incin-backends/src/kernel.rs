@@ -5,10 +5,9 @@
 //! Cartesian product of operations, dtypes, layouts, and devices.
 
 use alloc::{boxed::Box, string::String};
+use incin_core::exec::PrecisionRequest;
 use incin_core::exec::{LayoutClass, MathMode};
-use incin_core::prelude::{DTypeId, Error, Result};
-
-use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
 const KERNEL_KEY_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -76,6 +75,16 @@ impl KernelDType {
                 "dtype {dtype:?} has no kernel-key encoding"
             ))),
         }
+    }
+
+    fn from_descriptor(dtype: incin_core::prelude::DTypeDescriptor) -> Result<Self> {
+        let id = dtype.builtin_id().ok_or_else(|| {
+            Error::Msg(format!(
+                "custom dtype {:?} has no kernel-key encoding",
+                dtype
+            ))
+        })?;
+        Self::from_id(id)
     }
 
     fn tag(self) -> &'static str {
@@ -156,22 +165,47 @@ impl KernelKey {
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
-        layout: LayoutClass,
+        layout_class: LayoutClass,
         access: KernelAccess,
         rank_class: RankClass,
         shape_bucket: ShapeBucket,
         alignment: AlignmentClass,
     ) -> Result<Self> {
-        let policy = resolve_dtype_policy(BackendFamily::Cuda, policy_family, dtype, "kernel_key")?;
+        let _req = PrecisionRequest::new(
+            policy_family,
+            dtype.descriptor(),
+            dtype.descriptor(),
+            layout_class,
+            1,
+            false,
+            MathMode::Fast,
+        );
+        #[cfg(feature = "cuda")]
+        let policy = crate::cuda::backend::native_precision(&req)?;
+        #[cfg(not(feature = "cuda"))]
+        let policy = {
+            let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
+                DTypeId::F32.descriptor()
+            } else {
+                dtype.descriptor()
+            };
+            incin_core::exec::ResolvedPrecision::new(
+                dtype.descriptor(),
+                compute,
+                compute,
+                dtype.descriptor(),
+                incin_core::exec::LossScaling::None,
+            )
+        };
         Ok(Self {
             schema_version: KERNEL_KEY_SCHEMA_VERSION,
             family,
             operation: operation.into(),
-            storage: KernelDType::from_id(policy.storage)?,
-            compute: KernelDType::from_id(policy.compute)?,
-            accumulator: KernelDType::from_id(policy.accumulator)?,
-            output: KernelDType::from_id(policy.output)?,
-            layout,
+            storage: KernelDType::from_descriptor(policy.storage)?,
+            compute: KernelDType::from_descriptor(policy.compute)?,
+            accumulator: KernelDType::from_descriptor(policy.accumulator)?,
+            output: KernelDType::from_descriptor(policy.output)?,
+            layout: layout_class,
             access,
             index_width: KernelIndexWidth::I32,
             math_mode: MathMode::Precise,
@@ -259,8 +293,32 @@ struct CudaScalarSpec {
 
 impl CudaScalarSpec {
     fn for_float(dtype: DTypeId, op: &'static str) -> Result<Self> {
-        let policy =
-            resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op)?;
+        let _req = PrecisionRequest::new(
+            OperationKind::Pointwise,
+            dtype.descriptor(),
+            dtype.descriptor(),
+            LayoutClass::Contiguous,
+            1,
+            false,
+            MathMode::Fast,
+        );
+        #[cfg(feature = "cuda")]
+        let policy = crate::cuda::backend::native_precision(&req)?;
+        #[cfg(not(feature = "cuda"))]
+        let policy = {
+            let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
+                DTypeId::F32.descriptor()
+            } else {
+                dtype.descriptor()
+            };
+            incin_core::exec::ResolvedPrecision::new(
+                dtype.descriptor(),
+                compute,
+                compute,
+                dtype.descriptor(),
+                incin_core::exec::LossScaling::None,
+            )
+        };
         match dtype {
             DTypeId::F16 => Ok(Self {
                 suffix: "f16",
@@ -307,7 +365,7 @@ impl CudaScalarSpec {
                 element_size: 8,
             }),
             _ => Err(Error::UnsupportedDType {
-                dtype,
+                dtype: dtype.descriptor(),
                 backend: "Cuda",
                 op,
             }),
@@ -316,9 +374,9 @@ impl CudaScalarSpec {
             debug_assert_eq!(
                 policy.compute,
                 if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
-                    DTypeId::F32
+                    DTypeId::F32.descriptor()
                 } else {
-                    dtype
+                    dtype.descriptor()
                 }
             );
         })
@@ -972,18 +1030,38 @@ pub(crate) fn render_cuda_reduction(
     contiguous_last_axis: bool,
 ) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_reduction")?;
-    let policy = resolve_dtype_policy(
-        BackendFamily::Cuda,
-        OperationKind::Reduction,
-        dtype,
-        "render_reduction",
-    )?;
+    let _req = PrecisionRequest::new(
+        incin_core::prelude::OperationKind::Reduction,
+        dtype.descriptor(),
+        dtype.descriptor(),
+        LayoutClass::Contiguous,
+        1,
+        false,
+        MathMode::Fast,
+    );
+    #[cfg(feature = "cuda")]
+    let policy = crate::cuda::backend::native_precision(&req)?;
+    #[cfg(not(feature = "cuda"))]
+    let policy = {
+        let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
+            DTypeId::F32.descriptor()
+        } else {
+            dtype.descriptor()
+        };
+        incin_core::exec::ResolvedPrecision::new(
+            dtype.descriptor(),
+            compute,
+            compute,
+            dtype.descriptor(),
+            incin_core::exec::LossScaling::None,
+        )
+    };
     debug_assert_eq!(
         policy.accumulator,
         if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
-            DTypeId::F32
+            DTypeId::F32.descriptor()
         } else {
-            dtype
+            dtype.descriptor()
         }
     );
     let (init, update, finish) = match op_name {
@@ -1199,12 +1277,32 @@ extern "C" __global__ void {entry_point}(
 #[allow(dead_code)]
 pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
-    let policy = resolve_dtype_policy(
-        BackendFamily::Cuda,
-        OperationKind::Normalization,
-        dtype,
-        "render_normalization",
-    )?;
+    let _req = PrecisionRequest::new(
+        incin_core::prelude::OperationKind::Normalization,
+        dtype.descriptor(),
+        dtype.descriptor(),
+        LayoutClass::Contiguous,
+        1,
+        false,
+        MathMode::Fast,
+    );
+    #[cfg(feature = "cuda")]
+    let policy = crate::cuda::backend::native_precision(&req)?;
+    #[cfg(not(feature = "cuda"))]
+    let policy = {
+        let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
+            DTypeId::F32.descriptor()
+        } else {
+            dtype.descriptor()
+        };
+        incin_core::exec::ResolvedPrecision::new(
+            dtype.descriptor(),
+            compute,
+            compute,
+            dtype.descriptor(),
+            incin_core::exec::LossScaling::None,
+        )
+    };
     debug_assert_eq!(policy.accumulator, policy.compute);
     let entry_point = format!("incin_normalization_{}_{}", scalar.suffix, op_name);
     let key = KernelKey::cuda(
@@ -1463,9 +1561,18 @@ mod tests {
         assert_eq!(f16.dtype, DTypeId::F16);
         assert_eq!(f32.dtype, DTypeId::F32);
         assert_eq!(f64.dtype, DTypeId::F64);
-        assert_eq!(f16.element_size, DTypeId::F16.element_size());
-        assert_eq!(f32.element_size, DTypeId::F32.element_size());
-        assert_eq!(f64.element_size, DTypeId::F64.element_size());
+        assert_eq!(
+            f16.element_size,
+            DTypeId::F16.encoding().scalar_bytes().unwrap()
+        );
+        assert_eq!(
+            f32.element_size,
+            DTypeId::F32.encoding().scalar_bytes().unwrap()
+        );
+        assert_eq!(
+            f64.element_size,
+            DTypeId::F64.encoding().scalar_bytes().unwrap()
+        );
         assert!(f16.source.contains("const __half* input"));
         assert!(f16.source.contains("__half2float(input[flat_idx])"));
         assert!(f16.source.contains("__float2half_rn(out_val)"));
