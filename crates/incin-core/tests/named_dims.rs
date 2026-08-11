@@ -104,7 +104,7 @@ fn named_broadcast_output_preserves_the_semantic_axis() {
     type R = s![Channels];
     type Out = <L as BroadcastShape<R>>::Output;
     type Expected = DimCons<
-        NamedDim<Channels, BroadcastExtent<NamedDim<Channels, usize>, NamedDim<Channels, usize>>>,
+        NamedDim<Channels, BroadcastExtent<usize, usize>>,
         Nil,
     >;
     assert_same::<Out, Expected>();

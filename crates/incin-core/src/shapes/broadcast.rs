@@ -180,10 +180,7 @@ where
     L: Dim,
     R: AnonymousDim,
 {
-    type Output = crate::shapes::dim::NamedDim<
-        Tag,
-        crate::shapes::dim::BroadcastExtent<crate::shapes::dim::NamedDim<Tag, L>, R>,
-    >;
+    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<L, R>>;
 }
 
 /// An anonymous axis adopts the semantic name of the named operand.
@@ -193,10 +190,7 @@ where
     L: AnonymousDim,
     R: Dim,
 {
-    type Output = crate::shapes::dim::NamedDim<
-        Tag,
-        crate::shapes::dim::BroadcastExtent<L, crate::shapes::dim::NamedDim<Tag, R>>,
-    >;
+    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<L, R>>;
 }
 
 /// Equal semantic names remain named. Different tags intentionally have no
@@ -208,13 +202,7 @@ where
     L: Dim,
     R: Dim,
 {
-    type Output = crate::shapes::dim::NamedDim<
-        Tag,
-        crate::shapes::dim::BroadcastExtent<
-            crate::shapes::dim::NamedDim<Tag, L>,
-            crate::shapes::dim::NamedDim<Tag, R>,
-        >,
-    >;
+    type Output = crate::shapes::dim::NamedDim<Tag, crate::shapes::dim::BroadcastExtent<L, R>>;
 }
 
 // ============================================================================
