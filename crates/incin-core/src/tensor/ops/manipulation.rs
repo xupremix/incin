@@ -10,9 +10,10 @@ use crate::dist::placement::Local;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, DTypeAttributes, FlattenAttributes, LogicalTensorMeta, NarrowAttributes,
-    NoAttributes, PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes,
-    ScalarAttributes, ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
+    AxisAttributes, DTypeAttributes, EpsilonAttributes, FlattenAttributes, GroupNormAttributes,
+    LogicalTensorMeta, NarrowAttributes, NoAttributes, PadAttributes, PixelShuffleAttributes,
+    Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes, SliceAttributes,
+    TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -2013,8 +2014,26 @@ impl<
     }
 
     /// Group normalization across `groups`.
-    pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self> {
-        let inner = self.under_grad_mode(|| B::group_norm::<K>(&self.inner, groups, eps))?;
+    pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self>
+    where
+        B: Execute<op::GroupNorm> + Capabilities,
+        <B as Execute<op::GroupNorm>>::Output: Into<B::Storage<K>>,
+    {
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::GroupNorm, B, S>(
+                    &context,
+                    GroupNormAttributes {
+                        groups,
+                        epsilon: eps,
+                    },
+                    &[input],
+                    &self._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             self._shape.clone(),
@@ -2025,8 +2044,23 @@ impl<
     }
 
     /// Instance normalization for 4D (N, C, H, W) tensors.
-    pub fn instance_norm(&self, eps: f64) -> Result<Self> {
-        let inner = self.under_grad_mode(|| B::instance_norm::<K>(&self.inner, eps))?;
+    pub fn instance_norm(&self, eps: f64) -> Result<Self>
+    where
+        B: Execute<op::InstanceNorm> + Capabilities,
+        <B as Execute<op::InstanceNorm>>::Output: Into<B::Storage<K>>,
+    {
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::InstanceNorm, B, S>(
+                    &context,
+                    EpsilonAttributes { epsilon: eps },
+                    &[input],
+                    &self._shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             self._shape.clone(),
