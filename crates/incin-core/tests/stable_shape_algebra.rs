@@ -395,3 +395,26 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
             .any(|node| node.op == incin_core::graph::OpType::Add)
     );
 }
+
+#[test]
+fn exact_tracing_records_boolean_comparison_output_dtype() {
+    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type S = s![2, 3];
+
+    let _ = incin_core::prelude::extract_graph();
+    let lhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let rhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let _output = lhs.eq(&rhs).unwrap();
+
+    let graph = incin_core::prelude::extract_graph();
+    let node = graph
+        .nodes
+        .iter()
+        .find(|node| node.op == incin_core::graph::OpType::CmpEq)
+        .expect("comparison node should be traced");
+    let output = graph
+        .values
+        .get(&node.outputs[0])
+        .expect("comparison output should be traced");
+    assert_eq!(output.dtype, DTypeId::Bool);
+}

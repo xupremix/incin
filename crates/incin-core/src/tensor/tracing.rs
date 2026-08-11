@@ -236,9 +236,7 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::T
                     .unwrap_or(crate::shapes::ShapeBuf::SCALAR)
                     .as_ref()
                     .to_vec(),
-                request.inputs.first().map_or(DTypeId::F32, |input| {
-                    input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
-                }),
+                request.operation.descriptor().trace_output_dtype(request.inputs),
                 None,
             );
             let inputs = request

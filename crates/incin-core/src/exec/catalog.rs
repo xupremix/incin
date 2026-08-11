@@ -880,6 +880,8 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 /// admission and descriptor execution. It is not a second operation catalog.
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_operation(&self) -> Option<crate::graph::OpType>;
+
+    fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId;
 }
 
 impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
@@ -920,6 +922,23 @@ impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
             OperationKind::AvgPool2d => crate::graph::OpType::AvgPool2d,
             _ => return None,
         })
+    }
+
+    fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId {
+        match O::ID {
+            OperationKind::CmpEq
+            | OperationKind::CmpNe
+            | OperationKind::CmpLt
+            | OperationKind::CmpLe
+            | OperationKind::CmpGt
+            | OperationKind::CmpGe
+            | OperationKind::LogicalAnd
+            | OperationKind::LogicalOr
+            | OperationKind::LogicalNot => DTypeId::Bool,
+            _ => inputs.first().map_or(DTypeId::F32, |input| {
+                input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
+            }),
+        }
     }
 }
 
