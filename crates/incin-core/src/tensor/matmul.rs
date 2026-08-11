@@ -8,7 +8,7 @@
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
 use crate::dist::Local;
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::{AddmmAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{MatMulRule, ShapeRule};
@@ -389,13 +389,30 @@ impl<
     ) -> Result<Self>
     where
         S1: DynShape,
+        S2: Shape + DynShape,
+        S3: Shape + DynShape,
+        B: Execute<Descriptor<op::Addmm>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::Addmm>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = self.under_grad_mode(|| {
-            B::addmm::<K>(&self.inner, &mat1.inner, &mat2.inner, beta, alpha)
-        })?;
+        let output_shape = crate::shapes::ShapeValue::<S1>::try_new(self.shape_buf_value())
+            .map_err(crate::prelude::Error::Shape)?;
+        let bias = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let lhs = TensorHandle::from_storage::<B, K, Local>(&mat1.inner);
+        let rhs = TensorHandle::from_storage::<B, K, Local>(&mat2.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<op::Addmm, B, S1>(
+                    &context,
+                    AddmmAttributes { alpha, beta },
+                    &[bias, lhs, rhs],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
-            self._shape.clone(),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
