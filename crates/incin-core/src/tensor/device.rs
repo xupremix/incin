@@ -428,6 +428,11 @@ pub enum DeviceKind {
     Wgpu,
     /// The Metal backend family for Apple Silicon.
     Metal,
+    /// An externally defined backend family identified by a stable namespace key.
+    ///
+    /// The key is owned by the external backend. Incin does not interpret it,
+    /// so adding a backend does not require changing this enum.
+    Custom(u64),
 }
 
 impl DeviceKind {
@@ -440,6 +445,16 @@ impl DeviceKind {
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
             Self::Metal => "metal",
+            Self::Custom(_) => "custom",
+        }
+    }
+
+    /// Returns the external namespace key, if this is a custom backend kind.
+    #[must_use]
+    pub const fn custom_key(self) -> Option<u64> {
+        match self {
+            Self::Custom(key) => Some(key),
+            _ => None,
         }
     }
 }
@@ -505,6 +520,18 @@ impl DeviceId {
     pub fn metal(ord: usize) -> Self {
         Self {
             kind: DeviceKind::Metal,
+            ordinal: ord,
+        }
+    }
+
+    /// An externally defined backend device at ordinal `ord`.
+    ///
+    /// `namespace` must be a stable key chosen by the external backend. The
+    /// key is carried through metadata and serialization without requiring
+    /// Incin to know the backend's type.
+    pub const fn custom(namespace: u64, ord: usize) -> Self {
+        Self {
+            kind: DeviceKind::Custom(namespace),
             ordinal: ord,
         }
     }
@@ -930,5 +957,13 @@ mod tests {
         let id = DeviceId::cuda(5);
         let field = <Dyn as Device>::init(id);
         assert_eq!(Dyn::to_incin(&field).unwrap(), DeviceId::cuda(5));
+    }
+
+    #[test]
+    fn external_device_identity_is_open_and_stable() {
+        let id = DeviceId::custom(0x434f_4d50_414e_5901, 7);
+        assert_eq!(id.kind().name(), "custom");
+        assert_eq!(id.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+        assert_eq!(id.ordinal(), 7);
     }
 }
