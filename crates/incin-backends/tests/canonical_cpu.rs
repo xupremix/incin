@@ -9,17 +9,20 @@
 
 #![cfg(feature = "cpu")]
 
+extern crate incin_core as incin;
+
+use incin_backends::IncinBackend;
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::{NumericOps, TensorOps};
-use incin_core::exec::catalog::{NoAttributes, ShapeAttributes, op};
+use incin_core::backend_authoring::{Backend, LossOps, ModuleOps, NumericOps, TensorOps};
+use incin_core::exec::catalog::{LossAttributes, LossReduction, NoAttributes, ShapeAttributes, op};
 use incin_core::exec::dispatch::{self, CanonicalError};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DescriptorError, ExecutionContext, LayoutClass, MathMode,
-    SupportLevel, TensorHandle, UnsupportedReason,
+    OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
-use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind};
+use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
 
-type TestBackend = CpuBackendImpl<f32, Cpu>;
+type TestBackend = CpuBackendImpl<Cpu>;
 
 fn f32_storage(values: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
     CpuStorage::try_from_contiguous(CpuBuffer::F32(values), shape)
@@ -36,8 +39,18 @@ fn i64_storage(values: Vec<i64>, shape: Vec<usize>) -> CpuStorage {
         .expect("test storage must be well formed")
 }
 
+fn bool_storage(values: Vec<bool>, shape: Vec<usize>) -> CpuStorage {
+    let bytes = values.into_iter().map(|b| b as u8).collect();
+    CpuStorage::try_from_contiguous(CpuBuffer::Bool(bytes), shape)
+        .expect("test storage must be well formed")
+}
+
 fn handle(storage: &CpuStorage) -> TensorHandle<'_> {
     TensorHandle::from_storage::<TestBackend, f32, Local>(storage)
+}
+
+fn handle_bool(storage: &CpuStorage) -> TensorHandle<'_> {
+    TensorHandle::from_storage::<TestBackend, bool, Local>(storage)
 }
 
 /// Read a storage handle's logical values through its strides.
@@ -264,8 +277,8 @@ fn the_capability_answer_and_the_execution_answer_agree() {
         OperationKind::MatMulExact,
     ] {
         let query = CapabilityQuery {
-            operation,
-            dtype: DTypeId::F32,
+            operation: OperationIdentity::Builtin(operation),
+            dtype: DTypeId::F32.descriptor(),
             layout: LayoutClass::Contiguous,
             rank: 2,
             training: true,
@@ -318,6 +331,7 @@ fn an_unregistered_operand_rank_is_refused_with_a_typed_reason() {
             matches!(
                 backend,
                 incin_core::prelude::BackendError::Unsupported {
+                    backend: "Cpu",
                     reason: UnsupportedReason::Rank { .. }
                 }
             ),
@@ -1080,7 +1094,7 @@ fn softmax_refuses_a_dtype_it_does_not_advertise() {
     let context = context();
     let input = <TestBackend as CreationOps<TestBackend>>::ones::<Dyn>(
         &[2, 2],
-        DTypeId::F16,
+        DTypeId::F16.descriptor(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -1096,6 +1110,7 @@ fn softmax_refuses_a_dtype_it_does_not_advertise() {
             matches!(
                 backend,
                 incin_core::prelude::BackendError::Unsupported {
+                    backend: "Cpu",
                     reason: UnsupportedReason::DType { .. }
                 }
             ),
@@ -1144,9 +1159,28 @@ fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
         CmpLe => cmp_le,
         CmpGt => cmp_gt,
         CmpGe => cmp_ge,
-        LogicalAnd => logical_and,
-        LogicalOr => logical_or,
     }
+
+    let lhs = bool_storage(vec![true, false, true, false], vec![4]);
+    let rhs = bool_storage(vec![true, true, false, false], vec![4]);
+
+    let canonical_and = dispatch::execute::<op::LogicalAnd, _>(
+        &context,
+        NoAttributes,
+        &[handle(&lhs), handle(&rhs)],
+    )
+    .expect("LogicalAnd is a registered CPU capability");
+    let legacy_and = <TestBackend as TensorOps<TestBackend>>::logical_and(&lhs, &rhs).unwrap();
+    assert_eq!(values(&canonical_and), values(&legacy_and));
+
+    let canonical_or = dispatch::execute::<op::LogicalOr, _>(
+        &context,
+        NoAttributes,
+        &[handle(&lhs), handle(&rhs)],
+    )
+    .expect("LogicalOr is a registered CPU capability");
+    let legacy_or = <TestBackend as TensorOps<TestBackend>>::logical_or(&lhs, &rhs).unwrap();
+    assert_eq!(values(&canonical_or), values(&legacy_or));
 }
 
 /// Parity for the tensor operations that carry a scalar or an offset, where a
@@ -1314,18 +1348,18 @@ fn the_selection_operations_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::ScalarAttributes;
 
     let context = context();
-    let mask = f32_storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let mask = bool_storage(vec![true, false, true, false], vec![4]);
     let on_true = f32_storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
     let on_false = f32_storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
 
     let selected = dispatch::execute::<op::WhereCond, _>(
         &context,
         NoAttributes,
-        &[handle(&mask), handle(&on_true), handle(&on_false)],
+        &[handle_bool(&mask), handle(&on_true), handle(&on_false)],
     )
     .expect("where_cond is a registered CPU capability");
     let legacy =
-        <TestBackend as TensorOps<TestBackend>>::where_cond::<f32, f32>(&mask, &on_true, &on_false)
+        <TestBackend as TensorOps<TestBackend>>::where_cond::<f32>(&mask, &on_true, &on_false)
             .unwrap();
     assert_eq!(values(&selected), values(&legacy));
     // Stated separately from the parity assertion: if the executor had bound
@@ -1336,25 +1370,25 @@ fn the_selection_operations_match_their_legacy_counterparts() {
     let filled = dispatch::execute::<op::MaskedFill, _>(
         &context,
         ScalarAttributes { value: 99.0 },
-        &[handle(&on_true), handle(&mask)],
+        &[handle(&on_true), handle_bool(&mask)],
     )
     .expect("masked_fill is a registered CPU capability");
     assert_eq!(
         values(&filled),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::masked_fill::<f32, f32>(
-                &on_true, &mask, 99.0
-            )
-            .unwrap()
+            &<TestBackend as TensorOps<TestBackend>>::masked_fill::<f32>(&on_true, &mask, 99.0)
+                .unwrap()
         )
     );
     assert_eq!(values(&filled), vec![99.0, 20.0, 99.0, 40.0]);
 
+    let bool_mask = bool_storage(vec![true, false, true, false], vec![4]);
     let negated =
-        dispatch::execute::<op::LogicalNot, _>(&context, NoAttributes, &[handle(&mask)]).unwrap();
+        dispatch::execute::<op::LogicalNot, _>(&context, NoAttributes, &[handle_bool(&bool_mask)])
+            .unwrap();
     assert_eq!(
         values(&negated),
-        values(&<TestBackend as TensorOps<TestBackend>>::logical_not::<f32>(&mask).unwrap())
+        values(&<TestBackend as TensorOps<TestBackend>>::logical_not(&bool_mask).unwrap())
     );
 }
 
@@ -1804,7 +1838,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
         &context,
         IndexReductionAttributes {
             axis: Some(1),
-            dtype: DTypeId::I64,
+            dtype: DTypeId::I64.descriptor(),
         },
         &[handle(&input)],
     )
@@ -1825,7 +1859,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
         &context,
         IndexReductionAttributes {
             axis: Some(1),
-            dtype: DTypeId::I64,
+            dtype: DTypeId::I64.descriptor(),
         },
         &[handle(&input)],
     )
@@ -1837,7 +1871,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
         ArgsortAttributes {
             axis: 1,
             descending: false,
-            index_dtype: DTypeId::U32,
+            index_dtype: DTypeId::U32.descriptor(),
         },
         &[handle(&input)],
     )
@@ -1872,7 +1906,7 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
             k: 1,
             axis: 1,
             largest: true,
-            index_dtype: DTypeId::U32,
+            index_dtype: DTypeId::U32.descriptor(),
         },
         &[handle(&input)],
     )
@@ -1885,8 +1919,8 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
 
     assert_eq!(values(&selected), vec![3.0, 4.0]);
     assert_eq!(values(&indices), vec![0.0, 1.0]);
-    assert_eq!(selected.dtype, DTypeId::F32);
-    assert_eq!(indices.dtype, DTypeId::U32);
+    assert_eq!(selected.dtype, DTypeId::F32.descriptor());
+    assert_eq!(indices.dtype, DTypeId::U32.descriptor());
 }
 
 /// An index-returning reduction produces the index dtype it was asked for.
@@ -1913,13 +1947,14 @@ fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
             &context,
             IndexReductionAttributes {
                 axis: Some(1),
-                dtype,
+                dtype: dtype.descriptor(),
             },
             &[handle(&input)],
         )
         .unwrap_or_else(|error| panic!("argmax with {dtype:?} indices: {error}"));
         assert_eq!(
-            indices.dtype, dtype,
+            indices.dtype,
+            dtype.descriptor(),
             "canonical argmax mislabelled {dtype:?}"
         );
         // Row 0 is [3, 1] and row 1 is [2, 4], so the winners sit at 0 and 1.
@@ -1933,7 +1968,7 @@ fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
         &context,
         IndexReductionAttributes {
             axis: Some(1),
-            dtype: DTypeId::F32,
+            dtype: DTypeId::F32.descriptor(),
         },
         &[handle(&input)],
     )
@@ -1947,5 +1982,213 @@ fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
     // has to agree rather than merely not error.
     let legacy = <TestBackend as ReductionOps<TestBackend>>::argmax::<f32, u32>(&input, Some(1))
         .expect("the legacy path honours the index dtype");
-    assert_eq!(legacy.dtype, DTypeId::U32);
+    assert_eq!(legacy.dtype, DTypeId::U32.descriptor());
+}
+
+/// Broadcasting operands agree with the legacy path, for every pointwise
+/// operation that takes the output shape from the descriptor.
+///
+/// The canonical executors no longer call `broadcast_shape`: they read the
+/// shape `dispatch` already inferred and sealed in the `Validated` descriptor.
+/// Every canonical pointwise case above uses same-shape operands, where a
+/// descriptor shape and a re-derived one are indistinguishable. These do not:
+/// `[2, 3]` against `[3]` right-aligns, so reading the wrong shape produces a
+/// wrong result or an allocation of the wrong size rather than a silent tie.
+#[test]
+fn a_broadcasting_canonical_invocation_matches_the_legacy_result() {
+    let context = context();
+    let lhs = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let rhs = f32_storage(vec![10.0, 20.0, 30.0], vec![3]);
+
+    let add =
+        dispatch::execute::<op::Add, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+            .expect("add is a registered CPU capability");
+    assert_eq!(dims(&add), vec![2, 3]);
+    assert_eq!(
+        values(&add),
+        values(&<TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs).unwrap())
+    );
+
+    let sub =
+        dispatch::execute::<op::Sub, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+            .expect("sub is a registered CPU capability");
+    assert_eq!(dims(&sub), vec![2, 3]);
+    assert_eq!(
+        values(&sub),
+        values(&<TestBackend as NumericOps<TestBackend>>::sub::<f32>(&lhs, &rhs).unwrap())
+    );
+
+    let mul =
+        dispatch::execute::<op::Mul, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+            .expect("mul is a registered CPU capability");
+    assert_eq!(dims(&mul), vec![2, 3]);
+    assert_eq!(
+        values(&mul),
+        values(&<TestBackend as NumericOps<TestBackend>>::mul::<f32>(&lhs, &rhs).unwrap())
+    );
+
+    let div =
+        dispatch::execute::<op::Div, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+            .expect("div is a registered CPU capability");
+    assert_eq!(dims(&div), vec![2, 3]);
+    assert_eq!(
+        values(&div),
+        values(&<TestBackend as NumericOps<TestBackend>>::div::<f32>(&lhs, &rhs).unwrap())
+    );
+}
+
+/// A left-broadcast operand, where the *shorter* shape is the left one.
+///
+/// `[3]` against `[2, 3]` exercises the other direction of the right-aligned
+/// rule. A descriptor shape read from the wrong operand would pass the test
+/// above and fail this one.
+#[test]
+fn a_left_broadcasting_canonical_invocation_matches_the_legacy_result() {
+    let context = context();
+    let lhs = f32_storage(vec![10.0, 20.0, 30.0], vec![3]);
+    let rhs = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+
+    let add =
+        dispatch::execute::<op::Add, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+            .expect("add is a registered CPU capability");
+    assert_eq!(dims(&add), vec![2, 3]);
+    assert_eq!(
+        values(&add),
+        values(&<TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs).unwrap())
+    );
+}
+
+// Canonical dispatch execution reaches `dispatch::execute_shaped` for operations.
+// These use the `Tensor` surface deliberately, not raw storage: the property under test is
+// that a real user-facing call actually reaches the canonical path with the
+// right autograd behaviour, which raw `dispatch::execute` calls elsewhere in
+// this file cannot exercise (they bypass `Tensor::under_grad_mode` entirely).
+type StableBackend = IncinBackend<Cpu>;
+
+/// `embedding`'s two operands admit different dtypes by construction: the
+/// index operand is integer, and the weight operand is f32 only —
+/// `embedding_impl` always reads and writes f32 regardless of what the
+/// operand declares. `INDEX_AND_F32_DTYPES` in `capability.rs` states the union
+/// of an integer index and an f32 weight, which is already as tight as the
+/// weight's real constraint, so an f64 weight is refused end to end and never
+/// silently narrowed — this asserts that outcome alongside the ordinary
+/// legacy-parity case every migrated operation gets.
+#[test]
+fn a_canonical_embedding_invocation_matches_the_legacy_result_and_refuses_a_narrowed_weight() {
+    let context = context();
+    let indices = i64_storage(vec![2, 0, 1], vec![3]);
+    let weight = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+
+    let canonical = dispatch::execute::<op::EmbeddingExact, _>(
+        &context,
+        NoAttributes,
+        &[handle(&indices), handle(&weight)],
+    )
+    .expect("embedding is a registered CPU capability");
+    let legacy = <TestBackend as ModuleOps<TestBackend>>::embedding::<f32, i64>(&indices, &weight)
+        .expect("the legacy path computes the same operation");
+    assert_eq!(dims(&canonical), dims(&legacy));
+    assert_eq!(values(&canonical), values(&legacy));
+    assert_eq!(dims(&canonical), vec![3, 2]);
+    assert_eq!(values(&canonical), vec![5.0, 6.0, 1.0, 2.0, 3.0, 4.0]);
+
+    // An f64 weight passes the descriptor's own per-operand dtype contract
+    // (it is float), but `INDEX_AND_F32_DTYPES` names only f32 among the floats,
+    // so the capability query refuses it before any kernel runs — the
+    // precision `embedding_impl` would otherwise silently narrow away never
+    // reaches it.
+    let wide_weight = CpuStorage::try_from_contiguous(
+        CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+        vec![3, 2],
+    )
+    .expect("test storage must be well formed");
+    let error = dispatch::execute::<op::EmbeddingExact, _>(
+        &context,
+        NoAttributes,
+        &[handle(&indices), handle(&wide_weight)],
+    )
+    .expect_err("an f64 weight must not silently execute at f32 precision");
+    assert!(matches!(error, CanonicalError::Backend(_)));
+}
+
+/// The rest of the pointwise-binary family's `_canonical` methods
+///
+/// `cross_entropy_loss` on the canonical path: the last operation FND-005
+/// recorded as blocked on `CapabilityRule`'s single dtype set.
+///
+/// It is checked against the legacy path for all three reduction modes rather
+/// than just one, because the reduction is an *attribute* rather than part of
+/// the identity — one row has to hold for all three, and `Mean`/`Sum` end in
+/// an all-reduce that `None` does not.
+#[test]
+fn a_canonical_cross_entropy_invocation_matches_the_legacy_result_in_every_reduction() {
+    let context = context();
+    let logits = f32_storage(vec![2.0, 1.0, 0.1, 0.5, 3.0, 0.2], vec![2, 3]);
+    let targets = i64_storage(vec![0, 1], vec![2]);
+
+    for (descriptor_reduction, legacy_reduction) in [
+        (LossReduction::Mean, Reduction::Mean),
+        (LossReduction::Sum, Reduction::Sum),
+        (LossReduction::None, Reduction::None),
+    ] {
+        let canonical = dispatch::execute::<op::CrossEntropyLoss, _>(
+            &context,
+            LossAttributes {
+                reduction: descriptor_reduction,
+            },
+            &[handle(&logits), handle(&targets)],
+        )
+        .expect("cross entropy is a registered CPU capability");
+        let legacy = <TestBackend as LossOps<TestBackend>>::cross_entropy_loss::<f32, i64>(
+            &logits,
+            &targets,
+            legacy_reduction,
+        )
+        .expect("the legacy path computes the same operation");
+
+        assert_eq!(dims(&canonical), dims(&legacy));
+        assert_eq!(values(&canonical), values(&legacy));
+    }
+}
+
+/// The two guards that make the shared `INDEX_AND_F32_DTYPES` row honest for
+/// `cross_entropy_loss`, each checked from the side it actually protects.
+#[test]
+fn canonical_cross_entropy_refuses_a_narrowed_logit_and_a_float_target() {
+    let context = context();
+    let targets = i64_storage(vec![0, 1], vec![2]);
+
+    // f64 logits pass the descriptor's float contract and are inside the
+    // row's union, but the kernel computes in f32 — `f32_only` refuses the
+    // precision it would otherwise silently narrow away.
+    let wide_logits = CpuStorage::try_from_contiguous(
+        CpuBuffer::F64(vec![2.0, 1.0, 0.1, 0.5, 3.0, 0.2]),
+        vec![2, 3],
+    )
+    .expect("test storage must be well formed");
+    let error = dispatch::execute::<op::CrossEntropyLoss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[handle(&wide_logits), handle(&targets)],
+    )
+    .expect_err("f64 logits must not silently execute at f32 precision");
+    assert!(matches!(error, CanonicalError::Backend(_)));
+
+    // The other direction: a float target is inside the row's union too (it
+    // is f32), so nothing in the capability layer would stop it. The
+    // descriptor's own `index_input` contract is what refuses it, before any
+    // backend is reached.
+    let logits = f32_storage(vec![2.0, 1.0, 0.1, 0.5, 3.0, 0.2], vec![2, 3]);
+    let float_targets = f32_storage(vec![0.0, 1.0], vec![2]);
+    let error = dispatch::execute::<op::CrossEntropyLoss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[handle(&logits), handle(&float_targets)],
+    )
+    .expect_err("a float class target must be refused as an index operand");
+    assert!(matches!(error, CanonicalError::Descriptor(_)));
 }
