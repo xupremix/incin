@@ -403,16 +403,40 @@ impl<
     }
 
     /// Batched matrix multiplication for 3D tensors: `(B, M, K) x (B, K, N) -> (B, M, N)`.
+    ///
+    /// This compatibility spelling uses the same exact structural matmul
+    /// descriptor as `matmul`; it does not call a parallel backend family
+    /// implementation.
     pub fn bmm<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G1>) -> Result<Tensor<Dyn, B, K, G1>>
     where
-        S1: DynShape,
+        S1: DynShape + MatMulShape<S2>,
         S2: DynShape,
+        B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
     {
-        let inner = self.under_grad_mode(|| B::bmm::<K>(&self.inner, &rhs.inner))?;
-        let out_shape = B::shape(&inner);
-        Tensor::from_parts(
+        let validated = <MatMulRule as ShapeRule<(S1, S2)>>::lower(
+            &(self.shape_buf_value(), rhs.shape_buf_value()),
+            (),
+        )?;
+        let output_shape = validated.descriptor().output.clone();
+        let expected = crate::shapes::ShapeValue::<S1::Output>::try_new(output_shape.clone())
+            .map_err(crate::prelude::Error::Shape)?;
+        let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<op::MatMulExact, B, S1::Output>(
+                    &context,
+                    crate::exec::catalog::NoAttributes,
+                    &[lhs, rhs],
+                    &expected,
+                )
+            })?
+            .into();
+        Tensor::<Dyn, B, K, G1>::from_shape_buf(
             inner,
-            out_shape,
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
