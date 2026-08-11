@@ -976,10 +976,12 @@ impl<
     pub fn try_concat_slice(
         tensors: &[&Tensor<S, B, K, G>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
-            tensors.iter().map(|t| &t.inner).collect();
-        if raw_tensors.is_empty() {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<Descriptor<op::ConcatExact>> + Capabilities,
+        <B as Execute<Descriptor<op::ConcatExact>>>::Output: Into<B::Storage<K>>,
+    {
+        if tensors.is_empty() {
             return Err(crate::err::Error::Msg(
                 "Cannot concat empty list".to_string(),
             ));
@@ -996,15 +998,35 @@ impl<
             .ok_or(crate::err::Error::Shape(
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
-        let inner = tensors[0].under_grad_mode(|| B::concat(&raw_tensors, dim))?;
-        let mut out_shape = B::shape(&tensors[0].inner).as_ref().to_vec();
-        out_shape[dim] = tensors
+        let mut out_shape = tensors[0].shape_buf().as_ref().to_vec();
+        out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
+            total.checked_add(tensor.shape_buf().as_ref()[dim]).ok_or(
+                crate::shapes::ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Concat,
+                    expression: "concat extent",
+                },
+            )
+        })?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = tensors
             .iter()
-            .map(|t| B::shape(&t.inner).as_ref()[dim])
-            .sum();
+            .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
+            .collect::<Vec<_>>();
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = tensors[0]
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ConcatExact, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis: dim },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            output_shape.shape_buf().clone(),
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
@@ -1076,6 +1098,8 @@ impl<
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
         S2: Shape,
+        B: Execute<Descriptor<op::ConcatExact>> + Capabilities,
+        <B as Execute<Descriptor<op::ConcatExact>>>::Output: Into<B::Storage<K>>,
     {
         let rank = self.shape_buf().rank();
         let dim = isize::try_from(dim)
@@ -1089,12 +1113,33 @@ impl<
             .ok_or(crate::err::Error::Shape(
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
-        let inner = self.under_grad_mode(|| B::concat(&[&self.inner, &other.inner], dim))?;
-        let mut out_shape = B::shape(&self.inner).as_ref().to_vec();
-        out_shape[dim] += B::shape(&other.inner).as_ref()[dim];
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        out_shape[dim] = out_shape[dim].checked_add(other.shape_buf().as_ref()[dim]).ok_or(
+            crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "concat extent",
+            },
+        )?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&other.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ConcatExact, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis: dim },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1105,10 +1150,12 @@ impl<
     pub fn try_stack_slice(
         tensors: &[&Tensor<S, B, K, G>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
-            tensors.iter().map(|t| &t.inner).collect();
-        if raw_tensors.is_empty() {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<Descriptor<op::StackExact>> + Capabilities,
+        <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+    {
+        if tensors.is_empty() {
             return Err(crate::err::Error::Msg(
                 "Cannot stack empty list".to_string(),
             ));
@@ -1128,12 +1175,28 @@ impl<
                     rank: rank + 1,
                 },
             ))?;
-        let inner = tensors[0].under_grad_mode(|| B::stack(&raw_tensors, dim))?;
-        let mut out_shape = B::shape(&tensors[0].inner).as_ref().to_vec();
+        let mut out_shape = tensors[0].shape_buf().as_ref().to_vec();
         out_shape.insert(dim, tensors.len());
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = tensors
+            .iter()
+            .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
+            .collect::<Vec<_>>();
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = tensors[0]
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::StackExact, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis: dim },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            output_shape.shape_buf().clone(),
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
@@ -1194,7 +1257,11 @@ impl<
         &self,
         other: &Tensor<S, B, K, G>,
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<Descriptor<op::StackExact>> + Capabilities,
+        <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
+    {
         let rank = self.shape_buf().rank() + 1;
         let dim = isize::try_from(dim)
             .ok()
@@ -1207,12 +1274,28 @@ impl<
             .ok_or(crate::err::Error::Shape(
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
-        let inner = self.under_grad_mode(|| B::stack(&[&self.inner, &other.inner], dim))?;
-        let mut out_shape = B::shape(&self.inner).as_ref().to_vec();
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
         out_shape.insert(dim, 2);
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&other.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::StackExact, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis: dim },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            shape_buf_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1494,7 +1577,7 @@ impl<
 /// `try_stack_tensors`.
 pub fn try_stack_tensors<
     S: Shape + DynShape,
-    B: Backend + TensorOps<B>,
+    B: Backend + TensorOps<B> + Execute<Descriptor<op::StackExact>> + Capabilities,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
 >(
@@ -1503,6 +1586,7 @@ pub fn try_stack_tensors<
 ) -> Result<Tensor<Dyn, B, K, G>>
 where
     G::Field: Clone,
+    <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
 {
     if tensors.is_empty() {
         return Err(crate::prelude::Error::ShapeMismatch {
@@ -1512,13 +1596,41 @@ where
             msg: alloc::string::String::from("Cannot stack empty list of tensors"),
         });
     }
-    let raw_tensors: alloc::vec::Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
-    let inner = tensors[0].under_grad_mode(|| B::stack(&raw_tensors, dim))?;
+    let rank = tensors[0].shape_buf().rank() + 1;
+    let dim = isize::try_from(dim)
+        .ok()
+        .and_then(|dim| {
+            crate::shapes::idx::AxisSelector::new(&[dim])
+                .normalize(rank)
+                .ok()
+                .map(|axes| axes[0])
+        })
+        .ok_or(crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+            axis: dim,
+            rank,
+        }))?;
     let mut shape = tensors[0].shape_buf().as_ref().to_vec();
     shape.insert(dim, tensors.len());
-    Tensor::<Dyn, B, K, G>::from_shape_buf(
+    let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape))
+        .map_err(crate::prelude::Error::Shape)?;
+    let inputs = tensors
+        .iter()
+        .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
+        .collect::<Vec<_>>();
+    let context = ExecutionContext::from_scope(B::default());
+    let inner = tensors[0]
+        .under_grad_mode(|| {
+            dispatch::execute_shaped::<op::StackExact, B, Dyn>(
+                &context,
+                crate::exec::catalog::AxisAttributes { axis: dim },
+                &inputs,
+                &output_shape,
+            )
+        })?
+        .into();
+    Tensor::<Dyn, B, K, G>::from_shape_value(
         inner,
-        ShapeBuf::from_slice(&shape),
+        output_shape,
         tensors[0]._dtype.clone(),
         tensors[0]._device.clone(),
         tensors[0]._grad.clone(),
