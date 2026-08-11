@@ -790,6 +790,31 @@ pub enum LossReduction {
     Sum,
 }
 
+/// Stable identity for an operation outside the built-in catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct OperationKey {
+    pub namespace: &'static str,
+    pub name: &'static str,
+    pub version: u32,
+}
+
+/// Open operation contract for downstream static execution.
+pub trait Operation: Clone + fmt::Debug + 'static {
+    type Attributes: Clone
+        + fmt::Debug
+        + PartialEq
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>;
+
+    const KEY: OperationKey;
+
+    /// Infers output metadata from checked logical input metadata.
+    fn infer_outputs(
+        attributes: &Self::Attributes,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError>;
+}
+
 mod private {
     pub trait Sealed {}
 }
@@ -823,6 +848,43 @@ pub struct Descriptor<O: CanonicalOperation> {
     attributes: O::Attributes,
     outputs: Vec<LogicalTensorMeta>,
     marker: PhantomData<fn() -> O>,
+}
+
+/// Descriptor for an operation supplied outside the built-in catalog.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(bound(
+    serialize = "O::Attributes: serde::Serialize",
+    deserialize = "O::Attributes: serde::Deserialize<'de>"
+))]
+pub struct CustomDescriptor<O: Operation> {
+    attributes: O::Attributes,
+    outputs: Vec<LogicalTensorMeta>,
+    marker: PhantomData<fn() -> O>,
+}
+
+impl<O: Operation> crate::exec::spec::ExecutionDescriptor for CustomDescriptor<O> {
+    fn output_shape(&self) -> Option<&ShapeBuf> {
+        self.outputs
+            .first()
+            .and_then(|output| output.shape.as_ref())
+    }
+}
+
+impl<O: Operation> CustomDescriptor<O> {
+    #[must_use]
+    pub const fn key(&self) -> OperationKey {
+        O::KEY
+    }
+
+    #[must_use]
+    pub const fn attributes(&self) -> &O::Attributes {
+        &self.attributes
+    }
+
+    #[must_use]
+    pub fn outputs(&self) -> &[LogicalTensorMeta] {
+        &self.outputs
+    }
 }
 
 impl<O: CanonicalOperation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
@@ -3456,6 +3518,62 @@ pub struct ValidatedInvocation<O: CanonicalOperation> {
     inputs: Vec<LogicalTensorMeta>,
 }
 
+/// Sealed invocation produced by the open operation inference contract.
+pub struct CustomValidatedInvocation<O: Operation> {
+    validated: crate::exec::Validated<CustomDescriptor<O>>,
+}
+
+impl<O: Operation> CustomValidatedInvocation<O> {
+    pub(crate) fn infer_runtime(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+    ) -> Result<Self, DescriptorError> {
+        let outputs = O::infer_outputs(&attributes, &inputs)?;
+        Ok(Self {
+            validated: crate::exec::Validated::new(
+                CustomDescriptor {
+                    attributes,
+                    outputs,
+                    marker: PhantomData,
+                },
+                crate::exec::ProofLevel::Dynamic,
+            ),
+        })
+    }
+
+    pub(crate) fn infer_typed<S: crate::prelude::Shape>(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        expected: &crate::shapes::ShapeValue<S>,
+    ) -> Result<Self, DescriptorError> {
+        let outputs = O::infer_outputs(&attributes, &inputs)?;
+        if let Some(actual) = outputs.first().and_then(|output| output.shape.as_ref())
+            && actual != expected.shape_buf()
+        {
+            return Err(DescriptorError::Shape(
+                crate::shapes::ShapeError::TargetShapeRejected {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    rank: actual.len(),
+                },
+            ));
+        }
+        Ok(Self {
+            validated: crate::exec::Validated::new(
+                CustomDescriptor {
+                    attributes,
+                    outputs,
+                    marker: PhantomData,
+                },
+                crate::exec::ProofLevel::of::<S>(),
+            ),
+        })
+    }
+
+    pub(crate) const fn validated(&self) -> &crate::exec::Validated<CustomDescriptor<O>> {
+        &self.validated
+    }
+}
+
 impl<O: CanonicalOperation> ValidatedInvocation<O> {
     /// Internal lowering entry point. The output is supplied by the typed
     /// frontend proof; callers outside `incin-core` cannot assert it.
@@ -3829,6 +3947,54 @@ pub fn operation_semantics_document() -> alloc::string::String {
 mod tests {
     use super::*;
     use alloc::collections::BTreeSet;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct TestCustomOperation;
+
+    impl Operation for TestCustomOperation {
+        type Attributes = NoAttributes;
+        const KEY: OperationKey = OperationKey {
+            namespace: "incin.test",
+            name: "identity",
+            version: 1,
+        };
+
+        fn infer_outputs(
+            _: &Self::Attributes,
+            inputs: &[LogicalTensorMeta],
+        ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+            Ok(inputs.first().cloned().into_iter().collect())
+        }
+    }
+
+    #[test]
+    fn custom_operation_keeps_static_shape_proof() {
+        let input = LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[2, 3])),
+            dtype: None,
+            device: None,
+        };
+        let expected =
+            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(ShapeBuf::from_slice(&[
+                2, 3,
+            ]))
+            .unwrap();
+        let invocation = CustomValidatedInvocation::<TestCustomOperation>::infer_typed(
+            NoAttributes,
+            vec![input],
+            &expected,
+        )
+        .unwrap();
+
+        assert_eq!(
+            invocation.validated().descriptor().key(),
+            TestCustomOperation::KEY
+        );
+        assert_eq!(
+            invocation.validated().proof_level(),
+            crate::exec::ProofLevel::of::<crate::prelude::Dyn>()
+        );
+    }
 
     #[test]
     fn identities_and_names_occur_exactly_once() {

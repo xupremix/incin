@@ -217,9 +217,9 @@ pub mod experimental {
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
         Backend, CapabilityRegistry, CreationOps, Execute, ExecutionContext, ExecutionDescriptor,
-        ExecutionRequest, FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, OperationSpec,
-        OptimizerOps, PrecisionSpec, QuantizedOps, ReductionOps, RuntimePrecisionPolicy,
-        StorageBackend, SupportsDType, TensorOps, TransferTo, Validated,
+        ExecutionRequest, FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, Operation,
+        OperationKey, OperationSpec, OptimizerOps, PrecisionSpec, QuantizedOps, ReductionOps,
+        RuntimePrecisionPolicy, StorageBackend, SupportsDType, TensorOps, TransferTo, Validated,
     };
 
     /// Canonical exact operation descriptors and typed attributes.
@@ -229,17 +229,18 @@ pub mod backend_authoring {
             ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
             AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
             ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
-            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
-            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
-            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
-            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
-            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
-            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
-            OPERATION_CATALOG, OperationCatalogEntry, PadAttributes, PixelShuffleAttributes,
-            Pool2dAttributes, QuantizationAttributes, RecurrentAttributes, RepeatAttributes,
-            ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes, SliceAttributes,
-            SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
-            ValidatedInvocation, VarianceAttributes, catalog_entry, op,
+            ConvTranspose2dAttributes, CreationAttributes, CustomDescriptor, DTypeAttributes,
+            Descriptor, DescriptorError, DeviceAttributes, DiagonalAttributes,
+            DistributionAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
+            FlattenAttributes, FullAttributes, GroupNormAttributes, IndexReductionAttributes,
+            LayerNormAttributes, LerpAttributes, LinearAttributes, LinspaceAttributes,
+            LogicalTensorMeta, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
+            NormAttributes, OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey,
+            PadAttributes, PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes,
+            RecurrentAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes,
+            SgdAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
+            TransposeAttributes, UnfoldAttributes, ValidatedInvocation, VarianceAttributes,
+            catalog_entry, op,
         };
         // Mirrors the core tier exactly: the classification enums every field
         // of the re-exported `OperationCatalogEntry` is typed as.
@@ -476,10 +477,10 @@ pub mod prelude {
         ConstDType, ConstDevice, ConversionFailure, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey,
         DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dim,
         DimCons, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType, FloatToIntPolicy, Grad,
-        Here, InferDim, IntDType, MatMulShape, Module, NamedDim, Next, Nil, NoGrad, NonFiniteSite,
-        PartialDynShape, PlainDType, Q8_0, QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape,
-        ShapeArgs, ShapeSpec, ShapeValue, Slice, StateDict, StorageEncoding, TensorElement, bf16,
-        convert_f64_to_i64, f16,
+        Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup, NamedAxisSelector,
+        NamedDim, Next, Nil, NoGrad, NonFiniteSite, PartialDynShape, PlainDType, Q8_0, QuantDType,
+        Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeSpec, ShapeValue, Slice,
+        StateDict, StorageEncoding, TensorElement, bf16, convert_f64_to_i64, f16,
     };
 
     pub use incin_core::prelude::{
@@ -519,7 +520,7 @@ pub mod prelude {
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{idx, module, s, shape, tensor};
+    pub use incin_macros::{axis, idx, module, s, shape, tensor};
 
     pub use super::{
         BatchNorm2d, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,

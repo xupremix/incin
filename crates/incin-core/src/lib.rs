@@ -1,6 +1,10 @@
 //! Core tensor operations, static shape checking, and autograd for Incin.
 #![allow(dead_code)]
 #![allow(unused_imports)]
+// Incin errors intentionally carry rich operation, dtype, device, and shape
+// context. Keep that error contract by allowing clippy's size heuristic at
+// this crate boundary instead of boxing every error variant.
+#![allow(clippy::result_large_err)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(
     feature = "nightly",
@@ -77,9 +81,10 @@ pub mod experimental {
 /// Extension traits and operation descriptor contracts for backend authors.
 pub mod backend_authoring {
     pub use crate::exec::{
-        CanonicalOperation, CapabilityRegistry, Descriptor, ExecutionContext, ExecutionDescriptor,
-        LossScaling, OPERATION_CATALOG, OperationCatalogEntry, OperationSpec, PrecisionSpec,
-        RuntimePrecisionPolicy, TensorMeta, Validated, ValidatedInvocation, op,
+        CanonicalOperation, CapabilityRegistry, CustomDescriptor, Descriptor, ExecutionContext,
+        ExecutionDescriptor, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
+        OperationKey, OperationSpec, PrecisionSpec, RuntimePrecisionPolicy, TensorMeta, Validated,
+        ValidatedInvocation, op,
     };
     pub use crate::tensor::backend::{
         Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
@@ -103,17 +108,18 @@ pub mod backend_authoring {
             ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
             AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
             ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
-            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
-            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
-            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
-            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
-            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
-            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
-            OPERATION_CATALOG, OperationCatalogEntry, PadAttributes, PixelShuffleAttributes,
-            Pool2dAttributes, QuantizationAttributes, RecurrentAttributes, RepeatAttributes,
-            ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes, SliceAttributes,
-            SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
-            ValidatedInvocation, VarianceAttributes, catalog_entry, op,
+            ConvTranspose2dAttributes, CreationAttributes, CustomDescriptor, DTypeAttributes,
+            Descriptor, DescriptorError, DeviceAttributes, DiagonalAttributes,
+            DistributionAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
+            FlattenAttributes, FullAttributes, GroupNormAttributes, IndexReductionAttributes,
+            LayerNormAttributes, LerpAttributes, LinearAttributes, LinspaceAttributes,
+            LogicalTensorMeta, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
+            NormAttributes, OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey,
+            PadAttributes, PixelShuffleAttributes, Pool2dAttributes, QuantizationAttributes,
+            RecurrentAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes,
+            SgdAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
+            TransposeAttributes, UnfoldAttributes, ValidatedInvocation, VarianceAttributes,
+            catalog_entry, op,
         };
         // The enums that every classification field of `OperationCatalogEntry`
         // is typed as. The entry is re-exported above, so without these a
@@ -184,15 +190,15 @@ pub mod prelude {
         AxisSet, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedByteLen,
         CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons,
         DimIdx, DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, FromEnd,
-        HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedDim, Next,
-        Nil, OperationKind, PartialDynShape, Pool2dShape, ProductDims, RankExpectation,
-        RankSupport, Ranked, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt, ReplaceLastDim,
-        ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeArgs, ShapeBuf, ShapeError,
-        ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget, SpatialConv1d, SpatialConv2d,
-        SpatialOut, StackShape, StaticAxis, StaticDim, StaticOrNamedDim, StrideBuf,
-        StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape, TryReshape,
-        broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims, dim_from_size,
-        shape_buf_from_dims, spatial_out_size,
+        HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup,
+        NamedAxisSelector, NamedDim, Next, Nil, OperationKind, PartialDynShape, Pool2dShape,
+        ProductDims, RankExpectation, RankSupport, Ranked, ReduceAt, ReduceKeepAt, RemoveAt,
+        ReplaceAt, ReplaceLastDim, ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape,
+        ShapeArgs, ShapeBuf, ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget,
+        SpatialConv1d, SpatialConv2d, SpatialOut, StackShape, StaticAxis, StaticDim,
+        StaticOrNamedDim, StrideBuf, StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape,
+        TryReshape, broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims,
+        dim_from_size, shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;

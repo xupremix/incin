@@ -70,11 +70,12 @@ pub mod tape;
 
 pub use capability::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
-    SupportLevel, UnsupportedReason,
+    RankSupport, SupportLevel, UnsupportedReason,
 };
 pub use catalog::{
-    CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, OPERATION_CATALOG,
-    OperationCatalogEntry, ValidatedInvocation, catalog_entry, op, operation_semantics_document,
+    CanonicalOperation, CustomDescriptor, Descriptor, DescriptorError, LogicalTensorMeta,
+    OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, ValidatedInvocation,
+    catalog_entry, op, operation_semantics_document,
 };
 // The classification fields of a catalog entry, re-exported beside the entry
 // itself. Reading one of these fields off a public struct should not require
@@ -96,16 +97,19 @@ pub use policy::{
 };
 #[cfg(feature = "std")]
 pub use policy::{check_gradients, no_grad};
-pub use precision::{LossScaling, PrecisionPolicy};
+pub use precision::{
+    LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
+    PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,
+};
 pub use proof::{ProofLevel, Validated};
 
 pub use request::TensorHandle;
 pub use rule::{
-    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceAllRule, ReduceKeepRule,
-    ReduceRule, ReshapeRule, ShapeRule,
+    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceAllRule, ReduceAtRule,
+    ReduceKeepAtRule, ReshapeRule, ShapeRule,
 };
 pub use spec::{
-    AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, ExecutionDescriptor,
+    AxisSet, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, ExecutionDescriptor,
     MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
 pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
