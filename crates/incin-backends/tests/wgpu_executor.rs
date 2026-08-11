@@ -1,7 +1,7 @@
 //! `EXE-008`: the descriptor execution contract on real WGPU hardware.
 //!
 //! `EXE-007` proved the contract for CPU. These cases prove the same sealed
-//! `Validated<MatMulSpec>` binds and executes against a second, genuinely
+//! `Validated<MatMulExact>` binds and executes against a second, genuinely
 //! different backend — so the descriptor path is a shared contract rather than
 //! a CPU-shaped one — and that the binder's rejections are enforced per backend
 //! rather than inherited from the CPU implementation.
@@ -10,29 +10,44 @@
 extern crate incin_core as incin;
 
 use incin_backends::wgpu::WgpuBackendImpl;
+use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
+use incin_core::exec::catalog::{
+    AttributeContract, AxisAttributes, Conv2dAttributes, Pool2dAttributes,
+};
 use incin_core::exec::{
-    Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec, Pool2dRule,
-    PoolOp, ReduceAtRule, ReduceOp, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+    CanonicalOperation, Descriptor, ExecutionContext, LogicalTensorMeta, TensorHandle, Validated,
+    op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
+    Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
-use incin_core::shapes::idx::{Here, Next};
-use incin_core::shapes::shape::{DimCons, Nil};
-use incin_core::typenum::{U0, U1, U2, U3};
+use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;
 type TestStorage = <TestBackend as incin_core::backend_authoring::StorageBackend>::Storage<f32>;
-type R2 = DimCons<U2, DimCons<U3, Nil>>;
 
 fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
     S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
-fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {
-    <MatMulRule as ShapeRule<(Dyn, Dyn)>>::lower(&(field::<Dyn>(lhs), field::<Dyn>(rhs)), ())
-        .expect("test operands must be valid matmul shapes")
+fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<Descriptor<op::MatMulExact>> {
+    Descriptor::<op::MatMulExact>::infer_runtime(
+        incin_core::backend_authoring::operations::NoAttributes,
+        vec![
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(lhs)),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(rhs)),
+                dtype: None,
+                device: None,
+            },
+        ],
+    )
+    .expect("test operands must be valid matmul shapes")
 }
 
 fn storage(shape: &[usize], values: &[f32]) -> TestStorage {
@@ -51,7 +66,7 @@ fn read(storage: &TestStorage) -> Vec<f32> {
 }
 
 fn execute(
-    validated: &Validated<MatMulSpec>,
+    validated: &Validated<Descriptor<op::MatMulExact>>,
     lhs: &TestStorage,
     rhs: &TestStorage,
 ) -> Result<TestStorage, BackendError> {
@@ -100,7 +115,7 @@ fn the_binder_requires_exactly_two_inputs() {
         error,
         BackendError::InvalidInput {
             operation: OperationKind::MatMulExact,
-            reason: "matmul expects exactly two tensor inputs"
+            reason: "matmul expects 2 inputs"
         }
     ));
 }
@@ -167,16 +182,20 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
     }
 }
 
-fn lower_reshape_2x6_to_3x4() -> Validated<ReshapeSpec> {
-    <ReshapeRule as ShapeRule<(s![2, 6], s![3, 4])>>::lower(
-        &(field::<s![2, 6]>(&[2, 6]), field::<s![3, 4]>(&[3, 4])),
-        (),
+fn lower_reshape_2x6_to_3x4() -> Validated<Descriptor<op::ReshapeExact>> {
+    Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: vec![3, 4] },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[2, 6])),
+            dtype: None,
+            device: None,
+        }],
     )
     .expect("12 elements either way")
 }
 
 fn execute_reshape(
-    validated: &Validated<ReshapeSpec>,
+    validated: &Validated<Descriptor<op::ReshapeExact>>,
     input: &TestStorage,
 ) -> Result<TestStorage, BackendError> {
     let context = ExecutionContext::new(TestBackend::new());
@@ -226,7 +245,7 @@ fn the_reshape_binder_requires_exactly_one_input() {
         error,
         BackendError::InvalidInput {
             operation: OperationKind::ReshapeExact,
-            reason: "reshape expects exactly one tensor input"
+            reason: "reshape expects 1 input"
         }
     ));
 }
@@ -249,13 +268,34 @@ fn the_reshape_binder_rejects_an_operand_that_disagrees_with_the_descriptor() {
     ));
 }
 
-type Conv3x3 = Conv2dRule<U3, U3, U1, U1, U1>;
 type ConvInput = s![1, 2, 4, 4];
 
-fn lower_conv2d() -> Validated<Conv2dSpec> {
-    <Conv3x3 as ShapeRule<ConvInput>>::lower(
-        &field::<ConvInput>(&[1, 2, 4, 4]),
-        Conv2dArgs::dense(3),
+fn lower_conv2d() -> Validated<Descriptor<op::Conv2dExact>> {
+    Descriptor::<op::Conv2dExact>::infer_runtime(
+        Conv2dAttributes {
+            stride: [1, 1],
+            padding: [1, 1],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: true,
+        },
+        vec![
+            LogicalTensorMeta {
+                shape: Some(field::<ConvInput>(&[1, 2, 4, 4])),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(&[3, 2, 3, 3])),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(&[3])),
+                dtype: None,
+                device: None,
+            },
+        ],
     )
     .expect("a 3x3 window with padding 1 fits a 4x4 input")
 }
@@ -385,12 +425,14 @@ fn a_conv2d_bias_actually_reaches_every_output_element() {
     }
 }
 
-fn execute_one<O: incin_core::exec::OperationSpec>(
-    validated: &Validated<O>,
+fn execute_one<O>(
+    validated: &Validated<Descriptor<O>>,
     input: &TestStorage,
 ) -> Result<TestStorage, BackendError>
 where
-    TestBackend: Execute<O, Output = TestStorage>,
+    O: CanonicalOperation,
+    O::Attributes: AttributeContract,
+    TestBackend: Execute<Descriptor<O>, Output = TestStorage>,
 {
     let context = ExecutionContext::new(TestBackend::new());
     let inputs = [TensorHandle::from_storage::<TestBackend, f32, Local>(input)];
@@ -405,21 +447,26 @@ where
 fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
     let input = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
 
-    for (op, expected) in [
-        (ReduceOp::Sum, [6.0, 15.0]),
-        (ReduceOp::Mean, [2.0, 5.0]),
-        (ReduceOp::Max, [3.0, 6.0]),
-        (ReduceOp::Min, [1.0, 4.0]),
-        (ReduceOp::Prod, [6.0, 120.0]),
-    ] {
-        let validated =
-            <ReduceAtRule<Next<Here>> as ShapeRule<R2>>::lower(&field::<R2>(&[2, 3]), op)
-                .expect("axis 1 is in range");
-        let output = execute_one(&validated, &input)
-            .unwrap_or_else(|error| panic!("{op} must execute on wgpu: {error:?}"));
-
-        assert_eq!(read(&output), expected.to_vec(), "{op} over axis 1");
+    macro_rules! check {
+        ($marker:ty, $expected:expr) => {{
+            let validated = Descriptor::<$marker>::infer_runtime(
+                AxisAttributes { axis: 1 },
+                vec![LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                    dtype: None,
+                    device: None,
+                }],
+            )
+            .expect("axis 1 is in range");
+            let output = execute_one(&validated, &input).expect("reduction must execute on wgpu");
+            assert_eq!(read(&output), $expected);
+        }};
     }
+    check!(op::SumDim, vec![6., 15.]);
+    check!(op::MeanDim, vec![2., 5.]);
+    check!(op::MaxDim, vec![3., 6.]);
+    check!(op::MinDim, vec![1., 4.]);
+    check!(op::ProdDim, vec![6., 120.]);
 }
 
 #[test]
@@ -427,19 +474,42 @@ fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
     let values: Vec<f32> = (1..=16).map(|value| value as f32).collect();
     let input = storage(&[1, 1, 4, 4], &values);
 
-    for (op, expected) in [
-        (PoolOp::Max, vec![6.0, 8.0, 14.0, 16.0]),
-        (PoolOp::Average, vec![3.5, 5.5, 11.5, 13.5]),
-    ] {
-        let validated = <Pool2dRule<U2, U2, U0, U1> as ShapeRule<s![1, 1, 4, 4]>>::lower(
-            &field::<s![1, 1, 4, 4]>(&[1, 1, 4, 4]),
-            op,
-        )
-        .expect("a 2x2 window strided by 2 tiles a 4x4 input");
-        let output = execute_one(&validated, &input)
-            .unwrap_or_else(|error| panic!("{op} pooling must execute on wgpu: {error:?}"));
-
-        assert_eq!(output.shape.to_vec(), vec![1, 1, 2, 2]);
-        assert_eq!(read(&output), expected, "{op} pooling over a 2x2 window");
+    macro_rules! check {
+        ($marker:ty, $expected:expr) => {{
+            let validated = Descriptor::<$marker>::infer_runtime(
+                Pool2dAttributes {
+                    kernel: [2, 2],
+                    stride: [2, 2],
+                    padding: [0, 0],
+                    dilation: [1, 1],
+                },
+                vec![LogicalTensorMeta {
+                    shape: Some(ShapeBuf::from_slice(&[1, 1, 4, 4])),
+                    dtype: None,
+                    device: None,
+                }],
+            )
+            .expect("a 2x2 window strided by 2 tiles a 4x4 input");
+            let output = execute_one(&validated, &input).expect("pooling must execute on wgpu");
+            assert_eq!(output.shape().dims(), &[1, 1, 2, 2]);
+            assert_eq!(read(&output), $expected);
+        }};
     }
+    check!(op::MaxPool2d, vec![6., 8., 14., 16.]);
+    let validated = Descriptor::<op::AvgPool2d>::infer_runtime(
+        incin_core::exec::catalog::AvgPool2dAttributes {
+            kernel: [2, 2],
+            stride: [2, 2],
+            padding: [0, 0],
+        },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[1, 1, 4, 4])),
+            dtype: None,
+            device: None,
+        }],
+    )
+    .unwrap();
+    let output = execute_one(&validated, &input).unwrap();
+    assert_eq!(output.shape().dims(), &[1, 1, 2, 2]);
+    assert_eq!(read(&output), vec![3.5, 5.5, 11.5, 13.5]);
 }

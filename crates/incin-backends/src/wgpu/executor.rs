@@ -9,12 +9,31 @@ use incin_core::backend_authoring::{
     Descriptor, Execute, ExecutionRequest, FloatOps, ModuleOps, NumericOps, ReductionOps,
     StorageBackend, TensorOps, op,
 };
-use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
+use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
+
+fn verify_operand_shape<O: CanonicalOperation>(
+    descriptor: &Descriptor<O>,
+    index: usize,
+    actual: &WgpuStorage,
+    operation: OperationKind,
+    reason: &'static str,
+) -> Result<(), BackendError> {
+    if let Some(expected) = descriptor
+        .inputs()
+        .get(index)
+        .and_then(|input| input.shape.as_ref())
+    {
+        if expected != actual.shape() {
+            return Err(invalid(operation, reason));
+        }
+    }
+    Ok(())
+}
 
 impl<D: Device> Capabilities for WgpuBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
@@ -69,6 +88,13 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for WgpuBackendImpl<D> {
         let storage = input
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(OperationKind::ReshapeExact, "input is not WGPU storage"))?;
+        verify_operand_shape(
+            request.operation.descriptor(),
+            0,
+            storage,
+            OperationKind::ReshapeExact,
+            "reshape input metadata does not match the validated descriptor",
+        )?;
         let shape = &request.operation.descriptor().attributes().shape;
         <Self as TensorOps<Self>>::reshape::<f32>(storage, shape)
             .map_err(|e| kernel_error("Wgpu", OperationKind::ReshapeExact, e))
@@ -114,6 +140,20 @@ impl<D: Device> Execute<Descriptor<op::MatMulExact>> for WgpuBackendImpl<D> {
         let rhs = rhs
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(OperationKind::MatMulExact, "rhs is not WGPU storage"))?;
+        verify_operand_shape(
+            request.operation.descriptor(),
+            0,
+            lhs,
+            OperationKind::MatMulExact,
+            "matmul lhs metadata does not match the validated descriptor",
+        )?;
+        verify_operand_shape(
+            request.operation.descriptor(),
+            1,
+            rhs,
+            OperationKind::MatMulExact,
+            "matmul rhs metadata does not match the validated descriptor",
+        )?;
         <Self as TensorOps<Self>>::matmul::<f32>(lhs, rhs)
             .map_err(|e| kernel_error("Wgpu", OperationKind::MatMulExact, e))
     }
@@ -125,11 +165,15 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for WgpuBackendImpl<D> {
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
     ) -> Result<WgpuStorage, BackendError> {
-        let [input, weight] = request.inputs else {
-            return Err(invalid(
-                OperationKind::Conv2dExact,
-                "conv2d expects 2 inputs",
-            ));
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    OperationKind::Conv2dExact,
+                    "conv2d expects an activation, a weight and an optional bias",
+                ));
+            }
         };
         let input = input
             .downcast_ref::<WgpuStorage>()
@@ -137,11 +181,40 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for WgpuBackendImpl<D> {
         let weight = weight
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(OperationKind::Conv2dExact, "weight is not WGPU storage"))?;
+        verify_operand_shape(
+            request.operation.descriptor(),
+            0,
+            input,
+            OperationKind::Conv2dExact,
+            "conv2d input metadata does not match the validated descriptor",
+        )?;
+        verify_operand_shape(
+            request.operation.descriptor(),
+            1,
+            weight,
+            OperationKind::Conv2dExact,
+            "conv2d weight metadata does not match the validated descriptor",
+        )?;
+        let bias = bias
+            .map(|bias| {
+                bias.downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(OperationKind::Conv2dExact, "bias is not WGPU storage"))
+            })
+            .transpose()?;
+        if let Some(bias) = bias {
+            verify_operand_shape(
+                request.operation.descriptor(),
+                2,
+                bias,
+                OperationKind::Conv2dExact,
+                "conv2d bias metadata does not match the validated descriptor",
+            )?;
+        }
         let attrs = request.operation.descriptor().attributes();
         <Self as ModuleOps<Self>>::conv2d::<f32>(
             input,
             weight,
-            None,
+            bias,
             attrs.stride[0],
             attrs.padding[0],
             attrs.dilation[0],
