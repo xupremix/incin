@@ -16,6 +16,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::exec::{ReshapeRule, ShapeRule};
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -425,7 +426,11 @@ impl<
         <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
-        let spec = crate::exec::ReshapeSpec::new(&self.shape_buf_value(), &new_shape_field)?;
+        let spec = <ReshapeRule as ShapeRule<(S, S2)>>::lower(
+            &(self.shape_buf_value(), new_shape_field.clone()),
+            (),
+        )?
+        .into_descriptor();
         let new_shape_field = spec.output;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
