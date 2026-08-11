@@ -383,7 +383,7 @@ where
         bias_arg: <Bias as crate::nn::optional::OptionalField>::Arg,
     ) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args((in_arg, out_arg));
-        let w_field = <S::WeightShape as Shape>::init(w_args);
+        let w_field = <S::WeightShape as Shape>::try_init(w_args).map_err(Error::Shape)?;
         let w_dims = w_field.clone();
         let init = crate::nn::init::kaiming_uniform();
         let context_w = crate::nn::init::InitContext::new(crate::nn::init::ParameterRole::Weight)
@@ -403,7 +403,7 @@ where
         )?;
 
         let bias = if Bias::init(bias_arg) {
-            let b_field = <S::BiasShape as Shape>::init(b_args);
+            let b_field = <S::BiasShape as Shape>::try_init(b_args).map_err(Error::Shape)?;
             let b_dims = b_field.clone();
             let context_b = crate::nn::init::InitContext::new(crate::nn::init::ParameterRole::Bias)
                 .with_fan(in_f, _out_f);

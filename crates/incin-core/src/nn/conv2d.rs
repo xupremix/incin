@@ -1,45 +1,8 @@
+use crate::nn::init::{InitContext, ParameterRole};
+use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 use typenum::Unsigned;
-
-/// A 2D convolutional layer operating on 4D tensors of shape `[Batch, Channels, H, W]`.
-///
-/// The layer type parameters give the compiler enough information to verify output shapes statically:
-/// * `K` — Kernel size (square, e.g. `typenum::U3` for a 3×3 kernel).
-/// * `S` — Stride.
-/// * `P` — Padding.
-/// * `D` — Dilation.
-/// * `W` — Weight shape (e.g. `(COut, CIn, K, K)` for a fully static layer).
-///
-/// The high-level entry point is `Tensor::conv2d(...)`, which accepts `S`, `P`, and a weight shape,
-/// and verifies at compile time that the output dimension is non-negative.
-///
-/// ## Examples
-/// ```rust
-/// # extern crate incin_core as incin;
-/// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
-/// use incin::prelude::*;
-///
-/// // A statically typed 3×3, stride-1, padding-0, dilation-1 conv: 3 in → 64 out
-/// type S = s![64, 3, 3, 1, 0, 1]; // (OutC, InC, K, Stride, Padding, Dilation)
-/// let conv = Conv2d::<S, DefaultBackend>::build(())?;
-/// # Ok(()) }
-/// ```
-#[derive(Debug, Clone)]
-#[incin_macros::module(internal)]
-pub struct Conv2d<
-    S: Conv2dShape,
-    B: Backend,
-    Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
-> {
-    /// The learnable weight matrix parameter.
-    pub weight: Param<S::WeightShape, B>,
-    /// The optional learnable bias vector parameter.
-    pub bias: Option<Param<S::BiasShape, B>>,
-    #[module(ignore)]
-    _phantom: core::marker::PhantomData<(S, B, Bias)>,
-}
 
 /// A shape marker trait specifying a [`Conv2d`] layer's channel counts and
 /// compile-time-fixed kernel/stride/padding/dilation. The typical usage is
@@ -50,13 +13,13 @@ pub trait Conv2dShape: Shape + DynShape {
     /// Number of input channels.
     type InC: Dim;
     /// Kernel (window) size — square, applied to both spatial dimensions.
-    type K: Unsigned + Dim<Arg = ()>;
+    type K: Dim<Arg = ()>;
     /// Stride.
-    type S: Unsigned + Dim<Arg = ()>;
+    type S: Dim<Arg = ()>;
     /// Padding.
-    type P: Unsigned + Dim<Arg = ()>;
+    type P: Dim<Arg = ()>;
     /// Dilation.
-    type D: Unsigned + Dim<Arg = ()>;
+    type D: Dim<Arg = ()>;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
     /// The shape argument type used to construct the bias tensor.
@@ -72,14 +35,10 @@ pub trait Conv2dShape: Shape + DynShape {
     ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
-impl<
-    OutC: Dim,
-    InC: Dim,
-    K: Unsigned + Dim<Arg = ()>,
-    S: Unsigned + Dim<Arg = ()>,
-    P: Unsigned + Dim<Arg = ()>,
-    D: Unsigned + Dim<Arg = ()>,
-> Conv2dShape for (OutC, InC, K, S, P, D)
+/* legacy tuple Conv2dShape implementation removed: use DimCons/Nil */
+/*
+impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
+    Conv2dShape for (OutC, InC, K, S, P, D)
 {
     /// Number of output channels.
     type OutC = OutC;
@@ -114,22 +73,214 @@ impl<
     ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let out_channels = OutC::from_arg(target.0.clone()).size();
         let in_channels = InC::from_arg(target.1.clone()).size();
-        K::from_arg(()).arg();
         (
             out_channels,
             in_channels,
-            (target.0.clone(), target.1, (), ()),
+            (
+                target.0.clone(),
+                target.1,
+                K::from_arg(()).arg(),
+                K::from_arg(()).arg(),
+            ),
             (target.0,),
         )
     }
 }
+*/
 
-impl<S, B, Bias> Conv2d<S, B, Bias>
+impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
+    Conv2dShape
+    for crate::shapes::shape::DimCons<
+        OutC,
+        crate::shapes::shape::DimCons<
+            InC,
+            crate::shapes::shape::DimCons<
+                K,
+                crate::shapes::shape::DimCons<
+                    S,
+                    crate::shapes::shape::DimCons<
+                        P,
+                        crate::shapes::shape::DimCons<D, crate::shapes::shape::Nil>,
+                    >,
+                >,
+            >,
+        >,
+    >
+{
+    type OutC = OutC;
+    type InC = InC;
+    type K = K;
+    type S = S;
+    type P = P;
+    type D = D;
+    type WeightArg = (
+        <OutC as Dim>::Arg,
+        (<InC as Dim>::Arg, (<K as Dim>::Arg, (<K as Dim>::Arg, ()))),
+    );
+    type BiasArg = (<OutC as Dim>::Arg, ());
+    type WeightShape = crate::shapes::shape::DimCons<
+        OutC,
+        crate::shapes::shape::DimCons<
+            InC,
+            crate::shapes::shape::DimCons<
+                K,
+                crate::shapes::shape::DimCons<K, crate::shapes::shape::Nil>,
+            >,
+        >,
+    >;
+    type BiasShape = crate::shapes::shape::DimCons<OutC, crate::shapes::shape::Nil>;
+
+    #[inline]
+    fn build_args(
+        target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+        let out_channels = OutC::from_arg(target.0.clone()).size();
+        let in_channels = InC::from_arg(target.1.clone()).size();
+        (
+            out_channels,
+            in_channels,
+            (
+                target.0.clone(),
+                (
+                    target.1,
+                    (K::from_arg(()).arg(), (K::from_arg(()).arg(), ())),
+                ),
+            ),
+            (target.0, ()),
+        )
+    }
+}
+
+/// A 2D convolutional layer operating on 4D tensors of shape `[Batch, Channels, H, W]`.
+#[derive(Debug, Clone)]
+#[incin_macros::module(internal)]
+pub struct Conv2d<
+    S: Conv2dShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
+    /// The learnable weight matrix parameter.
+    pub weight: Param<S::WeightShape, B, K, Train>,
+    /// The optional learnable bias vector parameter.
+    pub bias: Option<Param<S::BiasShape, B, K, Train>>,
+    #[module(ignore)]
+    _phantom: core::marker::PhantomData<(S, B, Bias, K, Train)>,
+}
+
+impl<
+    S: Conv2dShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> Conv2d<S, B, Bias, K, Train>
+{
+    /// Constructs a Conv2d from raw parts.
+    pub fn from_raw_parts(
+        weight: Param<S::WeightShape, B, K, Train>,
+        bias: Option<Param<S::BiasShape, B, K, Train>>,
+    ) -> Self {
+        Self {
+            weight,
+            bias,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Freezes this layer's parameters.
+    pub fn freeze(self) -> Conv2d<S, B, Bias, K, Frozen> {
+        Conv2d {
+            weight: self.weight.freeze(),
+            bias: self.bias.map(|b| b.freeze()),
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Unfreezes this layer's parameters.
+    pub fn unfreeze(self) -> Conv2d<S, B, Bias, K, Trainable> {
+        Conv2d {
+            weight: self.weight.unfreeze(),
+            bias: self.bias.map(|b| b.unfreeze()),
+            _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+/// A builder for constructing a [`Conv2d`] layer with a target.
+#[derive(Debug, Clone)]
+pub struct Conv2dBuilder<
+    S: Conv2dShape,
+    Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    Train: TrainState = Trainable,
+> {
+    pub shape: ShapeValue<S>,
+    pub weight_init: crate::nn::init::Init,
+    pub bias_init: crate::nn::init::Init,
+    pub _bias: core::marker::PhantomData<Bias>,
+    pub _train: core::marker::PhantomData<Train>,
+}
+
+/// Creates a new builder for a [`Conv2d`] layer with shape `shape`.
+pub fn conv2d<S: Conv2dShape>(shape: ShapeValue<S>) -> Conv2dBuilder<S> {
+    Conv2dBuilder {
+        shape,
+        weight_init: crate::nn::init::kaiming_uniform(),
+        bias_init: crate::nn::init::kaiming_uniform(),
+        _bias: core::marker::PhantomData,
+        _train: core::marker::PhantomData,
+    }
+}
+
+impl<S: Conv2dShape, Bias: crate::nn::optional::OptionalField, Train: TrainState>
+    Conv2dBuilder<S, Bias, Train>
+{
+    /// Disables bias parameter for this convolution layer.
+    pub fn no_bias(self) -> Conv2dBuilder<S, crate::nn::optional::False, Train> {
+        Conv2dBuilder {
+            shape: self.shape,
+            weight_init: self.weight_init,
+            bias_init: self.bias_init,
+            _bias: core::marker::PhantomData,
+            _train: self._train,
+        }
+    }
+
+    /// Marks the resulting layer as frozen (non-trainable).
+    pub fn frozen(self) -> Conv2dBuilder<S, Bias, Frozen> {
+        Conv2dBuilder {
+            shape: self.shape,
+            weight_init: self.weight_init,
+            bias_init: self.bias_init,
+            _bias: self._bias,
+            _train: core::marker::PhantomData,
+        }
+    }
+
+    /// Configures weight initialization.
+    pub fn weight_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.weight_init = init;
+        self
+    }
+
+    /// Configures bias initialization.
+    pub fn bias_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.bias_init = init;
+        self
+    }
+}
+
+impl<S, B, Bias, K: DType> Conv2d<S, B, Bias, K, Trainable>
 where
     S: Conv2dShape,
-    B: Backend + SupportsDType<B::FloatElem>,
+    B: Backend
+        + SupportsDType<K>
+        + crate::tensor::backend::CreationOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>,
     Bias: crate::nn::optional::OptionalField,
-    <B::FloatElem as DType>::Arg: Clone,
+    <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
     pub fn build<A>(args: A) -> Result<Self>
@@ -137,40 +288,54 @@ where
         A: crate::tensor::arg_into::LayerArgInto<(
                 <S::OutC as Dim>::Arg,
                 <S::InC as Dim>::Arg,
-                <B::FloatElem as DType>::Arg,
+                <K as DType>::Arg,
                 <B::Device as Device>::Arg,
                 <Bias as crate::nn::optional::OptionalField>::Arg,
             )>,
     {
         use crate::tensor::arg_into::LayerArgInto;
-        let (out_c, in_c, dtype, device, bias_arg) = args.into_layer_arg();
-        let (_cout, cin, weight_shape, bias_shape) = S::build_args((out_c, in_c));
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in: cin * S::K::USIZE * S::K::USIZE,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: weight_shape,
-                dtype: dtype.clone(),
-                device: device.clone(),
-                grad: (),
-            },
-            init,
+        let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
+        let (cout, cin, weight_shape_arg, bias_shape_arg) = S::build_args((out_c, in_c));
+        let kernel_size = S::K::from_arg(()).size();
+        let fan_in = cin * kernel_size * kernel_size;
+        let fan_out = cout * kernel_size * kernel_size;
+
+        let dtype_field = <K as DType>::init(dtype_arg);
+        let device_field = <B::Device as Device>::init(device_arg);
+        let weight_shape_field =
+            <S::WeightShape as Shape>::try_init(weight_shape_arg).map_err(Error::Shape)?;
+        let bias_shape_field =
+            <S::BiasShape as Shape>::try_init(bias_shape_arg).map_err(Error::Shape)?;
+
+        let init = crate::nn::init::kaiming_uniform();
+        let context_w = InitContext::new(ParameterRole::Weight).with_fan(fan_in, fan_out);
+        let plan_w = init.plan(context_w)?;
+        let weight_dims = weight_shape_field.clone();
+        let raw_w =
+            execute_plan_raw::<B, K>(weight_dims.as_ref(), &dtype_field, &device_field, plan_w)?;
+        let weight = Param::<S::WeightShape, B, K, Trainable>::from_parts_checked(
+            raw_w,
+            weight_shape_field,
+            dtype_field.clone(),
+            device_field.clone(),
         )?;
+
         let bias = if Bias::init(bias_arg) {
-            Some(Param::<S::BiasShape, B>::new_init_raw(
-                crate::tensor::arg_into::TensorArgsData {
-                    shape: bias_shape,
-                    dtype,
-                    device,
-                    grad: (),
-                },
-                init,
+            let context_b = InitContext::new(ParameterRole::Bias).with_fan(fan_in, fan_out);
+            let plan_b = init.plan(context_b)?;
+            let bias_dims = bias_shape_field.clone();
+            let raw_b =
+                execute_plan_raw::<B, K>(bias_dims.as_ref(), &dtype_field, &device_field, plan_b)?;
+            Some(Param::<S::BiasShape, B, K, Trainable>::from_parts_checked(
+                raw_b,
+                bias_shape_field,
+                dtype_field,
+                device_field,
             )?)
         } else {
             None
         };
+
         Ok(Self {
             weight,
             bias,
@@ -179,24 +344,26 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, crate::nn::optional::True>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+    for Conv2d<S, B, crate::nn::optional::True, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
     I: Shape
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B>;
+    type Output = Tensor<I::Output, B, K>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
+        let bias = self.bias.as_ref().unwrap().as_tensor()?;
 
         let x_shape = x.dims();
         let x_shape = x_shape.as_ref();
@@ -216,20 +383,20 @@ where
         let out = B::conv2d(
             &x_inner,
             &weight.inner,
-            Some(self.bias.as_ref().unwrap().as_tensor()?.inner()),
-            S::S::USIZE,
-            S::P::USIZE,
-            S::D::USIZE,
+            Some(bias.inner()),
+            S::S::from_arg(()).size(),
+            S::P::from_arg(()).size(),
+            S::D::from_arg(()).size(),
             1,
         )?;
 
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
-                x.shape_field(),
+                &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as Shape>::dims(&shape);
+        let out_shape = shape.clone();
         let out = if rank > 4 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
@@ -246,23 +413,24 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, crate::nn::optional::False>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+    for Conv2d<S, B, crate::nn::optional::False, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
     I: Shape
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B>;
+    type Output = Tensor<I::Output, B, K>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
 
         let x_shape = x.dims();
@@ -284,19 +452,19 @@ where
             &x_inner,
             &weight.inner,
             None,
-            S::S::USIZE,
-            S::P::USIZE,
-            S::D::USIZE,
+            S::S::from_arg(()).size(),
+            S::P::from_arg(()).size(),
+            S::D::from_arg(()).size(),
             1,
         )?;
 
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
-                x.shape_field(),
+                &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as Shape>::dims(&shape);
+        let out_shape = shape.clone();
         let out = if rank > 4 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
@@ -313,26 +481,27 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, Dyn>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+    for Conv2d<S, B, Dyn, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
     I: Shape
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + crate::tensor::backend::ModuleOps<B> + crate::tensor::backend::TensorOps<B>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B>;
+    type Output = Tensor<I::Output, B, K>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = match &self.bias {
-            Some(b) => Some(b.as_tensor()?.detach()),
+            Some(b) => Some(b.as_tensor()?),
             None => None,
         };
 
@@ -355,19 +524,19 @@ where
             &x_inner,
             &weight.inner,
             bias.as_ref().map(|b| b.inner()),
-            S::S::USIZE,
-            S::P::USIZE,
-            S::D::USIZE,
+            S::S::from_arg(()).size(),
+            S::P::from_arg(()).size(),
+            S::D::from_arg(()).size(),
             1,
         )?;
 
         let shape =
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
-                x.shape_field(),
+                &x.shape_buf_value(),
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as Shape>::dims(&shape);
+        let out_shape = shape.clone();
         let out = if rank > 4 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
