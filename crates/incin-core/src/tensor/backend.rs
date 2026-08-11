@@ -113,6 +113,16 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
     type Device: Device;
 
     fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
+
+    #[doc(hidden)]
+    fn execution_storage<K: DType>(
+        storage: &Self::Storage<K>,
+    ) -> (&dyn core::any::Any, Option<usize>)
+    where
+        Self::Storage<K>: core::any::Any,
+    {
+        (storage, None)
+    }
 }
 
 /// One validated descriptor invocation against checked tensor handles.

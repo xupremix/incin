@@ -16,6 +16,8 @@ use crate::tensor::dtype::DType;
 pub struct TensorHandle<'a> {
     storage: &'a dyn Any,
     metadata: &'a TensorMeta,
+    execution_storage: &'a dyn Any,
+    tracing_value: Option<usize>,
 }
 
 impl<'a> TensorHandle<'a> {
@@ -27,9 +29,12 @@ impl<'a> TensorHandle<'a> {
         P: Placement,
         <B as StorageBackend<P>>::Storage<K>: Any,
     {
+        let (execution_storage, tracing_value) = B::execution_storage(storage);
         Self {
             storage,
-            metadata: <B as StorageBackend<P>>::metadata(storage),
+            metadata: B::metadata(storage),
+            execution_storage,
+            tracing_value,
         }
     }
 
@@ -41,6 +46,19 @@ impl<'a> TensorHandle<'a> {
     #[must_use]
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         self.storage.downcast_ref()
+    }
+
+    pub(crate) fn execution_view(&self) -> Self {
+        Self {
+            storage: self.execution_storage,
+            metadata: self.metadata,
+            execution_storage: self.execution_storage,
+            tracing_value: None,
+        }
+    }
+
+    pub(crate) const fn tracing_value(&self) -> Option<usize> {
+        self.tracing_value
     }
 }
 
