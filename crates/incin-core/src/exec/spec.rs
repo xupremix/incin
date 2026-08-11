@@ -227,7 +227,6 @@ impl AxisMask {
 
     /// Every axis of a shape of this rank, or `None` if the rank exceeds
     /// [`MAX_AXES`](Self::MAX_AXES).
-
     #[must_use]
     pub const fn all_below(rank: usize) -> Option<Self> {
         if rank > Self::MAX_AXES {

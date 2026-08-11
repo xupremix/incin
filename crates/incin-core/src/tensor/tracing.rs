@@ -233,7 +233,7 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::T
                             .first()
                             .map(|input| input.metadata().shape.clone())
                     })
-                    .unwrap_or_else(|| crate::shapes::ShapeBuf::SCALAR)
+                    .unwrap_or(crate::shapes::ShapeBuf::SCALAR)
                     .as_ref()
                     .to_vec(),
                 request.inputs.first().map_or(DTypeId::F32, |input| {

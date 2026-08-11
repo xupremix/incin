@@ -79,8 +79,8 @@ impl ShapeGuard {
     pub fn check(&self, actual_shape: &[usize], actual_dtype: DTypeId) -> Result<()> {
         if self.expected_dtype != actual_dtype {
             return Err(Error::DTypeStorageMismatch {
-                expected: self.expected_dtype,
-                got: actual_dtype,
+                expected: self.expected_dtype.into(),
+                got: actual_dtype.into(),
             });
         }
         if self.expected_shape != actual_shape {
