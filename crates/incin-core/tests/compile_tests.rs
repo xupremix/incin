@@ -2,8 +2,8 @@
 //!
 //! `trybuild` compares each case against its recorded `.stderr` and passes when
 //! they match. It has no opinion about *what* the error was, so a case whose
-//! source has rotted — a broken import, a path to a module that has since become
-//! private — keeps passing while asserting nothing about the rule it was written
+//! source has rotted: a broken import, a path to a module that has since become
+//! private, keeps passing while asserting nothing about the rule it was written
 //! for. `SHP-007` found four such cases in this directory, one of which
 //! (`macro_module_invalid`) produced no error from the macro at all.
 //!

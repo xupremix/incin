@@ -2,7 +2,7 @@
 //!
 //! This is the compile-pass half of the broadcast suite. Every function here
 //! names a concrete `BroadcastShape` `Output`, so the file failing to compile
-//! *is* the assertion — a pair that stops typechecking cannot reach the
+//! *is* the assertion: a pair that stops typechecking cannot reach the
 //! runtime checks below it. The refusals live next door in
 //! `tests/compile_fail/`, which is where an absent impl can be asserted.
 //!
@@ -12,8 +12,8 @@
 //! mode worth catching.
 //!
 //! Before `SHP-007` the same-rank family required every axis to be the
-//! identical type, so the pair at the centre of this file — a tensor against a
-//! bias shaped `(U1, C, U1, U1)` — did not typecheck at all.
+//! identical type, so the pair at the centre of this file, a tensor against a
+//! bias shaped `(U1, C, U1, U1)`, did not typecheck at all.
 
 use incin::prelude::s;
 use incin_core::prelude::{BroadcastShape, Dyn, Shape, ShapeBuf};
