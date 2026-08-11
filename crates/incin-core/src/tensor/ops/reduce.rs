@@ -8,7 +8,7 @@ use crate::dist::{Local, Placement};
 use crate::exec::catalog::{Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{GradMode, ReductionSpec};
+use crate::exec::{GradMode, ReduceAtRule, ReduceKeepAtRule, ReductionSpec, ShapeRule};
 use crate::prelude::{Backend, DTypeId, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
@@ -81,12 +81,11 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let spec = ReductionSpec::over_axes(
+        let spec = <ReduceAtRule<C> as ShapeRule<S>>::lower(
             &self.shape_buf_value(),
-            [axis],
-            false,
             crate::exec::spec::ReduceOp::Sum,
-        )?;
+        )?
+        .into_descriptor();
         let output_shape =
             crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(spec.output.clone())
                 .map_err(crate::prelude::Error::Shape)?;
@@ -131,12 +130,11 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let spec = ReductionSpec::over_axes(
+        let spec = <ReduceKeepAtRule<C> as ShapeRule<S>>::lower(
             &self.shape_buf_value(),
-            [axis],
-            true,
             crate::exec::spec::ReduceOp::Sum,
-        )?;
+        )?
+        .into_descriptor();
         let output_shape = crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(
             spec.output.clone(),
         )
@@ -221,9 +219,8 @@ impl<
         validated: ReductionSpec,
     ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
     where
-        O: crate::exec::catalog::CanonicalOperation<
-                Attributes = crate::exec::catalog::AxisAttributes,
-            >,
+        O: crate::exec::catalog::CanonicalOperation
+            + crate::exec::catalog::Operation<Attributes = crate::exec::catalog::AxisAttributes>,
         B: Execute<Descriptor<O>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
     {
