@@ -89,6 +89,12 @@ pub struct TracingVar<V> {
 }
 
 impl<B: Backend> TracingBackend<B> {
+    fn traced_dtype<K: super::dtype::DType>(storage: &B::Storage<K>) -> DTypeId {
+        B::storage_dtype(storage)
+            .and_then(|dtype| dtype.builtin_id())
+            .unwrap_or(DTypeId::F32)
+    }
+
     /// Records a binary op's output as a new graph node with `lhs`/`rhs`
     /// as its inputs, wrapping `inner_res` with the new node's id.
     fn trace_binary<K1: super::dtype::DType, K2: super::dtype::DType, KOut: super::dtype::DType>(
@@ -100,7 +106,7 @@ impl<B: Backend> TracingBackend<B> {
         let shape = B::shape(inner_res);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), DTypeId::F32, None); // default F32 for now
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
             g.add_node(
                 op,
                 vec![lhs.value_id, rhs.value_id],
@@ -127,7 +133,7 @@ impl<B: Backend> TracingBackend<B> {
         let shape = B::shape(inner_res);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
             g.add_node(
                 op,
                 inputs,
@@ -152,7 +158,7 @@ impl<B: Backend> TracingBackend<B> {
         let shape = B::shape(inner_res);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
             g.add_node(
                 op,
                 vec![t.value_id],
