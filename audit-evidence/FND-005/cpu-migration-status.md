@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**154 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 7 executable operations are still reachable only through the legacy operation-family traits.
+**156 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 5 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -152,7 +152,7 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `std_keepdim` | `Kernel` | yes | `Tensor::std_keepdim` |
 | `layer_norm` | `Kernel` | yes | `ModuleOps::layer_norm` |
 | `batch_norm` | `Kernel` | yes | `ModuleOps::batch_norm` |
-| `embedding` | `Kernel` | no | `ModuleOps::embedding` |
+| `embedding` | `Kernel` | yes | `ModuleOps::embedding` |
 | `conv1d` | `Kernel` | yes | `ModuleOps::conv1d` |
 | `conv2d` | `Kernel` | yes | `ModuleOps::conv2d` |
 | `conv_transpose2d` | `Kernel` | yes | `ModuleOps::conv_transpose2d` |
@@ -167,7 +167,7 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `mse_loss` | `Kernel` | yes | `LossOps::mse_loss` |
 | `l1_loss` | `Kernel` | yes | `LossOps::l1_loss` |
 | `bce_with_logits_loss` | `Kernel` | yes | `LossOps::bce_with_logits_loss` |
-| `cross_entropy_loss` | `Kernel` | no | `LossOps::cross_entropy_loss` |
+| `cross_entropy_loss` | `Kernel` | yes | `LossOps::cross_entropy_loss` |
 | `quantize` | `Kernel` | yes | `QuantizedOps::quantize` |
 | `dequantize` | `Kernel` | yes | `QuantizedOps::dequantize` |
 | `quantized_matmul` | `Kernel` | yes | `QuantizedOps::quantized_matmul` |
@@ -181,10 +181,8 @@ None of these is an unwritten function. Each names a limit of the descriptor or 
 | `tensor_from_data` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
 | `tensor_from_bytes` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
 | `sample` | `DistributionAttributes` names its distribution as a string and its parameters as bytes. Executing one needs a registry that maps that pair back to a sampler, and no such registry exists |
-| `embedding` | the operands differ in dtype by construction, a float table or logits against integer indices, and one `CapabilityRule` states one dtype set |
 | `rnn` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
 | `lstm` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
-| `cross_entropy_loss` | the operands differ in dtype by construction, a float table or logits against integer indices, and one `CapabilityRule` states one dtype set |
 
 ## Operations the execution contract cannot carry
 
