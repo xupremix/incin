@@ -1,10 +1,10 @@
-use crate::nn::init::{InitContext, ParameterRole};
-use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
-use crate::nn::{Module, Param};
-use crate::prelude::*;
-use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
+use crate::exec::catalog::{op, Conv2dAttributes, Descriptor};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
+use crate::nn::init::{InitContext, ParameterRole};
+use crate::nn::param::{execute_plan_raw, Frozen, TrainState, Trainable};
+use crate::nn::{Module, Param};
+use crate::prelude::*;
 use crate::tensor::backend::Execute;
 use typenum::Unsigned;
 
@@ -92,8 +92,14 @@ impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, 
 }
 */
 
-impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
-    Conv2dShape
+impl<
+        OutC: Dim,
+        InC: Dim,
+        K: Dim<Arg = ()>,
+        S: Dim<Arg = ()>,
+        P: Dim<Arg = ()>,
+        D: Dim<Arg = ()>,
+    > Conv2dShape
     for crate::shapes::shape::DimCons<
         OutC,
         crate::shapes::shape::DimCons<
@@ -174,12 +180,12 @@ pub struct Conv2d<
 }
 
 impl<
-    S: Conv2dShape,
-    B: Backend,
-    Bias: crate::nn::optional::OptionalField,
-    K: DType,
-    Train: TrainState,
-> Conv2d<S, B, Bias, K, Train>
+        S: Conv2dShape,
+        B: Backend,
+        Bias: crate::nn::optional::OptionalField,
+        K: DType,
+        Train: TrainState,
+    > Conv2d<S, B, Bias, K, Train>
 {
     /// Constructs a Conv2d from raw parts.
     pub fn from_raw_parts(
@@ -290,12 +296,12 @@ where
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(
-                <S::OutC as Dim>::Arg,
-                <S::InC as Dim>::Arg,
-                <K as DType>::Arg,
-                <B::Device as Device>::Arg,
-                <Bias as crate::nn::optional::OptionalField>::Arg,
-            )>,
+            <S::OutC as Dim>::Arg,
+            <S::InC as Dim>::Arg,
+            <K as DType>::Arg,
+            <B::Device as Device>::Arg,
+            <Bias as crate::nn::optional::OptionalField>::Arg,
+        )>,
     {
         use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();

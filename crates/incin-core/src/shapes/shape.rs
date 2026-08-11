@@ -1,11 +1,11 @@
 use crate::prelude::{Dim, Dyn};
-use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
+use crate::shapes::ShapeBuf;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Add, Sub};
-use typenum::{U1, Unsigned};
+use typenum::{Unsigned, U1};
 
 /// Forward structural cursors.  Keeping reverse cursors out of the recursive
 /// `FromEnd` adapters prevents the trait solver from exploring an infinite
@@ -141,9 +141,7 @@ impl<const N: usize> Shape for [usize; N] {
         (dims.len() == N).then(|| crate::shapes::ShapeBuf::from_slice(dims))
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.len() == N {
             Ok(())
         } else {
@@ -189,9 +187,7 @@ impl Shape for Nil {
         }
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.is_empty() {
             Ok(())
         } else {
@@ -266,9 +262,7 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
         Some(crate::shapes::ShapeBuf::from_slice(dims))
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.is_empty() {
             return Err(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: crate::shapes::error::OperationKind::Storage,
@@ -752,9 +746,7 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
         (dims.len() == R::USIZE).then(|| crate::shapes::ShapeBuf::from_slice(dims))
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.len() == R::USIZE {
             Ok(())
         } else {
@@ -1145,9 +1137,9 @@ impl<H: Dim, T: Shape, D: Dim> HasChannels1D<D> for DimCons<H, T> where
 
 impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
     DimCons<H, T>: AtFromEnd<
-            crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
-            Output = D,
-        >
+        crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+        Output = D,
+    >
 {
 }
 
@@ -1180,9 +1172,7 @@ impl Shape for Dyn {
         Some(crate::shapes::ShapeBuf::from_slice(dims))
     }
 
-    fn validate_dims(
-        _: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(_: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         Ok(())
     }
 }
@@ -1249,9 +1239,7 @@ impl Shape for () {
         }
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.is_empty() {
             Ok(())
         } else {
@@ -1303,9 +1291,7 @@ impl<D: Dim> Shape for Vec<D> {
         }
     }
 
-    fn validate_dims(
-        dims: &[usize],
-    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.iter().all(|&d| D::validate_size(d)) {
             Ok(())
         } else {
@@ -1334,7 +1320,7 @@ mod tests {
     use crate::io::limits::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
     use crate::tensor::dtype::{
-        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
+        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding, Q8_0,
     };
 
     #[test]

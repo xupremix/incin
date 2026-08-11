@@ -410,15 +410,19 @@ macro_rules! static_op_dim {
                 arg: Self::Arg,
             ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
                 match Self::STATIC {
-                    StaticExtent::Invalid => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                        operation: crate::shapes::error::OperationKind::Storage,
-                        rank: 1,
-                    }),
+                    StaticExtent::Invalid => {
+                        Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                            operation: crate::shapes::error::OperationKind::Storage,
+                            rank: 1,
+                        })
+                    }
                     StaticExtent::Value(value) if value == arg => Ok(value),
-                    StaticExtent::Value(_) => Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                        operation: crate::shapes::error::OperationKind::Storage,
-                        rank: 1,
-                    }),
+                    StaticExtent::Value(_) => {
+                        Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                            operation: crate::shapes::error::OperationKind::Storage,
+                            rank: 1,
+                        })
+                    }
                     StaticExtent::RuntimeUnknown => Ok(arg),
                 }
             }
