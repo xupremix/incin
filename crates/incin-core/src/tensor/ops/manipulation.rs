@@ -8,6 +8,7 @@ use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::Placement;
 use crate::dist::placement::Local;
 use crate::exec::Capabilities;
+use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
     AxisAttributes, FlattenAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes,
     PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes,
@@ -16,7 +17,6 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::{ExecutionDescriptor, ReshapeRule, ShapeRule};
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -426,17 +426,6 @@ impl<
         <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
-        let spec = <ReshapeRule as ShapeRule<(S, S2)>>::lower(
-            &(self.shape_buf_value(), new_shape_field.clone()),
-            (),
-        )?
-        .into_descriptor();
-        let new_shape_field = spec.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: OperationKind::Reshape,
-                rank: 0,
-            })
-        })?;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
 

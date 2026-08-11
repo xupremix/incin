@@ -8,10 +8,10 @@
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
 use crate::dist::Local;
+use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{ExecutionDescriptor, MatMulRule, ShapeRule};
 use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -334,18 +334,9 @@ impl<
         B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
     {
-        let spec = <MatMulRule as ShapeRule<(S1, S2)>>::lower(
-            &(self.shape_buf_value(), rhs.shape_buf_value()),
-            (),
-        )?
-        .into_descriptor();
         let rhs_grad = &rhs._grad;
-        let output_dims = spec.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: OperationKind::MatMul,
-                rank: 0,
-            })
-        })?;
+        let output_dims = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
+            .map_err(crate::prelude::Error::Shape)?;
         let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(output_dims)
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
@@ -460,17 +451,8 @@ impl<
         B: Execute<Descriptor<op::MatMulExact>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<K>>,
     {
-        let spec = <MatMulRule as ShapeRule<(S1, S2)>>::lower(
-            &(self.shape_buf_value(), rhs.shape_buf_value()),
-            (),
-        )?
-        .into_descriptor();
-        let output_shape = spec.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: OperationKind::MatMul,
-                rank: 0,
-            })
-        })?;
+        let output_shape = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
+            .map_err(crate::prelude::Error::Shape)?;
         let expected = crate::shapes::ShapeValue::<S1::Output>::try_new(output_shape.clone())
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);

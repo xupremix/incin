@@ -22,7 +22,6 @@
 //! |---|---|---|
 //! | [`spec`] | `EXE-001` | shared descriptor identity and axis collections |
 //! | [`proof`] | `EXE-002` | [`ProofLevel`] and the sealed [`Validated<O>`](Validated) wrapper |
-//! | [`rule`] | `EXE-003` | [`ShapeRule`], binding each descriptor to the frontend trait that names its `Output` |
 //! | `meta` | `EXE-004` | `TensorMeta`, `LayoutClass`, `Alignment` |
 //! | `capability` | `EXE-005` | the capability registry |
 //!
@@ -56,8 +55,6 @@ pub mod precision;
 pub mod proof;
 /// Checked, type-erased inputs for descriptor execution.
 pub mod request;
-/// Lowering rules binding each descriptor to its frontend shape trait.
-pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
 /// The backend-neutral autograd tape.
@@ -99,6 +96,5 @@ pub use precision::{
 pub use proof::{ProofLevel, Validated};
 
 pub use request::TensorHandle;
-pub use rule::{MatMulRule, ReshapeRule, ShapeRule};
 pub use spec::{AxisSet, DescriptorSchemaVersion, ExecutionDescriptor, ReduceOp};
 pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
