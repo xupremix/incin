@@ -3,6 +3,7 @@ use incin::backend_authoring::{
     operations::op,
 };
 use incin::prelude::*;
+use incin_core::nn::param::ParameterInit;
 
 #[module]
 /// Basic block.
@@ -24,7 +25,8 @@ impl<
         + NumericOps<B>
         + TensorOps<B>
         + ModuleOps<B>
-        + ReductionOps<B>,
+        + ReductionOps<B>
+        + ParameterInit<f32>,
 > BasicBlock<B>
 where
     B: SupportsDType<f32>,
@@ -106,7 +108,8 @@ impl<
         + NumericOps<B>
         + TensorOps<B>
         + ModuleOps<B>
-        + ReductionOps<B>,
+        + ReductionOps<B>
+        + ParameterInit<f32>,
 > ResNet<B>
 where
     B: SupportsDType<f32>,

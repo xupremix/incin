@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate alloc;
-use incin::backend_authoring::{
-    CreationOps, FloatOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
-};
+use incin::backend_authoring::SupportsDType;
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
@@ -28,16 +26,7 @@ pub struct SimpleMlp<B: Backend> {
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<
-    B: Backend
-        + CreationOps<B>
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + ReductionOps<B>
-        + Execute<op::Add>
-        + Execute<op::Relu>,
-> SimpleMlp<B>
+impl<B: Backend + Execute<op::Add> + Execute<op::Relu>> SimpleMlp<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
