@@ -107,9 +107,9 @@ fn a_grad_clause_of_nograd_disables_gradient_tracking() {
 }
 
 #[test]
-fn without_a_grad_clause_the_default_is_still_grad() {
+fn without_a_grad_clause_the_default_is_nograd() {
     let t = tensor![1.0, 2.0].unwrap();
-    assert!(t.requires_grad());
+    assert!(!t.requires_grad());
 }
 
 // Clauses are matched by key, not position, so `dtype` and `grad` can be
