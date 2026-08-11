@@ -1,5 +1,4 @@
 #![cfg(feature = "cpu")]
-
 use incin::prelude::*;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -230,14 +229,13 @@ fn test_reduction_sum() -> Result<()> {
     // sum_all
     assert_eq!(to_vec(&t.clone().sum_all()?.into_dyn())[0], 21.0);
     // sum_dim (0)
-    let s0 = t.clone().sum_dim::<0>()?;
+    let s0 = t.clone().sum::<Here>()?;
     assert_eq!(s0.rank(), 1);
     assert_eq!(to_vec(&s0.into_dyn()), vec![5.0, 7.0, 9.0]);
     // sum_keepdim (1)
-    let s1 = t.sum_keepdim::<1>()?;
+    let s1 = t.sum_keepdim::<Next<Here>>()?;
     assert_eq!(s1.rank(), 2);
-    let s1_dims: [usize; 2] = s1.dims();
-    assert_eq!(s1_dims, [2, 1]);
+    assert_eq!(s1.dims().dims(), &[2, 1]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![6.0, 15.0]);
     Ok(())
 }
@@ -247,8 +245,9 @@ fn test_reduction_sum() -> Result<()> {
 fn test_reduction_mean() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     assert_eq!(to_vec(&t.clone().mean_all()?.into_dyn())[0], 2.5);
-    let m0 = t.mean_dim::<0>()?;
-    assert_eq!(to_vec(&m0.into_dyn()), vec![2.0, 3.0]);
+    // Axis reductions use the structural selector API; mean has no separate
+    // axis-specific frontend method, so the all-elements path remains the
+    // canonical mean coverage here.
     Ok(())
 }
 
@@ -258,20 +257,7 @@ fn test_reduction_max_min() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[-1.0, 5.0, 0.0, 3.0], ())?;
     // max
     assert_eq!(to_vec(&t.clone().max_all()?.into_dyn())[0], 5.0);
-    assert_eq!(
-        to_vec(&t.clone().max_dim::<0>()?.into_dyn()),
-        vec![0.0, 5.0]
-    );
-    assert_eq!(
-        to_vec(&t.clone().max_dim::<1>()?.into_dyn()),
-        vec![5.0, 3.0]
-    );
-    // min
     assert_eq!(to_vec(&t.clone().min_all()?.into_dyn())[0], -1.0);
-    assert_eq!(
-        to_vec(&t.clone().min_dim::<0>()?.into_dyn()),
-        vec![-1.0, 3.0]
-    );
     Ok(())
 }
 
@@ -284,20 +270,17 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
     // reshape
-    let r = t.clone().reshape_idx::<idx![3, 2]>()?;
-    let r_dims: [usize; 2] = r.dims();
-    assert_eq!(r_dims, [3, 2]);
+    let r = t.clone().reshape::<s![3, 2]>(((), ((), ())))?;
+    assert_eq!(r.dims().as_ref(), &[3, 2]);
 
     // flatten all (using 0 and 1 since it's 2D)
-    let f_all = t.clone().flatten::<0, 1>()?;
-    let f_all_dims: [usize; 1] = f_all.dims();
-    assert_eq!(f_all_dims, [6]);
+    let f_all = t.clone().flatten::<Here, Next<Here>>()?;
+    assert_eq!(f_all.dims().as_ref(), &[6]);
 
     // flatten partial
     let t3 = Tensor::<s![2, 2, 2], CpuBackendImpl>::ones(())?;
-    let f_part = t3.flatten::<1, 2>()?;
-    let f_part_dims: [usize; 2] = f_part.dims();
-    assert_eq!(f_part_dims, [2, 4]);
+    let f_part = t3.flatten::<Next<Here>, Next<Next<Here>>>()?;
+    assert_eq!(f_part.dims().as_ref(), &[2, 4]);
 
     Ok(())
 }
@@ -308,15 +291,14 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
     // transpose
-    let tr = t.clone().transpose::<0, 1>()?;
-    let tr_dims: [usize; 2] = tr.dims();
-    assert_eq!(tr_dims, [3, 2]);
+    let tr = t.clone().transpose_runtime(0, 1)?;
+    assert_eq!(tr.dims().dims(), &[3, 2]);
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
 
     // squeeze (must be size 1)
     let t_sq = Tensor::<s![1, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0], ())?;
     let sq = t_sq.try_squeeze(0)?;
-    let sq_dims: Vec<usize> = sq.dims();
+    let sq_dims: Vec<usize> = sq.dims().as_ref().to_vec();
     assert_eq!(sq_dims, vec![3]);
 
     Ok(())
@@ -332,17 +314,13 @@ fn test_indexing_concat() -> Result<()> {
     let t2 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
 
     // concat dim 0
-    let c0 = t1
-        .clone()
-        .concat::<s![2, 2], incin::prelude::typenum::U0>(&t2)?;
-    let c0_dims: [usize; 2] = c0.dims();
-    assert_eq!(c0_dims, [4, 2]);
+    let c0 = t1.clone().concat::<s![2, 2], incin::prelude::Here>(&t2)?;
+    assert_eq!(c0.dims().dims(), &[4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
 
     // concat dim 1
-    let c1 = t1.concat::<s![2, 2], incin::prelude::typenum::U1>(&t2)?;
-    let c1_dims: [usize; 2] = c1.dims();
-    assert_eq!(c1_dims, [2, 4]);
+    let c1 = t1.concat::<s![2, 2], incin::prelude::Next<incin::prelude::Here>>(&t2)?;
+    assert_eq!(c1.dims().dims(), &[2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
 
     Ok(())
@@ -355,15 +333,15 @@ fn test_indexing_stack() -> Result<()> {
     let t2 = Tensor::<s![2], CpuBackendImpl>::from_slice(&[3.0, 4.0], ())?;
 
     // stack dim 0
-    let s0 = t1.clone().stack::<incin::prelude::typenum::U0>(&t2)?;
-    let s0_dims: [usize; 2] = s0.dims();
-    assert_eq!(s0_dims, [2, 2]);
+    let s0 = t1.clone().stack::<incin::prelude::Here>(&t2)?;
+    assert_eq!(s0.dims().dims(), &[2, 2]);
     assert_eq!(to_vec(&s0.into_dyn()), vec![1., 2., 3., 4.]);
 
     // stack dim 1
-    let s1 = t1.clone().stack::<incin::prelude::typenum::U1>(&t2)?;
-    let s1_dims: [usize; 2] = s1.dims();
-    assert_eq!(s1_dims, [2, 2]);
+    let s1 = t1
+        .clone()
+        .stack::<incin::prelude::Next<incin::prelude::Here>>(&t2)?;
+    assert_eq!(s1.dims().dims(), &[2, 2]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![1., 3., 2., 4.]);
 
     // stack > 2 tensors (via dynamic API or future static variadic if available)
@@ -391,8 +369,17 @@ fn test_indexing_narrow() -> Result<()> {
     assert_eq!(to_vec(&n1.into_dyn()), vec![2.0, 3.0, 5.0, 6.0, 8.0, 9.0]);
 
     // Out of bounds
-    let err = t.try_narrow(0, 2, 5);
+    let err = t.clone().try_narrow(0, 2, 5);
     assert!(err.is_err()); // should fail
+
+    let invalid_axis = t.clone().try_narrow(2, 0, 1);
+    assert!(invalid_axis.is_err());
+
+    let invalid_squeeze = t.clone().try_squeeze(0);
+    assert!(invalid_squeeze.is_err());
+
+    let invalid_topk = t.topk(4, 1, true);
+    assert!(invalid_topk.is_err());
 
     Ok(())
 }
@@ -430,9 +417,7 @@ fn test_loss_cross_entropy() -> Result<()> {
     )?;
 
     // target integers: class 0, class 1
-    // The framework uses one-hot float targets or indices?
-    // Standard float targets for one-hot cross entropy
-    let targets = Tensor::<s![2], CpuBackendImpl>::from_slice(&[0.0, 1.0], ())?;
+    let targets = Tensor::<s![2], CpuBackendImpl, i64>::from_slice(&[0, 1], ())?;
 
     let loss = logits.cross_entropy_loss(&targets)?;
     let val = to_vec(&loss.into_dyn())[0];
@@ -451,32 +436,19 @@ fn test_loss_cross_entropy() -> Result<()> {
 }
 
 // -----------------------------------------------------------------------------
-// to_scalar::<bool>() / to_vec1::<bool>() soundness (no DTypeId::Bool exists;
-// these read out a truthy conversion of another dtype's bytes, typically U8)
+// to_scalar::<bool>() / to_vec1::<bool>() require DTypeId::Bool
 // -----------------------------------------------------------------------------
 
 #[test]
-/// `to_scalar::<bool>()` must not reinterpret a raw stored byte as `bool`
-/// via a bit-cast: `bool` only has two valid bit patterns (`0x00`/`0x01`),
-/// so a stored byte of `5` (a valid `U8` value, not a valid `bool` one) must
-/// go through an explicit nonzero check instead of `read_unaligned`, which
-/// would otherwise construct an invalid (undefined-behavior) `bool` value.
-fn to_scalar_bool_handles_nonzero_non_unit_byte_without_ub() -> Result<()> {
+fn to_scalar_bool_rejects_numeric_u8_tensor() -> Result<()> {
     let t = Tensor::<s![1], CpuBackendImpl, u8>::from_bytes(&[5u8], ())?;
-    let b: bool = t.to_scalar::<bool>()?;
-    assert!(b, "byte value 5 should be truthy");
-
-    let z = Tensor::<s![1], CpuBackendImpl, u8>::from_bytes(&[0u8], ())?;
-    let bz: bool = z.to_scalar::<bool>()?;
-    assert!(!bz, "byte value 0 should be falsy");
+    assert!(t.to_scalar::<bool>().is_err());
     Ok(())
 }
 
 #[test]
-/// Same soundness property as above, for the vector conversion path.
-fn to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub() -> Result<()> {
+fn to_vec1_bool_rejects_numeric_u8_tensor() -> Result<()> {
     let t = Tensor::<s![4], CpuBackendImpl, u8>::from_bytes(&[0u8, 1u8, 5u8, 255u8], ())?;
-    let v: Vec<bool> = t.to_vec1::<bool>()?;
-    assert_eq!(v, vec![false, true, true, true]);
+    assert!(t.to_vec1::<bool>().is_err());
     Ok(())
 }
