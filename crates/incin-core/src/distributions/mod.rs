@@ -1,7 +1,84 @@
 //! Probability distribution sampling with custom distribution trait support.
 
+use crate::backend_authoring::{Capabilities, Execute};
+use crate::exec::catalog::{CreationAttributes, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
 use crate::prelude::*;
+use crate::shapes::ShapeValue;
 use core::fmt::Debug;
+
+fn uniform_tensor<S, B, G>(
+    shape: &ShapeBuf,
+    device: &<B::Device as Device>::Field,
+) -> Result<Tensor<S, B, f32, G>>
+where
+    S: Shape + DynShape,
+    B: Backend + SupportsDType<f32> + Execute<op::UniformRandom> + Capabilities,
+    G: RequiresGrad,
+    (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+{
+    let device_id = B::Device::to_incin(device)?;
+    let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
+    let expected = ShapeValue::<S>::try_new(shape.clone()).map_err(Error::Shape)?;
+    let context =
+        ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
+    let inner = dispatch::execute_shaped::<op::UniformRandom, B, S>(
+        &context,
+        CreationAttributes {
+            shape: shape.as_ref().to_vec(),
+            dtype,
+            device: device_id,
+        },
+        &[],
+        &expected,
+    )?
+    .into();
+    Tensor::from_parts(
+        inner,
+        shape.clone(),
+        Default::default(),
+        device.clone(),
+        Default::default(),
+    )
+}
+
+fn normal_tensor<S, B, G>(
+    shape: &ShapeBuf,
+    device: &<B::Device as Device>::Field,
+) -> Result<Tensor<S, B, f32, G>>
+where
+    S: Shape + DynShape,
+    B: Backend + SupportsDType<f32> + Execute<op::NormalRandom> + Capabilities,
+    G: RequiresGrad,
+    (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    <B as Execute<op::NormalRandom>>::Output: Into<B::Storage<f32>>,
+{
+    let device_id = B::Device::to_incin(device)?;
+    let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
+    let expected = ShapeValue::<S>::try_new(shape.clone()).map_err(Error::Shape)?;
+    let context =
+        ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
+    let inner = dispatch::execute_shaped::<op::NormalRandom, B, S>(
+        &context,
+        CreationAttributes {
+            shape: shape.as_ref().to_vec(),
+            dtype,
+            device: device_id,
+        },
+        &[],
+        &expected,
+    )?
+    .into();
+    Tensor::from_parts(
+        inner,
+        shape.clone(),
+        Default::default(),
+        device.clone(),
+        Default::default(),
+    )
+}
 
 /// A trait for probability distributions capable of sampling tensors of any shape on backend `B`.
 ///
@@ -11,10 +88,7 @@ pub trait Distribution<K: DType = f32> {
     /// Samples a tensor of shape `S` on device `device`.
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<K>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<K> + DistributionExecutor<Self, K>,
         G: RequiresGrad,
     >(
         &self,
@@ -23,6 +97,21 @@ pub trait Distribution<K: DType = f32> {
     ) -> Result<Tensor<S, B, K, G>>
     where
         (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>;
+}
+
+/// Backend execution protocol for the special distribution sampling site.
+///
+/// Sampling combines a typed distribution identity with a backend-specific
+/// operation sequence. The protocol keeps that resource contract explicit
+/// without adding distribution operations to the core operation catalog.
+pub trait DistributionExecutor<D: ?Sized, K: DType>: Backend + SupportsDType<K> {
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &D,
+        shape: ShapeBuf,
+        device: &<Self::Device as Device>::Field,
+    ) -> Result<Tensor<S, Self, K, G>>
+    where
+        (S, K, Self::Device, G): TensorArgs<S, K, Self::Device, G>;
 }
 
 /// Uniform probability distribution over `[low, high)`.
@@ -45,13 +134,39 @@ impl Default for Uniform<f32> {
     }
 }
 
+impl<B> DistributionExecutor<Uniform<f32>, f32> for B
+where
+    B: Backend
+        + SupportsDType<f32>
+        + Execute<op::UniformRandom>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
+        + Capabilities,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+{
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &Uniform<f32>,
+        shape: ShapeBuf,
+        device: &<Self::Device as Device>::Field,
+    ) -> Result<Tensor<S, Self, f32, G>>
+    where
+        (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    {
+        // Scale: low + (high - low) * rand
+        let raw_rand = uniform_tensor::<S, B, G>(&shape, device)?;
+        let range = (distribution.high - distribution.low) as f64;
+        raw_rand
+            .mul_scalar(range)?
+            .add_scalar(distribution.low as f64)
+    }
+}
+
 impl Distribution<f32> for Uniform<f32> {
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<f32>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
         G: RequiresGrad,
     >(
         &self,
@@ -61,22 +176,7 @@ impl Distribution<f32> for Uniform<f32> {
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
-        let dims = shape.clone();
-        let device_id = B::Device::to_incin(device)?;
-        let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-        let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
-
-        // Scale: low + (high - low) * rand
-        let range = (self.high - self.low) as f64;
-        let scaled = B::add_scalar_float(&B::mul_scalar_float(&raw_rand, range)?, self.low as f64)?;
-
-        Tensor::from_parts(
-            scaled,
-            shape,
-            Default::default(),
-            device.clone(),
-            Default::default(),
-        )
+        B::sample_distribution::<S, G>(self, shape, device)
     }
 }
 
@@ -100,13 +200,37 @@ impl Default for Normal<f32> {
     }
 }
 
+impl<B> DistributionExecutor<Normal<f32>, f32> for B
+where
+    B: Backend
+        + SupportsDType<f32>
+        + Execute<op::NormalRandom>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
+        + Capabilities,
+    <B as Execute<op::NormalRandom>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+{
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &Normal<f32>,
+        shape: ShapeBuf,
+        device: &<B::Device as Device>::Field,
+    ) -> Result<Tensor<S, B, f32, G>>
+    where
+        (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    {
+        // Scale: mean + std * randn
+        normal_tensor::<S, B, G>(&shape, device)?
+            .mul_scalar(distribution.std as f64)?
+            .add_scalar(distribution.mean as f64)
+    }
+}
+
 impl Distribution<f32> for Normal<f32> {
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<f32>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
         G: RequiresGrad,
     >(
         &self,
@@ -116,24 +240,7 @@ impl Distribution<f32> for Normal<f32> {
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
-        let dims = shape.clone();
-        let device_id = B::Device::to_incin(device)?;
-        let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-        let raw_randn = B::randn(dims.as_ref(), dtype, &device_id)?;
-
-        // Scale: mean + std * randn
-        let scaled = B::add_scalar_float(
-            &B::mul_scalar_float(&raw_randn, self.std as f64)?,
-            self.mean as f64,
-        )?;
-
-        Tensor::from_parts(
-            scaled,
-            shape,
-            Default::default(),
-            device.clone(),
-            Default::default(),
-        )
+        B::sample_distribution::<S, G>(self, shape, device)
     }
 }
 
@@ -150,13 +257,40 @@ impl Bernoulli<f32> {
     }
 }
 
+impl<B> DistributionExecutor<Bernoulli<f32>, f32> for B
+where
+    B: Backend
+        + SupportsDType<f32>
+        + Execute<op::UniformRandom>
+        + Execute<op::Neg>
+        + Execute<op::AddScalar>
+        + Execute<op::Step>
+        + Capabilities,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Step>>::Output: Into<B::Storage<f32>>,
+{
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &Bernoulli<f32>,
+        shape: ShapeBuf,
+        device: &<B::Device as Device>::Field,
+    ) -> Result<Tensor<S, B, f32, G>>
+    where
+        (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    {
+        // Threshold: (rand < p) -> step(p - rand)
+        uniform_tensor::<S, B, G>(&shape, device)?
+            .neg()?
+            .add_scalar(distribution.p as f64)?
+            .step()
+    }
+}
+
 impl Distribution<f32> for Bernoulli<f32> {
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<f32>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
         G: RequiresGrad,
     >(
         &self,
@@ -166,22 +300,7 @@ impl Distribution<f32> for Bernoulli<f32> {
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
-        let dims = shape.clone();
-        let device_id = B::Device::to_incin(device)?;
-        let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-        let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
-
-        // Threshold: (rand < p) -> step(p - rand)
-        let sub = B::add_scalar_float(&B::neg(&raw_rand)?, self.p as f64)?;
-        let step = B::step(&sub)?;
-
-        Tensor::from_parts(
-            step,
-            shape,
-            Default::default(),
-            device.clone(),
-            Default::default(),
-        )
+        B::sample_distribution::<S, G>(self, shape, device)
     }
 }
 
@@ -198,13 +317,44 @@ impl Exponential<f32> {
     }
 }
 
+impl<B> DistributionExecutor<Exponential<f32>, f32> for B
+where
+    B: Backend
+        + SupportsDType<f32>
+        + Execute<op::UniformRandom>
+        + Execute<op::Neg>
+        + Execute<op::AddScalar>
+        + Execute<op::Log>
+        + Execute<op::MulScalar>
+        + Capabilities,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Log>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<f32>>,
+{
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &Exponential<f32>,
+        shape: ShapeBuf,
+        device: &<B::Device as Device>::Field,
+    ) -> Result<Tensor<S, B, f32, G>>
+    where
+        (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    {
+        // Inverse Transform: -ln(1 - U) / lambda
+        uniform_tensor::<S, B, G>(&shape, device)?
+            .neg()?
+            .add_scalar(1.0)?
+            .log()?
+            .neg()?
+            .mul_scalar(1.0 / distribution.lambda as f64)
+    }
+}
+
 impl Distribution<f32> for Exponential<f32> {
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<f32>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
         G: RequiresGrad,
     >(
         &self,
@@ -214,23 +364,7 @@ impl Distribution<f32> for Exponential<f32> {
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
-        let dims = shape.clone();
-        let device_id = B::Device::to_incin(device)?;
-        let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-        let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
-
-        // Inverse Transform: -ln(1 - U) / lambda
-        let one_minus_u = B::add_scalar_float(&B::neg(&raw_rand)?, 1.0)?;
-        let log_val = B::log(&one_minus_u)?;
-        let scaled = B::mul_scalar_float(&B::neg(&log_val)?, 1.0 / self.lambda as f64)?;
-
-        Tensor::from_parts(
-            scaled,
-            shape,
-            Default::default(),
-            device.clone(),
-            Default::default(),
-        )
+        B::sample_distribution::<S, G>(self, shape, device)
     }
 }
 
@@ -254,13 +388,44 @@ impl Default for Gumbel<f32> {
     }
 }
 
+impl<B> DistributionExecutor<Gumbel<f32>, f32> for B
+where
+    B: Backend
+        + SupportsDType<f32>
+        + Execute<op::UniformRandom>
+        + Execute<op::Log>
+        + Execute<op::Neg>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>
+        + Capabilities,
+    <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Log>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+{
+    fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+        distribution: &Gumbel<f32>,
+        shape: ShapeBuf,
+        device: &<B::Device as Device>::Field,
+    ) -> Result<Tensor<S, B, f32, G>>
+    where
+        (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
+    {
+        // Gumbel sample: loc - scale * ln(-ln(U))
+        let log_u = uniform_tensor::<S, B, G>(&shape, device)?.log()?;
+        let log_neg_log = log_u.neg()?.log()?;
+        log_neg_log
+            .mul_scalar(distribution.scale as f64)?
+            .neg()?
+            .add_scalar(distribution.loc as f64)
+    }
+}
+
 impl Distribution<f32> for Gumbel<f32> {
     fn sample<
         S: Shape + DynShape,
-        B: Backend
-            + SupportsDType<f32>
-            + crate::tensor::backend::CreationOps<B>
-            + crate::tensor::backend::FloatOps<B>,
+        B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
         G: RequiresGrad,
     >(
         &self,
@@ -270,25 +435,7 @@ impl Distribution<f32> for Gumbel<f32> {
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
-        let dims = shape.clone();
-        let device_id = B::Device::to_incin(device)?;
-        let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-        let raw_rand = B::rand(dims.as_ref(), dtype, &device_id)?;
-
-        // Gumbel sample: loc - scale * ln(-ln(U))
-        let log_u = B::log(&raw_rand)?;
-        let neg_log_u = B::neg(&log_u)?;
-        let log_neg_log = B::log(&neg_log_u)?;
-        let scaled = B::mul_scalar_float(&log_neg_log, self.scale as f64)?;
-        let gumbel = B::add_scalar_float(&B::neg(&scaled)?, self.loc as f64)?;
-
-        Tensor::from_parts(
-            gumbel,
-            shape,
-            Default::default(),
-            device.clone(),
-            Default::default(),
-        )
+        B::sample_distribution::<S, G>(self, shape, device)
     }
 }
 
@@ -336,13 +483,31 @@ mod tests {
     fn test_custom_distribution() {
         // Custom distribution sampling constant value + 42.0
         struct ConstantAdd(f32);
+        impl<B> DistributionExecutor<ConstantAdd, f32> for B
+        where
+            B: Backend
+                + SupportsDType<f32>
+                + Execute<op::UniformRandom>
+                + Execute<op::AddScalar>
+                + Capabilities,
+            <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<f32>>,
+            <B as Execute<op::AddScalar>>::Output: Into<B::Storage<f32>>,
+        {
+            fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
+                distribution: &ConstantAdd,
+                shape: ShapeBuf,
+                device: &<Self::Device as Device>::Field,
+            ) -> Result<Tensor<S, Self, f32, G>>
+            where
+                (S, f32, Self::Device, G): TensorArgs<S, f32, Self::Device, G>,
+            {
+                uniform_tensor::<S, Self, G>(&shape, device)?.add_scalar(distribution.0 as f64)
+            }
+        }
         impl Distribution<f32> for ConstantAdd {
             fn sample<
                 S: Shape + DynShape,
-                B: Backend
-                    + SupportsDType<f32>
-                    + crate::tensor::backend::CreationOps<B>
-                    + crate::tensor::backend::FloatOps<B>,
+                B: Backend + SupportsDType<f32> + DistributionExecutor<Self, f32>,
                 G: RequiresGrad,
             >(
                 &self,
@@ -352,18 +517,7 @@ mod tests {
             where
                 (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
             {
-                let dims = shape.clone();
-                let device_id = B::Device::to_incin(device)?;
-                let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
-                let zeros = B::zeros(dims.as_ref(), dtype, &device_id)?;
-                let add = B::add_scalar_float(&zeros, self.0 as f64)?;
-                Tensor::from_parts(
-                    add,
-                    shape,
-                    Default::default(),
-                    device.clone(),
-                    Default::default(),
-                )
+                B::sample_distribution::<S, G>(self, shape, device)
             }
         }
 

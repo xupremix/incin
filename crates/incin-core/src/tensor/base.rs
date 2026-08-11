@@ -983,8 +983,7 @@ where
     pub fn sample<D: crate::distributions::Distribution<K>, A>(dist: &D, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: SupportsDType<K>,
-        B: crate::tensor::backend::CreationOps<B> + crate::tensor::backend::FloatOps<B>,
+        B: SupportsDType<K> + crate::distributions::DistributionExecutor<D, K>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         dist.sample::<S, B, G>(_shape, &_device)
