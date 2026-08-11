@@ -1,32 +1,39 @@
+use crate::exec::catalog::{Descriptor, op};
 use crate::nn::{Module, Param};
 use crate::prelude::*;
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
+use crate::shapes::idx::{FromEnd, Here};
+use crate::shapes::shape_ops::ReduceKeepAt;
+use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 
 /// Shape traits for RMSNorm.
 pub trait RMSNormShape: Shape + DynShape {
     type Channels: Dim;
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
+    type ParamShape: Shape<Arg = Self::BuildArg> + DynShape;
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
-impl<C: Dim> RMSNormShape for (C,) {
+impl<C: Dim> RMSNormShape for crate::shapes::shape::DimCons<C, crate::shapes::shape::Nil> {
     type Channels = C;
-    type BuildArg = (<C as Dim>::Arg,);
+    type BuildArg = (<C as Dim>::Arg, ());
+    type ParamShape = crate::shapes::shape::DimCons<C, crate::shapes::shape::Nil>;
 
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg {
-        (target,)
+        (target, ())
     }
 }
 
 impl RMSNormShape for Dyn {
     type Channels = usize;
-    type BuildArg = (usize,);
+    type BuildArg = alloc::vec::Vec<usize>;
+    type ParamShape = Dyn;
     fn build_args(target: usize) -> Self::BuildArg {
-        (target,)
+        alloc::vec![target]
     }
 }
+
+use crate::nn::param::{Frozen, TrainState, Trainable};
 
 /// Root Mean Square Normalization (RMSNorm).
 ///
@@ -34,24 +41,95 @@ impl RMSNormShape for Dyn {
 /// improving training speed and stability. Widely used in modern LLMs (e.g. LLaMA).
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal)]
-pub struct RMSNorm<S: RMSNormShape, B: Backend> {
-    pub weight: Param<(S::Channels,), B>,
+pub struct RMSNorm<S: RMSNormShape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
+    pub weight: Param<S::ParamShape, B, K, Train>,
     #[module(ignore)]
     pub eps: f32,
     #[module(ignore)]
-    _phantom: PhantomData<(S, B)>,
+    _phantom: PhantomData<(S, B, K, Train)>,
 }
 
-impl<S: RMSNormShape, B: Backend> RMSNorm<S, B>
-where
-    B: SupportsDType<B::FloatElem>,
-    (S::Channels,): Shape<Arg = S::BuildArg>,
+impl<S: RMSNormShape, B: Backend, K: DType, Train: TrainState> RMSNorm<S, B, K, Train> {
+    /// Constructs an RMSNorm from a raw weight parameter and epsilon.
+    pub fn from_raw_parts(weight: Param<S::ParamShape, B, K, Train>, eps: f32) -> Self {
+        Self {
+            weight,
+            eps,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Freezes this layer's parameters.
+    pub fn freeze(self) -> RMSNorm<S, B, K, Frozen> {
+        RMSNorm {
+            weight: self.weight.freeze(),
+            eps: self.eps,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Unfreezes this layer's parameters.
+    pub fn unfreeze(self) -> RMSNorm<S, B, K, Trainable> {
+        RMSNorm {
+            weight: self.weight.unfreeze(),
+            eps: self.eps,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+/// A builder for constructing an [`RMSNorm`] layer with a target.
+#[derive(Debug, Clone)]
+pub struct RMSNormBuilder<S: RMSNormShape, Train: TrainState = Trainable> {
+    pub shape: ShapeValue<S>,
+    pub eps: f32,
+    pub weight_init: crate::nn::init::Init,
+    pub _train: PhantomData<Train>,
+}
+
+/// Creates a new builder for an [`RMSNorm`] layer with shape `shape` and epsilon `eps`.
+pub fn rms_norm<S: RMSNormShape>(shape: ShapeValue<S>, eps: f32) -> RMSNormBuilder<S> {
+    RMSNormBuilder {
+        shape,
+        eps,
+        weight_init: crate::nn::init::ones(),
+        _train: PhantomData,
+    }
+}
+
+impl<S: RMSNormShape, Train: TrainState> RMSNormBuilder<S, Train> {
+    /// Configures weight initialization.
+    pub fn weight_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.weight_init = init;
+        self
+    }
+
+    /// Marks the resulting layer as frozen (non-trainable).
+    pub fn frozen(self) -> RMSNormBuilder<S, Frozen> {
+        RMSNormBuilder {
+            shape: self.shape,
+            eps: self.eps,
+            weight_init: self.weight_init,
+            _train: PhantomData,
+        }
+    }
+}
+
+impl<
+    S: RMSNormShape,
+    B: Backend
+        + crate::tensor::backend::CreationOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>,
+    K: DType,
+> RMSNorm<S, B, K, Trainable>
 {
     pub fn build<A>(args: A) -> Result<Self>
     where
+        B: SupportsDType<K>,
         A: crate::tensor::arg_into::LayerArgInto<(
                 <S::Channels as Dim>::Arg,
-                <B::FloatElem as DType>::Arg,
+                <K as DType>::Arg,
                 <B::Device as Device>::Arg,
                 f32,
             )>,
@@ -59,13 +137,14 @@ where
         use crate::tensor::arg_into::LayerArgInto;
         let (channels, dtype, device, eps) = args.into_layer_arg();
         let shape = S::build_args(channels);
-        let weight =
-            Param::<(S::Channels,), B>::ones_raw(crate::tensor::arg_into::TensorArgsData {
+        let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(
+            crate::tensor::arg_into::TensorArgsData {
                 shape,
                 dtype,
                 device,
                 grad: (),
-            })?;
+            },
+        )?;
         Ok(Self {
             weight,
             eps,
@@ -76,38 +155,65 @@ where
 
 impl<
     S: RMSNormShape,
-    InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>,
-    B: Backend + crate::tensor::backend::ReductionOps<B> + crate::tensor::backend::FloatOps<B>,
-> Module<Tensor<InS, B>> for RMSNorm<S, B>
+    InS: Shape
+        + DynShape
+        + crate::shapes::EndsWith<S::Channels>
+        + ReduceKeepAt<FromEnd<Here>>,
+    B: Backend
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::TensorOps<B>
+        + crate::exec::Capabilities
+        + Execute<Descriptor<op::Mul>>
+        + Execute<Descriptor<op::Div>>
+        + Execute<Descriptor<op::Sqrt>>
+        + Execute<Descriptor<op::SumKeepDim>>,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<InS, B, K>> for RMSNorm<S, B, K, Train>
+where
+    <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
+    <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Div>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B>;
+    type Output = Tensor<InS, B, K>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();
 
-        let x_dims = InS::dims(&x._shape);
-        let dim = x_dims.as_ref().len().saturating_sub(1);
+        let channels = x
+            .shape_buf()
+            .as_ref()
+            .last()
+            .copied()
+            .ok_or_else(|| Error::Shape(crate::shapes::error::ShapeError::RankMismatch {
+                operation: crate::shapes::error::OperationKind::MeanDim,
+                expected: crate::shapes::error::RankExpectation::AtLeast(1),
+                actual: 0,
+            }))?;
+        if channels == 0 {
+            return Err(Error::Shape(
+                crate::shapes::error::ShapeError::InvalidParameter {
+                    operation: crate::shapes::error::OperationKind::MeanDim,
+                    parameter: "channels",
+                    value: channels,
+                },
+            ));
+        }
 
         // x^2
         let x_sq = x.mul(&x)?;
 
         // mean(x^2)
-        // We use backend dynamic reduce to keep shapes dynamic
-        let mean_sq_inner = B::mean_keepdim(x_sq.inner(), dim)?;
-        let mut mean_shape = InS::dims(&x._shape).into();
-        if !mean_shape.is_empty() {
-            mean_shape[dim] = 1;
-        }
-        let mean_sq = Tensor::<Dyn, B, B::FloatElem, Grad>::from_parts(
-            mean_sq_inner,
-            field_from_dims::<Dyn>(OperationKind::Normalization, &mean_shape)?,
-            x._dtype.clone(),
-            x._device.clone(),
-            x._grad, // We propagate grad context
-        )?;
+        let mean_sq = x_sq
+            .sum_keepdim::<FromEnd<Here>>()?
+            .div_scalar(channels as f64)?
+            .into_dyn();
 
         // mean(x^2) + eps
         let var = mean_sq.add_scalar(self.eps)?;
