@@ -262,7 +262,8 @@ where
                 self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
 
             let (bytes, ggml_type) = if can_quantize {
-                let context = ExecutionContext::from_scope(B::default());
+                let context = ExecutionContext::from_scope(B::default())
+                    .with_grad_mode(crate::exec::GradMode::Disabled);
                 let input = TensorHandle::from_storage::<B, f32, Local>(var.inner());
                 let quantized = dispatch::execute::<op::Quantize, B>(
                     &context,
