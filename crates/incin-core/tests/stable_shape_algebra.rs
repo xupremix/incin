@@ -4,8 +4,8 @@
 extern crate incin_core as incin;
 
 use incin_core::axis;
+use incin_core::exec::catalog::{op, AxisAttributes, Descriptor, LogicalTensorMeta};
 use incin_core::exec::{AxisSet, ExecutionDescriptor, RankSupport};
-use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
 use incin_core::prelude::*;
 use incin_core::shapes::dim::{
     AddDim, CheckedSubDim, ConstDim, Dim, ExactDivDim, MulDim, NamedDim, StaticExtent,
@@ -23,6 +23,7 @@ impl<T> Same<T> for T {}
 fn assert_same<A, B>()
 where
     A: Same<B>,
+    B: Same<A>,
 {
 }
 
@@ -96,6 +97,9 @@ fn structural_operations_compile_at_rank_16_64_and_200() {
     type T16 = <S16 as SwapAxes<Here, Next<Here>>>::Output;
     type R64 = <S64 as ReduceAt<FromEnd<Here>>>::Output;
     type B200 = <S200 as BroadcastShape<S200>>::Output;
+
+    assert_same::<T16, S16>();
+    assert_same::<R64, s![1; 63]>();
 
     assert_eq!(<T16 as Shape>::RANK, Some(16));
     assert_eq!(<R64 as Shape>::RANK, Some(63));
@@ -189,6 +193,9 @@ fn generic_typenum_rank_arithmetic_is_structural() {
     type Reduced = <Base as RemoveOneRank>::Output;
     type Added = <Base as AddOneRank>::Output;
 
+    assert_same::<Same, Base>();
+    assert_same::<Reduced, Ranked<typenum::U63>>();
+    assert_same::<Added, Ranked<typenum::U65>>();
     assert_eq!(<Same as Shape>::RANK, Some(64));
     assert_eq!(<Reduced as Shape>::RANK, Some(63));
     assert_eq!(<Added as Shape>::RANK, Some(65));

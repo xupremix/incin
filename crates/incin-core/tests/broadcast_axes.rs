@@ -42,6 +42,7 @@ impl<T> Same<T> for T {}
 fn assert_same<A, B>()
 where
     A: Same<B>,
+    B: Same<A>,
 {
 }
 
@@ -71,6 +72,14 @@ fn a_bias_shaped_like_the_channel_axis_broadcasts_over_a_batch() {
     // could not meet its own tensor without erasing to `Dyn`.
     type Tensor4 = S4<U2, U3, U4, U4>;
     type Bias = S4<U1, U3, U1, U1>;
+    type Output = <Tensor4 as BroadcastShape<Bias>>::Output;
+    type Expected = S4<
+        BroadcastExtent<U2, U1>,
+        BroadcastExtent<U3, U3>,
+        BroadcastExtent<U4, U1>,
+        BroadcastExtent<U4, U1>,
+    >;
+    assert_same::<Output, Expected>();
     assert_eq!(
         resolved::<Tensor4, Bias>(&[2, 3, 4, 4], &[1, 3, 1, 1]),
         vec![2, 3, 4, 4]

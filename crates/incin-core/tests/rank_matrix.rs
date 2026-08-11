@@ -8,6 +8,16 @@ use incin_core::prelude::*;
 use incin_core::shapes::shape_ops::SwapAxes;
 use incin_macros::s;
 
+trait Same<T> {}
+impl<T> Same<T> for T {}
+
+fn assert_same<A, B>()
+where
+    A: Same<B>,
+    B: Same<A>,
+{
+}
+
 #[test]
 fn structural_shapes_have_no_frontend_rank_ladder() {
     type R8 = s![1; 8];
@@ -41,13 +51,6 @@ fn structural_broadcast_and_matmul_retain_output_types() {
             >,
         >,
     >;
-    trait Same<T> {}
-    impl<T> Same<T> for T {}
-    fn assert_same<A: Shape, E: Shape>()
-    where
-        A: Same<E>,
-    {
-    }
     assert_same::<B, ExpectedB>();
 
     type M1 = s![2, 3, 4];
@@ -68,7 +71,9 @@ fn high_rank_structural_operations_are_exercised_without_rank_ladders() {
 
     type R16Transpose = <R16 as SwapAxes<Here, Next<Here>>>::Output;
     type R64Reduced = <R64 as ReduceAt<Here>>::Output;
-    type R200Broadcast = <R200 as BroadcastShape<R200>>::Output;
+
+    assert_same::<R16Transpose, R16>();
+    assert_same::<R64Reduced, s![1; 63]>();
 
     let dims16 = ShapeBuf::from_slice(&[1; 16]);
     let dims64 = ShapeBuf::from_slice(&[1; 64]);
@@ -85,7 +90,4 @@ fn high_rank_structural_operations_are_exercised_without_rank_ladders() {
         .expect("identical rank-200 shapes broadcast");
 
     assert_eq!(broadcast.as_ref(), &[1; 200]);
-    let _: core::marker::PhantomData<R16Transpose> = core::marker::PhantomData;
-    let _: core::marker::PhantomData<R64Reduced> = core::marker::PhantomData;
-    let _: core::marker::PhantomData<R200Broadcast> = core::marker::PhantomData;
 }

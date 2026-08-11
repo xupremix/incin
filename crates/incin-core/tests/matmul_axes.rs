@@ -13,6 +13,7 @@ impl<T> Same<T> for T {}
 fn assert_same<A, B>()
 where
     A: Same<B>,
+    B: Same<A>,
 {
 }
 
@@ -73,13 +74,6 @@ fn static_matmul_output_type_preserves_batch_and_matrix_axes() {
         DimCons<typenum::U3, DimCons<typenum::U5, Nil>>,
     >;
 
-    trait Same<T> {}
-    impl<T> Same<T> for T {}
-    fn assert_same<A, B>()
-    where
-        A: Same<B>,
-    {
-    }
     assert_same::<Out, Expected>();
 }
 
