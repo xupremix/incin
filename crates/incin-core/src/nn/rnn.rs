@@ -356,12 +356,7 @@ where
 impl<
     S: RnnShape,
     Batch: Dim,
-    B: Backend
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Add>
-        + Execute<op::Tanh>,
+    B: Backend + Execute<op::Add> + Execute<op::Tanh>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -506,9 +501,6 @@ impl<
     Batch: Dim<Arg = ()>,
     Seq: Dim<Arg = ()>,
     B: Backend
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::TensorOps<B>
         + Execute<op::StackExact>
         + Execute<op::Narrow>
         + Execute<op::SqueezeExact>
