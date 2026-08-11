@@ -61,11 +61,15 @@ impl<
         + ModuleOps<B>
         + ReductionOps<B>
         + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>,
+        + Execute<Descriptor<op::Relu>>
+        + Execute<Descriptor<op::Conv2dExact>>
+        + Execute<Descriptor<op::ReshapeExact>>,
 > BasicBlock<B>
 where
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
 {
     /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
@@ -127,6 +131,7 @@ impl<
         + ReductionOps<B>
         + Execute<Descriptor<op::Add>>
         + Execute<Descriptor<op::Relu>>
+        + Execute<Descriptor<op::Conv2dExact>>
         + Execute<Descriptor<op::MatMulExact>>
         + Execute<Descriptor<op::TransposeExact>>
         + Execute<Descriptor<op::ReshapeExact>>,
@@ -135,6 +140,7 @@ where
     <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::Conv2dExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
 {
