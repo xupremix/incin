@@ -157,9 +157,6 @@ impl<
     S: RMSNormShape,
     InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels> + ReduceKeepAt<FromEnd<Here>>,
     B: Backend
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::TensorOps<B>
         + crate::exec::Capabilities
         + Execute<op::Mul>
         + Execute<op::Div>
