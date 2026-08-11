@@ -182,6 +182,34 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
+    /// Sums one runtime-selected axis and erases only the unavailable output
+    /// position facts.
+    pub fn sum_runtime(&self, axis: usize) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    where
+        B: Execute<op::SumDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
+    {
+        let axis =
+            crate::shapes::idx::AxisSelector::normalize_unsigned(axis, self.shape_buf().rank())?;
+        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
+        self.execute_named_reduction(descriptor)
+    }
+
+    /// Sums one runtime-selected axis while retaining it as a length-one axis.
+    pub fn sum_keepdim_runtime(
+        &self,
+        axis: usize,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    where
+        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
+    {
+        let axis =
+            crate::shapes::idx::AxisSelector::normalize_unsigned(axis, self.shape_buf().rank())?;
+        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
+        self.execute_named_reduction(descriptor)
+    }
+
     /// Sums the axis identified by a semantic tag.
     ///
     /// Stable Rust cannot currently turn recursive semantic lookup into the

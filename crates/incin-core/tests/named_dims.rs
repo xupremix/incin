@@ -51,6 +51,23 @@ fn named_selector_reaches_the_canonical_reduction_descriptor() {
 }
 
 #[test]
+fn runtime_reduction_validates_axes_beyond_inline_storage() {
+    type B = DummyBackend<Cpu>;
+    let tensor: Tensor<Dyn, B> = Tensor::ones(vec![1usize; 71]).unwrap();
+
+    let reduced = tensor.sum_runtime(70).unwrap();
+    assert_eq!(reduced.shape_buf().rank(), 70);
+
+    let kept = tensor.sum_keepdim_runtime(70).unwrap();
+    assert_eq!(kept.shape_buf().as_ref()[70], 1);
+
+    assert!(matches!(
+        tensor.sum_runtime(71),
+        Err(Error::Shape(ShapeError::InvalidAxis { axis: 71, rank: 71 }))
+    ));
+}
+
+#[test]
 fn named_tags_are_zero_sized_semantic_metadata() {
     assert_eq!(<Batch as AxisTag>::NAME, "Batch");
     assert_eq!(core::mem::size_of::<Batch>(), 0);
