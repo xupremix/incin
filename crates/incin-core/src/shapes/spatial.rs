@@ -2,6 +2,8 @@ use core::ops::{Add, Div, Mul, Sub};
 use typenum::{U1, U2, UInt, UTerm};
 
 use super::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+use super::dim::{Dim, StaticExtent};
+use crate::shapes::ShapeBuf;
 
 /// Compile-time formula for a single spatial dimension's conv/pool
 /// output size: `(in + 2*Padding - Dilation*(Kernel-1) - 1) / Stride + 1`.
@@ -59,8 +61,13 @@ where
     >>::Output as Sub<U1>>::Output as Div<Stride>>::Output as Add<U1>>::Output;
 }
 
+impl<const N: usize, Kernel, Stride, Padding, Dilation>
+    SpatialOut<Kernel, Stride, Padding, Dilation> for crate::shapes::dim::ConstDim<N>
+{
+    type Output = usize;
+}
+
 impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dilation> for usize {
-    /// Runtime dimension in, runtime dimension out.
     type Output = usize;
 }
 
@@ -144,11 +151,10 @@ pub fn spatial_out_size(
 /// Rebuild a typed dimension from a computed extent, reporting a mismatch
 /// rather than unwrapping.
 ///
-/// [`Dim::from_size`] only rejects a size that disagrees with a
-/// compile-time-fixed dimension, so on the failing path `D::default()` *is*
-/// that fixed value and naming it makes the diagnostic actionable. Runtime
-/// (`usize`), symbolic, and product dimensions accept every size and never
-/// reach the error arm.
+/// [`Dim::from_size`] rejects a size that disagrees with a compile-time-fixed
+/// dimension. The expected value is read from the type-level classification,
+/// rather than from a default dimension value, because runtime and named
+/// dimensions do not store their numeric extent in the dimension type.
 pub fn dim_from_size<D: Dim + Default>(
     operation: OperationKind,
     axis: Axis,
@@ -158,7 +164,10 @@ pub fn dim_from_size<D: Dim + Default>(
         operation,
         axis,
         lhs: size,
-        rhs: D::default().size(),
+        rhs: match D::STATIC {
+            StaticExtent::Value(expected) => expected,
+            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
+        },
         constraint: DimensionConstraint::Equal,
     })
 }
@@ -193,81 +202,28 @@ pub trait Pool2dShape<K, S, P, D>: crate::prelude::Shape {
     /// The pooled output shape (same batch/channel dims, spatial dims
     /// reduced via `SpatialOut`).
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    /// Computes the runtime `Field` of `Output` from the input's own field.
-    fn compute_output_shape(
-        input: &Self::Field,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError>;
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError>;
 }
 
-use crate::prelude::{Dim, Dyn};
+use crate::prelude::{Dyn, DynShape, Shape};
 use typenum::Unsigned;
 
 // `$c`/`$h`/`$w` are the tuple indices of the channel and two spatial dims.
 // Pooling preserves the channel axis (conv replaces it), so unlike
 // `impl_conv2d_shape!` this needs the channel index as well.
-macro_rules! impl_pool2d_shape {
-    ($c:tt, $h:tt, $w:tt; $($B:ident : $idx:tt),*) => {
-        impl<$($B: Dim,)* C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-            Pool2dShape<K, S, P, D> for ($($B,)* C, HIn, WIn)
-        where
-            HIn: SpatialOut<K, S, P, D>,
-            WIn: SpatialOut<K, S, P, D>,
-            <HIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
-            <WIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
-        {
-            /// The resulting shape per this trait\'s rule.
-            type Output = (
-                $($B,)*
-                C,
-                <HIn as SpatialOut<K, S, P, D>>::Output,
-                <WIn as SpatialOut<K, S, P, D>>::Output,
-            );
-            /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            ///
-            /// The spatial extents are computed from the input\'s own runtime
-            /// sizes. They used to be `Default::default()`, which is the right
-            /// value for a `typenum` extent (the type carries it) and **0** for
-            /// a `usize` or symbolic one — so a pooled tensor with runtime
-            /// spatial dims silently claimed a zero-sized output and propagated
-            /// it. `SHP-005`.
-            fn compute_output_shape(
-                input: &Self::Field,
-            ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
-                const OP: OperationKind = OperationKind::Pool2d;
-                let height = spatial_out_size(
-                    OP, Axis::Named("height"), input.$h.size(),
-                    K::USIZE, S::USIZE, P::USIZE, D::USIZE,
-                )?;
-                let width = spatial_out_size(
-                    OP, Axis::Named("width"), input.$w.size(),
-                    K::USIZE, S::USIZE, P::USIZE, D::USIZE,
-                )?;
-                Ok((
-                    $(input.$idx,)*
-                    input.$c,
-                    dim_from_size(OP, Axis::Named("height"), height)?,
-                    dim_from_size(OP, Axis::Named("width"), width)?,
-                ))
-            }
-        }
-    };
-}
-
 // Shape is `(Batch.., C, HIn, WIn)`, so rank = batch count + 3.
-incin_macros::rank_sweep!(pool2d => impl_pool2d_shape, min = 0, max = 5);
 
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D> for Dyn {
     /// The resulting shape per this trait\'s rule.
     type Output = Dyn;
-    /// Computes the runtime `Field` of `Output` from the input\'s own field.
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     ///
     /// Rank 3 is `(C, H, W)` and rank 4 is `(B, C, H, W)`, as the trait's
     /// diagnostic already promised. The rank-3 case used to fall through the
     /// `len() == 4` test and return the *input* shape unpooled; any other rank
     /// did the same instead of reporting it.
-    fn compute_output_shape(
-        input: &Self::Field,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError> {
         let op = OperationKind::Pool2d;
         let mut dims = input.clone();
         expect_rank(op, [3, 4], dims.len())?;
@@ -302,75 +258,27 @@ pub trait SpatialConv1d<COut, K, S, P, D>: crate::prelude::Shape {
     /// The convolved output shape (batch dims unchanged, channel dim
     /// replaced by `COut`, length dim reduced via `SpatialOut`).
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    /// Computes the runtime `Field` of `Output` from the input's own field.
-    fn compute_output_shape(
-        input: &Self::Field,
-        out_channels: usize,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError>;
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError>;
 }
 
 // `$len` is the tuple index of the length dim, i.e. one past the channel dim.
 // It is passed explicitly rather than derived, because counting the batch
 // parameters inside the macro needs an unstable metavariable expression.
-macro_rules! impl_conv1d_shape {
-    ($len:tt; $($B:ident : $idx:tt),*) => {
-        impl<$($B: Dim,)* CIn: Dim, COut: Dim + Default, LIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-            SpatialConv1d<COut, K, S, P, D> for ($($B,)* CIn, LIn)
-        where
-            LIn: SpatialOut<K, S, P, D>,
-            <LIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
-        {
-            /// The resulting shape per this trait\'s rule.
-            type Output = ($($B,)* COut, <LIn as SpatialOut<K, S, P, D>>::Output);
-            /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            ///
-            /// Both trailing dimensions are computed rather than defaulted.
-            /// `COut` is bounded by `Dim`, not `Unsigned`, so for a `usize` or
-            /// symbolic channel count `Default::default()` is 0, not the
-            /// `out_channels` this function is already handed; the same is
-            /// true of the length dim. The channel conversion reports a
-            /// mismatch instead of unwrapping. `SHP-005`.
-            fn compute_output_shape(
-                input: &Self::Field,
-                out_channels: usize,
-            ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
-                const OP: OperationKind = OperationKind::Conv1d;
-                let length = spatial_out_size(
-                    OP,
-                    Axis::Named("length"),
-                    input.$len.size(),
-                    K::USIZE,
-                    S::USIZE,
-                    P::USIZE,
-                    D::USIZE,
-                )?;
-                Ok((
-                    $(input.$idx,)*
-                    dim_from_size::<COut>(OP, Axis::Named("channels"), out_channels)?,
-                    dim_from_size(OP, Axis::Named("length"), length)?,
-                ))
-            }
-        }
-    };
-}
-
 // Shape is `(Batch.., CIn, LIn)`, so rank = batch count + 2; `max = 6`
-// reaches `MAX_RANK`. Conv is rank-preserving, so 8 is its correct ceiling.
-incin_macros::rank_sweep!(conv1d => impl_conv1d_shape, max = 6);
+// The structural rule below is rank-polymorphic; backend limits are checked
+// separately from frontend shape representability.
 
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COut, K, S, P, D>
-    for Dyn
+impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
+    SpatialConv1d<COut, K, S, P, D> for Dyn
 {
     /// The resulting shape per this trait\'s rule.
     type Output = Dyn;
-    /// Computes the runtime `Field` of `Output` from the input\'s own field.
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     ///
     /// Rank 2 is `(C, L)` and rank 3 is `(B, C, L)`. Rank 2 used to fall
     /// through the `len() == 3` test and return the input unchanged.
-    fn compute_output_shape(
-        input: &Self::Field,
-        out_channels: usize,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError> {
         const OP: OperationKind = OperationKind::Conv1d;
         let mut dims = input.clone();
         expect_rank(OP, [2, 3], dims.len())?;
@@ -380,10 +288,10 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COu
             OP,
             Axis::Named("length"),
             dims[length],
-            K::USIZE,
-            S::USIZE,
-            P::USIZE,
-            D::USIZE,
+            K::from_arg(()).size(),
+            S::from_arg(()).size(),
+            P::from_arg(()).size(),
+            D::from_arg(()).size(),
         )?;
         Ok(dims)
     }
@@ -400,72 +308,25 @@ pub trait SpatialConv2d<COut, K, S, P, D>: crate::prelude::Shape {
     /// The convolved output shape (batch dims unchanged, channel dim
     /// replaced by `COut`, spatial dims reduced via `SpatialOut`).
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    /// Computes the runtime `Field` of `Output` from the input's own field.
-    fn compute_output_shape(
-        input: &Self::Field,
-        out_channels: usize,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError>;
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError>;
 }
 
 // `$h`/`$w` are the tuple indices of the two spatial dims. See
 // `impl_conv1d_shape!` for why they are passed rather than counted.
-macro_rules! impl_conv2d_shape {
-    ($h:tt, $w:tt; $($B:ident : $idx:tt),*) => {
-        impl<$($B: Dim,)* CIn: Dim, COut: Dim + Default, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-            SpatialConv2d<COut, K, S, P, D> for ($($B,)* CIn, HIn, WIn)
-        where
-            HIn: SpatialOut<K, S, P, D>,
-            WIn: SpatialOut<K, S, P, D>,
-            <HIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
-            <WIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
-        {
-            /// The resulting shape per this trait\'s rule.
-            type Output = ($($B,)* COut, <HIn as SpatialOut<K, S, P, D>>::Output, <WIn as SpatialOut<K, S, P, D>>::Output);
-            /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            ///
-            /// See `impl_conv1d_shape!`: every trailing dimension is computed
-            /// from the input rather than defaulted, and the channel
-            /// conversion reports a mismatch instead of unwrapping.
-            fn compute_output_shape(
-                input: &Self::Field,
-                out_channels: usize,
-            ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
-                const OP: OperationKind = OperationKind::Conv2d;
-                let height = spatial_out_size(
-                    OP, Axis::Named("height"), input.$h.size(),
-                    K::USIZE, S::USIZE, P::USIZE, D::USIZE,
-                )?;
-                let width = spatial_out_size(
-                    OP, Axis::Named("width"), input.$w.size(),
-                    K::USIZE, S::USIZE, P::USIZE, D::USIZE,
-                )?;
-                Ok((
-                    $(input.$idx,)*
-                    dim_from_size::<COut>(OP, Axis::Named("channels"), out_channels)?,
-                    dim_from_size(OP, Axis::Named("height"), height)?,
-                    dim_from_size(OP, Axis::Named("width"), width)?,
-                ))
-            }
-        }
-    };
-}
 
 // Shape is `(Batch.., CIn, HIn, WIn)`, so rank = batch count + 3.
-incin_macros::rank_sweep!(conv2d => impl_conv2d_shape, max = 5);
 
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COut, K, S, P, D>
-    for Dyn
+impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
+    SpatialConv2d<COut, K, S, P, D> for Dyn
 {
     /// The resulting shape per this trait\'s rule.
     type Output = Dyn;
-    /// Computes the runtime `Field` of `Output` from the input\'s own field.
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     ///
     /// Rank 3 is `(C, H, W)` and rank 4 is `(B, C, H, W)`. Rank 3 used to fall
     /// through the `len() == 4` test and return the input unchanged.
-    fn compute_output_shape(
-        input: &Self::Field,
-        out_channels: usize,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError> {
         const OP: OperationKind = OperationKind::Conv2d;
         let mut dims = input.clone();
         expect_rank(OP, [3, 4], dims.len())?;
@@ -480,10 +341,10 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COu
                 OP,
                 axis,
                 dims[index],
-                K::USIZE,
-                S::USIZE,
-                P::USIZE,
-                D::USIZE,
+                K::from_arg(()).size(),
+                S::from_arg(()).size(),
+                P::from_arg(()).size(),
+                D::from_arg(()).size(),
             )?;
         }
         Ok(dims)
@@ -501,10 +362,8 @@ pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::prelude::Shape {
     /// The pooled output shape: batch/channel dims unchanged, spatial dims
     /// fixed to `(HOut, WOut)`.
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    /// Computes the runtime `Field` of `Output` from the input's own field.
-    fn compute_output_shape(
-        input: &Self::Field,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError>;
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError>;
 }
 
 /// Reject an adaptive output extent of 0, which addresses no input elements.
@@ -520,50 +379,243 @@ fn adaptive_extent(axis: Axis, requested: usize) -> Result<usize, ShapeError> {
 
 // Same batch-variadic form as `impl_pool2d_shape!`; the spatial extents are
 // caller-chosen rather than derived, so `$h`/`$w` are only read to be replaced.
-macro_rules! impl_adaptive_pool2d_shape {
-    ($c:tt, $h:tt, $w:tt; $($B:ident : $idx:tt),*) => {
-        impl<$($B: Dim,)* C: Dim, HIn: Dim, WIn: Dim, HOut: Unsigned, WOut: Unsigned>
-            AdaptiveAvgPool2dShape<HOut, WOut> for ($($B,)* C, HIn, WIn)
-        where
-            HOut: Dim + Default,
-            WOut: Dim + Default,
-        {
-            /// The resulting shape per this trait\'s rule.
-            type Output = ($($B,)* C, HOut, WOut);
-            /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            ///
-            /// `HOut`/`WOut` are `Unsigned`, so unlike the other rules here
-            /// their `Default` really is the requested extent. The check that
-            /// remains is that neither is 0.
-            fn compute_output_shape(
-                input: &Self::Field,
-            ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
-                adaptive_extent(Axis::Named("height"), HOut::USIZE)?;
-                adaptive_extent(Axis::Named("width"), WOut::USIZE)?;
-                Ok(($(input.$idx,)* input.$c, HOut::default(), WOut::default()))
-            }
-        }
-    };
-}
 
 // Shape is `(Batch.., C, HIn, WIn)`, so rank = batch count + 3.
-incin_macros::rank_sweep!(pool2d => impl_adaptive_pool2d_shape, min = 0, max = 5);
 
 impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2dShape<HOut, WOut> for Dyn {
     /// The resulting shape per this trait\'s rule.
     type Output = Dyn;
-    /// Computes the runtime `Field` of `Output` from the input\'s own field.
+    /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     ///
     /// Rank 3 is `(C, H, W)` and rank 4 is `(B, C, H, W)`. Rank 3 used to fall
     /// through the `len() == 4` test and return the input unchanged.
-    fn compute_output_shape(
-        input: &Self::Field,
-    ) -> Result<<Self::Output as crate::prelude::Shape>::Field, ShapeError> {
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError> {
         let mut dims = input.clone();
         expect_rank(OperationKind::AdaptiveAvgPool2d, [3, 4], dims.len())?;
         let first_spatial = dims.len() - 2;
         dims[first_spatial] = adaptive_extent(Axis::Named("height"), HOut::USIZE)?;
         dims[first_spatial + 1] = adaptive_extent(Axis::Named("width"), WOut::USIZE)?;
         Ok(dims)
+    }
+}
+
+use crate::shapes::shape::{DimCons, Nil, SplitLast2, SplitLast3, StructuralConcatShape};
+
+type Conv1dTail<C, L> = DimCons<C, DimCons<L, Nil>>;
+type Conv2dTail<C, H, W> = DimCons<C, DimCons<H, DimCons<W, Nil>>>;
+type Pool2dTail<C, H, W> = DimCons<C, DimCons<H, DimCons<W, Nil>>>;
+type Conv1dOutput<S, C, K, Stride, Padding, Dilation> =
+    <<S as SplitLast2>::Prefix as StructuralConcatShape<
+        Conv1dTail<
+            C,
+            <<S as SplitLast2>::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+        >,
+    >>::Output;
+type Pool2dOutput<S, K, Stride, Padding, Dilation> =
+    <<S as SplitLast3>::Prefix as StructuralConcatShape<
+        Pool2dTail<
+            <S as SplitLast3>::ThirdLast,
+            <<S as SplitLast3>::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+            <<S as SplitLast3>::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+        >,
+    >>::Output;
+type Conv2dOutput<S, C, K, Stride, Padding, Dilation> =
+    <<S as SplitLast3>::Prefix as StructuralConcatShape<
+        Conv2dTail<
+            C,
+            <<S as SplitLast3>::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+            <<S as SplitLast3>::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+        >,
+    >>::Output;
+type AdaptivePool2dOutput<S, H, W> = <<S as SplitLast3>::Prefix as StructuralConcatShape<
+    Pool2dTail<<S as SplitLast3>::ThirdLast, H, W>,
+>>::Output;
+
+fn append_spatial_suffix(
+    operation: OperationKind,
+    input: &crate::shapes::ShapeBuf,
+    suffix: &[usize],
+) -> Result<crate::shapes::ShapeBuf, ShapeError> {
+    if input.len() < suffix.len() {
+        return Err(ShapeError::RankMismatch {
+            operation,
+            expected: RankExpectation::AtLeast(suffix.len()),
+            actual: input.len(),
+        });
+    }
+    let mut output = crate::shapes::ShapeBuf::from_slice(&input[..input.len() - suffix.len()]);
+    for &dim in suffix {
+        output.push(dim);
+    }
+    Ok(output)
+}
+
+impl<S: Shape + SplitLast3, HOut, WOut> AdaptiveAvgPool2dShape<HOut, WOut> for S
+where
+    HOut: Unsigned + Dim + Default,
+    WOut: Unsigned + Dim + Default,
+    S::Prefix: StructuralConcatShape<Pool2dTail<S::ThirdLast, HOut, WOut>>,
+    AdaptivePool2dOutput<S, HOut, WOut>: Shape + DynShape,
+{
+    type Output = AdaptivePool2dOutput<S, HOut, WOut>;
+
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError> {
+        if input.len() < 3 {
+            return Err(ShapeError::RankMismatch {
+                operation: OperationKind::AdaptiveAvgPool2d,
+                expected: RankExpectation::AtLeast(3),
+                actual: input.len(),
+            });
+        }
+        let height = adaptive_extent(Axis::Named("height"), HOut::USIZE)?;
+        let width = adaptive_extent(Axis::Named("width"), WOut::USIZE)?;
+        append_spatial_suffix(
+            OperationKind::AdaptiveAvgPool2d,
+            input,
+            &[input[input.len() - 3], height, width],
+        )
+    }
+}
+
+impl<S: Shape + SplitLast2, COut: Dim + Default, K, Stride, Padding, Dilation>
+    SpatialConv1d<COut, K, Stride, Padding, Dilation> for S
+where
+    K: Dim<Arg = ()>,
+    Stride: Dim<Arg = ()>,
+    Padding: Dim<Arg = ()>,
+    Dilation: Dim<Arg = ()>,
+    S::Last: SpatialOut<K, Stride, Padding, Dilation>,
+    <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output: Dim + Default,
+    S::Prefix: StructuralConcatShape<
+        Conv1dTail<COut, <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output>,
+    >,
+    Conv1dOutput<S, COut, K, Stride, Padding, Dilation>: Shape + DynShape,
+{
+    type Output = Conv1dOutput<S, COut, K, Stride, Padding, Dilation>;
+
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError> {
+        const OP: OperationKind = OperationKind::Conv1d;
+        let length = spatial_out_size(
+            OP,
+            Axis::Named("length"),
+            *input.as_ref().last().ok_or(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::AtLeast(2),
+                actual: input.len(),
+            })?,
+            K::from_arg(()).size(),
+            Stride::from_arg(()).size(),
+            Padding::from_arg(()).size(),
+            Dilation::from_arg(()).size(),
+        )?;
+        append_spatial_suffix(OP, input, &[out_channels, length])
+    }
+}
+
+impl<S: Shape + SplitLast3, K, Stride, Padding, Dilation> Pool2dShape<K, Stride, Padding, Dilation>
+    for S
+where
+    K: Unsigned + Dim,
+    Stride: Unsigned + Dim,
+    Padding: Unsigned + Dim,
+    Dilation: Unsigned + Dim,
+    S::SecondLast: SpatialOut<K, Stride, Padding, Dilation>,
+    S::Last: SpatialOut<K, Stride, Padding, Dilation>,
+    <S::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output: Dim + Default,
+    <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output: Dim + Default,
+    S::Prefix: StructuralConcatShape<
+        Pool2dTail<
+            S::ThirdLast,
+            <S::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+            <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+        >,
+    >,
+    Pool2dOutput<S, K, Stride, Padding, Dilation>: Shape + DynShape,
+{
+    type Output = Pool2dOutput<S, K, Stride, Padding, Dilation>;
+
+    fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError> {
+        const OP: OperationKind = OperationKind::Pool2d;
+        let dims = input.as_ref();
+        if dims.len() < 3 {
+            return Err(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::AtLeast(3),
+                actual: dims.len(),
+            });
+        }
+        let height = spatial_out_size(
+            OP,
+            Axis::Named("height"),
+            dims[dims.len() - 2],
+            K::USIZE,
+            Stride::USIZE,
+            Padding::USIZE,
+            Dilation::USIZE,
+        )?;
+        let width = spatial_out_size(
+            OP,
+            Axis::Named("width"),
+            dims[dims.len() - 1],
+            K::USIZE,
+            Stride::USIZE,
+            Padding::USIZE,
+            Dilation::USIZE,
+        )?;
+        append_spatial_suffix(OP, input, &[dims[dims.len() - 3], height, width])
+    }
+}
+
+impl<S: Shape + SplitLast3, COut: Dim + Default, K, Stride, Padding, Dilation>
+    SpatialConv2d<COut, K, Stride, Padding, Dilation> for S
+where
+    K: Dim<Arg = ()>,
+    Stride: Dim<Arg = ()>,
+    Padding: Dim<Arg = ()>,
+    Dilation: Dim<Arg = ()>,
+    S::SecondLast: SpatialOut<K, Stride, Padding, Dilation>,
+    S::Last: SpatialOut<K, Stride, Padding, Dilation>,
+    <S::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output: Dim + Default,
+    <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output: Dim + Default,
+    S::Prefix: StructuralConcatShape<
+        Conv2dTail<
+            COut,
+            <S::SecondLast as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+            <S::Last as SpatialOut<K, Stride, Padding, Dilation>>::Output,
+        >,
+    >,
+    Conv2dOutput<S, COut, K, Stride, Padding, Dilation>: Shape + DynShape,
+{
+    type Output = Conv2dOutput<S, COut, K, Stride, Padding, Dilation>;
+
+    fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError> {
+        const OP: OperationKind = OperationKind::Conv2d;
+        let dims = input.as_ref();
+        if dims.len() < 3 {
+            return Err(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::AtLeast(3),
+                actual: dims.len(),
+            });
+        }
+        let height = spatial_out_size(
+            OP,
+            Axis::Named("height"),
+            dims[dims.len() - 2],
+            K::from_arg(()).size(),
+            Stride::from_arg(()).size(),
+            Padding::from_arg(()).size(),
+            Dilation::from_arg(()).size(),
+        )?;
+        let width = spatial_out_size(
+            OP,
+            Axis::Named("width"),
+            dims[dims.len() - 1],
+            K::from_arg(()).size(),
+            Stride::from_arg(()).size(),
+            Padding::from_arg(()).size(),
+            Dilation::from_arg(()).size(),
+        )?;
+        append_spatial_suffix(OP, input, &[out_channels, height, width])
     }
 }
