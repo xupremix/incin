@@ -20,7 +20,7 @@ use crate::dist::mesh::{Data, DeviceMesh, MeshSpec, Pipeline, TensorParallel};
 use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
-use crate::prelude::{ConstDType, ConstShape, DTypeId, Dyn, OperationKind};
+use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn, OperationKind, Shape};
 use crate::shapes::error::ShapeError;
 
 /// Exactly two pipeline stages and no data or tensor partitioning.
@@ -43,7 +43,7 @@ impl PipelineDType for Dyn {}
 pub const fn validate_pipeline_dtype(dtype: DTypeId) -> Result<(), PipelineError> {
     match dtype {
         DTypeId::BF16 | DTypeId::F16 | DTypeId::F32 | DTypeId::F64 => Ok(()),
-        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 => {
+        DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(PipelineError::UnsupportedDType { dtype })
         }
     }
@@ -384,17 +384,26 @@ impl PipelinePlanBuilder {
         stream: StreamId,
     ) -> Result<PipelinePlan, PipelineError>
     where
-        K: ConstDType + PipelineDType,
-        S: ConstShape,
+        K: ConstDType + BuiltinDType + PipelineDType,
+        S: Shape,
+        S::Arg: Default,
         Microbatches: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
         Schedule: StaticPipelineSchedule,
     {
+        let shape_field = S::try_init(Default::default()).map_err(PipelineError::Shape)?;
+        let dims = shape_field.clone();
+        let elements = S::STATIC_NUMEL.ok_or_else(|| {
+            PipelineError::Shape(ShapeError::TargetShapeRejected {
+                operation: OperationKind::Storage,
+                rank: S::RANK.unwrap_or(0),
+            })
+        })?;
         Self::build_checked(
             mesh,
             rank,
             boundary,
-            S::DIMS.as_ref(),
-            S::NUMEL,
+            dims.as_ref(),
+            elements,
             K::DTYPE,
             Microbatches::USIZE,
             Schedule::SCHEDULE,
