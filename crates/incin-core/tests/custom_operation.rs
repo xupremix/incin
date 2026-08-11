@@ -4,7 +4,7 @@ extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
-    StorageBackend, execute_shaped,
+    StorageBackend, execute, execute_shaped,
 };
 use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel,
@@ -96,4 +96,18 @@ fn downstream_custom_operation_keeps_static_shape_dispatch() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Static);
+}
+
+#[test]
+fn downstream_custom_operation_uses_unified_runtime_dispatch() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let output = execute::<CompanyIdentity, _>(
+        &context,
+        IdentityAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+    )
+    .unwrap();
+    assert_eq!(output, ProofLevel::Dynamic);
 }
