@@ -379,6 +379,7 @@ fn execute_matmul<S: Subject>(
             operation: spec,
             inputs: &inputs,
             context: &context,
+            payload: None,
         })
         .map_err(|error| format!("{error}"))
 }
@@ -461,6 +462,7 @@ fn matmul_checks<S: Subject>(subject: &S) -> Vec<Check> {
                 operation: &spec,
                 inputs: &inputs,
                 context: &context,
+                payload: None,
             });
             if result.is_ok() {
                 return Err(
@@ -508,6 +510,7 @@ fn reshape_checks<S: Subject>(subject: &S) -> Vec<Check> {
                 operation: spec,
                 inputs: &inputs,
                 context: &context,
+                payload: None,
             })
             .map_err(|error| format!("{error}"))
     };
@@ -596,6 +599,7 @@ fn registry_agrees<S: Subject>(subject: &S) -> Result<(), String> {
             operation: &spec,
             inputs: &inputs,
             context: &context,
+            payload: None,
         })
         .is_ok();
     if reshape_claimed != reshape_ran {

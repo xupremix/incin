@@ -139,6 +139,20 @@ where
     O: Operation,
     B: Execute<O> + Capabilities,
 {
+    execute_with_payload(context, attributes, inputs, None)
+}
+
+/// Execute an operation with an optional borrowed payload kept outside its descriptor.
+pub fn execute_with_payload<O, B>(
+    context: &ExecutionContext<B>,
+    attributes: O::Attributes,
+    inputs: &[TensorHandle<'_>],
+    payload: Option<&[u8]>,
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
+where
+    O: Operation,
+    B: Execute<O> + Capabilities,
+{
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))
@@ -184,6 +198,7 @@ where
             operation: invocation.validated(),
             inputs,
             context,
+            payload,
         })
         .map_err(CanonicalError::Backend)
 }
@@ -194,6 +209,22 @@ pub fn execute_shaped<O, B, S>(
     attributes: O::Attributes,
     inputs: &[TensorHandle<'_>],
     expected: &crate::shapes::ShapeValue<S>,
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
+where
+    O: Operation,
+    B: Execute<O> + Capabilities,
+    S: crate::prelude::Shape,
+{
+    execute_shaped_with_payload(context, attributes, inputs, expected, None)
+}
+
+/// [`execute_shaped`], with an optional borrowed execution payload.
+pub fn execute_shaped_with_payload<O, B, S>(
+    context: &ExecutionContext<B>,
+    attributes: O::Attributes,
+    inputs: &[TensorHandle<'_>],
+    expected: &crate::shapes::ShapeValue<S>,
+    payload: Option<&[u8]>,
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
@@ -256,6 +287,7 @@ where
             operation: invocation.validated(),
             inputs,
             context,
+            payload,
         })
         .map_err(CanonicalError::Backend)
 }

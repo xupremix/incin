@@ -66,6 +66,7 @@ macro_rules! route_single_operand {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cpu)
                     }
@@ -86,6 +87,7 @@ macro_rules! route_single_operand {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Wgpu)
                     }
@@ -106,6 +108,7 @@ macro_rules! route_single_operand {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cuda)
                     }
@@ -163,6 +166,7 @@ macro_rules! impl_dispatch_binary {
                         ];
                         let inner_req = ExecutionRequest {
                             context: &context,
+                            payload: request.payload,
                             operation: request.operation,
                             inputs: &inputs,
                         };
@@ -184,6 +188,7 @@ macro_rules! impl_dispatch_binary {
                             context: &context,
                             operation: request.operation,
                             inputs: &inputs,
+                            payload: request.payload,
                         };
                         Concrete::new()
                             .execute_shaped::<ShapeTy>(inner_req)
@@ -203,6 +208,7 @@ macro_rules! impl_dispatch_binary {
                             context: &context,
                             operation: request.operation,
                             inputs: &inputs,
+                            payload: request.payload,
                         };
                         Concrete::new()
                             .execute_shaped::<ShapeTy>(inner_req)
@@ -261,6 +267,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cpu)
                     }
@@ -282,6 +289,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Wgpu)
                     }
@@ -303,6 +311,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cuda)
                     }
@@ -324,6 +333,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Metal)
                     }
@@ -372,6 +382,7 @@ macro_rules! route_cpu_unary {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cpu)
                     }
@@ -488,6 +499,7 @@ macro_rules! route_cpu_variadic {
                                 operation: request.operation,
                                 inputs: &handles,
                                 context: &context,
+                                payload: request.payload,
                             })
                             .map(DispatchStorage::Cpu)
                     }
@@ -549,6 +561,7 @@ impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
                 ];
                 let inner_req = ExecutionRequest {
                     context: &context,
+                    payload: request.payload,
                     operation: request.operation,
                     inputs: &inputs,
                 };
@@ -624,6 +637,7 @@ impl<D: Device> Execute<op::MaskedFill> for DispatchBackend<D> {
                     context: &context,
                     operation: request.operation,
                     inputs: &inputs,
+                    payload: request.payload,
                 };
                 Concrete::new()
                     .execute_shaped::<ShapeTy>(inner_req)

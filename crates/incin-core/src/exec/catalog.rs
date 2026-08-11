@@ -769,7 +769,7 @@ macro_rules! attributes {
 pub struct NoAttributes;
 
 attributes! {
-    DataAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, bytes: Vec<u8> }
+    DataAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
     CreationAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId }
     FullAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, value: f64 }
     ArangeAttributes { shape: Vec<usize>, dtype: DTypeDescriptor, device: DeviceId, start: f64, step: f64 }

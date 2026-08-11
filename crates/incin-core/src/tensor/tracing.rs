@@ -221,6 +221,7 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                 operation: request.operation,
                 inputs: &inner_inputs,
                 context: &inner_context,
+                payload: request.payload,
             })?;
 
         let output_id = {

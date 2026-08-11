@@ -134,6 +134,8 @@ where
     pub operation: &'a Validated<crate::exec::catalog::Descriptor<O>>,
     pub inputs: &'a [TensorHandle<'a>],
     pub context: &'a ExecutionContext<B>,
+    /// Borrowed execution data kept outside the semantic descriptor.
+    pub payload: Option<crate::exec::request::ExecutionPayload<'a>>,
 }
 
 /// Executes one descriptor type. Absence of an implementation is a compile-time fact.

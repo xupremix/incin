@@ -223,7 +223,9 @@ pub mod backend_authoring {
         ReductionOps, RuntimePrecisionPolicy, ShapeBuf, StorageBackend, SupportLevel,
         SupportsDType, TensorBackend, TensorMeta, TensorOps, TransferTo, Validated,
     };
-    pub use incin_core::backend_authoring::{execute, execute_shaped};
+    pub use incin_core::backend_authoring::{
+        execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,
+    };
 
     /// Canonical exact operation descriptors and typed attributes.
     pub mod operations {

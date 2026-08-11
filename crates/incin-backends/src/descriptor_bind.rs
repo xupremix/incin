@@ -75,8 +75,14 @@ macro_rules! impl_data_creation_executors {
                             ));
                         }
                         let attr = request.operation.descriptor().attributes();
+                        let bytes = request.payload.ok_or_else(|| {
+                            crate::descriptor_bind::invalid(
+                                incin_core::prelude::OperationKind::$operation,
+                                "data creation requires borrowed bytes",
+                            )
+                        })?;
                         <Self as incin_core::backend_authoring::Backend>::from_bytes::<f32>(
-                            &attr.bytes,
+                            bytes,
                             &attr.shape,
                             attr.dtype,
                             &attr.device,

@@ -20,6 +20,9 @@ pub struct TensorHandle<'a> {
     tracing_value: Option<usize>,
 }
 
+/// Optional borrowed payload owned by a creation or host-side execution call.
+pub type ExecutionPayload<'a> = &'a [u8];
+
 impl<'a> TensorHandle<'a> {
     #[must_use]
     pub fn from_storage<B, K, P>(storage: &'a <B as StorageBackend<P>>::Storage<K>) -> Self
