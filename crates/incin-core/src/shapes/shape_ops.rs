@@ -1,70 +1,82 @@
 use crate::prelude::Shape;
+use crate::shapes::idx::{FromEnd, Here, Next, StaticCursor};
+use crate::shapes::{At, Dim, DimCons, Nil, RemoveAt, RemoveFromEnd, ReplaceAt, SwapAt};
 
-#[diagnostic::on_unimplemented(
-    message = "Cannot transpose dimensions `{D1}` and `{D2}` on shape `{Self}`",
-    label = "Invalid transpose",
-    note = "Transpose requires both dimensions to be < the rank of the tensor"
-)]
-/// Compile-time-checked shape rule for swapping dimensions `D1`/`D2`.
-pub trait Transpose<const D1: usize, const D2: usize>: Shape {
-    /// `Self` with dimensions `D1` and `D2` swapped.
+/// Unified selector-facing swap operation. Both positive and from-end
+/// selectors use the one structural `SwapAt` algebra.
+pub trait SwapAxes<Left, Right>: Shape {
+    type Output: Shape;
+
+    fn swap_shape(dims: &crate::shapes::ShapeBuf) -> crate::err::Result<crate::shapes::ShapeBuf>
+    where
+        Left: crate::shapes::idx::StaticCursor,
+        Right: crate::shapes::idx::StaticCursor,
+    {
+        let left = crate::shapes::idx::StaticAxis::<Left>::DEFAULT.normalize(dims.len())?;
+        let right = crate::shapes::idx::StaticAxis::<Right>::DEFAULT.normalize(dims.len())?;
+        let mut output = dims.clone();
+        output.dims_mut().swap(left[0], right[0]);
+        Ok(output)
+    }
+}
+
+impl<S, L, R> SwapAxes<L, R> for S
+where
+    L: StaticCursor,
+    R: StaticCursor,
+    S: SwapAt<L, R>,
+{
+    type Output = <S as SwapAt<L, R>>::Output;
+}
+
+/// Structural reduction which removes one axis.
+pub trait ReduceAt<Cursor>: Shape {
+    type Output: Shape;
+
+    fn reduce_shape(dims: &crate::shapes::ShapeBuf) -> crate::err::Result<crate::shapes::ShapeBuf>
+    where
+        Cursor: crate::shapes::idx::StaticCursor,
+    {
+        let axis = crate::shapes::idx::StaticAxis::<Cursor>::DEFAULT.normalize(dims.len())?[0];
+        let mut output = dims.as_ref().to_vec();
+        output.remove(axis);
+        Ok(crate::shapes::ShapeBuf::from_slice(&output))
+    }
+}
+
+impl<S, Cursor> ReduceAt<Cursor> for S
+where
+    Cursor: crate::shapes::shape::ForwardCursor,
+    S: RemoveAt<Cursor>,
+{
+    type Output = <S as RemoveAt<Cursor>>::Output;
+}
+
+impl<S, Cursor> ReduceAt<FromEnd<Cursor>> for S
+where
+    Cursor: crate::shapes::shape::ForwardCursor,
+    S: RemoveFromEnd<Cursor>,
+{
+    type Output = <S as RemoveFromEnd<Cursor>>::Output;
+}
+
+/// Structural keepdim reduction. Rebinding is owned by the dimension, so a
+/// semantic axis name is preserved while its extent becomes one.
+pub trait ReduceKeepAt<Cursor>: Shape {
     type Output: Shape;
 }
 
-#[diagnostic::on_unimplemented(
-    message = "Cannot reduce dimension `{D}` on shape `{Self}`",
-    label = "Invalid reduction dimension",
-    note = "Reduction requires the dimension to be < the rank of the tensor"
-)]
-/// Compile-time-checked shape rule for reducing (removing) dimension `D`.
-pub trait ReduceDim<const D: usize>: Shape {
-    /// `Self` with dimension `D` removed.
-    type Output: Shape;
+impl<H: Dim, T: Shape> ReduceKeepAt<Here> for DimCons<H, T> {
+    type Output = DimCons<H::KeepDim, T>;
 }
 
-#[diagnostic::on_unimplemented(
-    message = "Cannot reduce dimension `{D}` (keepdim) on shape `{Self}`",
-    label = "Invalid reduction dimension",
-    note = "Reduction requires the dimension to be < the rank of the tensor"
-)]
-/// Compile-time-checked shape rule for reducing dimension `D` while
-/// keeping it in the shape at size 1.
-pub trait ReduceKeepDim<const D: usize>: Shape {
-    /// `Self` with dimension `D`'s size set to 1.
-    type Output: Shape;
+impl<H: Dim, T: Shape, Cursor> ReduceKeepAt<Next<Cursor>> for DimCons<H, T>
+where
+    T: ReduceKeepAt<Cursor>,
+{
+    type Output = DimCons<H, <T as ReduceKeepAt<Cursor>>::Output>;
 }
 
-#[diagnostic::on_unimplemented(
-    message = "Cannot flatten shape `{Self}` from dimension `{START}` to `{END}`",
-    label = "Invalid flatten range",
-    note = "Flatten requires START <= END and END < the rank of the tensor"
-)]
-/// Compile-time-checked shape rule for collapsing dimensions
-/// `[START, END]` into a single dimension.
-pub trait Flatten<const START: usize, const END: usize>: Shape {
-    /// `Self` with dimensions `[START, END]` collapsed into one.
-    type Output: Shape;
-}
-
-impl<const START: usize, const END: usize> Flatten<START, END> for crate::prelude::Dyn {
-    /// Always `Dyn` — the concrete size is only known at runtime.
+impl<Cursor> ReduceKeepAt<Cursor> for crate::prelude::Dyn {
     type Output = crate::prelude::Dyn;
 }
-
-impl<const D1: usize, const D2: usize> Transpose<D1, D2> for crate::prelude::Dyn {
-    /// Always `Dyn` — the concrete size is only known at runtime.
-    type Output = crate::prelude::Dyn;
-}
-
-impl<const D: usize> ReduceDim<D> for crate::prelude::Dyn {
-    /// Always `Dyn` — the concrete size is only known at runtime.
-    type Output = crate::prelude::Dyn;
-}
-
-impl<const D: usize> ReduceKeepDim<D> for crate::prelude::Dyn {
-    /// Always `Dyn` — the concrete size is only known at runtime.
-    type Output = crate::prelude::Dyn;
-}
-
-// Generate the trait implementations for permutations and reductions
-incin_macros::generate_shape_ops!();
