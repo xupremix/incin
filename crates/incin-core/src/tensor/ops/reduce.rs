@@ -8,7 +8,7 @@ use crate::dist::{Local, Placement};
 use crate::exec::catalog::{Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{GradMode, ReduceAtRule, ReduceKeepAtRule, ReductionSpec, ShapeRule, Validated};
+use crate::exec::{GradMode, ReductionSpec};
 use crate::prelude::{Backend, DTypeId, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
@@ -72,10 +72,6 @@ impl<
         B: Execute<Descriptor<op::SumDim>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
     {
-        let validated = <ReduceAtRule<C> as ShapeRule<S>>::lower(
-            &self.shape_buf_value(),
-            crate::exec::spec::ReduceOp::Sum,
-        )?;
         let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
             .normalize(self.shape_buf().len())?
             .into_iter()
@@ -86,8 +82,14 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
+        let spec = ReductionSpec::over_axes(
+            &self.shape_buf_value(),
+            [axis],
+            false,
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
         let output_shape = crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(
-            validated.descriptor().output.clone(),
+            spec.output.clone(),
         )
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
@@ -121,10 +123,6 @@ impl<
         B: Execute<Descriptor<op::SumKeepDim>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
     {
-        let validated = <ReduceKeepAtRule<C> as ShapeRule<S>>::lower(
-            &self.shape_buf_value(),
-            crate::exec::spec::ReduceOp::Sum,
-        )?;
         let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
             .normalize(self.shape_buf().len())?
             .into_iter()
@@ -135,8 +133,14 @@ impl<
                     rank: self.shape_buf().len(),
                 },
             ))?;
+        let spec = ReductionSpec::over_axes(
+            &self.shape_buf_value(),
+            [axis],
+            true,
+            crate::exec::spec::ReduceOp::Sum,
+        )?;
         let output_shape = crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(
-            validated.descriptor().output.clone(),
+            spec.output.clone(),
         )
         .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
