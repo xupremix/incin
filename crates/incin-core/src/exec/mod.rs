@@ -102,17 +102,3 @@ pub use request::TensorHandle;
 pub use rule::{MatMulRule, ReshapeRule, ShapeRule};
 pub use spec::{AxisSet, DescriptorSchemaVersion, ExecutionDescriptor, ReduceOp};
 pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
-
-/// Supertrait used to seal public traits in this module against outside
-/// implementations.
-///
-/// Sealing [`OperationSpec`] is deliberate. A descriptor is the *contract*
-/// between the shape proof and native execution, so adding one is a change to
-/// that contract and belongs in `incin-core` alongside the shape rule that
-/// produces it. External backend authors implement backends (`EXE-006`), which
-/// consume descriptors; they never need to define a new one, and a descriptor
-/// defined outside the crate would carry no proof that anything validated it.
-pub(crate) mod sealed {
-    /// Implemented only inside `incin-core`.
-    pub trait Sealed {}
-}

@@ -1,8 +1,8 @@
 error[E0308]: mismatched types
-  --> tests/compile_fail/execution_request_requires_validated.rs:30:20
+  --> tests/compile_fail/execution_request_requires_validated.rs:33:20
    |
-30 |         operation: &descriptor,
-   |                    ^^^^^^^^^^^ expected `&Validated<BroadcastSpec>`, found `&BroadcastSpec`
+33 |         operation: &descriptor,
+   |                    ^^^^^^^^^^^ expected `&Validated<Descriptor<Add>>`, found `&Descriptor<Add>`
    |
-   = note: expected reference `&Validated<BroadcastSpec>`
-              found reference `&BroadcastSpec`
+   = note: expected reference `&Validated<incin_core::exec::Descriptor<incin_core::exec::op::Add>>`
+              found reference `&incin_core::exec::Descriptor<incin_core::exec::op::Add>`

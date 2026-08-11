@@ -4,7 +4,7 @@
 //! descriptor is internally consistent — its constructors derive every field
 //! rather than accepting it — but internal consistency is not the property a
 //! backend needs. A backend needs to know that the operation was checked
-//! against the *frontend's* shape proof, and a bare `BroadcastSpec` cannot say
+//! against the frontend's shape proof, and a bare exact descriptor cannot say
 //! so, because anyone can build one.
 //!
 //! [`Validated<O>`] is that statement. It has private fields and a
@@ -176,7 +176,7 @@ impl fmt::Display for ProofLevel {
 ///
 /// The only way to obtain one outside `incin-core` is from a lowering rule,
 /// because its constructor is `pub(crate)` and the fields are private.
-/// A backend receiving `&Validated<MatMulSpec>` therefore knows the geometry
+/// A backend receiving `&Validated<Descriptor<op::MatMulExact>>` therefore knows the geometry
 /// was checked against the frontend's shape proof, and does not need to check
 /// it again.
 ///

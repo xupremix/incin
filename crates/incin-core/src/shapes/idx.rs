@@ -110,7 +110,7 @@ pub trait ReshapeTarget<In: Shape> {
 
 /// Internal recursive collector for structural reshape targets.
 #[doc(hidden)]
-pub trait ReshapeSpec {
+pub trait ReshapeTargetSpec {
     type Output: Shape;
 
     fn collect(
@@ -119,7 +119,7 @@ pub trait ReshapeSpec {
     ) -> core::result::Result<(), crate::shapes::error::ShapeError>;
 }
 
-impl ReshapeSpec for Nil {
+impl ReshapeTargetSpec for Nil {
     type Output = Nil;
 
     fn collect(
@@ -130,7 +130,7 @@ impl ReshapeSpec for Nil {
     }
 }
 
-impl<D: DimIdx, T: ReshapeSpec> ReshapeSpec for DimCons<D, T>
+impl<D: DimIdx, T: ReshapeTargetSpec> ReshapeTargetSpec for DimCons<D, T>
 where
     D::Resolved: Dim,
 {
@@ -158,7 +158,7 @@ where
     }
 }
 
-impl<In: Shape, Target: ReshapeSpec> ReshapeTarget<In> for Target {
+impl<In: Shape, Target: ReshapeTargetSpec> ReshapeTarget<In> for Target {
     type Output = Target::Output;
 
     fn calculate_shape(

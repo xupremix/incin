@@ -1,9 +1,9 @@
 error[E0451]: fields `descriptor` and `proof` of struct `Validated` are private
-  --> tests/compile_fail/validated_fields_are_private.rs:16:9
+  --> tests/compile_fail/validated_fields_are_private.rs:19:9
    |
-15 |     let _forged = Validated {
+18 |     let _forged = Validated {
    |                   --------- in this type
-16 |         descriptor: spec,
+19 |         descriptor: spec,
    |         ^^^^^^^^^^ private field
-17 |         proof: ProofLevel::Static,
+20 |         proof: ProofLevel::Static,
    |         ^^^^^ private field

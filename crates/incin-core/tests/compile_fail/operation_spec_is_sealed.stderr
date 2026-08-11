@@ -1,31 +1,72 @@
-error[E0277]: the trait bound `RogueSpec: exec::sealed::Sealed` is not satisfied
-  --> tests/compile_fail/operation_spec_is_sealed.rs:13:24
+error[E0046]: not all trait items implemented, missing: `ID`
+  --> tests/compile_fail/operation_spec_is_sealed.rs:10:1
    |
-13 | impl OperationSpec for RogueSpec {
-   |                        ^^^^^^^^^ unsatisfied trait bound
+10 | impl CanonicalOperation for RogueSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `ID` in implementation
    |
-help: the trait `exec::sealed::Sealed` is not implemented for `RogueSpec`
-  --> tests/compile_fail/operation_spec_is_sealed.rs:9:1
+   = help: implement the missing item: `const ID: OperationKind = /* value */;`
+
+error[E0277]: the trait bound `RogueSpec: incin_core::exec::Operation` is not satisfied
+  --> tests/compile_fail/operation_spec_is_sealed.rs:10:29
    |
- 9 | struct RogueSpec {
+10 | impl CanonicalOperation for RogueSpec {}
+   |                             ^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `incin_core::exec::Operation` is not implemented for `RogueSpec`
+  --> tests/compile_fail/operation_spec_is_sealed.rs:8:1
+   |
+ 8 | struct RogueSpec;
    | ^^^^^^^^^^^^^^^^
-   = help: the following other types implement trait `exec::sealed::Sealed`:
-             BroadcastSpec
-             Conv2dSpec
-             MatMulSpec
-             Pool2dSpec
-             ReductionSpec
-             ReshapeSpec
-note: required by a bound in `OperationSpec`
-  --> src/exec/spec.rs
+   = help: the following other types implement trait `incin_core::exec::Operation`:
+             incin_core::exec::op::Abs
+             incin_core::exec::op::AbsDiff
+             incin_core::exec::op::Acos
+             incin_core::exec::op::Acosh
+             incin_core::exec::op::AdamStep
+             incin_core::exec::op::AdamWStep
+             incin_core::exec::op::AdaptiveAvgPool2dExact
+             incin_core::exec::op::Add
+           and $N others
+note: required by a bound in `CanonicalOperation`
+  --> src/exec/catalog.rs
    |
-   | pub trait OperationSpec: Clone + fmt::Debug + Sealed {
-   |                                               ^^^^^^ required by this bound in `OperationSpec`
-   = note: `OperationSpec` is a "sealed trait", because to implement it you also need to implement `incin_core::exec::sealed::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   | pub trait CanonicalOperation: private::Sealed + Operation {
+   |                                                 ^^^^^^^^^ required by this bound in `CanonicalOperation`
+
+error[E0277]: the trait bound `RogueSpec: catalog::private::Sealed` is not satisfied
+  --> tests/compile_fail/operation_spec_is_sealed.rs:10:29
+   |
+10 | impl CanonicalOperation for RogueSpec {}
+   |                             ^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `catalog::private::Sealed` is not implemented for `RogueSpec`
+  --> tests/compile_fail/operation_spec_is_sealed.rs:8:1
+   |
+ 8 | struct RogueSpec;
+   | ^^^^^^^^^^^^^^^^
+   = help: the following other types implement trait `catalog::private::Sealed`:
+             incin_core::exec::op::Abs
+             incin_core::exec::op::AbsDiff
+             incin_core::exec::op::Acos
+             incin_core::exec::op::Acosh
+             incin_core::exec::op::AdamStep
+             incin_core::exec::op::AdamWStep
+             incin_core::exec::op::AdaptiveAvgPool2dExact
+             incin_core::exec::op::Add
+           and $N others
+note: required by a bound in `CanonicalOperation`
+  --> src/exec/catalog.rs
+   |
+   | pub trait CanonicalOperation: private::Sealed + Operation {
+   |                               ^^^^^^^^^^^^^^^ required by this bound in `CanonicalOperation`
+   = note: `CanonicalOperation` is a "sealed trait", because to implement it you also need to implement `incin_core::exec::catalog::private::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
    = help: the following types implement the trait:
-             incin_core::exec::BroadcastSpec
-             incin_core::exec::MatMulSpec
-             incin_core::exec::ReductionSpec
-             incin_core::exec::Conv2dSpec
-             incin_core::exec::Pool2dSpec
-             incin_core::exec::ReshapeSpec
+             incin_core::exec::op::TensorFromData
+             incin_core::exec::op::TensorFromBytes
+             incin_core::exec::op::TensorToBytes
+             incin_core::exec::op::Zeros
+             incin_core::exec::op::Ones
+             incin_core::exec::op::UniformRandom
+             incin_core::exec::op::NormalRandom
+             incin_core::exec::op::VariableZeros
+           and $N others
