@@ -5,15 +5,16 @@
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
 use crate::backend_authoring::{Descriptor, Execute};
-use crate::dist::placement::Local;
 use crate::dist::Placement;
+use crate::dist::placement::Local;
+use crate::exec::Capabilities;
 use crate::exec::catalog::{
-    op, FlattenAttributes, NoAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes,
+    FlattenAttributes, NoAttributes, Pool2dAttributes, ScalarAttributes, ShapeAttributes,
+    TransposeAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -79,11 +80,11 @@ fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeDescr
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -221,11 +222,14 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + crate::tensor::backend::ModuleOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + Execute<Descriptor<op::MaxPool2d>>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
+where
+    B: Capabilities,
+    <B as Execute<Descriptor<op::MaxPool2d>>>::Output: Into<B::Storage<K>>,
 {
     /// Functional `max_pool2d` operation.
     pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
@@ -241,23 +245,38 @@ impl<
         S: crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>,
         <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output: Shape,
     {
-        let out = self.under_grad_mode(|| {
-            B::max_pool2d::<K>(
-                &self.inner,
-                (KShape::USIZE, KShape::USIZE),
-                (SShape::USIZE, SShape::USIZE),
-                (Pool::USIZE, Pool::USIZE),
-                (Dilation::USIZE, Dilation::USIZE),
-            )
-        })?;
-
         let shape =
             <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::compute_output_shape(
                 &self.shape_buf_value(),
             )?;
+        let shape = ShapeValue::<
+            <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output,
+        >::try_new(shape)
+        .map_err(crate::err::Error::Shape)?;
+        let inputs = [TensorHandle::from_storage::<B, K, Local>(&self.inner)];
+        let context = ExecutionContext::from_scope(B::default());
+        let out = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<
+                    op::MaxPool2d,
+                    B,
+                    <S as crate::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output,
+                >(
+                    &context,
+                    Pool2dAttributes {
+                        kernel: [KShape::USIZE; 2],
+                        stride: [SShape::USIZE; 2],
+                        padding: [Pool::USIZE; 2],
+                        dilation: [Dilation::USIZE; 2],
+                    },
+                    &inputs,
+                    &shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             out,
-            shape,
+            shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -270,12 +289,12 @@ impl<
 // -------------------------------------------------------------
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        P: Placement,
-    > Tensor<S, B, K, G, P>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+> Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -589,11 +608,11 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
@@ -614,11 +633,11 @@ impl<
 }
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
@@ -1633,12 +1652,12 @@ where
 }
 
 impl<
-        S: Shape,
-        B: Backend,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        NewD: crate::prelude::Device,
-    > crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    NewD: crate::prelude::Device,
+> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
