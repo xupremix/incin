@@ -299,9 +299,9 @@ themselves.
 
 | Rule surface | `unwrap` | `expect` | `panic!`-class | `assert!` |
 |---|---:|---:|---:|---:|
-| `shapes` | 1 | 0 | 0 | 0 |
-| `tensor` | 2 | 0 | 8 | 2 |
-| `backend` | 0 | 0 | 0 | 0 |
+| `shapes` | 0 | 5 | 2 | 1 |
+| `tensor` | 0 | 1 | 0 | 9 |
+| `backend` | 0 | 0 | 1 | 0 |
 
 ### Named chains with a required terminal count of zero
 
@@ -315,25 +315,12 @@ themselves.
 
 | Rule | Max rank | vs `Shape` |
 |---|---:|---|
-| `AdaptiveAvgPool2dShape` | 8 | aligned |
-| `BroadcastShape` | 8 | aligned |
-| `ConcatShape` | 8 | aligned |
-| `ConstShape` | 8 | aligned |
-| `DynShape` | 8 | aligned |
-| `ElementCount` | 8 | aligned |
-| `EndsWith` | 8 | aligned |
-| `HasChannels1D` | 8 | aligned |
-| `HasChannels2D` | 8 | aligned |
-| `PartialDynShape` | 8 | aligned |
-| `Pool2dShape` | 8 | aligned |
-| `ReplaceLastDim` | 8 | aligned |
-| `ReshapeTarget` | 8 | aligned |
-| `Shape` | 8 | aligned |
-| `SliceTarget` | 8 | aligned |
-| `SpatialConv1d` | 8 | aligned |
-| `SpatialConv2d` | 8 | aligned |
-| `AppendDim` | 7 | 1 short |
-| `StackShape` | 7 | 1 short |
+| `AppendDim` | 0 | aligned |
+| `BroadcastShape` | 0 | aligned |
+| `DynShape` | 0 | aligned |
+| `ElementCount` | 0 | aligned |
+| `PartialDynShape` | 0 | aligned |
+| `Shape` | 0 | aligned |
 
 <!-- END GENERATED: audit-shapes -->
 
