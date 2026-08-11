@@ -53,6 +53,34 @@ fn test_try_concat_rejects_mismatched_ranks() {
 }
 
 #[test]
+fn test_try_concat_rejects_invalid_axis() {
+    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 3]).unwrap();
+
+    assert!(matches!(
+        t1.try_concat(&t2, 2),
+        Err(Error::Shape(ShapeError::InvalidAxis { axis: 2, rank: 2 }))
+    ));
+}
+
+#[test]
+fn test_try_concat_rejects_mismatched_non_concat_extent() {
+    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 4]).unwrap();
+
+    assert!(matches!(
+        t1.try_concat(&t2, 0),
+        Err(Error::Shape(ShapeError::DimensionMismatch {
+            operation: OperationKind::Concat,
+            axis: Axis::Index(1),
+            lhs: 3,
+            rhs: 4,
+            constraint: DimensionConstraint::Equal,
+        }))
+    ));
+}
+
+#[test]
 fn test_try_concat_slice_rejects_mismatched_ranks() {
     let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
     let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2]).unwrap();
@@ -63,6 +91,34 @@ fn test_try_concat_slice_rejects_mismatched_ranks() {
             operation: OperationKind::Concat,
             expected: RankExpectation::Exactly(2),
             actual: 1,
+        }))
+    ));
+}
+
+#[test]
+fn test_try_concat_slice_rejects_invalid_axis() {
+    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 3]).unwrap();
+
+    assert!(matches!(
+        Tensor::try_concat_slice(&[&t1, &t2], 2),
+        Err(Error::Shape(ShapeError::InvalidAxis { axis: 2, rank: 2 }))
+    ));
+}
+
+#[test]
+fn test_try_concat_slice_rejects_mismatched_non_concat_extent() {
+    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 4]).unwrap();
+
+    assert!(matches!(
+        Tensor::try_concat_slice(&[&t1, &t2], 0),
+        Err(Error::Shape(ShapeError::DimensionMismatch {
+            operation: OperationKind::Concat,
+            axis: Axis::Index(1),
+            lhs: 3,
+            rhs: 4,
+            constraint: DimensionConstraint::Equal,
         }))
     ));
 }

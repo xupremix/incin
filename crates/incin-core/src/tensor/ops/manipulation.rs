@@ -1231,6 +1231,25 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
         let mut out_shape = tensors[0].shape_buf().as_ref().to_vec();
+        if let Some((axis, tensor)) = tensors.iter().skip(1).find_map(|tensor| {
+            tensor
+                .shape_buf()
+                .as_ref()
+                .iter()
+                .enumerate()
+                .find(|(axis, extent)| *axis != dim && **extent != out_shape[*axis])
+                .map(|(axis, _)| (axis, *tensor))
+        }) {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::DimensionMismatch {
+                    operation: OperationKind::Concat,
+                    axis: crate::shapes::Axis::Index(axis),
+                    lhs: out_shape[axis],
+                    rhs: tensor.shape_buf().as_ref()[axis],
+                    constraint: crate::shapes::DimensionConstraint::Equal,
+                },
+            ));
+        }
         out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
             total.checked_add(tensor.shape_buf().as_ref()[dim]).ok_or(
                 crate::shapes::ShapeError::ArithmeticOverflow {
@@ -1356,6 +1375,23 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
         let mut out_shape = self.shape_buf().as_ref().to_vec();
+        if let Some((axis, rhs)) = other
+            .shape_buf()
+            .as_ref()
+            .iter()
+            .enumerate()
+            .find(|(axis, rhs)| *axis != dim && **rhs != out_shape[*axis])
+        {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::DimensionMismatch {
+                    operation: OperationKind::Concat,
+                    axis: crate::shapes::Axis::Index(axis),
+                    lhs: out_shape[axis],
+                    rhs: *rhs,
+                    constraint: crate::shapes::DimensionConstraint::Equal,
+                },
+            ));
+        }
         out_shape[dim] = out_shape[dim]
             .checked_add(other.shape_buf().as_ref()[dim])
             .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
