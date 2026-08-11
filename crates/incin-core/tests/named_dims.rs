@@ -3,6 +3,7 @@
 extern crate incin_core as incin;
 
 use incin_core::prelude::*;
+use incin_core::shapes::StaticExtent;
 use incin_core::shapes::SwapAt;
 use incin_core::shapes::reshape::{ElementCount, ReshapeShape};
 use incin_core::test_utils::DummyBackend;
@@ -105,6 +106,43 @@ fn named_broadcast_output_preserves_the_semantic_axis() {
     type Out = <L as BroadcastShape<R>>::Output;
     type Expected = DimCons<NamedDim<Channels, BroadcastExtent<usize, usize>>, Nil>;
     assert_same::<Out, Expected>();
+}
+
+#[test]
+fn named_static_broadcast_retains_static_extent_proof() {
+    type Left = s![Batch: 25];
+    type Right = s![Batch: 1];
+    type Out = <Left as BroadcastShape<Right>>::Output;
+    type Expected = DimCons<NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>>, Nil>;
+
+    assert_same::<Out, Expected>();
+    assert_eq!(
+        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as Dim>::STATIC,
+        StaticExtent::Value(25)
+    );
+    assert_eq!(
+        <NamedDim<Batch, BroadcastExtent<typenum::U25, typenum::U1>> as Dim>::static_size()
+            .unwrap(),
+        25
+    );
+}
+
+#[test]
+fn named_static_broadcast_retains_proof_in_reverse_order_and_with_anonymous_one() {
+    type NamedOne = s![Batch: 1];
+    type NamedTwentyFive = s![Batch: 25];
+    type NamedOut = <NamedOne as BroadcastShape<NamedTwentyFive>>::Output;
+    type AnonymousOut = <s![1] as BroadcastShape<s![Batch: 25]>>::Output;
+    type NamedExpected = DimCons<NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>>, Nil>;
+    type AnonymousExpected =
+        DimCons<NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>>, Nil>;
+
+    assert_same::<NamedOut, NamedExpected>();
+    assert_same::<AnonymousOut, AnonymousExpected>();
+    assert_eq!(
+        <NamedDim<Batch, BroadcastExtent<typenum::U1, typenum::U25>> as Dim>::STATIC,
+        StaticExtent::Value(25)
+    );
 }
 
 #[test]
