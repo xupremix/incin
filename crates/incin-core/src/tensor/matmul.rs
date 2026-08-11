@@ -8,7 +8,7 @@
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
 use crate::dist::Local;
-use crate::exec::catalog::{AddmmAttributes, Descriptor, op};
+use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{MatMulRule, ShapeRule};
@@ -473,15 +473,40 @@ impl<
         S2: DynShape,
         S3: DynShape,
         S4: DynShape,
+        B: Execute<Descriptor<op::ScaledDotProductAttention>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::ScaledDotProductAttention>>>::Output: Into<B::Storage<K>>,
     {
-        let mask_inner = mask.map(|m| &m.inner);
-        let inner = q.under_grad_mode(|| {
-            B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)
-        })?;
-        let out_shape = B::shape(&inner);
-        Tensor::from_parts(
+        let output_shape = crate::shapes::ShapeValue::<S1>::try_new(q.shape_buf_value())
+            .map_err(crate::prelude::Error::Shape)?;
+        let q_handle = TensorHandle::from_storage::<B, K, Local>(&q.inner);
+        let k_handle = TensorHandle::from_storage::<B, K, Local>(&k.inner);
+        let v_handle = TensorHandle::from_storage::<B, K, Local>(&v.inner);
+        let mask_handle = mask.map(|m| TensorHandle::from_storage::<B, K, Local>(&m.inner));
+        let mut inputs = vec![q_handle, k_handle, v_handle];
+        if let Some(mask_handle) = mask_handle {
+            inputs.push(mask_handle);
+        }
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = q
+            .under_grad_mode(|| {
+                crate::exec::dispatch::execute_shaped::<
+                    op::ScaledDotProductAttention,
+                    B,
+                    S1,
+                >(
+                    &context,
+                    AttentionAttributes {
+                        scale,
+                        has_mask: mask.is_some(),
+                    },
+                    &inputs,
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::<Dyn, B, K, G1>::from_shape_buf(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             q._dtype.clone(),
             q._device.clone(),
             q._grad.clone(),
