@@ -190,7 +190,7 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
     }
 }
 
-impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::spec::ExecutionDescriptor>
+impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::TraceDescriptor>
     crate::tensor::backend::Execute<O> for TracingBackend<B>
 {
     type Output = TracingTensor<B::Output>;
@@ -199,16 +199,6 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::spec::Exec
         &self,
         request: crate::tensor::backend::ExecutionRequest<'_, O, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
-        let shape = if let Some(input) = request.inputs.first() {
-            input.metadata().shape.dims().to_vec()
-        } else {
-            alloc::vec![]
-        };
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            g.add_value(shape, DTypeId::F32, None)
-        };
-
         let inner_backend = B::default();
         let inner_context = crate::exec::ExecutionContext::from_scope(inner_backend.clone());
         let inner_inputs: alloc::vec::Vec<_> = request
@@ -223,9 +213,47 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::spec::Exec
                 context: &inner_context,
             })?;
 
+        let output_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let output_id = g.add_value(
+                request
+                    .operation
+                    .descriptor()
+                    .output_shape()
+                    .cloned()
+                    .or_else(|| {
+                        request
+                            .inputs
+                            .first()
+                            .map(|input| input.metadata().shape.clone())
+                    })
+                    .unwrap_or_else(|| crate::shapes::ShapeBuf::SCALAR)
+                    .as_ref()
+                    .to_vec(),
+                request.inputs.first().map_or(DTypeId::F32, |input| {
+                    input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
+                }),
+                None,
+            );
+            let inputs = request
+                .inputs
+                .iter()
+                .filter_map(crate::exec::request::TensorHandle::tracing_value)
+                .collect();
+            if let Some(operation) = request.operation.descriptor().trace_operation() {
+                g.add_node(
+                    operation,
+                    inputs,
+                    vec![output_id],
+                    alloc::collections::BTreeMap::new(),
+                );
+            }
+            output_id
+        };
+
         Ok(TracingTensor {
             inner: inner_res,
-            value_id,
+            value_id: output_id,
         })
     }
 }

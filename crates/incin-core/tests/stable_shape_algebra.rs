@@ -360,3 +360,23 @@ fn test_high_rank_tensor_creation() {
     .unwrap();
     assert_eq!(t64.dims().len(), 64);
 }
+
+#[test]
+fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
+    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type S = s![2, 3];
+
+    let _ = incin_core::prelude::extract_graph();
+    let lhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let rhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let output = lhs.add(&rhs).unwrap();
+
+    assert_eq!(output.dims(), [2, 3]);
+    let graph = incin_core::prelude::extract_graph();
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|node| node.op == incin_core::graph::OpType::Add)
+    );
+}

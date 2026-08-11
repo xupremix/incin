@@ -874,6 +874,55 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
     }
 }
 
+/// Supplies the graph identity used by the tracing execution adapter.
+///
+/// This is derived from the same canonical operation identity as capability
+/// admission and descriptor execution. It is not a second operation catalog.
+pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
+    fn trace_operation(&self) -> Option<crate::graph::OpType>;
+}
+
+impl<O: CanonicalOperation> TraceDescriptor for Descriptor<O> {
+    fn trace_operation(&self) -> Option<crate::graph::OpType> {
+        Some(match O::ID {
+            OperationKind::Add => crate::graph::OpType::Add,
+            OperationKind::Sub => crate::graph::OpType::Sub,
+            OperationKind::Mul => crate::graph::OpType::Mul,
+            OperationKind::Div => crate::graph::OpType::Div,
+            OperationKind::CmpEq => crate::graph::OpType::CmpEq,
+            OperationKind::CmpNe => crate::graph::OpType::CmpNe,
+            OperationKind::CmpLt => crate::graph::OpType::CmpLt,
+            OperationKind::CmpLe => crate::graph::OpType::CmpLe,
+            OperationKind::CmpGt => crate::graph::OpType::CmpGt,
+            OperationKind::CmpGe => crate::graph::OpType::CmpGe,
+            OperationKind::LogicalAnd => crate::graph::OpType::LogicalAnd,
+            OperationKind::LogicalOr => crate::graph::OpType::LogicalOr,
+            OperationKind::LogicalNot => crate::graph::OpType::LogicalNot,
+            OperationKind::MatMulExact => crate::graph::OpType::MatMul,
+            OperationKind::ReshapeExact => crate::graph::OpType::Reshape,
+            OperationKind::TransposeExact => crate::graph::OpType::Transpose,
+            OperationKind::BroadcastAs | OperationKind::BroadcastLeft => {
+                crate::graph::OpType::Broadcast
+            }
+            OperationKind::StackExact => crate::graph::OpType::Stack,
+            OperationKind::ConcatExact => crate::graph::OpType::Concat,
+            OperationKind::SumAll => crate::graph::OpType::SumAll,
+            OperationKind::MeanAll => crate::graph::OpType::MeanAll,
+            OperationKind::MaxAll => crate::graph::OpType::MaxAll,
+            OperationKind::MinAll => crate::graph::OpType::MinAll,
+            OperationKind::SumDim | OperationKind::SumKeepDim => crate::graph::OpType::SumDim,
+            OperationKind::MeanDim | OperationKind::MeanKeepDim => crate::graph::OpType::MeanDim,
+            OperationKind::MaxDim | OperationKind::MaxKeepDim => crate::graph::OpType::MaxDim,
+            OperationKind::MinDim | OperationKind::MinKeepDim => crate::graph::OpType::MinDim,
+            OperationKind::Conv1dExact => crate::graph::OpType::Conv1d,
+            OperationKind::Conv2dExact => crate::graph::OpType::Conv2d,
+            OperationKind::MaxPool2d => crate::graph::OpType::MaxPool2d,
+            OperationKind::AvgPool2d => crate::graph::OpType::AvgPool2d,
+            _ => return None,
+        })
+    }
+}
+
 impl<O: Operation> Descriptor<O> {
     #[must_use]
     pub const fn key(&self) -> OperationKey {
