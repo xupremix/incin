@@ -299,8 +299,8 @@ themselves.
 
 | Rule surface | `unwrap` | `expect` | `panic!`-class | `assert!` |
 |---|---:|---:|---:|---:|
-| `shapes` | 0 | 5 | 2 | 1 |
-| `tensor` | 0 | 1 | 0 | 9 |
+| `shapes` | 0 | 1 | 2 | 1 |
+| `tensor` | 0 | 4 | 0 | 9 |
 | `backend` | 0 | 0 | 1 | 0 |
 
 ### Named chains with a required terminal count of zero
