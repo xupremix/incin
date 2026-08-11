@@ -361,11 +361,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: Backend
-        + crate::tensor::backend::ModuleOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Conv1dExact>
-        + Execute<op::ReshapeExact>,
+    B: Backend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -455,11 +451,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: Backend
-        + crate::tensor::backend::ModuleOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Conv1dExact>
-        + Execute<op::ReshapeExact>,
+    B: Backend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -546,11 +538,7 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: Backend
-        + crate::tensor::backend::ModuleOps<B>
-        + crate::tensor::backend::TensorOps<B>
-        + Execute<op::Conv1dExact>
-        + Execute<op::ReshapeExact>,
+    B: Backend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
