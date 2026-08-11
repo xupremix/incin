@@ -165,6 +165,14 @@ pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
     Ok(CpuGrads { grads })
 }
 
+/// Walk the reachable graph with an explicit output cotangent.
+pub fn backward_with(loss: &CpuStorage, seed: &CpuStorage) -> Result<CpuGrads> {
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled
+        .scope(|| tape::backward_with_seed(nodes, loss, seed))?;
+    Ok(CpuGrads { grads })
+}
+
 /// Emit telemetry post-backward when the feature is enabled.
 #[cfg(feature = "telemetry")]
 fn emit_backward_telemetry(step: usize, n_ops: usize) {

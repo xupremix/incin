@@ -42,6 +42,13 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
     (a.div(&zero).unwrap(), numerator)
 }
 
+fn seeded_backward(
+    loss: &Tensor<s![2, 2], B, f32, Grad>,
+) -> Result<incin_core::optim::Gradients<<B as Backend>::Grads>> {
+    let seed = Tensor::<s![2, 2], B, f32>::ones(()).unwrap();
+    loss.backward_with(&seed)
+}
+
 // ── The policy ───────────────────────────────────────────────────────────────
 
 #[test]
@@ -79,7 +86,7 @@ fn the_scope_ends_where_it_says_it_does() {
 fn a_non_finite_gradient_is_a_returned_error() {
     let (loss, numerator) = non_finite_chain();
 
-    let Err(err) = check_gradients(|| loss.backward()) else {
+    let Err(err) = check_gradients(|| seeded_backward(&loss)) else {
         panic!("a non-finite gradient was not reported");
     };
 
@@ -131,7 +138,7 @@ fn nothing_in_the_backward_path_panics_any_more() {
     // way to handle it.
     let (loss, _) = non_finite_chain();
 
-    let outcome = panic::catch_unwind(|| check_gradients(|| loss.backward()).is_err());
+    let outcome = panic::catch_unwind(|| check_gradients(|| seeded_backward(&loss)).is_err());
 
     assert_eq!(
         outcome.ok(),
@@ -149,10 +156,10 @@ fn the_default_pass_does_not_look_at_gradient_values() {
     // observable difference — an unchecked pass over a non-finite gradient
     // succeeds, where a checked one over the same tape does not.
     let (loss, _) = non_finite_chain();
-    assert!(loss.backward().is_ok());
+    assert!(seeded_backward(&loss).is_ok());
 
     let (loss, _) = non_finite_chain();
-    assert!(check_gradients(|| loss.backward()).is_err());
+    assert!(check_gradients(|| seeded_backward(&loss)).is_err());
 }
 
 #[test]
@@ -163,10 +170,12 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
     let b = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[5.0, 6.0, 7.0, 8.0], ()).unwrap();
 
-    let plain = gradient_of(&a, &a.mul(&b).unwrap().backward().unwrap());
+    let product = a.mul(&b).unwrap();
+    let plain = gradient_of(&a, &seeded_backward(&product).unwrap());
+    let product_checked = a.mul(&b).unwrap();
     let checked = gradient_of(
         &a,
-        &check_gradients(|| a.mul(&b).unwrap().backward()).unwrap(),
+        &check_gradients(|| seeded_backward(&product_checked)).unwrap(),
     );
 
     assert_eq!(plain, vec![5.0, 6.0, 7.0, 8.0]);
@@ -196,7 +205,7 @@ fn a_failed_pass_still_drained_the_tape_it_walked() {
     let (loss, _) = non_finite_chain();
     assert!(tape_depth() > 0);
 
-    assert!(check_gradients(|| loss.backward()).is_err());
+    assert!(check_gradients(|| seeded_backward(&loss)).is_err());
     assert_eq!(tape_depth(), 0);
 }
 

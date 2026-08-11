@@ -378,6 +378,13 @@ impl<B: Backend> Backend for TracingBackend<B> {
         B::backward(&loss.inner)
     }
 
+    fn backward_with<K: super::dtype::DType>(
+        loss: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+        seed: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Grads> {
+        B::backward_with(&loss.inner, &seed.inner)
+    }
+
     /// Always `None` — tracing doesn't maintain its own gradient map;
     /// gradient lookup must go through the wrapped backend `B` directly.
     fn get_grad<K: super::dtype::DType>(

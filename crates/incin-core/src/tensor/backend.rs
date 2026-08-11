@@ -314,6 +314,19 @@ pub trait Backend:
     /// every backend's walk reads, rather than a second method that also
     /// decided to abort the process on failure.
     fn backward<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads>;
+
+    /// Runs backpropagation with an explicit output cotangent.
+    fn backward_with<K: DType>(
+        _t: &<Self as StorageBackend>::Storage<K>,
+        _seed: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Self::Grads> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "seeded backward",
+            },
+        )))
+    }
     /// Looks up the gradient computed for `t` in a `Grads` collection
     /// returned by `backward`. `None` if `t` received no gradient (e.g. it
     /// wasn't reachable from the tensor `backward` was called on).

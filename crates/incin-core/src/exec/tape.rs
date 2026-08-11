@@ -294,13 +294,23 @@ impl<S> Tape<S> {
 ///    `CPUBACK-05` defect, which is why [`Entry`] is matched here rather than a
 ///    `contains_key` guarding an assignment.
 pub fn backward<S: TapeStorage>(nodes: Vec<TapeNode<S>>, loss: &S) -> Result<GradientMap<S>> {
+    let seed = loss.ones_like()?;
+    backward_with_seed(nodes, loss, &seed)
+}
+
+/// Walk `nodes` backward from `loss` using an explicit cotangent seed.
+pub fn backward_with_seed<S: TapeStorage>(
+    nodes: Vec<TapeNode<S>>,
+    loss: &S,
+    seed: &S,
+) -> Result<GradientMap<S>> {
     // Read once, not per gradient: the policy is ambient for the whole pass,
     // and a walk that re-read it could check some contributions and not
     // others if a recipe installed a scope.
     let checked = NanPolicy::current().checks();
 
     let mut grads: BTreeMap<TensorId, S> = BTreeMap::new();
-    grads.insert(loss.id(), loss.ones_like()?);
+    grads.insert(loss.id(), seed.clone());
 
     for node in nodes.into_iter().rev() {
         let Some(grad_out) = grads.get(&node.output_id).cloned() else {

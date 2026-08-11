@@ -69,3 +69,11 @@ pub fn backward(loss: &MetalStorage) -> Result<MetalGrads> {
     let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;
     Ok(MetalGrads { grads })
 }
+
+/// Walk the reachable graph with an explicit output cotangent.
+pub fn backward_with(loss: &MetalStorage, seed: &MetalStorage) -> Result<MetalGrads> {
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled
+        .scope(|| tape::backward_with_seed(nodes, loss, seed))?;
+    Ok(MetalGrads { grads })
+}

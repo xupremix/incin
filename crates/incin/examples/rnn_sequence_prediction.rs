@@ -15,14 +15,14 @@ fn main() -> Result<()> {
     // Batch size = 2, Sequence Length = 5, Features = 10
     // So the input shape is (2, 5, 10)
     // We instantiate it as a statically typed tensor
-    let input = Tensor::<s![2, 5, 10]>::zeros(())?;
+    let input = Tensor::<s![2, 5, 10]>::zeros(())?.require_grad();
     println!(
         "Created input sequence tensor with shape: {:?}",
         input.dims()
     );
 
     println!("Running forward pass over the sequence...");
-    let h0 = Tensor::<s![2, 20]>::zeros(())?;
+    let h0 = Tensor::<s![2, 20]>::zeros(())?.require_grad();
     let output = model.forward((input, h0)).unwrap();
 
     // Output shape should be (2, 5, 20)

@@ -2946,6 +2946,15 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
         let loss: &CudaStorage = loss;
         crate::cuda::tape::backward(loss)
     }
+
+    fn backward_with<K: DType>(
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        let loss: &CudaStorage = loss;
+        let seed: &CudaStorage = seed;
+        crate::cuda::tape::backward_with(loss, seed)
+    }
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,

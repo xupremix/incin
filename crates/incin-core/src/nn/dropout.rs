@@ -54,23 +54,24 @@ impl TrainMode for Dropout {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: BuiltinDType> Module<Tensor<S, B, K>> for Dropout
+impl<S: Shape + DynShape, B: Backend, K: BuiltinDType, G: RequiresGrad> Module<Tensor<S, B, K, G>>
+    for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K>;
+    type Output = Tensor<S, B, K, G>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<S, B, K>) -> core::result::Result<Tensor<S, B, K>, Error> {
+    fn forward(&self, x: Tensor<S, B, K, G>) -> core::result::Result<Tensor<S, B, K, G>, Error> {
         if !self.is_training || self.p <= 0.0 {
             return Ok(x);
         }
 
         let input = TensorHandle::from_storage::<B, K, Local>(&x.inner);
-        let context = ExecutionContext::from_scope(B::default());
+        let context = crate::tensor::grad::execution_context::<B, G>(&x._grad);
         let output = dispatch::execute_shaped::<op::Dropout, B, S>(
             &context,
             DropoutAttributes {

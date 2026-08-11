@@ -244,6 +244,13 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
         crate::wgpu::tape::backward(loss)
     }
 
+    fn backward_with<K: DType>(
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        crate::wgpu::tape::backward_with(loss, seed)
+    }
+
     /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,

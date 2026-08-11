@@ -198,6 +198,13 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
         crate::metal::tape::backward(loss)
     }
 
+    fn backward_with<K: DType>(
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        crate::metal::tape::backward_with(loss, seed)
+    }
+
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,

@@ -9,9 +9,10 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
-    DynShape, Error, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
+    DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
     SupportsDType, TensorArgs, TransferTo,
 };
+use crate::shapes::Nil;
 use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
 
@@ -1021,12 +1022,43 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
-    /// Computes the backward pass starting from this tensor, returning the gradients.
+impl<S: Shape, B: Backend, K: FloatDType, P: Placement> Tensor<S, B, K, Grad, P> {
+    /// Computes a vector-Jacobian product using an explicit output cotangent.
+    pub fn backward_with(
+        &self,
+        seed: &Tensor<S, B, K, NoGrad, P>,
+    ) -> Result<crate::optim::Gradients<B::Grads>> {
+        if self.shape_buf() != seed.shape_buf() {
+            return Err(Error::Backend(crate::err::BackendError::InvalidInput {
+                operation: crate::prelude::OperationKind::Storage,
+                reason: "backward seed shape does not match the output",
+            }));
+        }
+        if self.dtype() != seed.dtype() || self.device()? != seed.device()? {
+            return Err(Error::Backend(crate::err::BackendError::InvalidInput {
+                operation: crate::prelude::OperationKind::Storage,
+                reason: "backward seed metadata does not match the output",
+            }));
+        }
+        B::backward_with(&self.inner, seed.inner()).map(crate::optim::Gradients::from_backend)
+    }
+}
+
+impl<B: Backend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
+    /// Computes the backward pass for a scalar tensor.
     pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
         B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
     }
+}
 
+impl<B: Backend, K: FloatDType, P: Placement> Tensor<(), B, K, Grad, P> {
+    /// Computes the backward pass for a scalar tensor.
+    pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
+        B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
+    }
+}
+
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
     /// Moves this tensor to the specified device, returning a new Tensor.
     pub fn to_device<D2: Device>(
         &self,

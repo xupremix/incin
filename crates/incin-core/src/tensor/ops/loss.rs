@@ -25,9 +25,10 @@ fn execute_loss_descriptor<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
+    G2: RequiresGrad,
 >(
     prediction: &Tensor<S, B, K, G>,
-    target: &Tensor<S2, B, K, G>,
+    target: &Tensor<S2, B, K, G2>,
     reduction: Reduction,
 ) -> Result<<B as Execute<O>>::Output>
 where
@@ -67,21 +68,26 @@ impl<
     /// let target = Tensor::<s![2], DefaultBackend, i64>::zeros(()).unwrap();
     /// let loss = pred.cross_entropy_loss(&target).unwrap();
     /// ```
-    pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType>(
+    pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType, G2: RequiresGrad>(
         &self,
-        target: &Tensor<S2, B, KT, G>,
+        target: &Tensor<S2, B, KT, G2>,
     ) -> Result<Tensor<(), B, K, G>>
     where
         B: Execute<op::CrossEntropyLoss>,
         <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.cross_entropy_loss_with::<Mean, S2, KT>(target)
+        self.cross_entropy_loss_with::<Mean, S2, KT, G2>(target)
     }
 
     /// `cross_entropy_loss_with`.
-    pub fn cross_entropy_loss_with<R, S2: Shape, KT: crate::tensor::dtype::DType>(
+    pub fn cross_entropy_loss_with<
+        R,
+        S2: Shape,
+        KT: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+    >(
         &self,
-        target: &Tensor<S2, B, KT, G>,
+        target: &Tensor<S2, B, KT, G2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + CrossEntropyReductionShape<S>,
@@ -131,18 +137,21 @@ impl<
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
     /// let loss = pred.mse_loss(&target).unwrap();
     /// ```
-    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>>
+    pub fn mse_loss<S2: Shape, G2: RequiresGrad>(
+        &self,
+        target: &Tensor<S2, B, K, G2>,
+    ) -> Result<Tensor<(), B, K, G>>
     where
         B: Execute<op::MseLoss> + crate::exec::Capabilities,
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.mse_loss_with::<Mean, S2>(target)
+        self.mse_loss_with::<Mean, S2, G2>(target)
     }
 
     /// `mse_loss_with`.
-    pub fn mse_loss_with<R, S2: Shape>(
+    pub fn mse_loss_with<R, S2: Shape, G2: RequiresGrad>(
         &self,
-        target: &Tensor<S2, B, K, G>,
+        target: &Tensor<S2, B, K, G2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + MseReductionShape<S>,
@@ -150,7 +159,7 @@ impl<
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
         let inner =
-            execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G>(self, target, R::as_enum())?;
+            execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G, G2>(self, target, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -167,18 +176,21 @@ impl<
     }
 
     /// `l1_loss`.
-    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>>
+    pub fn l1_loss<S2: Shape, G2: RequiresGrad>(
+        &self,
+        target: &Tensor<S2, B, K, G2>,
+    ) -> Result<Tensor<(), B, K, G>>
     where
         B: Execute<op::L1Loss> + crate::exec::Capabilities,
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
-        self.l1_loss_with::<Mean, S2>(target)
+        self.l1_loss_with::<Mean, S2, G2>(target)
     }
 
     /// `l1_loss_with`.
-    pub fn l1_loss_with<R, S2: Shape>(
+    pub fn l1_loss_with<R, S2: Shape, G2: RequiresGrad>(
         &self,
-        target: &Tensor<S2, B, K, G>,
+        target: &Tensor<S2, B, K, G2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + L1ReductionShape<S>,
@@ -186,7 +198,7 @@ impl<
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
         let inner =
-            execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G>(self, target, R::as_enum())?;
+            execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G, G2>(self, target, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -203,28 +215,28 @@ impl<
     }
 
     /// `bce_with_logits_loss`.
-    pub fn bce_with_logits_loss<S2: Shape>(
+    pub fn bce_with_logits_loss<S2: Shape, G2: RequiresGrad>(
         &self,
-        target: &Tensor<S2, B, K, G>,
+        target: &Tensor<S2, B, K, G2>,
     ) -> Result<Tensor<(), B, K, G>>
     where
         B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.bce_with_logits_loss_with::<Mean, S2>(target)
+        self.bce_with_logits_loss_with::<Mean, S2, G2>(target)
     }
 
     /// `bce_with_logits_loss_with`.
-    pub fn bce_with_logits_loss_with<R, S2: Shape>(
+    pub fn bce_with_logits_loss_with<R, S2: Shape, G2: RequiresGrad>(
         &self,
-        target: &Tensor<S2, B, K, G>,
+        target: &Tensor<S2, B, K, G2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + BceReductionShape<S>,
         B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
-        let inner = execute_loss_descriptor::<op::BceWithLogitsLoss, S, S2, B, K, G>(
+        let inner = execute_loss_descriptor::<op::BceWithLogitsLoss, S, S2, B, K, G, G2>(
             self,
             target,
             R::as_enum(),

@@ -756,6 +756,41 @@ impl<D: Device> Backend for DispatchBackend<D> {
         }
     }
 
+    fn backward_with<K: DType>(
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        match (loss, seed) {
+            #[cfg(feature = "cpu")]
+            (DispatchStorage::Cpu(loss), DispatchStorage::Cpu(seed)) => {
+                crate::cpu::CpuBackendImpl::<Cpu>::backward_with::<K>(loss, seed)
+                    .map(DispatchGrads::Cpu)
+            }
+            #[cfg(feature = "wgpu")]
+            (DispatchStorage::Wgpu(loss), DispatchStorage::Wgpu(seed)) => {
+                crate::wgpu::WgpuBackendImpl::<Wgpu>::backward_with::<K>(loss, seed)
+                    .map(DispatchGrads::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            (DispatchStorage::Cuda(loss), DispatchStorage::Cuda(seed)) => {
+                crate::cuda::CudaBackendImpl::<Cuda>::backward_with::<K>(loss, seed)
+                    .map(DispatchGrads::Cuda)
+            }
+            #[cfg(feature = "metal")]
+            (DispatchStorage::Metal(loss), DispatchStorage::Metal(seed)) => {
+                crate::metal::MetalBackendImpl::<Metal>::backward_with::<K>(loss, seed)
+                    .map(DispatchGrads::Metal)
+            }
+            (DispatchStorage::Unavailable, _) | (_, DispatchStorage::Unavailable) => {
+                Err(unavailable(DeviceKind::Cpu))
+            }
+            _ => Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Storage,
+                reason: "backward seed and loss must use the same backend",
+            })),
+        }
+    }
+
     fn get_grad<K: DType>(
         storage: &Self::Storage<K>,
         grads: &Self::Grads,

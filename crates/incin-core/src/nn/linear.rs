@@ -513,18 +513,21 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InShape, B, K>>
+    G: RequiresGrad,
+> Module<Tensor<InShape, B, K, G>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
     InShape::Output: DynShape,
+    G: GradJoin<Train::TensorGrad>,
+    JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad>,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K>;
+    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -546,15 +549,10 @@ where
             .unwrap()
             .as_tensor()?
             .into_shape::<Dyn>()?;
-        let out_final = out_dyn.broadcast_add(&bias_dyn)?;
+        let out_final = out_dyn.broadcast_add::<Dyn, Train::TensorGrad>(&bias_dyn)?;
 
-        Tensor::from_parts(
-            out_final.into_inner(),
-            shape,
-            dtype,
-            device,
-            core::marker::PhantomData,
-        )
+        let grad = out_dyn._grad.clone();
+        Tensor::from_parts(out_final.into_inner(), shape, dtype, device, grad)
     }
 }
 
@@ -565,17 +563,19 @@ impl<
     B: Backend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InShape, B, K>>
+    G: RequiresGrad,
+> Module<Tensor<InShape, B, K, G>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
     InShape::Output: DynShape,
+    G: GradJoin<Train::TensorGrad>,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K>;
+    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -591,13 +591,8 @@ where
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_final = x_dyn.matmul(&weight_t)?;
 
-        Tensor::from_parts(
-            out_final.into_inner(),
-            shape,
-            dtype,
-            device,
-            core::marker::PhantomData,
-        )
+        let grad = out_final._grad.clone();
+        Tensor::from_parts(out_final.into_inner(), shape, dtype, device, grad)
     }
 }
 

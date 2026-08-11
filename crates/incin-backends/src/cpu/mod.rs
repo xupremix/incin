@@ -185,6 +185,15 @@ impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
         tape::backward(t)
     }
 
+    fn backward_with<K: DType>(
+        t: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        let t: &storage::CpuStorage = t;
+        let seed: &storage::CpuStorage = seed;
+        tape::backward_with(t, seed)
+    }
+
     /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,

@@ -361,27 +361,29 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+    G: RequiresGrad,
 >
     Module<(
-        Tensor<D2<Batch, S::In>, B, K>,
-        Tensor<D2<Batch, S::Out>, B, K>,
+        Tensor<D2<Batch, S::In>, B, K, G>,
+        Tensor<D2<Batch, S::Out>, B, K, G>,
     )> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
 where
     Linear<S::IhShape, B, BiasIh, K, Train>: Module<
-            Tensor<D2<Batch, S::In>, B, K>,
-            Output = Tensor<D2<Batch, S::Out>, B, K>,
+            Tensor<D2<Batch, S::In>, B, K, G>,
+            Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>,
             Error = Error,
         >,
     Linear<S::HhShape, B, BiasHh, K, Train>: Module<
-            Tensor<D2<Batch, S::Out>, B, K>,
-            Output = Tensor<D2<Batch, S::Out>, B, K>,
+            Tensor<D2<Batch, S::Out>, B, K, G>,
+            Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>,
             Error = Error,
         >,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
+    G: GradJoin<Train::TensorGrad>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<D2<Batch, S::Out>, B, K>;
+    type Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -390,8 +392,8 @@ where
     fn forward(
         &self,
         (x, h_prev): (
-            Tensor<D2<Batch, S::In>, B, K>,
-            Tensor<D2<Batch, S::Out>, B, K>,
+            Tensor<D2<Batch, S::In>, B, K, G>,
+            Tensor<D2<Batch, S::Out>, B, K, G>,
         ),
     ) -> core::result::Result<Self::Output, Error> {
         let i = self.wi.forward(x)?;
@@ -441,9 +443,11 @@ pub struct RNN<
     BiasHh: crate::nn::optional::OptionalField = True,
     K: DType = f32,
     Train: TrainState = Trainable,
+    G: RequiresGrad = Grad,
 > {
     /// `cell`.
     pub cell: RNNCell<S, B, BiasIh, BiasHh, K, Train>,
+    _grad: core::marker::PhantomData<G>,
 }
 
 impl<
@@ -453,24 +457,30 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> RNN<S, B, BiasIh, BiasHh, K, Train>
+    G: RequiresGrad,
+> RNN<S, B, BiasIh, BiasHh, K, Train, G>
 {
     /// Creates a new instance from a pre-built cell.
     pub fn new(cell: RNNCell<S, B, BiasIh, BiasHh, K, Train>) -> Self {
-        Self { cell }
+        Self {
+            cell,
+            _grad: core::marker::PhantomData,
+        }
     }
 
     /// Converts this RNN's parameters to frozen typestate.
-    pub fn freeze(self) -> RNN<S, B, BiasIh, BiasHh, K, Frozen> {
+    pub fn freeze(self) -> RNN<S, B, BiasIh, BiasHh, K, Frozen, G> {
         RNN {
             cell: self.cell.freeze(),
+            _grad: core::marker::PhantomData,
         }
     }
 
     /// Converts this RNN's parameters to trainable typestate.
-    pub fn unfreeze(self) -> RNN<S, B, BiasIh, BiasHh, K, Trainable> {
+    pub fn unfreeze(self) -> RNN<S, B, BiasIh, BiasHh, K, Trainable, G> {
         RNN {
             cell: self.cell.unfreeze(),
+            _grad: core::marker::PhantomData,
         }
     }
 }
@@ -482,7 +492,8 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B> for RNN<S, B, BiasIh, BiasHh, K, Train>
+    G: RequiresGrad,
+> Parameters<B> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
 where
     RNNCell<S, B, BiasIh, BiasHh, K, Train>: Parameters<B>,
 {
@@ -508,12 +519,13 @@ impl<
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: ConstDType,
+    G: RequiresGrad,
     Train: TrainState,
 >
     Module<(
-        Tensor<D3<Batch, Seq, S::In>, B, K>,
-        Tensor<D2<Batch, S::Out>, B, K>,
-    )> for RNN<S, B, BiasIh, BiasHh, K, Train>
+        Tensor<D3<Batch, Seq, S::In>, B, K, G>,
+        Tensor<D2<Batch, S::Out>, B, K, G>,
+    )> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
 where
     <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
@@ -522,19 +534,20 @@ where
     S::Out: Dim<Arg = ()>,
     K: ConstDType,
     B::Device: crate::prelude::ConstDevice,
+    G: GradJoin<Train::TensorGrad, Output = G>,
     RNNCell<S, B, BiasIh, BiasHh, K, Train>: Module<
             (
-                Tensor<D2<Batch, S::In>, B, K>,
-                Tensor<D2<Batch, S::Out>, B, K>,
+                Tensor<D2<Batch, S::In>, B, K, G>,
+                Tensor<D2<Batch, S::Out>, B, K, G>,
             ),
-            Output = Tensor<D2<Batch, S::Out>, B, K>,
+            Output = Tensor<D2<Batch, S::Out>, B, K, G>,
             Error = Error,
         >,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = (
-        Tensor<D3<Batch, Seq, S::Out>, B, K>,
-        Tensor<D2<Batch, S::Out>, B, K>,
+        Tensor<D3<Batch, Seq, S::Out>, B, K, G>,
+        Tensor<D2<Batch, S::Out>, B, K, G>,
     );
     /// The error type returned if the forward pass fails.
     type Error = Error;
@@ -544,8 +557,8 @@ where
     fn forward(
         &self,
         (x, mut h): (
-            Tensor<D3<Batch, Seq, S::In>, B, K>,
-            Tensor<D2<Batch, S::Out>, B, K>,
+            Tensor<D3<Batch, Seq, S::In>, B, K, G>,
+            Tensor<D2<Batch, S::Out>, B, K, G>,
         ),
     ) -> core::result::Result<Self::Output, Error> {
         let seq_len = Seq::static_size().map_err(Error::Shape)?;
@@ -553,14 +566,14 @@ where
 
         for i in 0..seq_len {
             let x_step = x.clone().try_narrow(1, i, 1)?.try_squeeze(1)?;
-            let x_step_static: Tensor<D2<Batch, S::In>, B, K> = x_step.into_shape()?;
+            let x_step_static: Tensor<D2<Batch, S::In>, B, K, G> = x_step.into_shape()?;
             h = self.cell.forward((x_step_static, h))?;
             outputs.push(h.clone().into_shape::<Dyn>()?);
         }
 
-        let refs: Vec<&Tensor<Dyn, B, K>> = outputs.iter().collect();
+        let refs: Vec<&Tensor<Dyn, B, K, G>> = outputs.iter().collect();
         let stacked_dyn = crate::tensor::ops::manipulation::try_stack_tensors(&refs, 1)?;
-        let stacked: Tensor<D3<Batch, Seq, S::Out>, B, K> = stacked_dyn.into_shape()?;
+        let stacked: Tensor<D3<Batch, Seq, S::Out>, B, K, G> = stacked_dyn.into_shape()?;
 
         Ok((stacked, h))
     }

@@ -104,6 +104,14 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     Ok(WgpuGrads { grads })
 }
 
+/// Walk the reachable graph with an explicit output cotangent.
+pub fn backward_with(loss: &WgpuStorage, seed: &WgpuStorage) -> Result<WgpuGrads> {
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled
+        .scope(|| tape::backward_with_seed(nodes, loss, seed))?;
+    Ok(WgpuGrads { grads })
+}
+
 #[cfg(feature = "telemetry")]
 fn emit_backward_telemetry(step: usize, n_ops: usize) {
     crate::telemetry::emit_scalar(step, "tape/ops", n_ops as f64);

@@ -104,6 +104,14 @@ pub(crate) fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
     Ok(CudaGrads { grads })
 }
 
+/// Walk the reachable graph with an explicit output cotangent.
+pub(crate) fn backward_with(loss: &CudaStorage, seed: &CudaStorage) -> Result<CudaGrads> {
+    let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
+    let grads = incin_core::exec::GradMode::Disabled
+        .scope(|| tape::backward_with_seed(nodes, loss, seed))?;
+    Ok(CudaGrads { grads })
+}
+
 fn add_cuda_storage(a: &CudaStorage, b: &CudaStorage) -> Result<CudaStorage> {
     crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", a, b, &a.shape)
 }
