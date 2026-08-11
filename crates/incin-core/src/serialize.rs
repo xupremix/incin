@@ -23,7 +23,7 @@ where
         DataAttributes {
             shape: shape.to_vec(),
             dtype,
-            device: device.clone(),
+            device: *device,
             bytes: bytes.to_vec(),
         },
         &[],
