@@ -50,12 +50,12 @@ impl_data_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
 /// is broadcast along it, so that axis is required to be 1 rather than equal.
 macro_rules! impl_wgpu_canonical {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for WgpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
                 let operation = OperationKind::$op;
                 let [lhs, rhs] = request.inputs else {
@@ -72,11 +72,11 @@ macro_rules! impl_wgpu_canonical {
 
 impl_wgpu_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
 
-impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
+        request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -100,11 +100,11 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for WgpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::BroadcastAs> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BroadcastAs>, Self>,
+        request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -121,11 +121,11 @@ impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for WgpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MatMulExact>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::MatMulExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
+        request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(
@@ -158,11 +158,11 @@ impl<D: Device> Execute<Descriptor<op::MatMulExact>> for WgpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::Conv2dExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
+        request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let (input, weight, bias) = match request.inputs {
             [input, weight] => (input, weight, None),
@@ -223,11 +223,11 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for WgpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::MaxPool2d> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
+        request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -251,11 +251,11 @@ impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for WgpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for WgpuBackendImpl<D> {
+impl<D: Device> Execute<op::AvgPool2d> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
+        request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<WgpuStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -280,11 +280,11 @@ impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for WgpuBackendImpl<D> {
 
 macro_rules! impl_wgpu_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for WgpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -298,11 +298,11 @@ macro_rules! impl_wgpu_reduction_all {
 
 macro_rules! impl_wgpu_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for WgpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -373,11 +373,11 @@ impl_wgpu_reduction_dim![
 
 macro_rules! impl_wgpu_unary_float {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for WgpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "unary operation expects 1 input"));
@@ -411,7 +411,7 @@ macro_rules! assert_every_advertised_wgpu_row_executes {
             const fn executes<O, B>()
             where
                 O: incin_core::exec::CanonicalOperation,
-                B: Execute<Descriptor<O>>,
+                B: Execute<O>,
             {
             }
 

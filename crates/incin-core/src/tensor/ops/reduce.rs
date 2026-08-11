@@ -43,8 +43,8 @@ macro_rules! impl_reduction_op {
         $(#[$meta])*
         pub fn $method(self) -> Result<Tensor<(), B, K, G>>
         where
-            B: Execute<Descriptor<op::$operation>> + crate::exec::Capabilities,
-            <B as Execute<Descriptor<op::$operation>>>::Output: Into<B::Storage<K>>,
+            B: Execute<op::$operation> + crate::exec::Capabilities,
+            <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
         {
             let output_shape = crate::shapes::ShapeValue::<()>::try_new(
                 crate::shapes::ShapeBuf::scalar(),
@@ -87,8 +87,8 @@ impl<
         C: StaticCursor,
         S: DynShape + ReduceAt<C>,
         <S as ReduceAt<C>>::Output: DynShape,
-        B: Execute<Descriptor<op::SumDim>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::SumDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
     {
         let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
             .normalize(self.shape_buf().len())?
@@ -138,8 +138,8 @@ impl<
         C: StaticCursor,
         S: DynShape + ReduceKeepAt<C>,
         <S as ReduceKeepAt<C>>::Output: DynShape,
-        B: Execute<Descriptor<op::SumKeepDim>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
     {
         let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
             .normalize(self.shape_buf().len())?
@@ -201,8 +201,8 @@ impl<
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<Descriptor<op::SumDim>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::SumDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
         let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
@@ -218,8 +218,8 @@ impl<
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<Descriptor<op::SumKeepDim>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
         let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
@@ -233,8 +233,8 @@ impl<
     where
         O: crate::exec::catalog::CanonicalOperation
             + crate::exec::catalog::Operation<Attributes = crate::exec::catalog::AxisAttributes>,
-        B: Execute<Descriptor<O>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<K>>,
     {
         let axis = descriptor.attributes().axis;
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
@@ -340,8 +340,8 @@ impl<
     pub fn cumsum<C: StaticCursor>(&self) -> Result<Self>
     where
         S: DynShape,
-        B: Execute<Descriptor<op::Cumsum>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Cumsum>>>::Output: Into<B::Storage<K>>,
+        B: Execute<op::Cumsum> + crate::exec::Capabilities,
+        <B as Execute<op::Cumsum>>::Output: Into<B::Storage<K>>,
     {
         let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
             .normalize(self.rank())?
@@ -381,17 +381,17 @@ impl<
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: crate::tensor::backend::FloatOps<B>
-            + Execute<Descriptor<op::Mul>>
-            + Execute<Descriptor<op::Abs>>
-            + Execute<Descriptor<op::Sqrt>>
-            + Execute<Descriptor<op::SumAll>>
-            + Execute<Descriptor<op::Powf>>
+            + Execute<op::Mul>
+            + Execute<op::Abs>
+            + Execute<op::Sqrt>
+            + Execute<op::SumAll>
+            + Execute<op::Powf>
             + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::Abs>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
-        <B as Execute<Descriptor<op::Powf>>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Abs>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Powf>>::Output: Into<B::Storage<K>>,
     {
         if (p - 1.0).abs() < 1e-6 {
             self.abs()?.sum_all()
@@ -413,14 +413,14 @@ impl<
         + FloatOps<B>
         + NumericOps<B>
         + TensorOps<B>
-        + Execute<Descriptor<op::Sub>>
-        + Execute<Descriptor<op::Mul>>,
+        + Execute<op::Sub>
+        + Execute<op::Mul>,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad,
 > Tensor<S, B, K, G>
 where
-    <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the argmax of the tensor.
     /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
@@ -430,8 +430,8 @@ where
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
     where
-        B: Execute<Descriptor<op::ArgMax>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::ArgMax>>>::Output: Into<B::Storage<u32>>,
+        B: Execute<op::ArgMax> + crate::exec::Capabilities,
+        <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
     {
         let normalized = dim
             .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
@@ -479,8 +479,8 @@ where
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
     where
-        B: Execute<Descriptor<op::ArgMin>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::ArgMin>>>::Output: Into<B::Storage<u32>>,
+        B: Execute<op::ArgMin> + crate::exec::Capabilities,
+        <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
     {
         let normalized = dim
             .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
@@ -532,8 +532,8 @@ where
         Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>,
     )>
     where
-        B: Execute<Descriptor<op::TopK>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::TopK>>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
+        B: Execute<op::TopK> + crate::exec::Capabilities,
+        <B as Execute<op::TopK>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
     {
         let rank = self.rank();
         let dim = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, rank)?;
@@ -596,8 +596,8 @@ where
         descending: bool,
     ) -> Result<Tensor<S, B, u32, crate::prelude::NoGrad>>
     where
-        B: Execute<Descriptor<op::Argsort>> + crate::exec::Capabilities,
-        <B as Execute<Descriptor<op::Argsort>>>::Output: Into<B::Storage<u32>>,
+        B: Execute<op::Argsort> + crate::exec::Capabilities,
+        <B as Execute<op::Argsort>>::Output: Into<B::Storage<u32>>,
     {
         // Disabled rather than this tensor's own mode: the result is `NoGrad`
         // whatever the receiver was, and sec. 1.2.5 makes that a statement
@@ -641,23 +641,23 @@ impl<
         + FloatOps<B>
         + NumericOps<B>
         + TensorOps<B>
-        + Execute<Descriptor<op::Sub>>
-        + Execute<Descriptor<op::Mul>>
-        + Execute<Descriptor<op::Sqrt>>
-        + Execute<Descriptor<op::MeanAll>>
-        + Execute<Descriptor<op::SumAll>>
-        + Execute<Descriptor<op::MulScalar>>
+        + Execute<op::Sub>
+        + Execute<op::Mul>
+        + Execute<op::Sqrt>
+        + Execute<op::MeanAll>
+        + Execute<op::SumAll>
+        + Execute<op::MulScalar>
         + crate::exec::Capabilities,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
 > Tensor<S, B, K, G>
 where
-    <B as Execute<Descriptor<op::Sub>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Mul>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::Sqrt>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::MeanAll>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::SumAll>>>::Output: Into<B::Storage<K>>,
-    <B as Execute<Descriptor<op::MulScalar>>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MeanAll>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
     pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {

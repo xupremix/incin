@@ -50,20 +50,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -142,20 +140,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -193,20 +189,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -246,20 +240,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -322,20 +314,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -360,20 +350,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -411,20 +399,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -469,20 +455,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -519,20 +503,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -598,20 +580,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -675,20 +655,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -761,20 +739,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -831,20 +807,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -885,20 +859,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,
@@ -979,20 +951,18 @@ where
         + FloatOps<TargetBackend<T>>
         + NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,

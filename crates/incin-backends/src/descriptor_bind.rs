@@ -55,9 +55,8 @@ macro_rules! impl_data_creation_executors {
             ($operation:ident) => {
                 impl<D: Device>
                     incin_core::backend_authoring::Execute<
-                        incin_core::backend_authoring::Descriptor<
-                            incin_core::backend_authoring::op::$operation,
-                        >,
+                        incin_core::backend_authoring::op::$operation,
+
                     > for $backend
                 {
                     type Output = $storage;
@@ -66,9 +65,7 @@ macro_rules! impl_data_creation_executors {
                         &self,
                         request: incin_core::backend_authoring::ExecutionRequest<
                             '_,
-                            incin_core::backend_authoring::Descriptor<
-                                incin_core::backend_authoring::op::$operation,
-                            >,
+                            incin_core::backend_authoring::op::$operation,
                             Self,
                         >,
                     ) -> core::result::Result<$storage, BackendError> {
@@ -106,7 +103,7 @@ macro_rules! impl_creation_executors {
     ($backend:ty, $storage:ty) => {
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+                incin_core::backend_authoring::op::Zeros,
             > for $backend
         {
             type Output = $storage;
@@ -114,9 +111,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::Zeros,
-                    >,
+                    incin_core::backend_authoring::op::Zeros,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -144,7 +139,7 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+                incin_core::backend_authoring::op::Ones,
             > for $backend
         {
             type Output = $storage;
@@ -152,9 +147,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::Ones,
-                    >,
+                    incin_core::backend_authoring::op::Ones,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -182,9 +175,8 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::UniformRandom,
-                >,
+                incin_core::backend_authoring::op::UniformRandom,
+
             > for $backend
         {
             type Output = $storage;
@@ -192,9 +184,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::UniformRandom,
-                    >,
+                    incin_core::backend_authoring::op::UniformRandom,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -222,9 +212,8 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::NormalRandom,
-                >,
+                incin_core::backend_authoring::op::NormalRandom,
+
             > for $backend
         {
             type Output = $storage;
@@ -232,9 +221,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::NormalRandom,
-                    >,
+                    incin_core::backend_authoring::op::NormalRandom,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -262,7 +249,7 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Full>,
+                incin_core::backend_authoring::op::Full,
             > for $backend
         {
             type Output = $storage;
@@ -270,9 +257,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::Full,
-                    >,
+                    incin_core::backend_authoring::op::Full,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -301,9 +286,8 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::Arange,
-                >,
+                incin_core::backend_authoring::op::Arange,
+
             > for $backend
         {
             type Output = $storage;
@@ -311,9 +295,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::Arange,
-                    >,
+                    incin_core::backend_authoring::op::Arange,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {
@@ -343,9 +325,8 @@ macro_rules! impl_creation_executors {
 
         impl<D: Device>
             incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::Linspace,
-                >,
+                incin_core::backend_authoring::op::Linspace,
+
             > for $backend
         {
             type Output = $storage;
@@ -353,9 +334,7 @@ macro_rules! impl_creation_executors {
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
-                    incin_core::backend_authoring::Descriptor<
-                        incin_core::backend_authoring::op::Linspace,
-                    >,
+                    incin_core::backend_authoring::op::Linspace,
                     Self,
                 >,
             ) -> core::result::Result<$storage, BackendError> {

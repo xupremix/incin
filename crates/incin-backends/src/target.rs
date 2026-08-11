@@ -397,7 +397,7 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+                incin_core::backend_authoring::op::Zeros,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -415,7 +415,7 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+                incin_core::backend_authoring::op::Ones,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -433,9 +433,8 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::UniformRandom,
-                >,
+                incin_core::backend_authoring::op::UniformRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -454,9 +453,8 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::NormalRandom,
-                >,
+                incin_core::backend_authoring::op::NormalRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -479,7 +477,7 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Full>,
+                incin_core::backend_authoring::op::Full,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -510,9 +508,8 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::Arange,
-                >,
+                incin_core::backend_authoring::op::Arange,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -544,9 +541,8 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::Linspace,
-                >,
+                incin_core::backend_authoring::op::Linspace,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -596,7 +592,7 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<O>,
+                O,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -627,7 +623,7 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<O>,
+                O,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -679,20 +675,18 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::ParameterDtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+                incin_core::backend_authoring::op::Zeros,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+                incin_core::backend_authoring::op::Ones,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::UniformRandom,
-                >,
+                incin_core::backend_authoring::op::UniformRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::NormalRandom,
-                >,
+                incin_core::backend_authoring::op::NormalRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -798,20 +792,18 @@ pub trait TargetExt: TensorTarget + Sized {
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::ParameterDtype>
             + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+                incin_core::backend_authoring::op::Zeros,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+                incin_core::backend_authoring::op::Ones,
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::UniformRandom,
-                >,
+                incin_core::backend_authoring::op::UniformRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::Descriptor<
-                    incin_core::backend_authoring::op::NormalRandom,
-                >,
+                incin_core::backend_authoring::op::NormalRandom,
+
                 Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::ParameterDtype>,
             > + incin_core::exec::Capabilities
             + Default,
@@ -958,20 +950,18 @@ where
         + incin_core::backend_authoring::FloatOps<TargetBackend<T>>
         + incin_core::backend_authoring::NumericOps<TargetBackend<T>>
         + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Zeros>,
+            incin_core::backend_authoring::op::Zeros,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::Ones>,
+            incin_core::backend_authoring::op::Ones,
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::UniformRandom,
-            >,
+            incin_core::backend_authoring::op::UniformRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::Descriptor<
-                incin_core::backend_authoring::op::NormalRandom,
-            >,
+            incin_core::backend_authoring::op::NormalRandom,
+
             Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
         > + incin_core::exec::Capabilities
         + Default,

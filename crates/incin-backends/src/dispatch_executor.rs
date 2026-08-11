@@ -11,7 +11,7 @@
 //! executor this module routes to performs the capability query against its own
 //! registry, which is the only device that can answer.
 
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
 use incin_core::exec::{ExecutionContext, TensorHandle};
 use incin_core::prelude::{BackendError, Device, OperationKind, Shape, StorageBackend};
 
@@ -118,7 +118,7 @@ macro_rules! route_single_operand {
 }
 
 route_single_operand!(
-    Descriptor<op::ReshapeExact>,
+    op::ReshapeExact,
     OperationKind::ReshapeExact,
     "reshape expects exactly one tensor input",
     "reshape input is not dispatch storage",
@@ -126,7 +126,7 @@ route_single_operand!(
 );
 
 route_single_operand!(
-    Descriptor<op::BroadcastAs>,
+    op::BroadcastAs,
     OperationKind::BroadcastAs,
     "broadcast_as expects exactly one tensor input",
     "broadcast_as input is not dispatch storage",
@@ -135,12 +135,12 @@ route_single_operand!(
 
 macro_rules! impl_dispatch_binary {
     ($($op:ident),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for DispatchBackend<D> {
+        impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
                 let operation = OperationKind::$op;
                 let [lhs, rhs] = request.inputs else {
@@ -223,12 +223,12 @@ impl_dispatch_binary!(Add, Sub, Mul, Div);
 macro_rules! impl_dispatch_binary_with_metal {
     ($($op:ident),* $(,)?) => {
         $(
-        impl<D: Device> Execute<Descriptor<op::$op>> for DispatchBackend<D> {
+        impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
                 let operation = OperationKind::$op;
                 let [lhs, rhs] = request.inputs else {
@@ -342,12 +342,12 @@ impl_dispatch_binary_with_metal!(MatMulExact);
 
 macro_rules! route_cpu_unary {
     ($op:ident, $kind:expr, $arity:expr, $not_dispatch:expr, $absent:expr) => {
-        impl<D: Device> Execute<Descriptor<op::$op>> for DispatchBackend<D> {
+        impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
                 let _ = self;
                 let [handle] = request.inputs else {
@@ -440,12 +440,12 @@ route_cpu_unary!(
 
 macro_rules! route_cpu_variadic {
     ($op:ident, $kind:expr, $absent:expr) => {
-        impl<D: Device> Execute<Descriptor<op::$op>> for DispatchBackend<D> {
+        impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
                 let _ = self;
                 if request.inputs.is_empty() {
@@ -509,12 +509,12 @@ route_cpu_variadic!(
     "stack is only available for CPU dispatch storage"
 );
 
-impl<D: Device> Execute<Descriptor<op::WhereCond>> for DispatchBackend<D> {
+impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
     type Output = DispatchStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::WhereCond>, Self>,
+        request: ExecutionRequest<'_, op::WhereCond, Self>,
     ) -> Result<DispatchStorage, BackendError> {
         let operation = OperationKind::WhereCond;
         let [mask_h, true_h, false_h] = request.inputs else {
@@ -586,12 +586,12 @@ impl<D: Device> Execute<Descriptor<op::WhereCond>> for DispatchBackend<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MaskedFill>> for DispatchBackend<D> {
+impl<D: Device> Execute<op::MaskedFill> for DispatchBackend<D> {
     type Output = DispatchStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaskedFill>, Self>,
+        request: ExecutionRequest<'_, op::MaskedFill, Self>,
     ) -> Result<DispatchStorage, BackendError> {
         let operation = OperationKind::MaskedFill;
         let [input_h, mask_h] = request.inputs else {

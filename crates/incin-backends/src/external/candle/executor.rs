@@ -123,12 +123,12 @@ const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError
     BackendError::InvalidInput { operation, reason }
 }
 
-impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CandleBackend<D> {
+impl<D: Device> Execute<op::MatMulExact> for CandleBackend<D> {
     type Output = CandleStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
+        request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let _ = self;
         let operation = OperationKind::MatMulExact;
@@ -172,12 +172,12 @@ impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CandleBackend<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CandleBackend<D> {
+impl<D: Device> Execute<op::ReshapeExact> for CandleBackend<D> {
     type Output = CandleStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
+        request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let _ = self;
         let operation = OperationKind::ReshapeExact;
@@ -228,11 +228,11 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CandleBackend<D> {
 
 macro_rules! impl_candle_creation_executors {
     ($(($op:ident, $func:ident $(, $arg:ident)*)),* $(,)?) => {$(
-        impl<D: Device> Execute<incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::$op>> for CandleBackend<D> {
+        impl<D: Device> Execute<incin_core::backend_authoring::op::$op> for CandleBackend<D> {
             type Output = CandleStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, incin_core::backend_authoring::Descriptor<incin_core::backend_authoring::op::$op>, Self>,
+                request: ExecutionRequest<'_, incin_core::backend_authoring::op::$op, Self>,
             ) -> core::result::Result<CandleStorage, BackendError> {
                 use incin_core::backend_authoring::CreationOps;
                 if !request.inputs.is_empty() {

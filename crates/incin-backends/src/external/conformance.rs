@@ -114,8 +114,8 @@ pub trait Subject {
     /// The backend itself.
     type Backend: StorageBackend<Storage<f32> = Self::Storage>
         + Capabilities
-        + Execute<Descriptor<op::MatMulExact>, Output = Self::Storage>
-        + Execute<Descriptor<op::ReshapeExact>, Output = Self::Storage>;
+        + Execute<op::MatMulExact, Output = Self::Storage>
+        + Execute<op::ReshapeExact, Output = Self::Storage>;
 
     /// A name for the report. Usually the backend's type name.
     fn name(&self) -> String;

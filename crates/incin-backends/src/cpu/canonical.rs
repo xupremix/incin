@@ -1,13 +1,13 @@
 //! Canonical descriptor execution for the CPU backend.
 //!
-//! One `Execute<Descriptor<op::X>>` implementation per exact catalog identity,
+//! One `Execute<op::X>` implementation per exact catalog identity,
 //! generated from the same `cpu_descriptor_operations!` declaration that
 //! generates `CPU_CAPABILITIES`. Advertising an operation and implementing it
 //! are therefore the same edit, and a row that claims support the executor does
 //! not provide will not compile.
 //!
 //! This is the FND-005 replacement for the grouped, attribute-polymorphic
-//! `Execute<Descriptor<op::MatMulExact>>` family: those adapters accept several semantic
+//! `Execute<op::MatMulExact>` family: those adapters accept several semantic
 //! operations through one descriptor type, so an error or a capability query
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
@@ -116,12 +116,12 @@ fn admitted<D: Device>(
 /// what it saves.
 macro_rules! pointwise_binary_executors {
     ($(($operation:ident, $kernel:ident, $kernel_with_shape:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let [lhs, rhs] = request.inputs else {
@@ -210,12 +210,12 @@ pointwise_binary_executors![
 /// runs, rather than only what gets asserted against.
 macro_rules! allocating_executors {
     ($(($operation:ident, $method:ident $(, $argument:ident)*)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 if !request.inputs.is_empty() {
@@ -251,12 +251,12 @@ allocating_executors![
 
 macro_rules! data_executors {
     ($($operation:ident),* $(,)?) => {$ (
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 if !request.inputs.is_empty() {
@@ -289,12 +289,12 @@ data_executors![TensorFromData, TensorFromBytes];
 /// nothing, whatever is done to it afterwards.
 macro_rules! variable_allocating_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = super::var::CpuVar;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<super::var::CpuVar, BackendError> {
                 let operation = OperationKind::$operation;
                 if !request.inputs.is_empty() {
@@ -335,12 +335,12 @@ variable_allocating_executors![
 /// operations that happen to return something small.
 macro_rules! readback_executors {
     ($(($operation:ident, $method:ident, $output:ty)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = $output;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<$output, BackendError> {
                 let operation = OperationKind::$operation;
                 let training = records_gradients(request.context);
@@ -364,12 +364,12 @@ readback_executors![
 /// On `Backend` rather than on any operation family, which is why it is not in
 /// the macro above: the byte view is a property of an allocation itself and
 /// exists before any operation over it does.
-impl<D: Device> Execute<Descriptor<op::TensorToBytes>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::TensorToBytes> for CpuBackendImpl<D> {
     type Output = Vec<u8>;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::TensorToBytes>, Self>,
+        request: ExecutionRequest<'_, op::TensorToBytes, Self>,
     ) -> Result<Vec<u8>, BackendError> {
         let operation = OperationKind::TensorToBytes;
         let training = records_gradients(request.context);
@@ -380,12 +380,12 @@ impl<D: Device> Execute<Descriptor<op::TensorToBytes>> for CpuBackendImpl<D> {
 }
 
 /// Reshape to the descriptor's declared shape.
-impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::ReshapeExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
+        request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::ReshapeExact;
         let [input] = request.inputs else {
@@ -400,12 +400,12 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<D> {
 }
 
 /// Broadcast to the descriptor's declared shape.
-impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::BroadcastAs> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BroadcastAs>, Self>,
+        request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::BroadcastAs;
         let [input] = request.inputs else {
@@ -423,12 +423,12 @@ impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for CpuBackendImpl<D> {
 }
 
 /// Matrix multiplication over the last two axes, batched over the rest.
-impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::MatMulExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
+        request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::MatMulExact;
         let [lhs, rhs] = request.inputs else {
@@ -481,12 +481,12 @@ fn reduction_operand<'a, D: Device>(
 /// Whole-tensor reductions, which take no attributes.
 macro_rules! reduce_all_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -508,12 +508,12 @@ reduce_all_executors![
 /// Single-axis reductions, which read the axis from their typed attributes.
 macro_rules! reduce_axis_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -542,12 +542,12 @@ reduce_axis_executors![
 /// This is the one operation in the index-reduction neighbourhood that is
 /// dtype-honest: the CPU kernel accumulates in `f64` and converts back through
 /// the operand's own buffer, so the result carries the operand's dtype.
-impl<D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Cumsum> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Cumsum>, Self>,
+        request: ExecutionRequest<'_, op::Cumsum, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Cumsum;
         let input = reduction_operand(
@@ -605,12 +605,12 @@ macro_rules! dispatch_index_dtype {
 /// Index of the extremum, either flattened or along one axis.
 macro_rules! index_reduction_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -627,12 +627,12 @@ macro_rules! index_reduction_executors {
 index_reduction_executors![(ArgMax, argmax), (ArgMin, argmin)];
 
 /// Indices that would sort the operand along one axis.
-impl<D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Argsort> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Argsort>, Self>,
+        request: ExecutionRequest<'_, op::Argsort, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Argsort;
         let input = reduction_operand(
@@ -664,12 +664,12 @@ impl<D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<D> {
 /// the row was narrowed to f32 alone to stop the canonical path routing to a
 /// mislabel. The kernel converts through the operand's own buffer now, so the
 /// row no longer has to be narrower than the kernel.
-impl<D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::TopK> for CpuBackendImpl<D> {
     type Output = (CpuStorage, CpuStorage);
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::TopK>, Self>,
+        request: ExecutionRequest<'_, op::TopK, Self>,
     ) -> Result<(CpuStorage, CpuStorage), BackendError> {
         let operation = OperationKind::TopK;
         let input = reduction_operand(
@@ -760,12 +760,12 @@ fn narrowed_epsilon(operation: OperationKind, epsilon: f64) -> Result<f32, Backe
 }
 
 /// Two-dimensional convolution with an optional bias.
-impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Conv2dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
+        request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Conv2dExact;
         let attributes = request.operation.descriptor().attributes();
@@ -814,12 +814,12 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<D> {
 }
 
 /// Two-dimensional maximum pooling.
-impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::MaxPool2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
+        request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::MaxPool2d;
         let input = reduction_operand(
@@ -843,12 +843,12 @@ impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<D> {
 }
 
 /// Two-dimensional average pooling, which has no dilated form.
-impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::AvgPool2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
+        request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::AvgPool2d;
         let input = reduction_operand(
@@ -871,12 +871,12 @@ impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<D> {
 }
 
 /// One-dimensional convolution with an optional bias.
-impl<D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Conv1dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Conv1dExact>, Self>,
+        request: ExecutionRequest<'_, op::Conv1dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Conv1dExact;
         let attributes = request.operation.descriptor().attributes();
@@ -917,12 +917,12 @@ impl<D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImpl<D> {
 }
 
 /// Two-dimensional transposed convolution with an optional bias.
-impl<D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::ConvTranspose2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ConvTranspose2d>, Self>,
+        request: ExecutionRequest<'_, op::ConvTranspose2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::ConvTranspose2d;
         let attributes = request.operation.descriptor().attributes();
@@ -989,12 +989,12 @@ impl<D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBackendImpl<D> {
 }
 
 /// Average pooling to a requested output extent rather than a requested window.
-impl<D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::AdaptiveAvgPool2dExact>, Self>,
+        request: ExecutionRequest<'_, op::AdaptiveAvgPool2dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::AdaptiveAvgPool2dExact;
         let input = reduction_operand(
@@ -1021,12 +1021,12 @@ impl<D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for CpuBackendIm
 /// enforces the weight's real, tighter constraint directly, the same way the
 /// convolution executors enforce theirs for a bias the row's dtype set does
 /// not cover either.
-impl<D: Device> Execute<Descriptor<op::EmbeddingExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::EmbeddingExact>, Self>,
+        request: ExecutionRequest<'_, op::EmbeddingExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::EmbeddingExact;
         let [indices, weight] = request.inputs else {
@@ -1053,12 +1053,12 @@ impl<D: Device> Execute<Descriptor<op::EmbeddingExact>> for CpuBackendImpl<D> {
 /// Unary elementwise float operations, which take no attributes.
 macro_rules! unary_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1109,12 +1109,12 @@ unary_float_executors![
 /// Unary float operations parametrised by one scalar attribute.
 macro_rules! scalar_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1135,12 +1135,12 @@ scalar_float_executors![
 /// Binary elementwise float operations over broadcast operands.
 macro_rules! binary_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let [lhs, rhs] = request.inputs else {
@@ -1160,12 +1160,12 @@ macro_rules! binary_float_executors {
 binary_float_executors![(Atan2, atan2), (Fmod, fmod), (Remainder, remainder),];
 
 /// Elementwise clamp, whose two bounds are a single typed attribute set.
-impl<D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Clamp> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Clamp>, Self>,
+        request: ExecutionRequest<'_, op::Clamp, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Clamp;
         let input = reduction_operand(
@@ -1181,12 +1181,12 @@ impl<D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<D> {
 }
 
 /// Softmax along the axis its attributes name.
-impl<D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Softmax>, Self>,
+        request: ExecutionRequest<'_, op::Softmax, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Softmax;
         let input = reduction_operand(
@@ -1202,12 +1202,12 @@ impl<D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<D> {
 }
 
 /// Normalize over the trailing axes the attributes name, then scale and shift.
-impl<D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::LayerNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::LayerNorm>, Self>,
+        request: ExecutionRequest<'_, op::LayerNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::LayerNorm;
         let attributes = request.operation.descriptor().attributes();
@@ -1241,12 +1241,12 @@ impl<D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<D> {
 ///
 /// Inference only, and refused rather than approximated otherwise. See the
 /// refusal below.
-impl<D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::BatchNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BatchNorm>, Self>,
+        request: ExecutionRequest<'_, op::BatchNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::BatchNorm;
         let attributes = request.operation.descriptor().attributes();
@@ -1357,12 +1357,12 @@ fn binary_operands<'a, D: Device>(
 /// producing a boolean one, and because they carry no gradient.
 macro_rules! numeric_binary_tensor_executors {
     ($(($operation:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1384,12 +1384,12 @@ numeric_binary_tensor_executors![
 
 macro_rules! cmp_tensor_executors {
     ($(($operation:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1414,12 +1414,12 @@ cmp_tensor_executors![
 
 macro_rules! logical_binary_tensor_executors {
     ($(($operation:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1440,12 +1440,12 @@ logical_binary_tensor_executors![
 
 /// Batched matrix multiplication, whose operand rank contract differs from the
 /// plain `matmul` row and so does not share its registration.
-impl<D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::BatchedMatMul> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BatchedMatMul>, Self>,
+        request: ExecutionRequest<'_, op::BatchedMatMul, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::BatchedMatMul;
         let (lhs, rhs) = binary_operands(
@@ -1462,12 +1462,12 @@ impl<D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendImpl<D> {
 /// Unary tensor operations parametrised by one scalar attribute.
 macro_rules! scalar_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1484,12 +1484,12 @@ scalar_tensor_executors![(SubScalar, sub_scalar), (DivScalar, div_scalar)];
 /// Triangular and diagonal views, parametrised by a signed diagonal offset.
 macro_rules! diagonal_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1506,12 +1506,12 @@ diagonal_tensor_executors![(Triu, triu), (Tril, tril), (Diag, diag)];
 /// Rank-changing views parametrised by a single axis.
 macro_rules! axis_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1526,12 +1526,12 @@ macro_rules! axis_tensor_executors {
 axis_tensor_executors![(SqueezeExact, squeeze), (UnsqueezeExact, unsqueeze)];
 
 /// Elementwise logical negation.
-impl<D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::LogicalNot> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::LogicalNot>, Self>,
+        request: ExecutionRequest<'_, op::LogicalNot, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::LogicalNot;
         let input = reduction_operand(
@@ -1549,12 +1549,12 @@ impl<D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl<D> {
 }
 
 /// Swap the two axes the descriptor names.
-impl<D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::TransposeExact>, Self>,
+        request: ExecutionRequest<'_, op::TransposeExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::TransposeExact;
         let input = reduction_operand(
@@ -1570,12 +1570,12 @@ impl<D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackendImpl<D> {
 }
 
 /// Take a contiguous run along one axis.
-impl<D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Narrow> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Narrow>, Self>,
+        request: ExecutionRequest<'_, op::Narrow, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Narrow;
         let input = reduction_operand(
@@ -1596,12 +1596,12 @@ impl<D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<D> {
 }
 
 /// Collapse an inclusive axis range into one axis.
-impl<D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::FlattenExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::FlattenExact>, Self>,
+        request: ExecutionRequest<'_, op::FlattenExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::FlattenExact;
         let input = reduction_operand(
@@ -1621,12 +1621,12 @@ impl<D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendImpl<D> {
 /// The operand order is the one the catalog's legacy source names -
 /// `TensorOps::where_cond(mask, on_true, on_false)` - so a caller that reads
 /// the catalog row gets the same meaning from either path.
-impl<D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::WhereCond>, Self>,
+        request: ExecutionRequest<'_, op::WhereCond, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::WhereCond;
         let [mask, on_true, on_false] = request.inputs else {
@@ -1667,12 +1667,12 @@ impl<D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<D> {
 }
 
 /// Overwrite the masked positions with the declared scalar.
-impl<D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::MaskedFill> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaskedFill>, Self>,
+        request: ExecutionRequest<'_, op::MaskedFill, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::MaskedFill;
         let (input, mask) = binary_operands(
@@ -1703,12 +1703,12 @@ impl<D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl<D> {
 }
 
 /// Interpolate between two operands at the declared weight.
-impl<D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Lerp> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Lerp>, Self>,
+        request: ExecutionRequest<'_, op::Lerp, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Lerp;
         let (start, end) = binary_operands(
@@ -1771,12 +1771,12 @@ fn ternary_operands<'a, D: Device>(
 }
 
 /// Join operands along an existing axis.
-impl<D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::ConcatExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ConcatExact>, Self>,
+        request: ExecutionRequest<'_, op::ConcatExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::ConcatExact;
         let operands = variadic_operands(
@@ -1792,12 +1792,12 @@ impl<D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImpl<D> {
 }
 
 /// Join operands along a new axis.
-impl<D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::StackExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::StackExact>, Self>,
+        request: ExecutionRequest<'_, op::StackExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::StackExact;
         let operands = variadic_operands(
@@ -1813,12 +1813,12 @@ impl<D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl<D> {
 }
 
 /// Take a half-open window per axis.
-impl<D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::SliceExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::SliceExact>, Self>,
+        request: ExecutionRequest<'_, op::SliceExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::SliceExact;
         let input = reduction_operand(
@@ -1836,12 +1836,12 @@ impl<D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl<D> {
 /// Indexing operations that read one axis and one index operand.
 macro_rules! indexing_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (input, index) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
@@ -1861,12 +1861,12 @@ indexing_executors![(Gather, gather), (IndexSelect, index_select)];
 /// has no duplicate detection: it writes in index order, so the last write
 /// wins. Answering a `Reject` request with that behaviour would report success
 /// for a contract the backend did not honour, so it is refused instead.
-impl<D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Scatter> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Scatter>, Self>,
+        request: ExecutionRequest<'_, op::Scatter, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Scatter;
         let [input, index, source] = ternary_operands(
@@ -1888,12 +1888,12 @@ impl<D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<D> {
 }
 
 /// Tile the operand per axis.
-impl<D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Repeat>, Self>,
+        request: ExecutionRequest<'_, op::Repeat, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Repeat;
         let input = reduction_operand(
@@ -1909,12 +1909,12 @@ impl<D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<D> {
 }
 
 /// Extend each axis with the declared constant.
-impl<D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Pad> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Pad>, Self>,
+        request: ExecutionRequest<'_, op::Pad, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Pad;
         let input = reduction_operand(
@@ -1930,12 +1930,12 @@ impl<D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<D> {
 }
 
 /// Extract sliding windows along one axis.
-impl<D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Unfold> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Unfold>, Self>,
+        request: ExecutionRequest<'_, op::Unfold, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Unfold;
         let input = reduction_operand(
@@ -1956,12 +1956,12 @@ impl<D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<D> {
 }
 
 /// Redistribute channel depth into spatial extent.
-impl<D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::PixelShuffle> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::PixelShuffle>, Self>,
+        request: ExecutionRequest<'_, op::PixelShuffle, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::PixelShuffle;
         let input = reduction_operand(
@@ -1977,12 +1977,12 @@ impl<D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendImpl<D> {
 }
 
 /// Normalize within channel groups.
-impl<D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::GroupNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::GroupNorm>, Self>,
+        request: ExecutionRequest<'_, op::GroupNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::GroupNorm;
         let input = reduction_operand(
@@ -2011,12 +2011,12 @@ impl<D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<D> {
 /// two identical invocations disagree about, which is a property of dropout and
 /// not a defect here, and the reason its test asserts the distribution rather
 /// than the values.
-impl<D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Dropout>, Self>,
+        request: ExecutionRequest<'_, op::Dropout, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Dropout;
         let training = records_gradients(request.context);
@@ -2061,12 +2061,12 @@ impl<D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<D> {
 /// and the product needs `[in, out]`. Doing it here rather than asking the
 /// caller to pre-transpose keeps the descriptor's operand order the same as the
 /// module's field order.
-impl<D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Linear> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Linear>, Self>,
+        request: ExecutionRequest<'_, op::Linear, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Linear;
         let (input, weight, bias) = match request.inputs {
@@ -2106,12 +2106,12 @@ impl<D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<D> {
 ///
 /// No mean is subtracted, which is the whole difference from `layer_norm` and
 /// the reason this cannot be routed to it.
-impl<D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::RmsNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::RmsNorm>, Self>,
+        request: ExecutionRequest<'_, op::RmsNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::RmsNorm;
         let training = records_gradients(request.context);
@@ -2134,12 +2134,12 @@ impl<D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<D> {
 }
 
 /// Normalize each channel independently.
-impl<D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::InstanceNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::InstanceNorm>, Self>,
+        request: ExecutionRequest<'_, op::InstanceNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::InstanceNorm;
         let input = reduction_operand(
@@ -2162,12 +2162,12 @@ impl<D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<D> {
 /// only the extents to prepend. Passing the descriptor's shape straight
 /// through would prepend the target to the operand and produce a tensor of
 /// twice the intended rank, so the prefix is derived here.
-impl<D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::BroadcastLeft> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BroadcastLeft>, Self>,
+        request: ExecutionRequest<'_, op::BroadcastLeft, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::BroadcastLeft;
         let input = reduction_operand(
@@ -2190,12 +2190,12 @@ impl<D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendImpl<D> {
 }
 
 /// Fused `beta * mat + alpha * (mat1 @ mat2)`.
-impl<D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Addmm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Addmm>, Self>,
+        request: ExecutionRequest<'_, op::Addmm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Addmm;
         let [mat, lhs, rhs] = ternary_operands(
@@ -2216,12 +2216,12 @@ impl<D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<D> {
 /// the declared contract have to agree before anything runs; a descriptor that
 /// declares a mask and supplies three operands is a defect, not a request to
 /// attend without one.
-impl<D: Device> Execute<Descriptor<op::ScaledDotProductAttention>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ScaledDotProductAttention>, Self>,
+        request: ExecutionRequest<'_, op::ScaledDotProductAttention, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::ScaledDotProductAttention;
         let attributes = request.operation.descriptor().attributes();
@@ -2263,12 +2263,12 @@ impl<D: Device> Execute<Descriptor<op::ScaledDotProductAttention>> for CpuBacken
 /// row constrains only what this reads. What it may be asked to write is
 /// constrained here: the CPU kernel refuses a quantized target, and a refusal
 /// that names the operation is more use than the kernel's untyped one.
-impl<D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ToDType>, Self>,
+        request: ExecutionRequest<'_, op::ToDType, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::ToDType;
         let input = reduction_operand(
@@ -2297,12 +2297,12 @@ impl<D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<D> {
 /// its operand, so the concrete types are named here instead of forwarding `T`.
 /// A `CpuBackendImpl<D>` executing this still compresses f32 storage into
 /// `Q8_0`, because the storage carries its own dtype and `T` never described it.
-impl<D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Quantize>, Self>,
+        request: ExecutionRequest<'_, op::Quantize, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Quantize;
         let input = reduction_operand(
@@ -2331,12 +2331,12 @@ impl<D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<D> {
 /// Lossy, and the inverse of `quantize` only up to the quantization error. That
 /// is a property of the representation rather than something this layer can
 /// correct, so it is stated and not compensated for.
-impl<D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Dequantize>, Self>,
+        request: ExecutionRequest<'_, op::Dequantize, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Dequantize;
         let input = reduction_operand(
@@ -2363,12 +2363,12 @@ impl<D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl<D> {
 /// float. That asymmetry is legal because a capability row constrains operands,
 /// and it is the clearest example in the registry of why the row and the output
 /// rule are separate claims.
-impl<D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::QuantizedMatMul> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::QuantizedMatMul>, Self>,
+        request: ExecutionRequest<'_, op::QuantizedMatMul, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::QuantizedMatMul;
         let (lhs, rhs) = binary_operands(
@@ -2388,12 +2388,12 @@ impl<D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBackendImpl<D> {
 /// does and the two must agree while both exist. `mul` broadcasts, but the
 /// descriptor has already required the operands to match, so no broadcast can
 /// occur here.
-impl<D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Dot> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Dot>, Self>,
+        request: ExecutionRequest<'_, op::Dot, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Dot;
         let (lhs, rhs) = binary_operands(
@@ -2413,12 +2413,12 @@ impl<D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<D> {
 ///
 /// Each operand grows an axis on the side the other one occupies, and the
 /// broadcast multiply fills the grid that leaves.
-impl<D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Outer> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Outer>, Self>,
+        request: ExecutionRequest<'_, op::Outer, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Outer;
         let (lhs, rhs) = binary_operands(
@@ -2479,12 +2479,12 @@ fn consecutive_pieces<D: Device>(
     Ok(pieces)
 }
 
-impl<D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Chunk> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Chunk>, Self>,
+        request: ExecutionRequest<'_, op::Chunk, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
         let operation = OperationKind::Chunk;
         let input = reduction_operand(
@@ -2513,12 +2513,12 @@ impl<D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::Split>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Split> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Split>, Self>,
+        request: ExecutionRequest<'_, op::Split, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
         let operation = OperationKind::Split;
         let input = reduction_operand(
@@ -2585,12 +2585,12 @@ fn squared_deviations(
 /// composition and no backward rule is written here.
 macro_rules! variance_executors {
     ($(($operation:ident, $mean:ident, $reduce:ident, $finish:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
@@ -2719,12 +2719,12 @@ variance_executors![
 /// each element to the power two and the sum to the power one half, which is
 /// two transcendental calls where a multiply and a square root do exactly the
 /// same thing more accurately.
-impl<D: Device> Execute<Descriptor<op::Norm>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::Norm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Norm>, Self>,
+        request: ExecutionRequest<'_, op::Norm, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::Norm;
         let input = reduction_operand(
@@ -2769,12 +2769,12 @@ const NORM_ORDER_TOLERANCE: f64 = 1e-6;
 /// and three copies of that would be three places for it to drift.
 macro_rules! loss_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+                request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (prediction, target) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
@@ -2823,12 +2823,12 @@ loss_executors![
 /// refused a non-integer target or a swapped pair, and `f32_only` enforces
 /// the logits' real constraint here. The target is deliberately *not* passed
 /// to `f32_only`: an integer class index is exactly what it should be.
-impl<D: Device> Execute<Descriptor<op::CrossEntropyLoss>> for CpuBackendImpl<D> {
+impl<D: Device> Execute<op::CrossEntropyLoss> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::CrossEntropyLoss>, Self>,
+        request: ExecutionRequest<'_, op::CrossEntropyLoss, Self>,
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::CrossEntropyLoss;
         let (logits, target) = binary_operands(
@@ -2864,7 +2864,7 @@ macro_rules! assert_every_advertised_row_executes {
             const fn executes<O, B>()
             where
                 O: incin_core::exec::CanonicalOperation,
-                B: Execute<Descriptor<O>>,
+                B: Execute<O>,
             {
             }
 

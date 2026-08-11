@@ -32,12 +32,12 @@ impl_data_creation_executors!(CudaBackendImpl<D>, CudaStorage);
 
 macro_rules! impl_cuda_canonical {
     ($(($op:ident, $func:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for CudaBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {
                 let operation = OperationKind::$op;
                 let [lhs, rhs] = request.inputs else {
@@ -59,11 +59,11 @@ impl_cuda_canonical![
     (Div, cuda_div_storage),
 ];
 
-impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::ReshapeExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
+        request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -80,11 +80,11 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CudaBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::BroadcastAs> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BroadcastAs>, Self>,
+        request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -101,11 +101,11 @@ impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for CudaBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
+        request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(
@@ -124,11 +124,11 @@ impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CudaBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
+        request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [input, weight] = request.inputs else {
             return Err(invalid(
@@ -156,11 +156,11 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for CudaBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::MaxPool2d> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
+        request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -184,11 +184,11 @@ impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for CudaBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for CudaBackendImpl<D> {
+impl<D: Device> Execute<op::AvgPool2d> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
+        request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<CudaStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -213,11 +213,11 @@ impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for CudaBackendImpl<D> {
 
 macro_rules! impl_cuda_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for CudaBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -231,11 +231,11 @@ macro_rules! impl_cuda_reduction_all {
 
 macro_rules! impl_cuda_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for CudaBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -296,7 +296,7 @@ macro_rules! assert_every_advertised_cuda_row_executes {
             const fn executes<O, B>()
             where
                 O: incin_core::exec::CanonicalOperation,
-                B: Execute<Descriptor<O>>,
+                B: Execute<O>,
             {
             }
 

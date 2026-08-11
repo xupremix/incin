@@ -22,12 +22,12 @@ impl_data_creation_executors!(MetalBackendImpl<D>, MetalStorage);
 
 macro_rules! impl_metal_canonical {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for MetalBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {
                 let operation = OperationKind::$op;
                 let [lhs, rhs] = request.inputs else {
@@ -44,11 +44,11 @@ macro_rules! impl_metal_canonical {
 
 impl_metal_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
 
-impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::ReshapeExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
+        request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -65,11 +65,11 @@ impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for MetalBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::BroadcastAs> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::BroadcastAs>, Self>,
+        request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -86,11 +86,11 @@ impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for MetalBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MatMulExact>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::MatMulExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
+        request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(
@@ -109,11 +109,11 @@ impl<D: Device> Execute<Descriptor<op::MatMulExact>> for MetalBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::Conv2dExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
+        request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [input, weight] = request.inputs else {
             return Err(invalid(
@@ -141,11 +141,11 @@ impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for MetalBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::MaxPool2d> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
+        request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -169,11 +169,11 @@ impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for MetalBackendImpl<D> {
     }
 }
 
-impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for MetalBackendImpl<D> {
+impl<D: Device> Execute<op::AvgPool2d> for MetalBackendImpl<D> {
     type Output = MetalStorage;
     fn execute_shaped<ShapeTy: Shape>(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
+        request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<MetalStorage, BackendError> {
         let [input] = request.inputs else {
             return Err(invalid(
@@ -198,11 +198,11 @@ impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for MetalBackendImpl<D> {
 
 macro_rules! impl_metal_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for MetalBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -216,11 +216,11 @@ macro_rules! impl_metal_reduction_all {
 
 macro_rules! impl_metal_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<Descriptor<op::$op>> for MetalBackendImpl<D> {
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, Descriptor<op::$op>, Self>,
+                request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {
                 let [input] = request.inputs else {
                     return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
@@ -263,7 +263,7 @@ macro_rules! assert_every_advertised_metal_row_executes {
             const fn executes<O, B>()
             where
                 O: incin_core::exec::CanonicalOperation,
-                B: Execute<Descriptor<O>>,
+                B: Execute<O>,
             {
             }
 
