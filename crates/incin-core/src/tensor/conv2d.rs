@@ -2,12 +2,12 @@
 
 use alloc::vec::Vec;
 
-use crate::exec::catalog::{op, Conv2dAttributes, Descriptor};
+use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::prelude::*;
-use crate::tensor::matmul::StaticDim;
 use crate::tensor::backend::Execute;
+use crate::tensor::matmul::StaticDim;
 use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
@@ -130,8 +130,7 @@ where
         S1: KernelConv2dShape<KShape, Stride, Padding>,
     {
         let output_shape = S1::output_shape(&self.shape_buf_value(), &weight.shape_buf_value());
-        let output_shape = ShapeValue::<S1::Output>::try_new(output_shape)
-            .map_err(Error::Shape)?;
+        let output_shape = ShapeValue::<S1::Output>::try_new(output_shape).map_err(Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let kernel = TensorHandle::from_storage::<B, K, Local>(&weight.inner);
         let mut inputs = Vec::with_capacity(if bias.is_some() { 3 } else { 2 });
