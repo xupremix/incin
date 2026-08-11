@@ -191,6 +191,22 @@ pub trait SupportsDType<K: DType> {
     fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeDescriptor>;
 }
 
+/// The broad backend profile used by generic tensor modules.
+///
+/// This profile contains backend identity, storage, dtype resolution, and
+/// capability admission. Individual operation implementations remain
+/// expressed by exact `Execute<O>` bounds at the call site, so a module can
+/// add only the operations it actually invokes without inheriting the old
+/// operation-family hierarchy.
+pub trait TensorBackend<K: DType>: Backend + SupportsDType<K> {}
+
+impl<B, K> TensorBackend<K> for B
+where
+    B: Backend + SupportsDType<K>,
+    K: DType,
+{
+}
+
 /// The framework's single extension point: implement this to add a new compute backend.
 ///
 /// `Tensor<S, B, K, G>` is generic over `B: Backend` and stores exactly one

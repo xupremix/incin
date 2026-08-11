@@ -1,9 +1,9 @@
 use incin::backend_authoring::operations::{Descriptor, NoAttributes, OPERATION_CATALOG, op};
-use incin::backend_authoring::{Backend, Execute, ExecutionDescriptor, Operation, StorageBackend};
+use incin::backend_authoring::{Execute, ExecutionDescriptor, Operation, StorageBackend, TensorBackend};
 
 pub fn accepts_backend_contract<B, O>()
 where
-    B: Backend + StorageBackend + Execute<O>,
+    B: TensorBackend<f32> + StorageBackend + Execute<O>,
     O: ExecutionDescriptor + Operation,
 {
 }

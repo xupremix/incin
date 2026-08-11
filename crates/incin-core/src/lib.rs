@@ -89,8 +89,8 @@ pub mod backend_authoring {
     };
     pub use crate::tensor::backend::{
         Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
-        OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
-        TransferTo, adamw_step_composed,
+        OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorBackend,
+        TensorOps, TransferTo, adamw_step_composed,
     };
     /// Read the tracing graph mid-flight, without draining it.
     ///

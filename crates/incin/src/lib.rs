@@ -220,7 +220,7 @@ pub mod backend_authoring {
         ExecutionContext, ExecutionDescriptor, ExecutionRequest, FloatOps, LossOps, LossScaling,
         ModuleOps, NumericOps, Operation, OperationIdentity, OperationKey, OptimizerOps,
         PrecisionSpec, QuantizedOps, ReductionOps, RuntimePrecisionPolicy, StorageBackend,
-        SupportsDType, TensorOps, TransferTo, Validated,
+        SupportsDType, TensorBackend, TensorOps, TransferTo, Validated,
     };
     pub use incin_core::backend_authoring::{execute, execute_shaped};
 
@@ -369,7 +369,7 @@ pub type Tensor<
     S,
     B = DefaultBackend,
     K = f32,
-    G = incin_core::prelude::Grad,
+    G = incin_core::prelude::NoGrad,
     P = incin_core::dist::Local,
 > = incin_core::prelude::Tensor<S, B, K, G, P>;
 
@@ -379,7 +379,7 @@ pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
     K = f32,
-    G = incin_core::prelude::Grad,
+    G = incin_core::prelude::NoGrad,
     P = incin_core::dist::Local,
 > = incin_core::prelude::Tensor<S, B, K, G, P>;
 
