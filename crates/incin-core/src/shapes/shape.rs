@@ -70,14 +70,8 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     type Arg;
     /// Converts a user-facing `Arg` into canonical runtime dimensions.
     fn init(arg: Self::Arg) -> ShapeBuf;
-    /// Attempts to construct canonical runtime dimensions from raw dimensions.
-    /// dimensions, returning `None` if `dims` doesn't match `Self`
-    /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf>;
     /// Fallible raw-dimension boundary for callers that need a typed shape
-    /// error. This is the canonical validation entry point; `from_dyn` is
-    /// retained only as a low-level compatibility hook for external Shape
-    /// implementations.
+    /// error.
     #[inline]
     fn try_from_dims(
         dims: &[usize],
@@ -86,15 +80,6 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
         Ok(crate::shapes::ShapeBuf::from_slice(dims))
     }
 
-    /// Legacy optional adapter for callers that have not moved to structured
-    /// shape errors yet. New framework code must use `try_from_dims`.
-    #[inline]
-    #[deprecated(note = "use Shape::try_from_dims for structured validation")]
-    fn try_from_dyn(
-        dims: &[usize],
-    ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        Self::try_from_dims(dims)
-    }
     /// Resolves constructor input into the canonical runtime dimension
     /// storage.  New shape-aware code should use this boundary instead of
     /// retaining a shape-specific field beyond construction.
@@ -121,11 +106,6 @@ impl<const N: usize> Shape for [usize; N] {
     #[inline(always)]
     fn init(arg: Self::Arg) -> ShapeBuf {
         crate::shapes::ShapeBuf::from_slice(&arg)
-    }
-
-    #[inline(always)]
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        (dims.len() == N).then(|| crate::shapes::ShapeBuf::from_slice(dims))
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -163,15 +143,6 @@ impl Shape for Nil {
     #[inline(always)]
     fn init(_: Self::Arg) -> ShapeBuf {
         crate::shapes::ShapeBuf::scalar()
-    }
-
-    #[inline(always)]
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        if dims.is_empty() {
-            Some(crate::shapes::ShapeBuf::scalar())
-        } else {
-            None
-        }
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -233,18 +204,6 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
             buf.push(d);
         }
         Ok(buf)
-    }
-
-    #[inline(always)]
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        if dims.is_empty() {
-            return None;
-        }
-        if !H::validate_size(dims[0]) {
-            return None;
-        }
-        let _tail_dims = T::from_dyn(&dims[1..])?;
-        Some(crate::shapes::ShapeBuf::from_slice(dims))
     }
 
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
@@ -735,10 +694,6 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
         arg
     }
 
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        (dims.len() == R::USIZE).then(|| crate::shapes::ShapeBuf::from_slice(dims))
-    }
-
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.len() == R::USIZE {
             Ok(())
@@ -764,7 +719,7 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> DynShape for R
 /// Rebuild a typed shape buffer from computed dimensions, reporting instead of
 /// panicking.
 ///
-/// This is the checked replacement for the `from_dyn(&dims).unwrap()` chain
+/// This is the checked replacement for the old optional raw-dimension chain
 /// that `SHP-001` inventoried across 39 sites. The unwrap was a proof
 /// obligation that no type stated and no test covered: the caller had already
 /// erased a known-rank shape to a `Vec<usize>`, and then asserted the
@@ -1160,11 +1115,6 @@ impl Shape for Dyn {
     fn init(arg: Self::Arg) -> ShapeBuf {
         arg.into_iter().collect()
     }
-    /// Attempts to validate raw runtime dimensions against this shape.
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        Some(crate::shapes::ShapeBuf::from_slice(dims))
-    }
-
     fn validate_dims(_: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         Ok(())
     }
@@ -1223,15 +1173,6 @@ impl Shape for () {
     fn init(_: Self::Arg) -> ShapeBuf {
         crate::shapes::ShapeBuf::scalar()
     }
-    /// Attempts to validate raw runtime dimensions against this shape.
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        if dims.is_empty() {
-            Some(crate::shapes::ShapeBuf::scalar())
-        } else {
-            None
-        }
-    }
-
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.is_empty() {
             Ok(())
@@ -1275,15 +1216,6 @@ impl<D: Dim> Shape for Vec<D> {
     fn init(arg: Self::Arg) -> ShapeBuf {
         crate::shapes::ShapeBuf::from_iter(arg.into_iter().map(|d| d.size()))
     }
-    /// Attempts to validate raw runtime dimensions against this shape.
-    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
-        if dims.iter().all(|&d| D::validate_size(d)) {
-            Some(crate::shapes::ShapeBuf::from_slice(dims))
-        } else {
-            None
-        }
-    }
-
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
         if dims.iter().all(|&d| D::validate_size(d)) {
             Ok(())

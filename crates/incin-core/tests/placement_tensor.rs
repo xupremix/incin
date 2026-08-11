@@ -18,12 +18,14 @@ use incin_core::dist::{
     PlacementTransitionRule, Replicated, Sharded,
 };
 use incin_core::exec::ReshapeSpec;
-use incin_core::prelude::{DTypeId, Dyn, Grad, PlacedTensorError, Shape, ShapeBuf, Tensor};
+use incin_core::prelude::{
+    DTypeId, DimCons, Dyn, Grad, Nil, PlacedTensorError, Shape, ShapeBuf, Tensor,
+};
 use incin_core::typenum::{U1, U2, U8};
 
 type B = CpuBackendImpl;
 type Mesh = MeshSpec<Data<U1>, TensorParallel<U2>>;
-type Global = (U2, U8);
+type Global = DimCons<U2, DimCons<U8, Nil>>;
 type ReplicatedTensor = Tensor<Global, B, f32, Grad, Replicated<Mesh>>;
 type ShardedTensor = Tensor<Global, B, f32, Grad, Sharded<Mesh, U1>>;
 
@@ -47,7 +49,7 @@ fn reshape(input: &[usize], output: &[usize]) -> ReshapeSpec {
 fn replicated_proof() -> incin_core::dist::ValidatedDistributed<ReshapeSpec> {
     let inputs = DistributedInputs::<_, Global>::new(
         reshape(&[2, 8], &[2, 8]),
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         vec![ShapeBuf::from_slice(&[2, 8]), ShapeBuf::from_slice(&[2, 8])],
         PlacementBuf::from([Replicated::<Mesh>::PLACEMENT]),
     );
@@ -57,7 +59,7 @@ fn replicated_proof() -> incin_core::dist::ValidatedDistributed<ReshapeSpec> {
 fn sharded_proof() -> incin_core::dist::ValidatedDistributed<ReshapeSpec> {
     let inputs = DistributedInputs::<_, Global>::new(
         reshape(&[2, 8], &[2, 8]),
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         vec![ShapeBuf::from_slice(&[2, 4]), ShapeBuf::from_slice(&[2, 4])],
         PlacementBuf::from([Replicated::<Mesh>::PLACEMENT]),
     );
@@ -69,7 +71,7 @@ fn a_static_placed_tensor_keeps_global_and_rank_local_shapes_distinct() {
     let storage = Tensor::<Dyn, B>::zeros(vec![2, 4]).unwrap().into_inner();
     let tensor = ShardedTensor::try_from_distributed_storage(
         storage,
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -82,7 +84,26 @@ fn a_static_placed_tensor_keeps_global_and_rank_local_shapes_distinct() {
     assert_eq!(tensor.local_dims(), vec![2, 4]);
     assert_eq!(tensor.rank_index(), 1);
     assert_eq!(tensor.placement(), PlacementKind::Sharded { axis: 1 });
-    assert_eq!(tensor.dtype(), DTypeId::F32);
+    assert_eq!(tensor.dtype(), DTypeId::F32.descriptor());
+}
+
+#[test]
+fn structural_reshape_retains_static_placement_metadata() {
+    let storage = Tensor::<Dyn, B>::zeros(vec![2, 8]).unwrap().into_inner();
+    let tensor: ReplicatedTensor = ReplicatedTensor::try_from_distributed_storage(
+        storage,
+        Global::try_from_dims(&[2, 8]).unwrap(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        0,
+        &replicated_proof(),
+    )
+    .unwrap();
+
+    let reshaped: ReplicatedTensor = tensor.reshape::<Global>(((), ((), ()))).unwrap();
+    assert_eq!(reshaped.placement(), PlacementKind::Replicated);
+    assert_eq!(reshaped.dims().as_ref(), &[2, 8]);
 }
 
 #[test]
@@ -90,7 +111,7 @@ fn static_reshard_requires_both_the_trait_proof_and_matching_runtime_storage() {
     let replicated_storage = Tensor::<Dyn, B>::zeros(vec![2, 8]).unwrap().into_inner();
     let replicated = ReplicatedTensor::try_from_distributed_storage(
         replicated_storage,
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -117,8 +138,8 @@ fn dyn_shape_dtype_and_placement_are_checked_at_runtime() {
         .into_inner();
     let tensor = DynamicTensor::try_from_distributed_storage(
         storage,
-        vec![2, 8],
-        DTypeId::F64,
+        ShapeBuf::from_slice(&[2, 8]),
+        DTypeId::F64.descriptor(),
         Default::default(),
         Default::default(),
         0,
@@ -128,7 +149,7 @@ fn dyn_shape_dtype_and_placement_are_checked_at_runtime() {
 
     assert_eq!(tensor.dims(), vec![2, 8]);
     assert_eq!(tensor.local_dims(), vec![2, 4]);
-    assert_eq!(tensor.dtype(), DTypeId::F64);
+    assert_eq!(tensor.dtype(), DTypeId::F64.descriptor());
     assert_eq!(tensor.placement(), PlacementKind::Sharded { axis: 1 });
 }
 
@@ -141,8 +162,8 @@ fn dyn_metadata_mismatches_are_rejected_before_a_tensor_is_minted() {
         .into_inner();
     let error = DynamicTensor::try_from_distributed_storage(
         wrong_dtype,
-        vec![2, 8],
-        DTypeId::F64,
+        ShapeBuf::from_slice(&[2, 8]),
+        DTypeId::F64.descriptor(),
         Default::default(),
         Default::default(),
         0,
@@ -152,15 +173,15 @@ fn dyn_metadata_mismatches_are_rejected_before_a_tensor_is_minted() {
     assert_eq!(
         error,
         PlacedTensorError::DType {
-            expected: DTypeId::F64,
-            got: DTypeId::F32,
+            expected: DTypeId::F64.descriptor(),
+            got: DTypeId::F32.descriptor(),
         }
     );
 
     let wrong_shape = Tensor::<Dyn, B>::zeros(vec![2, 5]).unwrap().into_inner();
     let error = ShardedTensor::try_from_distributed_storage(
         wrong_shape,
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -173,7 +194,7 @@ fn dyn_metadata_mismatches_are_rejected_before_a_tensor_is_minted() {
     let wrong_placement = Tensor::<Dyn, B>::zeros(vec![2, 4]).unwrap().into_inner();
     let error = ReplicatedTensor::try_from_distributed_storage(
         wrong_placement,
-        Global::from_dyn(&[2, 8]).unwrap(),
+        Global::try_from_dims(&[2, 8]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -193,8 +214,8 @@ fn dyn_reshard_uses_the_runtime_legal_transition_table() {
         .into_inner();
     let replicated = DynamicTensor::try_from_distributed_storage(
         storage,
-        vec![2, 8],
-        DTypeId::F32,
+        ShapeBuf::from_slice(&[2, 8]),
+        DTypeId::F32.descriptor(),
         Default::default(),
         Default::default(),
         0,

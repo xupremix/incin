@@ -1,6 +1,6 @@
 //! Fallible broadcast, reshape, flatten, and matmul geometry (`SHP-004`).
 //!
-//! `SHP-001` inventoried 39 live `from_dyn(&dims).unwrap()` sites: a shape rule
+//! `SHP-001` inventoried raw-dimension conversion sites: a shape rule
 //! would erase a known-rank output to a `Vec<usize>`, re-parse it, and assert
 //! the round-trip succeeded. The assertion was a proof obligation no type
 //! stated and no test covered. This file pins the replacement — every one of

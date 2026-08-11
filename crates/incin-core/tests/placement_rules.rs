@@ -21,7 +21,7 @@ use incin_core::dist::{
     validate_transition,
 };
 use incin_core::exec::{ReduceOp, ReshapeSpec};
-use incin_core::prelude::{Dyn, Shape, ShapeBuf};
+use incin_core::prelude::{DimCons, Dyn, Nil, Shape, ShapeBuf};
 use incin_core::typenum::{U0, U1, U2, U3, U4, U10, U12};
 
 type Mesh = MeshSpec<Data<U1>, TensorParallel<U3>>;
@@ -238,13 +238,13 @@ fn pipeline_indices_are_checked_against_the_runtime_mesh_degree() {
 
 #[test]
 fn a_valid_transition_mints_an_inspectable_distributed_proof() {
-    type Global = (U3, U12);
+    type Global = DimCons<U3, DimCons<U12, Nil>>;
     type Rule = PlacementTransitionRule<Replicated<Mesh>, Sharded<Mesh, U1>>;
 
     let operation = reshape(&[36], &[3, 12]);
     let inputs = DistributedInputs::<_, Global>::new(
         operation.clone(),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![
             ShapeBuf::from_slice(&[3, 4]),
             ShapeBuf::from_slice(&[3, 4]),
@@ -271,12 +271,12 @@ fn a_valid_transition_mints_an_inspectable_distributed_proof() {
 
 #[test]
 fn distributed_lowering_rejects_metadata_that_does_not_match_its_types() {
-    type Global = (U3, U12);
+    type Global = DimCons<U3, DimCons<U12, Nil>>;
     type Rule = PlacementTransitionRule<Replicated<Mesh>, Sharded<Mesh, U1>>;
 
     let wrong_descriptor = DistributedInputs::<_, Global>::new(
         reshape(&[30], &[3, 10]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
         PlacementBuf::from([PlacementKind::Replicated]),
     );
@@ -287,7 +287,7 @@ fn distributed_lowering_rejects_metadata_that_does_not_match_its_types() {
 
     let wrong_placement = DistributedInputs::<_, Global>::new(
         reshape(&[36], &[3, 12]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
         PlacementBuf::from([Sharded::<Mesh, U1>::PLACEMENT]),
     );
@@ -298,7 +298,7 @@ fn distributed_lowering_rejects_metadata_that_does_not_match_its_types() {
 
     let incomplete_partition = DistributedInputs::<_, Global>::new(
         reshape(&[36], &[3, 12]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 5]); 3],
         PlacementBuf::from([PlacementKind::Replicated]),
     );
@@ -315,12 +315,12 @@ fn distributed_lowering_rejects_metadata_that_does_not_match_its_types() {
 
 #[test]
 fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
-    type Global = (U3, U12);
+    type Global = DimCons<U3, DimCons<U12, Nil>>;
     type HybridRule = PlacementTransitionRule<Replicated<HybridMesh>, Sharded<HybridMesh, U1>>;
 
     let hybrid = DistributedInputs::<_, Global>::new(
         reshape(&[36], &[3, 12]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 6],
         PlacementBuf::from([Replicated::<HybridMesh>::PLACEMENT]),
     );
@@ -328,7 +328,7 @@ fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
 
     let too_few = DistributedInputs::<_, Global>::new(
         reshape(&[36], &[3, 12]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
         PlacementBuf::from([Replicated::<HybridMesh>::PLACEMENT]),
     );
@@ -344,7 +344,7 @@ fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
     type LocalRule = PlacementTransitionRule<Local, Local>;
     let too_many_local = DistributedInputs::<_, Global>::new(
         reshape(&[36], &[3, 12]),
-        Global::from_dyn(&[3, 12]).unwrap(),
+        Global::try_from_dims(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 12]); 2],
         PlacementBuf::from([PlacementKind::Local]),
     );
@@ -360,7 +360,7 @@ fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
 
 #[test]
 fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
-    type Global = (U3, U4);
+    type Global = DimCons<U3, DimCons<U4, Nil>>;
     type ValidRule =
         PlacementTransitionRule<PipelineStage<PipelineMesh, 2>, PipelineStage<PipelineMesh, 2>>;
     type InvalidRule =
@@ -369,7 +369,7 @@ fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
     let operation = reshape(&[12], &[3, 4]);
     let valid = DistributedInputs::<_, Global>::new(
         operation.clone(),
-        Global::from_dyn(&[3, 4]).unwrap(),
+        Global::try_from_dims(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4])],
         PlacementBuf::from([PipelineStage::<PipelineMesh, 2>::PLACEMENT]),
     );
@@ -377,7 +377,7 @@ fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
 
     let invalid = DistributedInputs::<_, Global>::new(
         operation,
-        Global::from_dyn(&[3, 4]).unwrap(),
+        Global::try_from_dims(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4])],
         PlacementBuf::from([PipelineStage::<PipelineMesh, 3>::PLACEMENT]),
     );
@@ -392,13 +392,13 @@ fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
 
 #[test]
 fn a_partial_value_becomes_complete_only_through_its_collective_transition() {
-    type Global = (U3, U4);
+    type Global = DimCons<U3, DimCons<U4, Nil>>;
     type Rule = PlacementTransitionRule<Partial<Mesh, Sum>, Replicated<Mesh>>;
 
     let operation = reshape(&[12], &[3, 4]);
     let inputs = DistributedInputs::<_, Global>::new(
         operation,
-        Global::from_dyn(&[3, 4]).unwrap(),
+        Global::try_from_dims(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
         PlacementBuf::from([Partial::<Mesh, Sum>::PLACEMENT]),
     );

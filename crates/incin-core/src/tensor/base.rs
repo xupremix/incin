@@ -936,8 +936,8 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
         let dims = self._shape.shape_buf();
         // `Dyn`'s field *is* the dimension vector, so there is nothing to
         // re-parse and nothing that can fail — the old
-        // `Dyn::from_dyn(..).unwrap()` was asserting `Some(dims.to_vec())` is
-        // `Some`. Building it directly makes that structural rather than
+        // The old optional raw-dimension conversion asserted that the input
+        // was accepted. Building it directly makes that structural rather than
         // assumed, and is the last of the 39 sites `SHP-004` removes.
         let s2_shape = crate::shapes::ShapeBuf::from_slice(dims.as_ref());
         Tensor::from_shape_value_unchecked(

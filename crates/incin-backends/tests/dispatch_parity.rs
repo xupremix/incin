@@ -13,6 +13,8 @@
 //! training loop.
 #![cfg(feature = "cpu")]
 
+extern crate incin_core as incin;
+
 use incin_backends::cpu::{CpuBackendImpl, CpuStorage};
 use incin_backends::dispatch::{DispatchBackend, DispatchStorage};
 use incin_core::backend_authoring::{
@@ -20,20 +22,26 @@ use incin_core::backend_authoring::{
     StorageBackend,
 };
 use incin_core::exec::{
-    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
-    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceAtRule,
+    ReduceOp, ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
 };
 use incin_core::prelude::*;
+use incin_core::shapes::idx::{Here, Next};
+use incin_core::shapes::shape::{DimCons, Nil};
 use incin_core::typenum::{U0, U1, U2, U3, U4, U6};
 
-type Dispatch = DispatchBackend<f32, Dyn>;
-type DirectCpu = CpuBackendImpl<f32, Cpu>;
+type Dispatch = DispatchBackend<Dyn>;
+type DirectCpu = CpuBackendImpl<Cpu>;
+type R2 = DimCons<U2, DimCons<U3, Nil>>;
+type Shape26 = DimCons<U2, DimCons<U6, Nil>>;
+type Shape34 = DimCons<U3, DimCons<U4, Nil>>;
+type Shape1144 = DimCons<U1, DimCons<U1, DimCons<U4, DimCons<U4, Nil>>>>;
 
 fn dispatch_from(values: &[f32], shape: &[usize]) -> DispatchStorage {
     <Dispatch as Backend>::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .expect("cpu-device creation must route to the cpu backend")
@@ -43,7 +51,7 @@ fn dispatch_indices(values: &[i64], shape: &[usize]) -> DispatchStorage {
     <Dispatch as Backend>::from_bytes::<i64>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::I64,
+        DTypeId::I64.descriptor(),
         &DeviceId::cpu(),
     )
     .expect("index creation must route to the cpu backend")
@@ -53,7 +61,7 @@ fn cpu_from(values: &[f32], shape: &[usize]) -> CpuStorage {
     <DirectCpu as Backend>::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.descriptor(),
         &DeviceId::cpu(),
     )
     .expect("cpu creation must succeed")
@@ -63,7 +71,7 @@ fn cpu_indices(values: &[i64], shape: &[usize]) -> CpuStorage {
     <DirectCpu as Backend>::from_bytes::<i64>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::I64,
+        DTypeId::I64.descriptor(),
         &DeviceId::cpu(),
     )
     .expect("cpu index creation must succeed")
@@ -237,15 +245,14 @@ fn a_validated_reshape_descriptor_routes_to_the_backend_holding_the_operand() {
     // a dispatch backend that answers for itself instead of routing gives a
     // runtime-selected device weaker validation than a statically-selected one.
     let values: Vec<f32> = (1..=12).map(|value| value as f32).collect();
-    let validated: Validated<ReshapeSpec> =
-        <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-            &(
-                <(U2, U6) as Shape>::from_dyn(&[2, 6]).unwrap(),
-                <(U3, U4) as Shape>::from_dyn(&[3, 4]).unwrap(),
-            ),
-            (),
-        )
-        .expect("12 elements either way");
+    let validated: Validated<ReshapeSpec> = <ReshapeRule as ShapeRule<(Shape26, Shape34)>>::lower(
+        &(
+            <Shape26 as Shape>::try_from_dims(&[2, 6]).unwrap(),
+            <Shape34 as Shape>::try_from_dims(&[3, 4]).unwrap(),
+        ),
+        (),
+    )
+    .expect("12 elements either way");
 
     let routed_input = dispatch_from(&values, &[2, 6]);
     let context = ExecutionContext::new(Dispatch::new());
@@ -291,10 +298,10 @@ fn a_validated_conv2d_descriptor_routes_with_all_three_of_its_operands() {
     // still produce a correctly shaped output, which is exactly why it is
     // compared against the directly-executed result instead of just its shape.
     type Conv3x3 = Conv2dRule<U3, U3, U1, U1, U1>;
-    type ConvInput = (U1, U2, U4, U4);
+    type ConvInput = s![1, 2, 4, 4];
 
     let validated = <Conv3x3 as ShapeRule<ConvInput>>::lower(
-        &<ConvInput as Shape>::from_dyn(&[1, 2, 4, 4]).unwrap(),
+        &<ConvInput as Shape>::try_from_dims(&[1, 2, 4, 4]).unwrap(),
         Conv2dArgs::dense(3),
     )
     .expect("a 3x3 window with padding 1 fits a 4x4 input");
@@ -366,11 +373,12 @@ fn a_reduction_routes_the_accumulation_its_descriptor_names() {
         ReduceOp::Min,
         ReduceOp::Prod,
     ] {
-        let validated: Validated<ReductionSpec> = <ReduceRule<1> as ShapeRule<(U2, U3)>>::lower(
-            &<(U2, U3) as Shape>::from_dyn(&[2, 3]).unwrap(),
-            op,
-        )
-        .expect("axis 1 is in range");
+        let validated: Validated<ReductionSpec> =
+            <ReduceAtRule<Next<Here>> as ShapeRule<R2>>::lower(
+                &<R2 as Shape>::try_from_dims(&[2, 3]).unwrap(),
+                op,
+            )
+            .expect("axis 1 is in range");
 
         let routed_input = dispatch_from(&values, &[2, 3]);
         let context = ExecutionContext::new(Dispatch::new());
@@ -410,8 +418,8 @@ fn a_pool_routes_the_accumulation_its_descriptor_names() {
 
     for op in [PoolOp::Max, PoolOp::Average] {
         let validated: Validated<Pool2dSpec> =
-            <Pool2dRule<U2, U2, U0, U1> as ShapeRule<(U1, U1, U4, U4)>>::lower(
-                &<(U1, U1, U4, U4) as Shape>::from_dyn(&[1, 1, 4, 4]).unwrap(),
+            <Pool2dRule<U2, U2, U0, U1> as ShapeRule<Shape1144>>::lower(
+                &<Shape1144 as Shape>::try_from_dims(&[1, 1, 4, 4]).unwrap(),
                 op,
             )
             .expect("a 2x2 window strided by 2 tiles a 4x4 input");
@@ -452,4 +460,31 @@ fn a_pool_routes_the_accumulation_its_descriptor_names() {
         );
         assert_close(&dispatch_values(&routed), &cpu_values(&direct));
     }
+}
+
+/// A device this dispatcher carries no variant for is refused *by name*.
+///
+/// Metal is the case that exists today: it is a first-class feature, and
+/// `DispatchStorage` has no arm for it, so every route lands on the fallback.
+/// That fallback used to answer `BackendUnavailable { backend: "Unknown" }`,
+/// which told a user on Apple Silicon nothing about which backend was missing
+/// and read identically to a genuinely unrecognized device. The refusal itself
+/// is correct and is not what this pins; the attribution is.
+#[test]
+fn an_unrouted_device_is_refused_by_name_not_as_unknown() {
+    // `let ... else` rather than `expect_err`: the success type is
+    // `DispatchStorage`, which is not `Debug`, so `expect_err` will not compile.
+    let Err(error) = <Dispatch as Backend>::from_bytes::<f32>(
+        bytemuck::cast_slice(&[1.0_f32, 2.0]),
+        &[2],
+        DTypeId::F32.descriptor(),
+        &DeviceId::metal(0),
+    ) else {
+        panic!("this dispatcher has no Metal variant to route to");
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "Backend 'Metal' is unavailable in this build"
+    );
 }

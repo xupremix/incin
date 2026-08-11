@@ -23,7 +23,7 @@ where
 #[test]
 fn named_runtime_axes_are_stored_in_shape_buf() {
     type S = s![Batch, Channels, 224, 224];
-    let field = S::from_dyn(&[2, 3, 224, 224]).unwrap();
+    let field = S::try_from_dims(&[2, 3, 224, 224]).unwrap();
     assert_eq!(field.as_ref(), &[2, 3, 224, 224]);
 }
 
@@ -128,7 +128,7 @@ fn named_static_extents_are_distinct_semantic_axes() {
     type Expected = s![Features: 25, Batch: 25];
 
     assert_same::<Out, Expected>();
-    let dims = <Out as Shape>::from_dyn(&[25, 25]).unwrap();
+    let dims = <Out as Shape>::try_from_dims(&[25, 25]).unwrap();
     assert_eq!(dims.as_ref(), &[25, 25]);
 }
 

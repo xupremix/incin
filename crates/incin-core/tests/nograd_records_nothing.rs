@@ -194,7 +194,7 @@ fn chain<G: RequiresGrad>(
 ) -> Result<f32> {
     let sum = a.add(b)?;
     let scaled = sum.mul_scalar(2.0)?;
-    let flat = scaled.reshape::<s![6]>(((),))?;
+    let flat = scaled.reshape::<s![6]>(((), ()))?;
     flat.sum_all()?.to_scalar::<f32>()
 }
 
@@ -226,7 +226,7 @@ fn dyn_operands(requires_grad: bool) -> Operands<Dyn> {
     let retag = |t: Tensor<s![2, 3], B, f32, NoGrad>| {
         Tensor::<s![2, 3], B, f32, Dyn>::try_from_storage(
             t.into_inner(),
-            <s![2, 3] as Shape>::from_dyn(&[2, 3]).unwrap(),
+            <s![2, 3] as Shape>::try_from_dims(&[2, 3]).unwrap(),
             Default::default(),
             Default::default(),
             requires_grad,

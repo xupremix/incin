@@ -7,19 +7,18 @@
 #![cfg(feature = "external-candle")]
 
 use incin_backends::external::candle::{CandleBackend, CandleStorage};
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, LayoutClass, MatMulRule, MatMulSpec, MathMode,
     ReshapeRule, ReshapeSpec, ShapeRule, SupportLevel, TensorHandle, Validated,
 };
-use incin_core::prelude::{
-    BackendError, Cpu, DTypeId, Dyn, Execute, ExecutionRequest, Local, OperationKind, Shape,
-};
+use incin_core::prelude::{BackendError, Cpu, DTypeId, Dyn, Local, OperationKind, Shape};
 use incin_core::typenum::{U2, U3, U4, U6};
 
-type TestBackend = CandleBackend<f32, Cpu>;
+type TestBackend = CandleBackend<Cpu>;
 
-fn field<S: Shape>(dims: &[usize]) -> S::Field {
-    S::from_dyn(dims).expect("test dimensions must match the shape type")
+fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
+    S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
 fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {

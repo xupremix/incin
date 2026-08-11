@@ -11,7 +11,7 @@ fn checked_construction_accepts_matching_storage_metadata() {
     let source = Tensor::<s![2, 3], B>::ones(()).unwrap();
     let rebuilt = Tensor::<s![2, 3], B>::try_from_storage(
         source.into_inner(),
-        <s![2, 3] as Shape>::from_dyn(&[2, 3]).unwrap(),
+        <s![2, 3] as Shape>::try_from_dims(&[2, 3]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -26,7 +26,7 @@ fn checked_construction_rejects_storage_shape_mismatch() {
     let storage = Tensor::<s![2, 3], B>::zeros(()).unwrap().into_inner();
     let err = Tensor::<s![2, 2], B>::try_from_storage(
         storage,
-        <s![2, 2] as Shape>::from_dyn(&[2, 2]).unwrap(),
+        <s![2, 2] as Shape>::try_from_dims(&[2, 2]).unwrap(),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -89,13 +89,13 @@ fn metadata_only_retagging_preserves_validated_storage() {
 #[test]
 fn dynamic_flatten_reports_invalid_ranges_without_panicking() {
     let tensor = Tensor::<Dyn, B>::ones(vec![2, 3, 4]).unwrap();
-    let err = tensor.flatten::<2, 1>().unwrap_err();
+    let err = tensor.flatten_runtime(2, 1).unwrap_err();
     assert_eq!(
         err.to_string(),
         "flatten: axis range 2..1 is invalid for rank 3"
     );
 
-    let err = tensor.flatten::<1, 3>().unwrap_err();
+    let err = tensor.flatten_runtime(1, 3).unwrap_err();
     assert_eq!(
         err.to_string(),
         "flatten: axis range 1..3 is invalid for rank 3"

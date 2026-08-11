@@ -86,15 +86,15 @@ fn reference(lhs: &[usize], rhs: &[usize]) -> Option<Vec<usize>> {
 
 /// The rule under test, as dimensions.
 fn broadcast(lhs: &[usize], rhs: &[usize]) -> Option<Vec<usize>> {
-    let lhs_field = <Dyn as Shape>::from_dyn(lhs).expect("`Dyn` accepts any dimensions");
-    let rhs_field = <Dyn as Shape>::from_dyn(rhs).expect("`Dyn` accepts any dimensions");
+    let lhs_field = <Dyn as Shape>::try_from_dims(lhs).expect("`Dyn` accepts any dimensions");
+    let rhs_field = <Dyn as Shape>::try_from_dims(rhs).expect("`Dyn` accepts any dimensions");
     <Dyn as BroadcastShape<Dyn>>::output_shape(&lhs_field, &rhs_field)
         .ok()
-        .map(|out| Dyn::dims(&out))
+        .map(|out| out.as_ref().to_vec())
 }
 
 const CASES: usize = 5000;
-const MAX_RANK: usize = 6;
+const FUZZ_RANK_LIMIT: usize = 6;
 
 // --- properties ----------------------------------------------------------
 
@@ -104,8 +104,8 @@ fn the_rule_agrees_with_the_reference_on_both_answers() {
     let (mut accepted, mut rejected) = (0, 0);
 
     for case in 0..CASES {
-        let lhs = rng.shape(MAX_RANK);
-        let rhs = rng.shape(MAX_RANK);
+        let lhs = rng.shape(FUZZ_RANK_LIMIT);
+        let rhs = rng.shape(FUZZ_RANK_LIMIT);
         let expected = reference(&lhs, &rhs);
 
         assert_eq!(
@@ -132,8 +132,8 @@ fn broadcasting_is_commutative_in_the_shape_it_produces() {
     let mut rng = Rng::new(0x436f_6d6d_75_74);
 
     for case in 0..CASES {
-        let lhs = rng.shape(MAX_RANK);
-        let rhs = rng.shape(MAX_RANK);
+        let lhs = rng.shape(FUZZ_RANK_LIMIT);
+        let rhs = rng.shape(FUZZ_RANK_LIMIT);
 
         assert_eq!(
             broadcast(&lhs, &rhs),
@@ -149,9 +149,9 @@ fn broadcasting_is_associative_where_all_three_are_defined() {
     let mut reached = 0;
 
     for case in 0..CASES {
-        let a = rng.shape(MAX_RANK);
-        let b = rng.shape(MAX_RANK);
-        let c = rng.shape(MAX_RANK);
+        let a = rng.shape(FUZZ_RANK_LIMIT);
+        let b = rng.shape(FUZZ_RANK_LIMIT);
+        let c = rng.shape(FUZZ_RANK_LIMIT);
 
         let left = broadcast(&a, &b).and_then(|ab| broadcast(&ab, &c));
         let right = broadcast(&b, &c).and_then(|bc| broadcast(&a, &bc));
@@ -177,7 +177,7 @@ fn a_shape_of_ones_is_the_identity() {
     let mut rng = Rng::new(0x4964_656e_74);
 
     for case in 0..CASES {
-        let shape = rng.shape(MAX_RANK);
+        let shape = rng.shape(FUZZ_RANK_LIMIT);
         let ones = vec![1; shape.len()];
 
         assert_eq!(
@@ -193,7 +193,7 @@ fn a_scalar_is_absorbed_whatever_the_other_operand_is() {
     let mut rng = Rng::new(0x5363_616c_61);
 
     for case in 0..CASES {
-        let shape = rng.shape(MAX_RANK);
+        let shape = rng.shape(FUZZ_RANK_LIMIT);
 
         assert_eq!(
             broadcast(&shape, &[]).as_deref(),
@@ -212,8 +212,8 @@ fn a_result_axis_is_never_one_where_an_operand_axis_was_zero() {
     let mut zeros_seen = 0;
 
     for case in 0..CASES {
-        let lhs = rng.shape(MAX_RANK);
-        let rhs = rng.shape(MAX_RANK);
+        let lhs = rng.shape(FUZZ_RANK_LIMIT);
+        let rhs = rng.shape(FUZZ_RANK_LIMIT);
         let Some(out) = broadcast(&lhs, &rhs) else {
             continue;
         };
@@ -241,8 +241,8 @@ fn the_result_has_the_rank_of_the_longer_operand() {
     let mut rng = Rng::new(0x5261_6e6b);
 
     for case in 0..CASES {
-        let lhs = rng.shape(MAX_RANK);
-        let rhs = rng.shape(MAX_RANK);
+        let lhs = rng.shape(FUZZ_RANK_LIMIT);
+        let rhs = rng.shape(FUZZ_RANK_LIMIT);
         let Some(out) = broadcast(&lhs, &rhs) else {
             continue;
         };

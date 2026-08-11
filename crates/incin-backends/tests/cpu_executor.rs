@@ -1,5 +1,7 @@
 #![cfg(feature = "cpu")]
 
+extern crate incin_core as incin;
+
 use core::hint::black_box;
 use core::mem::size_of;
 use std::time::Instant;
@@ -10,18 +12,21 @@ use incin_core::backend_authoring::{
 };
 use incin_core::exec::{
     Alignment, Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec,
-    Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceKeepRule, ReduceOp, ReduceRule,
+    Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceAtRule, ReduceKeepAtRule, ReduceOp,
     ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
 };
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf,
+    BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf, s,
 };
-use incin_core::typenum::{U0, U1, U2, U3, U4, U6, U8};
+use incin_core::shapes::idx::{Here, Next};
+use incin_core::shapes::shape::{DimCons, Nil};
+use incin_core::typenum::{U0, U1, U2, U3, U4};
 
-type TestBackend = CpuBackendImpl<f32, Cpu>;
+type TestBackend = CpuBackendImpl<Cpu>;
+type R2 = DimCons<U2, DimCons<U3, Nil>>;
 
-fn field<S: Shape>(dims: &[usize]) -> S::Field {
-    S::from_dyn(dims).expect("test dimensions must match the shape type")
+fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
+    S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
 fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {
@@ -45,8 +50,8 @@ fn u32_storage(shape: &[usize], values: &[u32]) -> CpuStorage {
 }
 
 fn lower_reshape_2x6_to_3x4() -> Validated<ReshapeSpec> {
-    <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-        &(field::<(U2, U6)>(&[2, 6]), field::<(U3, U4)>(&[3, 4])),
+    <ReshapeRule as ShapeRule<(s![2, 6], s![3, 4])>>::lower(
+        &(field::<s![2, 6]>(&[2, 6]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("12 elements either way")
@@ -191,6 +196,7 @@ fn descriptor_execution_preserves_forward_and_backward_parity() {
     assert_storage_eq(&descriptor.2, &legacy.2);
 }
 
+#[derive(Clone)]
 struct ForeignStorage {
     metadata: TensorMeta,
 }
@@ -198,6 +204,7 @@ struct ForeignStorage {
 struct ForeignBackend;
 
 impl StorageBackend for ForeignBackend {
+    const BACKEND_NAME: &'static str = "Foreign";
     type Storage<K: DType> = ForeignStorage;
     type Device = Cpu;
 
@@ -233,7 +240,7 @@ fn binder_rejects_wrong_count_storage_dtype_and_descriptor_binding() {
     let foreign = ForeignStorage {
         metadata: TensorMeta::contiguous(
             ShapeBuf::from_slice(&[2, 3]),
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             DeviceId::cpu(),
             Alignment::of::<f32>(),
             6,
@@ -272,15 +279,17 @@ fn binder_rejects_wrong_count_storage_dtype_and_descriptor_binding() {
             context: &context,
         })
         .unwrap_err();
-    assert!(matches!(
-        error,
-        BackendError::Unsupported {
-            reason: incin_core::exec::UnsupportedReason::DType {
-                operation: OperationKind::MatMulExact,
-                dtype: DTypeId::F64
-            }
-        }
-    ));
+    if let BackendError::Unsupported {
+        backend,
+        reason: incin_core::exec::UnsupportedReason::DType { operation, dtype },
+    } = error
+    {
+        assert_eq!(backend, "Cpu");
+        assert_eq!(operation, OperationKind::MatMulExact);
+        assert_eq!(dtype, DTypeId::F64.descriptor());
+    } else {
+        panic!("expected BackendError::Unsupported, got {:?}", error);
+    }
 
     let wrong_lhs = f32_storage(&[2, 4], &[1.; 8]);
     let wrong_rhs = f32_storage(&[4, 2], &[1.; 8]);
@@ -384,7 +393,7 @@ fn reshape_descriptor_execution_accepts_an_integer_dtype() {
         execute_reshape::<u32>(&backend, &context, &lower_reshape_2x6_to_3x4(), &input).unwrap();
 
     assert_eq!(descriptor.shape().dims(), &[3, 4]);
-    assert_eq!(descriptor.metadata().dtype(), DTypeId::U32);
+    assert_eq!(descriptor.metadata().dtype(), DTypeId::U32.descriptor());
 }
 
 #[test]
@@ -416,7 +425,7 @@ fn reshape_binder_rejects_wrong_count_storage_and_descriptor_binding() {
     let foreign = ForeignStorage {
         metadata: TensorMeta::contiguous(
             ShapeBuf::from_slice(&[2, 6]),
-            DTypeId::F32,
+            DTypeId::F32.descriptor(),
             DeviceId::cpu(),
             Alignment::of::<f32>(),
             12,
@@ -530,7 +539,7 @@ fn request_layer_has_fixed_borrowed_footprint_and_reports_timing() {
 
 /// A dense 3x3 convolution with padding 1, over a 1x2x4x4 input to 3 channels.
 type Conv3x3 = Conv2dRule<U3, U3, U1, U1, U1>;
-type ConvInput = (U1, U2, U4, U4);
+type ConvInput = s![1, 2, 4, 4];
 
 fn lower_conv2d() -> Validated<Conv2dSpec> {
     <Conv3x3 as ShapeRule<ConvInput>>::lower(
@@ -782,7 +791,7 @@ where
 }
 
 fn lower_reduce(op: ReduceOp) -> Validated<ReductionSpec> {
-    <ReduceRule<1> as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), op)
+    <ReduceAtRule<Next<Here>> as ShapeRule<R2>>::lower(&field::<R2>(&[2, 3]), op)
         .expect("axis 1 is in range")
 }
 
@@ -831,9 +840,8 @@ fn a_reduction_over_every_axis_collapses_the_whole_run() {
         (ReduceOp::Min, 1.0),
         (ReduceOp::Prod, 720.0),
     ] {
-        let validated =
-            <ReduceAllRule as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), op)
-                .expect("every axis is in range");
+        let validated = <ReduceAllRule as ShapeRule<R2>>::lower(&field::<R2>(&[2, 3]), op)
+            .expect("every axis is in range");
         let spec = validated.descriptor();
         assert_eq!(spec.axes.axes().count(), 2, "{op} names both axes");
         assert_eq!(spec.reduced, 6, "{op} collapses every element");
@@ -858,8 +866,8 @@ fn a_product_that_keeps_its_axis_is_composed_rather_than_refused() {
 
     // `ReductionOps` has a `prod_dim` and no `prod_keepdim`, so this is the one
     // reduction the executor cannot route with a single call.
-    let validated = <ReduceKeepRule<1> as ShapeRule<(U2, U3)>>::lower(
-        &field::<(U2, U3)>(&[2, 3]),
+    let validated = <ReduceKeepAtRule<Next<Here>> as ShapeRule<R2>>::lower(
+        &field::<R2>(&[2, 3]),
         ReduceOp::Prod,
     )
     .expect("axis 1 is in range");
@@ -891,8 +899,8 @@ fn a_reduction_will_not_bind_an_operand_of_the_wrong_geometry() {
 }
 
 fn lower_pool(op: PoolOp) -> Validated<Pool2dSpec> {
-    <Pool2dRule<U2, U2, U0, U1> as ShapeRule<(U1, U1, U4, U4)>>::lower(
-        &field::<(U1, U1, U4, U4)>(&[1, 1, 4, 4]),
+    <Pool2dRule<U2, U2, U0, U1> as ShapeRule<s![1, 1, 4, 4]>>::lower(
+        &field::<s![1, 1, 4, 4]>(&[1, 1, 4, 4]),
         op,
     )
     .expect("a 2x2 window strided by 2 tiles a 4x4 input")
@@ -928,8 +936,8 @@ fn a_dilated_average_pool_is_refused_rather_than_quietly_densified() {
     let input = f32_storage(&[1, 1, 8, 8], &[1.; 64]);
 
     let dilated = |op| {
-        <Pool2dRule<U2, U2, U0, U2> as ShapeRule<(U1, U1, U8, U8)>>::lower(
-            &field::<(U1, U1, U8, U8)>(&[1, 1, 8, 8]),
+        <Pool2dRule<U2, U2, U0, U2> as ShapeRule<s![1, 1, 8, 8]>>::lower(
+            &field::<s![1, 1, 8, 8]>(&[1, 1, 8, 8]),
             op,
         )
         .expect("a dilated 2x2 window fits an 8x8 input")

@@ -7,16 +7,19 @@ use incin_core::exec::{
     ExecutionContext, MatMulRule, MatMulSpec, ReshapeRule, ReshapeSpec, ShapeRule, TapeStorage,
     TensorHandle, Validated,
 };
-use incin_core::prelude::{
-    Backend, DTypeId, DeviceId, Dyn, Execute, ExecutionRequest, FloatOps, Local, NumericOps,
-    ReductionOps,
+// The op traits and the descriptor execution contract are `backend_authoring`,
+// not prelude. This file asked the prelude for them, which never had them, and
+// nothing noticed because no CI job compiles the Metal test targets.
+use incin_core::backend_authoring::{
+    Execute, ExecutionRequest, FloatOps, NumericOps, ReductionOps,
 };
+use incin_core::prelude::{Backend, DTypeId, DeviceId, Dyn, Local};
 use incin_core::typenum::{U2, U3, U4, U6};
 
-type TestBackend = MetalBackendImpl<f32, incin_core::prelude::Metal>;
+type TestBackend = MetalBackendImpl<incin_core::prelude::Metal>;
 
-fn field<S: incin_core::shapes::Shape>(dims: &[usize]) -> S::Field {
-    S::from_dyn(dims).expect("test dimensions must match shape")
+fn field<S: incin_core::shapes::Shape>(dims: &[usize]) -> incin_core::shapes::ShapeBuf {
+    S::try_from_dims(dims).expect("test dimensions must match shape")
 }
 
 fn lower_matmul(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {

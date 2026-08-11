@@ -12,33 +12,49 @@
 
 use incin_core::exec::{
     BinaryOp, BroadcastRule, BroadcastSpec, Conv2dArgs, Conv2dRule, MatMulRule, OperationSpec,
-    Pool2dRule, Pool2dSpec, PoolOp, ProofLevel, ReduceKeepRule, ReduceOp, ReduceRule, ReshapeRule,
-    ReshapeSpec, ShapeRule,
+    Pool2dRule, Pool2dSpec, PoolOp, ProofLevel, ReduceAtRule, ReduceKeepAtRule, ReduceOp,
+    ReshapeRule, ReshapeSpec, ShapeRule,
 };
 use incin_core::prelude::{Axis, Dyn, OperationKind, Shape, ShapeBuf};
-use typenum::{U0, U1, U2, U3, U4, U6, U8, U16};
+use incin_core::shapes::idx::{Here, Next};
+use typenum::{U0, U1, U2, U3, U16};
+extern crate incin_core as incin;
+use incin::prelude::s;
 
 incin_core::dim!(Batch);
+
+type R3 = s![2, 3, 4];
 
 /// A shape's runtime field, built from the dimensions a test wants.
 ///
 /// `from_dyn` returns `None` when the dimensions contradict the type, so a
 /// typo in a test is a failed unwrap here rather than a wrong expectation
 /// further down.
-fn field<S: Shape>(dims: &[usize]) -> S::Field {
-    S::from_dyn(dims).expect("test dimensions must match the shape type")
+fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
+    S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
 // -- broadcast ------------------------------------------------------------
 
 /// The pair the broadcast tests lower: a rank-2 shape against a leading axis
 /// of extent 1 that stretches to meet it.
-type Rank2AgainstStretched = ((U3, U4), (U1, U4));
+type Rank2AgainstStretched = (s![3, 4], s![1, 4]);
+type S34 = s![3, 4];
+type S14 = s![1, 4];
+type S23 = s![2, 3];
+type S34Static = s![3, 4];
+type S24 = s![2, 4];
+type S04 = s![4];
+type Batch4 = s![Batch, 4];
+type BatchBatch4 = (s![Batch, 4], s![Batch, 4]);
+type S26 = s![2, 6];
+type S18_88 = s![1, 3, 8, 8];
+type ConvInput = s![1, 3, 8, 8];
 
 #[test]
 fn a_static_broadcast_lowers_to_the_shape_the_frontend_names() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+        &(field::<S34>(&[3, 4]), field::<S14>(&[1, 4])),
         None,
     )
     .expect("3x4 against 1x4 broadcasts");
@@ -61,7 +77,7 @@ fn the_operator_reaches_the_descriptor_through_args() {
         Some(BinaryOp::Div),
     ] {
         let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
-            &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+            &(field::<S34>(&[3, 4]), field::<S14>(&[1, 4])),
             op,
         )
         .expect("3x4 against 1x4 broadcasts");
@@ -74,7 +90,7 @@ fn the_operator_reaches_the_descriptor_through_args() {
 #[test]
 fn a_stretched_axis_gets_a_zero_stride_rather_than_a_branch() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+        &(field::<S34>(&[3, 4]), field::<S14>(&[1, 4])),
         None,
     )
     .expect("3x4 against 1x4 broadcasts");
@@ -90,8 +106,8 @@ fn one_runtime_operand_weakens_the_whole_lowering() {
     // The descriptor is identical to the static case; what differs is how much
     // a backend may assume about it, which is the entire point of carrying the
     // level alongside.
-    let lowered = <BroadcastRule as ShapeRule<((usize, U4), (U4,))>>::lower(
-        &(field::<(usize, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
+    let lowered = <BroadcastRule as ShapeRule<(s![usize, 4], s![4])>>::lower(
+        &(field::<s![usize, 4]>(&[3, 4]), field::<s![4]>(&[4])),
         None,
     )
     .expect("3x4 against 4 broadcasts");
@@ -128,8 +144,11 @@ fn a_named_axis_is_typed_but_not_sized_so_one_side_may_still_stretch() {
     // `Batch` against `Batch` typechecks whatever the two sizes are, because
     // naming an axis says which axis it is and nothing about how long. A size
     // of 1 broadcasts here exactly as it would on an anonymous axis.
-    let lowered = <BroadcastRule as ShapeRule<((Batch, U4), (Batch, U4))>>::lower(
-        &(field::<(Batch, U4)>(&[1, 4]), field::<(Batch, U4)>(&[4, 4])),
+    let lowered = <BroadcastRule as ShapeRule<(s![Batch, 4], s![Batch, 4])>>::lower(
+        &(
+            field::<s![Batch, 4]>(&[1, 4]),
+            field::<s![Batch, 4]>(&[4, 4]),
+        ),
         None,
     )
     .expect("a `Batch` of 1 stretches to a `Batch` of 4");
@@ -143,8 +162,11 @@ fn two_uses_of_one_named_axis_must_still_be_compatible_at_runtime() {
     // The other half: sharing the name buys no exemption from the broadcast
     // rule, so two sizes that are neither equal nor 1 are an error even though
     // the pair typechecks.
-    let error = <BroadcastRule as ShapeRule<((Batch, U4), (Batch, U4))>>::lower(
-        &(field::<(Batch, U4)>(&[3, 4]), field::<(Batch, U4)>(&[5, 4])),
+    let error = <BroadcastRule as ShapeRule<(s![Batch, 4], s![Batch, 4])>>::lower(
+        &(
+            field::<s![Batch, 4]>(&[3, 4]),
+            field::<s![Batch, 4]>(&[5, 4]),
+        ),
         None,
     )
     .expect_err("a `Batch` cannot be both 3 and 5");
@@ -157,8 +179,8 @@ fn two_uses_of_one_named_axis_must_still_be_compatible_at_runtime() {
 
 #[test]
 fn matmul_lowers_to_the_gemm_extents_its_shapes_imply() {
-    let lowered = <MatMulRule as ShapeRule<((U2, U3), (U3, U4))>>::lower(
-        &(field::<(U2, U3)>(&[2, 3]), field::<(U3, U4)>(&[3, 4])),
+    let lowered = <MatMulRule as ShapeRule<(s![2, 3], s![3, 4])>>::lower(
+        &(field::<s![2, 3]>(&[2, 3]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("2x3 times 3x4");
@@ -197,8 +219,8 @@ fn a_disagreeing_contraction_never_reaches_a_descriptor() {
 
 #[test]
 fn transposition_is_applied_after_lowering_because_it_is_not_a_shape_fact() {
-    let lowered = <MatMulRule as ShapeRule<((U2, U3), (U3, U4))>>::lower(
-        &(field::<(U2, U3)>(&[2, 3]), field::<(U3, U4)>(&[3, 4])),
+    let lowered = <MatMulRule as ShapeRule<(s![2, 3], s![3, 4])>>::lower(
+        &(field::<s![2, 3]>(&[2, 3]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("2x3 times 3x4");
@@ -212,11 +234,9 @@ fn transposition_is_applied_after_lowering_because_it_is_not_a_shape_fact() {
 
 #[test]
 fn reducing_an_axis_drops_it_and_splits_the_shape_into_three_regions() {
-    let lowered = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-        &field::<(U2, U3, U4)>(&[2, 3, 4]),
-        ReduceOp::Sum,
-    )
-    .expect("axis 1 is in range");
+    let lowered =
+        <ReduceAtRule<Next<Here>> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), ReduceOp::Sum)
+            .expect("axis 1 is in range");
     let spec = lowered.descriptor();
 
     assert_eq!(spec.output.dims(), &[2, 4]);
@@ -226,14 +246,26 @@ fn reducing_an_axis_drops_it_and_splits_the_shape_into_three_regions() {
 }
 
 #[test]
+fn structural_reduction_rules_lower_through_the_same_descriptor() {
+    type Axis1 = Next<Here>;
+    let dropped =
+        <ReduceAtRule<Axis1> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), ReduceOp::Sum)
+            .expect("structural axis 1 is in range");
+    let kept =
+        <ReduceKeepAtRule<Axis1> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), ReduceOp::Sum)
+            .expect("structural axis 1 is in range");
+
+    assert_eq!(dropped.descriptor().output.dims(), &[2, 4]);
+    assert_eq!(kept.descriptor().output.dims(), &[2, 1, 4]);
+}
+
+#[test]
 fn keeping_the_axis_changes_the_output_but_not_the_three_extents() {
-    let dropped = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-        &field::<(U2, U3, U4)>(&[2, 3, 4]),
-        ReduceOp::Sum,
-    )
-    .expect("axis 1 is in range");
-    let kept = <ReduceKeepRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-        &field::<(U2, U3, U4)>(&[2, 3, 4]),
+    let dropped =
+        <ReduceAtRule<Next<Here>> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), ReduceOp::Sum)
+            .expect("axis 1 is in range");
+    let kept = <ReduceKeepAtRule<Next<Here>> as ShapeRule<R3>>::lower(
+        &field::<R3>(&[2, 3, 4]),
         ReduceOp::Sum,
     )
     .expect("axis 1 is in range");
@@ -259,8 +291,9 @@ fn a_reduction_output_that_the_typed_shape_rejects_is_an_error() {
     // `Dyn` accepts any rank, so this exercises the rebuild path rather than a
     // rank check: the descriptor's dimensions must round-trip into the output
     // type's field, and for `Dyn` they always do.
-    let lowered = <ReduceRule<0> as ShapeRule<Dyn>>::lower(&field::<Dyn>(&[7, 2]), ReduceOp::Sum)
-        .expect("axis 0 is in range");
+    let lowered =
+        <ReduceAtRule<Here> as ShapeRule<Dyn>>::lower(&field::<Dyn>(&[7, 2]), ReduceOp::Sum)
+            .expect("axis 0 is in range");
 
     assert_eq!(lowered.descriptor().output.dims(), &[2]);
     assert_eq!(lowered.proof_level(), ProofLevel::Dynamic);
@@ -277,16 +310,12 @@ fn the_accumulation_is_carried_into_the_descriptor_rather_than_defaulted() {
         ReduceOp::Min,
         ReduceOp::Prod,
     ] {
-        let dropped = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-            &field::<(U2, U3, U4)>(&[2, 3, 4]),
-            op,
-        )
-        .expect("axis 1 is in range");
-        let kept = <ReduceKeepRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-            &field::<(U2, U3, U4)>(&[2, 3, 4]),
-            op,
-        )
-        .expect("axis 1 is in range");
+        let dropped =
+            <ReduceAtRule<Next<Here>> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), op)
+                .expect("axis 1 is in range");
+        let kept =
+            <ReduceKeepAtRule<Next<Here>> as ShapeRule<R3>>::lower(&field::<R3>(&[2, 3, 4]), op)
+                .expect("axis 1 is in range");
 
         assert_eq!(dropped.descriptor().op, op);
         assert_eq!(kept.descriptor().op, op);
@@ -297,8 +326,8 @@ fn the_accumulation_is_carried_into_the_descriptor_rather_than_defaulted() {
 
 #[test]
 fn reshape_carries_the_element_count_the_two_shapes_share() {
-    let lowered = <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-        &(field::<(U2, U6)>(&[2, 6]), field::<(U3, U4)>(&[3, 4])),
+    let lowered = <ReshapeRule as ShapeRule<(s![2, 6], s![3, 4])>>::lower(
+        &(field::<s![2, 6]>(&[2, 6]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("12 elements either way");
@@ -332,8 +361,8 @@ type Pool2x2 = Pool2dRule<U2, U2, U0, U1>;
 
 #[test]
 fn a_padded_convolution_preserves_its_spatial_extent() {
-    let lowered = <Conv3x3 as ShapeRule<(U1, U3, U8, U8)>>::lower(
-        &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
+    let lowered = <Conv3x3 as ShapeRule<ConvInput>>::lower(
+        &field::<ConvInput>(&[1, 3, 8, 8]),
         Conv2dArgs::dense(16),
     )
     .expect("a 3x3 window with padding 1 fits an 8x8 input");
@@ -347,8 +376,8 @@ fn a_padded_convolution_preserves_its_spatial_extent() {
 
 #[test]
 fn grouping_that_does_not_divide_the_channels_is_rejected() {
-    let error = <Conv3x3 as ShapeRule<(U1, U3, U8, U8)>>::lower(
-        &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
+    let error = <Conv3x3 as ShapeRule<ConvInput>>::lower(
+        &field::<ConvInput>(&[1, 3, 8, 8]),
         Conv2dArgs {
             out_channels: 16,
             groups: 2,
@@ -361,11 +390,9 @@ fn grouping_that_does_not_divide_the_channels_is_rejected() {
 
 #[test]
 fn pooling_halves_the_spatial_axes_and_leaves_the_channels_alone() {
-    let lowered = <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(
-        &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
-        PoolOp::Max,
-    )
-    .expect("a 2x2 window strided by 2 tiles an 8x8 input");
+    let lowered =
+        <Pool2x2 as ShapeRule<ConvInput>>::lower(&field::<ConvInput>(&[1, 3, 8, 8]), PoolOp::Max)
+            .expect("a 2x2 window strided by 2 tiles an 8x8 input");
     let spec = lowered.descriptor();
 
     assert_eq!(spec.output.dims(), &[1, 3, 4, 4]);
@@ -376,11 +403,9 @@ fn pooling_halves_the_spatial_axes_and_leaves_the_channels_alone() {
 #[test]
 fn pooling_carries_the_accumulation_that_shares_its_window() {
     for op in [PoolOp::Max, PoolOp::Average] {
-        let lowered = <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(
-            &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
-            op,
-        )
-        .expect("a 2x2 window strided by 2 tiles an 8x8 input");
+        let lowered =
+            <Pool2x2 as ShapeRule<ConvInput>>::lower(&field::<ConvInput>(&[1, 3, 8, 8]), op)
+                .expect("a 2x2 window strided by 2 tiles an 8x8 input");
 
         // One geometry, two operations. `Pool2dSpec` is only a complete request
         // because it records which.
@@ -418,7 +443,7 @@ fn pooling_and_reshape_report_their_own_kinds() {
 #[test]
 fn every_descriptor_a_rule_produces_can_state_its_element_count() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+        &(field::<S34>(&[3, 4]), field::<S14>(&[1, 4])),
         None,
     )
     .expect("3x4 against 1x4 broadcasts");
@@ -432,7 +457,7 @@ fn the_descriptor_a_rule_mints_equals_the_one_built_by_hand() {
     // caller who builds the descriptor directly gets the same fields, minus any
     // evidence that a shape proof stood behind them.
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+        &(field::<S34>(&[3, 4]), field::<S14>(&[1, 4])),
         None,
     )
     .expect("3x4 against 1x4 broadcasts");

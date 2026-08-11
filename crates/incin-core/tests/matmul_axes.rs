@@ -17,7 +17,7 @@ where
 }
 
 fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
-    S::from_dyn(dims).expect("test dimensions must match the shape type")
+    S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
 #[test]

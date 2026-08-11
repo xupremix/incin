@@ -88,10 +88,10 @@ fn structural_operations_compile_at_rank_16_64_and_200() {
     // Exercise the runtime side of the structural rule as well as checking
     // the resulting type.  These calls intentionally use ShapeBuf, the sole
     // runtime shape representation.
-    let s64 = <S64 as Shape>::from_dyn(&[1; 64]).unwrap();
-    let _r64 = <R64 as Shape>::from_dyn(&[1; 63]).unwrap();
-    let _t16 = <T16 as Shape>::from_dyn(&[1; 16]).unwrap();
-    let s200 = <S200 as Shape>::from_dyn(&[1; 200]).unwrap();
+    let s64 = <S64 as Shape>::try_from_dims(&[1; 64]).unwrap();
+    let _r64 = <R64 as Shape>::try_from_dims(&[1; 63]).unwrap();
+    let _t16 = <T16 as Shape>::try_from_dims(&[1; 16]).unwrap();
+    let s200 = <S200 as Shape>::try_from_dims(&[1; 200]).unwrap();
     let b200 = <S200 as BroadcastShape<S200>>::output_shape(&s200, &s200).unwrap();
     let b64 = <S64 as BroadcastShape<S64>>::output_shape(&s64, &s64).unwrap();
     assert_eq!(b200.len(), 200);
@@ -152,16 +152,16 @@ fn test_recursive_fixed_rank_dim_cons() {
     let field = TestCons::init(((), (16, ())));
     assert_eq!(field.as_ref(), &[32, 16]);
 
-    let from_dyn = TestCons::from_dyn(&[32, 16]).unwrap();
-    assert_eq!(from_dyn.as_ref(), &[32, 16]);
+    let resolved = TestCons::try_from_dims(&[32, 16]).unwrap();
+    assert_eq!(resolved.as_ref(), &[32, 16]);
 
-    assert!(TestCons::from_dyn(&[31, 16]).is_none());
+    assert!(TestCons::try_from_dims(&[31, 16]).is_err());
 }
 
 #[test]
 fn generic_typenum_ranked_shape_preserves_rank_without_a_rank_ladder() {
     type S = Ranked<typenum::U64>;
-    let field = <S as Shape>::from_dyn(&[7; 64]).unwrap();
+    let field = <S as Shape>::try_from_dims(&[7; 64]).unwrap();
     assert_eq!(<S as Shape>::RANK, Some(64));
     assert_eq!(<S as DynShape>::rank(&field), 64);
 }
@@ -188,7 +188,7 @@ fn structural_swap_moves_complete_dimension_metadata_at_rank_three() {
 
     assert_same::<Swapped, Expected>();
 
-    let field = <Swapped as Shape>::from_dyn(&[1, 3, 2]).unwrap();
+    let field = <Swapped as Shape>::try_from_dims(&[1, 3, 2]).unwrap();
     assert_eq!(field.as_ref(), &[1, 3, 2]);
 }
 

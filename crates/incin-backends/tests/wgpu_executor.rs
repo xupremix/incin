@@ -7,22 +7,27 @@
 //! rather than inherited from the CPU implementation.
 #![cfg(feature = "wgpu")]
 
+extern crate incin_core as incin;
+
 use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
 use incin_core::exec::{
     Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec, Pool2dRule,
-    PoolOp, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+    PoolOp, ReduceAtRule, ReduceOp, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
 };
 use incin_core::prelude::{
-    Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, WgpuN,
+    Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
-use incin_core::typenum::{U0, U1, U2, U3, U4, U6};
+use incin_core::shapes::idx::{Here, Next};
+use incin_core::shapes::shape::{DimCons, Nil};
+use incin_core::typenum::{U0, U1, U2, U3};
 
-type TestBackend = WgpuBackendImpl<f32, WgpuN<U0>>;
-type TestStorage = <TestBackend as Backend>::Storage<f32>;
+type TestBackend = WgpuBackendImpl<WgpuN<U0>>;
+type TestStorage = <TestBackend as incin_core::backend_authoring::StorageBackend>::Storage<f32>;
+type R2 = DimCons<U2, DimCons<U3, Nil>>;
 
-fn field<S: Shape>(dims: &[usize]) -> S::Field {
-    S::from_dyn(dims).expect("test dimensions must match the shape type")
+fn field<S: Shape>(dims: &[usize]) -> ShapeBuf {
+    S::try_from_dims(dims).expect("test dimensions must match the shape type")
 }
 
 fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<MatMulSpec> {
@@ -34,7 +39,7 @@ fn storage(shape: &[usize], values: &[f32]) -> TestStorage {
     TestBackend::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
-        DTypeId::F32,
+        DTypeId::F32.into(),
         &DeviceId::wgpu(0),
     )
     .expect("test buffer must match its shape")
@@ -140,7 +145,7 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
         let validated = lower(&[2, 3], &[3, 2]);
         let context = ExecutionContext::new(TestBackend::new());
         let inputs = [
-            TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&foreign),
+            TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&foreign),
             TensorHandle::from_storage::<TestBackend, f32, Local>(&rhs),
         ];
 
@@ -163,8 +168,8 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
 }
 
 fn lower_reshape_2x6_to_3x4() -> Validated<ReshapeSpec> {
-    <ReshapeRule as ShapeRule<((U2, U6), (U3, U4))>>::lower(
-        &(field::<(U2, U6)>(&[2, 6]), field::<(U3, U4)>(&[3, 4])),
+    <ReshapeRule as ShapeRule<(s![2, 6], s![3, 4])>>::lower(
+        &(field::<s![2, 6]>(&[2, 6]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("12 elements either way")
@@ -245,7 +250,7 @@ fn the_reshape_binder_rejects_an_operand_that_disagrees_with_the_descriptor() {
 }
 
 type Conv3x3 = Conv2dRule<U3, U3, U1, U1, U1>;
-type ConvInput = (U1, U2, U4, U4);
+type ConvInput = s![1, 2, 4, 4];
 
 fn lower_conv2d() -> Validated<Conv2dSpec> {
     <Conv3x3 as ShapeRule<ConvInput>>::lower(
@@ -408,7 +413,7 @@ fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
         (ReduceOp::Prod, [6.0, 120.0]),
     ] {
         let validated =
-            <ReduceRule<1> as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), op)
+            <ReduceAtRule<Next<Here>> as ShapeRule<R2>>::lower(&field::<R2>(&[2, 3]), op)
                 .expect("axis 1 is in range");
         let output = execute_one(&validated, &input)
             .unwrap_or_else(|error| panic!("{op} must execute on wgpu: {error:?}"));
@@ -426,8 +431,8 @@ fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
         (PoolOp::Max, vec![6.0, 8.0, 14.0, 16.0]),
         (PoolOp::Average, vec![3.5, 5.5, 11.5, 13.5]),
     ] {
-        let validated = <Pool2dRule<U2, U2, U0, U1> as ShapeRule<(U1, U1, U4, U4)>>::lower(
-            &field::<(U1, U1, U4, U4)>(&[1, 1, 4, 4]),
+        let validated = <Pool2dRule<U2, U2, U0, U1> as ShapeRule<s![1, 1, 4, 4]>>::lower(
+            &field::<s![1, 1, 4, 4]>(&[1, 1, 4, 4]),
             op,
         )
         .expect("a 2x2 window strided by 2 tiles a 4x4 input");
