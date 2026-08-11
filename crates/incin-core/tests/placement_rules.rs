@@ -20,7 +20,8 @@ use incin_core::dist::{
     ShardRemainderPolicy, Sharded, Sum, validate_pipeline_stage, validate_shard,
     validate_transition,
 };
-use incin_core::exec::{ReduceOp, ReshapeSpec};
+use incin_core::backend_authoring::operations::ShapeAttributes;
+use incin_core::exec::{Descriptor, LogicalTensorMeta, ReduceOp, op};
 use incin_core::prelude::{DimCons, Dyn, Nil, Shape, ShapeBuf};
 use incin_core::typenum::{U0, U1, U2, U3, U4, U10, U12};
 
@@ -29,8 +30,17 @@ type HybridMesh = MeshSpec<Data<U2>, TensorParallel<U3>>;
 type PipelineMesh = MeshSpec<Data<U1>, TensorParallel<U1>, Pipeline<U3>>;
 type OtherMesh = MeshSpec<Data<U3>>;
 
-fn reshape(input: &[usize], output: &[usize]) -> ReshapeSpec {
-    ReshapeSpec::new(&ShapeBuf::from_slice(input), &ShapeBuf::from_slice(output)).unwrap()
+fn reshape(input: &[usize], output: &[usize]) -> Descriptor<op::ReshapeExact> {
+    Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: output.to_vec() },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(input)),
+            dtype: None,
+            device: None,
+        }],
+    )
+    .unwrap()
+    .into_descriptor()
 }
 
 fn static_local<Extent, Degree>() -> usize

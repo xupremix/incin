@@ -4,7 +4,8 @@
 extern crate incin_core as incin;
 
 use incin_core::axis;
-use incin_core::exec::{AxisSet, RankSupport, ReduceOp, ReductionSpec};
+use incin_core::exec::{AxisSet, ExecutionDescriptor, RankSupport};
+use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
 use incin_core::prelude::*;
 use incin_core::shapes::dim::{
     AddDim, CheckedSubDim, ConstDim, Dim, ExactDivDim, MulDim, NamedDim, StaticExtent,
@@ -282,8 +283,18 @@ fn test_descriptor_axis_mask_and_axis_set_above_31() {
 fn descriptor_reduction_accepts_axis_seventy() {
     let input = ShapeBuf::from_slice(&[1; 71]);
     let axes = AxisSet::EMPTY.insert(70);
-    let spec = ReductionSpec::new(&input, axes, false, ReduceOp::Sum).unwrap();
-    assert_eq!(spec.output.rank(), 70);
+    assert!(axes.contains(70));
+    let descriptor = Descriptor::<op::SumDim>::infer_runtime(
+        AxisAttributes { axis: 70 },
+        vec![LogicalTensorMeta {
+            shape: Some(input),
+            dtype: None,
+            device: None,
+        }],
+    )
+    .unwrap()
+    .into_descriptor();
+    assert_eq!(descriptor.output_shape().unwrap().rank(), 70);
 }
 
 #[test]

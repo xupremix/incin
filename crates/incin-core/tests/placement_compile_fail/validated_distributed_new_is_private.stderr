@@ -1,7 +1,7 @@
 error[E0624]: associated function `new` is private
-  --> tests/placement_compile_fail/validated_distributed_new_is_private.rs:12:35
+  --> tests/placement_compile_fail/validated_distributed_new_is_private.rs:22:35
    |
-12 |       let _ = ValidatedDistributed::new(
+22 |       let _ = ValidatedDistributed::new(
    |                                     ^^^ private associated function
    |
   ::: src/dist/rule.rs

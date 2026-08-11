@@ -85,7 +85,7 @@ pub mod backend_authoring {
         AttributeContract, CanonicalOperation, Capabilities, CapabilityRegistry,
         CustomCapabilityQuery, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
         LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
-        OperationKey, OperationSpec, PrecisionSpec, RuntimePrecisionPolicy, TensorMeta, Validated,
+        OperationKey, PrecisionSpec, RuntimePrecisionPolicy, TensorMeta, Validated,
         ValidatedInvocation, op,
     };
     pub use crate::tensor::backend::{

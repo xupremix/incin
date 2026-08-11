@@ -1,25 +1,25 @@
-error[E0277]: placement transition from `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>` to `incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>, 0>` is not legal
-  --> tests/placement_tensor_compile_fail/illegal_static_reshard.rs:18:20
+error[E0277]: placement transition from `incin::dist::Replicated<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>` to `incin::dist::PipelineStage<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>, 0>` is not legal
+  --> tests/placement_tensor_compile_fail/illegal_static_reshard.rs:20:20
    |
-18 |     let _ = tensor.try_reshard::<PipelineStage<Mesh, 0>, _>(storage, 0, proof);
+20 |     let _ = tensor.try_reshard::<PipelineStage<Mesh, 0>, _>(storage, 0, proof);
    |                    ^^^^^^^^^^^ no direct placement transition
    |
-   = help: the trait `LegalTransition<incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>, 0>>` is not implemented for `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>`
+   = help: the trait `LegalTransition<incin::dist::PipelineStage<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>, 0>>` is not implemented for `incin::dist::Replicated<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>`
    = note: use an explicit replicated intermediate when no direct collective exists
-help: `incin_core::dist::Replicated<Mesh>` implements trait `LegalTransition<To>`
+help: `incin::dist::Replicated<Mesh>` implements trait `LegalTransition<To>`
   --> src/dist/rule.rs
    |
    | / impl<Mesh> LegalTransition<Replicated<Mesh>> for Replicated<Mesh>
    | | where
    | |     Mesh: ValidMesh,
-   | |____________________^ `LegalTransition<incin_core::dist::Replicated<Mesh>>`
+   | |____________________^ `LegalTransition<incin::dist::Replicated<Mesh>>`
 ...
    | / impl<Mesh, Axis> LegalTransition<Sharded<Mesh, Axis>> for Replicated<Mesh>
    | | where
    | |     Mesh: ValidMesh,
    | |     Axis: crate::dist::placement::PlacementAxis,
-   | |________________________________________________^ `LegalTransition<incin_core::dist::Sharded<Mesh, Axis>>`
-note: required by a bound in `incin_backends::cpu::Tensor::<S, B, K, G, P>::try_reshard`
+   | |________________________________________________^ `LegalTransition<incin::dist::Sharded<Mesh, Axis>>`
+note: required by a bound in `incin::prelude::Tensor::<S, B, K, G, P>::try_reshard`
   --> src/tensor/base.rs
    |
    |     pub fn try_reshard<To, O>(

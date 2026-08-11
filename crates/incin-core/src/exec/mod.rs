@@ -13,33 +13,28 @@
 //! ```text
 //!   typed frontend            this module              native execution
 //!   ──────────────            ───────────              ────────────────
-//!   BroadcastShape      →     BroadcastSpec      →     kernel launch
-//!   MatMulShape         →     MatMulSpec         →     GEMM call
-//!   ReduceDim           →     ReductionSpec      →     reduction launch
-//!   Conv2dShape         →     Conv2dSpec         →     conv call
+//!   typed shape rule     →     exact catalog descriptor → kernel launch
 //! ```
 //!
 //! The module fills in over several tasks, in dependency order:
 //!
 //! | Submodule | Task | Contents |
 //! |---|---|---|
-//! | [`spec`] | `EXE-001` | the descriptors themselves, and the schema they are frozen at |
+//! | [`spec`] | `EXE-001` | shared descriptor identity and axis collections |
 //! | [`proof`] | `EXE-002` | [`ProofLevel`] and the sealed [`Validated<O>`](Validated) wrapper |
 //! | [`rule`] | `EXE-003` | [`ShapeRule`], binding each descriptor to the frontend trait that names its `Output` |
 //! | `meta` | `EXE-004` | `TensorMeta`, `LayoutClass`, `Alignment` |
 //! | `capability` | `EXE-005` | the capability registry |
 //!
-//! The first three exist today, and together they close the loop. A bare
-//! descriptor from [`spec`] is internally consistent — its constructors derive
-//! every field rather than accepting it — but anyone can build one, so it
-//! carries no evidence that a shape proof stood behind it.
+//! The canonical catalog descriptors are internally consistent because their
+//! constructors derive every field rather than accepting it. A bare descriptor
+//! still carries no evidence that a shape proof stood behind it.
 //! [`Validated<O>`](Validated) is that evidence, and [`rule`] is what mints it:
 //! a descriptor wrapped in `Validated` came from a typed operand whose frontend
 //! trait had already proved the operation legal.
 //!
 //! [`Execute<O>`](crate::backend_authoring::Execute) is now the descriptor consumer.
-//! Concrete backend migrations are staged through `EXE-007` and `EXE-008`, so
-//! the legacy operation families remain callable until `EXE-009` removes them.
+//! Concrete backend execution consumes the canonical catalog descriptors.
 
 /// Backend-neutral capability queries and registry resolution.
 pub mod capability;
@@ -104,14 +99,8 @@ pub use precision::{
 pub use proof::{ProofLevel, Validated};
 
 pub use request::TensorHandle;
-pub use rule::{
-    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceAllRule, ReduceAtRule,
-    ReduceKeepAtRule, ReshapeRule, ShapeRule,
-};
-pub use spec::{
-    AxisSet, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, ExecutionDescriptor,
-    MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
-};
+pub use rule::{MatMulRule, ReshapeRule, ShapeRule};
+pub use spec::{AxisSet, DescriptorSchemaVersion, ExecutionDescriptor, ReduceOp};
 pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
 
 /// Supertrait used to seal public traits in this module against outside
