@@ -408,10 +408,6 @@ where
 
 impl<
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -446,14 +442,7 @@ where
 }
 
 impl<
-    B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
-        + Execute<op::MatMulExact>
-        + Execute<op::TransposeExact>
-        + crate::exec::Capabilities,
+    B: Backend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
@@ -474,10 +463,6 @@ where
 
 impl<
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -523,10 +508,6 @@ impl<
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -582,14 +563,7 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
-        + Execute<op::MatMulExact>
-        + Execute<op::TransposeExact>
-        + crate::exec::Capabilities,
+    B: Backend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InShape, B, K>>
@@ -633,10 +607,6 @@ impl<
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
     B: Backend
-        + crate::tensor::backend::TensorOps<B>
-        + crate::tensor::backend::NumericOps<B>
-        + crate::tensor::backend::FloatOps<B>
-        + crate::tensor::backend::ReductionOps<B>
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
