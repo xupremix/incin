@@ -5,15 +5,15 @@
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
 use crate::backend_authoring::{Descriptor, Execute};
-use crate::dist::Placement;
 use crate::dist::placement::Local;
-use crate::exec::Capabilities;
+use crate::dist::Placement;
 use crate::exec::catalog::{
-    FlattenAttributes, NoAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes, op,
+    op, FlattenAttributes, NoAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::exec::Capabilities;
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -79,11 +79,11 @@ fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeDescr
 }
 
 impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+        S: Shape + DynShape,
+        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+    > Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -221,11 +221,11 @@ impl<
 }
 
 impl<
-    S: Shape + DynShape,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+        S: Shape + DynShape,
+        B: Backend + crate::tensor::backend::ModuleOps<B>,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+    > Tensor<S, B, K, G>
 {
     /// Functional `max_pool2d` operation.
     pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
@@ -270,12 +270,12 @@ impl<
 // -------------------------------------------------------------
 
 impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    P: Placement,
-> Tensor<S, B, K, G, P>
+        S: Shape + DynShape,
+        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+        P: Placement,
+    > Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -342,9 +342,7 @@ impl<
         &self,
     ) -> Result<Tensor<T::Output, B, K, G, P>>
     where
-        B: Execute<
-                Descriptor<op::ReshapeExact>,
-            > + Capabilities,
+        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
         <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let in_shape_vec = self.shape_buf();
@@ -353,16 +351,18 @@ impl<
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
-            dispatch::execute_shaped::<op::ReshapeExact, B, T::Output>(
-                &context,
-                ShapeAttributes {
-                    shape: out_shape_vec.clone(),
-                },
-                &[input],
-                &output_shape,
-            )
-        })?.into();
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ReshapeExact, B, T::Output>(
+                    &context,
+                    ShapeAttributes {
+                        shape: out_shape_vec.clone(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::<T::Output, B, K, G, P>::from_shape_value_placed(
             inner,
             output_shape,
@@ -492,9 +492,7 @@ impl<
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
-        B: Execute<
-                Descriptor<op::ReshapeExact>,
-            > + Capabilities,
+        B: Execute<Descriptor<op::ReshapeExact>> + Capabilities,
         <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::try_init(args).map_err(crate::prelude::Error::Shape)?;
@@ -525,16 +523,18 @@ impl<
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
-            dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
-                &context,
-                ShapeAttributes {
-                    shape: new_shape_field.as_ref().to_vec(),
-                },
-                &[input],
-                &output_shape,
-            )
-        })?.into();
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
+                    &context,
+                    ShapeAttributes {
+                        shape: new_shape_field.as_ref().to_vec(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
             output_shape,
@@ -589,11 +589,11 @@ impl<
 }
 
 impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+        S: Shape + DynShape,
+        B: Backend + TensorOps<B>,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+    > Tensor<S, B, K, G>
 {
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
@@ -614,11 +614,11 @@ impl<
 }
 
 impl<
-    S: Shape + DynShape,
-    B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-> Tensor<S, B, K, G>
+        S: Shape + DynShape,
+        B: Backend + TensorOps<B> + FloatOps<B> + NumericOps<B>,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+    > Tensor<S, B, K, G>
 {
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
@@ -779,9 +779,7 @@ impl<
         R: StaticCursor,
         S: SwapAxes<L, R>,
         <S as SwapAxes<L, R>>::Output: Shape + DynShape,
-        B: Execute<
-                Descriptor<op::TransposeExact>,
-            > + Capabilities,
+        B: Execute<Descriptor<op::TransposeExact>> + Capabilities,
         <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
@@ -793,17 +791,19 @@ impl<
                 .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
-            dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
-                &context,
-                TransposeAttributes {
-                    first: axes[0],
-                    second: axes[1],
-                },
-                &[input],
-                &output_shape,
-            )
-        })?.into();
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
+                    &context,
+                    TransposeAttributes {
+                        first: axes[0],
+                        second: axes[1],
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::<<S as SwapAxes<L, R>>::Output, B, K, G>::from_shape_value(
             inner,
             output_shape,
@@ -817,9 +817,7 @@ impl<
     /// backend operation and the result intentionally carries only `Dyn`.
     pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>>
     where
-        B: Execute<
-                Descriptor<op::TransposeExact>,
-            > + Capabilities,
+        B: Execute<Descriptor<op::TransposeExact>> + Capabilities,
         <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
@@ -830,17 +828,19 @@ impl<
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
-        let inner = self.under_grad_mode(|| {
-            dispatch::execute_shaped::<op::TransposeExact, B, Dyn>(
-                &context,
-                TransposeAttributes {
-                    first: axes[0],
-                    second: axes[1],
-                },
-                &[input],
-                &output_shape,
-            )
-        })?.into();
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::TransposeExact, B, Dyn>(
+                    &context,
+                    TransposeAttributes {
+                        first: axes[0],
+                        second: axes[1],
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_shape_value(
             inner,
             output_shape,
@@ -1114,12 +1114,12 @@ impl<
                 crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
             ))?;
         let mut out_shape = self.shape_buf().as_ref().to_vec();
-        out_shape[dim] = out_shape[dim].checked_add(other.shape_buf().as_ref()[dim]).ok_or(
-            crate::shapes::ShapeError::ArithmeticOverflow {
+        out_shape[dim] = out_shape[dim]
+            .checked_add(other.shape_buf().as_ref()[dim])
+            .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::Concat,
                 expression: "concat extent",
-            },
-        )?;
+            })?;
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
             .map_err(crate::prelude::Error::Shape)?;
         let inputs = [
@@ -1253,11 +1253,7 @@ impl<
     }
 
     /// Dynamically stacks `self` with `other` along `dim`.
-    pub fn try_stack(
-        &self,
-        other: &Tensor<S, B, K, G>,
-        dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn try_stack(&self, other: &Tensor<S, B, K, G>, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<Descriptor<op::StackExact>> + Capabilities,
         <B as Execute<Descriptor<op::StackExact>>>::Output: Into<B::Storage<K>>,
@@ -1605,10 +1601,9 @@ where
                 .ok()
                 .map(|axes| axes[0])
         })
-        .ok_or(crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
-            axis: dim,
-            rank,
-        }))?;
+        .ok_or(crate::err::Error::Shape(
+            crate::shapes::ShapeError::InvalidAxis { axis: dim, rank },
+        ))?;
     let mut shape = tensors[0].shape_buf().as_ref().to_vec();
     shape.insert(dim, tensors.len());
     let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape))
@@ -1638,12 +1633,12 @@ where
 }
 
 impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    NewD: crate::prelude::Device,
-> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
+        S: Shape,
+        B: Backend,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+        NewD: crate::prelude::Device,
+    > crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
