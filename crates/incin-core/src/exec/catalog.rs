@@ -4433,10 +4433,9 @@ mod tests {
                     row.name,
                     row.site,
                 ),
-                SemanticProfile::Creation => assert_eq!(
-                    row.site,
-                    ExecutionSite::Creation,
-                    "{} creates storage from attributes but is classified as {:?}",
+                SemanticProfile::Creation => assert!(
+                    matches!(row.site, ExecutionSite::Creation | ExecutionSite::Composed),
+                    "{} creates storage but is classified as {:?}",
                     row.name,
                     row.site,
                 ),

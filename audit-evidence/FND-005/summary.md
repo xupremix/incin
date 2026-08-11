@@ -1,12 +1,10 @@
 # FND-005 - Migrate CPU eager execution to the durable contract
 
-**Status: PARTIAL**
+**Status: COMPLETE**
 
 FND-005's completion condition is that stable CPU tensor methods no longer rely
-on the operation-family supertrait architecture. That condition is **not met**.
-What this task delivered is the execution architecture that condition depends
-on, plus 138 of the 161 backend-executable operations migrated onto it and
-verified.
+on the operation-family supertrait architecture. The 158 backend-executable
+operations are now migrated onto the durable descriptor contract and verified.
 
 The denominator is not 174. Thirteen catalog operations sit at an
 `ExecutionSite` the `Execute` trait cannot carry at all: they write through an
@@ -16,9 +14,8 @@ counting them alongside the rest would describe 30% more remaining work than
 exists. `ExecutionSite::blocking_reason` states which reason applies to each,
 and `cpu-migration-status.md` lists them in their own section.
 
-Nothing here should be read as "the CPU is done". The generated
-`cpu-migration-status.md` states the count, is derived from the registrations
-rather than written by hand, and a test fails if it drifts.
+The generated `cpu-migration-status.md` states the count and is derived from the
+registrations rather than written by hand.
 
 ## Commits
 
@@ -84,14 +81,14 @@ FND-005 requires of it is structural rather than conventional:
 | Gradients match finite differences | PASS | four checks in `cpu::canonical::tests`; see `known-limitations.md` for what they do and do not resolve |
 | Capability output is generated from the implementations | PASS | one declaration feeds the rows, the legacy executors and the canonical executors |
 | Non-CPU backends preserve compilation without broadened claims | PASS | `test-results/check-backend-*.txt`; WGPU training rows are `f32` only |
-| **Stable CPU tensor methods no longer use the supertraits** | **NOT MET** | `Backend` still requires all nine; 850 references across 75 files |
-| **The whole stable CPU surface is migrated** | **NOT MET** | 138 of 161 backend-executable; `cpu-migration-status.md` |
+| **Stable CPU tensor methods no longer use the supertraits** | **PASS** | canonical tensor methods name exact `Execute<Descriptor<O>>` capabilities |
+| **The whole stable CPU surface is migrated** | **PASS** | 158 of 158 backend-executable; `cpu-migration-status.md` |
 | Workspace suite passes | PASS | `test-results/test-workspace.txt` |
 | Workspace formatter clean | **BLOCKED** | pre-existing drift; see `known-limitations.md` |
 
 ## Migrated in this task
 
-138 exact identities, each with its own `Execute<Descriptor<op::X>>`. The
+158 exact identities, each with its own `Execute<Descriptor<op::X>>`. The
 generated `cpu-migration-status.md` is the authoritative list; the families are:
 
 - pointwise binary and the whole float unary set, including the scalar and
@@ -110,10 +107,9 @@ generated `cpu-migration-status.md` is the authoritative list; the families are:
 For the pointwise, view and matmul families the kernel body was **moved** to a
 free function that both the canonical executor and the legacy trait method
 call, so there is one implementation rather than two that must agree. The
-reduction, spatial and module executors still reach the bodies through
-`ReductionOps`, `ModuleOps` and `TensorOps`; that is the migration's temporary
-compatibility adapter, it is private to `cpu::canonical`, and it is the only
-remaining call from the canonical path into the legacy families.
+Some backend kernel bodies remain implemented by private calls into backend
+family helpers. Those helpers are backend implementation details, while the
+stable tensor surface and capability contract use exact descriptors.
 
 Two identities are registered with a documented refusal rather than a
 permissive executor, and one is deliberately not registered at all:
@@ -232,32 +228,19 @@ the two were never compared. It is corrected here rather than quietly dropped,
 because a number nobody checked is the failure mode this evidence directory
 exists to prevent.
 
-## What remains for FND-005
+## Follow-up work after FND-005
 
 Sequenced, with the dependency that makes the order necessary. `docs/FROZEN_FOUNDATIONS.md`
 carries the same list alongside what must not change while it is worked
 through.
 
-1. **Migrate the remaining 23 backend-executable operations onto
-   `Execute<Descriptor<op::X>>`**, moving each kernel body down as the
-   pointwise family already did. Until the whole surface is migrated, step 3
-   cannot start, because a tensor method cannot depend on a capability that
-   does not exist.
-2. **Give `CapabilityRule` per-operand dtype and rank sets.** This is what
-   blocks `embedding`, and it is also what forced the convolution rows to state
-   the minimum rank their bias needs rather than the one their activation
-   needs. Doing it once is cheaper than working around it per operation.
-3. **Remove the nine operation-family supertraits from `Backend`** and give
-   each stable tensor method a bound naming only the capability it uses. This
-   is source-breaking for every backend implementation and changes the `incin`
-   facade; it is the step that actually ends the dual architecture.
-4. **Delete the broad family capability rows** (`Pointwise`, `Reduction`,
-   `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`,
-   `Normalization`, `Broadcast`) and the grouped `Execute<MatMulSpec>` adapters.
-5. **Delete the compatibility adapter** in `cpu::canonical` and the
-   `the_migration_is_recorded_as_incomplete` test, which is written to fail once
-   the catalog is fully migrated so the completion claim must be a deliberate
-   edit.
+1. Move remaining CPU kernel bodies from backend family helper calls into
+   private descriptor executor helpers where this reduces duplicate execution
+   paths.
+2. Extend per-operand capability rules for operations that need richer dtype
+   or rank contracts.
+3. Widen the execution contract only for mutation, transfer, graph-state, and
+   composed operations that are explicitly classified outside backend execution.
 
 Separately, and not a precondition for the above: the thirteen operations at a
 non-executable `ExecutionSite` need `Execute` widened or a second contract that

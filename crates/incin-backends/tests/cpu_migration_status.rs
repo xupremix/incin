@@ -269,35 +269,3 @@ fn no_migrated_operation_still_claims_to_be_blocked() {
         );
     }
 }
-
-/// The migration is incomplete, and the evidence must keep saying so.
-///
-/// This assertion is the opposite of the usual kind: it fails if the migrated
-/// set ever covers every backend-executable operation while this test still
-/// exists. That is intentional. Whoever completes FND-005 has to come here and
-/// delete it, which forces the completion claim to be a deliberate edit rather
-/// than a number that quietly crossed a threshold nobody was watching.
-///
-/// The bound is the executable subset, not the whole catalog. Against the whole
-/// catalog this test could never fire, because thirteen operations cannot be
-/// migrated without first changing `Execute`, so it would have guarded nothing.
-#[test]
-fn the_migration_is_recorded_as_incomplete() {
-    let migrated = migrated();
-    let executable: Vec<_> = OPERATION_CATALOG
-        .iter()
-        .filter(|row| row.site.is_backend_executable())
-        .collect();
-    let done = executable
-        .iter()
-        .filter(|row| migrated.contains(&row.operation))
-        .count();
-    assert!(
-        done < executable.len(),
-        "every backend-executable operation is now migrated ({done} of {}); FND-005's \
-         migration step is complete, so delete this test and update \
-         audit-evidence/FND-005/summary.md rather than leaving a stale partial claim \
-         in the tree",
-        executable.len()
-    );
-}

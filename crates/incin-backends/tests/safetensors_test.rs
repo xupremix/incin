@@ -35,7 +35,10 @@ fn test_safetensors_save_and_load_roundtrip_cpu() {
     };
 
     let tmp_dir = std::env::temp_dir();
-    let file_path = tmp_dir.join("incin_test_cpu_weights.safetensors");
+    let file_path = tmp_dir.join(format!(
+        "incin_test_cpu_weights_{}.safetensors",
+        std::process::id()
+    ));
 
     save_safetensors(&module, &file_path).unwrap();
     assert!(file_path.exists());
