@@ -1,4 +1,4 @@
-use crate::backend_authoring::{Capabilities, Execute, Operation, StorageBackend, TensorOps};
+use crate::backend_authoring::{Capabilities, Execute, Operation, StorageBackend};
 use crate::exec::catalog::{CreationAttributes, FullAttributes, ScalarAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -543,7 +543,6 @@ use alloc::collections::BTreeMap;
 impl<
     S: Shape,
     B: Backend
-        + TensorOps<B>
         + SupportsDType<K>
         + SupportsDType<f32>
         + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>
@@ -814,7 +813,6 @@ impl<S: Shape + DynShape, B: Backend, K: DType> Parameters<B> for Buffer<S, B, K
 impl<
     S: Shape,
     B: Backend
-        + TensorOps<B>
         + SupportsDType<K>
         + SupportsDType<f32>
         + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>

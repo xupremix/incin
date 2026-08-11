@@ -334,8 +334,7 @@ where
     B: Backend
         + SupportsDType<K>
         + crate::tensor::backend::SupportsDType<K>
-        + crate::nn::param::ParameterInit<K>
-        + crate::tensor::backend::TensorOps<B>,
+        + crate::nn::param::ParameterInit<K>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     <K as DType>::Arg: Clone,
@@ -593,8 +592,7 @@ impl<
         B: Backend
             + SupportsDType<K>
             + crate::tensor::backend::SupportsDType<K>
-            + crate::nn::param::ParameterInit<K>
-            + crate::tensor::backend::TensorOps<B>,
+            + crate::nn::param::ParameterInit<K>,
         <K as DType>::Arg: Clone,
         <S::In as Dim>::Arg: Clone,
         <S::Out as Dim>::Arg: Clone,
@@ -615,8 +613,7 @@ impl<
         B: Backend
             + SupportsDType<K>
             + crate::tensor::backend::SupportsDType<K>
-            + crate::nn::param::ParameterInit<K>
-            + crate::tensor::backend::TensorOps<B>,
+            + crate::nn::param::ParameterInit<K>,
         <K as DType>::Arg: Clone,
         <S::In as Dim>::Arg: Clone,
         <S::Out as Dim>::Arg: Clone,
