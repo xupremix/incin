@@ -10,8 +10,8 @@ Legacy operation-family trait methods with a reviewed descriptor mapping: 142
 
 | Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
 |---|---|---|---|---|---|---|---|
-| `tensor_from_data` | `Storage` | `Creation` | `Descriptor<op::TensorFromData>` | `CreationAttributes` | 0-0 | 1-1 | `TensorArgsData` |
-| `tensor_from_bytes` | `Storage` | `Creation` | `Descriptor<op::TensorFromBytes>` | `CreationAttributes` | 0-0 | 1-1 | `Tensor::from_bytes` |
+| `tensor_from_data` | `Storage` | `Creation` | `Descriptor<op::TensorFromData>` | `DataAttributes` | 0-0 | 1-1 | `TensorArgsData` |
+| `tensor_from_bytes` | `Storage` | `Creation` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | 0-0 | 1-1 | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `Storage` | `Transfer` | `Descriptor<op::TensorToBytes>` | `NoAttributes` | 1-1 | 0-0 | `Tensor::to_bytes` |
 | `zeros` | `Fill` | `Creation` | `Descriptor<op::Zeros>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::zeros` |
 | `ones` | `Fill` | `Creation` | `Descriptor<op::Ones>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::ones` |

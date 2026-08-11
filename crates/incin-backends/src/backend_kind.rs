@@ -2,20 +2,22 @@
 
 #[cfg(feature = "cpu")]
 use incin_core::prelude::Cpu;
+#[cfg(test)]
+use incin_core::prelude::ShapeBuf;
 use incin_core::prelude::{Backend, DType, Device, Dyn};
 
 mod sealed {
     pub trait Sealed<T> {}
 }
 
-/// Maps a type-level device and float element type to its concrete backend.
+/// LEGACY / compatibility facade.
 ///
-/// `IncinBackend<T, D>` is a type alias through this trait, so it retains
-/// the concrete backend storage and operation implementations without a
-/// runtime-dispatch wrapper.
+/// `BackendFor<T>` is retained only for source compatibility.
+/// `T` does not affect backend identity.
+/// New code uses `NativeBackend<D>` / `EngineBackend<E,D>`.
 pub trait BackendFor<T: DType>: Device + sealed::Sealed<T> {
     /// Concrete backend for this device and float element type.
-    type Backend: Backend<Device = Self, FloatElem = T, IntElem = i64>;
+    type Backend: Backend<Device = Self>;
 }
 
 #[cfg(feature = "cpu")]
@@ -23,7 +25,7 @@ impl<T: DType> sealed::Sealed<T> for Cpu {}
 
 #[cfg(feature = "cpu")]
 impl<T: DType> BackendFor<T> for Cpu {
-    type Backend = crate::cpu::CpuBackendImpl<T, Cpu>;
+    type Backend = crate::cpu::CpuBackendImpl<Cpu>;
 }
 
 #[cfg(feature = "wgpu")]
@@ -34,7 +36,7 @@ impl<T: DType> sealed::Sealed<T> for Wgpu {}
 
 #[cfg(feature = "wgpu")]
 impl<T: DType> BackendFor<T> for Wgpu {
-    type Backend = crate::wgpu::WgpuBackendImpl<T, Wgpu>;
+    type Backend = crate::wgpu::WgpuBackendImpl<Wgpu>;
 }
 
 #[cfg(feature = "wgpu")]
@@ -62,7 +64,7 @@ where
         + PartialEq
         + core::fmt::Debug,
 {
-    type Backend = crate::wgpu::WgpuBackendImpl<T, WgpuN<N>>;
+    type Backend = crate::wgpu::WgpuBackendImpl<WgpuN<N>>;
 }
 
 #[cfg(feature = "cuda")]
@@ -73,7 +75,7 @@ impl<T: DType> sealed::Sealed<T> for Cuda {}
 
 #[cfg(feature = "cuda")]
 impl<T: DType> BackendFor<T> for Cuda {
-    type Backend = crate::cuda::CudaBackendImpl<T, Cuda>;
+    type Backend = crate::cuda::CudaBackendImpl<Cuda>;
 }
 
 #[cfg(feature = "cuda")]
@@ -101,7 +103,7 @@ where
         + PartialEq
         + core::fmt::Debug,
 {
-    type Backend = crate::cuda::CudaBackendImpl<T, CudaN<N>>;
+    type Backend = crate::cuda::CudaBackendImpl<CudaN<N>>;
 }
 #[cfg(feature = "metal")]
 use incin_core::prelude::{Metal, MetalN};
@@ -111,7 +113,7 @@ impl<T: DType> sealed::Sealed<T> for Metal {}
 
 #[cfg(feature = "metal")]
 impl<T: DType> BackendFor<T> for Metal {
-    type Backend = crate::metal::MetalBackendImpl<T, Metal>;
+    type Backend = crate::metal::MetalBackendImpl<Metal>;
 }
 
 #[cfg(feature = "metal")]
@@ -139,42 +141,44 @@ where
         + PartialEq
         + core::fmt::Debug,
 {
-    type Backend = crate::metal::MetalBackendImpl<T, MetalN<N>>;
+    type Backend = crate::metal::MetalBackendImpl<MetalN<N>>;
 }
 
 impl<T: DType> sealed::Sealed<T> for Dyn {}
 
 impl<T: DType> BackendFor<T> for Dyn {
-    type Backend = crate::dispatch::DispatchBackend<T, Dyn>;
+    type Backend = crate::dispatch::DispatchBackend<Dyn>;
 }
 
 macro_rules! impl_transfer {
     ($source:ty) => {
-        impl<T: DType, D: Device, NewD> incin_core::prelude::TransferTo<NewD> for $source
+        impl<D: Device, NewD: Device> incin_core::prelude::TransferTo<NewD> for $source
         where
-            NewD: BackendFor<T>,
+            crate::target::Native: crate::target::EngineOn<NewD>,
         {
-            type Output = crate::IncinBackend<T, NewD>;
+            type Output = crate::IncinBackend<NewD>;
 
             fn transfer_storage<K: DType>(
                 storage: &Self::Storage<K>,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> incin_core::prelude::Result<<Self::Output as Backend>::Storage<K>>
+            ) -> incin_core::prelude::Result<
+                <Self::Output as incin_core::backend_authoring::StorageBackend>::Storage<K>,
+            >
             where
                 Self::Output: incin_core::prelude::SupportsDType<K>,
             {
                 use incin_core::prelude::{Error, SupportsDType};
-                let expected_dtype = K::to_incin(dtype);
+                let expected_descriptor = K::descriptor(dtype);
                 let source_dtype = Self::storage_dtype::<K>(storage).ok_or(
                     Error::UnsupportedBackendOperation {
                         op: "transfer_storage_metadata",
                         backend: core::any::type_name::<Self>(),
                     },
                 )?;
-                if source_dtype != expected_dtype {
+                if source_dtype != expected_descriptor {
                     return Err(Error::DTypeStorageMismatch {
-                        expected: expected_dtype,
+                        expected: expected_descriptor,
                         got: source_dtype,
                     });
                 }
@@ -183,41 +187,46 @@ macro_rules! impl_transfer {
                     backend: core::any::type_name::<Self>(),
                 })?;
                 let destination = NewD::to_incin(device)?;
-                let dtype_id =
+                let dtype_descriptor =
                     <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
                 let shape = Self::shape::<K>(storage);
                 let bytes = Self::to_bytes::<K>(storage)?;
-                <Self::Output as Backend>::from_bytes::<K>(&bytes, &shape, dtype_id, &destination)
+                <Self::Output as Backend>::from_bytes::<K>(
+                    &bytes,
+                    &shape,
+                    dtype_descriptor,
+                    &destination,
+                )
             }
 
-            fn transfer_var(
+            fn transfer_var<K: DType>(
                 variable: &Self::RawVar,
-                dtype: &<T as DType>::Field,
+                dtype: &K::Field,
                 device: &NewD::Field,
             ) -> incin_core::prelude::Result<<Self::Output as Backend>::RawVar>
             where
-                Self::Output: incin_core::prelude::SupportsDType<T>,
+                Self::Output: incin_core::prelude::SupportsDType<K>,
             {
                 use incin_core::prelude::SupportsDType;
-                let source = Self::var_as_tensor::<T>(variable)?;
-                let expected_dtype = T::to_incin(dtype);
-                if let Some(got) = Self::storage_dtype::<T>(&source)
-                    && got != expected_dtype
+                let source = Self::var_as_tensor::<K>(variable)?;
+                let expected_descriptor = K::descriptor(dtype);
+                if let Some(got) = Self::storage_dtype::<K>(&source)
+                    && got != expected_descriptor
                 {
                     return Err(incin_core::prelude::Error::DTypeStorageMismatch {
-                        expected: expected_dtype,
+                        expected: expected_descriptor,
                         got,
                     });
                 }
                 let destination = NewD::to_incin(device)?;
-                let dtype_id =
-                    <Self::Output as SupportsDType<T>>::resolve_dtype(dtype, &destination)?;
-                let shape = Self::shape::<T>(&source);
-                let bytes = Self::to_bytes::<T>(&source)?;
-                let storage = <Self::Output as Backend>::from_bytes::<T>(
+                let dtype_descriptor =
+                    <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
+                let shape = Self::shape::<K>(&source);
+                let bytes = Self::to_bytes::<K>(&source)?;
+                let storage = <Self::Output as Backend>::from_bytes::<K>(
                     &bytes,
                     &shape,
-                    dtype_id,
+                    dtype_descriptor,
                     &destination,
                 )?;
                 <Self::Output as Backend>::var_from_tensor(&storage)
@@ -227,50 +236,56 @@ macro_rules! impl_transfer {
 }
 
 #[cfg(feature = "cpu")]
-impl_transfer!(crate::cpu::CpuBackendImpl<T, D>);
+impl_transfer!(crate::cpu::CpuBackendImpl<D>);
 #[cfg(feature = "wgpu")]
-impl_transfer!(crate::wgpu::WgpuBackendImpl<T, D>);
+impl_transfer!(crate::wgpu::WgpuBackendImpl<D>);
 #[cfg(feature = "cuda")]
-impl_transfer!(crate::cuda::CudaBackendImpl<T, D>);
+impl_transfer!(crate::cuda::CudaBackendImpl<D>);
 #[cfg(feature = "metal")]
-impl_transfer!(crate::metal::MetalBackendImpl<T, D>);
-impl_transfer!(crate::dispatch::DispatchBackend<T, D>);
+impl_transfer!(crate::metal::MetalBackendImpl<D>);
+impl_transfer!(crate::dispatch::DispatchBackend<D>);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[cfg(feature = "cpu")]
     use incin_core::prelude::{
-        DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, RequiresGrad, Tensor, ToDevice, typenum,
+        BackendError, DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind,
+        RequiresGrad, Tensor, ToDevice,
     };
+    #[cfg(feature = "cpu")]
+    type Linear23 = incin_core::shapes::shape::DimCons<
+        incin_core::typenum::U2,
+        incin_core::shapes::shape::DimCons<incin_core::typenum::U3, incin_core::shapes::shape::Nil>,
+    >;
 
     fn assert_backend<B: Backend>() {}
 
     #[cfg(feature = "cpu")]
     #[test]
     fn selects_cpu_backend() {
-        assert_backend::<crate::IncinBackend<f32, Cpu>>();
+        assert_backend::<crate::IncinBackend<Cpu>>();
     }
 
     #[cfg(feature = "wgpu")]
     #[test]
     fn selects_wgpu_backend() {
-        assert_backend::<crate::IncinBackend<f32, incin_core::prelude::Wgpu>>();
+        assert_backend::<crate::IncinBackend<incin_core::prelude::Wgpu>>();
     }
 
     #[cfg(feature = "cuda")]
     #[test]
     fn selects_cuda_backend() {
-        assert_backend::<crate::IncinBackend<f32, incin_core::prelude::Cuda>>();
+        assert_backend::<crate::IncinBackend<incin_core::prelude::Cuda>>();
     }
 
     #[cfg(feature = "cpu")]
     #[test]
     fn runtime_dispatch_selects_cpu_and_preserves_metadata() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
+        type B = crate::IncinBackend<Dyn>;
         let tensor = Tensor::<Dyn, B, Dyn>::zeros(([2, 3], DTypeId::F64, DeviceId::cpu())).unwrap();
         assert_eq!(tensor.dims(), vec![2, 3]);
-        assert_eq!(tensor.dtype(), DTypeId::F64);
+        assert_eq!(tensor.dtype(), DTypeId::F64.descriptor());
         assert_eq!(tensor.device().unwrap(), DeviceId::cpu());
         assert!(matches!(
             tensor.inner(),
@@ -281,15 +296,16 @@ mod tests {
     #[cfg(feature = "cpu")]
     #[test]
     fn checked_storage_wrapping_rejects_metadata_mismatches() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
-        let storage = Tensor::<Dyn, B, Dyn>::zeros(([1], DTypeId::F32, DeviceId::cpu()))
-            .unwrap()
-            .into_inner();
+        type B = crate::IncinBackend<Dyn>;
+        let storage =
+            Tensor::<Dyn, B, Dyn>::zeros(([1], DTypeId::F32.descriptor(), DeviceId::cpu()))
+                .unwrap()
+                .into_inner();
 
         let dtype_error = Tensor::<Dyn, B, Dyn>::try_from_storage(
             storage.clone(),
-            vec![1],
-            DTypeId::F64,
+            ShapeBuf::from_slice(&[1]),
+            DTypeId::F64.descriptor(),
             DeviceId::cpu(),
             <Grad as RequiresGrad>::init(()),
         )
@@ -297,15 +313,15 @@ mod tests {
         assert!(matches!(
             dtype_error,
             Error::DTypeStorageMismatch {
-                expected: DTypeId::F64,
-                got: DTypeId::F32,
-            }
+                expected,
+                got,
+            } if expected == DTypeId::F64.descriptor() && got == DTypeId::F32.descriptor()
         ));
 
         let device_error = Tensor::<Dyn, B, Dyn>::try_from_storage(
             storage,
-            vec![1],
-            DTypeId::F32,
+            ShapeBuf::from_slice(&[1]),
+            DTypeId::F32.descriptor(),
             DeviceId::wgpu(0),
             <Grad as RequiresGrad>::init(()),
         )
@@ -316,30 +332,34 @@ mod tests {
     #[cfg(feature = "cpu")]
     #[test]
     fn runtime_from_bytes_rejects_wrong_length() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
-        let error =
-            Tensor::<Dyn, B, Dyn>::from_bytes(&[0; 3], ([1], DTypeId::F32, DeviceId::cpu()))
-                .unwrap_err();
+        type B = crate::IncinBackend<Dyn>;
+        let error = Tensor::<Dyn, B, Dyn>::from_bytes(
+            &[0; 3],
+            ([1], DTypeId::F32.descriptor(), DeviceId::cpu()),
+        )
+        .unwrap_err();
         assert!(matches!(
             error,
-            Error::InvalidByteLength {
-                expected: 4,
-                got: 3,
-            }
+            Error::Backend(BackendError::Execution {
+                operation: OperationKind::TensorFromBytes,
+                ..
+            })
         ));
     }
 
     #[cfg(feature = "cpu")]
     #[test]
     fn runtime_dispatch_reduces_and_transfers_through_host_bytes() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
-        let tensor = Tensor::<Dyn, B, Dyn>::ones(([2, 2], DTypeId::F32, DeviceId::cpu())).unwrap();
+        type B = crate::IncinBackend<Dyn>;
+        let tensor =
+            Tensor::<Dyn, B, Dyn>::ones(([2, 2], DTypeId::F32.descriptor(), DeviceId::cpu()))
+                .unwrap();
         let reduced = tensor.clone().sum_all().unwrap();
         assert_eq!(reduced.to_scalar::<f32>().unwrap(), 4.0);
 
         let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
         assert_eq!(transferred.dims(), vec![2, 2]);
-        assert_eq!(transferred.dtype(), DTypeId::F32);
+        assert_eq!(transferred.dtype(), DTypeId::F32.descriptor());
         assert_eq!(transferred.device().unwrap(), DeviceId::cpu());
         assert_eq!(
             transferred.sum_all().unwrap().to_scalar::<f32>().unwrap(),
@@ -350,20 +370,24 @@ mod tests {
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
     #[test]
     fn runtime_dispatch_reports_disabled_backend() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
+        type B = crate::IncinBackend<Dyn>;
         let error =
-            Tensor::<Dyn, B, Dyn>::zeros(([1], DTypeId::F32, DeviceId::wgpu(0))).unwrap_err();
+            Tensor::<Dyn, B, Dyn>::zeros(([1], DTypeId::F32.descriptor(), DeviceId::wgpu(0)))
+                .unwrap_err();
         assert!(matches!(
             error,
-            Error::BackendUnavailable { backend: "Wgpu" }
+            Error::Backend(BackendError::Execution {
+                operation: OperationKind::Zeros,
+                ..
+            })
         ));
     }
 
     #[cfg(feature = "cpu")]
     #[test]
     fn static_cpu_transfer_rebuilds_dynamic_dispatch_storage() {
-        type Source = crate::IncinBackend<f32, Cpu>;
-        type Target = crate::IncinBackend<f32, Dyn>;
+        type Source = crate::IncinBackend<Cpu>;
+        type Target = crate::IncinBackend<Dyn>;
         let tensor = Tensor::<Dyn, Source>::from_slice(&[1.0f32, 2.0, 3.0], [3]).unwrap();
         let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
         fn assert_target(_: &Tensor<Dyn, Target>) {}
@@ -378,26 +402,25 @@ mod tests {
     #[cfg(feature = "cpu")]
     #[test]
     fn dynamic_layer_builders_consume_dtype_device_and_optional_flags() {
-        type B = crate::IncinBackend<Dyn, Dyn>;
-        let linear = Linear::<Dyn, B>::build((10, 20, DTypeId::F32, DeviceId::cpu())).unwrap();
+        type B = crate::IncinBackend<Dyn>;
+        let linear = Linear::<Dyn, B>::build((10, 20, DeviceId::cpu())).unwrap();
         assert_eq!(linear.weight.shape_dims(), vec![20, 10]);
 
-        let biased =
-            Linear::<Dyn, B, Dyn>::build((10, 20, DTypeId::F32, DeviceId::cpu(), true)).unwrap();
+        let biased = Linear::<Dyn, B, Dyn>::build((10, 20, DeviceId::cpu(), true)).unwrap();
         assert!(biased.bias.is_some());
 
-        let norm = LayerNorm::<Dyn, B>::build((20, DTypeId::F32, DeviceId::cpu(), 1e-5)).unwrap();
+        let norm = LayerNorm::<Dyn, B>::build((20, DeviceId::cpu(), 1e-5)).unwrap();
         assert_eq!(norm.weight.shape_dims(), vec![20]);
     }
 
     #[cfg(feature = "cpu")]
     #[test]
     fn derived_module_transfer_changes_its_backend_output_type() {
-        type Source = crate::IncinBackend<f32, Cpu>;
-        type Target = crate::IncinBackend<f32, Dyn>;
-        let layer = Linear::<(typenum::U2, typenum::U3), Source>::build(()).unwrap();
+        type Source = crate::IncinBackend<Cpu>;
+        type Target = crate::IncinBackend<Dyn>;
+        let layer = Linear::<Linear23, Source>::build(()).unwrap();
         let transferred = ToDevice::<Source, Dyn>::to_device(layer, &DeviceId::cpu()).unwrap();
-        fn assert_target(_: &Linear<(typenum::U2, typenum::U3), Target>) {}
+        fn assert_target(_: &Linear<Linear23, Target>) {}
         assert_target(&transferred);
         assert!(matches!(
             transferred.weight.as_tensor().unwrap().inner(),
