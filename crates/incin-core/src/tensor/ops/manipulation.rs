@@ -9,7 +9,8 @@ use crate::dist::placement::Local;
 use crate::dist::Placement;
 use crate::exec::catalog::{
     op, AxisAttributes, FlattenAttributes, NarrowAttributes, NoAttributes, PadAttributes,
-    Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes,
+    PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes, ShapeAttributes,
+    TransposeAttributes, UnfoldAttributes,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -1775,12 +1776,47 @@ impl<
     }
 
     /// Extracts sliding window slices along `dim`.
-    pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>> {
-        let inner = self.under_grad_mode(|| B::unfold::<K>(&self.inner, dim, size, step))?;
-        let out_shape = B::shape(&inner);
+    pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::Unfold>>,
+        <B as Execute<Descriptor<op::Unfold>>>::Output: Into<B::Storage<K>>,
+    {
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        let extent = *out_shape.get(dim).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                axis: dim,
+                rank: out_shape.len(),
+            })
+        })?;
+        if size == 0 || step == 0 || size > extent {
+            return Err(crate::err::Error::Msg(
+                "unfold expects positive size and step within the selected extent".into(),
+            ));
+        }
+        let windows = (extent - size) / step + 1;
+        out_shape[dim] = windows;
+        out_shape.push(size);
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::Unfold, B, Dyn>(
+                    &context,
+                    UnfoldAttributes {
+                        axis: dim,
+                        size,
+                        step,
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1788,12 +1824,65 @@ impl<
     }
 
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
-    pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>> {
-        let inner = self.under_grad_mode(|| B::pixel_shuffle::<K>(&self.inner, upscale_factor))?;
-        let out_shape = B::shape(&inner);
+    pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Capabilities + Execute<Descriptor<op::PixelShuffle>>,
+        <B as Execute<Descriptor<op::PixelShuffle>>>::Output: Into<B::Storage<K>>,
+    {
+        let dims = self.shape_buf();
+        if dims.as_ref().len() != 4 || upscale_factor == 0 {
+            return Err(crate::err::Error::Msg(
+                "pixel_shuffle expects a rank-4 tensor and a positive upscale factor".into(),
+            ));
+        }
+        let factor = upscale_factor.checked_mul(upscale_factor).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::PixelShuffle,
+                expression: "upscale factor squared",
+            })
+        })?;
+        if dims.as_ref()[1] % factor != 0 {
+            return Err(crate::err::Error::Msg(
+                "pixel_shuffle channels must be divisible by upscale factor squared".into(),
+            ));
+        }
+        let out_shape = vec![
+            dims.as_ref()[0],
+            dims.as_ref()[1] / factor,
+            dims.as_ref()[2]
+                .checked_mul(upscale_factor)
+                .ok_or_else(|| {
+                    crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::PixelShuffle,
+                        expression: "height times upscale factor",
+                    })
+                })?,
+            dims.as_ref()[3]
+                .checked_mul(upscale_factor)
+                .ok_or_else(|| {
+                    crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::PixelShuffle,
+                        expression: "width times upscale factor",
+                    })
+                })?,
+        ];
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self
+            .under_grad_mode(|| {
+                dispatch::execute_shaped::<op::PixelShuffle, B, Dyn>(
+                    &context,
+                    PixelShuffleAttributes { upscale_factor },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
         Tensor::from_parts(
             inner,
-            out_shape,
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
