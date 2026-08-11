@@ -229,9 +229,9 @@ impl<
         // One scope around the whole walk rather than one per axis: a slice
         // over three axes is three backend calls, and the mode they run under
         // is a property of this tensor, not of an iteration.
+        let mut logical_dims = current_dims.as_ref().to_vec();
         let inner = self.under_grad_mode(|| -> Result<B::Storage<K>> {
             let mut inner = self.inner.clone();
-            let mut logical_dims = current_dims.as_ref().to_vec();
             let mut dim = 0;
             for spec in specs {
                 let dim_len = logical_dims[dim];
@@ -321,11 +321,9 @@ impl<
             Ok(inner)
         })?;
 
-        let out_shape = B::shape(&inner);
-
         Tensor::from_parts(
             inner,
-            out_shape,
+            ShapeBuf::from_slice(&logical_dims),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -507,6 +505,30 @@ impl<
     ) -> Result<Tensor<T::Output, B, K, G, P>> {
         let in_shape_vec = self.shape_buf();
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
+        if ranges.len() > in_shape_vec.as_ref().len() {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::RankMismatch {
+                    operation: OperationKind::Slice,
+                    expected: crate::shapes::error::RankExpectation::AtMost(
+                        in_shape_vec.as_ref().len(),
+                    ),
+                    actual: ranges.len(),
+                },
+            ));
+        }
+        for (axis, &(start, end)) in ranges.iter().enumerate() {
+            let extent = in_shape_vec.as_ref()[axis];
+            if start > end || end > extent {
+                return Err(crate::err::Error::Shape(
+                    crate::shapes::ShapeError::InvalidAxisRange {
+                        operation: OperationKind::Slice,
+                        start,
+                        end,
+                        rank: extent,
+                    },
+                ));
+            }
+        }
         let inner = self.under_grad_mode(|| B::slice(&self.inner, &ranges))?;
 
         let mut out_shape_vec = Vec::new();
@@ -1718,7 +1740,12 @@ impl<
         B: Capabilities + Execute<Descriptor<op::Narrow>>,
         <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
     {
-        let dim_size = self.shape_buf().as_ref()[dim];
+        let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                axis: dim,
+                rank: self.shape_buf().rank(),
+            })
+        })?;
         if chunks == 0 {
             return Err(crate::err::Error::Msg(
                 "chunk expects positive number of chunks".into(),
@@ -1747,7 +1774,12 @@ impl<
         B: Capabilities + Execute<Descriptor<op::Narrow>>,
         <B as Execute<Descriptor<op::Narrow>>>::Output: Into<B::Storage<K>>,
     {
-        let dim_size = self.shape_buf().as_ref()[dim];
+        let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                axis: dim,
+                rank: self.shape_buf().rank(),
+            })
+        })?;
         if split_size == 0 {
             return Err(crate::err::Error::Msg(
                 "split expects positive split_size".into(),
