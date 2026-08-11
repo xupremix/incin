@@ -1188,35 +1188,6 @@ impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
     type Output = Dyn;
 }
 
-impl<D: Dim> Shape for Vec<D> {
-    /// The user-facing constructor argument type for this concrete shape.
-    type Arg = Self;
-    /// Runtime values for this shape are held in `ShapeBuf`.
-    /// Converts a user-facing argument into canonical `ShapeBuf` storage.
-    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        let dims = crate::shapes::ShapeBuf::from_iter(arg.into_iter().map(|d| d.size()));
-        Self::try_from_dims(dims.as_ref()).map(|_| dims)
-    }
-    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        if dims.iter().all(|&d| D::validate_size(d)) {
-            Ok(())
-        } else {
-            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: crate::shapes::error::OperationKind::Storage,
-                rank: dims.len(),
-            })
-        }
-    }
-}
-
-impl<D: Dim> DynShape for Vec<D> {
-    #[inline(always)]
-    /// Returns the number of dimensions.
-    fn rank(shape: &ShapeBuf) -> usize {
-        shape.len()
-    }
-}
-
 /// The 0-dimensional (scalar) shape - an alias for `()`.
 pub type Scalar = ();
 

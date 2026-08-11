@@ -199,7 +199,7 @@ pub mod prelude {
         SpatialConv1d, SpatialConv2d, SpatialOut, StackShape, StaticAxis, StaticDim,
         StaticOrNamedDim, StrideBuf, StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape,
         TryReshape, broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims,
-        dim_from_size, shape_buf_from_dims, spatial_out_size,
+        shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;

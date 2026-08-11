@@ -4,7 +4,7 @@
 extern crate incin_core as incin;
 
 use incin_core::axis;
-use incin_core::exec::catalog::{op, AxisAttributes, Descriptor, LogicalTensorMeta};
+use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
 use incin_core::exec::{AxisSet, ExecutionDescriptor, RankSupport};
 use incin_core::prelude::*;
 use incin_core::shapes::dim::{
@@ -29,13 +29,11 @@ where
 
 #[test]
 fn test_const_dim_and_extent_classification() {
-    let d32 = ConstDim::<32>;
-    assert_eq!(d32.size(), 32);
-    assert_eq!(d32.static_extent(), StaticExtent::Value(32));
+    assert_eq!(ConstDim::<32>::static_size(), Ok(32));
+    assert_eq!(<ConstDim<32> as Dim>::STATIC, StaticExtent::Value(32));
 
-    let dyn_dim = 16usize;
-    assert_eq!(dyn_dim.size(), 16);
-    assert_eq!(dyn_dim.static_extent(), StaticExtent::RuntimeUnknown);
+    assert!(usize::static_size().is_err());
+    assert_eq!(<usize as Dim>::STATIC, StaticExtent::RuntimeUnknown);
 }
 
 #[test]
@@ -44,8 +42,11 @@ fn test_derived_symbolic_dimensions() {
     assert_eq!(m.static_extent(), StaticExtent::Value(128));
 
     // Semantic equality vs ConstDim<128>
-    assert_eq!(m.size(), ConstDim::<128>.size());
-    assert_eq!(m.static_extent(), ConstDim::<128>.static_extent());
+    assert_eq!(
+        <MulDim<ConstDim<32>, ConstDim<4>> as Dim>::static_size(),
+        ConstDim::<128>::static_size()
+    );
+    assert_eq!(m.static_extent(), <ConstDim<128> as Dim>::STATIC);
 
     let a = AddDim::<ConstDim<10>, ConstDim<5>>::default();
     assert_eq!(a.static_extent(), StaticExtent::Value(15));
@@ -75,10 +76,6 @@ fn invalid_symbolic_dimensions_are_zst_specs_not_panic_values() {
     type InvalidProduct = MulDim<ConstDim<{ usize::MAX }>, ConstDim<2>>;
     type InvalidDifference = CheckedSubDim<ConstDim<3>, ConstDim<10>>;
     type InvalidDivision = ExactDivDim<ConstDim<10>, ConstDim<3>>;
-
-    let _ = InvalidProduct::from_arg(usize::MAX);
-    let _ = InvalidDifference::from_arg(0);
-    let _ = InvalidDivision::from_arg(0);
 
     assert!(InvalidProduct::resolve_arg(usize::MAX).is_err());
     assert!(InvalidDifference::resolve_arg(0).is_err());
@@ -129,12 +126,18 @@ fn test_named_dim_tag_extent_orthogonality() {
     assert_eq!(named_runtime.static_extent(), StaticExtent::RuntimeUnknown);
 
     let named_static = NamedDim::<ChannelsTag, ConstDim<64>>::new();
-    assert_eq!(named_static.size(), 64);
+    assert_eq!(
+        <NamedDim<ChannelsTag, ConstDim<64>> as Dim>::static_size(),
+        Ok(64)
+    );
     assert_eq!(named_static.static_extent(), StaticExtent::Value(64));
 
     // keepdim preserves ChannelsTag while replacing extent with ConstDim<1>
     let keepdim_named = NamedDim::<ChannelsTag, ConstDim<1>>::new();
-    assert_eq!(keepdim_named.size(), 1);
+    assert_eq!(
+        <NamedDim<ChannelsTag, ConstDim<1>> as Dim>::static_size(),
+        Ok(1)
+    );
     assert_eq!(keepdim_named.static_extent(), StaticExtent::Value(1));
 }
 

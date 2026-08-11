@@ -714,7 +714,7 @@ where
             (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
         ),
     ) -> core::result::Result<Self::Output, Error> {
-        let seq_len = Seq::from_arg(()).size();
+        let seq_len = Seq::static_size().map_err(Error::Shape)?;
         let mut outputs = Vec::with_capacity(seq_len);
 
         for i in 0..seq_len {

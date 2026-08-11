@@ -16,7 +16,7 @@ use crate::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "wgpu")]
 use crate::tensor::device::{Wgpu, WgpuN};
 
-use crate::prelude::{Cpu, DTypeId, DeviceId, Dim, Grad, NoGrad};
+use crate::prelude::{Cpu, DTypeDescriptor, DTypeId, DeviceId, Dim, Grad, NoGrad, ShapeBuf};
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 use alloc::vec::Vec;
@@ -77,16 +77,42 @@ macro_rules! impl_self_arginto {
 }
 
 impl_self_arginto! {
-    ()
     f32
     f64
     usize
     bool
     DTypeId
+    DTypeDescriptor
     DeviceId
     Cpu
     Grad
     NoGrad
+    ShapeBuf
+}
+
+pub trait UnitTree: Default + Copy + Clone + core::fmt::Debug {}
+impl UnitTree for () {}
+impl<T: UnitTree> UnitTree for ((), T) {}
+impl UnitTree for ((),) {}
+impl UnitTree for ((), (), ()) {}
+impl UnitTree for ((), (), (), ()) {}
+impl UnitTree for ((), (), (), (), ()) {}
+impl UnitTree for ((), (), (), (), (), ()) {}
+impl UnitTree for ((), (), (), (), (), (), ()) {}
+impl UnitTree for ((), (), (), (), (), (), (), ()) {}
+
+impl<T: UnitTree> ArgInto<T> for () {
+    #[inline(always)]
+    fn into_arg(self) -> T {
+        T::default()
+    }
+}
+
+impl ArgInto<DTypeDescriptor> for DTypeId {
+    #[inline(always)]
+    fn into_arg(self) -> DTypeDescriptor {
+        self.descriptor()
+    }
 }
 
 impl ArgInto<UTerm> for UTerm {
@@ -171,7 +197,6 @@ impl<D: Dim> ArgInto<Vec<D>> for Vec<D> {
 
 impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
     #[inline(always)]
-    /// Converts `self` into the target representation.
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -179,7 +204,6 @@ impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
 
 impl ArgInto<Vec<usize>> for &[usize] {
     #[inline(always)]
-    /// Converts `self` into the target representation.
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -187,8 +211,103 @@ impl ArgInto<Vec<usize>> for &[usize] {
 
 impl<const N: usize> ArgInto<[usize; N]> for [usize; N] {
     #[inline(always)]
-    /// Converts `self` into the target representation.
     fn into_arg(self) -> [usize; N] {
+        self
+    }
+}
+
+impl ArgInto<(usize, ())> for [usize; 1] {
+    #[inline(always)]
+    fn into_arg(self) -> (usize, ()) {
+        (self[0], ())
+    }
+}
+
+impl ArgInto<(usize, (usize, ()))> for [usize; 2] {
+    #[inline(always)]
+    fn into_arg(self) -> (usize, (usize, ())) {
+        (self[0], (self[1], ()))
+    }
+}
+
+impl ArgInto<(usize, (usize, (usize, ())))> for [usize; 3] {
+    #[inline(always)]
+    fn into_arg(self) -> (usize, (usize, (usize, ()))) {
+        (self[0], (self[1], (self[2], ())))
+    }
+}
+
+type Dim4Tuple = (usize, (usize, (usize, (usize, ()))));
+impl ArgInto<Dim4Tuple> for [usize; 4] {
+    #[inline(always)]
+    fn into_arg(self) -> (usize, (usize, (usize, (usize, ())))) {
+        (self[0], (self[1], (self[2], (self[3], ()))))
+    }
+}
+
+impl<A, TA> ArgInto<(TA, ())> for (A,)
+where
+    A: ArgInto<TA>,
+{
+    #[inline(always)]
+    fn into_arg(self) -> (TA, ()) {
+        (self.0.into_arg(), ())
+    }
+}
+
+impl<A, B, TA, TB> ArgInto<(TA, (TB, ()))> for (A, B)
+where
+    A: ArgInto<TA>,
+    B: ArgInto<TB>,
+{
+    #[inline(always)]
+    fn into_arg(self) -> (TA, (TB, ())) {
+        (self.0.into_arg(), (self.1.into_arg(), ()))
+    }
+}
+
+impl<A, B, C, TA, TB, TC> ArgInto<(TA, (TB, (TC, ())))> for (A, B, C)
+where
+    A: ArgInto<TA>,
+    B: ArgInto<TB>,
+    C: ArgInto<TC>,
+{
+    #[inline(always)]
+    fn into_arg(self) -> (TA, (TB, (TC, ()))) {
+        (
+            self.0.into_arg(),
+            (self.1.into_arg(), (self.2.into_arg(), ())),
+        )
+    }
+}
+
+impl<A, B, C, D, TA, TB, TC, TD> ArgInto<(TA, (TB, (TC, (TD, ()))))> for (A, B, C, D)
+where
+    A: ArgInto<TA>,
+    B: ArgInto<TB>,
+    C: ArgInto<TC>,
+    D: ArgInto<TD>,
+{
+    #[inline(always)]
+    fn into_arg(self) -> (TA, (TB, (TC, (TD, ())))) {
+        (
+            self.0.into_arg(),
+            (
+                self.1.into_arg(),
+                (self.2.into_arg(), (self.3.into_arg(), ())),
+            ),
+        )
+    }
+}
+
+// Structural five-axis shapes use the canonical right-nested argument tree.
+// Keep the exact-tree conversion available so callers can pass a ShapeBuf-like
+// argument without first flattening it into a legacy tuple representation.
+type Dim5Arg = ((), ((), ((), (usize, ((), ())))));
+
+impl ArgInto<Dim5Arg> for Dim5Arg {
+    #[inline(always)]
+    fn into_arg(self) -> Dim5Arg {
         self
     }
 }
@@ -215,7 +334,9 @@ impl_not_unit! {
     Grad
     NoGrad
     DTypeId
+    DTypeDescriptor
     DeviceId
+    ShapeBuf
 }
 
 // () combinations used for static shapes should also be treated as Non-Unit
@@ -284,47 +405,15 @@ macro_rules! impl_dim_tuple_arg_into {
     };
 }
 
-impl_dim_tuple_arg_into!(D0);
-impl_dim_tuple_arg_into!(D0, D1);
+// 1-tuple and 2-tuple ArgInto are handled by the generic DimCons nesting impls above.
+// impl_dim_tuple_arg_into!(D0);
+// impl_dim_tuple_arg_into!(D0, D1);
 impl_dim_tuple_arg_into!(D0, D1, D2);
 // 4-tuple is handled by the generic `impl<A, B, C, D> ArgInto<(TA, TB, TC, TD)>`
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6, D7);
-
-// ============================================================================
-// Fully-static shape construction from ()
-// When all dims are ConstDim (e.g. Const<N>), no runtime arg is needed.
-// ============================================================================
-
-macro_rules! impl_const_dim_tuple_from_unit {
-    ($($name:ident),+ $(,)?) => {
-        // Handled by incin_macros::impl_arg_into!(), through MAX_RANK.
-    };
-}
-
-impl_const_dim_tuple_from_unit!(D0);
-impl_const_dim_tuple_from_unit!(D0, D1);
-impl_const_dim_tuple_from_unit!(D0, D1, D2);
-impl_const_dim_tuple_from_unit!(D0, D1, D2, D3);
-impl_const_dim_tuple_from_unit!(D0, D1, D2, D3, D4);
-impl_const_dim_tuple_from_unit!(D0, D1, D2, D3, D4, D5);
-impl_const_dim_tuple_from_unit!(D0, D1, D2, D3, D4, D5, D6);
-
-// ============================================================================
-// Partially-static shape conversions (via proc macro)
-//
-// Generates impls like:
-//   impl<D0: Dim, const N1: usize> ArgInto<(usize, Const<N1>)> for (D0,)
-//   impl<D0: Dim, const N1: usize> ArgInto<(usize, Const<N1>)> for D0
-//   impl<const N1: usize, const N2: usize> ArgInto<(Const<N1>, Const<N2>)> for ()
-//
-// This allows users to only provide the dynamic dimensions when constructing
-// partially-static shapes.
-// ============================================================================
-
-incin_macros::impl_arg_into!();
 
 // ============================================================================
 // 4-tuple lifting: converts user args into TensorArgsData

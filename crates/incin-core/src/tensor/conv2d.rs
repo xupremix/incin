@@ -64,17 +64,16 @@ where
     >;
 
     #[inline(always)]
-    /// `COut`/`HOut`/`WOut` come from `Default` — they're all `StaticDim`
-    /// (typenum) here, so the default *is* the only possible value. `B`
-    /// (the batch dim) is bounded only by `Dim + Default`, so a `usize` or
-    /// `symbolic_dim!` batch needs its real value copied from `lhs`
-    /// instead — `Default::default()` would silently produce 0.
+    /// `COut`/`HOut`/`WOut` are statically proven extents. `B` is copied from
+    /// `lhs` because it may be runtime-sized.
     fn output_shape(lhs: &ShapeBuf, _: &ShapeBuf) -> ShapeBuf {
         ShapeBuf::from_slice(&[
             lhs[0],
-            COut::default().size(),
-            ConvOutDim::<HIn, KH, Stride, Padding>::default().size(),
-            ConvOutDim::<WIn, KW, Stride, Padding>::default().size(),
+            COut::static_size().expect("StaticDim proves a concrete extent"),
+            ConvOutDim::<HIn, KH, Stride, Padding>::static_size()
+                .expect("StaticDim proves a concrete extent"),
+            ConvOutDim::<WIn, KW, Stride, Padding>::static_size()
+                .expect("StaticDim proves a concrete extent"),
         ])
     }
 }

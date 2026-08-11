@@ -37,7 +37,7 @@ pub trait Conv1dShape: Shape + DynShape {
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(
         target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError>;
 }
 
 /* legacy tuple Conv1dShape implementation removed: use DimCons/Nil */
@@ -59,15 +59,15 @@ impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, 
     #[inline]
     fn build_args(
         target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
-        let out_channels = OutC::from_arg(target.0.clone()).size();
-        let in_channels = InC::from_arg(target.1.clone()).size();
-        (
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
+        let out_channels = OutC::resolve_arg(target.0.clone())?;
+        let in_channels = InC::resolve_arg(target.1.clone())?;
+        Ok((
             out_channels,
             in_channels,
-            (target.0.clone(), target.1, K::from_arg(()).arg()),
+            (target.0.clone(), target.1, ()),
             (target.0,),
-        )
+        ))
     }
 }
 */
@@ -114,15 +114,15 @@ impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, 
     #[inline]
     fn build_args(
         target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
-        let out_channels = OutC::from_arg(target.0.clone()).size();
-        let in_channels = InC::from_arg(target.1.clone()).size();
-        (
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
+        let out_channels = OutC::resolve_arg(target.0.clone())?;
+        let in_channels = InC::resolve_arg(target.1.clone())?;
+        Ok((
             out_channels,
             in_channels,
-            (target.0.clone(), (target.1, (K::from_arg(()).arg(), ()))),
+            (target.0.clone(), (target.1, ((), ()))),
             (target.0, ()),
-        )
+        ))
     }
 }
 
@@ -299,7 +299,8 @@ where
     {
         use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
-        let (cout, cin, weight_shape_arg, bias_shape_arg) = S::build_args((out_c, in_c));
+        let (cout, cin, weight_shape_arg, bias_shape_arg) =
+            S::build_args((out_c, in_c)).map_err(Error::Shape)?;
         let kernel_size = S::K::static_size().map_err(Error::Shape)?;
         let fan_in = cin * kernel_size;
         let fan_out = cout * kernel_size;

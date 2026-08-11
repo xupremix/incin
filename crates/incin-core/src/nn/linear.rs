@@ -39,7 +39,7 @@ pub trait LinearShape: Shape + DynShape {
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(
         target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError>;
 }
 
 /* legacy tuple LinearShape implementation removed: use DimCons/Nil */
@@ -88,15 +88,15 @@ impl<InF: Dim, OutF: Dim> LinearShape
     #[inline]
     fn build_args(
         target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
-        let in_f = InF::from_arg(target.0.clone()).size();
-        let out_f = OutF::from_arg(target.1.clone()).size();
-        (
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
+        let in_f = InF::resolve_arg(target.0.clone())?;
+        let out_f = OutF::resolve_arg(target.1.clone())?;
+        Ok((
             in_f,
             out_f,
             (target.1.clone(), (target.0, ())),
             (target.1, ()),
-        )
+        ))
     }
 }
 
@@ -118,10 +118,10 @@ impl LinearShape for Dyn {
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(
         target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
-    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
         let in_f = target.0;
         let out_f = target.1;
-        (in_f, out_f, alloc::vec![out_f, in_f], alloc::vec![out_f])
+        Ok((in_f, out_f, alloc::vec![out_f, in_f], alloc::vec![out_f]))
     }
 }
 
@@ -382,7 +382,8 @@ where
         device: <B::Device as Device>::Arg,
         bias_arg: <Bias as crate::nn::optional::OptionalField>::Arg,
     ) -> Result<Self> {
-        let (in_f, _out_f, w_args, b_args) = S::build_args((in_arg, out_arg));
+        let (in_f, _out_f, w_args, b_args) =
+            S::build_args((in_arg, out_arg)).map_err(Error::Shape)?;
         let w_field = <S::WeightShape as Shape>::resolve(w_args).map_err(Error::Shape)?;
         let w_dims = w_field.clone();
         let init = crate::nn::init::kaiming_uniform();

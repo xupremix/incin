@@ -148,30 +148,6 @@ pub fn spatial_out_size(
     Ok((padded - extent) / stride + 1)
 }
 
-/// Rebuild a typed dimension from a computed extent, reporting a mismatch
-/// rather than unwrapping.
-///
-/// [`Dim::from_size`] rejects a size that disagrees with a compile-time-fixed
-/// dimension. The expected value is read from the type-level classification,
-/// rather than from a default dimension value, because runtime and named
-/// dimensions do not store their numeric extent in the dimension type.
-pub fn dim_from_size<D: Dim + Default>(
-    operation: OperationKind,
-    axis: Axis,
-    size: usize,
-) -> Result<D, ShapeError> {
-    D::from_size(size).ok_or(ShapeError::DimensionMismatch {
-        operation,
-        axis,
-        lhs: size,
-        rhs: match D::STATIC {
-            StaticExtent::Value(expected) => expected,
-            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
-        },
-        constraint: DimensionConstraint::Equal,
-    })
-}
-
 /// Check that a dynamic operand has one of the ranks its operation accepts.
 fn expect_rank(
     operation: OperationKind,

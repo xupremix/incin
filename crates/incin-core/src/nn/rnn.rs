@@ -21,12 +21,8 @@ pub trait RnnShape: Shape + DynShape {
     type In: Dim;
     /// `Out`.
     type Out: Dim;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target;
     type IhShape: LinearShape<InF = Self::In, OutF = Self::Out>;
     type HhShape: LinearShape<InF = Self::Out, OutF = Self::Out>;
-    /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize);
 }
 
 impl<In: Dim, Out: Dim> RnnShape
@@ -37,7 +33,6 @@ impl<In: Dim, Out: Dim> RnnShape
 {
     type In = In;
     type Out = Out;
-    type Target = ();
     type IhShape = crate::shapes::shape::DimCons<
         In,
         crate::shapes::shape::DimCons<Out, crate::shapes::shape::Nil>,
@@ -46,12 +41,6 @@ impl<In: Dim, Out: Dim> RnnShape
         Out,
         crate::shapes::shape::DimCons<Out, crate::shapes::shape::Nil>,
     >;
-    fn build_args(_: ()) -> (usize, usize) {
-        (
-            In::from_arg(Default::default()).size(),
-            Out::from_arg(Default::default()).size(),
-        )
-    }
 }
 
 impl RnnShape for Dyn {
@@ -59,14 +48,8 @@ impl RnnShape for Dyn {
     type In = usize;
     /// `Out`.
     type Out = usize;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (usize, usize);
     type IhShape = Dyn;
     type HhShape = Dyn;
-    /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: (usize, usize)) -> (usize, usize) {
-        target
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -573,7 +556,7 @@ where
             Tensor<D2<Batch, S::Out>, B, K>,
         ),
     ) -> core::result::Result<Self::Output, Error> {
-        let seq_len = Seq::from_arg(()).size();
+        let seq_len = Seq::static_size().map_err(Error::Shape)?;
         let mut outputs = Vec::with_capacity(seq_len);
 
         for i in 0..seq_len {

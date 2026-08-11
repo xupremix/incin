@@ -75,19 +75,8 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// The user-facing constructor argument (e.g. `()` for compile-time-
     /// fixed dimensions, `usize` for runtime-sized ones).
     type Arg: Clone + Default + core::fmt::Debug;
-    /// Returns this dimension's size.
-    fn size(&self) -> usize;
-    /// Attempts to construct this dimension from a runtime `size`, returning
-    /// `None` if `size` doesn't match a compile-time-fixed value.
-    fn from_size(size: usize) -> Option<Self>;
-    /// Constructs this dimension from its constructor argument.
-    fn from_arg(arg: Self::Arg) -> Self;
-    /// Returns the constructor argument that would reproduce this dimension.
-    fn arg(&self) -> Self::Arg;
-
     /// Resolves an argument at the Shape/ShapeBuf boundary without retaining a
-    /// dimension value. This is the canonical path used by structural shapes;
-    /// the older value constructors remain only for parameter adapters.
+    /// dimension value.
     #[inline]
     fn resolve_arg(
         _arg: Self::Arg,
@@ -278,28 +267,6 @@ impl<L: Dim, R: Dim> Dim for BroadcastExtent<L, R> {
     type KeepDim = typenum::U1;
     const STATIC: StaticExtent = broadcast_static(L::STATIC, R::STATIC);
     type Arg = usize;
-    fn size(&self) -> usize {
-        match Self::STATIC {
-            StaticExtent::Value(value) => value,
-            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
-        }
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        match Self::STATIC {
-            StaticExtent::Invalid => None,
-            StaticExtent::Value(value) => {
-                (value == size).then_some(Self(core::marker::PhantomData))
-            }
-            StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
-        }
-    }
-    fn from_arg(arg: Self::Arg) -> Self {
-        let _ = arg;
-        Self(core::marker::PhantomData)
-    }
-    fn arg(&self) -> Self::Arg {
-        self.size()
-    }
     fn resolve_arg(
         arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -323,20 +290,6 @@ impl Dim for usize {
     /// A runtime dimension's argument is just its size.
     type Arg = Self;
 
-    #[inline(always)]
-    /// Itself.
-    fn size(&self) -> usize {
-        *self
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        Some(size)
-    }
-    fn from_arg(arg: Self::Arg) -> Self {
-        arg
-    }
-    fn arg(&self) -> Self::Arg {
-        *self
-    }
     fn resolve_arg(
         arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -408,18 +361,6 @@ impl<const N: usize> Dim for ConstDim<N> {
     type KeepDim = typenum::U1;
     const STATIC: StaticExtent = StaticExtent::Value(N);
     type Arg = ();
-
-    #[inline(always)]
-    fn size(&self) -> usize {
-        N
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        (size == N).then_some(Self)
-    }
-    fn from_arg(_: Self::Arg) -> Self {
-        ConstDim
-    }
-    fn arg(&self) -> Self::Arg {}
 }
 
 macro_rules! static_op {
@@ -472,29 +413,6 @@ macro_rules! static_op_dim {
 
             type Arg = usize;
 
-            #[inline(always)]
-            fn size(&self) -> usize {
-                match Self::STATIC {
-                    StaticExtent::Value(value) => value,
-                    StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
-                }
-            }
-            fn from_size(size: usize) -> Option<Self> {
-                match Self::STATIC {
-                    StaticExtent::Invalid => None,
-                    StaticExtent::Value(v) => {
-                        (v == size).then_some(Self(core::marker::PhantomData))
-                    }
-                    StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
-                }
-            }
-            fn from_arg(arg: Self::Arg) -> Self {
-                let _ = arg;
-                Self(core::marker::PhantomData)
-            }
-            fn arg(&self) -> Self::Arg {
-                Default::default()
-            }
             fn resolve_arg(
                 arg: Self::Arg,
             ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -558,27 +476,6 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     const NAME: Option<&'static str> = Some(Tag::NAME);
     type Arg = Extent::Arg;
 
-    #[inline(always)]
-    fn size(&self) -> usize {
-        match Self::STATIC {
-            StaticExtent::Value(value) => value,
-            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
-        }
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        Extent::from_size(size).map(|_| Self {
-            _tag: core::marker::PhantomData,
-        })
-    }
-    fn from_arg(arg: Self::Arg) -> Self {
-        let _ = arg;
-        Self {
-            _tag: core::marker::PhantomData,
-        }
-    }
-    fn arg(&self) -> Self::Arg {
-        Default::default()
-    }
     fn resolve_arg(
         arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -610,29 +507,6 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
 
     type Arg = usize;
 
-    #[inline(always)]
-    fn size(&self) -> usize {
-        match Self::STATIC {
-            StaticExtent::Value(value) => value,
-            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
-        }
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        match Self::STATIC {
-            StaticExtent::Invalid => None,
-            StaticExtent::Value(value) => {
-                (value == size).then_some(Self(core::marker::PhantomData))
-            }
-            StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
-        }
-    }
-    fn from_arg(arg: Self::Arg) -> Self {
-        let _ = arg;
-        Self(core::marker::PhantomData)
-    }
-    fn arg(&self) -> Self::Arg {
-        Default::default()
-    }
     fn resolve_arg(
         arg: Self::Arg,
     ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -662,19 +536,6 @@ impl Dim for UTerm {
 
     /// No argument needed — `UTerm` (typenum's zero) is always size 0.
     type Arg = ();
-
-    #[inline(always)]
-    /// Always 0.
-    fn size(&self) -> usize {
-        0
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        (size == 0).then_some(UTerm)
-    }
-    fn from_arg(_: Self::Arg) -> Self {
-        UTerm
-    }
-    fn arg(&self) -> Self::Arg {}
 }
 
 impl<U, B> Dim for UInt<U, B>
@@ -698,17 +559,4 @@ where
 
     /// No argument needed — the size is fixed by the `typenum` type itself.
     type Arg = ();
-
-    #[inline(always)]
-    /// The compile-time-known `typenum` value.
-    fn size(&self) -> usize {
-        Self::USIZE
-    }
-    fn from_size(size: usize) -> Option<Self> {
-        (size == Self::USIZE).then_some(Default::default())
-    }
-    fn from_arg(_: Self::Arg) -> Self {
-        Default::default()
-    }
-    fn arg(&self) -> Self::Arg {}
 }
