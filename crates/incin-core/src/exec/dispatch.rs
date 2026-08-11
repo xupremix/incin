@@ -184,6 +184,7 @@ pub fn execute<O, B>(
 ) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
     O: CanonicalOperation,
+    O::Attributes: crate::exec::AttributeContract,
     B: Execute<Descriptor<O>> + Capabilities,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
@@ -243,6 +244,7 @@ pub fn execute_shaped<O, B, S>(
 ) -> Result<<B as Execute<Descriptor<O>>>::Output, CanonicalError>
 where
     O: CanonicalOperation,
+    O::Attributes: crate::exec::AttributeContract,
     B: Execute<Descriptor<O>> + Capabilities,
     S: crate::prelude::Shape,
 {
@@ -432,6 +434,7 @@ pub fn support_for<O, B>(
 ) -> Result<SupportLevel, UnsupportedReason>
 where
     O: CanonicalOperation,
+    O::Attributes: crate::exec::AttributeContract,
     B: Capabilities + crate::tensor::backend::StorageBackend,
 {
     admit(

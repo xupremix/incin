@@ -3,8 +3,8 @@
 extern crate incin_core as incin;
 
 use incin_core::backend_authoring::{
-    AttributeContract, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta,
-    Operation, OperationKey, StorageBackend, execute_custom_shaped,
+    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
+    StorageBackend, execute_custom_shaped,
 };
 use incin_core::exec::{
     Capabilities, CustomCapabilityQuery, ExecutionContext, ProofLevel, SupportLevel,
@@ -14,16 +14,6 @@ use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValu
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct IdentityAttributes {
     shape: ShapeBuf,
-}
-
-impl AttributeContract for IdentityAttributes {
-    fn validate(
-        &self,
-        _operation: incin_core::prelude::OperationKind,
-        _inputs: &[LogicalTensorMeta],
-    ) -> Result<(), DescriptorError> {
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone)]

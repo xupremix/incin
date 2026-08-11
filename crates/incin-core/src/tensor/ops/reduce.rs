@@ -335,8 +335,7 @@ impl<
         B: Execute<Descriptor<op::Cumsum>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::Cumsum>>>::Output: Into<B::Storage<K>>,
     {
-        let axis =
-            crate::shapes::idx::AxisSelector::new(&[DIM as isize]).normalize(self.rank())?[0];
+        let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(DIM, self.rank())?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
@@ -415,11 +414,11 @@ where
         B: Execute<Descriptor<op::ArgMax>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::ArgMax>>>::Output: Into<B::Storage<u32>>,
     {
-        if let Some(d) = dim {
-            crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
-        }
+        let normalized = dim
+            .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
+            .transpose()?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
-        if let Some(d) = dim {
+        if let Some(d) = normalized {
             out_dims.remove(d);
         } else {
             out_dims = alloc::vec![];
@@ -435,7 +434,7 @@ where
                 crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
                     &context,
                     crate::exec::catalog::IndexReductionAttributes {
-                        axis: dim,
+                        axis: normalized,
                         dtype: DTypeId::U32.descriptor(),
                     },
                     &[input],
@@ -464,11 +463,11 @@ where
         B: Execute<Descriptor<op::ArgMin>> + crate::exec::Capabilities,
         <B as Execute<Descriptor<op::ArgMin>>>::Output: Into<B::Storage<u32>>,
     {
-        if let Some(d) = dim {
-            crate::shapes::idx::AxisSelector::new(&[d as isize]).normalize(self.rank())?;
-        }
+        let normalized = dim
+            .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
+            .transpose()?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
-        if let Some(d) = dim {
+        if let Some(d) = normalized {
             out_dims.remove(d);
         } else {
             out_dims = alloc::vec![];
@@ -484,7 +483,7 @@ where
                 crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
                     &context,
                     crate::exec::catalog::IndexReductionAttributes {
-                        axis: dim,
+                        axis: normalized,
                         dtype: DTypeId::U32.descriptor(),
                     },
                     &[input],
@@ -518,7 +517,7 @@ where
         <B as Execute<Descriptor<op::TopK>>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
     {
         let rank = self.rank();
-        let dim = crate::shapes::idx::AxisSelector::new(&[dim as isize]).normalize(rank)?[0];
+        let dim = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, rank)?;
         let extent = self.shape_buf().as_ref()[dim];
         if k > extent {
             return Err(crate::err::Error::Shape(
@@ -584,8 +583,7 @@ where
         // Disabled rather than this tensor's own mode: the result is `NoGrad`
         // whatever the receiver was, and sec. 1.2.5 makes that a statement
         // about what runs, not only about which APIs the result offers.
-        let axis =
-            crate::shapes::idx::AxisSelector::new(&[dim as isize]).normalize(self.rank())?[0];
+        let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, self.rank())?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);

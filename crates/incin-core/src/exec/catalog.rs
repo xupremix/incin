@@ -821,8 +821,7 @@ pub struct OperationKey {
 
 /// Open operation contract for downstream static execution.
 pub trait Operation: Clone + fmt::Debug + 'static {
-    type Attributes: AttributeContract
-        + Clone
+    type Attributes: Clone
         + fmt::Debug
         + PartialEq
         + serde::Serialize
@@ -891,7 +890,10 @@ impl<O: Operation> Descriptor<O> {
     }
 }
 
-impl<O: CanonicalOperation> Descriptor<O> {
+impl<O: CanonicalOperation> Descriptor<O>
+where
+    O::Attributes: AttributeContract,
+{
     #[must_use]
     pub const fn operation(&self) -> OperationKind {
         O::ID
@@ -948,7 +950,10 @@ impl std::error::Error for DescriptorCaptureError {}
 impl CapturedDescriptor {
     pub fn capture<O: CanonicalOperation>(
         descriptor: &Descriptor<O>,
-    ) -> Result<Self, DescriptorCaptureError> {
+    ) -> Result<Self, DescriptorCaptureError>
+    where
+        O::Attributes: AttributeContract,
+    {
         let payload = postcard::to_allocvec(descriptor).map_err(DescriptorCaptureError::Encode)?;
         Ok(Self {
             operation: O::ID,
@@ -962,7 +967,10 @@ impl CapturedDescriptor {
         self.operation
     }
 
-    pub fn decode<O: CanonicalOperation>(&self) -> Result<Descriptor<O>, DescriptorCaptureError> {
+    pub fn decode<O: CanonicalOperation>(&self) -> Result<Descriptor<O>, DescriptorCaptureError>
+    where
+        O::Attributes: AttributeContract,
+    {
         if self.operation != O::ID {
             return Err(DescriptorCaptureError::Identity {
                 expected: O::ID,
@@ -3531,9 +3539,24 @@ impl<O: Operation> ValidatedInvocation<O> {
         expected: &crate::shapes::ShapeValue<S>,
     ) -> Result<Self, DescriptorError> {
         let outputs = O::infer_outputs(&attributes, &inputs)?;
-        if let Some(actual) = outputs.first().and_then(|output| output.shape.as_ref())
-            && actual != expected.shape_buf()
-        {
+        let actual = match outputs.as_slice() {
+            [output] => output
+                .shape
+                .as_ref()
+                .ok_or(DescriptorError::InvalidAttribute {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    attribute: "outputs",
+                    reason: "typed custom execution requires concrete output shape metadata",
+                })?,
+            _ => {
+                return Err(DescriptorError::InvalidAttribute {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    attribute: "outputs",
+                    reason: "typed custom execution requires exactly one output",
+                });
+            }
+        };
+        if actual != expected.shape_buf() {
             return Err(DescriptorError::Shape(
                 crate::shapes::ShapeError::TargetShapeRejected {
                     operation: crate::shapes::error::OperationKind::Storage,
@@ -3559,7 +3582,10 @@ impl<O: Operation> ValidatedInvocation<O> {
     }
 }
 
-impl<O: CanonicalOperation> ValidatedInvocation<O> {
+impl<O: CanonicalOperation> ValidatedInvocation<O>
+where
+    O::Attributes: AttributeContract,
+{
     /// Internal lowering entry point. The output is supplied by the typed
     /// frontend proof; callers outside `incin-core` cannot assert it.
     pub(crate) fn validate(
@@ -3975,6 +4001,90 @@ mod tests {
             invocation.validated().proof_level(),
             crate::exec::ProofLevel::of::<crate::prelude::Dyn>()
         );
+    }
+
+    macro_rules! custom_shape_case {
+        ($name:ident, $key:literal, $outputs:expr) => {
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            struct $name;
+
+            impl Operation for $name {
+                type Attributes = NoAttributes;
+                const KEY: OperationKey = OperationKey {
+                    namespace: Cow::Borrowed("incin.test"),
+                    name: Cow::Borrowed($key),
+                    version: 1,
+                };
+
+                fn infer_outputs(
+                    _: &Self::Attributes,
+                    _: &[LogicalTensorMeta],
+                ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+                    Ok($outputs)
+                }
+            }
+        };
+    }
+
+    custom_shape_case!(
+        NoShapeCustomOperation,
+        "no-shape",
+        vec![LogicalTensorMeta {
+            shape: None,
+            dtype: None,
+            device: None,
+        }]
+    );
+    custom_shape_case!(ZeroOutputCustomOperation, "zero-output", Vec::new());
+    custom_shape_case!(
+        MultiOutputCustomOperation,
+        "multi-output",
+        vec![
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(&[2, 3])),
+                dtype: None,
+                device: None,
+            },
+        ]
+    );
+
+    #[test]
+    fn custom_typed_proof_requires_one_concrete_output() {
+        let expected =
+            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(ShapeBuf::from_slice(&[
+                2, 3,
+            ]))
+            .unwrap();
+
+        assert!(matches!(
+            ValidatedInvocation::<NoShapeCustomOperation>::infer_custom_typed(
+                NoAttributes,
+                Vec::new(),
+                &expected,
+            ),
+            Err(DescriptorError::InvalidAttribute { .. })
+        ));
+        assert!(matches!(
+            ValidatedInvocation::<ZeroOutputCustomOperation>::infer_custom_typed(
+                NoAttributes,
+                Vec::new(),
+                &expected,
+            ),
+            Err(DescriptorError::InvalidAttribute { .. })
+        ));
+        assert!(matches!(
+            ValidatedInvocation::<MultiOutputCustomOperation>::infer_custom_typed(
+                NoAttributes,
+                Vec::new(),
+                &expected,
+            ),
+            Err(DescriptorError::InvalidAttribute { .. })
+        ));
     }
 
     #[test]

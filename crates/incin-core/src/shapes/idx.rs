@@ -483,6 +483,16 @@ impl AxisSelector {
         }
         Ok(normalized)
     }
+
+    /// Normalize a nonnegative axis without converting it through `isize`.
+    pub fn normalize_unsigned(axis: usize, rank: usize) -> crate::err::Result<usize> {
+        if axis >= rank {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::error::ShapeError::InvalidAxis { axis, rank },
+            ));
+        }
+        Ok(axis)
+    }
 }
 
 /// Trait allowing numbers and static cursors to be converted to signed axis indices.
@@ -493,12 +503,6 @@ pub trait ToAxisIndex {
 impl ToAxisIndex for isize {
     fn to_axis_index(&self) -> isize {
         *self
-    }
-}
-
-impl ToAxisIndex for usize {
-    fn to_axis_index(&self) -> isize {
-        *self as isize
     }
 }
 
