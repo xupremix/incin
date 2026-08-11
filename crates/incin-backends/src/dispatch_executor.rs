@@ -12,122 +12,13 @@
 //! registry, which is the only device that can answer.
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
-use incin_core::exec::{
-    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec, TensorHandle,
-};
+use incin_core::exec::{ExecutionContext, TensorHandle};
 use incin_core::prelude::{BackendError, Device, OperationKind, Shape, StorageBackend};
 
 use crate::descriptor_bind::invalid;
 use crate::dispatch::{DispatchBackend, DispatchStorage};
 
 impl_creation_executors!(DispatchBackend<D>, DispatchStorage);
-
-impl<D: Device> Execute<MatMulSpec> for DispatchBackend<D> {
-    type Output = DispatchStorage;
-
-    fn execute_shaped<ShapeTy: Shape>(
-        &self,
-        request: ExecutionRequest<'_, MatMulSpec, Self>,
-    ) -> Result<DispatchStorage, BackendError> {
-        let _ = self;
-        let [lhs, rhs] = request.inputs else {
-            return Err(invalid(
-                OperationKind::MatMul,
-                "matmul expects exactly two tensor inputs",
-            ));
-        };
-        // Both operands must live on one device before a backend can be chosen.
-        // Routing on the first operand alone would silently pick a backend that
-        // then rejects the second, reporting a downcast failure in place of the
-        // device mismatch that actually occurred.
-        let (lhs_storage, rhs_storage) = (
-            lhs.downcast_ref::<DispatchStorage>().ok_or_else(|| {
-                invalid(
-                    OperationKind::MatMul,
-                    "matmul input is not dispatch storage",
-                )
-            })?,
-            rhs.downcast_ref::<DispatchStorage>().ok_or_else(|| {
-                invalid(
-                    OperationKind::MatMul,
-                    "matmul input is not dispatch storage",
-                )
-            })?,
-        );
-
-        match (lhs_storage, rhs_storage) {
-            #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
-                use crate::cpu::CpuBackendImpl;
-                use incin_core::prelude::{Cpu, Dyn, Local};
-
-                type Concrete = CpuBackendImpl<Cpu>;
-                let context =
-                    ExecutionContext::with_policy(Concrete::new(), request.context.policy());
-                let inputs = [
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(lhs),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
-                ];
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
-                use crate::wgpu::WgpuBackendImpl;
-                use incin_core::prelude::{Dyn, Local, WgpuN};
-
-                type Concrete = WgpuBackendImpl<WgpuN<incin_core::typenum::U0>>;
-                let context =
-                    ExecutionContext::with_policy(Concrete::new(), request.context.policy());
-                let inputs = [
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(lhs),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
-                ];
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(lhs), DispatchStorage::Cuda(rhs)) => {
-                use crate::cuda::backend::CudaBackendImpl;
-                use incin_core::prelude::{Cuda, Dyn, Local};
-
-                type Concrete = CudaBackendImpl<Cuda>;
-                let context = ExecutionContext::with_policy(
-                    Concrete::new(),
-                    request.context.policy().clone(),
-                );
-                let inputs = [
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(lhs),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
-                ];
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Cuda)
-            }
-            _ => Err(invalid(
-                OperationKind::MatMul,
-                "matmul operands must be resident on the same runtime-selected backend",
-            )),
-        }
-    }
-}
 
 /// Route a one-operand descriptor to the backend that holds its operand.
 ///
@@ -140,13 +31,13 @@ impl<D: Device> Execute<MatMulSpec> for DispatchBackend<D> {
 /// concrete executor runs the same binder and the same capability query it would
 /// have run had the caller named the device statically.
 macro_rules! route_single_operand {
-    ($spec:ty, $kind:expr, $arity:expr, $not_dispatch:expr, $absent:expr) => {
-        impl<D: Device> Execute<$spec> for DispatchBackend<D> {
+    ($descriptor:ty, $kind:expr, $arity:expr, $not_dispatch:expr, $absent:expr) => {
+        impl<D: Device> Execute<$descriptor> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
             fn execute_shaped<ShapeTy: Shape>(
                 &self,
-                request: ExecutionRequest<'_, $spec, Self>,
+                request: ExecutionRequest<'_, $descriptor, Self>,
             ) -> Result<DispatchStorage, BackendError> {
                 let _ = self;
                 let [handle] = request.inputs else {
@@ -226,14 +117,6 @@ macro_rules! route_single_operand {
 }
 
 route_single_operand!(
-    ReshapeSpec,
-    OperationKind::Reshape,
-    "reshape expects exactly one tensor input",
-    "reshape input is not dispatch storage",
-    "reshape input is resident on a backend this build does not include"
-);
-
-route_single_operand!(
     Descriptor<op::ReshapeExact>,
     OperationKind::ReshapeExact,
     "reshape expects exactly one tensor input",
@@ -248,162 +131,6 @@ route_single_operand!(
     "broadcast_as input is not dispatch storage",
     "broadcast_as input is resident on a backend this build does not include"
 );
-
-route_single_operand!(
-    ReductionSpec,
-    OperationKind::Reduction,
-    "a reduction expects exactly one tensor input",
-    "reduction input is not dispatch storage",
-    "reduction input is resident on a backend this build does not include"
-);
-
-route_single_operand!(
-    Pool2dSpec,
-    OperationKind::Pool2d,
-    "pool2d expects exactly one tensor input",
-    "pool2d input is not dispatch storage",
-    "pool2d input is resident on a backend this build does not include"
-);
-
-impl<D: Device> Execute<Conv2dSpec> for DispatchBackend<D> {
-    type Output = DispatchStorage;
-
-    fn execute_shaped<ShapeTy: Shape>(
-        &self,
-        request: ExecutionRequest<'_, Conv2dSpec, Self>,
-    ) -> Result<DispatchStorage, BackendError> {
-        let _ = self;
-        let (input, weight, bias) = match request.inputs {
-            [input, weight] => (input, weight, None),
-            [input, weight, bias] => (input, weight, Some(bias)),
-            _ => {
-                return Err(invalid(
-                    OperationKind::Conv2d,
-                    "conv2d expects an input and a weight, and optionally a bias",
-                ));
-            }
-        };
-        let input = input.downcast_ref::<DispatchStorage>().ok_or_else(|| {
-            invalid(
-                OperationKind::Conv2d,
-                "conv2d input is not dispatch storage",
-            )
-        })?;
-        let weight = weight.downcast_ref::<DispatchStorage>().ok_or_else(|| {
-            invalid(
-                OperationKind::Conv2d,
-                "conv2d input is not dispatch storage",
-            )
-        })?;
-        let bias = bias
-            .map(|bias| {
-                bias.downcast_ref::<DispatchStorage>().ok_or_else(|| {
-                    invalid(
-                        OperationKind::Conv2d,
-                        "conv2d input is not dispatch storage",
-                    )
-                })
-            })
-            .transpose()?;
-
-        // Every operand has to be resident on one device before a backend can
-        // be chosen, for the same reason matmul routes on both: picking from the
-        // activation alone would report a downcast failure where the real fault
-        // is a filter bank on another device.
-        match (input, weight, bias) {
-            #[cfg(feature = "cpu")]
-            (
-                DispatchStorage::Cpu(input),
-                DispatchStorage::Cpu(weight),
-                None | Some(DispatchStorage::Cpu(_)),
-            ) => {
-                use crate::cpu::CpuBackendImpl;
-                use incin_core::prelude::{Cpu, Dyn, Local};
-
-                type Concrete = CpuBackendImpl<Cpu>;
-                let context =
-                    ExecutionContext::with_policy(Concrete::new(), request.context.policy());
-                let mut inputs = alloc::vec![
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(input),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(weight),
-                ];
-                if let Some(DispatchStorage::Cpu(bias)) = bias {
-                    inputs.push(TensorHandle::from_storage::<Concrete, Dyn, Local>(bias));
-                }
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            (
-                DispatchStorage::Wgpu(input),
-                DispatchStorage::Wgpu(weight),
-                None | Some(DispatchStorage::Wgpu(_)),
-            ) => {
-                use crate::wgpu::WgpuBackendImpl;
-                use incin_core::prelude::{Dyn, Local, WgpuN};
-
-                type Concrete = WgpuBackendImpl<WgpuN<incin_core::typenum::U0>>;
-                let context =
-                    ExecutionContext::with_policy(Concrete::new(), request.context.policy());
-                let mut inputs = alloc::vec![
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(input),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(weight),
-                ];
-                if let Some(DispatchStorage::Wgpu(bias)) = bias {
-                    inputs.push(TensorHandle::from_storage::<Concrete, Dyn, Local>(bias));
-                }
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            (
-                DispatchStorage::Cuda(input),
-                DispatchStorage::Cuda(weight),
-                None | Some(DispatchStorage::Cuda(_)),
-            ) => {
-                use crate::cuda::backend::CudaBackendImpl;
-                use incin_core::prelude::{Cuda, Dyn, Local};
-
-                type Concrete = CudaBackendImpl<Cuda>;
-                let context = ExecutionContext::with_policy(
-                    Concrete::new(),
-                    request.context.policy().clone(),
-                );
-                let mut inputs = alloc::vec![
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(input),
-                    TensorHandle::from_storage::<Concrete, Dyn, Local>(weight),
-                ];
-                if let Some(DispatchStorage::Cuda(bias)) = bias {
-                    inputs.push(TensorHandle::from_storage::<Concrete, Dyn, Local>(bias));
-                }
-                context
-                    .backend()
-                    .execute_shaped::<ShapeTy>(ExecutionRequest {
-                        operation: request.operation,
-                        inputs: &inputs,
-                        context: &context,
-                    })
-                    .map(DispatchStorage::Cuda)
-            }
-            _ => Err(invalid(
-                OperationKind::Conv2d,
-                "conv2d operands must be resident on the same runtime-selected backend",
-            )),
-        }
-    }
-}
 
 macro_rules! impl_dispatch_binary {
     ($($op:ident),* $(,)?) => {$(

@@ -32,6 +32,12 @@ use super::CpuBackendImpl;
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
+impl<D: Device> Capabilities for CpuBackendImpl<D> {
+    fn support(&self, query: &CapabilityQuery) -> SupportLevel {
+        crate::capability::support(DeviceKind::Cpu, query)
+    }
+}
+
 /// The name the CPU executors answer to when they refuse work.
 ///
 /// Read off the `StorageBackend` impl rather than spelled out again, so renaming
