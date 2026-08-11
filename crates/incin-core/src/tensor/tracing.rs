@@ -2009,47 +2009,6 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
     }
 }
 
-impl<B: Backend + QuantizedOps<B>> QuantizedOps<Self> for TracingBackend<B> {
-    /// Delegates to `B::quantize`. Simplistic trace: reuses the
-    /// input's `value_id` rather than recording a new graph node.
-    fn quantize<K: super::dtype::FloatDType, Q: super::dtype::QuantDType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<Q>> {
-        let inner = B::quantize(&t.inner)?;
-        Ok(TracingTensor {
-            inner,
-            value_id: t.value_id, // simplistic trace
-        })
-    }
-
-    /// Delegates to `B::dequantize`. Simplistic trace: reuses the
-    /// input's `value_id` rather than recording a new graph node.
-    fn dequantize<Q: super::dtype::QuantDType, K: super::dtype::FloatDType>(
-        t: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let inner = B::dequantize(&t.inner)?;
-        Ok(TracingTensor {
-            inner,
-            value_id: t.value_id, // simplistic trace
-        })
-    }
-
-    /// Delegates to `B::quantized_matmul`. Simplistic trace:
-    /// reuses `lhs`'s `value_id` rather than recording a new graph node.
-    fn quantized_matmul<Q: super::dtype::QuantDType>(
-        lhs: &<Self as StorageBackend>::Storage<Q>,
-        rhs: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<f32>> {
-        let inner = B::quantized_matmul(&lhs.inner, &rhs.inner)?;
-        Ok(TracingTensor {
-            inner,
-            value_id: lhs.value_id, // simplistic trace
-        })
-    }
-}
-
-impl<B: Backend + NumericOps<B> + FloatOps<B>> OptimizerOps<Self> for TracingBackend<B> {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
