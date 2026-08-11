@@ -3,86 +3,84 @@
 //! This module provides element-wise unary operations (e.g., `abs`, `relu`, `exp`) that act
 //! on a single tensor and return a new tensor with the exact same shape. It also includes
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
+use crate::exec::catalog::{op, Descriptor};
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 use crate::tensor::backend::{FloatOps, NumericOps, TensorOps};
 
 macro_rules! impl_unary_op {
     (
         $(#[$meta:meta])*
-        $method:ident, $backend_method:ident
+        $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(&self) -> Result<Self> {
-            let inner = self.under_grad_mode(|| B::$backend_method::<K>(&self.inner))?;
-            Tensor::from_shape_value(
-                inner,
-                self._shape.clone(),
-                self._dtype.clone(),
-                self._device.clone(),
-                self._grad.clone(),
-            )
+        pub fn $method(&self) -> Result<Self>
+        where
+            B: Execute<Descriptor<op::$operation>>,
+            <B as Execute<Descriptor<op::$operation>>>::Output: Into<B::Storage<K>>,
+        {
+            execute_unary_descriptor::<op::$operation, S, B, K, G>(self)
         }
     };
 }
 
 impl<
     S: Shape,
-    B: Backend + FloatOps<B> + NumericOps<B> + TensorOps<B>,
+    B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 > Tensor<S, B, K, G>
 {
     impl_unary_op!(
         /// Elementwise tangent.
-        tan, tan
+        tan, Tan
     );
     impl_unary_op!(
         /// Elementwise arcsine.
-        asin, asin
+        asin, Asin
     );
     impl_unary_op!(
         /// Elementwise arccosine.
-        acos, acos
+        acos, Acos
     );
     impl_unary_op!(
         /// Elementwise arctangent.
-        atan, atan
+        atan, Atan
     );
     impl_unary_op!(
         /// Elementwise hyperbolic sine.
-        sinh, sinh
+        sinh, Sinh
     );
     impl_unary_op!(
         /// Elementwise hyperbolic cosine.
-        cosh, cosh
+        cosh, Cosh
     );
     impl_unary_op!(
         /// Elementwise inverse hyperbolic sine.
-        asinh, asinh
+        asinh, Asinh
     );
     impl_unary_op!(
         /// Elementwise inverse hyperbolic cosine.
-        acosh, acosh
+        acosh, Acosh
     );
     impl_unary_op!(
         /// Elementwise inverse hyperbolic tangent.
-        atanh, atanh
+        atanh, Atanh
     );
     impl_unary_op!(
         /// Elementwise error function.
-        erf, erf
+        erf, Erf
     );
     impl_unary_op!(
         /// Elementwise reciprocal square root $1/\sqrt{x}$.
-        rsqrt, rsqrt
+        rsqrt, Rsqrt
     );
     impl_unary_op!(
         /// Elementwise integer truncation toward zero.
-        trunc, trunc
+        trunc, Trunc
     );
     impl_unary_op!(
         /// Elementwise fractional part.
-        frac, frac
+        frac, Frac
     );
 
     /// Computes the absolute value of each element in the tensor.
@@ -216,42 +214,42 @@ impl<
 
     impl_unary_op!(
         /// Elementwise sign function (-1.0, 0.0, or +1.0).
-        sign, sign
+        sign, Sign
     );
 
     impl_unary_op!(
         /// Computes the floor of each element.
-        floor, floor
+        floor, Floor
     );
 
     impl_unary_op!(
         /// Computes the ceiling of each element.
-        ceil, ceil
+        ceil, Ceil
     );
 
     impl_unary_op!(
         /// Rounds each element to nearest integer.
-        round, round
+        round, Round
     );
 
     impl_unary_op!(
         /// Computes base-2 logarithm elementwise.
-        log2, log2
+        log2, Log2
     );
 
     impl_unary_op!(
         /// Computes base-10 logarithm elementwise.
-        log10, log10
+        log10, Log10
     );
 
     impl_unary_op!(
         /// Computes sine elementwise.
-        sin, sin
+        sin, Sin
     );
 
     impl_unary_op!(
         /// Computes cosine elementwise.
-        cos, cos
+        cos, Cos
     );
 
     /// Computes the natural logarithm of each element.
@@ -294,7 +292,10 @@ impl<
     pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,
         scalar: Sc,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
+    {
         let scalar_val = scalar.into();
         let inner =
             self.under_grad_mode(|| B::mul_scalar_float(&self.inner, scalar_val.to_f64()))?;
@@ -320,7 +321,10 @@ impl<
     pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,
         scalar: Sc,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
+    {
         let scalar_val = scalar.into();
         let inner =
             self.under_grad_mode(|| B::add_scalar_float(&self.inner, scalar_val.to_f64()))?;
@@ -336,7 +340,7 @@ impl<
 
 use crate::dist::placement::Local;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{AttributeContract, CanonicalOperation, Descriptor, NoAttributes, op};
+use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
