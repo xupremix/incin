@@ -938,8 +938,8 @@ impl<S: Shape + DynShape> ShapeSpec for ShapeArgs<S> {
 
     fn resolve(self) -> Result<ShapeValue<S>, crate::err::Error> {
         S::resolve(self.args)
-            .map(ShapeValue::from_shape_buf)
             .map_err(crate::err::Error::Shape)
+            .and_then(|dims| ShapeValue::try_new(dims).map_err(crate::err::Error::Shape))
     }
 }
 
