@@ -16,7 +16,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::{ReshapeRule, ShapeRule};
+use crate::exec::{ExecutionDescriptor, ReshapeRule, ShapeRule};
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -431,7 +431,12 @@ impl<
             (),
         )?
         .into_descriptor();
-        let new_shape_field = spec.output;
+        let new_shape_field = spec.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: OperationKind::Reshape,
+                rank: 0,
+            })
+        })?;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
 

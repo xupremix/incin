@@ -15,7 +15,7 @@
 //! |---|---|---|
 //! | [`BroadcastRule`] | `BroadcastShape<Rhs>` | [`BroadcastSpec`] |
 //! | [`MatMulRule`] | `MatMulShape<Rhs>` | [`MatMulSpec`] |
-//! | [`ReduceRule`] / [`ReduceKeepRule`] | `ReduceDim<D>` / `ReduceKeepDim<D>` | [`ReductionSpec`] |
+//! | [`ReduceRule`] / [`ReduceKeepRule`] | structural axis cursors | [`ReductionSpec`] |
 //! | [`ReduceAllRule`] | none; the output is always [`Scalar`] | [`ReductionSpec`] |
 //!
 //! [`Scalar`]: crate::shapes::shape::Scalar
@@ -29,11 +29,11 @@
 //! descriptor's output against the frontend's answer at runtime, by whichever
 //! route the frontend trait offers:
 //!
-//! * traits that compute a `Field` — `BroadcastShape`, `MatMulShape`,
+//! * traits that compute a runtime `ShapeBuf` — `BroadcastShape`, `MatMulShape`,
 //!   `SpatialConv2d`, `Pool2dShape` — are called, and their dimensions are
 //!   compared against the descriptor's axis by axis;
-//! * traits that only name a type — `ReduceDim`, `ReduceKeepDim` — are checked
-//!   by rebuilding that type's `Field` from the descriptor's dimensions, which
+//! * traits that only name a type — structural reduction cursors — are checked
+//!   by validating the output `ShapeBuf` against that type's shape contract, which
 //!   fails if the rank differs or a statically fixed axis disagrees.
 //!
 //! [`ReduceAllRule`] has no frontend trait to restate, because reducing every
@@ -65,18 +65,20 @@
 
 use core::marker::PhantomData;
 
+use super::catalog::{Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op};
 use super::proof::{ProofLevel, Validated};
 use super::spec::{
-    BinaryOp, BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp,
-    ReductionSpec, ReshapeSpec,
+    BinaryOp, BroadcastSpec, Conv2dSpec, ExecutionDescriptor, MatMulSpec, Pool2dSpec, PoolOp,
+    ReduceOp, ReductionSpec, ReshapeSpec,
 };
 use crate::shapes::broadcast::BroadcastShape;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::dim::Dim;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+use crate::shapes::idx::StaticCursor;
 use crate::shapes::reshape::ReshapeShape;
-use crate::shapes::shape::{DynShape, Scalar, Shape, field_from_dims};
-use crate::shapes::shape_ops::{ReduceDim, ReduceKeepDim};
+use crate::shapes::shape::{DynShape, Scalar, Shape, shape_buf_from_dims};
+use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::shapes::spatial::{Pool2dShape, SpatialConv2d};
 use crate::tensor::matmul::MatMulShape;
 use typenum::Unsigned;
@@ -99,11 +101,11 @@ pub trait ShapeRule<Inputs>: Sized {
     /// drift apart without failing to compile.
     type Output: Shape;
 
-    /// The runtime half of `Inputs` — each operand shape's
-    /// [`Field`](Shape::Field).
+    /// The runtime half of `Inputs` — each operand's authoritative
+    /// [`ShapeBuf`].
     ///
     /// Stated as an associated type rather than written out as
-    /// `<Inputs as Shape>::Field` because `Inputs` is a *tuple* of shapes for
+    /// `<Inputs as Shape>` because `Inputs` is a *tuple* of shapes for
     /// the binary rules, and a tuple of shapes is not itself a `Shape`.
     type Operands;
 
@@ -111,7 +113,7 @@ pub trait ShapeRule<Inputs>: Sized {
     ///
     /// `()` wherever the operation is fixed by its operand types alone, as
     /// matmul and reshape are. It is not empty where a family of operations
-    /// shares one shape rule: `ReduceDim<D>` carries the axis but not the
+    /// shares one shape rule: a structural cursor carries the axis but not the
     /// accumulation, `Pool2dShape<K, S, P, D>` carries the window but not what
     /// runs inside it, and `BroadcastShape<Rhs>` carries the geometry of a
     /// stretch that four binary operations read the same way, so each takes its
@@ -121,10 +123,10 @@ pub trait ShapeRule<Inputs>: Sized {
 
     /// The descriptor this rule resolves to.
     ///
-    /// Bounded by [`OperationSpec`], which is sealed, so a rule cannot invent a
-    /// descriptor type — see the module note on why that makes sealing
-    /// `ShapeRule` itself unnecessary.
-    type Descriptor: OperationSpec;
+    /// A descriptor that can expose the resolved output shape. Built-in rules
+    /// increasingly use exact catalog descriptors while the remaining
+    /// geometry rules are migrated without changing this seam.
+    type Descriptor: super::spec::ExecutionDescriptor;
 
     /// Resolve the operands into a descriptor, or report why they do not.
     fn lower(
@@ -136,8 +138,8 @@ pub trait ShapeRule<Inputs>: Sized {
 // --- shared machinery -------------------------------------------------------
 
 /// One operand's runtime dimensions, as the descriptors want them.
-fn dims_of<S: DynShape>(field: &S::Field) -> ShapeBuf {
-    ShapeBuf::from_slice(S::dims(field).as_ref())
+fn dims_of(dims: &ShapeBuf) -> ShapeBuf {
+    dims.clone()
 }
 
 /// Cross-check the frontend's output shape against the descriptor's.
@@ -194,7 +196,7 @@ where
     <L as BroadcastShape<R>>::Output: DynShape,
 {
     type Output = <L as BroadcastShape<R>>::Output;
-    type Operands = (<L as Shape>::Field, <R as Shape>::Field);
+    type Operands = (ShapeBuf, ShapeBuf);
     /// The operator, which the shape types do not determine: the same
     /// broadcast geometry serves a stretch and all four binary operations.
     /// This is where `Conv2dArgs` puts grouping and the reduce rules put
@@ -206,15 +208,19 @@ where
         operands: &Self::Operands,
         op: Self::Args,
     ) -> Result<Validated<BroadcastSpec>, ShapeError> {
+        // Materialize the structural static proof at the canonical rule
+        // boundary.  Without this, the deliberately general BroadcastExtent
+        // fallback would turn a statically impossible pair into a runtime
+        // error and erase a useful compile-time rejection.
+        <Self::Output as Shape>::STATIC_VALID;
         // The frontend runs first because it, not the descriptor, is bound to
         // the output *type*: `output_shape` rebuilds that type's field from the
         // dimensions it resolved and fails if one does not fit. The descriptor
         // sees erased numbers and has nothing to check them against.
         let resolved = L::output_shape(&operands.0, &operands.1)?;
-        let expected = dims_of::<Self::Output>(&resolved);
+        let expected = dims_of(&resolved);
 
-        let spec =
-            BroadcastSpec::contiguous(&dims_of::<L>(&operands.0), &dims_of::<R>(&operands.1), op)?;
+        let spec = BroadcastSpec::contiguous(&dims_of(&operands.0), &dims_of(&operands.1), op)?;
         agree(OperationKind::Broadcast, &expected, &spec.output)?;
 
         Ok(Validated::new(
@@ -237,22 +243,51 @@ where
     <L as MatMulShape<R>>::Output: DynShape,
 {
     type Output = <L as MatMulShape<R>>::Output;
-    type Operands = (<L as Shape>::Field, <R as Shape>::Field);
+    type Operands = (ShapeBuf, ShapeBuf);
     type Args = ();
-    type Descriptor = MatMulSpec;
+    type Descriptor = Descriptor<op::MatMulExact>;
 
     fn lower(
         operands: &Self::Operands,
         (): Self::Args,
-    ) -> Result<Validated<MatMulSpec>, ShapeError> {
+    ) -> Result<Validated<Descriptor<op::MatMulExact>>, ShapeError> {
         let resolved = L::output_shape(&operands.0, &operands.1)?;
-        let expected = dims_of::<Self::Output>(&resolved);
+        let expected = dims_of(&resolved);
 
-        let spec = MatMulSpec::new(&dims_of::<L>(&operands.0), &dims_of::<R>(&operands.1))?;
-        agree(OperationKind::MatMul, &expected, &spec.output)?;
+        let descriptor = Descriptor::<op::MatMulExact>::infer_runtime(
+            NoAttributes,
+            alloc::vec![
+                LogicalTensorMeta {
+                    shape: Some(dims_of(&operands.0)),
+                    dtype: None,
+                    device: None,
+                },
+                LogicalTensorMeta {
+                    shape: Some(dims_of(&operands.1)),
+                    dtype: None,
+                    device: None,
+                },
+            ],
+        )
+        .map_err(|error| match error {
+            super::catalog::DescriptorError::Shape(error) => error,
+            _ => ShapeError::TargetShapeRejected {
+                operation: OperationKind::MatMul,
+                rank: expected.rank(),
+            },
+        })?;
+        let descriptor_shape =
+            descriptor
+                .descriptor()
+                .output_shape()
+                .ok_or(ShapeError::TargetShapeRejected {
+                    operation: OperationKind::MatMul,
+                    rank: expected.rank(),
+                })?;
+        agree(OperationKind::MatMul, &expected, descriptor_shape)?;
 
         Ok(Validated::new(
-            spec,
+            descriptor.into_descriptor(),
             ProofLevel::of::<L>().meet(ProofLevel::of::<R>()),
         ))
     }
@@ -260,17 +295,18 @@ where
 
 // --- reduction --------------------------------------------------------------
 
-/// Lowers a reduction along axis `D` that drops the axis.
+/// Lowers a reduction selected by the canonical structural cursor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
-pub struct ReduceRule<const D: usize>;
+pub struct ReduceAtRule<C>(PhantomData<fn() -> C>);
 
-/// Lowers a reduction along axis `D` that keeps the axis at length 1.
+/// Lowers a keep-dimension reduction selected by the canonical structural
+/// cursor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
-pub struct ReduceKeepRule<const D: usize>;
+pub struct ReduceKeepAtRule<C>(PhantomData<fn() -> C>);
 
 /// Lowers a reduction over every axis, producing a scalar.
 ///
-/// The single-axis rules cover `ReduceDim<D>`, which names one axis at compile
+/// The single-axis rules cover a structural cursor, which names one axis at compile
 /// time. Total reduction has no axis to name: `ReductionOps::sum_all` and its
 /// siblings already exist on every backend and are what autograd calls to turn a
 /// loss into a scalar, but they had no descriptor, so the one operation every
@@ -279,7 +315,7 @@ pub struct ReduceKeepRule<const D: usize>;
 /// The output is [`Scalar`], which is the honest answer and was not always the
 /// one given: `EXE-005` found WGPU reporting `[1]` for an all-reduction, a rank-1
 /// tensor standing in for a rank-0 one. `()` has rank 0 and `NUMEL` 1, so
-/// `field_from_dims` rejects any descriptor that disagrees.
+/// `shape_buf_from_dims` rejects any descriptor that disagrees.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
 pub struct ReduceAllRule;
 
@@ -288,7 +324,7 @@ where
     S: DynShape,
 {
     type Output = Scalar;
-    type Operands = <S as Shape>::Field;
+    type Operands = ShapeBuf;
     /// See [`ReduceRule::Args`](ShapeRule::Args).
     type Args = ReduceOp;
     type Descriptor = ReductionSpec;
@@ -297,22 +333,14 @@ where
         operands: &Self::Operands,
         op: Self::Args,
     ) -> Result<Validated<ReductionSpec>, ShapeError> {
-        let spec = ReductionSpec::over_all(&dims_of::<S>(operands), false, op)?;
-        field_from_dims::<Self::Output>(OperationKind::Reduction, spec.output.dims())?;
+        let spec = ReductionSpec::over_all(&dims_of(operands), false, op)?;
+        shape_buf_from_dims::<Self::Output>(OperationKind::Reduction, spec.output.dims())?;
         Ok(Validated::new(spec, ProofLevel::of::<S>()))
     }
 }
 
-/// Resolve a single-axis reduction and check it against the type it must produce.
-///
-/// `ReduceDim` and `ReduceKeepDim` name an `Output` and compute nothing, so
-/// unlike the binary rules there is no independently computed shape to compare
-/// against. Rebuilding the output type's `Field` from the descriptor's
-/// dimensions is the check that remains, and it is not a weak one: it fails on
-/// a rank the type does not have and on any axis the type fixes at compile time
-/// to something the descriptor disagrees with.
 fn lower_reduction<S, Output>(
-    field: &S::Field,
+    field: &ShapeBuf,
     axis: usize,
     keep_dims: bool,
     op: ReduceOp,
@@ -321,20 +349,19 @@ where
     S: DynShape,
     Output: Shape,
 {
-    let spec = ReductionSpec::over_axes(&dims_of::<S>(field), [axis], keep_dims, op)?;
-    field_from_dims::<Output>(OperationKind::Reduction, spec.output.dims())?;
+    let spec = ReductionSpec::over_axes(&dims_of(field), [axis], keep_dims, op)?;
+    shape_buf_from_dims::<Output>(OperationKind::Reduction, spec.output.dims())?;
     Ok(Validated::new(spec, ProofLevel::of::<S>()))
 }
 
-impl<S, const D: usize> ShapeRule<S> for ReduceRule<D>
+impl<S, C> ShapeRule<S> for ReduceAtRule<C>
 where
-    S: ReduceDim<D> + DynShape,
+    C: StaticCursor,
+    S: ReduceAt<C> + DynShape,
+    <S as ReduceAt<C>>::Output: DynShape,
 {
-    type Output = <S as ReduceDim<D>>::Output;
-    type Operands = <S as Shape>::Field;
-    /// `ReduceDim<D>` fixes the axis and says nothing about the accumulation, so
-    /// the accumulation is what the caller still has to supply. Every reduction
-    /// in the set shares this rule and this output type.
+    type Output = <S as ReduceAt<C>>::Output;
+    type Operands = ShapeBuf;
     type Args = ReduceOp;
     type Descriptor = ReductionSpec;
 
@@ -342,17 +369,25 @@ where
         operands: &Self::Operands,
         op: Self::Args,
     ) -> Result<Validated<ReductionSpec>, ShapeError> {
-        lower_reduction::<S, Self::Output>(operands, D, false, op)
+        let rank = dims_of(operands).as_ref().len();
+        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(rank)
+            .map_err(|_| ShapeError::InvalidAxis {
+                axis: C::INDEX.unsigned_abs(),
+                rank,
+            })?[0];
+        lower_reduction::<S, Self::Output>(operands, axis, false, op)
     }
 }
 
-impl<S, const D: usize> ShapeRule<S> for ReduceKeepRule<D>
+impl<S, C> ShapeRule<S> for ReduceKeepAtRule<C>
 where
-    S: ReduceKeepDim<D> + DynShape,
+    C: StaticCursor,
+    S: ReduceKeepAt<C> + DynShape,
+    <S as ReduceKeepAt<C>>::Output: DynShape,
 {
-    type Output = <S as ReduceKeepDim<D>>::Output;
-    type Operands = <S as Shape>::Field;
-    /// See [`ReduceRule::Args`](ShapeRule::Args).
+    type Output = <S as ReduceKeepAt<C>>::Output;
+    type Operands = ShapeBuf;
     type Args = ReduceOp;
     type Descriptor = ReductionSpec;
 
@@ -360,7 +395,14 @@ where
         operands: &Self::Operands,
         op: Self::Args,
     ) -> Result<Validated<ReductionSpec>, ShapeError> {
-        lower_reduction::<S, Self::Output>(operands, D, true, op)
+        let rank = dims_of(operands).as_ref().len();
+        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(rank)
+            .map_err(|_| ShapeError::InvalidAxis {
+                axis: C::INDEX.unsigned_abs(),
+                rank,
+            })?[0];
+        lower_reduction::<S, Self::Output>(operands, axis, true, op)
     }
 }
 
@@ -379,17 +421,33 @@ where
     /// no `Output` of its own, so restating it means naming `Target` — there is
     /// no second computation to drift from.
     type Output = T;
-    type Operands = (<S as Shape>::Field, <T as Shape>::Field);
+    type Operands = (ShapeBuf, ShapeBuf);
     type Args = ();
-    type Descriptor = ReshapeSpec;
+    type Descriptor = Descriptor<op::ReshapeExact>;
 
     fn lower(
         operands: &Self::Operands,
         (): Self::Args,
-    ) -> Result<Validated<ReshapeSpec>, ShapeError> {
-        let spec = ReshapeSpec::new(&dims_of::<S>(&operands.0), &dims_of::<T>(&operands.1))?;
+    ) -> Result<Validated<Descriptor<op::ReshapeExact>>, ShapeError> {
+        let descriptor = Descriptor::<op::ReshapeExact>::infer_runtime(
+            ShapeAttributes {
+                shape: operands.1.as_ref().to_vec(),
+            },
+            alloc::vec![LogicalTensorMeta {
+                shape: Some(dims_of(&operands.0)),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .map_err(|error| match error {
+            super::catalog::DescriptorError::Shape(error) => error,
+            _ => ShapeError::TargetShapeRejected {
+                operation: OperationKind::Reshape,
+                rank: operands.1.rank(),
+            },
+        })?;
         Ok(Validated::new(
-            spec,
+            descriptor.into_descriptor(),
             ProofLevel::of::<S>().meet(ProofLevel::of::<T>()),
         ))
     }
@@ -438,7 +496,7 @@ where
     D: Unsigned,
 {
     type Output = <Sh as SpatialConv2d<COut, K, S, P, D>>::Output;
-    type Operands = <Sh as Shape>::Field;
+    type Operands = ShapeBuf;
     type Args = Conv2dArgs;
     type Descriptor = Conv2dSpec;
 
@@ -447,10 +505,10 @@ where
         args: Conv2dArgs,
     ) -> Result<Validated<Conv2dSpec>, ShapeError> {
         let resolved = Sh::compute_output_shape(operands, args.out_channels)?;
-        let expected = dims_of::<Self::Output>(&resolved);
+        let expected = dims_of(&resolved);
 
         let spec = Conv2dSpec::new(
-            &dims_of::<Sh>(operands),
+            &dims_of(operands),
             args.out_channels,
             [K::USIZE; 2],
             [S::USIZE; 2],
@@ -485,7 +543,7 @@ where
     D: Unsigned,
 {
     type Output = <Sh as Pool2dShape<K, S, P, D>>::Output;
-    type Operands = <Sh as Shape>::Field;
+    type Operands = ShapeBuf;
     /// `Pool2dShape` fixes the window as `typenum` parameters, which leaves the
     /// accumulation inside it as the one thing the shape types do not determine.
     type Args = PoolOp;
@@ -496,10 +554,10 @@ where
         op: Self::Args,
     ) -> Result<Validated<Pool2dSpec>, ShapeError> {
         let resolved = Sh::compute_output_shape(operands)?;
-        let expected = dims_of::<Self::Output>(&resolved);
+        let expected = dims_of(&resolved);
 
         let spec = Pool2dSpec::new(
-            &dims_of::<Sh>(operands),
+            &dims_of(operands),
             [K::USIZE; 2],
             [S::USIZE; 2],
             [P::USIZE; 2],

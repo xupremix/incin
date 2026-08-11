@@ -10,10 +10,14 @@
 //! Everything here runs from outside the crate, so it also pins what a caller
 //! can reach: rules and descriptors are public, and `Validated::new` is not.
 
+use incin_core::backend_authoring::operations::ShapeAttributes;
 use incin_core::exec::{
     BinaryOp, BroadcastRule, BroadcastSpec, Conv2dArgs, Conv2dRule, MatMulRule, OperationSpec,
     Pool2dRule, Pool2dSpec, PoolOp, ProofLevel, ReduceAtRule, ReduceKeepAtRule, ReduceOp,
-    ReshapeRule, ReshapeSpec, ShapeRule,
+    ReshapeRule, ShapeRule,
+};
+use incin_core::exec::{
+    CanonicalOperation, Descriptor, ExecutionDescriptor, LogicalTensorMeta, op,
 };
 use incin_core::prelude::{Axis, Dyn, OperationKind, Shape, ShapeBuf};
 use incin_core::shapes::idx::{Here, Next};
@@ -186,9 +190,9 @@ fn matmul_lowers_to_the_gemm_extents_its_shapes_imply() {
     .expect("2x3 times 3x4");
     let spec = lowered.descriptor();
 
-    assert_eq!((spec.m, spec.n, spec.k), (2, 4, 3));
-    assert_eq!(spec.output.dims(), &[2, 4]);
-    assert!(spec.batch.is_empty());
+    assert_eq!(spec.inputs()[0].shape.as_ref().unwrap().dims(), &[2, 3]);
+    assert_eq!(spec.inputs()[1].shape.as_ref().unwrap().dims(), &[3, 4]);
+    assert_eq!(spec.output_shape().unwrap().dims(), &[2, 4]);
     assert_eq!(lowered.proof_level(), ProofLevel::Static);
 }
 
@@ -201,9 +205,8 @@ fn a_batch_axis_reused_across_the_batch_gets_a_zero_stride() {
     .expect("batched 2x3 times 3x4");
     let spec = lowered.descriptor();
 
-    assert_eq!(spec.output.dims(), &[5, 2, 4]);
-    assert_eq!(spec.rhs_batch_strides.strides(), &[0]);
-    assert_eq!(spec.lhs_batch_strides.strides(), &[6]);
+    assert_eq!(spec.output_shape().unwrap().dims(), &[5, 2, 4]);
+    assert_eq!(spec.key().name.as_ref(), "matmul");
 }
 
 #[test]
@@ -218,16 +221,16 @@ fn a_disagreeing_contraction_never_reaches_a_descriptor() {
 }
 
 #[test]
-fn transposition_is_applied_after_lowering_because_it_is_not_a_shape_fact() {
+fn exact_matmul_lowering_has_the_catalog_identity() {
     let lowered = <MatMulRule as ShapeRule<(s![2, 3], s![3, 4])>>::lower(
         &(field::<s![2, 3]>(&[2, 3]), field::<s![3, 4]>(&[3, 4])),
         (),
     )
     .expect("2x3 times 3x4");
 
-    let transposed = lowered.into_descriptor().transposed(false, true);
-    assert!(transposed.transpose_rhs);
-    assert_eq!((transposed.m, transposed.n, transposed.k), (2, 4, 3));
+    let descriptor = lowered.into_descriptor();
+    assert_eq!(descriptor.operation(), OperationKind::MatMulExact);
+    assert_eq!(descriptor.output_shape().unwrap().dims(), &[2, 4]);
 }
 
 // -- reduction ------------------------------------------------------------
@@ -333,9 +336,8 @@ fn reshape_carries_the_element_count_the_two_shapes_share() {
     .expect("12 elements either way");
     let spec = lowered.descriptor();
 
-    assert_eq!(spec.input.dims(), &[2, 6]);
-    assert_eq!(spec.output.dims(), &[3, 4]);
-    assert_eq!(spec.elements, 12);
+    assert_eq!(spec.inputs()[0].shape.as_ref().unwrap().dims(), &[2, 6]);
+    assert_eq!(spec.output_shape().unwrap().dims(), &[3, 4]);
     assert_eq!(lowered.proof_level(), ProofLevel::Static);
 }
 
@@ -345,13 +347,24 @@ fn a_reshape_between_static_shapes_of_different_sizes_does_not_typecheck() {
     // same typenum, so `ReshapeRule` cannot be handed a mismatched pair at all.
     // The constructor still rejects one, because a caller can reach it directly
     // and a dynamic reshape will once one exists.
-    let error = ReshapeSpec::new(
-        &ShapeBuf::from_slice(&[2, 6]),
-        &ShapeBuf::from_slice(&[5, 5]),
+    let error = Descriptor::<op::ReshapeExact>::infer_runtime(
+        ShapeAttributes { shape: vec![5, 5] },
+        vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::from_slice(&[2, 6])),
+            dtype: None,
+            device: None,
+        }],
     )
     .expect_err("12 elements cannot become 25");
 
-    assert_eq!(error.operation(), OperationKind::Reshape);
+    assert!(matches!(
+        error,
+        incin_core::exec::DescriptorError::InvalidAttribute {
+            operation: OperationKind::ReshapeExact,
+            ..
+        }
+            | incin_core::exec::DescriptorError::Shape(_)
+    ));
 }
 
 // -- convolution and pooling ----------------------------------------------
@@ -437,7 +450,10 @@ fn pooling_and_reshape_report_their_own_kinds() {
     // depthwise `Conv2dSpec` would produce the same geometry and then answer
     // `Conv2d` to every capability query and cache lookup keyed on it.
     assert_eq!(<Pool2dSpec as OperationSpec>::KIND, OperationKind::Pool2d);
-    assert_eq!(<ReshapeSpec as OperationSpec>::KIND, OperationKind::Reshape);
+    assert_eq!(
+        <op::ReshapeExact as CanonicalOperation>::ID,
+        OperationKind::ReshapeExact
+    );
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::dist::Local;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
-use crate::exec::{MatMulRule, ShapeRule};
+use crate::exec::{ExecutionDescriptor, MatMulRule, ShapeRule};
 use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -340,7 +340,13 @@ impl<
         )?
         .into_descriptor();
         let rhs_grad = &rhs._grad;
-        let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(spec.output.clone())
+        let output_dims = spec.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: OperationKind::MatMul,
+                rank: 0,
+            })
+        })?;
+        let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(output_dims)
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
@@ -459,7 +465,12 @@ impl<
             (),
         )?
         .into_descriptor();
-        let output_shape = spec.output.clone();
+        let output_shape = spec.output_shape().cloned().ok_or_else(|| {
+            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: OperationKind::MatMul,
+                rank: 0,
+            })
+        })?;
         let expected = crate::shapes::ShapeValue::<S1::Output>::try_new(output_shape.clone())
             .map_err(crate::prelude::Error::Shape)?;
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
