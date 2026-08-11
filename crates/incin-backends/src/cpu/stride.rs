@@ -3,27 +3,14 @@
 //! These functions are the foundation every later `CpuStorage` view
 //! operation (`reshape`/`transpose`/`broadcast_as`) is built on. They must be
 //! correct and standalone-tested before any storage/tape code touches them.
+//!
+//! The parts of that foundation the accelerators also need now live in
+//! [`crate::layout`] and are re-exported here; what remains below is the part
+//! only `CpuStorage` asks for.
 
-use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+use incin_core::prelude::{OperationKind, Result, ShapeBuf};
 
-/// Compute row-major (C-contiguous) strides for `shape`.
-///
-/// The last dimension has stride 1; each earlier dimension's stride is the
-/// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
-/// returns an empty stride vector.
-pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
-    incin_core::prelude::StrideBuf::contiguous_for(
-        &ShapeBuf::from_slice(shape),
-        OperationKind::Storage,
-    )
-    .map(|strides| strides.strides().to_vec())
-    .map_err(Into::into)
-}
-
-pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
-    checked_contiguous_strides(shape)
-        .expect("validated CpuStorage shape must have representable contiguous strides")
-}
+pub(crate) use crate::layout::{broadcast_shape, checked_contiguous_strides, contiguous_strides};
 
 /// Returns true if `strides` matches the contiguous (row-major) strides for
 /// `shape`.
@@ -76,51 +63,33 @@ pub(crate) fn validated_numel(shape: &[usize]) -> usize {
         .expect("validated CpuStorage shape must have a representable element count")
 }
 
-/// Resolve the broadcast-compatible output shape of two input shapes, using
-/// right-aligned numpy/Candle-style broadcast rules.
+/// The element count for `shape`, read from `S`'s own const when `S` is fully
+/// static instead of walked from `shape` at run time.
 ///
-/// For each axis (right-aligned), a missing dimension (shorter shape) is
-/// treated as `1`. If the two dims differ and neither is `1`, returns
-/// `Error::ShapeMismatch`.
-pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
-    let max_len = a.len().max(b.len());
-    let mut out = Vec::with_capacity(max_len);
-    for i in 0..max_len {
-        let da = *a.get(a.len().wrapping_sub(max_len - i)).unwrap_or(&1usize);
-        let db = *b.get(b.len().wrapping_sub(max_len - i)).unwrap_or(&1usize);
-        if da != db && da != 1 && db != 1 {
-            return Err(Error::ShapeMismatch {
-                op: "broadcast_shape",
-                expected: a.to_vec(),
-                got: b.to_vec(),
-                msg: format!(
-                    "cannot broadcast shapes {:?} and {:?}: incompatible at right-aligned axis {}",
-                    a, b, i
-                ),
-            });
-        }
-        out.push(da.max(db));
+/// This is only sound because a caller reaches `shape` through a descriptor
+/// already checked against `S`: the shape a canonical executor receives is
+/// the one `S::from_dyn` would have produced, so `S::STATIC_NUMEL` and a
+/// fresh product over `shape` cannot disagree unless that checking was
+/// skipped, which nothing in this crate does. The `debug_assert_eq!` verifies
+/// exactly that on every test run and costs nothing in release, matching the
+/// pattern `resolved_output_shape` in `cpu::canonical` already uses for the
+/// pointwise family.
+pub(crate) fn numel_for<S: incin_core::prelude::Shape>(shape: &[usize]) -> Result<usize> {
+    if let Some(total) = S::STATIC_NUMEL {
+        debug_assert_eq!(
+            checked_numel(shape).ok(),
+            Some(total),
+            "a statically-known numel must match the shape actually produced",
+        );
+        return Ok(total);
     }
-    Ok(out)
+    checked_numel(shape)
 }
 
 #[cfg(test)]
 /// `tests`.
 mod tests {
     use super::*;
-
-    #[test]
-    /// `contiguous_strides_row_major`.
-    fn contiguous_strides_row_major() {
-        assert_eq!(contiguous_strides(&[2, 3, 4]), vec![12, 4, 1]);
-    }
-
-    #[test]
-    /// `contiguous_strides_scalar`.
-    fn contiguous_strides_scalar() {
-        let empty: &[usize] = &[];
-        assert_eq!(contiguous_strides(empty), Vec::<usize>::new());
-    }
 
     #[test]
     /// `is_contiguous_true_for_fresh_strides`.
@@ -141,28 +110,23 @@ mod tests {
     }
 
     #[test]
-    /// `broadcast_shape_both_expand`.
-    fn broadcast_shape_both_expand() {
-        assert_eq!(broadcast_shape(&[3, 1], &[1, 4]).unwrap(), vec![3, 4]);
+    fn numel_for_a_static_shape_reads_the_type_level_constant() {
+        use incin_core::shapes::shape::{DimCons, Nil};
+        use incin_core::typenum::{U2, U3};
+
+        let shape = [2usize, 3usize];
+        type S23 = DimCons<U2, DimCons<U3, Nil>>;
+        assert_eq!(numel_for::<S23>(&shape).unwrap(), 6);
     }
 
     #[test]
-    /// `broadcast_shape_right_aligned_leading_dim_insert`.
-    fn broadcast_shape_right_aligned_leading_dim_insert() {
-        assert_eq!(broadcast_shape(&[5], &[3, 5]).unwrap(), vec![3, 5]);
-    }
+    fn numel_for_a_dynamic_shape_matches_checked_numel() {
+        use incin_core::prelude::Dyn;
 
-    #[test]
-    /// `broadcast_shape_incompatible_errors`.
-    fn broadcast_shape_incompatible_errors() {
-        let result = broadcast_shape(&[3, 4], &[3, 5]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    /// `broadcast_shape_scalar_broadcast`.
-    fn broadcast_shape_scalar_broadcast() {
-        let empty: &[usize] = &[];
-        assert_eq!(broadcast_shape(empty, &[3, 4]).unwrap(), vec![3, 4]);
+        let shape = [2usize, 3usize, 4usize];
+        assert_eq!(
+            numel_for::<Dyn>(&shape).unwrap(),
+            checked_numel(&shape).unwrap(),
+        );
     }
 }

@@ -1,8 +1,9 @@
 use crate::cpu::{CpuBackendImpl, CpuBuffer};
+use incin_core::backend_authoring::StorageBackend;
 use incin_core::backend_authoring::{Backend, OptimizerOps};
 use incin_core::prelude::{DType, Device, Result};
 
-impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
     /// Applies a fused AdamW optimization step on the backend.
     ///
     /// This directly modifies the buffers (`var`, `m`, `v`) in place, in a
@@ -17,9 +18,9 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
     /// reason other than that the fast path had not been written for it.
     fn adamw_step<K: DType>(
         _var: &mut <Self as Backend>::RawVar,
-        _grad: &<Self as Backend>::Storage<K>,
-        _m: &mut <Self as Backend>::Storage<K>,
-        _v: &mut <Self as Backend>::Storage<K>,
+        _grad: &<Self as StorageBackend>::Storage<K>,
+        _m: &mut <Self as StorageBackend>::Storage<K>,
+        _v: &mut <Self as StorageBackend>::Storage<K>,
         _lr: f64,
         _beta1: f64,
         _beta2: f64,
@@ -96,7 +97,7 @@ mod tests {
     use super::*;
     use crate::cpu::storage::CpuStorage;
 
-    type TestBackend = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     fn storage(buffer: CpuBuffer, len: usize) -> CpuStorage {
         CpuStorage::from_contiguous(buffer, vec![len])

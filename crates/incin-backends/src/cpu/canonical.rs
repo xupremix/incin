@@ -24,12 +24,21 @@ use incin_core::exec::{
     TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, DType, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
+    BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
+    Shape,
 };
 
 use super::CpuBackendImpl;
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
+
+/// The name the CPU executors answer to when they refuse work.
+///
+/// Read off the `StorageBackend` impl rather than spelled out again, so renaming
+/// the backend cannot leave this file naming one that no longer exists. The type
+/// parameters are arbitrary: `CpuBackendImpl` reports the same name for every
+/// instantiation, and the free helpers below have no `Self` to ask.
+const CPU_NAME: &str = <CpuBackendImpl<Cpu> as StorageBackend>::BACKEND_NAME;
 
 /// Recover CPU storage from a checked handle.
 ///
@@ -73,8 +82,8 @@ fn records_gradients<B: StorageBackend>(context: &ExecutionContext<B>) -> bool {
 /// the quantization rows carry `training = false`, because their kernels push
 /// no tape entry and a training row would promise a gradient that never
 /// arrives.
-fn admitted<T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn admitted<D: Device>(
+    backend: &CpuBackendImpl<D>,
     operation: OperationKind,
     storage: &CpuStorage,
     training: bool,
@@ -89,18 +98,22 @@ fn admitted<T: DType, D: Device>(
         math_mode: MathMode::Precise,
     };
     match backend.support(&query) {
-        SupportLevel::Unsupported(reason) => Err(reason.into()),
+        SupportLevel::Unsupported(reason) => Err(BackendError::unsupported(CPU_NAME, reason)),
         _ => Ok(()),
     }
 }
 
 /// Binary pointwise operations over broadcast operands.
+///
+/// These take the output shape from the descriptor rather than re-deriving it
+/// from the operands. See [`resolved_output_shape`] for why that is sound and
+/// what it saves.
 macro_rules! pointwise_binary_executors {
-    ($(($operation:ident, $kernel:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+    ($(($operation:ident, $kernel:ident, $kernel_with_shape:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -112,18 +125,62 @@ macro_rules! pointwise_binary_executors {
                 let rhs = operand(rhs, operation)?;
                 admitted(self, operation, lhs, records_gradients(request.context))?;
                 admitted(self, operation, rhs, records_gradients(request.context))?;
-                crate::cpu::ops::elementwise::$kernel(lhs, rhs)
-                    .map_err(|error| kernel_error(operation, error))
+                match resolved_output_shape(request.operation) {
+                    Some(out_shape) => {
+                        // The whole point of taking the descriptor's answer is
+                        // not to compute this one. Doing it anyway under
+                        // `debug_assert` means every test run checks that
+                        // `infer_outputs` and `broadcast_shape` agree, and a
+                        // release build pays nothing for the guarantee.
+                        debug_assert_eq!(
+                            crate::layout::broadcast_shape(&lhs.shape, &rhs.shape).ok().as_deref(),
+                            Some(out_shape),
+                            "the descriptor's inferred output shape must be the operands' broadcast",
+                        );
+                        crate::cpu::ops::elementwise::$kernel_with_shape(lhs, rhs, out_shape)
+                    }
+                    None => crate::cpu::ops::elementwise::$kernel(lhs, rhs),
+                }
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
+/// The output shape the descriptor already resolved, if it has one.
+///
+/// `dispatch::execute_shaped` runs `infer_outputs` and seals the result
+/// in a [`Validated`] before any backend is reached, so by the time an executor
+/// runs, the broadcast has been computed *and* validated. Re-deriving it with
+/// `broadcast_shape` repeats a fallible right-aligned loop and a heap
+/// allocation to reach an answer the request is already carrying.
+///
+/// This is the first place a CPU executor reads the descriptor instead of
+/// re-deriving from raw storage. What makes the value trustworthy is that the
+/// request is [`Validated`] — not the proof level, which says when the geometry
+/// became known rather than whether it is right. The callers cross-check it
+/// against a re-derivation under `debug_assert`, so the trust is verified on
+/// every test run and free in release.
+///
+/// `None` is returned when inference produced no single output shape. The
+/// caller falls back to deriving it, so this is an optimization that declines
+/// rather than a correctness fork.
+///
+/// [`Validated`]: incin_core::exec::Validated
+fn resolved_output_shape<O: incin_core::exec::CanonicalOperation>(
+    operation: &incin_core::exec::Validated<Descriptor<O>>,
+) -> Option<&[usize]> {
+    let [single] = operation.descriptor().outputs() else {
+        return None;
+    };
+    single.shape.as_deref()
+}
+
 pointwise_binary_executors![
-    (Add, add_storage),
-    (Sub, sub_storage),
-    (Mul, mul_storage),
-    (Div, div_storage),
+    (Add, add_storage, add_storage_with_shape),
+    (Sub, sub_storage, sub_storage_with_shape),
+    (Mul, mul_storage, mul_storage_with_shape),
+    (Div, div_storage, div_storage_with_shape),
 ];
 
 /// Allocation, which has no operand to read anything from.
@@ -137,12 +194,20 @@ pointwise_binary_executors![
 /// on the descriptor's output: its per-operand loop runs zero times here, so
 /// without that these would have been the only path to a backend that skipped
 /// the registry entirely.
+///
+/// The element count is resolved through `ShapeTy` rather than the attributes'
+/// runtime shape: `numel_for` reads `ShapeTy::STATIC_NUMEL` when the caller's
+/// shape type is fully static, so `zeros::<s![2, 3]>()` never runs the
+/// checked-multiplication loop over `attributes.shape` at all — the count was
+/// already a compile-time constant. This is the one place in the crate the
+/// shape type parameter `execute_shaped` carries actually changes what code
+/// runs, rather than only what gets asserted against.
 macro_rules! allocating_executors {
     ($(($operation:ident, $method:ident $(, $argument:ident)*)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -151,13 +216,16 @@ macro_rules! allocating_executors {
                     return Err(invalid(operation, "an allocation takes no operand"));
                 }
                 let attributes = request.operation.descriptor().attributes();
-                <Self as CreationOps<Self>>::$method::<T>(
+                let total = crate::cpu::stride::numel_for::<ShapeTy>(&attributes.shape)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+                crate::cpu::creation::$method(
+                    total,
                     $(attributes.$argument,)*
                     &attributes.shape,
                     attributes.dtype,
                     &attributes.device,
                 )
-                .map_err(|error| kernel_error(operation, error))
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -166,13 +234,13 @@ macro_rules! allocating_executors {
 // The scalar parameters come first in every one of these signatures, which is
 // why the macro takes them as a prefix rather than trying to place them.
 allocating_executors![
-    (Zeros, zeros),
-    (Ones, ones),
-    (UniformRandom, rand),
-    (NormalRandom, randn),
-    (Full, full, value),
-    (Arange, arange, start, step),
-    (Linspace, linspace, start, end),
+    (Zeros, zeros_with_total),
+    (Ones, ones_with_total),
+    (UniformRandom, rand_with_total),
+    (NormalRandom, randn_with_total),
+    (Full, full_with_total, value),
+    (Arange, arange_with_total, start, step),
+    (Linspace, linspace_with_total, start, end),
 ];
 
 /// The same four allocations, returning a trainable variable.
@@ -187,10 +255,10 @@ allocating_executors![
 /// nothing, whatever is done to it afterwards.
 macro_rules! variable_allocating_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = super::var::CpuVar;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<super::var::CpuVar, BackendError> {
@@ -199,22 +267,25 @@ macro_rules! variable_allocating_executors {
                     return Err(invalid(operation, "an allocation takes no operand"));
                 }
                 let attributes = request.operation.descriptor().attributes();
-                <Self as CreationOps<Self>>::$method::<T>(
+                let total = crate::cpu::stride::numel_for::<ShapeTy>(&attributes.shape)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+                crate::cpu::creation::$method(
+                    total,
                     &attributes.shape,
                     attributes.dtype,
                     &attributes.device,
                 )
-                .map_err(|error| kernel_error(operation, error))
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
 variable_allocating_executors![
-    (VariableZeros, var_zeros),
-    (VariableOnes, var_ones),
-    (VariableUniformRandom, var_rand),
-    (VariableNormalRandom, var_randn),
+    (VariableZeros, var_zeros_with_total),
+    (VariableOnes, var_ones_with_total),
+    (VariableUniformRandom, var_rand_with_total),
+    (VariableNormalRandom, var_randn_with_total),
 ];
 
 /// Reading a value back to the host.
@@ -230,18 +301,18 @@ variable_allocating_executors![
 /// operations that happen to return something small.
 macro_rules! readback_executors {
     ($(($operation:ident, $method:ident, $output:ty)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = $output;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<$output, BackendError> {
                 let operation = OperationKind::$operation;
                 let training = records_gradients(request.context);
                 let input = reduction_operand(self, request.inputs, operation, training)?;
-                <Self as TensorOps<Self>>::$method::<T>(input)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as TensorOps<Self>>::$method::<f32>(input)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -259,25 +330,26 @@ readback_executors![
 /// On `Backend` rather than on any operation family, which is why it is not in
 /// the macro above: the byte view is a property of an allocation itself and
 /// exists before any operation over it does.
-impl<T: DType, D: Device> Execute<Descriptor<op::TensorToBytes>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::TensorToBytes>> for CpuBackendImpl<D> {
     type Output = Vec<u8>;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::TensorToBytes>, Self>,
     ) -> Result<Vec<u8>, BackendError> {
         let operation = OperationKind::TensorToBytes;
         let training = records_gradients(request.context);
         let input = reduction_operand(self, request.inputs, operation, training)?;
-        <Self as Backend>::to_bytes::<T>(input).map_err(|error| kernel_error(operation, error))
+        <Self as Backend>::to_bytes::<f32>(input)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Reshape to the descriptor's declared shape.
-impl<T: DType, D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::ReshapeExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -289,15 +361,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendIm
         admitted(self, operation, input, records_gradients(request.context))?;
         let shape = &request.operation.descriptor().attributes().shape;
         crate::cpu::ops::shape_ops::reshape_storage(input, shape)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Broadcast to the descriptor's declared shape.
-impl<T: DType, D: Device> Execute<Descriptor<op::BroadcastAs>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::BroadcastAs>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::BroadcastAs>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -312,15 +384,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BroadcastAs>> for CpuBackendImp
         admitted(self, operation, input, records_gradients(request.context))?;
         let shape = &request.operation.descriptor().attributes().shape;
         crate::cpu::ops::shape_ops::broadcast_as_storage(input, shape)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Matrix multiplication over the last two axes, batched over the rest.
-impl<T: DType, D: Device> Execute<Descriptor<op::MatMulExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::MatMulExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::MatMulExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -331,23 +403,25 @@ impl<T: DType, D: Device> Execute<Descriptor<op::MatMulExact>> for CpuBackendImp
         let lhs = operand(lhs, operation)?;
         let rhs = operand(rhs, operation)?;
         for storage in [lhs, rhs] {
-            if storage.metadata().dtype() != DTypeId::F32 {
-                return Err(UnsupportedReason::DType {
-                    operation,
-                    dtype: storage.metadata().dtype(),
-                }
-                .into());
+            if storage.metadata().dtype() != DTypeId::F32.descriptor() {
+                return Err(BackendError::unsupported(
+                    CPU_NAME,
+                    UnsupportedReason::DType {
+                        operation,
+                        dtype: storage.metadata().dtype(),
+                    },
+                ));
             }
             admitted(self, operation, storage, records_gradients(request.context))?;
         }
         crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Bind the single operand a reduction consumes.
-fn reduction_operand<'a, T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn reduction_operand<'a, D: Device>(
+    backend: &CpuBackendImpl<D>,
     inputs: &'a [TensorHandle<'a>],
     operation: OperationKind,
     training: bool,
@@ -373,17 +447,17 @@ fn reduction_operand<'a, T: DType, D: Device>(
 /// Whole-tensor reductions, which take no attributes.
 macro_rules! reduce_all_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
-                <Self as ReductionOps<Self>>::$method::<T>(input)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as ReductionOps<Self>>::$method::<f32>(input)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -400,18 +474,18 @@ reduce_all_executors![
 /// Single-axis reductions, which read the axis from their typed attributes.
 macro_rules! reduce_axis_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as ReductionOps<Self>>::$method::<T>(input, axis)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as ReductionOps<Self>>::$method::<f32>(input, axis)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -434,10 +508,10 @@ reduce_axis_executors![
 /// This is the one operation in the index-reduction neighbourhood that is
 /// dtype-honest: the CPU kernel accumulates in `f64` and converts back through
 /// the operand's own buffer, so the result carries the operand's dtype.
-impl<T: DType, D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Cumsum>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -449,8 +523,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<T, 
             records_gradients(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as ReductionOps<Self>>::cumsum::<T>(input, axis)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as ReductionOps<Self>>::cumsum::<f32>(input, axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -469,22 +543,27 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<T, 
 macro_rules! dispatch_index_dtype {
     ($operation:expr, $dtype:expr, |$index:ident| $body:expr) => {{
         let operation = $operation;
-        match $dtype {
-            DTypeId::U8 => {
+        let desc: incin_core::prelude::DTypeDescriptor = $dtype;
+        match desc.builtin_id() {
+            Some(DTypeId::U8) => {
                 type $index = u8;
                 $body
             }
-            DTypeId::U32 => {
+            Some(DTypeId::U32) => {
                 type $index = u32;
                 $body
             }
-            DTypeId::I64 => {
+            Some(DTypeId::I64) => {
                 type $index = i64;
                 $body
             }
-            dtype => Err(BackendError::Unsupported {
-                reason: UnsupportedReason::DType { operation, dtype },
-            }),
+            _ => Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: desc,
+                },
+            )),
         }
     }};
 }
@@ -492,10 +571,10 @@ macro_rules! dispatch_index_dtype {
 /// Index of the extremum, either flattened or along one axis.
 macro_rules! index_reduction_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -503,8 +582,8 @@ macro_rules! index_reduction_executors {
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let attributes = request.operation.descriptor().attributes();
                 dispatch_index_dtype!(operation, attributes.dtype, |KIndex| {
-                    <Self as ReductionOps<Self>>::$method::<T, KIndex>(input, attributes.axis)
-                        .map_err(|error| kernel_error(operation, error))
+                    <Self as ReductionOps<Self>>::$method::<f32, KIndex>(input, attributes.axis)
+                        .map_err(|error| kernel_error(CPU_NAME, operation, error))
                 })
             }
         }
@@ -514,10 +593,10 @@ macro_rules! index_reduction_executors {
 index_reduction_executors![(ArgMax, argmax), (ArgMin, argmin)];
 
 /// Indices that would sort the operand along one axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Argsort>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -530,12 +609,12 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T,
         )?;
         let attributes = request.operation.descriptor().attributes();
         dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
-            <Self as ReductionOps<Self>>::argsort::<T, KIndex>(
+            <Self as ReductionOps<Self>>::argsort::<f32, KIndex>(
                 input,
                 attributes.axis,
                 attributes.descending,
             )
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
         })
     }
 }
@@ -551,10 +630,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T,
 /// the row was narrowed to f32 alone to stop the canonical path routing to a
 /// mislabel. The kernel converts through the operand's own buffer now, so the
 /// row no longer has to be narrower than the kernel.
-impl<T: DType, D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<D> {
     type Output = (CpuStorage, CpuStorage);
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::TopK>, Self>,
     ) -> Result<(CpuStorage, CpuStorage), BackendError> {
@@ -567,13 +646,13 @@ impl<T: DType, D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<T, D>
         )?;
         let attributes = request.operation.descriptor().attributes();
         dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
-            <Self as ReductionOps<Self>>::topk::<T, KIndex>(
+            <Self as ReductionOps<Self>>::topk::<f32, KIndex>(
                 input,
                 attributes.k,
                 attributes.axis,
                 attributes.largest,
             )
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
         })
     }
 }
@@ -616,8 +695,11 @@ fn f32_only(
 ) -> Result<(), BackendError> {
     for storage in operands.iter().flatten() {
         let dtype = storage.metadata().dtype();
-        if dtype != DTypeId::F32 {
-            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        if dtype != DTypeId::F32.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType { operation, dtype },
+            ));
         }
     }
     Ok(())
@@ -644,10 +726,10 @@ fn narrowed_epsilon(operation: OperationKind, epsilon: f64) -> Result<f32, Backe
 }
 
 /// Two-dimensional convolution with an optional bias.
-impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -682,7 +764,7 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImp
         // because `ModuleOps::conv2d` states one extent for both axes. The
         // kernel behind that signature never needed them equal, so the pair
         // goes straight to it rather than through the narrower spelling.
-        crate::cpu::ops::conv::conv2d_windowed_impl::<T, D, T>(
+        crate::cpu::ops::conv::conv2d_windowed_impl::<D, f32>(
             activation,
             weight,
             bias,
@@ -693,15 +775,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImp
             },
             attributes.groups,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Two-dimensional maximum pooling.
-impl<T: DType, D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -715,22 +797,22 @@ impl<T: DType, D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<
         let attributes = request.operation.descriptor().attributes();
         let pair = |[height, width]: [usize; 2]| (height, width);
 
-        <Self as ModuleOps<Self>>::max_pool2d::<T>(
+        <Self as ModuleOps<Self>>::max_pool2d::<f32>(
             input,
             pair(attributes.kernel),
             pair(attributes.stride),
             pair(attributes.padding),
             pair(attributes.dilation),
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Two-dimensional average pooling, which has no dilated form.
-impl<T: DType, D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -744,21 +826,21 @@ impl<T: DType, D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<
         let attributes = request.operation.descriptor().attributes();
         let pair = |[height, width]: [usize; 2]| (height, width);
 
-        <Self as ModuleOps<Self>>::avg_pool2d::<T>(
+        <Self as ModuleOps<Self>>::avg_pool2d::<f32>(
             input,
             pair(attributes.kernel),
             pair(attributes.stride),
             pair(attributes.padding),
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// One-dimensional convolution with an optional bias.
-impl<T: DType, D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Conv1dExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -787,7 +869,7 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImp
 
         // `Conv1dAttributes` already carries one extent per field, so unlike the
         // two-dimensional forms there is nothing to collapse.
-        <Self as ModuleOps<Self>>::conv1d::<T>(
+        <Self as ModuleOps<Self>>::conv1d::<f32>(
             activation,
             weight,
             bias,
@@ -796,15 +878,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImp
             attributes.dilation,
             attributes.groups,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Two-dimensional transposed convolution with an optional bias.
-impl<T: DType, D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::ConvTranspose2d>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -858,7 +940,7 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBacken
              both",
         )?;
 
-        <Self as ModuleOps<Self>>::conv_transpose2d::<T>(
+        <Self as ModuleOps<Self>>::conv_transpose2d::<f32>(
             activation,
             weight,
             bias,
@@ -868,15 +950,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBacken
             dilation,
             attributes.groups,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Average pooling to a requested output extent rather than a requested window.
-impl<T: DType, D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::AdaptiveAvgPool2dExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -889,8 +971,43 @@ impl<T: DType, D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for Cp
         )?;
         f32_only(operation, &[Some(input)])?;
         let [height, width] = request.operation.descriptor().attributes().output;
-        <Self as ModuleOps<Self>>::adaptive_avg_pool2d::<T>(input, (height, width))
-            .map_err(|error| kernel_error(operation, error))
+        <Self as ModuleOps<Self>>::adaptive_avg_pool2d::<f32>(input, (height, width))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+/// Gather rows of a weight table addressed by an integer index tensor.
+///
+/// `embedding`'s two operands admit different dtypes by construction: the
+/// index operand is one of the integer dtypes, and the weight operand is f32
+/// only, because `embedding_impl` always reads and writes f32 regardless of
+/// the operand's declared dtype. `INDEX_AND_F32_DTYPES` (see `capability.rs`)
+/// states the union of the two, the loosest set one row can honestly claim,
+/// so both operands pass the registry re-check below; `f32_only` then
+/// enforces the weight's real, tighter constraint directly, the same way the
+/// convolution executors enforce theirs for a bias the row's dtype set does
+/// not cover either.
+impl<D: Device> Execute<Descriptor<op::EmbeddingExact>> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::EmbeddingExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::EmbeddingExact;
+        let [indices, weight] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "embedding expects an index tensor and a weight table",
+            ));
+        };
+        let indices = operand(indices, operation)?;
+        let weight = operand(weight, operation)?;
+        admitted(self, operation, indices, records_gradients(request.context))?;
+        admitted(self, operation, weight, records_gradients(request.context))?;
+        f32_only(operation, &[Some(weight)])?;
+        <Self as ModuleOps<Self>>::embedding::<f32, i64>(indices, weight)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -902,17 +1019,17 @@ impl<T: DType, D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for Cp
 /// Unary elementwise float operations, which take no attributes.
 macro_rules! unary_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
-                <Self as FloatOps<Self>>::$method::<T>(input)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as FloatOps<Self>>::$method::<f32>(input)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -958,18 +1075,18 @@ unary_float_executors![
 /// Unary float operations parametrised by one scalar attribute.
 macro_rules! scalar_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let value = request.operation.descriptor().attributes().value;
-                <Self as FloatOps<Self>>::$method::<T>(input, value)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as FloatOps<Self>>::$method::<f32>(input, value)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -984,10 +1101,10 @@ scalar_float_executors![
 /// Binary elementwise float operations over broadcast operands.
 macro_rules! binary_float_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -999,8 +1116,8 @@ macro_rules! binary_float_executors {
                 let rhs = operand(rhs, operation)?;
                 admitted(self, operation, lhs, records_gradients(request.context))?;
                 admitted(self, operation, rhs, records_gradients(request.context))?;
-                <Self as FloatOps<Self>>::$method::<T>(lhs, rhs)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as FloatOps<Self>>::$method::<f32>(lhs, rhs)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -1009,10 +1126,10 @@ macro_rules! binary_float_executors {
 binary_float_executors![(Atan2, atan2), (Fmod, fmod), (Remainder, remainder),];
 
 /// Elementwise clamp, whose two bounds are a single typed attribute set.
-impl<T: DType, D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Clamp>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1024,16 +1141,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<T, D
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as FloatOps<Self>>::clamp::<T>(input, attributes.min, attributes.max)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as FloatOps<Self>>::clamp::<f32>(input, attributes.min, attributes.max)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Softmax along the axis its attributes name.
-impl<T: DType, D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Softmax>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1045,16 +1162,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<T,
             records_gradients(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as FloatOps<Self>>::softmax::<T>(input, axis)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as FloatOps<Self>>::softmax::<f32>(input, axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Normalize over the trailing axes the attributes name, then scale and shift.
-impl<T: DType, D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::LayerNorm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1081,8 +1198,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<
         // checked that it is the operand's trailing suffix and that the weight
         // and bias match it, and the kernel derives the same split from the
         // weight's own shape.
-        <Self as ModuleOps<Self>>::layer_norm::<T>(input, weight, bias, epsilon)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as ModuleOps<Self>>::layer_norm::<f32>(input, weight, bias, epsilon)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1090,10 +1207,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<
 ///
 /// Inference only, and refused rather than approximated otherwise. See the
 /// refusal below.
-impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::BatchNorm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1133,10 +1250,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<
             admitted(self, operation, input, records_gradients(request.context))?;
             f32_only(operation, &[Some(input), weight, bias])?;
             let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
-            return crate::cpu::ops::norm::batch_norm_training_impl::<T, D, T>(
+            return crate::cpu::ops::norm::batch_norm_training_impl::<D, f32>(
                 input, weight, bias, epsilon,
             )
-            .map_err(|error| kernel_error(operation, error));
+            .map_err(|error| kernel_error(CPU_NAME, operation, error));
         }
 
         // Descriptor validation already pairs these with `training`, but the
@@ -1169,7 +1286,7 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<
         )?;
         let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
 
-        <Self as ModuleOps<Self>>::batch_norm::<T>(
+        <Self as ModuleOps<Self>>::batch_norm::<f32>(
             input,
             weight,
             bias,
@@ -1178,13 +1295,13 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<
             epsilon,
             attributes.momentum,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Bind the two operands a binary tensor operation consumes.
-fn binary_operands<'a, T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn binary_operands<'a, D: Device>(
+    backend: &CpuBackendImpl<D>,
     inputs: &'a [TensorHandle<'a>],
     operation: OperationKind,
     training: bool,
@@ -1204,44 +1321,95 @@ fn binary_operands<'a, T: DType, D: Device>(
 /// Comparisons and logical connectives are here rather than with the float
 /// family because their semantic profile preserves the operand dtype instead of
 /// producing a boolean one, and because they carry no gradient.
-macro_rules! binary_tensor_executors {
-    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+macro_rules! numeric_binary_tensor_executors {
+    ($(($operation:ident, $func:expr)),* $(,)?) => {$(
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
-                <Self as TensorOps<Self>>::$method::<T>(lhs, rhs)
-                    .map_err(|error| kernel_error(operation, error))
+                let out_shape = resolved_output_shape(request.operation)
+                    .map(|s| s.to_vec())
+                    .unwrap_or_else(|| crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape).unwrap_or_default());
+                crate::cpu::ops::elementwise::elementwise_binary(lhs, rhs, &out_shape, $func)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-binary_tensor_executors![
-    (Maximum, maximum),
-    (Minimum, minimum),
-    (AbsDiff, abs_diff),
-    (CmpEq, cmp_eq),
-    (CmpNe, cmp_ne),
-    (CmpLt, cmp_lt),
-    (CmpLe, cmp_le),
-    (CmpGt, cmp_gt),
-    (CmpGe, cmp_ge),
-    (LogicalAnd, logical_and),
-    (LogicalOr, logical_or),
+numeric_binary_tensor_executors![
+    (Maximum, |a, b| a.max(b)),
+    (Minimum, |a, b| a.min(b)),
+    (AbsDiff, |a, b| (a - b).abs()),
+];
+
+macro_rules! cmp_tensor_executors {
+    ($(($operation:ident, $func:expr)),* $(,)?) => {$(
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+            type Output = CpuStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
+                if lhs.meta.dtype() != rhs.meta.dtype() {
+                    return Err(invalid(operation, "comparison operands must have matching dtypes"));
+                }
+                crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, $func)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            }
+        }
+    )*};
+}
+
+cmp_tensor_executors![
+    (CmpEq, |a, b| a == b),
+    (CmpNe, |a, b| a != b),
+    (CmpLt, |a, b| a < b),
+    (CmpLe, |a, b| a <= b),
+    (CmpGt, |a, b| a > b),
+    (CmpGe, |a, b| a >= b),
+];
+
+macro_rules! logical_binary_tensor_executors {
+    ($(($operation:ident, $func:expr)),* $(,)?) => {$(
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
+            type Output = CpuStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let (lhs, rhs) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
+                if lhs.meta.dtype() != <bool as ConstDType>::DESCRIPTOR || rhs.meta.dtype() != <bool as ConstDType>::DESCRIPTOR {
+                    return Err(invalid(operation, "logical operation operands must be bool"));
+                }
+                crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, $func)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            }
+        }
+    )*};
+}
+
+logical_binary_tensor_executors![
+    (LogicalAnd, |a, b| a != 0.0 && b != 0.0),
+    (LogicalOr, |a, b| a != 0.0 || b != 0.0),
 ];
 
 /// Batched matrix multiplication, whose operand rank contract differs from the
 /// plain `matmul` row and so does not share its registration.
-impl<T: DType, D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::BatchedMatMul>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1252,26 +1420,26 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendI
             operation,
             records_gradients(request.context),
         )?;
-        <Self as TensorOps<Self>>::bmm::<T>(lhs, rhs)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::bmm::<f32>(lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Unary tensor operations parametrised by one scalar attribute.
 macro_rules! scalar_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let value = request.operation.descriptor().attributes().value;
-                <Self as TensorOps<Self>>::$method::<T>(input, value)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as TensorOps<Self>>::$method::<f32>(input, value)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -1282,18 +1450,18 @@ scalar_tensor_executors![(SubScalar, sub_scalar), (DivScalar, div_scalar)];
 /// Triangular and diagonal views, parametrised by a signed diagonal offset.
 macro_rules! diagonal_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let offset = request.operation.descriptor().attributes().offset;
-                <Self as TensorOps<Self>>::$method::<T>(input, offset)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as TensorOps<Self>>::$method::<f32>(input, offset)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -1304,18 +1472,18 @@ diagonal_tensor_executors![(Triu, triu), (Tril, tril), (Diag, diag)];
 /// Rank-changing views parametrised by a single axis.
 macro_rules! axis_tensor_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as TensorOps<Self>>::$method::<T>(input, axis)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as TensorOps<Self>>::$method::<f32>(input, axis)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -1324,10 +1492,10 @@ macro_rules! axis_tensor_executors {
 axis_tensor_executors![(SqueezeExact, squeeze), (UnsqueezeExact, unsqueeze)];
 
 /// Elementwise logical negation.
-impl<T: DType, D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::LogicalNot>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1338,16 +1506,19 @@ impl<T: DType, D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl
             operation,
             records_gradients(request.context),
         )?;
-        <Self as TensorOps<Self>>::logical_not::<T>(input)
-            .map_err(|error| kernel_error(operation, error))
+        if input.meta.dtype() != <bool as ConstDType>::DESCRIPTOR {
+            return Err(invalid(operation, "logical_not operand must be bool"));
+        }
+        crate::cpu::ops::shape_ops::elementwise_cmp(input, input, |a, _| a == 0.0)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Swap the two axes the descriptor names.
-impl<T: DType, D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::TransposeExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1359,16 +1530,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackend
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::transpose::<T>(input, attributes.first, attributes.second)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::transpose::<f32>(input, attributes.first, attributes.second)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Take a contiguous run along one axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Narrow>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1380,21 +1551,21 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<T, 
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::narrow::<T>(
+        <Self as TensorOps<Self>>::narrow::<f32>(
             input,
             attributes.axis,
             attributes.start,
             attributes.length,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Collapse an inclusive axis range into one axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::FlattenExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1406,8 +1577,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendIm
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::flatten::<T>(input, attributes.start_axis, attributes.end_axis)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::flatten::<f32>(input, attributes.start_axis, attributes.end_axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1416,10 +1587,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendIm
 /// The operand order is the one the catalog's legacy source names -
 /// `TensorOps::where_cond(mask, on_true, on_false)` - so a caller that reads
 /// the catalog row gets the same meaning from either path.
-impl<T: DType, D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::WhereCond>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1436,16 +1607,36 @@ impl<T: DType, D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<
         for storage in [mask, on_true, on_false] {
             admitted(self, operation, storage, records_gradients(request.context))?;
         }
-        <Self as TensorOps<Self>>::where_cond::<T, T>(mask, on_true, on_false)
-            .map_err(|error| kernel_error(operation, error))
+        match on_true.dtype().builtin_id() {
+            Some(DTypeId::F32) => {
+                <Self as TensorOps<Self>>::where_cond::<f32>(mask, on_true, on_false)
+            }
+            Some(DTypeId::F64) => {
+                <Self as TensorOps<Self>>::where_cond::<f64>(mask, on_true, on_false)
+            }
+            Some(DTypeId::I64) => {
+                <Self as TensorOps<Self>>::where_cond::<i64>(mask, on_true, on_false)
+            }
+            Some(DTypeId::U8) => {
+                <Self as TensorOps<Self>>::where_cond::<u8>(mask, on_true, on_false)
+            }
+            Some(DTypeId::U32) => {
+                <Self as TensorOps<Self>>::where_cond::<u32>(mask, on_true, on_false)
+            }
+            Some(DTypeId::Bool) => {
+                <Self as TensorOps<Self>>::where_cond::<bool>(mask, on_true, on_false)
+            }
+            _ => return Err(invalid(operation, "unsupported value dtype for where_cond")),
+        }
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Overwrite the masked positions with the declared scalar.
-impl<T: DType, D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::MaskedFill>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1457,16 +1648,31 @@ impl<T: DType, D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl
             records_gradients(request.context),
         )?;
         let value = request.operation.descriptor().attributes().value;
-        <Self as TensorOps<Self>>::masked_fill::<T, T>(input, mask, value)
-            .map_err(|error| kernel_error(operation, error))
+        match input.dtype().builtin_id() {
+            Some(DTypeId::F32) => <Self as TensorOps<Self>>::masked_fill::<f32>(input, mask, value),
+            Some(DTypeId::F64) => <Self as TensorOps<Self>>::masked_fill::<f64>(input, mask, value),
+            Some(DTypeId::I64) => <Self as TensorOps<Self>>::masked_fill::<i64>(input, mask, value),
+            Some(DTypeId::U8) => <Self as TensorOps<Self>>::masked_fill::<u8>(input, mask, value),
+            Some(DTypeId::U32) => <Self as TensorOps<Self>>::masked_fill::<u32>(input, mask, value),
+            Some(DTypeId::Bool) => {
+                <Self as TensorOps<Self>>::masked_fill::<bool>(input, mask, value)
+            }
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "unsupported value dtype for masked_fill",
+                ));
+            }
+        }
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Interpolate between two operands at the declared weight.
-impl<T: DType, D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Lerp>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1478,8 +1684,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<T, D>
             records_gradients(request.context),
         )?;
         let weight = request.operation.descriptor().attributes().weight;
-        <Self as TensorOps<Self>>::lerp::<T>(start, end, weight)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::lerp::<f32>(start, end, weight)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1487,8 +1693,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<T, D>
 ///
 /// `concat` and `stack` take one or more operands, so their arity contract is
 /// a lower bound rather than a fixed count. An empty list is still a defect.
-fn variadic_operands<'a, T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn variadic_operands<'a, D: Device>(
+    backend: &CpuBackendImpl<D>,
     inputs: &'a [TensorHandle<'a>],
     operation: OperationKind,
     training: bool,
@@ -1507,8 +1713,8 @@ fn variadic_operands<'a, T: DType, D: Device>(
 }
 
 /// Bind the three operands an indexing or fused operation consumes.
-fn ternary_operands<'a, T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn ternary_operands<'a, D: Device>(
+    backend: &CpuBackendImpl<D>,
     inputs: &'a [TensorHandle<'a>],
     operation: OperationKind,
     training: bool,
@@ -1531,10 +1737,10 @@ fn ternary_operands<'a, T: DType, D: Device>(
 }
 
 /// Join operands along an existing axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::ConcatExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1546,16 +1752,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImp
             records_gradients(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as TensorOps<Self>>::concat::<T>(&operands, axis)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::concat::<f32>(&operands, axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Join operands along a new axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::StackExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1567,16 +1773,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl
             records_gradients(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as TensorOps<Self>>::stack::<T>(&operands, axis)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::stack::<f32>(&operands, axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Take a half-open window per axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::SliceExact>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1588,26 +1794,26 @@ impl<T: DType, D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl
             records_gradients(request.context),
         )?;
         let ranges = &request.operation.descriptor().attributes().ranges;
-        <Self as TensorOps<Self>>::slice::<T>(input, ranges)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::slice::<f32>(input, ranges)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Indexing operations that read one axis and one index operand.
 macro_rules! indexing_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let (input, index) = binary_operands(self, request.inputs, operation, records_gradients(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as TensorOps<Self>>::$method::<T, T>(input, axis, index)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as TensorOps<Self>>::$method::<f32, i64>(input, axis, index)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -1621,10 +1827,10 @@ indexing_executors![(Gather, gather), (IndexSelect, index_select)];
 /// has no duplicate detection: it writes in index order, so the last write
 /// wins. Answering a `Reject` request with that behaviour would report success
 /// for a contract the backend did not honour, so it is refused instead.
-impl<T: DType, D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Scatter>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1642,16 +1848,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<T,
                 "this backend applies last-write-wins and cannot reject duplicate indices",
             ));
         }
-        <Self as TensorOps<Self>>::scatter::<T, T>(input, attributes.axis, index, source)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::scatter::<f32, i64>(input, attributes.axis, index, source)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Tile the operand per axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Repeat>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1663,16 +1869,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<T, 
             records_gradients(request.context),
         )?;
         let repeats = &request.operation.descriptor().attributes().repeats;
-        <Self as TensorOps<Self>>::repeat::<T>(input, repeats)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::repeat::<f32>(input, repeats)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Extend each axis with the declared constant.
-impl<T: DType, D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Pad>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1684,16 +1890,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<T, D> 
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::pad::<T>(input, &attributes.padding, attributes.value)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::pad::<f32>(input, &attributes.padding, attributes.value)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Extract sliding windows along one axis.
-impl<T: DType, D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Unfold>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1705,21 +1911,21 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<T, 
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::unfold::<T>(
+        <Self as TensorOps<Self>>::unfold::<f32>(
             input,
             attributes.axis,
             attributes.size,
             attributes.step,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Redistribute channel depth into spatial extent.
-impl<T: DType, D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::PixelShuffle>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1731,16 +1937,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendIm
             records_gradients(request.context),
         )?;
         let factor = request.operation.descriptor().attributes().upscale_factor;
-        <Self as TensorOps<Self>>::pixel_shuffle::<T>(input, factor)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::pixel_shuffle::<f32>(input, factor)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Normalize within channel groups.
-impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::GroupNorm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1752,8 +1958,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::group_norm::<T>(input, attributes.groups, attributes.epsilon)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::group_norm::<f32>(input, attributes.groups, attributes.epsilon)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1771,10 +1977,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<
 /// two identical invocations disagree about, which is a property of dropout and
 /// not a defect here, and the reason its test asserts the distribution rather
 /// than the values.
-impl<T: DType, D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Dropout>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1782,17 +1988,17 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<T,
         let training = records_gradients(request.context);
         let input = reduction_operand(self, request.inputs, operation, training)?;
         let attributes = request.operation.descriptor().attributes();
-        let wrap = |error| kernel_error(operation, error);
+        let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
         if !attributes.training || attributes.probability <= 0.0 {
             return Ok(input.clone());
         }
         if attributes.probability >= 1.0 {
-            return <Self as FloatOps<Self>>::mul_scalar_float::<T>(input, 0.0).map_err(wrap);
+            return <Self as FloatOps<Self>>::mul_scalar_float::<f32>(input, 0.0).map_err(wrap);
         }
 
         let metadata = input.metadata();
-        let draw = <Self as CreationOps<Self>>::rand::<T>(
+        let draw = <Self as CreationOps<Self>>::rand::<f32>(
             input.shape.as_ref(),
             metadata.dtype(),
             &metadata.device(),
@@ -1802,12 +2008,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<T,
         // uniform draw down by the probability turns it into the mask directly
         // and keeps exactly the share of elements the attribute asked for.
         let shifted =
-            <Self as FloatOps<Self>>::add_scalar_float::<T>(&draw, -attributes.probability)
+            <Self as FloatOps<Self>>::add_scalar_float::<f32>(&draw, -attributes.probability)
                 .map_err(wrap)?;
-        let mask = <Self as FloatOps<Self>>::step::<T>(&shifted).map_err(wrap)?;
+        let mask = <Self as FloatOps<Self>>::step::<f32>(&shifted).map_err(wrap)?;
         let kept = crate::cpu::ops::elementwise::mul_storage(input, &mask).map_err(wrap)?;
-        <Self as FloatOps<Self>>::mul_scalar_float::<T>(&kept, 1.0 / (1.0 - attributes.probability))
-            .map_err(wrap)
+        <Self as FloatOps<Self>>::mul_scalar_float::<f32>(
+            &kept,
+            1.0 / (1.0 - attributes.probability),
+        )
+        .map_err(wrap)
     }
 }
 
@@ -1818,10 +2027,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<T,
 /// and the product needs `[in, out]`. Doing it here rather than asking the
 /// caller to pre-transpose keeps the descriptor's operand order the same as the
 /// module's field order.
-impl<T: DType, D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Linear>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1842,9 +2051,9 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<T, 
         let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
         admitted(self, operation, input, training)?;
         admitted(self, operation, weight, training)?;
-        let wrap = |error| kernel_error(operation, error);
+        let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
-        let transposed = <Self as TensorOps<Self>>::transpose::<T>(weight, 0, 1).map_err(wrap)?;
+        let transposed = <Self as TensorOps<Self>>::transpose::<f32>(weight, 0, 1).map_err(wrap)?;
         let product =
             crate::cpu::ops::shape_ops::matmul_storage(input, &transposed).map_err(wrap)?;
         match bias {
@@ -1863,10 +2072,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<T, 
 ///
 /// No mean is subtracted, which is the whole difference from `layer_norm` and
 /// the reason this cannot be routed to it.
-impl<T: DType, D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::RmsNorm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1874,26 +2083,27 @@ impl<T: DType, D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<T,
         let training = records_gradients(request.context);
         let (input, weight) = binary_operands(self, request.inputs, operation, training)?;
         let epsilon = request.operation.descriptor().attributes().epsilon;
-        let wrap = |error| kernel_error(operation, error);
+        let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
         // The trailing axis, and the keep-dim reduction over it so the divisor
         // broadcasts back against the operand.
         let axis = input.shape.len().saturating_sub(1);
         let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
-        let mean = <Self as ReductionOps<Self>>::mean_keepdim::<T>(&squared, axis).map_err(wrap)?;
+        let mean =
+            <Self as ReductionOps<Self>>::mean_keepdim::<f32>(&squared, axis).map_err(wrap)?;
         let guarded =
-            <Self as FloatOps<Self>>::add_scalar_float::<T>(&mean, epsilon).map_err(wrap)?;
-        let scale = <Self as FloatOps<Self>>::sqrt::<T>(&guarded).map_err(wrap)?;
+            <Self as FloatOps<Self>>::add_scalar_float::<f32>(&mean, epsilon).map_err(wrap)?;
+        let scale = <Self as FloatOps<Self>>::sqrt::<f32>(&guarded).map_err(wrap)?;
         let normalized = crate::cpu::ops::elementwise::div_storage(input, &scale).map_err(wrap)?;
         crate::cpu::ops::elementwise::mul_storage(&normalized, weight).map_err(wrap)
     }
 }
 
 /// Normalize each channel independently.
-impl<T: DType, D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::InstanceNorm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1905,8 +2115,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendIm
             records_gradients(request.context),
         )?;
         let epsilon = request.operation.descriptor().attributes().epsilon;
-        <Self as TensorOps<Self>>::instance_norm::<T>(input, epsilon)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::instance_norm::<f32>(input, epsilon)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1918,10 +2128,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendIm
 /// only the extents to prepend. Passing the descriptor's shape straight
 /// through would prepend the target to the operand and produce a tensor of
 /// twice the intended rank, so the prefix is derived here.
-impl<T: DType, D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::BroadcastLeft>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1940,16 +2150,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendI
                 "the declared target shape has fewer axes than the operand",
             ));
         };
-        <Self as TensorOps<Self>>::broadcast_left::<T>(input, &target[..prefix])
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::broadcast_left::<f32>(input, &target[..prefix])
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// Fused `beta * mat + alpha * (mat1 @ mat2)`.
-impl<T: DType, D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Addmm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1961,8 +2171,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<T, D
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::addmm::<T>(mat, lhs, rhs, attributes.beta, attributes.alpha)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::addmm::<f32>(mat, lhs, rhs, attributes.beta, attributes.alpha)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1972,12 +2182,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<T, D
 /// the declared contract have to agree before anything runs; a descriptor that
 /// declares a mask and supplies three operands is a defect, not a request to
 /// attend without one.
-impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
-    for CpuBackendImpl<T, D>
-{
+impl<D: Device> Execute<Descriptor<op::ScaledDotProductAttention>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::ScaledDotProductAttention>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2004,14 +2212,14 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
         if let Some(mask) = mask {
             admitted(self, operation, mask, records_gradients(request.context))?;
         }
-        <Self as TensorOps<Self>>::scaled_dot_product_attention::<T>(
+        <Self as TensorOps<Self>>::scaled_dot_product_attention::<f32>(
             bound[0],
             bound[1],
             bound[2],
             mask,
             attributes.scale,
         )
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2021,10 +2229,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
 /// row constrains only what this reads. What it may be asked to write is
 /// constrained here: the CPU kernel refuses a quantized target, and a refusal
 /// that names the operation is more use than the kernel's untyped one.
-impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::ToDType>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2036,13 +2244,16 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T,
             records_gradients(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype == DTypeId::Q8_0 {
-            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        if dtype == DTypeId::Q8_0.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType { operation, dtype },
+            ));
         }
         // Both type parameters are phantom here: CPU storage carries its dtype
         // in the buffer variant, and the kernel switches on the runtime value.
-        <Self as TensorOps<Self>>::tensor_to_dtype::<T, T>(input, dtype)
-            .map_err(|error| kernel_error(operation, error))
+        <Self as TensorOps<Self>>::tensor_to_dtype::<f32, i64>(input, dtype)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2050,12 +2261,12 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T,
 ///
 /// The kernel's supported pair is fixed by its type parameters rather than by
 /// its operand, so the concrete types are named here instead of forwarding `T`.
-/// A `CpuBackendImpl<f64, _>` executing this still compresses f32 storage into
+/// A `CpuBackendImpl<D>` executing this still compresses f32 storage into
 /// `Q8_0`, because the storage carries its own dtype and `T` never described it.
-impl<T: DType, D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Quantize>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2070,11 +2281,14 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<T
         // is the only one this backend has. Refusing here rather than letting
         // the kernel refuse keeps the reason attached to the operation.
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype != DTypeId::Q8_0 {
-            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        if dtype != DTypeId::Q8_0.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType { operation, dtype },
+            ));
         }
         <Self as QuantizedOps<Self>>::quantize::<f32, Q8_0>(input)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2083,10 +2297,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Quantize>> for CpuBackendImpl<T
 /// Lossy, and the inverse of `quantize` only up to the quantization error. That
 /// is a property of the representation rather than something this layer can
 /// correct, so it is stated and not compensated for.
-impl<T: DType, D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Dequantize>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2098,11 +2312,14 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl
             records_gradients(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype != DTypeId::F32 {
-            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        if dtype != DTypeId::F32.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType { operation, dtype },
+            ));
         }
         <Self as QuantizedOps<Self>>::dequantize::<Q8_0, f32>(input)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2112,10 +2329,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dequantize>> for CpuBackendImpl
 /// float. That asymmetry is legal because a capability row constrains operands,
 /// and it is the clearest example in the registry of why the row and the output
 /// rule are separate claims.
-impl<T: DType, D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::QuantizedMatMul>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2127,7 +2344,7 @@ impl<T: DType, D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBacken
             records_gradients(request.context),
         )?;
         <Self as QuantizedOps<Self>>::quantized_matmul::<Q8_0>(lhs, rhs)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2137,10 +2354,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::QuantizedMatMul>> for CpuBacken
 /// does and the two must agree while both exist. `mul` broadcasts, but the
 /// descriptor has already required the operands to match, so no broadcast can
 /// occur here.
-impl<T: DType, D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Dot>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2152,9 +2369,9 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<T, D> 
             records_gradients(request.context),
         )?;
         let product = crate::cpu::ops::elementwise::mul_storage(lhs, rhs)
-            .map_err(|error| kernel_error(operation, error))?;
-        <Self as ReductionOps<Self>>::sum_all::<T>(&product)
-            .map_err(|error| kernel_error(operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        <Self as ReductionOps<Self>>::sum_all::<f32>(&product)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2162,10 +2379,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<T, D> 
 ///
 /// Each operand grows an axis on the side the other one occupies, and the
 /// broadcast multiply fills the grid that leaves.
-impl<T: DType, D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Outer>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2176,9 +2393,9 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<T, D
             operation,
             records_gradients(request.context),
         )?;
-        let wrap = |error| kernel_error(operation, error);
-        let column = <Self as TensorOps<Self>>::unsqueeze::<T>(lhs, 1).map_err(wrap)?;
-        let row = <Self as TensorOps<Self>>::unsqueeze::<T>(rhs, 0).map_err(wrap)?;
+        let wrap = |error| kernel_error(CPU_NAME, operation, error);
+        let column = <Self as TensorOps<Self>>::unsqueeze::<f32>(lhs, 1).map_err(wrap)?;
+        let row = <Self as TensorOps<Self>>::unsqueeze::<f32>(rhs, 0).map_err(wrap)?;
         crate::cpu::ops::elementwise::mul_storage(&column, &row).map_err(wrap)
     }
 }
@@ -2193,8 +2410,8 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<T, D
 ///
 /// The output is a `Vec`, which the execution contract carries because `Execute`
 /// names its output as an associated type rather than fixing it to one storage.
-fn consecutive_pieces<T: DType, D: Device>(
-    backend: &CpuBackendImpl<T, D>,
+fn consecutive_pieces<D: Device>(
+    backend: &CpuBackendImpl<D>,
     input: &CpuStorage,
     axis: usize,
     piece: usize,
@@ -2218,20 +2435,20 @@ fn consecutive_pieces<T: DType, D: Device>(
     while start < extent {
         let length = (extent - start).min(piece);
         pieces.push(
-            <CpuBackendImpl<T, D> as TensorOps<CpuBackendImpl<T, D>>>::narrow::<T>(
+            <CpuBackendImpl<D> as TensorOps<CpuBackendImpl<D>>>::narrow::<f32>(
                 input, axis, start, length,
             )
-            .map_err(|error| kernel_error(operation, error))?,
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))?,
         );
         start += length;
     }
     Ok(pieces)
 }
 
-impl<T: DType, D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Chunk>, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
@@ -2262,10 +2479,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<T, D
     }
 }
 
-impl<T: DType, D: Device> Execute<Descriptor<op::Split>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Split>> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Split>, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
@@ -2317,9 +2534,9 @@ fn squared_deviations(
     operation: OperationKind,
 ) -> Result<CpuStorage, BackendError> {
     let deviation = crate::cpu::ops::elementwise::sub_storage(input, mean)
-        .map_err(|error| kernel_error(operation, error))?;
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
     crate::cpu::ops::elementwise::mul_storage(&deviation, &deviation)
-        .map_err(|error| kernel_error(operation, error))
+        .map_err(|error| kernel_error(CPU_NAME, operation, error))
 }
 
 /// Variance and standard deviation, over everything or along one axis.
@@ -2334,28 +2551,28 @@ fn squared_deviations(
 /// composition and no backward rule is written here.
 macro_rules! variance_executors {
     ($(($operation:ident, $mean:ident, $reduce:ident, $finish:expr)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let attributes = request.operation.descriptor().attributes();
-                let (mean, count) = <Self as VarianceAxis<T, D>>::$mean(input, attributes)
-                    .map_err(|error| kernel_error(operation, error))?;
+                let (mean, count) = <Self as VarianceAxis<D>>::$mean(input, attributes)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
                 let squared = squared_deviations(input, &mean, operation)?;
-                let summed = <Self as VarianceAxis<T, D>>::$reduce(&squared, attributes)
-                    .map_err(|error| kernel_error(operation, error))?;
-                let scaled = <Self as FloatOps<Self>>::mul_scalar_float::<T>(
+                let summed = <Self as VarianceAxis<D>>::$reduce(&squared, attributes)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+                let scaled = <Self as FloatOps<Self>>::mul_scalar_float::<f32>(
                     &summed,
                     variance_scale(count, attributes.unbiased),
                 )
-                .map_err(|error| kernel_error(operation, error))?;
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
                 let finish: fn(&CpuStorage) -> incin_core::prelude::Result<CpuStorage> = $finish;
-                finish(&scaled).map_err(|error| kernel_error(operation, error))
+                finish(&scaled).map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -2367,7 +2584,7 @@ macro_rules! variance_executors {
 /// two forms differ in the *type* of their attributes as well as in which
 /// reduction they call, and a macro that papered over that would stop the
 /// compiler from checking either.
-trait VarianceAxis<T: DType, D: Device> {
+trait VarianceAxis<D: Device> {
     fn mean_over_all(
         input: &CpuStorage,
         attributes: &VarianceAttributes,
@@ -2390,20 +2607,20 @@ trait VarianceAxis<T: DType, D: Device> {
     ) -> incin_core::prelude::Result<CpuStorage>;
 }
 
-impl<T: DType, D: Device> VarianceAxis<T, D> for CpuBackendImpl<T, D> {
+impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn mean_over_all(
         input: &CpuStorage,
         _: &VarianceAttributes,
     ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
         let count = input.shape.iter().product::<usize>();
-        Ok((<Self as ReductionOps<Self>>::mean_all::<T>(input)?, count))
+        Ok((<Self as ReductionOps<Self>>::mean_all::<f32>(input)?, count))
     }
 
     fn sum_over_all(
         input: &CpuStorage,
         _: &VarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_all::<T>(input)
+        <Self as ReductionOps<Self>>::sum_all::<f32>(input)
     }
 
     /// The mean keeps the axis so it broadcasts back against the operand, and
@@ -2414,7 +2631,7 @@ impl<T: DType, D: Device> VarianceAxis<T, D> for CpuBackendImpl<T, D> {
     ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
         let count = input.shape.get(attributes.axis).copied().unwrap_or(0);
         Ok((
-            <Self as ReductionOps<Self>>::mean_keepdim::<T>(input, attributes.axis)?,
+            <Self as ReductionOps<Self>>::mean_keepdim::<f32>(input, attributes.axis)?,
             count,
         ))
     }
@@ -2423,14 +2640,14 @@ impl<T: DType, D: Device> VarianceAxis<T, D> for CpuBackendImpl<T, D> {
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_dim::<T>(input, attributes.axis)
+        <Self as ReductionOps<Self>>::sum_dim::<f32>(input, attributes.axis)
     }
 
     fn sum_along_axis_keeping_it(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_keepdim::<T>(input, attributes.axis)
+        <Self as ReductionOps<Self>>::sum_keepdim::<f32>(input, attributes.axis)
     }
 }
 
@@ -2438,10 +2655,8 @@ fn identity(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
     Ok(storage.clone())
 }
 
-fn square_root<T: DType, D: Device>(
-    storage: &CpuStorage,
-) -> incin_core::prelude::Result<CpuStorage> {
-    <CpuBackendImpl<T, D> as FloatOps<CpuBackendImpl<T, D>>>::sqrt::<T>(storage)
+fn square_root<D: Device>(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
+    <CpuBackendImpl<D> as FloatOps<CpuBackendImpl<D>>>::sqrt::<f32>(storage)
 }
 
 variance_executors![
@@ -2453,13 +2668,13 @@ variance_executors![
         sum_along_axis_keeping_it,
         identity
     ),
-    (StdAll, mean_over_all, sum_over_all, square_root::<T, D>),
-    (StdDim, mean_along_axis, sum_along_axis, square_root::<T, D>),
+    (StdAll, mean_over_all, sum_over_all, square_root::<D>),
+    (StdDim, mean_along_axis, sum_along_axis, square_root::<D>),
     (
         StdKeepDim,
         mean_along_axis,
         sum_along_axis_keeping_it,
-        square_root::<T, D>
+        square_root::<D>
     ),
 ];
 
@@ -2470,10 +2685,10 @@ variance_executors![
 /// each element to the power two and the sum to the power one half, which is
 /// two transcendental calls where a multiply and a square root do exactly the
 /// same thing more accurately.
-impl<T: DType, D: Device> Execute<Descriptor<op::Norm>> for CpuBackendImpl<T, D> {
+impl<D: Device> Execute<Descriptor<op::Norm>> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute(
+    fn execute_shaped<ShapeTy: Shape>(
         &self,
         request: ExecutionRequest<'_, Descriptor<op::Norm>, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2485,21 +2700,21 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Norm>> for CpuBackendImpl<T, D>
             records_gradients(request.context),
         )?;
         let order = request.operation.descriptor().attributes().order;
-        let wrap = |error| kernel_error(operation, error);
+        let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
         if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
-            let magnitude = <Self as FloatOps<Self>>::abs::<T>(input).map_err(wrap)?;
-            return <Self as ReductionOps<Self>>::sum_all::<T>(&magnitude).map_err(wrap);
+            let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
+            return <Self as ReductionOps<Self>>::sum_all::<f32>(&magnitude).map_err(wrap);
         }
         if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
             let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
-            let summed = <Self as ReductionOps<Self>>::sum_all::<T>(&squared).map_err(wrap)?;
-            return <Self as FloatOps<Self>>::sqrt::<T>(&summed).map_err(wrap);
+            let summed = <Self as ReductionOps<Self>>::sum_all::<f32>(&squared).map_err(wrap)?;
+            return <Self as FloatOps<Self>>::sqrt::<f32>(&summed).map_err(wrap);
         }
-        let magnitude = <Self as FloatOps<Self>>::abs::<T>(input).map_err(wrap)?;
-        let raised = <Self as FloatOps<Self>>::powf::<T>(&magnitude, order).map_err(wrap)?;
-        let summed = <Self as ReductionOps<Self>>::sum_all::<T>(&raised).map_err(wrap)?;
-        <Self as FloatOps<Self>>::powf::<T>(&summed, 1.0 / order).map_err(wrap)
+        let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
+        let raised = <Self as FloatOps<Self>>::powf::<f32>(&magnitude, order).map_err(wrap)?;
+        let summed = <Self as ReductionOps<Self>>::sum_all::<f32>(&raised).map_err(wrap)?;
+        <Self as FloatOps<Self>>::powf::<f32>(&summed, 1.0 / order).map_err(wrap)
     }
 }
 
@@ -2520,10 +2735,10 @@ const NORM_ORDER_TOLERANCE: f64 = 1e-6;
 /// and three copies of that would be three places for it to drift.
 macro_rules! loss_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+        impl<D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute(
+            fn execute_shaped<ShapeTy: Shape>(
                 &self,
                 request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -2532,8 +2747,8 @@ macro_rules! loss_executors {
                 let reduction = loss_reduction(
                     request.operation.descriptor().attributes().reduction,
                 );
-                <Self as LossOps<Self>>::$method::<T>(prediction, target, reduction)
-                    .map_err(|error| kernel_error(operation, error))
+                <Self as LossOps<Self>>::$method::<f32>(prediction, target, reduction)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
@@ -2557,6 +2772,43 @@ loss_executors![
     (L1Loss, l1_loss),
     (BceWithLogitsLoss, bce_with_logits_loss),
 ];
+
+/// Negative log likelihood over logits addressed by integer class targets.
+///
+/// Not a member of `loss_executors!` above, for the reason it is not a member
+/// of the `composed_reduction` capability group either: those take a
+/// prediction and a target of the *same* shape and dtype, and this takes
+/// `[batch, classes]` f32 logits against `[batch]` integer class indices.
+/// `LossOps::cross_entropy_loss` is correspondingly the one loss with two
+/// dtype parameters rather than one, so the shared macro's
+/// `$method::<f32>(prediction, target, reduction)` call could not name it.
+///
+/// The dtype split is enforced the same way `embedding`'s is: the row carries
+/// `INDEX_AND_F32_DTYPES` (the union both operands fall inside, which is all
+/// one row can state), the descriptor's per-operand contract has already
+/// refused a non-integer target or a swapped pair, and `f32_only` enforces
+/// the logits' real constraint here. The target is deliberately *not* passed
+/// to `f32_only`: an integer class index is exactly what it should be.
+impl<D: Device> Execute<Descriptor<op::CrossEntropyLoss>> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::CrossEntropyLoss>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::CrossEntropyLoss;
+        let (logits, target) = binary_operands(
+            self,
+            request.inputs,
+            operation,
+            records_gradients(request.context),
+        )?;
+        f32_only(operation, &[Some(logits)])?;
+        let reduction = loss_reduction(request.operation.descriptor().attributes().reduction);
+        <Self as LossOps<Self>>::cross_entropy_loss::<f32, i64>(logits, target, reduction)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
 
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
@@ -2582,11 +2834,11 @@ macro_rules! assert_every_advertised_row_executes {
             {
             }
 
-            const fn assert_all<T: DType, D: Device>() {
-                $($(executes::<op::$operation, CpuBackendImpl<T, D>>();)*)*
+            const fn assert_all<D: Device>() {
+                $($(executes::<op::$operation, CpuBackendImpl<D>>();)*)*
             }
 
-            assert_all::<f32, incin_core::prelude::Cpu>();
+            assert_all::<incin_core::prelude::Cpu>();
         };
     };
 }
@@ -2609,7 +2861,7 @@ mod tests {
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, DeviceId, Local};
 
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
     fn storage(values: &[f32], shape: &[usize]) -> CpuStorage {
         CpuStorage::try_from_contiguous(CpuBuffer::F32(values.to_vec()), shape.to_vec())
@@ -3141,7 +3393,7 @@ mod tests {
             &context,
             CreationAttributes {
                 shape: vec![2, 2],
-                dtype: DTypeId::I64,
+                dtype: DTypeId::I64.descriptor(),
                 device: DeviceId::cpu(),
             },
             &[],
@@ -3159,7 +3411,7 @@ mod tests {
             &context,
             CreationAttributes {
                 shape: vec![2, 2],
-                dtype: DTypeId::F32,
+                dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
             },
             &[],
@@ -3182,7 +3434,7 @@ mod tests {
             &context,
             ArangeAttributes {
                 shape: shape.clone(),
-                dtype: DTypeId::F32,
+                dtype: DTypeId::F32.descriptor(),
                 device,
                 start: 10.0,
                 step: 2.0,
@@ -3198,7 +3450,7 @@ mod tests {
             &context,
             LinspaceAttributes {
                 shape,
-                dtype: DTypeId::F32,
+                dtype: DTypeId::F32.descriptor(),
                 device,
                 start: 0.0,
                 end: 3.0,
@@ -3225,7 +3477,7 @@ mod tests {
             &context,
             CreationAttributes {
                 shape: vec![2],
-                dtype: DTypeId::F32,
+                dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
             },
             &[handle(&stray)],
@@ -3393,7 +3645,7 @@ mod tests {
         let blocks = dispatch::execute::<op::Quantize, _>(
             &context,
             QuantizationAttributes {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
             },
             &[handle(&input)],
         )
@@ -3401,13 +3653,13 @@ mod tests {
         let restored = dispatch::execute::<op::Dequantize, _>(
             &context,
             QuantizationAttributes {
-                dtype: DTypeId::F32,
+                dtype: DTypeId::F32.descriptor(),
             },
             &[handle(&blocks)],
         )
         .expect("dequantize executes");
-        assert_eq!(blocks.dtype, DTypeId::Q8_0);
-        assert_eq!(restored.dtype, DTypeId::F32);
+        assert_eq!(blocks.dtype, DTypeId::Q8_0.descriptor());
+        assert_eq!(restored.dtype, DTypeId::F32.descriptor());
         assert_eq!(restored.shape.to_vec(), vec![32]);
 
         let largest = values
@@ -3436,7 +3688,7 @@ mod tests {
         let error = dispatch::execute::<op::Quantize, _>(
             &context,
             QuantizationAttributes {
-                dtype: DTypeId::F16,
+                dtype: DTypeId::F16.descriptor(),
             },
             &[handle(&input)],
         )
@@ -3666,7 +3918,7 @@ mod tests {
         let error = dispatch::execute::<op::ToDType, _>(
             &context,
             DTypeAttributes {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
             },
             &[handle(&input)],
         )

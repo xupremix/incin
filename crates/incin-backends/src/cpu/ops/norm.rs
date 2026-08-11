@@ -1,4 +1,4 @@
-//! Free-function normalization helpers for `CpuBackendImpl<T, D>`.
+//! Free-function normalization helpers for `CpuBackendImpl<D>`.
 //!
 //! `layer_norm_impl` and `batch_norm_impl` are called by the trait dispatch
 //! methods in `ops/module.rs`. They are `pub(crate)` rather than `pub` so
@@ -37,14 +37,14 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 /// When `bias` is `None`, a zero-filled buffer of the same shape as `weight`
 /// is substituted (matching `CandleBackend::layer_norm`'s `zeros_like`
 /// default-fallback convention, confirmed by direct code read).
-pub(crate) fn layer_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn layer_norm_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
     eps: f32,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     let rank = t.shape.len();
     let last_dim = rank - 1;
@@ -52,20 +52,19 @@ pub(crate) fn layer_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
     // ── NATIVE CUDA FAST PATH ──
 
     // 1. mean_keepdim over the trailing dim → shape matches t with last dim = 1
-    let mean = <B<T, D> as ReductionOps<B<T, D>>>::mean_keepdim::<K>(t, last_dim)?;
+    let mean = <B<D> as ReductionOps<B<D>>>::mean_keepdim::<K>(t, last_dim)?;
     // 2. centered = t - mean  (broadcast sub)
-    let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &mean)?;
+    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &mean)?;
     // 3. variance = mean_keepdim(centered², trailing dim)
-    let sq = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&centered, &centered)?;
-    let variance = <B<T, D> as ReductionOps<B<T, D>>>::mean_keepdim::<K>(&sq, last_dim)?;
+    let sq = <B<D> as NumericOps<B<D>>>::mul::<K>(&centered, &centered)?;
+    let variance = <B<D> as ReductionOps<B<D>>>::mean_keepdim::<K>(&sq, last_dim)?;
     // 4. std = sqrt(variance + eps)
-    let var_plus_eps =
-        <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
-    let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&var_plus_eps)?;
+    let var_plus_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
+    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&var_plus_eps)?;
     // 5. normalized = centered / std
-    let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
+    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
     // 6. affine: normalized * weight + bias
-    let scaled = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, weight)?;
+    let scaled = <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, weight)?;
     // Default-fallback: absent bias → zero-filled buffer shaped like weight.
     let bias_storage: CpuStorage;
     let bias_ref = match bias {
@@ -77,7 +76,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
             &bias_storage
         }
     };
-    <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&scaled, bias_ref)
+    <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, bias_ref)
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +95,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
 ///   - absent `bias`         → zeros shaped `[1, C, 1, ...]`
 ///
 /// Formula: `((t - rm) / sqrt(rv + eps)) * weight + bias`, all broadcast.
-pub(crate) fn batch_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn batch_norm_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
     b: Option<&CpuStorage>,
@@ -106,7 +105,7 @@ pub(crate) fn batch_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
     _momentum: f64, // deliberately unused — inference-mode-only (CONTEXT.md carried-forward decision)
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
@@ -166,12 +165,12 @@ pub(crate) fn batch_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
     };
 
     // (t - rm) / sqrt(rv + eps) * w + b — all broadcast via existing tape-tracked ops.
-    let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &rm_ref)?;
-    let rv_eps = <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&rv_ref, eps as f64)?;
-    let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&rv_eps)?;
-    let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
-    let scaled = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, &w_ref)?;
-    <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&scaled, &b_ref)
+    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &rm_ref)?;
+    let rv_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&rv_ref, eps as f64)?;
+    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&rv_eps)?;
+    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
+    let scaled = <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, &w_ref)?;
+    <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, &b_ref)
 }
 
 // ---------------------------------------------------------------------------
@@ -201,14 +200,14 @@ pub(crate) fn batch_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
 /// which the execution contract does not currently carry. A caller that
 /// trains with this and then evaluates with inference mode is therefore
 /// reading whatever running statistics it supplied, unchanged.
-pub(crate) fn batch_norm_training_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn batch_norm_training_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
     b: Option<&CpuStorage>,
     eps: f32,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
@@ -237,29 +236,27 @@ pub(crate) fn batch_norm_training_impl<T: DType, D: incin_core::prelude::Device,
 
     let inv_count = 1.0 / count as f64;
     let total = sum_over_reduced(t)?;
-    let mean = <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&total, inv_count)?;
-    let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &mean)?;
-    let squared = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&centered, &centered)?;
+    let mean = <B<D> as FloatOps<B<D>>>::mul_scalar_float::<K>(&total, inv_count)?;
+    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &mean)?;
+    let squared = <B<D> as NumericOps<B<D>>>::mul::<K>(&centered, &centered)?;
     let squared_total = sum_over_reduced(&squared)?;
-    let variance =
-        <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&squared_total, inv_count)?;
+    let variance = <B<D> as FloatOps<B<D>>>::mul_scalar_float::<K>(&squared_total, inv_count)?;
 
-    let variance_eps =
-        <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
-    let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&variance_eps)?;
-    let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
+    let variance_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
+    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&variance_eps)?;
+    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
 
     let scaled = match w {
         Some(weight) => {
             let weight = weight.reshape(&bcast_shape)?;
-            <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, &weight)?
+            <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, &weight)?
         }
         None => normalized,
     };
     match b {
         Some(bias) => {
             let bias = bias.reshape(&bcast_shape)?;
-            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&scaled, &bias)
+            <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, &bias)
         }
         None => Ok(scaled),
     }
@@ -273,7 +270,7 @@ mod tests {
     use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
     /// `TestB`.
-    type TestB = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type TestB = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -316,9 +313,8 @@ mod tests {
         let bias = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out =
-            layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
-                .unwrap();
+        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
+            .unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let vals = f32_vec(&out);
 
@@ -360,9 +356,8 @@ mod tests {
         let bias = vec1(vec![1.0f32, 1.0, 1.0]);
         let eps = 1e-5f32;
 
-        let out =
-            layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
-                .unwrap();
+        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
+            .unwrap();
         let vals = f32_vec(&out);
 
         let mean = 2.0f32;
@@ -390,15 +385,11 @@ mod tests {
         let bias_zeros = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let with_explicit_zero = layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
-            &t,
-            &weight,
-            Some(&bias_zeros),
-            eps,
-        )
-        .unwrap();
+        let with_explicit_zero =
+            layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias_zeros), eps)
+                .unwrap();
         let with_none_bias =
-            layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(&t, &weight, None, eps).unwrap();
+            layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, None, eps).unwrap();
 
         let a = f32_vec(&with_explicit_zero);
         let b = f32_vec(&with_none_bias);
@@ -421,7 +412,7 @@ mod tests {
         let bias = vec1(vec![0.1f32, -0.1, 0.2]);
         let eps = 1e-5f32;
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+            let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(
                 &inputs[0],
                 &weight,
                 Some(&bias),
@@ -457,9 +448,8 @@ mod tests {
         let bias = vec1(vec![0.0f32; 4]);
         let eps = 1e-5f32;
 
-        let out =
-            layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
-                .unwrap();
+        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
+            .unwrap();
         assert_eq!(out.shape, vec![2, 2, 4]);
         let vals = f32_vec(&out);
 
@@ -499,7 +489,7 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+        let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -546,7 +536,7 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out0 = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+        let out0 = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -556,7 +546,7 @@ mod tests {
             0.0,
         )
         .unwrap();
-        let out1 = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+        let out1 = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -598,7 +588,7 @@ mod tests {
         let b_zeros = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let with_explicit = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+        let with_explicit = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
             &t,
             Some(&w_ones),
             Some(&b_zeros),
@@ -608,10 +598,9 @@ mod tests {
             0.0,
         )
         .unwrap();
-        let with_none = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
-            &t, None, None, None, None, eps, 0.0,
-        )
-        .unwrap();
+        let with_none =
+            batch_norm_impl::<incin_core::prelude::Cpu, f32>(&t, None, None, None, None, eps, 0.0)
+                .unwrap();
 
         let a = f32_vec(&with_explicit);
         let b = f32_vec(&with_none);
@@ -644,7 +633,7 @@ mod tests {
         let b = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let out = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+        let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -698,7 +687,7 @@ mod tests {
         let eps = 1e-5f32;
 
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = batch_norm_impl::<f32, incin_core::prelude::Cpu, f32>(
+            let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
                 &inputs[0],
                 Some(&w),
                 Some(&b),

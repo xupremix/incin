@@ -1,4 +1,4 @@
-//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackendImpl<T, D>` —
+//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackendImpl<D>` —
 //! generalizes `ops/reduce.rs`'s `max_axis_with_indices`/`scatter_axis_grad`
 //! 1D-axis-reduction pattern to a 2D sliding window (D-01/D-02).
 //!
@@ -133,7 +133,7 @@ fn scatter_pool_grad_2d(
 
 /// `ModuleOps::max_pool2d`'s `CpuBackendImpl` implementation.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn max_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn max_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
     stride: (usize, usize),
@@ -172,7 +172,7 @@ pub(crate) fn max_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
 /// position the window covered, `+=`-accumulating across overlapping
 /// windows.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn avg_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
     stride: (usize, usize),
@@ -315,7 +315,7 @@ fn adaptive_window_bounds(
 
 /// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackendImpl` implementation.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn adaptive_avg_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     output_size: (usize, usize),
 ) -> Result<CpuStorage> {
@@ -446,7 +446,7 @@ mod tests {
     use incin_core::prelude::Cpu;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
@@ -474,7 +474,7 @@ mod tests {
             13.0, 14.0, 15.0, 16.0,
         ];
         let input = tensor(input_data, vec![1, 1, 4, 4]);
-        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        let out = max_pool2d_impl::<Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         // window(0,0)=rows0-1,cols0-1={1,2,5,6}->6
         // window(0,1)=rows0-1,cols2-3={3,4,7,8}->8
@@ -488,7 +488,7 @@ mod tests {
     fn max_pool2d_forward_with_padding_zero_boundary() {
         // [1,1,2,2] input, kernel=2x2, stride=1x1, padding=1x1.
         let input = tensor(vec![1.0, -2.0, -3.0, 4.0], vec![1, 1, 2, 2]);
-        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (1, 1), (1, 1), (1, 1)).unwrap();
+        let out = max_pool2d_impl::<Cpu, f32>(&input, (2, 2), (1, 1), (1, 1), (1, 1)).unwrap();
         // padded region: -inf-candidate skip, not 0.0 — confirms real values
         // (including negatives) win over padding rather than losing to an
         // artificial 0.0.
@@ -513,7 +513,7 @@ mod tests {
             13.0, 14.0, 15.0, 16.0,
         ];
         let input = tensor(input_data, vec![1, 1, 4, 4]);
-        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        let out = max_pool2d_impl::<Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         let loss = TestBackend::sum_all::<f32>(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(input.id).expect("grad_input should exist");
@@ -539,7 +539,7 @@ mod tests {
         // [1,1,1,3] input: single global max at the middle position, so it
         // wins BOTH overlapping windows (stride=1 < kernel_size=2).
         let input = tensor(vec![1.0, 100.0, 1.0], vec![1, 1, 1, 3]);
-        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (1, 2), (1, 1), (0, 0), (1, 1)).unwrap();
+        let out = max_pool2d_impl::<Cpu, f32>(&input, (1, 2), (1, 1), (0, 0), (1, 1)).unwrap();
         // H_out=1, W_out = (3-2)/1+1 = 2: window0=[1,100]->100, window1=[100,1]->100.
         assert_eq!(out.shape, vec![1, 1, 1, 2]);
         assert_eq!(f32_vec(&out), vec![100.0, 100.0]);
@@ -561,8 +561,8 @@ mod tests {
             vec![1, 1, 3, 3],
         );
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = max_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0), (1, 1))
-                .unwrap();
+            let out =
+                max_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0), (1, 1)).unwrap();
             TestBackend::sum_all::<f32>(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);
@@ -584,7 +584,7 @@ mod tests {
             13.0, 14.0, 15.0, 16.0,
         ];
         let input = tensor(input_data, vec![1, 1, 4, 4]);
-        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+        let out = avg_pool2d_impl::<Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         // window(0,0) mean of {1,2,5,6} = 3.5
         // window(0,1) mean of {3,4,7,8} = 5.5
@@ -601,7 +601,7 @@ mod tests {
         // [1,1,1,3] input, kernel=1x2, stride=1x1 (overlapping): 2 output
         // windows, middle position covered by both.
         let input = tensor(vec![1.0, 2.0, 3.0], vec![1, 1, 1, 3]);
-        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (1, 2), (1, 1), (0, 0)).unwrap();
+        let out = avg_pool2d_impl::<Cpu, f32>(&input, (1, 2), (1, 1), (0, 0)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 1, 2]);
         // window0 mean{1,2}=1.5, window1 mean{2,3}=2.5
         assert_eq!(f32_vec(&out), vec![1.5, 2.5]);
@@ -624,7 +624,7 @@ mod tests {
             vec![1, 1, 3, 3],
         );
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+            let out = avg_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
             TestBackend::sum_all::<f32>(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);
@@ -646,8 +646,8 @@ mod tests {
             13.0, 14.0, 15.0, 16.0,
         ];
         let input = tensor(input_data, vec![1, 1, 4, 4]);
-        let adaptive = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2)).unwrap();
-        let fixed = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+        let adaptive = adaptive_avg_pool2d_impl::<Cpu, f32>(&input, (2, 2)).unwrap();
+        let fixed = avg_pool2d_impl::<Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
         assert_eq!(adaptive.shape, fixed.shape);
         assert_eq!(f32_vec(&adaptive), f32_vec(&fixed));
     }
@@ -673,7 +673,7 @@ mod tests {
         // values so each H-window's mean is hand-verifiable.
         let input_data: Vec<f32> = (1..=5).map(|x| x as f32).collect(); // 1..5
         let input = tensor(input_data, vec![1, 1, 5, 1]);
-        let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (3, 1)).unwrap();
+        let out = adaptive_avg_pool2d_impl::<Cpu, f32>(&input, (3, 1)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3, 1]);
         let vals = f32_vec(&out);
         // window0 = mean(1,2) = 1.5
@@ -690,7 +690,7 @@ mod tests {
         let input_data: Vec<f32> = (1..=7).map(|x| x as f32 * 0.1).collect();
         let input = tensor(input_data, vec![1, 1, 7, 1]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (3, 1)).unwrap();
+            let out = adaptive_avg_pool2d_impl::<Cpu, f32>(&inputs[0], (3, 1)).unwrap();
             TestBackend::sum_all::<f32>(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);

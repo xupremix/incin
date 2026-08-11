@@ -1,4 +1,4 @@
-//! `ReductionOps` for `CpuBackendImpl<T, D>`: every method now has a real
+//! `ReductionOps` for `CpuBackendImpl<D>`: every method now has a real
 //! implementation — `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
 //! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
 //! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
@@ -44,7 +44,7 @@
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{Backend, ReductionOps};
+use incin_core::backend_authoring::ReductionOps;
 use incin_core::prelude::Error;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
@@ -97,14 +97,10 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
 /// rather than truncated: a silently wrapped index is the failure this
 /// function exists to remove, not one to reintroduce in a narrower type.
 fn index_buffer<KInt: DType>(op: &'static str, indices: &[i64]) -> Result<CpuBuffer> {
-    /// The requested dtype, resolved from the type parameter. `Field` is a
-    /// `PhantomData` for every compile-time dtype, so the default is the only
-    /// value it has. `Dyn` resolves to `F32` and is refused below, which is
-    /// correct: an index tensor is an integer one.
     fn narrow<T: TryFrom<i64>>(
         op: &'static str,
         indices: &[i64],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
     ) -> Result<Vec<T>> {
         indices
             .iter()
@@ -118,13 +114,14 @@ fn index_buffer<KInt: DType>(op: &'static str, indices: &[i64]) -> Result<CpuBuf
             .collect()
     }
 
-    let dtype = KInt::to_incin(&Default::default());
-    match dtype {
-        DTypeId::I64 => Ok(CpuBuffer::I64(indices.to_vec())),
-        DTypeId::U32 => Ok(CpuBuffer::U32(narrow::<u32>(op, indices, dtype)?)),
-        DTypeId::U8 => Ok(CpuBuffer::U8(narrow::<u8>(op, indices, dtype)?)),
+    let descriptor = KInt::descriptor(&Default::default());
+    let builtin_id = descriptor.builtin_id();
+    match builtin_id {
+        Some(DTypeId::I64) => Ok(CpuBuffer::I64(indices.to_vec())),
+        Some(DTypeId::U32) => Ok(CpuBuffer::U32(narrow::<u32>(op, indices, descriptor)?)),
+        Some(DTypeId::U8) => Ok(CpuBuffer::U8(narrow::<u8>(op, indices, descriptor)?)),
         _ => Err(Error::UnsupportedDType {
-            dtype,
+            dtype: descriptor,
             backend: "cpu",
             op,
         }),
@@ -158,6 +155,7 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
         CpuBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),
         CpuBuffer::F64(_) => reduce_variant!(F64, |v: f64| v),
         CpuBuffer::U8(_) => reduce_variant!(U8, |v: f64| v as u8),
+        CpuBuffer::Bool(_) => reduce_variant!(Bool, |v: f64| v as u8),
         CpuBuffer::U32(_) => reduce_variant!(U32, |v: f64| v as u32),
         CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
@@ -165,7 +163,7 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
 
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: "sum_axis_keepdim",
             });
@@ -201,6 +199,7 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> Result<Cp
         CpuBuffer::F32(_) => CpuBuffer::F32(vec![scalar_value as f32; total]),
         CpuBuffer::F64(_) => CpuBuffer::F64(vec![scalar_value; total]),
         CpuBuffer::U8(_) => CpuBuffer::U8(vec![scalar_value as u8; total]),
+        CpuBuffer::Bool(_) => CpuBuffer::Bool(vec![scalar_value as u8; total]),
         CpuBuffer::U32(_) => CpuBuffer::U32(vec![scalar_value as u32; total]),
         CpuBuffer::I64(_) => CpuBuffer::I64(vec![scalar_value as i64; total]),
         CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
@@ -208,7 +207,7 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> Result<Cp
 
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: "reduction gradient fill",
             });
@@ -305,13 +304,13 @@ fn scatter_axis_grad(
 // ReductionOps impl
 // ---------------------------------------------------------------------------
 
-impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> ReductionOps<Self> for CpuBackendImpl<D> {
     /// Sum every element of `t` into a single-element scalar storage (shape
     /// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
     /// scalar gradient uniformly back across `t`'s original shape.
     fn sum_all<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
@@ -344,8 +343,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Mean of every element of `t`. Backward scales the incoming scalar
     /// gradient by `1/n` before broadcasting back to the original shape.
     fn mean_all<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
@@ -382,8 +381,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Backward scatters the incoming scalar gradient to ONLY the single
     /// global winning flat index, zero everywhere else.
     fn max_all<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut best_val = f64::NEG_INFINITY;
@@ -423,8 +422,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Minimum over every element of `t`, as a scalar (shape `[]`). Mirror of
     /// `max_all` with strict `<` comparison.
     fn min_all<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut best_val = f64::INFINITY;
@@ -464,9 +463,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Sum over `dim`, removing that axis from the output shape.
     /// (e.g. `[2, 3]` over dim 0 → `[3]`)
     fn sum_dim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "sum_dim",
@@ -512,9 +511,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Sum over `dim`, keeping that axis as size 1.
     /// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
     fn sum_keepdim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "sum_keepdim",
@@ -559,9 +558,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Thin wrapper over `sum_axis_squeeze`, divided by the axis length.
     /// (e.g. `[2, 3]` over dim 0 → `[3]`, each value = column sum / 2)
     fn mean_dim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "mean_dim",
@@ -617,9 +616,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Thin wrapper over `sum_axis_keepdim`, divided by the axis length.
     /// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
     fn mean_keepdim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "mean_keepdim",
@@ -674,9 +673,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Backward routes gradient to exactly one winning element per output
     /// position (T-02-07/T-02-08 mitigations).
     fn max_dim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "max_dim",
@@ -711,9 +710,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
 
     /// Maximum over `dim`, keeping that axis as size 1.
     fn max_keepdim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "max_keepdim",
@@ -747,9 +746,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Minimum over `dim`, removing that axis from the output shape. Mirror
     /// of `max_dim` using `min_axis_with_indices`.
     fn min_dim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "min_dim",
@@ -785,9 +784,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Minimum over `dim`, keeping that axis as size 1. Mirror of
     /// `max_keepdim` using `min_axis_with_indices`.
     fn min_keepdim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "min_keepdim",
@@ -827,9 +826,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// (T-02-09 mitigation; the one exception to this file's
     /// every-other-method unconditional-push convention).
     fn argmax<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
-    ) -> Result<<Self as Backend>::Storage<KInt>> {
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -889,9 +888,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Index of the minimum element. Mirror of `argmax` using
     /// `min_axis_with_indices`. Forward-only, no `tape::push` (T-02-09).
     fn argmin<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
-    ) -> Result<<Self as Backend>::Storage<KInt>> {
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -946,8 +945,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     }
 
     fn prod_all<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut prod = 1.0f64;
@@ -962,9 +961,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     }
 
     fn prod_dim<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let mut out_shape = t.shape.to_vec();
         out_shape.remove(dim);
         let mut keep_shape = t.shape.to_vec();
@@ -986,9 +985,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     }
 
     fn cumsum<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut out_data = vec![0.0f64; total];
         let dim_len = t.shape[dim];
@@ -1017,13 +1016,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
 
     /// `topk`.
     fn topk<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         k: usize,
         dim: usize,
         largest: bool,
     ) -> Result<(
-        <Self as Backend>::Storage<K>,
-        <Self as Backend>::Storage<KInt>,
+        <Self as StorageBackend>::Storage<K>,
+        <Self as StorageBackend>::Storage<KInt>,
     )> {
         let shape = t.shape.to_vec();
         if dim >= shape.len() {
@@ -1096,10 +1095,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
 
     /// `argsort`.
     fn argsort<K: DType, KInt: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         descending: bool,
-    ) -> Result<<Self as Backend>::Storage<KInt>> {
+    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         let shape = t.shape.to_vec();
         if dim >= shape.len() {
             return Err(Error::ShapeMismatch {
@@ -1165,7 +1164,7 @@ mod tests {
     use crate::cpu::tape;
 
     /// `B`.
-    type B = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type B = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1224,8 +1223,8 @@ mod tests {
     /// `prod_all_keeps_the_operand_dtype`.
     fn prod_all_keeps_the_operand_dtype() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
-        let out = CpuBackendImpl::<f64, incin_core::prelude::Cpu>::prod_all::<f64>(&t).unwrap();
-        assert_eq!(out.dtype, DTypeId::F64);
+        let out = CpuBackendImpl::<incin_core::prelude::Cpu>::prod_all::<f64>(&t).unwrap();
+        assert_eq!(out.dtype, DTypeId::F64.descriptor());
         assert_eq!(out.get(&[]), 24.0);
     }
 

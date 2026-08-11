@@ -14,7 +14,6 @@ use rayon::prelude::*;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::typed_kernel::{TypedKernel, map_binary_typed, map_unary_typed};
-use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::{IterationPlan, OperandIteration, OperandLayout, UnaryIterationPlan};
 use crate::simd_lanes;
 
@@ -258,18 +257,11 @@ pub(crate) fn execute_binary(
 ) -> Result<Option<CpuStorage>> {
     if lhs.buffer.dtype_id() != rhs.buffer.dtype_id() {
         return Err(Error::DTypeStorageMismatch {
-            expected: lhs.buffer.dtype_id(),
-            got: rhs.buffer.dtype_id(),
+            expected: lhs.buffer.descriptor(),
+            got: rhs.buffer.descriptor(),
         });
     }
-    if resolve_dtype_policy(
-        BackendFamily::Cpu,
-        OperationKind::Pointwise,
-        lhs.buffer.dtype_id(),
-        "elementwise_binary",
-    )
-    .is_err()
-    {
+    if crate::cpu::validate_cpu_dtype(lhs.buffer.descriptor(), "pointwise").is_err() {
         return Ok(None);
     }
 
@@ -417,14 +409,7 @@ fn execute_strided_f64(
 }
 
 pub(crate) fn execute_unary(op: UnaryOp, input: &CpuStorage) -> Result<Option<CpuStorage>> {
-    if resolve_dtype_policy(
-        BackendFamily::Cpu,
-        OperationKind::Pointwise,
-        input.buffer.dtype_id(),
-        "elementwise_unary",
-    )
-    .is_err()
-    {
+    if crate::cpu::validate_cpu_dtype(input.buffer.descriptor(), "pointwise").is_err() {
         return Ok(None);
     }
     let output: Option<Result<CpuBuffer>> = match &*input.buffer {

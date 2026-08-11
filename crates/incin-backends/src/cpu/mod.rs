@@ -6,7 +6,7 @@
 //! independent of any external tensor compute library (Candle, ndarray, burn).
 //!
 //! This crate is built incrementally across multiple phases. This plan wires
-//! up `CpuBackendImpl<T, D>`'s `Backend` trait impl (associated types,
+//! up `CpuBackendImpl<D>`'s `Backend` trait impl (associated types,
 //! `shape`/`backward`/`get_grad`/`format_*`/`var_*`/`assign_var`/`to_bytes`/
 //! `from_bytes`) plus `CreationOps` and a minimal `NumericOps`/`FloatOps`
 //! subset. `CpuBackendImpl` is not yet a fully `Backend`-complete implementor
@@ -31,7 +31,7 @@ pub(crate) mod var;
 
 // ── Public re-exports ─────────────────────────────────────────────────────────
 // Only the three types a downstream crate legitimately needs to name:
-//   - CpuBackendImpl<T, D>  to parameterise Tensor
+//   - CpuBackendImpl<D>  to parameterise Tensor
 //   - CpuStorage        as Backend::Storage<K>
 //   - CpuVar            as Backend::RawVar
 //   - CpuGrads          as Backend::Grads
@@ -46,14 +46,13 @@ pub use tape::CpuGrads;
 pub use tape::depth as tape_depth;
 pub use var::CpuVar;
 
-/// The CPU pure-Rust `Backend` implementor. `T` genuinely drives
-/// `Backend::FloatElem` (CPUBACK-01, D-03).
-/// Also accessible as `IncinBackend<T, D>` from the `incin` facade
+/// The CPU pure-Rust `Backend` implementor.
+/// Also accessible as `IncinBackend<D>` from the `incin` facade
 /// when only the `cpu` feature is active.
 #[derive(Clone)]
-pub struct CpuBackendImpl<T = f32, D = Cpu>(core::marker::PhantomData<(T, D)>);
+pub struct CpuBackendImpl<D = Cpu>(core::marker::PhantomData<D>);
 
-impl<T, D> CpuBackendImpl<T, D> {
+impl<D> CpuBackendImpl<D> {
     /// Construct the stateless CPU executor.
     #[must_use]
     pub const fn new() -> Self {
@@ -61,28 +60,98 @@ impl<T, D> CpuBackendImpl<T, D> {
     }
 }
 
-impl<T, D> Default for CpuBackendImpl<T, D> {
+impl<D> Default for CpuBackendImpl<D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: DType, D: Device, K: DType> SupportsDType<K> for CpuBackendImpl<T, D> {
-    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeId> {
-        Ok(K::to_incin(field))
+impl<D: Device, K: DType> SupportsDType<K> for CpuBackendImpl<D> {
+    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeDescriptor> {
+        let descriptor = K::descriptor(field);
+        if descriptor.builtin_id().is_some() {
+            Ok(descriptor)
+        } else {
+            Err(incin_core::prelude::Error::UnsupportedDType {
+                dtype: descriptor,
+                backend: "Cpu",
+                op: "pointwise",
+            })
+        }
     }
 }
 
-impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> {
-    /// `Device`.
+pub(crate) fn validate_cpu_dtype(
+    dtype: impl Into<DTypeDescriptor>,
+    op: &'static str,
+) -> Result<DTypeId> {
+    let desc = dtype.into();
+    if let Some(id) = desc.builtin_id()
+        && matches!(
+            id,
+            DTypeId::F32
+                | DTypeId::F64
+                | DTypeId::F16
+                | DTypeId::BF16
+                | DTypeId::U8
+                | DTypeId::U32
+                | DTypeId::I64
+                | DTypeId::Q8_0
+                | DTypeId::Bool
+        )
+    {
+        return Ok(id);
+    }
+    Err(Error::UnsupportedDType {
+        dtype: desc,
+        backend: "Cpu",
+        op,
+    })
+}
+
+impl<D: Device> incin_core::exec::PrecisionCapabilities for CpuBackendImpl<D> {
+    fn native_precision(
+        &self,
+        request: &incin_core::exec::PrecisionRequest,
+    ) -> Result<incin_core::exec::ResolvedPrecision> {
+        validate_cpu_dtype(request.storage, "native_precision")?;
+
+        let storage_id = request.storage.builtin_id();
+        let compute = match storage_id {
+            Some(DTypeId::F16 | DTypeId::BF16) => DTypeId::F32.descriptor(),
+            _ => request.storage,
+        };
+
+        let accumulator = match request.operation {
+            OperationKind::Reduction | OperationKind::Normalization
+                if matches!(storage_id, Some(DTypeId::F16 | DTypeId::BF16)) =>
+            {
+                DTypeId::F32.descriptor()
+            }
+            _ => compute,
+        };
+
+        Ok(incin_core::exec::ResolvedPrecision::new(
+            request.storage,
+            compute,
+            accumulator,
+            request.output,
+            incin_core::exec::LossScaling::None,
+        ))
+    }
+}
+
+impl<D: Device> incin_core::backend_authoring::StorageBackend for CpuBackendImpl<D> {
     type Device = D;
-    // CPUBACK-01: genuinely dispatched from T, NOT hardcoded f32.
-    /// `FloatElem`.
-    type FloatElem = T;
-    /// `IntElem`.
-    type IntElem = i64;
-    /// `Storage`.
+    const BACKEND_NAME: &'static str = "Cpu";
     type Storage<K: DType> = storage::CpuStorage;
+
+    fn metadata<K: DType>(t: &Self::Storage<K>) -> &incin_core::backend_authoring::TensorMeta {
+        &t.meta
+    }
+}
+
+impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
     /// `RawVar`.
     type RawVar = var::CpuVar;
     /// `Grads`.
@@ -90,35 +159,26 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
     /// `InnerBackend`.
     type InnerBackend = Self;
     /// `shape`.
-    fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
-        t.shape.to_vec()
+    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
+        let t: &storage::CpuStorage = t;
+        ShapeBuf::from_slice(t.shape.as_ref())
     }
 
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
-        Some(t.buffer.dtype_id())
+    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
+        let t: &storage::CpuStorage = t;
+        Some(t.buffer.dtype_id().descriptor())
     }
 
     fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
         Some(DeviceId::cpu())
     }
 
-    /// `format_tensor_display`.
-    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
-        alloc::format!("CpuStorage(shape={:?})", t.shape)
-    }
-
-    /// `format_tensor_debug`.
-    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
-        alloc::format!(
-            "CpuStorage(shape={:?}, strides={:?}, offset={})",
-            t.shape,
-            t.strides,
-            t.offset_elements
-        )
-    }
+    // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
+    // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
     /// `backward`.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
+        let t: &storage::CpuStorage = t;
         tape::backward(t)
     }
 
@@ -127,11 +187,13 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
+        let t: &storage::CpuStorage = t;
         Ok(grads.get(t.id).cloned())
     }
 
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+        let t: &storage::CpuStorage = t;
         let t_contig = t.contiguous()?;
         let num_elements = stride::checked_numel(&t_contig.shape)?;
         let offset = t_contig.offset_elements;
@@ -143,6 +205,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
                 Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
             }
             storage::CpuBuffer::U8(v) => Ok(v[offset..offset + num_elements].to_vec()),
+            storage::CpuBuffer::Bool(v) => Ok(v[offset..offset + num_elements].to_vec()),
             storage::CpuBuffer::U32(v) => {
                 Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
             }
@@ -175,7 +238,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
-        dtype: DTypeId,
+        dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
         if device.kind() != DeviceKind::Cpu || device.ordinal() != 0 {
@@ -190,10 +253,8 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
                 got: bytes.len(),
             })
         })?;
-        let expected = match dtype {
-            DTypeId::Q8_0 => elements.div_ceil(32) * 34,
-            _ => elements * dtype.element_size(),
-        };
+        let expected =
+            dtype.size_bytes(elements, incin_core::shapes::error::OperationKind::Storage)?;
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {
                 expected,
@@ -213,7 +274,13 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
             }};
         }
 
-        let buffer = match dtype {
+        let builtin_id = dtype.builtin_id().ok_or_else(|| Error::UnsupportedDType {
+            dtype,
+            backend: "Cpu",
+            op: "storage",
+        })?;
+
+        let buffer = match builtin_id {
             DTypeId::F32 => decode!(f32, 4, F32),
             DTypeId::F64 => decode!(f64, 8, F64),
             DTypeId::U8 => storage::CpuBuffer::U8(bytes.to_vec()),
@@ -246,6 +313,14 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
                     })
                     .collect(),
             ),
+            DTypeId::Bool => {
+                if bytes.iter().any(|&b| b > 1) {
+                    return Err(Error::Msg(
+                        "invalid boolean byte representation: bytes must be 0 or 1".into(),
+                    ));
+                }
+                storage::CpuBuffer::Bool(bytes.to_vec())
+            }
             _ => {
                 return Err(Error::UnsupportedDType {
                     dtype,

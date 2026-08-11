@@ -161,7 +161,7 @@ mod tests {
     use incin_core::prelude::Cpu;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `vector`.
     fn vector(v: Vec<f32>) -> CpuStorage {

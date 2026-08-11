@@ -1,5 +1,5 @@
 //! `NumericOps` (`add`/`sub`/`mul`/`div`) and `FloatOps::{add_scalar_float,
-//! mul_scalar_float}` for `CpuBackendImpl<T, D>`.
+//! mul_scalar_float}` for `CpuBackendImpl<D>`.
 //!
 //! Every op here resolves the broadcast output shape via
 //! `stride::broadcast_shape`, then iterates the OUTPUT shape's logical index
@@ -11,7 +11,7 @@
 //! (pre-broadcast) operand shapes.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{Backend, FloatOps, NumericOps};
+use incin_core::backend_authoring::{FloatOps, NumericOps};
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
 
@@ -248,7 +248,23 @@ fn erf_approx(x: f64) -> f64 {
 /// Broadcast elementwise addition, with its gradient recorded.
 pub(crate) fn add_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, &out_shape)?;
+    add_storage_with_shape(lhs, rhs, &out_shape)
+}
+
+/// [`add_storage`] for a caller that already holds the resolved output shape.
+///
+/// The canonical executor does: `dispatch::execute_shaped` infers and
+/// validates the output metadata before the backend is reached, so recomputing
+/// the broadcast here would repeat a fallible loop and a heap allocation whose
+/// answer is already sealed in the descriptor. `out_shape` must be that
+/// resolved shape; passing anything else is a caller bug, not a runtime case,
+/// which is why this takes a shape rather than an `Option`.
+pub(crate) fn add_storage_with_shape(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out_shape: &[usize],
+) -> Result<CpuStorage> {
+    let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, out_shape)?;
 
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -268,7 +284,23 @@ pub(crate) fn add_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 /// Broadcast elementwise subtraction, with its gradient recorded.
 pub(crate) fn sub_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, &out_shape)?;
+    sub_storage_with_shape(lhs, rhs, &out_shape)
+}
+
+/// [`sub_storage`] for a caller that already holds the resolved output shape.
+///
+/// The canonical executor does: `dispatch::execute_shaped` infers and
+/// validates the output metadata before the backend is reached, so recomputing
+/// the broadcast here would repeat a fallible loop and a heap allocation whose
+/// answer is already sealed in the descriptor. `out_shape` must be that
+/// resolved shape; passing anything else is a caller bug, not a runtime case,
+/// which is why this takes a shape rather than an `Option`.
+pub(crate) fn sub_storage_with_shape(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out_shape: &[usize],
+) -> Result<CpuStorage> {
+    let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, out_shape)?;
 
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -288,7 +320,23 @@ pub(crate) fn sub_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 /// Broadcast elementwise multiplication, with its gradient recorded.
 pub(crate) fn mul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out = elementwise_binary_numeric(BinaryOp::Mul, lhs, rhs, &out_shape)?;
+    mul_storage_with_shape(lhs, rhs, &out_shape)
+}
+
+/// [`mul_storage`] for a caller that already holds the resolved output shape.
+///
+/// The canonical executor does: `dispatch::execute_shaped` infers and
+/// validates the output metadata before the backend is reached, so recomputing
+/// the broadcast here would repeat a fallible loop and a heap allocation whose
+/// answer is already sealed in the descriptor. `out_shape` must be that
+/// resolved shape; passing anything else is a caller bug, not a runtime case,
+/// which is why this takes a shape rather than an `Option`.
+pub(crate) fn mul_storage_with_shape(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out_shape: &[usize],
+) -> Result<CpuStorage> {
+    let out = elementwise_binary_numeric(BinaryOp::Mul, lhs, rhs, out_shape)?;
 
     // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
     // since the backward closure needs their VALUES, not just shapes.
@@ -315,7 +363,23 @@ pub(crate) fn mul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 /// Broadcast elementwise division, with its gradient recorded.
 pub(crate) fn div_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out = elementwise_binary_numeric(BinaryOp::Div, lhs, rhs, &out_shape)?;
+    div_storage_with_shape(lhs, rhs, &out_shape)
+}
+
+/// [`div_storage`] for a caller that already holds the resolved output shape.
+///
+/// The canonical executor does: `dispatch::execute_shaped` infers and
+/// validates the output metadata before the backend is reached, so recomputing
+/// the broadcast here would repeat a fallible loop and a heap allocation whose
+/// answer is already sealed in the descriptor. `out_shape` must be that
+/// resolved shape; passing anything else is a caller bug, not a runtime case,
+/// which is why this takes a shape rather than an `Option`.
+pub(crate) fn div_storage_with_shape(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out_shape: &[usize],
+) -> Result<CpuStorage> {
+    let out = elementwise_binary_numeric(BinaryOp::Div, lhs, rhs, out_shape)?;
 
     // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
     // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
@@ -349,46 +413,46 @@ pub(crate) fn div_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
     Ok(out)
 }
 
-impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> NumericOps<Self> for CpuBackendImpl<D> {
     /// `add`.
     fn add<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         add_storage(lhs, rhs)
     }
 
     /// `sub`.
     fn sub<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         sub_storage(lhs, rhs)
     }
 
     /// `mul`.
     fn mul<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         mul_storage(lhs, rhs)
     }
 
     /// `div`.
     fn div<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         div_storage(lhs, rhs)
     }
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     /// `add_scalar_float`.
     fn add_scalar_float<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::AddScalar(scalar), t)?;
 
         let (t_id, out_id) = (t.id, out.id);
@@ -404,9 +468,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `mul_scalar_float`.
     fn mul_scalar_float<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::MulScalar(scalar), t)?;
 
         let (t_id, out_id) = (t.id, out.id);
@@ -435,7 +499,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `relu`.
-    fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn relu<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Relu, t)?;
 
         // relu'(x) = 1 if x > 0 else 0 (input-based; strict `>`, zero
@@ -457,7 +523,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `step`.
-    fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn step<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Step, t)?;
 
         // step'(x) = 0 almost everywhere.
@@ -478,7 +546,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `mish`.
-    fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn mish<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
 
         let t_capture = t.clone();
@@ -501,7 +571,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `elu`.
-    fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn elu<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Elu, t)?;
 
         let out_capture = out.clone();
@@ -521,7 +593,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `gelu`.
-    fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn gelu<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Gelu, t)?;
 
         // gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))
@@ -546,7 +620,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `abs`.
-    fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn abs<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Abs, t)?;
 
         // abs'(x) = sign(x) (input-based).
@@ -573,7 +649,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `exp`.
-    fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn exp<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Exp, t)?;
 
         // exp'(x) = out (output-based).
@@ -594,7 +672,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `neg`.
-    fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn neg<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = negate(t);
 
         // neg'(x) = -1 (constant; no input capture needed).
@@ -608,7 +688,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `sqrt`.
-    fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn sqrt<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Sqrt, t)?;
 
         // sqrt'(x) = 1/(2*out) (output-based).
@@ -629,7 +711,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `log`.
-    fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn log<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Log, t)?;
 
         // log'(x) = 1/x (input-based, NOT output-based).
@@ -650,7 +734,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `tanh`.
-    fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn tanh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Tanh, t)?;
 
         // tanh'(x) = 1 - out^2 (output-based).
@@ -672,8 +758,8 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `sigmoid`.
     fn sigmoid<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Sigmoid, t)?;
 
         // sigmoid'(x) = out*(1-out) (output-based).
@@ -694,7 +780,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `swish`.
-    fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn swish<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Swish, t)?;
 
         // swish(x) = x * sigmoid(x)
@@ -732,7 +820,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `tan`.
-    fn tan<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn tan<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Tan, t)?;
         let out_capture = out.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -750,7 +840,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `asin`.
-    fn asin<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn asin<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Asin, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -768,7 +860,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `acos`.
-    fn acos<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn acos<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Acos, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -786,7 +880,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `atan`.
-    fn atan<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn atan<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Atan, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -805,9 +901,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `atan2`.
     fn atan2<K: DType>(
-        y: &<Self as Backend>::Storage<K>,
-        x: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        y: &<Self as StorageBackend>::Storage<K>,
+        x: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out_atan = elementwise_binary(y, x, &y.shape, |y_val, x_val| y_val.atan2(x_val))?;
         let (y_id, x_id, out_id) = (y.id, x.id, out_atan.id);
         let (y_cap, x_cap) = (y.clone(), x.clone());
@@ -834,7 +930,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `sinh`.
-    fn sinh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn sinh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Sinh, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -851,7 +949,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `cosh`.
-    fn cosh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn cosh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Cosh, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -868,7 +968,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `asinh`.
-    fn asinh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn asinh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Asinh, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -886,7 +988,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `acosh`.
-    fn acosh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn acosh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Acosh, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -904,7 +1008,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `atanh`.
-    fn atanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn atanh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Atanh, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -922,7 +1028,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `erf`.
-    fn erf<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn erf<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Erf, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -941,7 +1049,9 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `rsqrt`.
-    fn rsqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn rsqrt<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = elementwise_unary_typed(UnaryOp::Rsqrt, t)?;
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -959,96 +1069,116 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `trunc`.
-    fn trunc<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn trunc<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Trunc, t)
     }
 
     /// `frac`.
-    fn frac<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn frac<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Frac, t)
     }
 
     /// `fmod`.
     fn fmod<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)
     }
 
     /// `remainder`.
     fn remainder<K: DType>(
-        lhs: &<Self as Backend>::Storage<K>,
-        rhs: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))
     }
     /// `softmax`.
     fn softmax<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // D-02 (Plan 04-01): softmax is now exp(log_softmax(x, dim)).
         // log_softmax shares the same max-subtracted kernel as cross_entropy_loss,
         // eliminating two independent compositions of the same formula.
-        let ls = log_softmax::<T, D, K>(t, dim)?;
+        let ls = log_softmax::<D, K>(t, dim)?;
         <Self as FloatOps<Self>>::exp::<K>(&ls)
     }
 
     /// `powf`.
     fn powf<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         exponent: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Powf(exponent), t)
     }
 
     /// `clamp`.
     fn clamp<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
         min: f64,
         max: f64,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
     }
 
     /// `sign`.
-    fn sign<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn sign<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Sign, t)
     }
 
     /// `floor`.
-    fn floor<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn floor<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Floor, t)
     }
 
     /// `ceil`.
-    fn ceil<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn ceil<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Ceil, t)
     }
 
     /// `round`.
-    fn round<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn round<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Round, t)
     }
 
     /// `log2`.
-    fn log2<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn log2<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Log2, t)
     }
 
     /// `log10`.
-    fn log10<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn log10<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Log10, t)
     }
 
     /// `sin`.
-    fn sin<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn sin<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Sin, t)
     }
 
     /// `cos`.
-    fn cos<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn cos<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Cos, t)
     }
 }
@@ -1075,21 +1205,21 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 /// Called by both `FloatOps::softmax` (as `exp(log_softmax(x, dim))`) and
 /// `LossOps::cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
 /// numerically-stable kernel is shared rather than duplicated.
-pub(crate) fn log_softmax<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn log_softmax<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     dim: usize,
 ) -> Result<CpuStorage> {
     use incin_core::backend_authoring::{FloatOps, NumericOps, ReductionOps};
 
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
-    let max = <B<T, D> as ReductionOps<B<T, D>>>::max_keepdim::<K>(t, dim)?;
-    let diff = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &max)?;
-    let exp_diff = <B<T, D> as FloatOps<B<T, D>>>::exp::<K>(&diff)?;
-    let sum_exp = <B<T, D> as ReductionOps<B<T, D>>>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let log_sum_exp = <B<T, D> as FloatOps<B<T, D>>>::log::<K>(&sum_exp)?;
-    <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(&diff, &log_sum_exp)
+    let max = <B<D> as ReductionOps<B<D>>>::max_keepdim::<K>(t, dim)?;
+    let diff = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &max)?;
+    let exp_diff = <B<D> as FloatOps<B<D>>>::exp::<K>(&diff)?;
+    let sum_exp = <B<D> as ReductionOps<B<D>>>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let log_sum_exp = <B<D> as FloatOps<B<D>>>::log::<K>(&sum_exp)?;
+    <B<D> as NumericOps<B<D>>>::sub::<K>(&diff, &log_sum_exp)
 }
 
 #[cfg(test)]
@@ -1201,14 +1331,14 @@ mod tests {
 
         match &*out.buffer {
             CpuBuffer::F64(v) => {
-                assert_eq!(v, &vec![0.0, 3.000000987654321]);
+                assert_eq!(*v, vec![0.0f64, 3.000000987654321f64]);
             }
             other => panic!("expected CpuBuffer::F64, got {other:?}"),
         }
     }
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     #[test]
     /// `add_broadcasts_forward_correctly`.
@@ -1698,7 +1828,7 @@ mod tests {
         // exp(log_softmax(x)).sum() == 1.0 (the softmax identity).
         use crate::cpu::ops::elementwise::log_softmax;
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
         let exp_ls = TestBackend::exp::<f32>(&ls).unwrap();
         let vals = f32_vec(&exp_ls);
         let sum: f32 = vals.iter().sum();
@@ -1715,7 +1845,7 @@ mod tests {
         // Without max-subtraction, exp(1000) overflows to inf and log(inf) = inf.
         use crate::cpu::ops::elementwise::log_softmax;
         let t = vector(vec![1000.0f32, 1000.0, 1000.0]);
-        let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
         let vals = f32_vec(&ls);
         let expected = -(3.0f32.ln());
         for (i, &v) in vals.iter().enumerate() {
@@ -1755,7 +1885,7 @@ mod tests {
         use crate::cpu::ops::elementwise::log_softmax;
         let x = vector(vec![0.5f32, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
+            let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
             TestBackend::sum_all::<f32>(&ls).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);

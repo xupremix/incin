@@ -14,7 +14,7 @@ use core::ops::Deref;
 use half::{bf16, f16};
 use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::prelude::Result;
-use incin_core::prelude::{DTypeId, Error};
+use incin_core::prelude::{DTypeDescriptor, DTypeId, Error};
 
 use crate::cpu::stride;
 
@@ -28,18 +28,7 @@ use crate::cpu::stride;
 /// spelled as it was.
 pub use incin_core::exec::TensorId;
 
-/// Dtype-tagged raw data buffer.
-///
-/// All 7 `DTypeId` variants are reserved as enum shape per the
-/// project's "Resolving the Deferred Gray Areas" decision. Only `F32` needs
-/// real arithmetic elsewhere in this phase; the other variants exist as
-/// data-holding shapes since `storage.rs` itself doesn't perform arithmetic,
-/// only shape/stride bookkeeping.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BlockQ8_0 {
-    pub(crate) d: half::f16,
-    pub(crate) qs: [i8; 32],
-}
+pub use crate::quant::BlockQ8_0;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Implementation of `CpuBuffer` for the respective backend..
@@ -60,6 +49,8 @@ pub enum CpuBuffer {
     BF16(Vec<bf16>),
     /// `Q8_0`.
     Q8_0(Vec<BlockQ8_0>),
+    /// `Bool`.
+    Bool(Vec<u8>),
 }
 
 impl CpuBuffer {
@@ -73,7 +64,12 @@ impl CpuBuffer {
             Self::F16(_) => DTypeId::F16,
             Self::BF16(_) => DTypeId::BF16,
             Self::Q8_0(_) => DTypeId::Q8_0,
+            Self::Bool(_) => DTypeId::Bool,
         }
+    }
+
+    pub(crate) fn descriptor(&self) -> DTypeDescriptor {
+        self.dtype_id().descriptor()
     }
 
     fn alignment(&self) -> Alignment {
@@ -86,6 +82,7 @@ impl CpuBuffer {
             Self::F16(_) => Alignment::of::<f16>(),
             Self::BF16(_) => Alignment::of::<bf16>(),
             Self::Q8_0(_) => Alignment::of::<BlockQ8_0>(),
+            Self::Bool(_) => Alignment::of::<u8>(),
         }
     }
 
@@ -101,6 +98,7 @@ impl CpuBuffer {
             CpuBuffer::F16(v) => v.len(),
             CpuBuffer::BF16(v) => v.len(),
             CpuBuffer::Q8_0(v) => v.len() * 32,
+            CpuBuffer::Bool(v) => v.len(),
         }
     }
 
@@ -136,6 +134,7 @@ impl CpuBuffer {
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
                 ),
+                CpuBuffer::Bool(v) => v.as_slice(),
             }
         }
     }
@@ -164,9 +163,15 @@ impl CpuBuffer {
             CpuBuffer::BF16(_) => {
                 CpuBuffer::BF16(values.into_iter().map(half::bf16::from_f64).collect())
             }
+            CpuBuffer::Bool(_) => CpuBuffer::Bool(
+                values
+                    .into_iter()
+                    .map(|v| if v != 0.0 { 1u8 } else { 0u8 })
+                    .collect(),
+            ),
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
-                    dtype: DTypeId::Q8_0,
+                    dtype: DTypeId::Q8_0.descriptor(),
                     backend: "cpu",
                     op: "construct arithmetic result",
                 });
@@ -186,6 +191,13 @@ impl CpuBuffer {
             CpuBuffer::I64(v) => v[i] as f64,
             CpuBuffer::F16(v) => v[i].to_f64(),
             CpuBuffer::BF16(v) => v[i].to_f64(),
+            CpuBuffer::Bool(v) => {
+                if v[i] != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             CpuBuffer::Q8_0(v) => {
                 let block = &v[i / 32];
                 block.d.to_f64() * f64::from(block.qs[i % 32])
@@ -227,7 +239,7 @@ impl CpuStorage {
             shape.as_slice().into(),
             strides.as_slice().into(),
             offset_elements,
-            buffer.dtype_id(),
+            buffer.descriptor(),
             incin_core::prelude::DeviceId::cpu(),
             buffer.alignment(),
             buffer.len(),
@@ -264,13 +276,14 @@ impl CpuStorage {
             CpuBuffer::F32(_) => CpuBuffer::F32(vec![1.0f32; total]),
             CpuBuffer::F64(_) => CpuBuffer::F64(vec![1.0f64; total]),
             CpuBuffer::U8(_) => CpuBuffer::U8(vec![1u8; total]),
+            CpuBuffer::Bool(_) => CpuBuffer::Bool(vec![1u8; total]),
             CpuBuffer::U32(_) => CpuBuffer::U32(vec![1u32; total]),
             CpuBuffer::I64(_) => CpuBuffer::I64(vec![1i64; total]),
             CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
-                    dtype: DTypeId::Q8_0,
+                    dtype: DTypeId::Q8_0.descriptor(),
                     backend: "cpu",
                     op: "autograd seed",
                 });
@@ -295,6 +308,21 @@ impl CpuStorage {
             flat += i * s;
         }
         self.buffer.get_f64(flat)
+    }
+
+    /// Read the bool value at the given logical multi-index.
+    /// Only valid when `self.buffer` is `CpuBuffer::Bool`.
+    /// Returns `true` for any non-zero byte, `false` for zero.
+    pub(crate) fn get_bool(&self, idx: &[usize]) -> bool {
+        debug_assert_eq!(idx.len(), self.shape.len());
+        let mut flat = self.offset_elements;
+        for (i, s) in idx.iter().zip(self.strides.iter()) {
+            flat += i * s;
+        }
+        match &*self.buffer {
+            CpuBuffer::Bool(v) => v[flat] != 0,
+            _ => self.buffer.get_f64(flat) != 0.0,
+        }
     }
 
     /// Reads one logical element as an integer without silently applying
@@ -324,34 +352,35 @@ impl CpuStorage {
         }
         match &*self.buffer {
             CpuBuffer::U8(values) => Ok(i64::from(values[flat])),
+            CpuBuffer::Bool(values) => Ok(i64::from(values[flat])),
             CpuBuffer::U32(values) => Ok(i64::from(values[flat])),
             CpuBuffer::I64(values) => Ok(values[flat]),
             CpuBuffer::F32(values) => incin_core::prelude::convert_f64_to_i64(
                 operation,
-                DTypeId::F32,
+                DTypeId::F32.descriptor(),
                 f64::from(values[flat]),
                 incin_core::prelude::FloatToIntPolicy::Exact,
             ),
             CpuBuffer::F64(values) => incin_core::prelude::convert_f64_to_i64(
                 operation,
-                DTypeId::F64,
+                DTypeId::F64.descriptor(),
                 values[flat],
                 incin_core::prelude::FloatToIntPolicy::Exact,
             ),
             CpuBuffer::F16(values) => incin_core::prelude::convert_f64_to_i64(
                 operation,
-                DTypeId::F16,
+                DTypeId::F16.descriptor(),
                 values[flat].to_f64(),
                 incin_core::prelude::FloatToIntPolicy::Exact,
             ),
             CpuBuffer::BF16(values) => incin_core::prelude::convert_f64_to_i64(
                 operation,
-                DTypeId::BF16,
+                DTypeId::BF16.descriptor(),
                 values[flat].to_f64(),
                 incin_core::prelude::FloatToIntPolicy::Exact,
             ),
             CpuBuffer::Q8_0(_) => Err(Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: operation,
             }),
@@ -500,6 +529,7 @@ impl CpuStorage {
             CpuBuffer::F32(_) => materialize!(F32, f32),
             CpuBuffer::F64(_) => materialize!(F64, f64),
             CpuBuffer::U8(_) => materialize!(U8, u8),
+            CpuBuffer::Bool(_) => materialize!(Bool, u8),
             CpuBuffer::U32(_) => materialize!(U32, u32),
             CpuBuffer::I64(_) => materialize!(I64, i64),
             CpuBuffer::F16(_) => {
@@ -520,7 +550,7 @@ impl CpuStorage {
             }
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
-                    dtype: DTypeId::Q8_0,
+                    dtype: DTypeId::Q8_0.descriptor(),
                     backend: "cpu",
                     op: "materialize non-contiguous storage",
                 });
@@ -531,17 +561,7 @@ impl CpuStorage {
     }
 }
 
-/// Increment a row-major multi-index in place (odometer-style), matching the
-/// iteration order `contiguous_strides` assumes.
-pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
-    for i in (0..idx.len()).rev() {
-        idx[i] += 1;
-        if idx[i] < shape[i] {
-            return;
-        }
-        idx[i] = 0;
-    }
-}
+pub(crate) use crate::layout::increment_index;
 
 /// Build a zero-filled, freshly-allocated, contiguous `CpuStorage` of
 /// `original_shape` (dtype-matched to `values`), then copy `values`'s data
@@ -584,6 +604,7 @@ pub(crate) fn scatter_into_zeros(
         CpuBuffer::F32(_) => scatter_variant!(F32, f32, 0.0f32),
         CpuBuffer::F64(_) => scatter_variant!(F64, f64, 0.0f64),
         CpuBuffer::U8(_) => scatter_variant!(U8, u8, 0u8),
+        CpuBuffer::Bool(_) => scatter_variant!(Bool, u8, 0u8),
         CpuBuffer::U32(_) => scatter_variant!(U32, u32, 0u32),
         CpuBuffer::I64(_) => scatter_variant!(I64, i64, 0i64),
         CpuBuffer::F16(_) => {
@@ -612,7 +633,7 @@ pub(crate) fn scatter_into_zeros(
         }
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0,
+                dtype: DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: "scatter gradient",
             });

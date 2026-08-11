@@ -1051,7 +1051,7 @@ mod tests {
     use incin_core::prelude::Cpu;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
     /// requires a scalar-output op) can drive it.
@@ -1288,7 +1288,7 @@ mod tests {
 
         let out = matmul_impl(&lhs, &identity).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
-        assert_eq!(out.dtype, DTypeId::F64);
+        assert_eq!(out.dtype, DTypeId::F64.descriptor());
         assert_eq!(
             (0..4)
                 .map(|i| out.get(&[i / 2, i % 2]))
@@ -1312,7 +1312,7 @@ mod tests {
 
         let out = batched_matmul_impl(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 2, 2]);
-        assert_eq!(out.dtype, DTypeId::F64);
+        assert_eq!(out.dtype, DTypeId::F64.descriptor());
         // Both slices multiply by the identity, so the operand comes back.
         assert_eq!(out.get(&[1, 1, 1]), 8.0);
         assert_eq!(out.get(&[0, 1, 0]), 3.0);

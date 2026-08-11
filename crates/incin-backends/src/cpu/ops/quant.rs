@@ -1,17 +1,17 @@
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::{Backend, QuantizedOps};
+use incin_core::backend_authoring::QuantizedOps;
 use incin_core::prelude::*;
 use incin_core::prelude::{FloatDType, QuantDType};
 
 extern crate alloc;
 use alloc::vec::Vec;
 
-impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
     /// `quantize`.
     fn quantize<K: FloatDType, Q: QuantDType>(
-        _t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<Q>> {
+        _t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<Q>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
             || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
         {
@@ -71,8 +71,8 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
 
     /// `dequantize`.
     fn dequantize<Q: QuantDType, K: FloatDType>(
-        _t: &<Self as Backend>::Storage<Q>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+        _t: &<Self as StorageBackend>::Storage<Q>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
             || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
         {
@@ -109,9 +109,9 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
 
     /// `quantized_matmul`.
     fn quantized_matmul<Q: QuantDType>(
-        _lhs: &<Self as Backend>::Storage<Q>,
-        _rhs: &<Self as Backend>::Storage<Q>,
-    ) -> Result<<Self as Backend>::Storage<f32>> {
+        _lhs: &<Self as StorageBackend>::Storage<Q>,
+        _rhs: &<Self as StorageBackend>::Storage<Q>,
+    ) -> Result<<Self as StorageBackend>::Storage<f32>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>() {
             return Err(Error::UnsupportedBackendOperation {
                 op: "quantized_matmul",
@@ -314,7 +314,7 @@ mod tests {
     use incin_core::backend_authoring::NumericOps;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     #[test]
     /// `test_quantize_dequantize_fidelity`.
@@ -382,13 +382,12 @@ mod tests {
         let quantized = TestBackend::quantize::<f32, Q8_0>(&source).unwrap();
 
         let error = TestBackend::add::<Q8_0>(&quantized, &quantized).unwrap_err();
-        assert!(matches!(
-            error,
-            Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0,
-                backend: "cpu",
-                op: "construct arithmetic result",
-            }
-        ));
+        if let Error::UnsupportedDType { dtype, backend, op } = error {
+            assert_eq!(dtype, DTypeId::Q8_0.descriptor());
+            assert_eq!(backend, "cpu");
+            assert_eq!(op, "construct arithmetic result");
+        } else {
+            panic!("expected Error::UnsupportedDType, got {:?}", error);
+        }
     }
 }

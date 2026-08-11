@@ -1,4 +1,4 @@
-//! `LossOps` for `CpuBackendImpl<T, D>`.
+//! `LossOps` for `CpuBackendImpl<D>`.
 //!
 //! `mse_loss` is composed strictly from already-tape-tracked primitives
 //! (`NumericOps::sub`, `NumericOps::mul`, `ReductionOps::mean_all` /
@@ -25,14 +25,14 @@
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
+use incin_core::backend_authoring::{FloatOps, LossOps, NumericOps, ReductionOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
-impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
+impl<D: Device> LossOps<Self> for CpuBackendImpl<D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
     ///
@@ -51,10 +51,10 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
     /// 4. `per_nll = -sum_dim(picked, 1)` — shape `[Batch]`.
     /// 5. Dispatch on `reduction`: mean / sum / none.
     fn cross_entropy_loss<K: DType, KInt: DType>(
-        pred: &<Self as Backend>::Storage<K>,
-        target: &<Self as Backend>::Storage<KInt>,
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<KInt>,
         reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if pred.shape.len() != 2 {
             return Err(ShapeError::RankMismatch {
                 operation: OperationKind::Reduction,
@@ -77,7 +77,7 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
         }
 
         // Step 1: log_softmax over the class dimension (axis 1).
-        let log_probs = crate::cpu::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
+        let log_probs = crate::cpu::ops::elementwise::log_softmax::<D, K>(pred, 1)?;
 
         // CPU FALLBACK
         let one_hot_total =
@@ -87,8 +87,8 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
             let class_idx = target.get_i64_checked(&[b_idx], "cross_entropy_target")?;
             let class_idx = usize::try_from(class_idx).map_err(|_| Error::InvalidConversion {
                 operation: "cross_entropy_target",
-                from: DTypeId::I64,
-                to: DTypeId::U32,
+                from: DTypeId::I64.descriptor(),
+                to: DTypeId::U32.descriptor(),
                 reason: ConversionFailure::OutOfRange,
             })?;
             if class_idx >= classes {
@@ -133,7 +133,7 @@ mod tests {
     use crate::cpu::tape;
 
     /// `B`.
-    type B = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+    type B = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {

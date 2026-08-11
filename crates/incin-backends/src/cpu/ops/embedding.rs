@@ -1,4 +1,4 @@
-//! Free-function `embedding` helper for `CpuBackendImpl<T, D>`.
+//! Free-function `embedding` helper for `CpuBackendImpl<D>`.
 //!
 //! `embedding_impl` is called by `ops/module.rs`'s `ModuleOps::embedding`
 //! trait method, mirroring `ops/norm.rs`'s free-function-called-from-
@@ -32,7 +32,7 @@ use crate::cpu::tape::{self, TapeEntry};
 /// of a zero-filled buffer sized to `w`, summing contributions when the same
 /// row index appears more than once in `t`.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType, KInt: DType>(
+pub(crate) fn embedding_impl<D: incin_core::prelude::Device, K: DType, KInt: DType>(
     t: &CpuStorage,
     w: &CpuStorage,
 ) -> Result<CpuStorage> {
@@ -63,8 +63,8 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
         let raw = t.get_i64_checked(&idx, "embedding_index")?;
         let row_idx = usize::try_from(raw).map_err(|_| Error::InvalidConversion {
             operation: "embedding_index",
-            from: incin_core::prelude::DTypeId::I64,
-            to: incin_core::prelude::DTypeId::U32,
+            from: incin_core::prelude::DTypeId::I64.descriptor(),
+            to: incin_core::prelude::DTypeId::U32.descriptor(),
             reason: incin_core::prelude::ConversionFailure::OutOfRange,
         })?;
         if row_idx >= vocab_size {
@@ -142,7 +142,7 @@ mod tests {
     use incin_core::prelude::Cpu;
 
     /// `B`.
-    type B = CpuBackendImpl<f32, Cpu>;
+    type B = CpuBackendImpl<Cpu>;
 
     /// The learnable weight matrix parameter.
     fn weight(v: Vec<f32>, vocab: usize, hidden: usize) -> CpuStorage {
@@ -168,7 +168,7 @@ mod tests {
         // weight [3,2]: row0=[1,2], row1=[3,4], row2=[5,6]
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
         let idx = indices_i64(vec![0, 2, 0], vec![3]);
-        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+        let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
         assert_eq!(out.shape, vec![3, 2]);
         let vals = f32_vec(&out);
         // row 0 -> [1,2], row 2 -> [5,6], row 0 again -> [1,2]
@@ -190,7 +190,7 @@ mod tests {
             3,
         );
         let idx = indices_i64(vec![1, 3, 0, 2], vec![2, 2]);
-        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+        let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
         assert_eq!(out.shape, vec![2, 2, 3]);
         let vals = f32_vec(&out);
         assert_eq!(
@@ -210,7 +210,7 @@ mod tests {
         // weight [2,2]: row0, row1
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![0, 1, 0], vec![3]);
-        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+        let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
         // Manually seed grad_out as ones (mirrors ones_like seeding via a
         // sum_all-style consumer) by summing the output through the real
         // ReductionOps::sum_all so tape::backward seeds correctly.
@@ -230,7 +230,7 @@ mod tests {
         // weight [3,2]; only row 1 is addressed.
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
         let idx = indices_i64(vec![1], vec![1]);
-        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+        let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
         let loss = B::sum_all::<f32>(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(w.id).expect("weight should have gradient");
@@ -245,7 +245,7 @@ mod tests {
     fn out_of_range_index_returns_typed_shape_error() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![5], vec![1]);
-        let result = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w);
+        let result = embedding_impl::<Cpu, f32, i64>(&idx, &w);
         assert!(matches!(result, Err(Error::Shape(_))));
     }
 
@@ -254,7 +254,7 @@ mod tests {
     fn negative_index_returns_conversion_error_not_panic() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![-1], vec![1]);
-        let result = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w);
+        let result = embedding_impl::<Cpu, f32, i64>(&idx, &w);
         assert!(matches!(
             result,
             Err(Error::InvalidConversion {

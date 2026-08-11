@@ -1,4 +1,4 @@
-//! `conv1d`/`conv2d` for `CpuBackendImpl<T, D>` via im2col (window-unfold into
+//! `conv1d`/`conv2d` for `CpuBackendImpl<D>` via im2col (window-unfold into
 //! a column matrix) + `ops::matmul::batched_matmul_impl` for the actual
 //! multiply-accumulate (D-01).
 //!
@@ -409,7 +409,7 @@ fn col2im_2d(
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
 /// broadcast-added via the already-tape-tracked `NumericOps::add` (so
 /// `grad_bias` is free via composition, per this file's module doc).
-pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -419,7 +419,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
     let (cout, cin_g, kernel_size) = (weight.shape[0], weight.shape[1], weight.shape[2]);
@@ -453,7 +453,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     let matmul_out = if groups == 1 {
         group_outputs[0].clone()
     } else {
-        <B<T, D> as TensorOps<B<T, D>>>::concat::<K>(&refs, 2)?
+        <B<D> as TensorOps<B<D>>>::concat::<K>(&refs, 2)?
     };
     // matmul_out: [B, L_out, Cout] -> canonical [B, Cout, L_out]
     let conv_out = matmul_out.transpose(1, 2)?.reshape(&[b, cout, l_out])?;
@@ -527,7 +527,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1])?;
-            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&conv_out, &bias_shaped)
+            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -542,7 +542,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
 ///
 /// The legacy signature states one extent for both axes, so this is the
 /// isotropic case of [`conv2d_windowed_impl`] rather than a kernel of its own.
-pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv2d_impl<D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -551,7 +551,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    conv2d_windowed_impl::<T, D, K>(
+    conv2d_windowed_impl::<D, K>(
         input,
         weight,
         bias,
@@ -567,7 +567,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
 /// single extent for both. Nothing about the algorithm needed them equal: the
 /// row and column extents are used in separate expressions throughout, and
 /// making them separate parameters is the whole of the change.
-pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -575,7 +575,7 @@ pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: 
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     let (b, cin, h, w) = (
         input.shape[0],
@@ -633,7 +633,7 @@ pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: 
     let matmul_out = if groups == 1 {
         group_outputs[0].clone()
     } else {
-        <B<T, D> as TensorOps<B<T, D>>>::concat::<K>(&refs, 2)?
+        <B<D> as TensorOps<B<D>>>::concat::<K>(&refs, 2)?
     };
     // matmul_out: [B, H_out*W_out, Cout] -> canonical [B, Cout, H_out, W_out]
     let conv_out = matmul_out
@@ -700,7 +700,7 @@ pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: 
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
-            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&conv_out, &bias_shaped)
+            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -737,7 +737,7 @@ pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: 
 /// confirmed behavior, which likewise ignores `groups`); a `groups != 1`
 /// call returns a typed `Error::ShapeMismatch` rather than silently ignoring
 /// the parameter or asserting via `debug_assert_eq!`.
-pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv_transpose2d_impl<D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -748,7 +748,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
+    type B<D> = CpuBackendImpl<D>;
 
     if groups != 1 {
         return Err(Error::ShapeMismatch {
@@ -893,7 +893,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
-            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&conv_out, &bias_shaped)
+            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -993,7 +993,7 @@ mod tests {
     use incin_core::prelude::Cpu;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
@@ -1018,7 +1018,7 @@ mod tests {
         // input = [1,2,3,4], kernel = [10,1]
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 4]);
         let weight = tensor(vec![10.0, 1.0], vec![1, 1, 2]);
-        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
         // window0 = [1,2] . [10,1] = 10+2=12
         // window1 = [2,3] . [10,1] = 20+3=23
@@ -1034,7 +1034,7 @@ mod tests {
         // input = [1,2,3], kernel = [1,1,1], padding=1 -> padded = [0,1,2,3,0]
         let input = tensor(vec![1.0, 2.0, 3.0], vec![1, 1, 3]);
         let weight = tensor(vec![1.0, 1.0, 1.0], vec![1, 1, 3]);
-        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 1, 1, 1).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 1, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
         // windows over padded [0,1,2,3,0]: [0,1,2]->3, [1,2,3]->6, [2,3,0]->5
         assert_eq!(f32_vec(&out), vec![3.0, 6.0, 5.0]);
@@ -1051,18 +1051,18 @@ mod tests {
         let weight_data: Vec<f32> = (1..=8).map(|x| x as f32 * 0.1).collect(); // [2,2,2]
         let weight = tensor(weight_data.clone(), vec![2, 2, 2]);
 
-        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![1, 2, 4]);
 
         // group 0: input channels [0,1] (rows 0-1 of input, each len 5),
         // weight channel 0 (shape [1,2,2])
         let g0_input = tensor(input_data[0..10].to_vec(), vec![1, 2, 5]);
         let g0_weight = tensor(weight_data[0..4].to_vec(), vec![1, 2, 2]);
-        let g0_out = conv1d_impl::<f32, Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
+        let g0_out = conv1d_impl::<Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
 
         let g1_input = tensor(input_data[10..20].to_vec(), vec![1, 2, 5]);
         let g1_weight = tensor(weight_data[4..8].to_vec(), vec![1, 2, 2]);
-        let g1_out = conv1d_impl::<f32, Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
+        let g1_out = conv1d_impl::<Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
 
         let combined = f32_vec(&out);
         assert_eq!(&combined[0..4], &f32_vec(&g0_out)[..]);
@@ -1076,7 +1076,7 @@ mod tests {
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 4]);
         let weight = tensor(vec![10.0, 1.0], vec![1, 1, 2]);
         let bias = tensor(vec![100.0], vec![1]);
-        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&input, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
         assert_eq!(f32_vec(&out), vec![112.0, 123.0, 134.0]);
     }
@@ -1085,7 +1085,7 @@ mod tests {
 
     /// `conv1d_sum_op`.
     fn conv1d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
-        let out = conv1d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
     }
 
@@ -1111,7 +1111,7 @@ mod tests {
         // each input position (except the first/last) touched by 2 windows.
         let input = tensor(vec![1.0, 2.0, 3.0], vec![1, 1, 3]);
         let weight = tensor(vec![1.0, 1.0], vec![1, 1, 2]);
-        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+        let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
         let loss = TestBackend::sum_all::<f32>(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let grad_input = grads.get(input.id).expect("grad_input should exist");
@@ -1134,7 +1134,7 @@ mod tests {
         let input_data: Vec<f32> = (1..=16).map(|x| x as f32).collect(); // [1,1,4,4]
         let input = tensor(input_data, vec![1, 1, 4, 4]);
         let weight = tensor(vec![1.0; 9], vec![1, 1, 3, 3]); // sum-of-window kernel
-        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         // input matrix:
         //  1  2  3  4
@@ -1158,16 +1158,16 @@ mod tests {
         let weight_data: Vec<f32> = (1..=36).map(|x| x as f32 * 0.01).collect(); // [2,2,3,3]
         let weight = tensor(weight_data.clone(), vec![2, 2, 3, 3]);
 
-        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
+        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![1, 2, 3, 3]);
 
         let g0_input = tensor(input_data[0..50].to_vec(), vec![1, 2, 5, 5]);
         let g0_weight = tensor(weight_data[0..18].to_vec(), vec![1, 2, 3, 3]);
-        let g0_out = conv2d_impl::<f32, Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
+        let g0_out = conv2d_impl::<Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
 
         let g1_input = tensor(input_data[50..100].to_vec(), vec![1, 2, 5, 5]);
         let g1_weight = tensor(weight_data[18..36].to_vec(), vec![1, 2, 3, 3]);
-        let g1_out = conv2d_impl::<f32, Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
+        let g1_out = conv2d_impl::<Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
 
         let combined = f32_vec(&out);
         assert_eq!(&combined[0..9], &f32_vec(&g0_out)[..]);
@@ -1185,7 +1185,7 @@ mod tests {
         let weight_data: Vec<f32> = (1..=27).map(|x| x as f32 * 0.01).collect(); // [3,1,3,3]
         let weight = tensor(weight_data.clone(), vec![3, 1, 3, 3]);
 
-        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 3).unwrap();
+        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 3).unwrap();
         assert_eq!(out.shape, vec![1, 3, 3, 3]);
 
         // Verify each channel independently against a groups=1 conv on just
@@ -1193,8 +1193,7 @@ mod tests {
         for c in 0..3 {
             let ch_input = tensor(input_data[c * 25..(c + 1) * 25].to_vec(), vec![1, 1, 5, 5]);
             let ch_weight = tensor(weight_data[c * 9..(c + 1) * 9].to_vec(), vec![1, 1, 3, 3]);
-            let ch_out =
-                conv2d_impl::<f32, Cpu, f32>(&ch_input, &ch_weight, None, 1, 0, 1, 1).unwrap();
+            let ch_out = conv2d_impl::<Cpu, f32>(&ch_input, &ch_weight, None, 1, 0, 1, 1).unwrap();
             let combined = f32_vec(&out);
             assert_eq!(&combined[c * 9..(c + 1) * 9], &f32_vec(&ch_out)[..]);
         }
@@ -1204,7 +1203,7 @@ mod tests {
 
     /// `conv2d_sum_op`.
     fn conv2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
-        let out = conv2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
+        let out = conv2d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
     }
 
@@ -1236,8 +1235,7 @@ mod tests {
         // input = [[1,2],[3,4]], weight = [[1,1],[1,1]]
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
         let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
-        let out =
-            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap();
+        let out = conv_transpose2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3, 3]);
         // Hand-computed scatter-add of weighted 2x2 patches:
         // out[i+kh, j+kw] += input[i,j] * weight[kh,kw] for i,j,kh,kw in 0..2
@@ -1255,8 +1253,7 @@ mod tests {
     fn conv_transpose2d_forward_stride_upsamples() {
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
         let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
-        let out =
-            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 0, 1, 1).unwrap();
+        let out = conv_transpose2d_impl::<Cpu, f32>(&input, &weight, None, 2, 0, 0, 1, 1).unwrap();
         // (2-1)*2 + 1*(2-1) + 1 - 0 = 4
         assert_eq!(out.shape, vec![1, 1, 4, 4]);
         assert_eq!(
@@ -1278,8 +1275,7 @@ mod tests {
     fn conv_transpose2d_forward_output_padding_appends_trailing_zeros_only() {
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
         let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
-        let out =
-            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 1, 1, 1).unwrap();
+        let out = conv_transpose2d_impl::<Cpu, f32>(&input, &weight, None, 2, 0, 1, 1, 1).unwrap();
         // natural (output_padding=0) shape was [1,1,4,4]; output_padding=1
         // appends ONE extra trailing row and column -> [1,1,5,5].
         assert_eq!(out.shape, vec![1, 1, 5, 5]);
@@ -1311,7 +1307,7 @@ mod tests {
     fn conv_transpose2d_rejects_groups_other_than_one() {
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
         let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
-        let result = conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 2);
+        let result = conv_transpose2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 2);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -1320,8 +1316,7 @@ mod tests {
     /// `conv_transpose2d_sum_op`.
     fn conv_transpose2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out =
-            conv_transpose2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1)
-                .unwrap();
+            conv_transpose2d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
     }
 

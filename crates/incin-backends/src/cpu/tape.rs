@@ -173,7 +173,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     // Snapshot the current tracing graph and ship it to incin-viz.
     #[cfg(feature = "std")]
     {
-        if let Some(g) = incin_core::prelude::tracing_graph_snapshot() {
+        if let Some(g) = incin_core::backend_authoring::tracing_graph_snapshot() {
             crate::telemetry::emit_graph_snapshot(g);
         }
     }
@@ -306,6 +306,7 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
         CpuBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),
         CpuBuffer::F64(_) => reduce_variant!(F64, |v: f64| v),
         CpuBuffer::U8(_) => reduce_variant!(U8, |v: f64| v as u8),
+        CpuBuffer::Bool(_) => reduce_variant!(Bool, |v: f64| v as u8),
         CpuBuffer::U32(_) => reduce_variant!(U32, |v: f64| v as u32),
         CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
@@ -313,7 +314,7 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
 
         CpuBuffer::Q8_0(_) => {
             return Err(incin_core::prelude::Error::UnsupportedDType {
-                dtype: incin_core::prelude::DTypeId::Q8_0,
+                dtype: incin_core::prelude::DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: "autograd unbroadcast",
             });
