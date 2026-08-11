@@ -7,6 +7,8 @@ use incin_core::axis;
 use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
 use incin_core::exec::{AxisSet, ExecutionDescriptor, RankSupport};
 use incin_core::prelude::*;
+
+static TRACE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use incin_core::shapes::dim::{
     AddDim, CheckedSubDim, ConstDim, Dim, ExactDivDim, MulDim, NamedDim, StaticExtent,
 };
@@ -378,6 +380,7 @@ fn test_high_rank_tensor_creation() {
 
 #[test]
 fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
+    let _guard = TRACE_TEST_LOCK.lock().unwrap();
     type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
@@ -398,6 +401,7 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
 
 #[test]
 fn exact_tracing_records_boolean_comparison_output_dtype() {
+    let _guard = TRACE_TEST_LOCK.lock().unwrap();
     type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
