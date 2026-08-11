@@ -1,4 +1,12 @@
 use crate::prelude::*;
+use crate::{
+    backend_authoring::{Capabilities, Execute},
+    exec::request::TensorHandle,
+    exec::{
+        catalog::{NoAttributes, ScalarAttributes, op},
+        dispatch,
+    },
+};
 
 pub mod scheduler;
 pub use scheduler::*;
@@ -49,6 +57,122 @@ struct PreparedUpdate<S> {
     updated: S,
     first_moment: Option<S>,
     second_moment: Option<S>,
+}
+
+/// The exact canonical operations used by the generic optimizer fallback.
+///
+/// Keeping this private preserves the optimizer's public surface while making
+/// its capability requirements explicit at the dispatch boundary.
+trait OptimizerDispatch<K: DType>: Backend {
+    fn optimizer_add(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    fn optimizer_sub(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    fn optimizer_mul(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    fn optimizer_div(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    fn optimizer_sqrt(storage: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    fn optimizer_mul_scalar(storage: &Self::Storage<K>, value: f64) -> Result<Self::Storage<K>>;
+    fn optimizer_add_scalar(storage: &Self::Storage<K>, value: f64) -> Result<Self::Storage<K>>;
+}
+
+impl<B, K: DType> OptimizerDispatch<K> for B
+where
+    B: Backend
+        + Capabilities
+        + Execute<op::Add>
+        + Execute<op::Sub>
+        + Execute<op::Mul>
+        + Execute<op::Div>
+        + Execute<op::Sqrt>
+        + Execute<op::MulScalar>
+        + Execute<op::AddScalar>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Div>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
+{
+    fn optimizer_add(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        execute_binary::<op::Add, B, K>(lhs, rhs)
+    }
+
+    fn optimizer_sub(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        execute_binary::<op::Sub, B, K>(lhs, rhs)
+    }
+
+    fn optimizer_mul(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        execute_binary::<op::Mul, B, K>(lhs, rhs)
+    }
+
+    fn optimizer_div(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        execute_binary::<op::Div, B, K>(lhs, rhs)
+    }
+
+    fn optimizer_sqrt(storage: &B::Storage<K>) -> Result<B::Storage<K>> {
+        execute_unary::<op::Sqrt, B, K>(storage)
+    }
+
+    fn optimizer_mul_scalar(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>> {
+        execute_scalar::<op::MulScalar, B, K>(storage, value)
+    }
+
+    fn optimizer_add_scalar(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>> {
+        execute_scalar::<op::AddScalar, B, K>(storage, value)
+    }
+}
+
+fn execute_binary<O, B, K>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>
+where
+    O: crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    B: Backend + Capabilities + Execute<O>,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let expected =
+        ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&B::shape(lhs))).map_err(Error::Shape)?;
+    let inputs = [
+        TensorHandle::from_storage::<B, K, Local>(lhs),
+        TensorHandle::from_storage::<B, K, Local>(rhs),
+    ];
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
+    dispatch::execute_shaped::<O, B, Dyn>(&context, NoAttributes, &inputs, &expected)
+        .map(Into::into)
+        .map_err(Error::from)
+}
+
+fn execute_unary<O, B, K>(storage: &B::Storage<K>) -> Result<B::Storage<K>>
+where
+    O: crate::exec::catalog::Operation<Attributes = NoAttributes>,
+    B: Backend + Capabilities + Execute<O>,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&B::shape(storage)))
+        .map_err(Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
+    dispatch::execute_shaped::<O, B, Dyn>(&context, NoAttributes, &[input], &expected)
+        .map(Into::into)
+        .map_err(Error::from)
+}
+
+fn execute_scalar<O, B, K>(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>>
+where
+    O: crate::exec::catalog::Operation<Attributes = ScalarAttributes>,
+    B: Backend + Capabilities + Execute<O>,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&B::shape(storage)))
+        .map_err(Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
+    dispatch::execute_shaped::<O, B, Dyn>(&context, ScalarAttributes { value }, &[input], &expected)
+        .map(Into::into)
+        .map_err(Error::from)
 }
 
 fn invalid_optimizer_config(operation: &'static str, reason: &'static str) -> Error {
@@ -219,10 +343,7 @@ fn commit_parameter_updates<B: Backend, K: DType>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_adam_update<
-    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
-    K: DType,
->(
+fn prepare_adam_update<B: OptimizerDispatch<K>, K: DType>(
     operation: &'static str,
     tensor: &B::Storage<K>,
     grad: &B::Storage<K>,
@@ -244,19 +365,19 @@ fn prepare_adam_update<
     }
 
     let m_t = if let Some(m) = previous_m {
-        let retained = B::mul_scalar_float::<K>(m, beta1)?;
-        let incoming = B::mul_scalar_float::<K>(grad, 1.0 - beta1)?;
-        B::add::<K>(&retained, &incoming)?
+        let retained = B::optimizer_mul_scalar(m, beta1)?;
+        let incoming = B::optimizer_mul_scalar(grad, 1.0 - beta1)?;
+        B::optimizer_add(&retained, &incoming)?
     } else {
-        B::mul_scalar_float::<K>(grad, 1.0 - beta1)?
+        B::optimizer_mul_scalar(grad, 1.0 - beta1)?
     };
-    let grad_sq = B::mul::<K>(grad, grad)?;
+    let grad_sq = B::optimizer_mul(grad, grad)?;
     let v_t = if let Some(v) = previous_v {
-        let retained = B::mul_scalar_float::<K>(v, beta2)?;
-        let incoming = B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?;
-        B::add::<K>(&retained, &incoming)?
+        let retained = B::optimizer_mul_scalar(v, beta2)?;
+        let incoming = B::optimizer_mul_scalar(&grad_sq, 1.0 - beta2)?;
+        B::optimizer_add(&retained, &incoming)?
     } else {
-        B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?
+        B::optimizer_mul_scalar(&grad_sq, 1.0 - beta2)?
     };
 
     let t_step = step as f64;
@@ -273,17 +394,19 @@ fn prepare_adam_update<
         });
     }
 
-    let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
-    let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
-    let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, eps)?;
-    let step_value = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, lr)?;
+    let m_hat = B::optimizer_mul_scalar(&m_t, 1.0 / bias_correction1)?;
+    let v_hat = B::optimizer_mul_scalar(&v_t, 1.0 / bias_correction2)?;
+    let sqrt_v_hat = B::optimizer_sqrt(&v_hat)?;
+    let denom = B::optimizer_add_scalar(&sqrt_v_hat, eps)?;
+    let normalized = B::optimizer_div(&m_hat, &denom)?;
+    let step_value = B::optimizer_mul_scalar(&normalized, lr)?;
     let decayed = if weight_decay == 0.0 {
         tensor.clone()
     } else {
-        let decay = B::mul_scalar_float::<K>(tensor, weight_decay * lr)?;
-        B::sub::<K>(tensor, &decay)?
+        let decay = B::optimizer_mul_scalar(tensor, weight_decay * lr)?;
+        B::optimizer_sub(tensor, &decay)?
     };
-    let updated = B::sub::<K>(&decayed, &step_value)?;
+    let updated = B::optimizer_sub(&decayed, &step_value)?;
     Ok((updated, m_t, v_t))
 }
 
@@ -323,11 +446,7 @@ impl<B: Backend, K: DType> SGD<B, K> {
     }
 }
 
-impl<
-    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
-    K: DType,
-> Optimizer<B> for SGD<B, K>
-{
+impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for SGD<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "sgd_step";
@@ -337,8 +456,8 @@ impl<
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
                 validate_storage_pair::<B, K>(OPERATION, &t, &grad)?;
-                let grad_scaled = B::mul_scalar_float::<K>(&grad, self.lr)?;
-                let updated = B::sub::<K>(&t, &grad_scaled)?;
+                let grad_scaled = B::optimizer_mul_scalar(&grad, self.lr)?;
+                let updated = B::optimizer_sub(&t, &grad_scaled)?;
                 updates.push(PreparedUpdate {
                     name: name.clone(),
                     before: t,
@@ -485,11 +604,7 @@ impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for AdamW<
     }
 }
 
-impl<
-    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
-    K: DType,
-> Optimizer<B> for AdamW<B, K>
-{
+impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for AdamW<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adamw_step";
@@ -681,11 +796,7 @@ impl<B: Backend + SupportsDType<f32>> crate::nn::module::StateDict<B> for Adam<B
     }
 }
 
-impl<
-    B: Backend + crate::tensor::backend::NumericOps<B> + crate::tensor::backend::FloatOps<B>,
-    K: DType,
-> Optimizer<B> for Adam<B, K>
-{
+impl<B: OptimizerDispatch<K>, K: DType> Optimizer<B> for Adam<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adam_step";
