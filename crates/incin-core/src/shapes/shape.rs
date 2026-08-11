@@ -1,11 +1,11 @@
 use crate::prelude::{Dim, Dyn};
-use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
+use crate::shapes::ShapeBuf;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Add, Sub};
-use typenum::{U1, Unsigned};
+use typenum::{Unsigned, U1};
 
 /// Forward structural cursors.  Keeping reverse cursors out of the recursive
 /// `FromEnd` adapters prevents the trait solver from exploring an infinite
@@ -20,9 +20,9 @@ impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 /// A `Shape` encodes the rank (number of dimensions) and, optionally, the static size of each
 /// dimension into the type system. The three primary implementors are:
 ///
-/// * **`DimCons`/`Nil`** (e.g., `s![2, 3]`) — Fully static or mixed.
-/// * **`Dyn`** — Fully dynamic. Shape and rank are determined at runtime.
-/// * **`Ranked<R>`** — Runtime extents with a typenum-known rank.
+/// * **`DimCons`/`Nil`** (e.g., `s![2, 3]`) - Fully static or mixed.
+/// * **`Dyn`** - Fully dynamic. Shape and rank are determined at runtime.
+/// * **`Ranked<R>`** - Runtime extents with a typenum-known rank.
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
@@ -61,7 +61,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     ///
     /// `None` is the honest default. A shape with any runtime axis has no
     /// element count until its field exists, and one implemented outside this
-    /// crate is credited with nothing it has not shown — the same rule `PROOF`
+    /// crate is credited with nothing it has not shown - the same rule `PROOF`
     /// follows.
     const STATIC_NUMEL: Option<usize> = None;
 
@@ -701,7 +701,7 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> DynShape for R
 /// erased a known-rank shape to a `Vec<usize>`, and then asserted the
 /// round-trip back would succeed.
 ///
-/// Prefer building the field axis by axis where the arity is known — that
+/// Prefer building the field axis by axis where the arity is known - that
 /// avoids the erasure entirely and yields a
 /// [`DimensionMismatch`](crate::shapes::error::ShapeError::DimensionMismatch)
 /// naming the offending axis. Use this where the shape is only available
@@ -993,7 +993,7 @@ pub trait ReplaceLastDim<NewDim: Dim> {
     type Output: Shape;
 }
 
-/// Marker: `Self`'s last dimension is `D` — used to bound layer
+/// Marker: `Self`'s last dimension is `D` - used to bound layer
 /// `forward` impls (e.g. `Linear`) to inputs whose trailing feature
 /// dimension matches the layer's expected input size.
 #[diagnostic::on_unimplemented(
@@ -1061,9 +1061,9 @@ impl<H: Dim, T: Shape, D: Dim> HasChannels1D<D> for DimCons<H, T> where
 
 impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
     DimCons<H, T>: AtFromEnd<
-            crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
-            Output = D,
-        >
+        crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+        Output = D,
+    >
 {
 }
 
@@ -1213,7 +1213,7 @@ impl<D: Dim> DynShape for Vec<D> {
     }
 }
 
-/// The 0-dimensional (scalar) shape — an alias for `()`.
+/// The 0-dimensional (scalar) shape - an alias for `()`.
 pub type Scalar = ();
 
 #[cfg(test)]
@@ -1222,7 +1222,7 @@ mod tests {
     use crate::io::limits::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
     use crate::tensor::dtype::{
-        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
+        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding, Q8_0,
     };
 
     #[test]

@@ -3,7 +3,7 @@
 //! `SHP-001` inventoried raw-dimension conversion sites: a shape rule
 //! would erase a known-rank output to a `Vec<usize>`, re-parse it, and assert
 //! the round-trip succeeded. The assertion was a proof obligation no type
-//! stated and no test covered. This file pins the replacement — every one of
+//! stated and no test covered. This file pins the replacement - every one of
 //! those paths now returns a `ShapeError` that names the operation, and where
 //! the axis is known, the axis.
 //!
@@ -116,7 +116,7 @@ fn broadcast_accepts_the_numpy_compatible_cases() {
 fn broadcasting_a_size_one_axis_against_a_size_zero_one_yields_zero() {
     // The regression this pins: the rule used to be `lhs.max(rhs)`, which
     // answers 1 here. NumPy's rule is "take the side that isn't 1", which
-    // answers 0 — an axis with no elements cannot gain one by being
+    // answers 0 - an axis with no elements cannot gain one by being
     // broadcast against.
     let out = <Dyn as BroadcastShape<Dyn>>::output_shape(
         &incin_core::shapes::ShapeBuf::from_slice(&[1]),
@@ -208,8 +208,8 @@ fn matmul_accepts_an_agreeing_contraction() {
 
 #[test]
 fn dyn_matmul_no_longer_returns_a_sentinel_empty_shape() {
-    // Every unmatched rank combination used to fall through to `vec![]` — the
-    // scalar shape — which then propagated as a real answer.
+    // Every unmatched rank combination used to fall through to `vec![]` - the
+    // scalar shape - which then propagated as a real answer.
     let err = <Dyn as MatMulShape<Dyn>>::output_shape(
         &ShapeBuf::from_slice(&[7]),
         &ShapeBuf::from_slice(&[7, 3]),
