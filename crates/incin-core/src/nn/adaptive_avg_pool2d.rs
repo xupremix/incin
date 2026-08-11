@@ -1,5 +1,11 @@
 use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
+use crate::dist::placement::Local;
+use crate::exec::catalog::{AdaptivePool2dAttributes, Descriptor, op};
+use crate::exec::context::ExecutionContext;
+use crate::exec::dispatch;
+use crate::exec::request::TensorHandle;
+use crate::tensor::backend::Execute;
 
 use typenum::Unsigned;
 
@@ -43,8 +49,10 @@ impl<
     I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
     HOut: Unsigned,
     WOut: Unsigned,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend + crate::exec::Capabilities + Execute<Descriptor<op::AdaptiveAvgPool2dExact>>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
+where
+    <B as Execute<Descriptor<op::AdaptiveAvgPool2dExact>>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
@@ -54,15 +62,24 @@ impl<
     #[inline]
     /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = B::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
+        let input = TensorHandle::from_storage::<B, f32, Local>(x.inner());
+        let context = ExecutionContext::from_scope(B::default());
+        let out = dispatch::execute::<op::AdaptiveAvgPool2dExact, B>(
+            &context,
+            AdaptivePool2dAttributes {
+                output: [HOut::USIZE, WOut::USIZE],
+            },
+            &[input],
+        )
+        .map_err(crate::prelude::Error::from)?;
 
         let shape = <I as crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>>::compute_output_shape(
-            x.shape_field(),
+            &x.shape_buf_value(),
         )?;
         Tensor::from_parts(
-            out,
+            out.into(),
             shape,
-            x._dtype.clone(),
+            x._dtype,
             x._device.clone(),
             core::marker::PhantomData,
         )
