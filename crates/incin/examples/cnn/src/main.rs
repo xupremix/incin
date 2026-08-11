@@ -29,7 +29,7 @@ impl SimpleCNN {
     }
 
     /// Forward.
-    pub fn forward(&self, x: Tensor<Dyn>) -> Result<Tensor<Dyn>> {
+    pub fn forward(&self, x: Tensor<Dyn>) -> Result<Tensor<Dyn, DefaultBackend, f32, Grad>> {
         // 1. Feature extraction (Conv2d -> ReLU)
         let f = self.features.forward(x)?;
 

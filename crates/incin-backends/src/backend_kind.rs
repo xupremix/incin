@@ -302,7 +302,7 @@ mod tests {
                 .unwrap()
                 .into_inner();
 
-        let dtype_error = Tensor::<Dyn, B, Dyn>::try_from_storage(
+        let dtype_error = Tensor::<Dyn, B, Dyn, Grad>::try_from_storage(
             storage.clone(),
             ShapeBuf::from_slice(&[1]),
             DTypeId::F64.descriptor(),
@@ -318,7 +318,7 @@ mod tests {
             } if expected == DTypeId::F64.descriptor() && got == DTypeId::F32.descriptor()
         ));
 
-        let device_error = Tensor::<Dyn, B, Dyn>::try_from_storage(
+        let device_error = Tensor::<Dyn, B, Dyn, Grad>::try_from_storage(
             storage,
             ShapeBuf::from_slice(&[1]),
             DTypeId::F32.descriptor(),
