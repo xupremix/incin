@@ -891,6 +891,13 @@ impl<O: Operation> Descriptor<O> {
     }
 }
 
+impl<O: CanonicalOperation> Descriptor<O> {
+    #[must_use]
+    pub const fn operation(&self) -> OperationKind {
+        O::ID
+    }
+}
+
 /// Storage-free serialized descriptor capture. The exact identity is outside
 /// the payload so decoding as the wrong descriptor type fails closed.
 #[cfg(feature = "std")]
