@@ -39,59 +39,6 @@ pub trait Conv2dShape: Shape + DynShape {
     ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError>;
 }
 
-/* legacy tuple Conv2dShape implementation removed: use DimCons/Nil */
-/*
-impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
-    Conv2dShape for (OutC, InC, K, S, P, D)
-{
-    /// Number of output channels.
-    type OutC = OutC;
-    /// Number of input channels.
-    type InC = InC;
-    /// Kernel (window) size.
-    type K = K;
-    /// Stride.
-    type S = S;
-    /// Padding.
-    type P = P;
-    /// Dilation.
-    type D = D;
-    /// The shape argument type used to construct the weight tensor.
-    type WeightArg = (
-        <OutC as Dim>::Arg,
-        <InC as Dim>::Arg,
-        <K as Dim>::Arg,
-        <K as Dim>::Arg,
-    );
-    /// The shape argument type used to construct the bias tensor.
-    type BiasArg = (<OutC as Dim>::Arg,);
-    /// The static shape type of the weight parameter tensor.
-    type WeightShape = (OutC, InC, K, K);
-    /// The static shape type of the bias parameter tensor.
-    type BiasShape = (OutC,);
-
-    #[inline]
-    /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(
-        target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
-    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
-        let out_channels = OutC::resolve_arg(target.0.clone())?;
-        let in_channels = InC::resolve_arg(target.1.clone())?;
-        Ok((
-            out_channels,
-            in_channels,
-            (
-                target.0.clone(),
-                target.1,
-                (),
-                (),
-            ),
-            (target.0,),
-        ))
-    }
-}
-*/
-
 impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
     Conv2dShape
     for crate::shapes::shape::DimCons<

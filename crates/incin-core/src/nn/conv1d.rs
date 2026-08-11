@@ -40,38 +40,6 @@ pub trait Conv1dShape: Shape + DynShape {
     ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError>;
 }
 
-/* legacy tuple Conv1dShape implementation removed: use DimCons/Nil */
-/*
-impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
-    Conv1dShape for (OutC, InC, K, S, P, D)
-{
-    type OutC = OutC;
-    type InC = InC;
-    type K = K;
-    type S = S;
-    type P = P;
-    type D = D;
-    type WeightArg = (<OutC as Dim>::Arg, <InC as Dim>::Arg, <K as Dim>::Arg);
-    type BiasArg = (<OutC as Dim>::Arg,);
-    type WeightShape = (OutC, InC, K);
-    type BiasShape = (OutC,);
-
-    #[inline]
-    fn build_args(
-        target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
-    ) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), ShapeError> {
-        let out_channels = OutC::resolve_arg(target.0.clone())?;
-        let in_channels = InC::resolve_arg(target.1.clone())?;
-        Ok((
-            out_channels,
-            in_channels,
-            (target.0.clone(), target.1, ()),
-            (target.0,),
-        ))
-    }
-}
-*/
-
 impl<OutC: Dim, InC: Dim, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()>>
     Conv1dShape
     for crate::shapes::shape::DimCons<

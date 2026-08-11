@@ -325,10 +325,10 @@ impl AxisMask {
 ///
 /// The representation is deliberately private: callers use this semantic
 /// collection, while the <=64-bit mask remains an implementation detail.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AxisSet(AxisSetRepr);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum AxisSetRepr {
     Empty,
     Inline(AxisMask),
@@ -338,6 +338,28 @@ enum AxisSetRepr {
 impl Default for AxisSet {
     fn default() -> Self {
         Self::EMPTY
+    }
+}
+
+impl serde::Serialize for AxisSet {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let axes: alloc::vec::Vec<_> = self.axes().collect();
+        serializer.collect_seq(axes)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for AxisSet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let axes = alloc::vec::Vec::<usize>::deserialize(deserializer)?;
+        Ok(axes
+            .into_iter()
+            .fold(Self::EMPTY, |set, axis| set.insert(axis)))
     }
 }
 
@@ -399,7 +421,8 @@ impl AxisSet {
 
     pub fn is_contiguous_run(&self) -> bool {
         let axes: alloc::vec::Vec<_> = self.axes().collect();
-        axes.windows(2).all(|pair| pair[1] == pair[0] + 1)
+        axes.windows(2)
+            .all(|pair| pair[0].checked_add(1) == Some(pair[1]))
     }
 
     pub fn try_from_axes(

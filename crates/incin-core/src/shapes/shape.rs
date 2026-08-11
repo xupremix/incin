@@ -76,6 +76,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn try_from_dims(
         dims: &[usize],
     ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        Self::STATIC_VALID;
         Self::validate_dims(dims)?;
         Ok(crate::shapes::ShapeBuf::from_slice(dims))
     }
@@ -710,6 +711,7 @@ pub fn shape_buf_from_dims<S: Shape>(
     operation: crate::shapes::error::OperationKind,
     dims: &[usize],
 ) -> Result<ShapeBuf, crate::shapes::error::ShapeError> {
+    S::STATIC_VALID;
     S::try_from_dims(dims).map_err(|error| match error {
         crate::shapes::error::ShapeError::TargetShapeRejected { .. } => {
             crate::shapes::error::ShapeError::TargetShapeRejected {

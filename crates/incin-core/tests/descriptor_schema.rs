@@ -28,6 +28,23 @@ fn schema_version_is_explicit_and_compatible() {
 }
 
 #[test]
+fn axis_set_serializes_as_canonical_semantic_axes() {
+    let set = AxisSet::EMPTY.insert(70).insert(2);
+    let encoded = serde_json::to_string(&set).unwrap();
+    assert_eq!(encoded, "[2,70]");
+
+    let decoded: AxisSet = serde_json::from_str("[70,2,2]").unwrap();
+    assert_eq!(decoded, set);
+    assert_eq!(decoded.count(), 2);
+}
+
+#[test]
+fn axis_set_deserialization_cannot_create_unordered_contiguous_state() {
+    let decoded: AxisSet = serde_json::from_str("[18446744073709551615,0]").unwrap();
+    assert!(!decoded.is_contiguous_run());
+}
+
+#[test]
 fn catalog_contains_unique_exact_operation_identities() {
     for (index, left) in OPERATION_CATALOG.iter().enumerate() {
         assert!(!left.name.is_empty());
