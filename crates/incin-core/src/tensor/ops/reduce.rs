@@ -371,8 +371,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     pub fn norm(&self, p: f64) -> Result<Tensor<(), B, K, G>>
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
-        B: crate::tensor::backend::FloatOps<B>
-            + Execute<op::Mul>
+        B: Execute<op::Mul>
             + Execute<op::Abs>
             + Execute<op::Sqrt>
             + Execute<op::SumAll>
@@ -400,12 +399,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
 
 impl<
     S: crate::prelude::Shape + crate::shapes::DynShape,
-    B: crate::prelude::Backend
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
-        + Execute<op::Sub>
-        + Execute<op::Mul>,
+    B: crate::prelude::Backend + Execute<op::Sub> + Execute<op::Mul>,
     K: crate::prelude::DType,
     G: crate::prelude::RequiresGrad,
 > Tensor<S, B, K, G>
@@ -629,9 +623,6 @@ where
 impl<
     S: crate::prelude::Shape + crate::shapes::DynShape,
     B: crate::prelude::Backend
-        + FloatOps<B>
-        + NumericOps<B>
-        + TensorOps<B>
         + Execute<op::Sub>
         + Execute<op::Mul>
         + Execute<op::Sqrt>

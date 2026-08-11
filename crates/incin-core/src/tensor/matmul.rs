@@ -382,7 +382,6 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     ) -> Result<Tensor<(), B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
-        B: FloatOps<B> + NumericOps<B> + TensorOps<B>,
         B: Execute<op::Mul> + Execute<op::SumAll> + crate::exec::Capabilities,
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
@@ -399,7 +398,6 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
-        B: TensorOps<B> + FloatOps<B> + NumericOps<B>,
         B: Execute<op::Mul> + Execute<op::UnsqueezeExact> + crate::exec::Capabilities,
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
