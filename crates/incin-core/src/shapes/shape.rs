@@ -96,10 +96,8 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn try_from_dims(
         dims: &[usize],
     ) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        Self::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
-            operation: crate::shapes::error::OperationKind::Storage,
-            rank: dims.len(),
-        })
+        Self::validate_dims(dims)?;
+        Ok(crate::shapes::ShapeBuf::from_slice(dims))
     }
 
     /// Legacy optional adapter for callers that have not moved to structured
@@ -142,6 +140,19 @@ impl<const N: usize> Shape for [usize; N] {
     fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
         (dims.len() == N).then(|| crate::shapes::ShapeBuf::from_slice(dims))
     }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.len() == N {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
+        }
+    }
 }
 
 impl<const N: usize> DynShape for [usize; N] {
@@ -175,6 +186,19 @@ impl Shape for Nil {
             Some(crate::shapes::ShapeBuf::scalar())
         } else {
             None
+        }
+    }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.is_empty() {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
         }
     }
 }
@@ -240,6 +264,24 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
         }
         let _tail_dims = T::from_dyn(&dims[1..])?;
         Some(crate::shapes::ShapeBuf::from_slice(dims))
+    }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.is_empty() {
+            return Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: 0,
+            });
+        }
+        H::validate_size(dims[0]).then_some(()).ok_or(
+            crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            },
+        )?;
+        T::validate_dims(&dims[1..])
     }
 }
 
@@ -709,6 +751,19 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
     fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
         (dims.len() == R::USIZE).then(|| crate::shapes::ShapeBuf::from_slice(dims))
     }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.len() == R::USIZE {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
+        }
+    }
 }
 
 impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> PartialDynShape for Ranked<R> {
@@ -1124,6 +1179,12 @@ impl Shape for Dyn {
     fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
         Some(crate::shapes::ShapeBuf::from_slice(dims))
     }
+
+    fn validate_dims(
+        _: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        Ok(())
+    }
 }
 
 impl DynShape for Dyn {
@@ -1187,6 +1248,19 @@ impl Shape for () {
             None
         }
     }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.is_empty() {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
+        }
+    }
 }
 
 impl PartialDynShape for () {
@@ -1226,6 +1300,19 @@ impl<D: Dim> Shape for Vec<D> {
             Some(crate::shapes::ShapeBuf::from_slice(dims))
         } else {
             None
+        }
+    }
+
+    fn validate_dims(
+        dims: &[usize],
+    ) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if dims.iter().all(|&d| D::validate_size(d)) {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
         }
     }
 }
