@@ -69,6 +69,21 @@ fn invalid_static_arithmetic_is_not_reported_as_static_knowledge() {
 }
 
 #[test]
+fn invalid_symbolic_dimensions_are_zst_specs_not_panic_values() {
+    type InvalidProduct = MulDim<ConstDim<{ usize::MAX }>, ConstDim<2>>;
+    type InvalidDifference = CheckedSubDim<ConstDim<3>, ConstDim<10>>;
+    type InvalidDivision = ExactDivDim<ConstDim<10>, ConstDim<3>>;
+
+    let _ = InvalidProduct::from_arg(usize::MAX);
+    let _ = InvalidDifference::from_arg(0);
+    let _ = InvalidDivision::from_arg(0);
+
+    assert!(InvalidProduct::resolve_arg(usize::MAX).is_err());
+    assert!(InvalidDifference::resolve_arg(0).is_err());
+    assert!(InvalidDivision::resolve_arg(0).is_err());
+}
+
+#[test]
 fn structural_operations_compile_at_rank_16_64_and_200() {
     use incin_core::shapes::idx::{FromEnd, Here};
     use incin_core::shapes::{BroadcastShape, ReduceAt, SwapAxes};

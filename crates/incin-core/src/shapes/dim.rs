@@ -255,7 +255,8 @@ impl<L: Dim, R: Dim> Dim for BroadcastExtent<L, R> {
         }
     }
     fn from_arg(arg: Self::Arg) -> Self {
-        Self::from_size(arg).expect("broadcast extent violates static compatibility")
+        let _ = arg;
+        Self(core::marker::PhantomData)
     }
     fn arg(&self) -> Self::Arg {
         self.size()
@@ -449,7 +450,8 @@ macro_rules! static_op_dim {
                 }
             }
             fn from_arg(arg: Self::Arg) -> Self {
-                Self::from_size(arg).expect("invalid derived dimension")
+                let _ = arg;
+                Self(core::marker::PhantomData)
             }
             fn arg(&self) -> Self::Arg {
                 Default::default()
@@ -530,7 +532,7 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
         })
     }
     fn from_arg(arg: Self::Arg) -> Self {
-        let _ = Extent::from_arg(arg);
+        let _ = arg;
         Self {
             _tag: core::marker::PhantomData,
         }
@@ -586,7 +588,8 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
         }
     }
     fn from_arg(arg: Self::Arg) -> Self {
-        Self::from_size(arg).expect("invalid product dimension")
+        let _ = arg;
+        Self(core::marker::PhantomData)
     }
     fn arg(&self) -> Self::Arg {
         Default::default()
