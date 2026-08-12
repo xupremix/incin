@@ -161,6 +161,20 @@ impl Execute<PayloadOperation> for CompanyBackend {
 impl Execute<CpuIdentityOperation> for CpuBackendImpl<Cpu> {
     type Output = CpuStorage;
 
+    fn supports_custom(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+        assert_eq!(
+            query.operation,
+            OperationIdentity::Custom(CpuIdentityOperation::KEY)
+        );
+        if query.rank > 2 {
+            SupportLevel::Unsupported(incin_core::exec::UnsupportedReason::CustomOperation {
+                operation: CpuIdentityOperation::KEY,
+            })
+        } else {
+            SupportLevel::Native
+        }
+    }
+
     fn execute_shaped<S: Shape>(
         &self,
         request: ExecutionRequest<'_, CpuIdentityOperation, Self>,
@@ -201,6 +215,14 @@ impl Execute<op::TensorFromBytes> for CompanyBackend {
 
 impl Execute<CompanyIdentity> for CpuBackendImpl<Cpu> {
     type Output = ProofLevel;
+
+    fn supports_custom(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+        assert_eq!(
+            query.operation,
+            OperationIdentity::Custom(CompanyIdentity::KEY)
+        );
+        SupportLevel::Native
+    }
 
     fn execute_shaped<S: Shape>(
         &self,
@@ -309,6 +331,20 @@ fn custom_operation_returns_backend_owned_storage() {
     assert_eq!(output.shape.as_ref(), &[2]);
     assert_eq!(output.get(&[0]), 2.0);
     assert_eq!(output.get(&[1]), 4.0);
+}
+
+#[test]
+fn custom_operation_capability_can_reject_an_input_invocation() {
+    let input =
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![1, 2, 2])
+            .unwrap();
+    let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
+    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::default());
+    let error = execute::<CpuIdentityOperation, _>(&context, NoAttributes, &[handle]).unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Backend(BackendError::Unsupported { .. })
+    ));
 }
 
 #[test]

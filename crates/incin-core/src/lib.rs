@@ -92,8 +92,8 @@ pub mod backend_authoring {
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        Backend, Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput,
-        SupportsDType, TensorBackend, TransferTo,
+        Backend, Execute, ExecuteInto, ExecuteOutput, ExecutionRequest, StorageBackend,
+        StorageOutput, SupportsDType, TensorBackend, TransferTo,
     };
     /// Read the tracing graph mid-flight, without draining it.
     ///

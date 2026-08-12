@@ -181,6 +181,12 @@ where
 {
     type Output: ExecuteOutput;
 
+    /// Reports support for an external operation without requiring a second
+    /// capability trait. Built-in dispatch continues to use the catalog.
+    fn supports_custom(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
+        crate::exec::SupportLevel::Native
+    }
+
     /// Run the invocation, told the frontend's shape type.
     ///
     /// `S` is the shape the caller held before the data existed, not a
@@ -220,6 +226,37 @@ where
         request: ExecutionRequest<'_, O, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         self.execute_shaped::<crate::prelude::Dyn>(request)
+    }
+}
+
+/// Executes an operation and converts its backend result at the execution
+/// boundary.
+///
+/// The method belongs to the adapter rather than to a marker trait so generic
+/// callers can name one operation/output contract without repeating an
+/// associated-output conversion bound. The blanket implementation keeps
+/// operation authors responsible for only `Execute<O>`.
+pub trait ExecuteInto<O, R>: Execute<O>
+where
+    O: crate::exec::catalog::Operation,
+{
+    fn execute_into_shaped<S: crate::prelude::Shape>(
+        &self,
+        request: ExecutionRequest<'_, O, Self>,
+    ) -> core::result::Result<R, BackendError>;
+}
+
+impl<B, O, R> ExecuteInto<O, R> for B
+where
+    B: Execute<O>,
+    O: crate::exec::catalog::Operation,
+    B::Output: Into<R>,
+{
+    fn execute_into_shaped<S: crate::prelude::Shape>(
+        &self,
+        request: ExecutionRequest<'_, O, Self>,
+    ) -> core::result::Result<R, BackendError> {
+        self.execute_shaped::<S>(request).map(Into::into)
     }
 }
 

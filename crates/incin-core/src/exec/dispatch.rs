@@ -164,33 +164,46 @@ where
 
     let training = context.training();
     let identity = invocation.descriptor().identity();
-    if matches!(identity, OperationIdentity::Builtin(_)) {
-        for handle in inputs {
-            admit(
-                context.backend(),
-                identity,
-                handle.metadata(),
-                training,
-                context.math_mode(),
-            )
-            .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
+    for handle in inputs {
+        let query = CapabilityQuery {
+            operation: identity.clone(),
+            dtype: handle.metadata().dtype,
+            layout: handle.metadata().layout,
+            rank: handle.metadata().shape.dims().len(),
+            training,
+            math_mode: context.math_mode(),
+        };
+        let support = match identity {
+            OperationIdentity::Builtin(_) => Capabilities::support(context.backend(), &query),
+            OperationIdentity::Custom(_) => {
+                <B as Execute<O>>::supports_custom(context.backend(), &query)
+            }
+        };
+        if let SupportLevel::Unsupported(reason) = support {
+            return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
         }
-        if inputs.is_empty() {
-            for output in invocation.descriptor().outputs() {
-                let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
-                    continue;
-                };
-                let query = CapabilityQuery {
-                    operation: identity.clone(),
-                    dtype,
-                    layout: crate::exec::meta::LayoutClass::Contiguous,
-                    rank: shape.len(),
-                    training,
-                    math_mode: context.math_mode(),
-                };
-                if let SupportLevel::Unsupported(reason) = context.backend().support(&query) {
-                    return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
+    }
+    if inputs.is_empty() {
+        for output in invocation.descriptor().outputs() {
+            let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
+                continue;
+            };
+            let query = CapabilityQuery {
+                operation: identity.clone(),
+                dtype,
+                layout: crate::exec::meta::LayoutClass::Contiguous,
+                rank: shape.len(),
+                training,
+                math_mode: context.math_mode(),
+            };
+            let support = match identity {
+                OperationIdentity::Builtin(_) => Capabilities::support(context.backend(), &query),
+                OperationIdentity::Custom(_) => {
+                    <B as Execute<O>>::supports_custom(context.backend(), &query)
                 }
+            };
+            if let SupportLevel::Unsupported(reason) = support {
+                return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
             }
         }
     }
@@ -280,7 +293,9 @@ where
                     training,
                     math_mode: context.math_mode(),
                 };
-                if let SupportLevel::Unsupported(reason) = context.backend().support(&query) {
+                if let SupportLevel::Unsupported(reason) =
+                    Capabilities::support(context.backend(), &query)
+                {
                     return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
                 }
             }

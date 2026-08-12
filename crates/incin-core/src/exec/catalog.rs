@@ -1203,7 +1203,19 @@ impl CapturedDescriptor {
                 actual: self.schema,
             });
         }
-        postcard::from_bytes(&self.payload).map_err(DescriptorCaptureError::Decode)
+        let descriptor: Descriptor<O> =
+            postcard::from_bytes(&self.payload).map_err(DescriptorCaptureError::Decode)?;
+        if descriptor.identity != crate::exec::OperationIdentity::Builtin(O::ID) {
+            let actual = match descriptor.identity {
+                crate::exec::OperationIdentity::Builtin(operation) => operation,
+                crate::exec::OperationIdentity::Custom(_) => O::ID,
+            };
+            return Err(DescriptorCaptureError::Identity {
+                expected: O::ID,
+                actual,
+            });
+        }
+        Ok(descriptor)
     }
 }
 
@@ -5409,6 +5421,15 @@ mod tests {
         assert!(matches!(
             stale.decode::<op::Conv2dExact>(),
             Err(DescriptorCaptureError::Schema { .. })
+        ));
+
+        let mut forged = invocation.descriptor().clone();
+        forged.identity = crate::exec::OperationIdentity::Builtin(OperationKind::Add);
+        let mut tampered = captured.clone();
+        tampered.payload = postcard::to_allocvec(&forged).unwrap();
+        assert!(matches!(
+            tampered.decode::<op::Conv2dExact>(),
+            Err(DescriptorCaptureError::Identity { .. }) | Err(DescriptorCaptureError::Decode(_))
         ));
     }
 

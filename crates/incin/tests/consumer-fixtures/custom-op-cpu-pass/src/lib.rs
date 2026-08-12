@@ -29,6 +29,11 @@ impl Operation for CompanyOp {
 impl Execute<CompanyOp> for CpuBackendImpl<Cpu> {
     type Output = CpuStorage;
 
+    fn supports_custom(&self, query: &incin::backend_authoring::CapabilityQuery) -> incin::backend_authoring::SupportLevel {
+        assert_eq!(query.operation, incin::backend_authoring::OperationIdentity::Custom(CompanyOp::KEY));
+        incin::backend_authoring::SupportLevel::Native
+    }
+
     fn execute_shaped<S: Shape>(
         &self,
         request: ExecutionRequest<'_, CompanyOp, Self>,

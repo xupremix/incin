@@ -125,7 +125,7 @@ impl FusionPass {
         while i < graph.nodes.len() {
             // Check if this node is a fusion consumer (producer was already merged)
             if fused_pairs.contains(&i) {
-                // Already merged — skip, it was incorporated into the previous kernel
+                // Already merged, skip because it was incorporated into the previous kernel
                 i += 1;
                 continue;
             }
