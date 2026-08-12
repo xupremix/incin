@@ -95,7 +95,12 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
+        let descriptor = <crate::exec::rule::ReduceRule as crate::exec::ShapeRule<(S, C)>>::lower(
+            &self.shape_buf_value(),
+            crate::exec::catalog::AxisAttributes { axis },
+        )
+        .map_err(crate::prelude::Error::Shape)?
+        .into_descriptor();
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
             crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: crate::shapes::error::OperationKind::SumDim,
@@ -146,7 +151,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                     rank: self.shape_buf().len(),
                 },
             ))?;
-        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
+        let descriptor =
+            <crate::exec::rule::ReduceKeepRule as crate::exec::ShapeRule<(S, C)>>::lower(
+                &self.shape_buf_value(),
+                crate::exec::catalog::AxisAttributes { axis },
+            )
+            .map_err(crate::prelude::Error::Shape)?
+            .into_descriptor();
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
             crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: crate::shapes::error::OperationKind::SumKeepDim,

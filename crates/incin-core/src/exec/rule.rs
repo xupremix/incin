@@ -3,13 +3,17 @@
 //! A rule binds a structural frontend proof to the exact descriptor family
 //! consumed by execution. Runtime dimensions remain in `ShapeBuf`.
 
-use super::catalog::{Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op};
+use super::catalog::{
+    AxisAttributes, Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op,
+};
 use super::proof::{ProofLevel, Validated};
 use super::spec::ExecutionDescriptor;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+use crate::shapes::idx::StaticCursor;
 use crate::shapes::reshape::ReshapeShape;
-use crate::shapes::shape::{DynShape, Shape};
+use crate::shapes::shape::{DynShape, Shape, ShapeValue};
+use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::tensor::matmul::MatMulShape;
 
 /// Resolves typed shape operands into a validated canonical descriptor.
@@ -155,6 +159,114 @@ where
         Ok(Validated::new(
             descriptor.into_descriptor(),
             ProofLevel::of::<S>().meet(ProofLevel::of::<T>()),
+        ))
+    }
+}
+
+/// Canonical structural reduction shape rule.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub struct ReduceRule;
+
+impl<S, C> ShapeRule<(S, C)> for ReduceRule
+where
+    C: StaticCursor,
+    S: DynShape + ReduceAt<C>,
+    <S as ReduceAt<C>>::Output: DynShape,
+{
+    type Output = <S as ReduceAt<C>>::Output;
+    type Operands = ShapeBuf;
+    type Args = AxisAttributes;
+    type Descriptor = Descriptor<op::SumDim>;
+
+    fn lower(
+        operands: &Self::Operands,
+        args: Self::Args,
+    ) -> Result<Validated<Self::Descriptor>, ShapeError> {
+        let expected = S::reduce_shape(operands).map_err(|error| match error {
+            crate::err::Error::Shape(error) => error,
+            _ => ShapeError::TargetShapeRejected {
+                operation: OperationKind::SumDim,
+                rank: operands.rank(),
+            },
+        })?;
+        let descriptor = Descriptor::<op::SumDim>::infer_runtime(
+            args,
+            alloc::vec![LogicalTensorMeta {
+                shape: Some(operands.clone()),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .map_err(|error| match error {
+            super::catalog::DescriptorError::Shape(error) => error,
+            _ => ShapeError::TargetShapeRejected {
+                operation: OperationKind::SumDim,
+                rank: expected.rank(),
+            },
+        })?;
+        let actual =
+            descriptor
+                .descriptor()
+                .output_shape()
+                .ok_or(ShapeError::TargetShapeRejected {
+                    operation: OperationKind::SumDim,
+                    rank: expected.rank(),
+                })?;
+        agree(OperationKind::SumDim, &expected, actual)?;
+        Ok(Validated::new(
+            descriptor.into_descriptor(),
+            ProofLevel::of::<S>(),
+        ))
+    }
+}
+
+/// Canonical structural keepdim reduction shape rule.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub struct ReduceKeepRule;
+
+impl<S, C> ShapeRule<(S, C)> for ReduceKeepRule
+where
+    C: StaticCursor,
+    S: DynShape + ReduceKeepAt<C>,
+    <S as ReduceKeepAt<C>>::Output: DynShape,
+{
+    type Output = <S as ReduceKeepAt<C>>::Output;
+    type Operands = ShapeBuf;
+    type Args = AxisAttributes;
+    type Descriptor = Descriptor<op::SumKeepDim>;
+
+    fn lower(
+        operands: &Self::Operands,
+        args: Self::Args,
+    ) -> Result<Validated<Self::Descriptor>, ShapeError> {
+        let descriptor = Descriptor::<op::SumKeepDim>::infer_runtime(
+            args,
+            alloc::vec![LogicalTensorMeta {
+                shape: Some(operands.clone()),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .map_err(|error| match error {
+            super::catalog::DescriptorError::Shape(error) => error,
+            _ => ShapeError::TargetShapeRejected {
+                operation: OperationKind::SumKeepDim,
+                rank: operands.rank(),
+            },
+        })?;
+        let actual =
+            descriptor
+                .descriptor()
+                .output_shape()
+                .ok_or(ShapeError::TargetShapeRejected {
+                    operation: OperationKind::SumKeepDim,
+                    rank: operands.rank(),
+                })?;
+        let expected = ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(actual.clone())?;
+        agree(OperationKind::SumKeepDim, expected.shape_buf(), actual)?;
+        Ok(Validated::new(
+            descriptor.into_descriptor(),
+            ProofLevel::of::<S>(),
         ))
     }
 }
