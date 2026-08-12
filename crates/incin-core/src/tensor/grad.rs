@@ -53,10 +53,6 @@ where
     context.with_grad_mode(mode)
 }
 
-/// Marker for `RequiresGrad` implementors whose value is resolved at
-/// runtime rather than fixed by the type alone (currently only `Dyn`).
-pub trait DynRequiresGrad: RequiresGrad {}
-
 /// A `RequiresGrad` whose value is fully known at compile time (`Grad` or
 /// `NoGrad`, as opposed to `Dyn`) — takes no constructor argument.
 pub trait ConstRequiresGrad: RequiresGrad<Arg = ()> {
@@ -113,10 +109,6 @@ impl RequiresGrad for NoGrad {
         PhantomData
     }
 }
-
-impl DynRequiresGrad for Dyn {}
-impl DynRequiresGrad for Grad {}
-impl DynRequiresGrad for NoGrad {}
 
 impl ConstRequiresGrad for Grad {
     /// Always `true`.

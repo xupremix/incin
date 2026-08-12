@@ -39,9 +39,25 @@ impl Execute<op::Add> for Probe {
     }
 }
 
+fn assert_output<B, O, R>()
+where
+    B: Execute<O, Output = R>,
+    O: incin_core::backend_authoring::Operation,
+    R: incin_core::backend_authoring::ExecuteOutput,
+{
+}
+
 fn supports<K: DType, B: SupportsDType<K>>() {}
 
 fn main() {
+    assert_output::<Probe, op::Add, Vec<usize>>();
+    assert_output::<CpuBackendImpl<Cpu>, op::Add, incin_backends::cpu::CpuStorage>();
+    assert_output::<CpuBackendImpl<Cpu>, op::ArgMax, incin_backends::cpu::CpuStorage>();
+    assert_output::<
+        CpuBackendImpl<Cpu>,
+        op::TopK,
+        (incin_backends::cpu::CpuStorage, incin_backends::cpu::CpuStorage),
+    >();
     supports::<f64, CpuBackendImpl<Cpu>>();
     supports::<f32, WgpuBackendImpl<Wgpu>>();
 
