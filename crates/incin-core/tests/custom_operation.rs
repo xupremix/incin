@@ -5,7 +5,7 @@ extern crate incin_core as incin;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
-    StorageBackend, execute, execute_shaped,
+    StorageBackend, execute, execute_shaped, execute_with_payload,
 };
 use incin_core::exec::catalog::CreationAttributes;
 use incin_core::exec::{
@@ -47,6 +47,29 @@ impl Operation for CompanyIdentity {
 #[derive(Debug, Clone, Default)]
 struct CompanyBackend;
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct PayloadAttributes;
+
+#[derive(Debug, Clone)]
+struct PayloadOperation;
+
+impl Operation for PayloadOperation {
+    type Attributes = PayloadAttributes;
+    const KEY: OperationKey = OperationKey {
+        namespace: std::borrow::Cow::Borrowed("company.example"),
+        name: std::borrow::Cow::Borrowed("payload"),
+        version: 1,
+    };
+    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
+
+    fn infer_outputs(
+        _: &Self::Attributes,
+        _: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+        Ok(Vec::new())
+    }
+}
+
 impl StorageBackend for CompanyBackend {
     const BACKEND_NAME: &'static str = "company";
     type Storage<K: incin_core::prelude::DType> = ();
@@ -79,6 +102,17 @@ impl Execute<CompanyIdentity> for CompanyBackend {
         request: ExecutionRequest<'_, CompanyIdentity, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.operation.proof_level())
+    }
+}
+
+impl Execute<PayloadOperation> for CompanyBackend {
+    type Output = Vec<u8>;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, PayloadOperation, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(request.payload.unwrap_or_default().to_vec())
     }
 }
 
@@ -180,4 +214,17 @@ fn built_in_cpu_backend_executes_a_downstream_operation() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Static);
+}
+
+#[test]
+fn custom_operations_receive_borrowed_execution_payloads() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let output = execute_with_payload::<PayloadOperation, _>(
+        &context,
+        PayloadAttributes,
+        &[],
+        Some(&[1, 2, 3, 4]),
+    )
+    .unwrap();
+    assert_eq!(output, vec![1, 2, 3, 4]);
 }
