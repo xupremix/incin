@@ -117,3 +117,13 @@ fn test_artifact_rejects_invalid_captured_graph() {
     assert!(CompiledArtifact::load(&bytes, &current_version()).is_err());
     assert_ne!(value_id, 999);
 }
+
+#[test]
+fn test_artifact_load_rejects_unframed_json() {
+    let artifact = CompiledArtifact::new(make_test_plan(), current_version(), "unframed".into())
+        .expect("artifact creation should succeed");
+    let framed = artifact.serialize().expect("serialization should succeed");
+    let raw_json = &framed[8..];
+
+    assert!(CompiledArtifact::load(raw_json, &current_version()).is_err());
+}

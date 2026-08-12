@@ -188,6 +188,11 @@ impl CompiledArtifact {
                 limits.max_file_bytes
             )));
         }
+        if !bytes.starts_with(&ARTIFACT_MAGIC) {
+            return Err(Error::Msg(String::from(
+                "compiled artifact is missing the required Incin framing magic",
+            )));
+        }
         let artifact = Self::deserialize(bytes)?;
         artifact.verify_integrity()?;
         artifact.check_compatibility(required_version)?;
