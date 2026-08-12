@@ -89,6 +89,9 @@ impl Capabilities for CompanyBackend {
             OperationIdentity::Builtin(incin_core::prelude::OperationKind::Zeros) => {
                 SupportLevel::Native
             }
+            OperationIdentity::Builtin(incin_core::prelude::OperationKind::TensorFromBytes) => {
+                SupportLevel::Native
+            }
             other => panic!("unexpected capability query: {other:?}"),
         }
     }
@@ -122,6 +125,17 @@ impl Execute<op::Zeros> for CompanyBackend {
     fn execute_shaped<S: Shape>(
         &self,
         request: ExecutionRequest<'_, op::Zeros, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(request.operation.proof_level())
+    }
+}
+
+impl Execute<op::TensorFromBytes> for CompanyBackend {
+    type Output = ProofLevel;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::TensorFromBytes, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.operation.proof_level())
     }
@@ -227,4 +241,73 @@ fn custom_operations_receive_borrowed_execution_payloads() {
     )
     .unwrap();
     assert_eq!(output, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn built_in_creation_requires_the_declared_payload() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let attributes = incin_core::exec::catalog::DataAttributes {
+        shape: vec![1],
+        dtype: DTypeId::F32.descriptor(),
+        device: incin_core::prelude::DeviceId::cpu(),
+        payload: incin_core::exec::catalog::CreationPayload::Bytes { byte_len: 4 },
+    };
+
+    let error = execute_with_payload::<op::TensorFromBytes, _>(
+        &context,
+        attributes.clone(),
+        &[],
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Descriptor(
+            incin_core::exec::DescriptorError::PayloadMissing {
+                operation: incin_core::prelude::OperationKind::TensorFromBytes,
+            }
+        )
+    ));
+
+    let error = execute_with_payload::<op::TensorFromBytes, _>(
+        &context,
+        attributes,
+        &[],
+        Some(&[1, 2]),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Descriptor(
+            incin_core::exec::DescriptorError::PayloadByteLength {
+                operation: incin_core::prelude::OperationKind::TensorFromBytes,
+                expected: 4,
+                actual: 2,
+            }
+        )
+    ));
+}
+
+#[test]
+fn built_in_non_creation_rejects_an_execution_payload() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let error = execute_with_payload::<op::Zeros, _>(
+        &context,
+        incin_core::exec::catalog::CreationAttributes {
+            shape: vec![1],
+            dtype: DTypeId::F32.descriptor(),
+            device: incin_core::prelude::DeviceId::cpu(),
+        },
+        &[],
+        Some(&[1]),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Descriptor(
+            incin_core::exec::DescriptorError::UnexpectedPayload {
+                operation: incin_core::prelude::OperationKind::Zeros,
+            }
+        )
+    ));
 }
