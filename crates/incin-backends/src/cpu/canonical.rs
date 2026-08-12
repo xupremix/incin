@@ -35,8 +35,8 @@ use super::ops::elementwise::{
     canonical_cosh, canonical_elu, canonical_erf, canonical_exp, canonical_fmod, canonical_frac,
     canonical_gelu, canonical_log, canonical_mish, canonical_mul_scalar, canonical_neg,
     canonical_powf, canonical_relu, canonical_remainder, canonical_rsqrt, canonical_sigmoid,
-    canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_tan,
-    canonical_tanh, canonical_trunc, canonical_unary,
+    canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
+    canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1100,7 +1100,7 @@ impl<D: Device> Execute<op::Relu> for CpuBackendImpl<D> {
     }
 }
 
-unary_float_executors![(Swish, swish),];
+canonical_unary_executors![(Swish, canonical_swish),];
 
 canonical_unary_executors![
     (Gelu, canonical_gelu),

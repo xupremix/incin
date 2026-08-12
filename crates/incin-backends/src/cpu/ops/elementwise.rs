@@ -456,6 +456,36 @@ pub(crate) fn canonical_gelu(t: &CpuStorage) -> Result<CpuStorage> {
     })
 }
 
+pub(crate) fn canonical_swish(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Swish, t)?;
+    let t_capture = t.clone();
+    let out_capture = out.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let total: usize = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let grad: Vec<f64> = (0..total)
+                .into_par_iter()
+                .map(|flat_idx| {
+                    let nd_idx = flat_to_nd(flat_idx, &grad_out.shape);
+                    let x = t_capture.get(&nd_idx);
+                    let o = out_capture.get(&nd_idx);
+                    let g = grad_out.get(&nd_idx);
+                    let sig = 1.0 / (1.0 + (-x).exp());
+                    g * (o + sig * (1.0 - o))
+                })
+                .collect();
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grad)?,
+                grad_out.shape.to_vec(),
+            )])
+        }),
+    });
+    Ok(out)
+}
+
 pub(crate) fn canonical_tan(t: &CpuStorage) -> Result<CpuStorage> {
     canonical_unary_with_derivative(UnaryOp::Tan, t, |x| 1.0 + x.tan().powi(2))
 }
@@ -921,40 +951,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn swish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Swish, t)?;
-
-        // swish(x) = x * sigmoid(x)
-        // swish'(x) = out + sigmoid(x)*(1-out) — needs BOTH the output and
-        // the plain sigmoid value at each input position, recomputed inline
-        // (not via a recursive Self::sigmoid call, to avoid an extra tape
-        // push during backward).
-        let t_capture = t.clone();
-        let out_capture = out.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
-                let grad: Vec<f64> = (0..total)
-                    .into_par_iter()
-                    .map(|flat_idx| {
-                        let nd_idx = flat_to_nd(flat_idx, &grad_out.shape);
-                        let x = t_capture.get(&nd_idx);
-                        let o = out_capture.get(&nd_idx);
-                        let g = grad_out.get(&nd_idx);
-                        let sig = 1.0 / (1.0 + (-x).exp());
-                        let deriv = o + sig * (1.0 - o);
-                        g * deriv
-                    })
-                    .collect();
-                Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad)?,
-                    grad_out.shape.to_vec(),
-                )])
-            }),
-        });
-        Ok(out)
+        canonical_swish(t)
     }
 
     /// `tan`.
