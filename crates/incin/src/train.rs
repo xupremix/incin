@@ -571,9 +571,9 @@ impl Trainer {
     /// # Errors
     ///
     /// [`TrainError::CollectivesUnavailable`] if the plan names more than one
-    /// device, and [`TrainError::Step`] — carrying the epoch and batch — if a
+    /// device, and [`TrainError::Step`] carrying the epoch and batch if a
     /// forward pass, backward pass, or optimizer step fails.
-    pub fn fit<B, S, M, O, D, Batch, F>(
+    pub fn fit<B, M, O, D, Batch, F>(
         &self,
         model: &mut M,
         optimizer: &mut O,
@@ -582,14 +582,14 @@ impl Trainer {
     ) -> Result<FitOutcome, TrainError>
     where
         B: Backend,
-        // Generic over the loss's shape rather than fixed to `Dyn`, because a
-        // loss is zero-rank. `mse_loss` returns a scalar tensor. Requiring `Dyn`
-        // here would have meant every caller reshaping their loss to satisfy
-        // the trainer, which is the trainer inventing work.
-        S: incin_core::prelude::Shape + incin_core::prelude::DynShape,
         O: Optimizer<B>,
         D: IntoIterator<Item = Batch> + Clone,
-        F: FnMut(&mut M, Batch) -> incin_core::prelude::Result<Tensor<S, B>>,
+        F: FnMut(
+            &mut M,
+            Batch,
+        ) -> incin_core::prelude::Result<
+            Tensor<incin_core::shapes::Nil, B, f32, incin_core::prelude::Grad>,
+        >,
     {
         if self.plan.is_multi_device() {
             return Err(TrainError::CollectivesUnavailable {

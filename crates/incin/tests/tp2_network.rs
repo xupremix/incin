@@ -24,13 +24,13 @@
 
 use std::time::Duration;
 
-use incin::cuda::CudaBackendImpl;
 use incin::experimental::distributed::{
     DistributedContext, NcclTopology, NcclTransport, StreamId, TensorParallelCollective,
     TensorParallelId, TensorParallelPlanBuilder, TwoRankTensorParallel,
 };
 use incin::prelude::*;
 use incin::typenum::{U0, U1, U2, U4, U6};
+use incin_backends::cuda::CudaBackendImpl;
 
 type CudaB = CudaBackendImpl<CudaN<U0>>;
 
@@ -234,13 +234,13 @@ fn static_local_outputs(
             .unwrap();
     let column_weight = Tensor::<Dyn, CudaB>::from_slice(column_weight(rank), vec![3, 4]).unwrap();
     let column = input
-        .matmul(&column_weight.transpose::<0, 1>().unwrap())
+        .matmul(&column_weight.transpose_runtime(0, 1).unwrap())
         .unwrap();
 
     let row_input = Tensor::<Dyn, CudaB>::from_slice(row_input(rank), vec![1, 2]).unwrap();
     let row_weight = Tensor::<Dyn, CudaB>::from_slice(row_weight(rank), vec![3, 2]).unwrap();
     let row = row_input
-        .matmul(&row_weight.transpose::<0, 1>().unwrap())
+        .matmul(&row_weight.transpose_runtime(0, 1).unwrap())
         .unwrap();
 
     let (query, key, value) = attention_inputs(rank);
@@ -248,7 +248,7 @@ fn static_local_outputs(
     let key = Tensor::<Dyn, CudaB>::from_slice(&key, vec![2, 1]).unwrap();
     let value = Tensor::<Dyn, CudaB>::from_slice(&value, vec![2, 1]).unwrap();
     let scores = query
-        .matmul(&key.transpose::<0, 1>().unwrap())
+        .matmul(&key.transpose_runtime(0, 1).unwrap())
         .unwrap()
         .softmax(1)
         .unwrap();
@@ -274,13 +274,13 @@ fn dyn_local_outputs(
     let input = dyn_tensor(&[1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0], vec![2, 4]);
     let column_weight = dyn_tensor(column_weight(rank), vec![3, 4]);
     let column = input
-        .matmul(&column_weight.transpose::<0, 1>().unwrap())
+        .matmul(&column_weight.transpose_runtime(0, 1).unwrap())
         .unwrap();
 
     let row_input = dyn_tensor(row_input(rank), vec![1, 2]);
     let row_weight = dyn_tensor(row_weight(rank), vec![3, 2]);
     let row = row_input
-        .matmul(&row_weight.transpose::<0, 1>().unwrap())
+        .matmul(&row_weight.transpose_runtime(0, 1).unwrap())
         .unwrap();
 
     let (query, key, value) = attention_inputs(rank);
@@ -288,7 +288,7 @@ fn dyn_local_outputs(
     let key = dyn_tensor(&key, vec![2, 1]);
     let value = dyn_tensor(&value, vec![2, 1]);
     let scores = query
-        .matmul(&key.transpose::<0, 1>().unwrap())
+        .matmul(&key.transpose_runtime(0, 1).unwrap())
         .unwrap()
         .softmax(1)
         .unwrap();
@@ -365,7 +365,9 @@ fn attention_head(rank: usize) -> [f32; 2] {
     output
 }
 
-fn read_f32<K: DType>(storage: &<CudaB as Backend>::Storage<K>) -> Vec<f32> {
+fn read_f32<K: DType>(
+    storage: &<CudaB as incin_core::backend_authoring::StorageBackend>::Storage<K>,
+) -> Vec<f32> {
     let bytes = CudaB::to_bytes::<K>(storage).unwrap();
     bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
 }

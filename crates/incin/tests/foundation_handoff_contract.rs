@@ -24,7 +24,7 @@ fn test_foundation_user_contract_shapes_and_allocation() -> Result<()> {
     let _static = shape![4, const WIDTH];
     let _mixed = shape![batch, const WIDTH];
     let _fixed_rank_runtime = [batch, WIDTH];
-    let _dynamic_rank = vec![batch, WIDTH];
+    let _dynamic_rank = [batch, WIDTH];
 
     // 2. Target allocation without backend alias
     let x = Cpu.zeros(shape![batch, const WIDTH])?;

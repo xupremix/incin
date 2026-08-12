@@ -23,7 +23,6 @@
 
 use std::time::Duration;
 
-use incin::cuda::CudaBackendImpl;
 use incin::experimental::distributed::{
     DataParallelPlanBuilder, DistributedContext, GradientId, NcclTopology, NcclTransport, StreamId,
     TwoRankDataParallel,
@@ -31,6 +30,8 @@ use incin::experimental::distributed::{
 use incin::prelude::*;
 use incin::typenum::U0;
 use incin_backends::cpu::CpuBackendImpl;
+use incin_backends::cuda::CudaBackendImpl;
+use incin_core::tensor::backend::{FloatOps, NumericOps};
 
 type CudaB = CudaBackendImpl<CudaN<U0>>;
 type CpuB = CpuBackendImpl;

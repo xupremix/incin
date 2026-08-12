@@ -19,6 +19,16 @@ pub mod signature;
 #[cfg(any(feature = "autotune", test))]
 pub mod telemetry;
 
+#[cfg(feature = "autotune")]
+pub use cache::{CacheLimits, CacheRecovery, PersistentTuningCache};
+#[cfg(feature = "autotune")]
+pub use identity::{CompilerFingerprint, DeviceFingerprint, TuningEnvironmentFingerprint};
+#[cfg(feature = "autotune")]
+pub use service::{AutotunePolicy, SelectionSource, TuningContext, TuningScope, TuningSelection};
+pub use signature::{AlignmentClass, DTypePolicyId, KernelSignature, RankClass};
+#[cfg(feature = "autotune")]
+pub use telemetry::{TuningExplain, TuningProvenance};
+
 use crate::kernel::KernelAccess;
 #[cfg(any(feature = "autotune", test))]
 use crate::kernel::KernelKey;

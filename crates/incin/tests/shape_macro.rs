@@ -151,7 +151,7 @@ fn dtype_comes_from_the_target_not_the_shape() {
     let as_f32: Tensor<s![2, 2], _, f32, NoGrad> = Cpu.zeros(shape![2, 2]).unwrap();
     assert_eq!(as_f32.to_vec1::<f32>().unwrap(), vec![0.0_f32; 4]);
 
-    let fp64 = Cpu.with_dtype::<f64>().unwrap();
+    let fp64 = Cpu.dtype::<f64>().unwrap();
     let as_f64: Tensor<s![2, 2], _, f64, NoGrad> = fp64.zeros(shape![2, 2]).unwrap();
     assert_eq!(as_f64.to_vec1::<f64>().unwrap(), vec![0.0_f64; 4]);
 }

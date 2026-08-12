@@ -38,7 +38,7 @@ fn logical_masks_feed_selection() -> Result<()> {
     let upper = Cpu.tensor([2.0_f32; 3])?;
 
     let in_range = x.gt(&lower)?.logical_and(&x.lt(&upper)?)?;
-    let zeros = Cpu.zeros([3])?;
+    let zeros = Cpu.tensor([0.0_f32, 0.0, 0.0])?;
 
     let selected = in_range.where_cond(&x, &zeros)?;
 
