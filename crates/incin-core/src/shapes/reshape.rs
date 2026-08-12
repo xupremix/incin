@@ -9,11 +9,6 @@ pub trait ElementCount {
     type Count: typenum::Unsigned;
 }
 
-impl ElementCount for () {
-    /// `Count`.
-    type Count = U1;
-}
-
 impl ElementCount for crate::shapes::Nil {
     type Count = U1;
 }
