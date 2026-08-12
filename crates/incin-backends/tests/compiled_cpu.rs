@@ -6,8 +6,8 @@ use incin_core::compiled::{
 };
 use incin_core::exec::OperationIdentity;
 use incin_core::exec::catalog::{
-    AxisAttributes, CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes,
-    ShapeAttributes, op,
+    AxisAttributes, CapturedDescriptor, Descriptor, LinearAttributes, LogicalTensorMeta,
+    NoAttributes, ShapeAttributes, op,
 };
 use incin_core::graph::Graph;
 use incin_core::prelude::{DTypeId, DeviceId, OperationKind, ShapeBuf};
@@ -314,6 +314,92 @@ fn compiled_cpu_executes_a_chained_matrix_pipeline() {
     assert_eq!(outputs[0].get(&[0, 1]), 9.0);
     assert_eq!(outputs[0].get(&[1, 0]), 1.5);
     assert_eq!(outputs[0].get(&[1, 1]), 3.5);
+}
+
+#[test]
+fn compiled_cpu_reuses_guarded_linear_mlp_for_multiple_batches() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![2, 3], DTypeId::F32, Some("x".into()));
+    let w1 = graph.add_value(vec![4, 3], DTypeId::F32, Some("w1".into()));
+    let hidden = graph.add_value(vec![2, 4], DTypeId::F32, Some("hidden".into()));
+    let activated = graph.add_value(vec![2, 4], DTypeId::F32, Some("activated".into()));
+    let w2 = graph.add_value(vec![2, 4], DTypeId::F32, Some("w2".into()));
+    let y = graph.add_value(vec![2, 2], DTypeId::F32, Some("y".into()));
+    graph.mark_input(x);
+    graph.mark_input(w1);
+    graph.mark_input(w2);
+    graph.mark_output(y);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Linear),
+        vec![x, w1],
+        vec![hidden],
+        Default::default(),
+        Some(payload_with::<op::Linear>(
+            LinearAttributes { has_bias: false },
+            &[&[2, 3], &[4, 3]],
+        )),
+    );
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Relu),
+        vec![hidden],
+        vec![activated],
+        Default::default(),
+        Some(payload::<op::Relu>(&[&[2, 4]])),
+    );
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Linear),
+        vec![activated, w2],
+        vec![y],
+        Default::default(),
+        Some(payload_with::<op::Linear>(
+            LinearAttributes { has_bias: false },
+            &[&[2, 4], &[2, 4]],
+        )),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+
+    let w1_storage = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![
+            1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+        ]),
+        vec![4, 3],
+    )
+    .unwrap();
+    let w2_storage = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
+        vec![2, 4],
+    )
+    .unwrap();
+    let batch_two = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+        vec![2, 3],
+    )
+    .unwrap();
+    let output_two =
+        CpuCompiledInvocation::new(vec![batch_two, w1_storage.clone(), w2_storage.clone()])
+            .run(&plan)
+            .unwrap();
+    assert_eq!(output_two[0].shape.as_ref(), &[2, 2]);
+    assert_eq!(output_two[0].get(&[0, 0]), 1.0);
+    assert_eq!(output_two[0].get(&[0, 1]), 6.0);
+    assert_eq!(output_two[0].get(&[1, 0]), 4.0);
+    assert_eq!(output_two[0].get(&[1, 1]), 15.0);
+
+    let batch_three = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0]),
+        vec![3, 3],
+    )
+    .unwrap();
+    let output_three = CpuCompiledInvocation::new(vec![batch_three, w1_storage, w2_storage])
+        .run(&plan)
+        .unwrap();
+    assert_eq!(output_three[0].shape.as_ref(), &[3, 2]);
+    assert_eq!(output_three[0].get(&[2, 0]), 3.0);
+    assert_eq!(output_three[0].get(&[2, 1]), 12.0);
 }
 
 #[test]
