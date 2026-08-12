@@ -120,6 +120,35 @@ fn admit<B: Capabilities>(
     }
 }
 
+fn admit_operation<O, B>(
+    backend: &B,
+    operation: &OperationIdentity,
+    metadata: &TensorMeta,
+    context_training: bool,
+    math_mode: crate::exec::policy::MathMode,
+) -> Result<SupportLevel, UnsupportedReason>
+where
+    O: Operation,
+    B: Capabilities + Execute<O>,
+{
+    let query = CapabilityQuery {
+        operation: operation.clone(),
+        dtype: metadata.dtype,
+        layout: metadata.layout,
+        rank: metadata.shape.dims().len(),
+        training: context_training,
+        math_mode,
+    };
+    let support = match operation {
+        OperationIdentity::Builtin(_) => Capabilities::support(backend, &query),
+        OperationIdentity::Custom(_) => Execute::<O>::supports_custom(backend, &query),
+    };
+    match support {
+        SupportLevel::Unsupported(reason) => Err(reason),
+        level => Ok(level),
+    }
+}
+
 /// Validate and run one operation on `context`'s backend.
 ///
 /// `O` names the exact operation identity, so the descriptor, capability query
@@ -165,21 +194,13 @@ where
     let training = context.training();
     let identity = invocation.descriptor().identity();
     for handle in inputs {
-        let query = CapabilityQuery {
-            operation: identity.clone(),
-            dtype: handle.metadata().dtype,
-            layout: handle.metadata().layout,
-            rank: handle.metadata().shape.dims().len(),
+        if let Err(reason) = admit_operation::<O, B>(
+            context.backend(),
+            identity,
+            handle.metadata(),
             training,
-            math_mode: context.math_mode(),
-        };
-        let support = match identity {
-            OperationIdentity::Builtin(_) => Capabilities::support(context.backend(), &query),
-            OperationIdentity::Custom(_) => {
-                <B as Execute<O>>::supports_custom(context.backend(), &query)
-            }
-        };
-        if let SupportLevel::Unsupported(reason) = support {
+            context.math_mode(),
+        ) {
             return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
         }
     }
@@ -258,9 +279,9 @@ where
 
     let training = context.training();
     let identity = invocation.descriptor().identity();
-    if matches!(identity, OperationIdentity::Builtin(_)) {
+    {
         for handle in inputs {
-            admit(
+            admit_operation::<O, B>(
                 context.backend(),
                 identity,
                 handle.metadata(),
@@ -293,9 +314,15 @@ where
                     training,
                     math_mode: context.math_mode(),
                 };
-                if let SupportLevel::Unsupported(reason) =
-                    Capabilities::support(context.backend(), &query)
-                {
+                let support = match identity {
+                    OperationIdentity::Builtin(_) => {
+                        Capabilities::support(context.backend(), &query)
+                    }
+                    OperationIdentity::Custom(_) => {
+                        <B as Execute<O>>::supports_custom(context.backend(), &query)
+                    }
+                };
+                if let SupportLevel::Unsupported(reason) = support {
                     return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
                 }
             }

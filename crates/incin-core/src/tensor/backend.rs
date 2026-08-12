@@ -229,37 +229,6 @@ where
     }
 }
 
-/// Executes an operation and converts its backend result at the execution
-/// boundary.
-///
-/// The method belongs to the adapter rather than to a marker trait so generic
-/// callers can name one operation/output contract without repeating an
-/// associated-output conversion bound. The blanket implementation keeps
-/// operation authors responsible for only `Execute<O>`.
-pub trait ExecuteInto<O, R>: Execute<O>
-where
-    O: crate::exec::catalog::Operation,
-{
-    fn execute_into_shaped<S: crate::prelude::Shape>(
-        &self,
-        request: ExecutionRequest<'_, O, Self>,
-    ) -> core::result::Result<R, BackendError>;
-}
-
-impl<B, O, R> ExecuteInto<O, R> for B
-where
-    B: Execute<O>,
-    O: crate::exec::catalog::Operation,
-    B::Output: Into<R>,
-{
-    fn execute_into_shaped<S: crate::prelude::Shape>(
-        &self,
-        request: ExecutionRequest<'_, O, Self>,
-    ) -> core::result::Result<R, BackendError> {
-        self.execute_shaped::<S>(request).map(Into::into)
-    }
-}
-
 /// Resolves the dtype represented by `K` for a concrete runtime device.
 pub trait SupportsDType<K: DType> {
     /// Resolve and validate dtype metadata before storage is created.
