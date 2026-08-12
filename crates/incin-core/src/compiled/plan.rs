@@ -14,10 +14,11 @@ use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
     Debug, Default, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum FusionPolicy {
-    /// Kernel fusion enabled (default).
-    #[default]
+    /// Kernel fusion is requested, but compiled fused lowering is not yet
+    /// available for this plan.
     Enabled,
-    /// Kernel fusion disabled for debugging or exact execution tracing.
+    /// Kernel fusion disabled for exact execution tracing.
+    #[default]
     Disabled,
 }
 
@@ -49,7 +50,7 @@ impl CompileOptions {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            fusion: FusionPolicy::Enabled,
+            fusion: FusionPolicy::Disabled,
             dynamic_shapes: DynamicShapePolicy::Guarded,
         }
     }
@@ -114,6 +115,11 @@ impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
     #[must_use]
     pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
+        if matches!(options.fusion, FusionPolicy::Enabled) {
+            return Err(Error::Msg(
+                "compiled fusion is not available for executable plans".into(),
+            ));
+        }
         for node in &graph.nodes {
             let site = node.execution_site.ok_or_else(|| {
                 Error::Msg(alloc::format!(
@@ -127,13 +133,6 @@ impl CompiledPlan {
                     node.operation,
                     site
                 )));
-            }
-            if matches!(options.fusion, FusionPolicy::Enabled)
-                && matches!(node.operation, crate::exec::OperationIdentity::Custom(_))
-            {
-                return Err(Error::Msg(
-                    "compiled fusion requires canonical built-in executable lowering".into(),
-                ));
             }
         }
         let mut symbols = SymbolTable::default();

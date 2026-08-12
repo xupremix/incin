@@ -99,3 +99,63 @@ fn invocation_guards_share_symbols_across_inputs() {
         .is_err()
     );
 }
+
+#[test]
+fn composite_dimensions_are_validated_after_symbol_binding() {
+    let hidden = DimExpr::Symbol(SymbolId(21));
+    let shape = ShapeExpr {
+        rank: RankExpr::Static(2),
+        dims: vec![
+            hidden.clone(),
+            DimExpr::Mul(Box::new(hidden), Box::new(DimExpr::Const(2))),
+        ],
+        constraints: Vec::new(),
+    };
+    let guard = ShapeGuard::new(0, shape, DTypeId::F32.into());
+    assert!(guard.check(&[8, 16], DTypeId::F32.into()).is_ok());
+    assert!(guard.check(&[8, 15], DTypeId::F32.into()).is_err());
+}
+
+#[test]
+fn strict_and_guarded_plans_have_distinct_shape_contracts() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![2, 4], DTypeId::F32, Some("x".into()));
+    graph.mark_input(x);
+    let captured = CapturedGraph::capture(&graph).unwrap();
+
+    let guarded = CompiledPlan::compile(captured.clone(), CompileOptions::new()).unwrap();
+    assert!(
+        guarded
+            .verify_inputs(&[(vec![9, 4], DTypeId::F32.into())])
+            .is_ok()
+    );
+
+    let strict = CompiledPlan::compile(
+        captured,
+        CompileOptions {
+            dynamic_shapes: incin_core::experimental::compiled::DynamicShapePolicy::Strict,
+            ..CompileOptions::new()
+        },
+    )
+    .unwrap();
+    assert!(
+        strict
+            .verify_inputs(&[(vec![9, 4], DTypeId::F32.into())])
+            .is_err()
+    );
+}
+
+#[test]
+fn requested_fusion_fails_closed_without_fused_lowering() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![2, 4], DTypeId::F32, Some("x".into()));
+    graph.mark_input(x);
+    let result = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions {
+            fusion: incin_core::experimental::compiled::FusionPolicy::Enabled,
+            ..CompileOptions::new()
+        },
+    );
+    assert!(result.is_err());
+}

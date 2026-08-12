@@ -93,6 +93,11 @@ impl SymbolEnvironment {
         }
     }
 
+    #[must_use]
+    pub fn is_bound(&self, id: SymbolId) -> bool {
+        self.bindings.contains_key(&id)
+    }
+
     pub fn validate_constraints(&self, constraints: &[Constraint]) -> Result<(), String> {
         for constraint in constraints {
             let valid = match constraint {
