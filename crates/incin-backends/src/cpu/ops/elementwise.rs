@@ -224,6 +224,10 @@ pub(crate) fn canonical_powf(t: &CpuStorage, exponent: f64) -> Result<CpuStorage
     elementwise_unary_typed(UnaryOp::Powf(exponent), t)
 }
 
+pub(crate) fn canonical_clamp(t: &CpuStorage, min: f64, max: f64) -> Result<CpuStorage> {
+    elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -1138,7 +1142,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         min: f64,
         max: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
+        canonical_clamp(t, min, max)
     }
 
     /// `sign`.

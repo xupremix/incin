@@ -30,8 +30,8 @@ use incin_core::prelude::{
 
 use super::CpuBackendImpl;
 use super::ops::elementwise::{
-    canonical_add_scalar, canonical_mul_scalar, canonical_neg, canonical_powf, canonical_relu,
-    canonical_step, canonical_unary,
+    canonical_add_scalar, canonical_clamp, canonical_mul_scalar, canonical_neg, canonical_powf,
+    canonical_relu, canonical_step, canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1236,7 +1236,7 @@ impl<D: Device> Execute<op::Clamp> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as FloatOps<Self>>::clamp::<f32>(input, attributes.min, attributes.max)
+        canonical_clamp(input, attributes.min, attributes.max)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
