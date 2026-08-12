@@ -70,7 +70,7 @@ test-utils = ["incin-core/test-utils", "incin-backends/test-utils"]
 # Extension contracts for backend authors.
 backend-authoring = []
 # Curated preview types for compiled execution.
-compiled = ["incin-core/compiled"]
+compiled = ["incin-core/compiled", "incin-backends/compiled"]
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
