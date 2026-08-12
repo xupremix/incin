@@ -463,3 +463,30 @@ fn capture_sessions_keep_graphs_independent() {
     assert!(first.snapshot().outputs.is_empty());
     assert!(second.snapshot().outputs.is_empty());
 }
+
+#[test]
+fn capture_sessions_record_values_and_nodes_independently() {
+    use incin_core::prelude::CaptureSession;
+
+    let first = CaptureSession::new();
+    let second = CaptureSession::new();
+    let first_input = first.add_value(vec![2], DTypeId::F32, Some("first".into()));
+    let first_output = first.add_value(vec![2], DTypeId::F32, Some("first_out".into()));
+    first.add_node_with_identity(
+        incin_core::graph::OpType::Relu,
+        vec![first_input],
+        vec![first_output],
+        std::collections::BTreeMap::new(),
+        None,
+    );
+    let second_input = second.add_value(vec![3], DTypeId::F32, Some("second".into()));
+
+    assert_eq!(first.snapshot().nodes.len(), 1);
+    assert_eq!(first.snapshot().values.len(), 2);
+    assert_eq!(second.snapshot().nodes.len(), 0);
+    assert_eq!(second.snapshot().values.len(), 1);
+    assert_eq!(first_input, 0);
+    assert_eq!(second_input, 0);
+    assert_eq!(first.snapshot().values.get(&0).unwrap().shape, vec![2]);
+    assert_eq!(second.snapshot().values.get(&0).unwrap().shape, vec![3]);
+}

@@ -49,6 +49,33 @@ impl CaptureSession {
     pub fn mark_output(&self, value_id: ValueId) {
         self.graph.lock().mark_output(value_id);
     }
+
+    /// Adds a value and returns its session-local identifier.
+    pub fn add_value(
+        &self,
+        shape: alloc::vec::Vec<usize>,
+        dtype: DTypeId,
+        name: Option<alloc::string::String>,
+    ) -> ValueId {
+        self.graph.lock().add_value(shape, dtype, name)
+    }
+
+    /// Adds a node while preserving its typed execution identity.
+    pub fn add_node_with_identity(
+        &self,
+        op: OpType,
+        inputs: alloc::vec::Vec<ValueId>,
+        outputs: alloc::vec::Vec<ValueId>,
+        attributes: alloc::collections::BTreeMap<
+            alloc::string::String,
+            crate::graph::AttributeValue,
+        >,
+        identity: Option<crate::exec::OperationIdentity>,
+    ) -> usize {
+        self.graph
+            .lock()
+            .add_node_with_identity(op, inputs, outputs, attributes, identity)
+    }
 }
 
 /// Drain the process-wide tracing graph, returning everything recorded since
