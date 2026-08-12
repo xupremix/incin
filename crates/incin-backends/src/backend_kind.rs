@@ -361,7 +361,12 @@ mod tests {
         let reduced = tensor.clone().sum_all().unwrap();
         assert_eq!(reduced.to_scalar::<f32>().unwrap(), 4.0);
 
-        let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
+        let transferred =
+            <Tensor<Dyn, B, Dyn> as incin_core::nn::module::ToDevice<B, Dyn>>::to_device(
+                tensor,
+                &DeviceId::cpu(),
+            )
+            .unwrap();
         assert_eq!(transferred.dims(), vec![2, 2]);
         assert_eq!(transferred.dtype(), DTypeId::F32.descriptor());
         assert_eq!(transferred.device().unwrap(), DeviceId::cpu());
@@ -369,6 +374,23 @@ mod tests {
             transferred.sum_all().unwrap().to_scalar::<f32>().unwrap(),
             4.0
         );
+    }
+
+    #[cfg(feature = "cpu")]
+    #[test]
+    fn device_transfer_detaches_tracked_tensor_type() {
+        type B = crate::IncinBackend<Dyn>;
+        let tensor =
+            Tensor::<Dyn, B, Dyn, Grad>::ones(([1], DTypeId::F32.descriptor(), DeviceId::cpu()))
+                .unwrap();
+        let transferred =
+            <Tensor<Dyn, B, Dyn, Grad> as incin_core::nn::module::ToDevice<B, Dyn>>::to_device(
+                tensor,
+                &DeviceId::cpu(),
+            )
+            .unwrap();
+        fn assert_detached(_: &Tensor<Dyn, B, Dyn, incin_core::prelude::NoGrad>) {}
+        assert_detached(&transferred);
     }
 
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
@@ -393,7 +415,12 @@ mod tests {
         type Source = crate::IncinBackend<Cpu>;
         type Target = crate::IncinBackend<Dyn>;
         let tensor = Tensor::<Dyn, Source>::from_slice(&[1.0f32, 2.0, 3.0], [3]).unwrap();
-        let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
+        let transferred =
+            <Tensor<Dyn, Source> as incin_core::nn::module::ToDevice<Source, Dyn>>::to_device(
+                tensor,
+                &DeviceId::cpu(),
+            )
+            .unwrap();
         fn assert_target(_: &Tensor<Dyn, Target>) {}
         assert_target(&transferred);
         assert!(matches!(

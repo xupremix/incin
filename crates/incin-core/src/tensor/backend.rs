@@ -160,6 +160,7 @@ pub trait ExecuteOutput {}
 pub trait StorageOutput {}
 
 impl<T: StorageOutput> ExecuteOutput for T {}
+impl ExecuteOutput for ShapeBuf {}
 impl ExecuteOutput for crate::exec::ProofLevel {}
 impl ExecuteOutput for f64 {}
 impl ExecuteOutput for i64 {}

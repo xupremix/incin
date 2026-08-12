@@ -63,6 +63,8 @@ pub mod template {
         meta: TensorMeta,
     }
 
+    impl incin_core::backend_authoring::StorageOutput for TemplateStorage {}
+
     impl TemplateStorage {
         /// Validate a buffer and its intended shape into checked metadata.
         pub fn try_new(dims: &[usize], values: Vec<f32>) -> Result<Self, String> {
