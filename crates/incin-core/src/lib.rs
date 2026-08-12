@@ -6,11 +6,6 @@
 // this crate boundary instead of boxing every error variant.
 #![allow(clippy::result_large_err)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(
-    feature = "nightly",
-    feature(generic_const_exprs),
-    allow(incomplete_features)
-)]
 
 #[macro_use]
 pub(crate) extern crate alloc;

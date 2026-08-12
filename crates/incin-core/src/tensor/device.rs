@@ -330,7 +330,7 @@ mod metal_partial {
 
         /// Returns the selected logical ordinal.
         #[must_use]
-        pub const fn ordinal(self) -> usize {
+        pub const fn ordinal(&self) -> usize {
             self.ordinal
         }
     }
