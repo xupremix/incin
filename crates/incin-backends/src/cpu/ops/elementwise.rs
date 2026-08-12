@@ -269,6 +269,11 @@ pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStora
     Ok(out)
 }
 
+pub(crate) fn canonical_softmax<D: Device>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    let log_values = log_softmax::<D, f32>(t, dim)?;
+    canonical_unary(UnaryOp::Exp, &log_values)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -1143,8 +1148,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         // D-02 (Plan 04-01): softmax is now exp(log_softmax(x, dim)).
         // log_softmax shares the same max-subtracted kernel as cross_entropy_loss,
         // eliminating two independent compositions of the same formula.
-        let ls = log_softmax::<D, K>(t, dim)?;
-        <Self as FloatOps<Self>>::exp::<K>(&ls)
+        canonical_softmax::<D>(t, dim)
     }
 
     /// `powf`.

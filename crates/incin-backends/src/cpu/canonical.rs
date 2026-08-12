@@ -31,8 +31,8 @@ use incin_core::prelude::{
 use super::CpuBackendImpl;
 use super::ops::elementwise::{
     canonical_add_scalar, canonical_atan2, canonical_clamp, canonical_fmod, canonical_mul_scalar,
-    canonical_neg, canonical_powf, canonical_relu, canonical_remainder, canonical_step,
-    canonical_unary,
+    canonical_neg, canonical_powf, canonical_relu, canonical_remainder, canonical_softmax,
+    canonical_step, canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1277,7 +1277,7 @@ impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as FloatOps<Self>>::softmax::<f32>(input, axis)
+        canonical_softmax::<D>(input, axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
