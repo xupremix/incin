@@ -29,6 +29,7 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
+use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
 use super::ops::elementwise::{
     canonical_abs, canonical_acos, canonical_acosh, canonical_add_scalar, canonical_asin,
     canonical_asinh, canonical_atan, canonical_atan2, canonical_atanh, canonical_clamp,
@@ -39,6 +40,7 @@ use super::ops::elementwise::{
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
+use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
 use super::ops::shape_ops::{
     diag_storage, div_scalar_storage, flatten_storage, narrow_storage, squeeze_storage,
     sub_scalar_storage, transpose_storage, tril_storage, triu_storage, unsqueeze_storage,
@@ -835,7 +837,7 @@ impl<D: Device> Execute<op::MaxPool2d> for CpuBackendImpl<D> {
         let attributes = request.operation.descriptor().attributes();
         let pair = |[height, width]: [usize; 2]| (height, width);
 
-        <Self as ModuleOps<Self>>::max_pool2d::<f32>(
+        max_pool2d_impl::<D, f32>(
             input,
             pair(attributes.kernel),
             pair(attributes.stride),
@@ -864,7 +866,7 @@ impl<D: Device> Execute<op::AvgPool2d> for CpuBackendImpl<D> {
         let attributes = request.operation.descriptor().attributes();
         let pair = |[height, width]: [usize; 2]| (height, width);
 
-        <Self as ModuleOps<Self>>::avg_pool2d::<f32>(
+        avg_pool2d_impl::<D, f32>(
             input,
             pair(attributes.kernel),
             pair(attributes.stride),
@@ -902,7 +904,7 @@ impl<D: Device> Execute<op::Conv1dExact> for CpuBackendImpl<D> {
 
         // `Conv1dAttributes` already carries one extent per field, so unlike the
         // two-dimensional forms there is nothing to collapse.
-        <Self as ModuleOps<Self>>::conv1d::<f32>(
+        conv1d_impl::<D, f32>(
             activation,
             weight,
             bias,
@@ -968,7 +970,7 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CpuBackendImpl<D> {
              both",
         )?;
 
-        <Self as ModuleOps<Self>>::conv_transpose2d::<f32>(
+        conv_transpose2d_impl::<D, f32>(
             activation,
             weight,
             bias,
@@ -999,7 +1001,7 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CpuBackendImpl<D> {
         )?;
         f32_only(operation, &[Some(input)])?;
         let [height, width] = request.operation.descriptor().attributes().output;
-        <Self as ModuleOps<Self>>::adaptive_avg_pool2d::<f32>(input, (height, width))
+        adaptive_avg_pool2d_impl::<D, f32>(input, (height, width))
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
