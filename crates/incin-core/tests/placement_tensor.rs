@@ -241,6 +241,23 @@ fn dyn_metadata_mismatches_are_rejected_before_a_tensor_is_minted() {
 }
 
 #[test]
+fn static_global_shape_is_validated_before_placement_metadata_is_minted() {
+    let storage = Tensor::<Dyn, B>::zeros(vec![2, 8]).unwrap().into_inner();
+    let error = ReplicatedTensor::try_from_distributed_storage(
+        storage,
+        ShapeBuf::from_slice(&[3, 8]),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        0,
+        &replicated_proof(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, PlacedTensorError::Shape(_)));
+}
+
+#[test]
 fn dyn_reshard_uses_the_runtime_legal_transition_table() {
     type DynamicTensor = Tensor<Dyn, B, Dyn, Grad, Dyn>;
 

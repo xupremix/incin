@@ -411,6 +411,8 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
                 op: "gradient tracking",
             });
         }
+        let shape = ShapeValue::<S>::try_new(global_shape.clone())
+            .map_err(|error| PlacedTensorError::Shape(error.to_string()))?;
         let tensor_global = global_shape.as_ref().to_vec();
         let proof_global = proof.global_shape().dims().to_vec();
         if tensor_global != proof_global {
@@ -471,7 +473,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
 
         Ok(Self {
             inner,
-            _shape: ShapeValue::from_validated(global_shape),
+            _shape: shape,
             _dtype: dtype,
             _device: device,
             _grad: grad,
