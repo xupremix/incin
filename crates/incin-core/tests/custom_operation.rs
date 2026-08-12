@@ -75,6 +75,29 @@ impl Operation for PayloadOperation {
 }
 
 #[derive(Debug, Clone)]
+struct MetadataFreeOperation;
+
+impl Operation for MetadataFreeOperation {
+    type Attributes = NoAttributes;
+    const KEY: OperationKey = OperationKey {
+        namespace: std::borrow::Cow::Borrowed("company.example"),
+        name: std::borrow::Cow::Borrowed("metadata_free"),
+        version: 1,
+    };
+
+    fn infer_outputs(
+        _: &Self::Attributes,
+        _: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+        Ok(vec![LogicalTensorMeta {
+            shape: Some(ShapeBuf::SCALAR),
+            dtype: None,
+            device: None,
+        }])
+    }
+}
+
+#[derive(Debug, Clone)]
 struct CpuIdentityOperation;
 
 impl Operation for CpuIdentityOperation {
@@ -155,6 +178,32 @@ impl Execute<PayloadOperation> for CompanyBackend {
         request: ExecutionRequest<'_, PayloadOperation, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.payload.unwrap_or_default().to_vec())
+    }
+}
+
+impl Execute<MetadataFreeOperation> for CompanyBackend {
+    type Output = ProofLevel;
+
+    fn supports_custom_operation(
+        &self,
+        operation: &OperationIdentity,
+        _: bool,
+        _: incin_core::exec::MathMode,
+    ) -> SupportLevel {
+        assert_eq!(
+            operation,
+            &OperationIdentity::Custom(MetadataFreeOperation::KEY)
+        );
+        SupportLevel::Unsupported(incin_core::exec::UnsupportedReason::CustomOperation {
+            operation: MetadataFreeOperation::KEY,
+        })
+    }
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, MetadataFreeOperation, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(request.operation.proof_level())
     }
 }
 
@@ -386,6 +435,29 @@ fn custom_operations_receive_borrowed_execution_payloads() {
     )
     .unwrap();
     assert_eq!(output, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn metadata_free_custom_operations_cannot_bypass_capability_admission() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let error = execute::<MetadataFreeOperation, _>(&context, NoAttributes, &[]).unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Backend(BackendError::Unsupported { .. })
+    ));
+
+    let expected = ShapeValue::<incin_core::prelude::Dyn>::try_new(ShapeBuf::SCALAR).unwrap();
+    let error = execute_shaped::<MetadataFreeOperation, _, incin_core::prelude::Dyn>(
+        &context,
+        NoAttributes,
+        &[],
+        &expected,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        incin_core::exec::CanonicalError::Backend(BackendError::Unsupported { .. })
+    ));
 }
 
 #[test]

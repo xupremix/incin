@@ -149,6 +149,25 @@ where
     }
 }
 
+fn admit_metadata_free_operation<O, B>(
+    backend: &B,
+    operation: &OperationIdentity,
+    training: bool,
+    math_mode: crate::exec::policy::MathMode,
+) -> Result<(), UnsupportedReason>
+where
+    O: Operation,
+    B: Execute<O>,
+{
+    let OperationIdentity::Custom(_) = operation else {
+        return Ok(());
+    };
+    match Execute::<O>::supports_custom_operation(backend, operation, training, math_mode) {
+        SupportLevel::Unsupported(reason) => Err(reason),
+        SupportLevel::Native | SupportLevel::Composed | SupportLevel::Fallback => Ok(()),
+    }
+}
+
 /// Validate and run one operation on `context`'s backend.
 ///
 /// `O` names the exact operation identity, so the descriptor, capability query
@@ -205,10 +224,12 @@ where
         }
     }
     if inputs.is_empty() {
+        let mut queried = false;
         for output in invocation.descriptor().outputs() {
             let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
                 continue;
             };
+            queried = true;
             let query = CapabilityQuery {
                 operation: identity.clone(),
                 dtype,
@@ -226,6 +247,15 @@ where
             if let SupportLevel::Unsupported(reason) = support {
                 return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
             }
+        }
+        if !queried {
+            admit_metadata_free_operation::<O, B>(
+                context.backend(),
+                identity,
+                training,
+                context.math_mode(),
+            )
+            .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
         }
     }
 
@@ -302,10 +332,12 @@ where
         // allocation is contiguous by construction, so the layout is not inferred
         // from anything, it is a fact about what the backend is being told to make.
         if inputs.is_empty() {
+            let mut queried = false;
             for output in invocation.descriptor().outputs() {
                 let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
                     continue;
                 };
+                queried = true;
                 let query = CapabilityQuery {
                     operation: identity.clone(),
                     dtype,
@@ -325,6 +357,15 @@ where
                 if let SupportLevel::Unsupported(reason) = support {
                     return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
                 }
+            }
+            if !queried {
+                admit_metadata_free_operation::<O, B>(
+                    context.backend(),
+                    identity,
+                    training,
+                    context.math_mode(),
+                )
+                .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
             }
         }
     }

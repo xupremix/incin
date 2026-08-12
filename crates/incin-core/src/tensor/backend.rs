@@ -187,6 +187,17 @@ where
         crate::exec::SupportLevel::Native
     }
 
+    /// Reports support for a custom operation when no operand or output
+    /// metadata exists from which to build a complete capability query.
+    fn supports_custom_operation(
+        &self,
+        _operation: &crate::exec::OperationIdentity,
+        _training: bool,
+        _math_mode: crate::exec::MathMode,
+    ) -> crate::exec::SupportLevel {
+        crate::exec::SupportLevel::Native
+    }
+
     /// Run the invocation, told the frontend's shape type.
     ///
     /// `S` is the shape the caller held before the data existed, not a
