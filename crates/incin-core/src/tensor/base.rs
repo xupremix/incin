@@ -395,6 +395,11 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         O: crate::exec::ExecutionDescriptor,
         B: SupportsDType<K>,
     {
+        validate_gradient_dtype::<B, K, G>(&dtype, &grad).map_err(|error| {
+            PlacedTensorError::MetadataResolution {
+                message: error.to_string(),
+            }
+        })?;
         let tensor_global = global_shape.as_ref().to_vec();
         let proof_global = proof.global_shape().dims().to_vec();
         if tensor_global != proof_global {

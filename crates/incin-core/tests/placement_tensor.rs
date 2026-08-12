@@ -29,6 +29,7 @@ type Mesh = MeshSpec<Data<U1>, TensorParallel<U2>>;
 type Global = DimCons<U2, DimCons<U8, Nil>>;
 type ReplicatedTensor = Tensor<Global, B, f32, Grad, Replicated<Mesh>>;
 type ShardedTensor = Tensor<Global, B, f32, Grad, Sharded<Mesh, U1>>;
+type ReplicatedIntegerTensor = Tensor<Global, B, i64, Grad, Replicated<Mesh>>;
 
 #[test]
 fn local_placement_metadata_remains_zero_sized() {
@@ -41,6 +42,27 @@ fn local_placement_metadata_remains_zero_sized() {
         core::mem::size_of::<<Sharded<Mesh, U1> as Placement>::Field>(),
         core::mem::size_of::<usize>()
     );
+}
+
+#[test]
+fn distributed_construction_rejects_integer_gradient_tracking() {
+    let storage = Tensor::<Dyn, B, i64>::zeros(vec![2, 8]).unwrap().into_inner();
+    let error = ReplicatedIntegerTensor::try_from_distributed_storage(
+        storage,
+        Global::try_from_dims(&[2, 8]).unwrap(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        0,
+        &replicated_proof(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        PlacedTensorError::MetadataResolution { message }
+            if message.contains("gradient tracking")
+    ));
 }
 
 fn reshape(input: &[usize], output: &[usize]) -> Descriptor<op::ReshapeExact> {
