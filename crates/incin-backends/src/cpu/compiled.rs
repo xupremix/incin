@@ -11,6 +11,28 @@ use incin_core::prelude::{Cpu, DTypeDescriptor, Dyn, Error, Result};
 
 use super::{CpuBackendImpl, CpuStorage};
 
+macro_rules! cpu_compiled_operations {
+    ($callback:ident) => {
+        $callback!(
+            Add => op::Add,
+            Relu => op::Relu,
+            MatMulExact => op::MatMulExact,
+            Linear => op::Linear,
+            Addmm => op::Addmm,
+        );
+    };
+}
+
+macro_rules! supports_cpu_operation {
+    ($($kind:ident => $descriptor:ty,)*) => {
+        fn supports_cpu_operation(operation: incin_core::prelude::OperationKind) -> bool {
+            matches!(operation, $(incin_core::prelude::OperationKind::$kind)|*)
+        }
+    };
+}
+
+cpu_compiled_operations!(supports_cpu_operation);
+
 /// Inputs and outputs for one executable CPU compiled invocation.
 #[derive(Debug, Clone)]
 pub struct CpuCompiledInvocation {
@@ -28,17 +50,8 @@ impl CpuCompiledPlan {
     /// canonical lowering.
     pub fn try_new(plan: &CompiledPlan) -> Result<Self> {
         for node in &plan.graph.nodes {
-            let supported = matches!(
-                node.operation,
-                OperationIdentity::Builtin(
-                    incin_core::prelude::OperationKind::Add
-                        | incin_core::prelude::OperationKind::Relu
-                        | incin_core::prelude::OperationKind::MatMulExact
-                        | incin_core::prelude::OperationKind::Linear
-                        | incin_core::prelude::OperationKind::Addmm
-                )
-            );
-            if !supported {
+            if !matches!(node.operation, OperationIdentity::Builtin(operation) if supports_cpu_operation(operation))
+            {
                 return Err(Error::Msg(format!(
                     "compiled CPU lowering does not support {:?}",
                     node.operation
@@ -125,28 +138,7 @@ impl CpuCompiledInvocation {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let output = match operation {
-                incin_core::prelude::OperationKind::Add => {
-                    execute::<op::Add>(&context, payload, &inputs)?
-                }
-                incin_core::prelude::OperationKind::Relu => {
-                    execute::<op::Relu>(&context, payload, &inputs)?
-                }
-                incin_core::prelude::OperationKind::MatMulExact => {
-                    execute::<op::MatMulExact>(&context, payload, &inputs)?
-                }
-                incin_core::prelude::OperationKind::Linear => {
-                    execute::<op::Linear>(&context, payload, &inputs)?
-                }
-                incin_core::prelude::OperationKind::Addmm => {
-                    execute::<op::Addmm>(&context, payload, &inputs)?
-                }
-                _ => {
-                    return Err(Error::Msg(format!(
-                        "compiled CPU lowering does not support {operation}"
-                    )));
-                }
-            };
+            let output = dispatch_cpu_operation(operation, &context, payload, &inputs)?;
             let output_id = *node
                 .outputs
                 .first()
@@ -179,6 +171,28 @@ impl CpuCompiledInvocation {
             .collect()
     }
 }
+
+macro_rules! dispatch_cpu_operation {
+    ($($kind:ident => $descriptor:ty,)*) => {
+        fn dispatch_cpu_operation(
+            operation: incin_core::prelude::OperationKind,
+            context: &ExecutionContext<CpuBackendImpl<Cpu>>,
+            payload: &incin_core::graph::DescriptorPayload,
+            inputs: &[&CpuStorage],
+        ) -> Result<CpuStorage> {
+            match operation {
+                $(incin_core::prelude::OperationKind::$kind => {
+                    execute::<$descriptor>(context, payload, inputs)
+                })*
+                _ => Err(Error::Msg(format!(
+                    "compiled CPU lowering does not support {operation}"
+                ))),
+            }
+        }
+    };
+}
+
+cpu_compiled_operations!(dispatch_cpu_operation);
 
 fn execute<O>(
     context: &ExecutionContext<CpuBackendImpl<Cpu>>,
