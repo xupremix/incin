@@ -160,7 +160,7 @@ fn named_batch_broadcast_preserves_name_and_static_extent() {
 }
 
 #[test]
-fn bmm_preserves_named_static_output_type() {
+fn matmul_preserves_named_static_output_type() {
     type B = DummyBackend<Cpu>;
     type L = s![Batch: 25, 3, Features: 64];
     type R = s![Batch: 1, Features: 64, 5];
@@ -168,7 +168,7 @@ fn bmm_preserves_named_static_output_type() {
 
     let lhs: Tensor<L, B> = Tensor::ones(()).unwrap();
     let rhs: Tensor<R, B> = Tensor::ones(()).unwrap();
-    let output = lhs.bmm(&rhs).unwrap();
+    let output = lhs.matmul(&rhs).unwrap();
 
     fn output_type(_: &Tensor<Expected, B>) {}
     output_type(&output);

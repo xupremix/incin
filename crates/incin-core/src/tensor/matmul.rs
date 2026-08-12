@@ -460,44 +460,6 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         )
     }
 
-    /// Batched matrix multiplication for 3D tensors: `(B, M, K) x (B, K, N) -> (B, M, N)`.
-    ///
-    /// This compatibility spelling uses the same exact structural matmul
-    /// descriptor as `matmul`; it does not call a parallel backend family
-    /// implementation.
-    pub fn bmm<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G1>) -> Result<Tensor<S1::Output, B, K, G1>>
-    where
-        S1: DynShape + MatMulShape<S2>,
-        S2: DynShape,
-        B: Execute<op::MatMulExact> + crate::exec::Capabilities,
-        <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
-    {
-        let output_shape = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
-            .map_err(crate::prelude::Error::Shape)?;
-        let expected = crate::shapes::ShapeValue::<S1::Output>::try_new(output_shape.clone())
-            .map_err(crate::prelude::Error::Shape)?;
-        let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
-        let context = crate::tensor::grad::execution_context::<B, G1>(&self._grad);
-        let inner = G1::grad_mode(&self._grad)
-            .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<op::MatMulExact, B, S1::Output>(
-                    &context,
-                    crate::exec::catalog::NoAttributes,
-                    &[lhs, rhs],
-                    &expected,
-                )
-            })?
-            .into();
-        Tensor::<S1::Output, B, K, G1>::from_shape_value(
-            inner,
-            expected,
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
-        )
-    }
-
     /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
     pub fn scaled_dot_product_attention<S2: Shape, S3: Shape, S4: Shape>(
         q: &Tensor<S1, B, K, G1>,
