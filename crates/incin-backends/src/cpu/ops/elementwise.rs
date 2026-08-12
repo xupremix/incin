@@ -166,6 +166,24 @@ pub(crate) fn canonical_neg(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Step, t)?;
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let zeros = vec![0.0f64; total];
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(zeros)?,
+                grad_out.shape.to_vec(),
+            )])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -542,23 +560,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn step<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Step, t)?;
-
-        // step'(x) = 0 almost everywhere.
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
-                let zeros = vec![0.0f64; total];
-                Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(zeros)?,
-                    grad_out.shape.to_vec(),
-                )])
-            }),
-        });
-        Ok(out)
+        canonical_step(t)
     }
 
     /// `mish`.
