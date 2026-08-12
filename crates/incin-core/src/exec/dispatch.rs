@@ -160,6 +160,8 @@ where
 
     let invocation = O::infer_invocation(attributes, logical)?;
 
+    validate_execution_payload::<O>(&invocation, payload)?;
+
     let training = context.training();
     if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
         for handle in inputs {
@@ -238,6 +240,8 @@ where
 
     let invocation = O::infer_invocation_typed(attributes, logical, expected)?;
 
+    validate_execution_payload::<O>(&invocation, payload)?;
+
     let training = context.training();
     if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
         for handle in inputs {
@@ -290,6 +294,50 @@ where
             payload,
         })
         .map_err(CanonicalError::Backend)
+}
+
+fn validate_execution_payload<O>(
+    invocation: &crate::exec::catalog::ValidatedInvocation<O>,
+    payload: Option<&[u8]>,
+) -> Result<(), CanonicalError>
+where
+    O: Operation,
+{
+    let attributes = invocation.descriptor().attributes();
+    let data =
+        (attributes as &dyn core::any::Any).downcast_ref::<crate::exec::catalog::DataAttributes>();
+    let operation = match O::IDENTITY {
+        OperationIdentity::Builtin(operation) => operation,
+        OperationIdentity::Custom(_) => {
+            if payload.is_some() {
+                return Err(CanonicalError::Descriptor(
+                    crate::exec::catalog::DescriptorError::UnexpectedPayload {
+                        operation: crate::shapes::error::OperationKind::Storage,
+                    },
+                ));
+            }
+            return Ok(());
+        }
+    };
+    match data {
+        Some(data) => match payload {
+            Some(bytes) if bytes.len() == data.payload.byte_len() => Ok(()),
+            Some(bytes) => Err(CanonicalError::Descriptor(
+                crate::exec::catalog::DescriptorError::PayloadByteLength {
+                    operation,
+                    expected: data.payload.byte_len(),
+                    actual: bytes.len(),
+                },
+            )),
+            None => Err(CanonicalError::Descriptor(
+                crate::exec::catalog::DescriptorError::PayloadMissing { operation },
+            )),
+        },
+        None if payload.is_some() => Err(CanonicalError::Descriptor(
+            crate::exec::catalog::DescriptorError::UnexpectedPayload { operation },
+        )),
+        None => Ok(()),
+    }
 }
 
 /// The support level `operation` would resolve to for one operand, without

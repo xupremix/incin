@@ -874,6 +874,7 @@ pub trait Operation: Clone + fmt::Debug + 'static {
     type Attributes: Clone
         + fmt::Debug
         + PartialEq
+        + core::any::Any
         + serde::Serialize
         + for<'de> serde::Deserialize<'de>;
 
@@ -1265,6 +1266,14 @@ pub enum DescriptorError {
         expected: usize,
         actual: usize,
     },
+    /// A creation operation was dispatched without its borrowed bytes.
+    PayloadMissing {
+        operation: OperationKind,
+    },
+    /// A non-creation operation received an execution payload.
+    UnexpectedPayload {
+        operation: OperationKind,
+    },
 }
 
 impl From<crate::prelude::ShapeError> for DescriptorError {
@@ -1352,6 +1361,12 @@ impl fmt::Display for DescriptorError {
                 f,
                 "{operation}: payload byte length {actual} does not match {expected}"
             ),
+            Self::PayloadMissing { operation } => {
+                write!(f, "{operation}: creation payload is missing")
+            }
+            Self::UnexpectedPayload { operation } => {
+                write!(f, "{operation}: unexpected execution payload")
+            }
         }
     }
 }

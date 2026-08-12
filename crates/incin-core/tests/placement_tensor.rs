@@ -62,8 +62,7 @@ fn distributed_construction_rejects_integer_gradient_tracking() {
 
     assert!(matches!(
         error,
-        PlacedTensorError::MetadataResolution { message }
-            if message.contains("gradient tracking")
+        PlacedTensorError::GradientDType { op, .. } if op == "gradient tracking"
     ));
 }
 

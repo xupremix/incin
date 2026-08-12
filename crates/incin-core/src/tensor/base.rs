@@ -182,6 +182,15 @@ pub enum PlacedTensorError {
         /// Underlying typed resolution failure.
         message: alloc::string::String,
     },
+    /// Gradient tracking was requested for a non-floating dtype.
+    #[error(
+        "gradient tracking requires a floating dtype, got {dtype:?} on backend {backend} for {op}"
+    )]
+    GradientDType {
+        dtype: DTypeDescriptor,
+        backend: &'static str,
+        op: &'static str,
+    },
     /// A sealed proof does not describe the tensor's current placement.
     #[error("distributed proof expects input {proof:?}, tensor is {tensor:?}")]
     InputPlacement {
@@ -395,11 +404,13 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         O: crate::exec::ExecutionDescriptor,
         B: SupportsDType<K>,
     {
-        validate_gradient_dtype::<B, K, G>(&dtype, &grad).map_err(|error| {
-            PlacedTensorError::MetadataResolution {
-                message: error.to_string(),
-            }
-        })?;
+        if G::requires_grad(&grad) && !K::descriptor(&dtype).is_float() {
+            return Err(PlacedTensorError::GradientDType {
+                dtype: K::descriptor(&dtype),
+                backend: B::BACKEND_NAME,
+                op: "gradient tracking",
+            });
+        }
         let tensor_global = global_shape.as_ref().to_vec();
         let proof_global = proof.global_shape().dims().to_vec();
         if tensor_global != proof_global {
