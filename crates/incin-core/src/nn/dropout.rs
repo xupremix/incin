@@ -71,7 +71,8 @@ where
         }
 
         let input = TensorHandle::from_storage::<B, K, Local>(&x.inner);
-        let context = crate::tensor::grad::execution_context::<B, G>(&x._grad);
+        let context = crate::tensor::grad::execution_context::<B, G>(&x._grad)
+            .with_training(self.is_training);
         let output = dispatch::execute_shaped::<op::Dropout, B, S>(
             &context,
             DropoutAttributes {

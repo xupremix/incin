@@ -31,7 +31,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             has_bias: true,
         };
         let shape = self._shape.clone();
-        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let context =
+            crate::tensor::grad::execution_context::<B, G>(&self._grad).with_training(true);
         let inner =
             dispatch::execute_shaped::<op::LayerNorm, B, S>(&context, attributes, &inputs, &shape)
                 .map_err(crate::prelude::Error::from)?;

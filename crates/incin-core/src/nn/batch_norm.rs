@@ -279,7 +279,7 @@ where
             TensorHandle::from_storage::<B, K, Local>(running_mean.inner()),
             TensorHandle::from_storage::<B, K, Local>(running_var.inner()),
         ];
-        let context = ExecutionContext::from_scope(B::default());
+        let context = ExecutionContext::from_scope(B::default()).with_training(false);
         let out = dispatch::execute_shaped::<op::BatchNorm, B, InS>(
             &context,
             BatchNormAttributes {
