@@ -149,12 +149,36 @@ where
     pub payload: Option<crate::exec::request::ExecutionPayload<'a>>,
 }
 
+/// A value returned by a backend executor.
+///
+/// Execution results are deliberately constrained to backend-owned storage or
+/// an explicitly sanctioned transport value. This keeps arbitrary control
+/// values out of the kernel boundary while still allowing byte readback and
+/// structured multi-output operations.
+pub trait ExecuteOutput {}
+
+pub trait StorageOutput {}
+
+impl<T: StorageOutput> ExecuteOutput for T {}
+impl ExecuteOutput for crate::exec::ProofLevel {}
+impl ExecuteOutput for f64 {}
+impl ExecuteOutput for i64 {}
+impl ExecuteOutput for () {}
+impl ExecuteOutput for f32 {}
+impl ExecuteOutput for i32 {}
+
+impl ExecuteOutput for alloc::vec::Vec<u8> {}
+impl ExecuteOutput for alloc::vec::Vec<usize> {}
+impl<T: ExecuteOutput> ExecuteOutput for alloc::vec::Vec<T> {}
+
+impl<L: ExecuteOutput, R: ExecuteOutput> ExecuteOutput for (L, R) {}
+
 /// Executes one descriptor type. Absence of an implementation is a compile-time fact.
 pub trait Execute<O>: StorageBackend + Sized
 where
     O: crate::exec::catalog::Operation,
 {
-    type Output;
+    type Output: ExecuteOutput;
 
     /// Run the invocation, told the frontend's shape type.
     ///

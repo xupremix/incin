@@ -50,6 +50,7 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("forward_model_building_mismatch", "E0277"),
         ("execution_request_requires_validated", "E0308"),
         ("execute_is_not_blanket", "E0277"),
+        ("execution_output_must_be_backend_owned", "E0277"),
         ("flatten_invalid_range", "error[E0277]"),
         ("kernel_conv2d_channel_mismatch", "error[E0277]"),
         ("layer_builder_invalid_count", "E0277"),

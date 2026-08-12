@@ -161,6 +161,8 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for MetalBackendIm
     }
 }
 
+impl incin_core::backend_authoring::StorageOutput for MetalStorage {}
+
 impl<D: Device> Backend for MetalBackendImpl<D> {
     type RawVar = MetalVar;
     type Grads = MetalGrads;

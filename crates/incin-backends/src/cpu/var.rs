@@ -30,6 +30,8 @@ use crate::cpu::storage::CpuStorage;
 #[derive(Debug, Clone)]
 pub struct CpuVar(pub(crate) Rc<RefCell<CpuStorage>>);
 
+impl incin_core::backend_authoring::ExecuteOutput for CpuVar {}
+
 /// Read the current value of `var` as a plain `CpuStorage`.
 ///
 /// Implemented as `var.0.borrow().clone()` — a scoped borrow that clones

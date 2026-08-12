@@ -1,0 +1,24 @@
+error[E0277]: the trait bound `usize: ExecuteOutput` is not satisfied
+  --> tests/compile_fail/execution_output_must_be_backend_owned.rs:22:19
+   |
+22 |     type Output = usize;
+   |                   ^^^^^ the trait `StorageOutput` is not implemented for `usize`
+   |
+help: the following other types implement trait `ExecuteOutput`
+  --> src/tensor/backend.rs
+   |
+   | impl ExecuteOutput for f64 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+   | impl ExecuteOutput for i64 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `i64`
+   | impl ExecuteOutput for () {}
+   | impl ExecuteOutput for f32 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+   | impl ExecuteOutput for i32 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `i32`
+   = note: required for `usize` to implement `ExecuteOutput`
+note: required by a bound in `incin::backend_authoring::Execute::Output`
+  --> src/tensor/backend.rs
+   |
+   |     type Output: ExecuteOutput;
+   |                  ^^^^^^^^^^^^^ required by this bound in `Execute::Output`

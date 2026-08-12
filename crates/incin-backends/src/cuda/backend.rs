@@ -2922,6 +2922,8 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CudaBackendImp
     }
 }
 
+impl incin_core::backend_authoring::StorageOutput for CudaStorage {}
+
 impl<D: Device> Backend for CudaBackendImpl<D> {
     type RawVar = CudaVar;
     type Grads = CudaGrads;

@@ -154,6 +154,8 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CpuBackendImpl
     }
 }
 
+impl incin_core::backend_authoring::StorageOutput for storage::CpuStorage {}
+
 impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
     /// `RawVar`.
     type RawVar = var::CpuVar;

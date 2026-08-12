@@ -95,6 +95,8 @@ impl<D: Device> StorageBackend for CandleBackend<D> {
     }
 }
 
+impl incin_core::backend_authoring::StorageOutput for CandleStorage {}
+
 impl<D: Device> Capabilities for CandleBackend<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
         // Candle is a third-party backend with no registry of its own. Its

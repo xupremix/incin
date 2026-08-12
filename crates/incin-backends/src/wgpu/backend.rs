@@ -195,6 +195,8 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for WgpuBackendImp
     }
 }
 
+impl incin_core::backend_authoring::StorageOutput for WgpuStorage {}
+
 impl<D: Device> Backend for WgpuBackendImpl<D> {
     /// `RawVar`.
     type RawVar = WgpuVar;

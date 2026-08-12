@@ -73,6 +73,11 @@ pub struct TracingTensor<T> {
     pub value_id: ValueId,
 }
 
+impl<T: crate::tensor::backend::ExecuteOutput> crate::tensor::backend::ExecuteOutput
+    for TracingTensor<T>
+{
+}
+
 #[derive(Clone)]
 /// A `TracingBackend` variable handle: the real backend's `RawVar` plus
 /// the `ValueId` identifying this variable's node in the tracing graph.

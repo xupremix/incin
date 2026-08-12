@@ -27,7 +27,7 @@ impl StorageBackend for Probe {
 }
 
 impl Execute<op::Add> for Probe {
-    type Output = usize;
+    type Output = Vec<usize>;
 
     fn execute_shaped<ShapeTy: Shape>(
         &self,
@@ -35,7 +35,7 @@ impl Execute<op::Add> for Probe {
     ) -> Result<Self::Output, BackendError> {
         assert_eq!(request.operation.descriptor().outputs().len(), 1);
         assert!(request.inputs[0].downcast_ref::<Storage>().is_some());
-        Ok(request.inputs.len())
+        Ok(vec![request.inputs.len()])
     }
 }
 
@@ -71,5 +71,5 @@ fn main() {
         context: &context,
         payload: None,
     };
-    assert_eq!(Execute::execute(context.backend(), request).unwrap(), 1);
+    assert_eq!(Execute::execute(context.backend(), request).unwrap(), vec![1]);
 }

@@ -144,6 +144,8 @@ pub enum DispatchStorage {
     Unavailable,
 }
 
+impl incin_core::backend_authoring::StorageOutput for DispatchStorage {}
+
 impl DispatchStorage {
     /// Checked physical metadata of whichever backend currently holds the data.
     #[must_use]
@@ -190,6 +192,8 @@ pub enum DispatchVar {
     #[doc(hidden)]
     Unavailable,
 }
+
+impl incin_core::backend_authoring::ExecuteOutput for DispatchVar {}
 
 /// Gradient collection owned by a runtime-selected backend.
 #[non_exhaustive]
