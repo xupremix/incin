@@ -29,7 +29,7 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
-use super::ops::elementwise::{canonical_relu, canonical_unary};
+use super::ops::elementwise::{canonical_neg, canonical_relu, canonical_unary};
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1075,7 +1075,6 @@ unary_float_executors![
     (Gelu, gelu),
     (Abs, abs),
     (Exp, exp),
-    (Neg, neg),
     (Sqrt, sqrt),
     (Log, log),
     (Tanh, tanh),
@@ -1095,6 +1094,24 @@ unary_float_executors![
     (Trunc, trunc),
     (Frac, frac),
 ];
+
+impl<D: Device> Execute<op::Neg> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::Neg, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Neg;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        canonical_neg(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
 
 macro_rules! direct_unary_float_executors {
     ($(($operation:ident, $kernel:ident)),* $(,)?) => {$(

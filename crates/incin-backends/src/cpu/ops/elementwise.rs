@@ -155,6 +155,17 @@ pub(crate) fn canonical_unary(op: UnaryOp, t: &CpuStorage) -> Result<CpuStorage>
     elementwise_unary_typed(op, t)
 }
 
+pub(crate) fn canonical_neg(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = negate(t);
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![negate(grad_out)])),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -680,16 +691,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn neg<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = negate(t);
-
-        // neg'(x) = -1 (constant; no input capture needed).
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![negate(grad_out)])),
-        });
-        Ok(out)
+        canonical_neg(t)
     }
 
     /// `sqrt`.
