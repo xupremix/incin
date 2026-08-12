@@ -1211,6 +1211,16 @@ impl CapturedDescriptor {
         self.operation
     }
 
+    #[must_use]
+    pub const fn schema(&self) -> u32 {
+        self.schema
+    }
+
+    #[must_use]
+    pub fn payload(&self) -> &[u8] {
+        &self.payload
+    }
+
     pub fn decode<O: CanonicalOperation>(&self) -> Result<Descriptor<O>, DescriptorCaptureError>
     where
         O::Attributes: AttributeContract,

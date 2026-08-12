@@ -26,6 +26,8 @@ pub use incin_core::prelude::*;
 mod canonical;
 #[cfg(feature = "compiled")]
 pub mod compiled;
+#[cfg(feature = "compiled")]
+pub use compiled::CpuCompiledInvocation;
 pub(crate) mod creation;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.
 pub(crate) mod gradcheck;
