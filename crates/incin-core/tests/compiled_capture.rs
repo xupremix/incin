@@ -1,5 +1,7 @@
 #![cfg(feature = "compiled")]
 
+extern crate incin_core as incin;
+
 use incin_core::exec::OperationIdentity;
 use incin_core::exec::{DimExpr, SymbolId};
 use incin_core::experimental::compiled::CapturedGraph;
@@ -57,4 +59,15 @@ fn test_eager_graph_capture_rejects_undefined_output() {
     graph.mark_output(999); // Undefined value ID 999
 
     assert!(CapturedGraph::capture(&graph).is_err());
+}
+
+#[test]
+fn typed_input_projection_keeps_static_axes_and_symbols_runtime_axes() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![7, 768], DTypeId::F32, Some("input".into()));
+    graph.mark_input_with_shape::<incin::prelude::s![usize, 768]>(input);
+
+    let expression = &graph.values[&input].shape_expr;
+    assert!(matches!(expression.dims[0], DimExpr::Symbol(SymbolId(_))));
+    assert_eq!(expression.dims[1], DimExpr::Const(768));
 }
