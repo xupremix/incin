@@ -181,17 +181,9 @@ impl DynShape for Nil {
     }
 }
 
-impl PartialDynShape for Nil {
-    const RANK: usize = 0;
-}
-
-impl<H: Dim, T: Shape + PartialDynShape> PartialDynShape for DimCons<H, T> {
-    const RANK: usize = 1 + <T as PartialDynShape>::RANK;
-}
-
-impl<H: Dim, T: Shape + DynShape + PartialDynShape> DynShape for DimCons<H, T> {
+impl<H: Dim, T: Shape + DynShape> DynShape for DimCons<H, T> {
     fn rank(_: &ShapeBuf) -> usize {
-        1 + <T as PartialDynShape>::RANK
+        T::RANK.map_or(1, |rank| rank + 1)
     }
 }
 
@@ -650,10 +642,6 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
     }
 }
 
-impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> PartialDynShape for Ranked<R> {
-    const RANK: usize = R::USIZE;
-}
-
 impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> DynShape for Ranked<R> {
     fn rank(_: &ShapeBuf) -> usize {
         R::USIZE
@@ -1040,13 +1028,6 @@ impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
 {
 }
 
-/// A `DynShape` whose rank is additionally known at compile time (as
-/// opposed to `Dyn`, whose rank is runtime-only).
-pub trait PartialDynShape: DynShape {
-    /// The compile-time-known number of dimensions.
-    const RANK: usize;
-}
-
 ///
 /// --- Dyn ---
 ///
@@ -1148,7 +1129,7 @@ mod tests {
         assert_eq!(<Ranked<typenum::U3> as DynShape>::rank(&field), 3);
         assert_eq!(<Ranked<typenum::U3> as DynShape>::numel(&field), 24);
         assert_eq!(field.dims(), &[2, 3, 4]);
-        assert_eq!(<Ranked<typenum::U3> as PartialDynShape>::RANK, 3);
+        assert_eq!(<Ranked<typenum::U3> as Shape>::RANK, Some(3));
     }
 
     #[test]

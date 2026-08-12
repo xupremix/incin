@@ -402,7 +402,7 @@ impl BroadcastShape<Dyn> for Nil {
     }
 }
 
-impl<H: Dim, T: Shape + DynShape + PartialDynShape> BroadcastShape<Dyn> for DimCons<H, T> {
+impl<H: Dim, T: Shape + DynShape> BroadcastShape<Dyn> for DimCons<H, T> {
     type Output = Dyn;
 
     fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError> {
@@ -542,8 +542,8 @@ impl<H: Dim, T: Shape> BroadcastShape<DimCons<H, T>> for Nil {
 impl<LH: Dim, LT, RH: Dim, RT, LRev, RRev, RevOut> BroadcastShape<DimCons<RH, RT>>
     for DimCons<LH, LT>
 where
-    LT: Shape + crate::shapes::PartialDynShape + crate::shapes::DynShape + StaticShapeNames,
-    RT: Shape + crate::shapes::PartialDynShape + crate::shapes::DynShape + StaticShapeNames,
+    LT: Shape + crate::shapes::DynShape + StaticShapeNames,
+    RT: Shape + crate::shapes::DynShape + StaticShapeNames,
     DimCons<LH, LT>: ReverseShape<Output = LRev>,
     DimCons<RH, RT>: ReverseShape<Output = RRev>,
     LRev: Shape + BroadcastReversed<RRev>,
