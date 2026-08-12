@@ -15,10 +15,11 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, DTypeId, Local, Shape, ShapeBuf, ShapeValue, TracingBackend,
-    extract_graph,
+    Backend, BackendError, Cpu, Device, DeviceId, DTypeId, Local, Shape, ShapeBuf, ShapeValue,
+    TracingBackend, extract_graph,
 };
 use incin_core::test_utils::DummyBackend;
+use core::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct IdentityAttributes {
@@ -51,6 +52,50 @@ impl Operation for CompanyIdentity {
 
 #[derive(Debug, Clone, Default)]
 struct CompanyBackend;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct CompanyDevice;
+
+impl Device for CompanyDevice {
+    type Arg = ();
+    type Field = PhantomData<Self>;
+
+    fn init(_: Self::Arg) -> Self::Field {
+        PhantomData
+    }
+
+    fn to_incin(_: &Self::Field) -> incin_core::prelude::Result<DeviceId> {
+        Ok(DeviceId::custom(0x434f_4d50_414e_5901, 7))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct StaticRankProbe;
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct StaticRankProbeAttributes {
+    shape: ShapeBuf,
+}
+
+impl Operation for StaticRankProbe {
+    type Attributes = StaticRankProbeAttributes;
+    const KEY: OperationKey = OperationKey {
+        namespace: std::borrow::Cow::Borrowed("company.example"),
+        name: std::borrow::Cow::Borrowed("static_rank_probe"),
+        version: 1,
+    };
+
+    fn infer_outputs(
+        attributes: &Self::Attributes,
+        _: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+        Ok(vec![LogicalTensorMeta {
+            shape: Some(attributes.shape.clone()),
+            dtype: Some(DTypeId::U32.descriptor()),
+            device: Some(DeviceId::cpu()),
+        }])
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct PayloadAttributes;
@@ -144,6 +189,7 @@ impl Capabilities for CompanyBackend {
     fn support(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
         match &query.operation {
             OperationIdentity::Custom(key) if *key == CompanyIdentity::KEY => SupportLevel::Native,
+            OperationIdentity::Custom(key) if *key == StaticRankProbe::KEY => SupportLevel::Native,
             OperationIdentity::Builtin(incin_core::prelude::OperationKind::Zeros) => {
                 SupportLevel::Native
             }
@@ -152,6 +198,17 @@ impl Capabilities for CompanyBackend {
             }
             other => panic!("unexpected capability query: {other:?}"),
         }
+    }
+}
+
+impl Execute<StaticRankProbe> for CompanyBackend {
+    type Output = i32;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        _: ExecutionRequest<'_, StaticRankProbe, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(S::RANK.map_or(-1, |rank| rank as i32))
     }
 }
 
@@ -296,6 +353,40 @@ fn downstream_custom_operation_keeps_static_shape_dispatch() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Static);
+}
+
+#[test]
+fn downstream_executor_receives_the_exact_shape_type() {
+    type S = incin::prelude::s![2, 3];
+    let expected = ShapeValue::<S>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
+    let context = ExecutionContext::new(CompanyBackend);
+    let static_rank = execute_shaped::<StaticRankProbe, _, S>(
+        &context,
+        StaticRankProbeAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+        &expected,
+    )
+    .unwrap();
+    assert_eq!(static_rank, 2);
+
+    let runtime_rank = execute::<StaticRankProbe, _>(
+        &context,
+        StaticRankProbeAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+    )
+    .unwrap();
+    assert_eq!(runtime_rank, -1);
+}
+
+#[test]
+fn downstream_device_implementation_keeps_custom_identity() {
+    let identity = CompanyDevice::to_incin(&PhantomData).unwrap();
+    assert_eq!(identity.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+    assert_eq!(identity.ordinal(), 7);
 }
 
 #[test]
