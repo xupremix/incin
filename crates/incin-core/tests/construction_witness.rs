@@ -115,6 +115,27 @@ fn checked_construction_rejects_storage_dtype_mismatch() {
 }
 
 #[test]
+fn checked_construction_rejects_integer_gradient_tracking() {
+    let source = Tensor::<s![2], B, i64>::zeros(()).unwrap();
+    let err = Tensor::<s![2], B, i64, Grad>::try_from_storage(
+        source.into_inner(),
+        ShapeBuf::from_slice(&[2]),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        err,
+        Error::UnsupportedDType {
+            op: "gradient tracking",
+            ..
+        }
+    ));
+}
+
+#[test]
 fn metadata_only_retagging_preserves_validated_storage() {
     let tensor = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
     let dynamic = tensor.into_dyn();

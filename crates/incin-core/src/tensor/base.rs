@@ -563,6 +563,17 @@ fn validate_reshard_proof<O>(
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> {
+    fn validate_gradient_dtype(dtype: &K::Field, grad: &G::Field) -> Result<()> {
+        if G::requires_grad(grad) && !K::descriptor(dtype).is_float() {
+            return Err(Error::UnsupportedDType {
+                dtype: K::descriptor(dtype),
+                backend: B::BACKEND_NAME,
+                op: "gradient tracking",
+            });
+        }
+        Ok(())
+    }
+
     /// Joins component parts after this module has witnessed their invariants.
     fn from_parts_witnessed(
         inner: B::Storage<K>,
@@ -593,6 +604,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
+        Self::validate_gradient_dtype(&dtype, &grad)?;
         let expected = shape.shape_buf().as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got.as_ref() {
@@ -655,6 +667,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
+        Self::validate_gradient_dtype(&dtype, &grad)?;
         S::validate_dims(shape.as_ref()).map_err(crate::err::Error::Shape)?;
         let expected = shape.as_ref().to_vec();
         let got = B::shape(&inner);
@@ -1142,8 +1155,10 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     }
 }
 
-impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
+impl<S: Shape, B: Backend, K: FloatDType> Tensor<S, B, K, NoGrad> {
     /// Marks this tensor to require gradient tracking.
+    ///
+    /// Reverse-mode tracking is available only for floating-point dtypes.
     pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
         Tensor::from_shape_value_unchecked(
             B::fresh_autograd_identity(self.inner),
