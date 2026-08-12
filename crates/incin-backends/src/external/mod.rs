@@ -4,12 +4,12 @@
 //! intentionally separate from Incin native CPU, CUDA, and WGPU backends.
 
 pub use incin_core::backend_authoring::{
-    execute, execute_shaped, execute_shaped_with_payload, execute_with_payload, Alignment,
-    AttributeContract, Backend, CanonicalOperation, Capabilities, CapabilityQuery,
+    Alignment, AttributeContract, Backend, CanonicalOperation, Capabilities, CapabilityQuery,
     CapabilityRegistry, Descriptor, DescriptorError, Execute, ExecuteOutput, ExecutionContext,
-    ExecutionDescriptor, ExecutionRequest, LogicalTensorMeta, Operation, OperationIdentity,
-    OperationKey, OperationCatalogEntry, ShapeBuf, StorageBackend, StorageOutput, SupportLevel,
-    SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated,
+    ExecutionDescriptor, ExecutionRequest, LogicalTensorMeta, Operation, OperationCatalogEntry,
+    OperationIdentity, OperationKey, ShapeBuf, StorageBackend, StorageOutput, SupportLevel,
+    SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, execute,
+    execute_shaped, execute_shaped_with_payload, execute_with_payload,
 };
 pub use incin_core::prelude::*;
 

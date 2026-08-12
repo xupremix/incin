@@ -114,6 +114,10 @@ impl Execute<CompanyIdentity> for CompanyBackend {
         &self,
         request: ExecutionRequest<'_, CompanyIdentity, Self>,
     ) -> Result<Self::Output, BackendError> {
+        assert_eq!(
+            request.operation.descriptor().identity(),
+            &OperationIdentity::Custom(CompanyIdentity::KEY)
+        );
         Ok(request.operation.proof_level())
     }
 }
@@ -191,6 +195,22 @@ fn downstream_custom_operation_uses_unified_runtime_dispatch() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Dynamic);
+}
+
+#[test]
+fn custom_identity_is_derived_from_the_operation_key() {
+    let context = ExecutionContext::new(CompanyBackend);
+    let expected =
+        ShapeValue::<incin::prelude::s![2, 3]>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
+    let _ = execute_shaped::<CompanyIdentity, _, incin::prelude::s![2, 3]>(
+        &context,
+        IdentityAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+        &expected,
+    )
+    .unwrap();
 }
 
 #[test]

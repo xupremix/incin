@@ -338,9 +338,7 @@ pub trait Backend:
     /// [`NanPolicy`](crate::exec::NanPolicy), an ambient execution-policy axis
     /// every backend's walk reads, rather than a second method that also
     /// decided to abort the process on failure.
-    fn backward<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<Self::Grads> {
+    fn backward<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads> {
         Err(crate::err::Error::Backend(BackendError::unsupported(
             Self::BACKEND_NAME,
             crate::exec::UnsupportedReason::MissingDeviceFeature {

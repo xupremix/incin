@@ -299,6 +299,7 @@ fn a_mixed_binary_operation_records_when_any_operand_requires_grad() {
     let grad = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
 
     assert!(recorded(|| no_grad.add(&grad).unwrap()) > 0);
+    assert!(recorded(|| grad.add(&no_grad).unwrap()) > 0);
 }
 
 #[test]
