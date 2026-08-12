@@ -4,7 +4,8 @@ use incin_backends::cpu::{CpuBuffer, CpuCompiledInvocation, CpuStorage};
 use incin_core::compiled::{CapturedGraph, CompileOptions, CompiledPlan};
 use incin_core::exec::OperationIdentity;
 use incin_core::exec::catalog::{
-    CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op,
+    AxisAttributes, CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes,
+    ShapeAttributes, op,
 };
 use incin_core::graph::Graph;
 use incin_core::prelude::{DTypeId, DeviceId, OperationKind, ShapeBuf};
@@ -116,6 +117,51 @@ fn compiled_cpu_executes_captured_reshape_through_canonical_descriptor() {
     let outputs = CpuCompiledInvocation::new(vec![input]).run(&plan).unwrap();
     assert_eq!(outputs[0].shape.as_ref(), &[4]);
     assert_eq!(outputs[0].get(&[3]), 4.0);
+}
+
+#[test]
+fn compiled_cpu_executes_arithmetic_then_reduction() {
+    let mut graph = Graph::new();
+    let lhs = graph.add_value(vec![2, 2], DTypeId::F32, Some("lhs".into()));
+    let rhs = graph.add_value(vec![2, 2], DTypeId::F32, Some("rhs".into()));
+    let added = graph.add_value(vec![2, 2], DTypeId::F32, Some("added".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(lhs);
+    graph.mark_input(rhs);
+    graph.mark_output(output);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Add),
+        vec![lhs, rhs],
+        vec![added],
+        Default::default(),
+        Some(payload::<op::Add>(&[&[2, 2], &[2, 2]])),
+    );
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::SumDim),
+        vec![added],
+        vec![output],
+        Default::default(),
+        Some(payload_with::<op::SumDim>(
+            AxisAttributes { axis: 1 },
+            &[&[2, 2]],
+        )),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let lhs = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2])
+        .unwrap();
+    let rhs = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![5.0, 6.0, 7.0, 8.0]), vec![2, 2])
+        .unwrap();
+    let outputs = CpuCompiledInvocation::new(vec![lhs, rhs])
+        .run(&plan)
+        .unwrap();
+    assert_eq!(outputs[0].shape.as_ref(), &[2]);
+    assert_eq!(outputs[0].get(&[0]), 14.0);
+    assert_eq!(outputs[0].get(&[1]), 22.0);
 }
 
 #[test]
