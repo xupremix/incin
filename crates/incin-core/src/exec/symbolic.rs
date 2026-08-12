@@ -20,19 +20,10 @@ pub struct SymbolInfo {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SymbolTable {
     pub symbols: Vec<SymbolInfo>,
     pub constraints: Vec<Constraint>,
-}
-
-impl Default for SymbolTable {
-    fn default() -> Self {
-        Self {
-            symbols: Vec::new(),
-            constraints: Vec::new(),
-        }
-    }
 }
 
 impl SymbolTable {
