@@ -38,6 +38,7 @@ use super::ops::elementwise::{
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
+use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::shape_ops::{
     diag_storage, div_scalar_storage, flatten_storage, narrow_storage, squeeze_storage,
     sub_scalar_storage, transpose_storage, tril_storage, triu_storage, unsqueeze_storage,
@@ -1483,7 +1484,7 @@ impl<D: Device> Execute<op::LayerNorm> for CpuBackendImpl<D> {
         // checked that it is the operand's trailing suffix and that the weight
         // and bias match it, and the kernel derives the same split from the
         // weight's own shape.
-        <Self as ModuleOps<Self>>::layer_norm::<f32>(input, weight, bias, epsilon)
+        layer_norm_impl::<D, f32>(input, weight, bias, epsilon)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -1571,7 +1572,7 @@ impl<D: Device> Execute<op::BatchNorm> for CpuBackendImpl<D> {
         )?;
         let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
 
-        <Self as ModuleOps<Self>>::batch_norm::<f32>(
+        batch_norm_impl::<D, f32>(
             input,
             weight,
             bias,
