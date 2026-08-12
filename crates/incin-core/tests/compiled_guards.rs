@@ -27,7 +27,7 @@ fn test_compiled_plan_construction_and_guards() {
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let options = CompileOptions::default();
-    let plan = CompiledPlan::compile(captured, options);
+    let plan = CompiledPlan::compile(captured, options).unwrap();
 
     assert_eq!(plan.input_guards.len(), 2);
     assert!(plan.verify_input(2, &[1], DTypeId::F32).is_err());
@@ -81,7 +81,8 @@ fn invocation_guards_share_symbols_across_inputs() {
     let plan = CompiledPlan::compile(
         CapturedGraph::capture(&graph).unwrap(),
         CompileOptions::new(),
-    );
+    )
+    .unwrap();
 
     assert!(
         plan.verify_inputs(&[

@@ -3,6 +3,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
 use crate::exec::{ShapeExpr, SymbolEnvironment, SymbolTable};
 use crate::graph::ValueId;
@@ -105,12 +106,36 @@ pub struct CompiledPlan {
     /// Dynamic shape guards for graph inputs.
     pub input_guards: Vec<ShapeGuard>,
     pub symbols: SymbolTable,
+    pub liveness: LivenessMap,
+    pub memory_plan: MemoryPlan,
 }
 
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
     #[must_use]
-    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Self {
+    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
+        for node in &graph.nodes {
+            let site = node.execution_site.ok_or_else(|| {
+                Error::Msg(alloc::format!(
+                    "compiled operation {:?} has no execution-site classification",
+                    node.operation
+                ))
+            })?;
+            if !site.is_backend_executable() {
+                return Err(Error::Msg(alloc::format!(
+                    "compiled execution does not support {:?} at {:?}",
+                    node.operation,
+                    site
+                )));
+            }
+            if matches!(options.fusion, FusionPolicy::Enabled)
+                && matches!(node.operation, crate::exec::OperationIdentity::Custom(_))
+            {
+                return Err(Error::Msg(
+                    "compiled fusion requires canonical built-in executable lowering".into(),
+                ));
+            }
+        }
         let mut symbols = SymbolTable::default();
         let input_guards = graph
             .inputs
@@ -123,17 +148,25 @@ impl CompiledPlan {
                     for constraint in &value.shape_expr.constraints {
                         collect_constraint_symbols(constraint, &mut symbols);
                     }
-                    ShapeGuard::new(in_id, value.shape_expr.clone(), value.dtype)
+                    let shape = match options.dynamic_shapes {
+                        DynamicShapePolicy::Guarded => value.shape_expr.clone(),
+                        DynamicShapePolicy::Strict => ShapeExpr::concrete(&value.shape),
+                    };
+                    ShapeGuard::new(in_id, shape, value.dtype)
                 })
             })
             .collect();
 
-        Self {
+        let liveness = LivenessMap::compute(&graph);
+        let memory_plan = AllocationPlanner.plan(&liveness, &graph)?;
+        Ok(Self {
             graph,
             options,
             input_guards,
             symbols,
-        }
+            liveness,
+            memory_plan,
+        })
     }
 
     /// Validates dynamic guards for provided inputs.

@@ -23,7 +23,7 @@ fn make_test_plan_with_nodes(node_count: usize) -> CompiledPlan {
     }
     graph.mark_output(prev);
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
-    CompiledPlan::compile(captured, CompileOptions::new())
+    CompiledPlan::compile(captured, CompileOptions::new()).unwrap()
 }
 
 #[test]
