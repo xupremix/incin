@@ -289,7 +289,18 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             OperationIdentity::Builtin(crate::prelude::OperationKind::Relu) => {
                 inputs.first().cloned()
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Add) => inputs
+            OperationIdentity::Builtin(
+                crate::prelude::OperationKind::AddScalar
+                | crate::prelude::OperationKind::SubScalar
+                | crate::prelude::OperationKind::MulScalar
+                | crate::prelude::OperationKind::DivScalar,
+            ) => inputs.first().cloned(),
+            OperationIdentity::Builtin(
+                crate::prelude::OperationKind::Add
+                | crate::prelude::OperationKind::Sub
+                | crate::prelude::OperationKind::Mul
+                | crate::prelude::OperationKind::Div,
+            ) => inputs
                 .first()
                 .zip(inputs.get(1))
                 .map(|(lhs, rhs)| broadcast_shapes(lhs, rhs)),
