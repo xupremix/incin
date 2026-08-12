@@ -475,13 +475,6 @@ fn reduction_operand<'a, D: Device>(
     Ok(input)
 }
 
-// The reduction bodies still live on `ReductionOps`. Reaching them from here is
-// the migration's temporary compatibility adapter: it is private to this
-// module, it is the only remaining call into the legacy family from the
-// canonical path, and it is deleted when the reduction kernels move down here
-// the way the pointwise and view kernels already have. It is deliberately not
-// a source for anything new.
-
 /// Whole-tensor reductions, which take no attributes.
 macro_rules! reduce_all_executors {
     ($(($operation:ident, $method:ident)),* $(,)?) => {$(
@@ -494,7 +487,7 @@ macro_rules! reduce_all_executors {
             ) -> Result<CpuStorage, BackendError> {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
-                <Self as ReductionOps<Self>>::$method::<f32>(input)
+                crate::cpu::ops::reduce::$method(input)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -522,7 +515,7 @@ macro_rules! reduce_axis_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as ReductionOps<Self>>::$method::<f32>(input, axis)
+                crate::cpu::ops::reduce::$method(input, axis)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -561,7 +554,7 @@ impl<D: Device> Execute<op::Cumsum> for CpuBackendImpl<D> {
             records_gradients(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as ReductionOps<Self>>::cumsum::<f32>(input, axis)
+        crate::cpu::ops::reduce::cumsum(input, axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -620,7 +613,7 @@ macro_rules! index_reduction_executors {
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let attributes = request.operation.descriptor().attributes();
                 dispatch_index_dtype!(operation, attributes.dtype, |KIndex| {
-                    <Self as ReductionOps<Self>>::$method::<f32, KIndex>(input, attributes.axis)
+                    crate::cpu::ops::reduce::$method::<KIndex>(input, attributes.axis)
                         .map_err(|error| kernel_error(CPU_NAME, operation, error))
                 })
             }
@@ -647,7 +640,7 @@ impl<D: Device> Execute<op::Argsort> for CpuBackendImpl<D> {
         )?;
         let attributes = request.operation.descriptor().attributes();
         dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
-            <Self as ReductionOps<Self>>::argsort::<f32, KIndex>(
+            crate::cpu::ops::reduce::argsort::<KIndex>(
                 input,
                 attributes.axis,
                 attributes.descending,
@@ -684,7 +677,7 @@ impl<D: Device> Execute<op::TopK> for CpuBackendImpl<D> {
         )?;
         let attributes = request.operation.descriptor().attributes();
         dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
-            <Self as ReductionOps<Self>>::topk::<f32, KIndex>(
+            crate::cpu::ops::reduce::topk::<KIndex>(
                 input,
                 attributes.k,
                 attributes.axis,

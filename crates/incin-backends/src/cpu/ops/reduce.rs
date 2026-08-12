@@ -301,854 +301,870 @@ fn scatter_axis_grad(
 }
 
 // ---------------------------------------------------------------------------
-// ReductionOps impl
+// Concrete reduction kernels
 // ---------------------------------------------------------------------------
 
+/// Sum every element of `t` into a single-element scalar storage (shape
+/// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
+/// scalar gradient uniformly back across `t`'s original shape.
+pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    let mut sum = 0f64;
+    for _ in 0..total {
+        sum += t.get(&idx);
+        if !t.shape.is_empty() {
+            increment_index(&mut idx, &t.shape);
+        }
+    }
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![sum as f32]), vec![]);
+
+    let original_shape = t.shape.to_vec();
+    let t_clone = t.clone(); // dtype reference for fill_like
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // grad_out is a scalar []; broadcast it to every element of
+            // the original shape (the backward of sum is "distribute
+            // everywhere").
+            let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
+            Ok(vec![fill_like(&t_clone, &original_shape, scalar_grad)?])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Mean of every element of `t`. Backward scales the incoming scalar
+/// gradient by `1/n` before broadcasting back to the original shape.
+pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    let mut sum = 0f64;
+    for _ in 0..total {
+        sum += t.get(&idx);
+        if !t.shape.is_empty() {
+            increment_index(&mut idx, &t.shape);
+        }
+    }
+    let mean = if total > 0 { sum / total as f64 } else { 0.0 };
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![mean as f32]), vec![]);
+
+    let original_shape = t.shape.to_vec();
+    let t_clone = t.clone();
+    let n = total as f64;
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
+            // d(mean)/d(x_i) = 1/n for each element.
+            let scaled = if n > 0.0 { scalar_grad / n } else { 0.0 };
+            Ok(vec![fill_like(&t_clone, &original_shape, scaled)?])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Maximum over every element of `t`, as a scalar (shape `[]`).
+/// Independent flat iteration (mirrors `sum_all`'s structure, NOT a
+/// reshape-then-axis-reduce composition, per RESEARCH.md Open Question 2).
+/// Backward scatters the incoming scalar gradient to ONLY the single
+/// global winning flat index, zero everywhere else.
+pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    let mut best_val = f64::NEG_INFINITY;
+    let mut best_flat_idx = 0usize;
+    for flat in 0..total {
+        let v = t.get(&idx);
+        if v > best_val {
+            best_val = v;
+            best_flat_idx = flat;
+        }
+        if !t.shape.is_empty() {
+            increment_index(&mut idx, &t.shape);
+        }
+    }
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut vals = vec![0.0f32; total];
+            vals[best_flat_idx] = scalar_grad as f32;
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Minimum over every element of `t`, as a scalar (shape `[]`). Mirror of
+/// `max_all` with strict `<` comparison.
+pub(crate) fn min_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    let mut best_val = f64::INFINITY;
+    let mut best_flat_idx = 0usize;
+    for flat in 0..total {
+        let v = t.get(&idx);
+        if v < best_val {
+            best_val = v;
+            best_flat_idx = flat;
+        }
+        if !t.shape.is_empty() {
+            increment_index(&mut idx, &t.shape);
+        }
+    }
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut vals = vec![0.0f32; total];
+            vals[best_flat_idx] = scalar_grad as f32;
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Sum over `dim`, removing that axis from the output shape.
+/// (e.g. `[2, 3]` over dim 0 → `[3]`)
+pub(crate) fn sum_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "sum_dim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("sum_dim: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
+    let out = sum_axis_squeeze(t, dim)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // Backward of sum_dim (squeeze): reinsert the axis with size 1,
+            // then broadcast back to the original shape.
+            let mut keepdim_shape = grad_out.shape.to_vec();
+            keepdim_shape.insert(dim, 1);
+            let keepdim = grad_out.reshape(&keepdim_shape)?;
+            let expanded = keepdim.broadcast_as(&original_shape)?;
+            // Materialize the broadcast view (walk all elements) so the
+            // gradient is a concrete contiguous tensor, not a strided view
+            // that upstream accumulation might mis-sum.
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut idx = vec![0usize; original_shape.len()];
+            let mut vals = Vec::with_capacity(total);
+            for _ in 0..total {
+                vals.push(expanded.get(&idx) as f32);
+                increment_index(&mut idx, &original_shape);
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Sum over `dim`, keeping that axis as size 1.
+/// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
+pub(crate) fn sum_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "sum_keepdim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!(
+                "sum_keepdim: axis {dim} out of range for shape {:?}",
+                t.shape
+            ),
+        });
+    }
+    let out = sum_axis_keepdim(t, dim)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // Backward of sum_keepdim: broadcast the keepdim gradient
+            // (which already has size 1 on `dim`) back to the original
+            // shape, then materialize it.
+            let expanded = grad_out.broadcast_as(&original_shape)?;
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut idx = vec![0usize; original_shape.len()];
+            let mut vals = Vec::with_capacity(total);
+            for _ in 0..total {
+                vals.push(expanded.get(&idx) as f32);
+                increment_index(&mut idx, &original_shape);
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Mean over `dim`, removing that axis from the output shape.
+/// Thin wrapper over `sum_axis_squeeze`, divided by the axis length.
+/// (e.g. `[2, 3]` over dim 0 → `[3]`, each value = column sum / 2)
+pub(crate) fn mean_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "mean_dim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("mean_dim: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
+    let axis_len = t.shape[dim] as f64;
+    let summed = sum_axis_squeeze(t, dim)?;
+    let out_shape = summed.shape.to_vec();
+    let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
+    let mut idx = vec![0usize; out_shape.len()];
+    let mut vals = Vec::with_capacity(total);
+    for _ in 0..total {
+        vals.push((summed.get(&idx) / axis_len) as f32);
+        increment_index(&mut idx, &out_shape);
+    }
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // Backward of mean_dim (squeeze): reinsert the axis with size
+            // 1, broadcast back to the original shape, then scale every
+            // materialized value by 1/axis_len (mirrors mean_all's 1/n
+            // relationship to sum_all).
+            let mut keepdim_shape = grad_out.shape.to_vec();
+            keepdim_shape.insert(dim, 1);
+            let keepdim = grad_out.reshape(&keepdim_shape)?;
+            let expanded = keepdim.broadcast_as(&original_shape)?;
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut idx = vec![0usize; original_shape.len()];
+            let mut vals = Vec::with_capacity(total);
+            for _ in 0..total {
+                vals.push((expanded.get(&idx) / axis_len) as f32);
+                increment_index(&mut idx, &original_shape);
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Mean over `dim`, keeping that axis as size 1.
+/// Thin wrapper over `sum_axis_keepdim`, divided by the axis length.
+/// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
+pub(crate) fn mean_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "mean_keepdim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!(
+                "mean_keepdim: axis {dim} out of range for shape {:?}",
+                t.shape
+            ),
+        });
+    }
+    let axis_len = t.shape[dim] as f64;
+    let summed = sum_axis_keepdim(t, dim)?;
+    let out_shape = summed.shape.to_vec();
+    let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
+    let mut idx = vec![0usize; out_shape.len()];
+    let mut vals = Vec::with_capacity(total);
+    for _ in 0..total {
+        vals.push((summed.get(&idx) / axis_len) as f32);
+        increment_index(&mut idx, &out_shape);
+    }
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // Backward of mean_keepdim: broadcast the keepdim gradient
+            // (already size 1 on `dim`) back to the original shape, then
+            // scale by 1/axis_len.
+            let expanded = grad_out.broadcast_as(&original_shape)?;
+            let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+            let mut idx = vec![0usize; original_shape.len()];
+            let mut vals = Vec::with_capacity(total);
+            for _ in 0..total {
+                vals.push((expanded.get(&idx) / axis_len) as f32);
+                increment_index(&mut idx, &original_shape);
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                CpuBuffer::F32(vals),
+                original_shape.to_vec(),
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Maximum over `dim`, removing that axis from the output shape.
+/// Backward routes gradient to exactly one winning element per output
+/// position (T-02-07/T-02-08 mitigations).
+pub(crate) fn max_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "max_dim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("max_dim: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
+    let (keepdim_out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
+    let mut squeeze_shape = keepdim_out.shape.to_vec();
+    squeeze_shape.remove(dim);
+    let out = keepdim_out
+        .reshape(&squeeze_shape)
+        .expect("max_dim: squeeze reshape of size-1 keepdim result cannot fail");
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![scatter_axis_grad(
+                grad_out,
+                &winning_flat_src_idx,
+                &original_shape,
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Maximum over `dim`, keeping that axis as size 1.
+pub(crate) fn max_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "max_keepdim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!(
+                "max_keepdim: axis {dim} out of range for shape {:?}",
+                t.shape
+            ),
+        });
+    }
+    let (out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![scatter_axis_grad(
+                grad_out,
+                &winning_flat_src_idx,
+                &original_shape,
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Minimum over `dim`, removing that axis from the output shape. Mirror
+/// of `max_dim` using `min_axis_with_indices`.
+pub(crate) fn min_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "min_dim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("min_dim: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
+    let (keepdim_out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
+    let mut squeeze_shape = keepdim_out.shape.to_vec();
+    squeeze_shape.remove(dim);
+    let out = keepdim_out
+        .reshape(&squeeze_shape)
+        .expect("min_dim: squeeze reshape of size-1 keepdim result cannot fail");
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![scatter_axis_grad(
+                grad_out,
+                &winning_flat_src_idx,
+                &original_shape,
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Minimum over `dim`, keeping that axis as size 1. Mirror of
+/// `max_keepdim` using `min_axis_with_indices`.
+pub(crate) fn min_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "min_keepdim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!(
+                "min_keepdim: axis {dim} out of range for shape {:?}",
+                t.shape
+            ),
+        });
+    }
+    let (out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![scatter_axis_grad(
+                grad_out,
+                &winning_flat_src_idx,
+                &original_shape,
+            )])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Index of the maximum element. `Some(d)`: per-axis, axis removed from
+/// the output shape (mirrors `max_dim`'s squeeze shape). `None`: fully
+/// flattened, returns a scalar (shape `[]`) holding the single winning
+/// flat index. Forward-only — `incin-core`'s `Tensor::argmax`
+/// structurally forces `G = NoGrad` on the output regardless of the
+/// input's own `G`, so this deliberately never calls `tape::push`
+/// (T-02-09 mitigation; the one exception to this file's
+/// every-other-method unconditional-push convention).
+pub(crate) fn argmax<KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
+    match dim {
+        Some(d) => {
+            if d >= t.shape.len() {
+                return Err(Error::ShapeMismatch {
+                    op: "argmax",
+                    expected: t.shape.to_vec(),
+                    got: vec![d],
+                    msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
+                });
+            }
+            let (_, winning_flat_src_idx) = max_axis_with_indices(t, d)?;
+            let mut out_shape = t.shape.to_vec();
+            out_shape[d] = 1;
+            // Convert each winning FLAT source index into its coordinate
+            // along `d` (the axis-position the winner occupied), not the
+            // flat index itself.
+            let idx_vals: Vec<i64> = winning_flat_src_idx
+                .iter()
+                .map(|&flat_src| {
+                    let multi = unflatten_index(flat_src, &t.shape);
+                    multi[d] as i64
+                })
+                .collect();
+            let keepdim_out = CpuStorage::from_contiguous(
+                index_buffer::<KInt>("argmax", &idx_vals)?,
+                out_shape.to_vec(),
+            );
+            let mut squeeze_shape = keepdim_out.shape.to_vec();
+            squeeze_shape.remove(d);
+            Ok(keepdim_out
+                .reshape(&squeeze_shape)
+                .expect("argmax: squeeze reshape of size-1 keepdim result cannot fail"))
+        }
+        None => {
+            let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+            let mut idx = vec![0usize; t.shape.len()];
+            let mut best_val = f64::NEG_INFINITY;
+            let mut best_flat_idx = 0i64;
+            for flat in 0..total {
+                let v = t.get(&idx);
+                if v > best_val {
+                    best_val = v;
+                    best_flat_idx = flat as i64;
+                }
+                if !t.shape.is_empty() {
+                    increment_index(&mut idx, &t.shape);
+                }
+            }
+            Ok(CpuStorage::from_contiguous(
+                index_buffer::<KInt>("argmax", &[best_flat_idx])?,
+                vec![],
+            ))
+        }
+    }
+}
+
+/// Index of the minimum element. Mirror of `argmax` using
+/// `min_axis_with_indices`. Forward-only, no `tape::push` (T-02-09).
+pub(crate) fn argmin<KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
+    match dim {
+        Some(d) => {
+            if d >= t.shape.len() {
+                return Err(Error::ShapeMismatch {
+                    op: "argmin",
+                    expected: t.shape.to_vec(),
+                    got: vec![d],
+                    msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
+                });
+            }
+            let (_, winning_flat_src_idx) = min_axis_with_indices(t, d)?;
+            let mut out_shape = t.shape.to_vec();
+            out_shape[d] = 1;
+            let idx_vals: Vec<i64> = winning_flat_src_idx
+                .iter()
+                .map(|&flat_src| {
+                    let multi = unflatten_index(flat_src, &t.shape);
+                    multi[d] as i64
+                })
+                .collect();
+            let keepdim_out = CpuStorage::from_contiguous(
+                index_buffer::<KInt>("argmin", &idx_vals)?,
+                out_shape.to_vec(),
+            );
+            let mut squeeze_shape = keepdim_out.shape.to_vec();
+            squeeze_shape.remove(d);
+            Ok(keepdim_out
+                .reshape(&squeeze_shape)
+                .expect("argmin: squeeze reshape of size-1 keepdim result cannot fail"))
+        }
+        None => {
+            let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+            let mut idx = vec![0usize; t.shape.len()];
+            let mut best_val = f64::INFINITY;
+            let mut best_flat_idx = 0i64;
+            for flat in 0..total {
+                let v = t.get(&idx);
+                if v < best_val {
+                    best_val = v;
+                    best_flat_idx = flat as i64;
+                }
+                if !t.shape.is_empty() {
+                    increment_index(&mut idx, &t.shape);
+                }
+            }
+            Ok(CpuStorage::from_contiguous(
+                index_buffer::<KInt>("argmin", &[best_flat_idx])?,
+                vec![],
+            ))
+        }
+    }
+}
+
+pub(crate) fn prod_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    let mut prod = 1.0f64;
+    for _ in 0..total {
+        prod *= t.get(&idx);
+        if !t.shape.is_empty() {
+            increment_index(&mut idx, &t.shape);
+        }
+    }
+    let buffer = t.buffer.from_f64_values(vec![prod])?;
+    Ok(CpuStorage::from_contiguous(buffer, vec![]))
+}
+
+pub(crate) fn prod_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    let mut out_shape = t.shape.to_vec();
+    out_shape.remove(dim);
+    let mut keep_shape = t.shape.to_vec();
+    keep_shape[dim] = 1;
+    let total: usize = crate::cpu::stride::validated_numel(&(keep_shape));
+    let mut prods = vec![1.0f64; total];
+    let src_total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..src_total {
+        let mut out_idx = idx.clone();
+        out_idx[dim] = 0;
+        let flat_out = flatten_index(&out_idx, &keep_shape);
+        prods[flat_out] *= t.get(&idx);
+        increment_index(&mut idx, &t.shape);
+    }
+    let buffer = t.buffer.from_f64_values(prods)?;
+    let storage = CpuStorage::from_contiguous(buffer, keep_shape);
+    storage.reshape(&out_shape)
+}
+
+pub(crate) fn cumsum(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+    let mut out_data = vec![0.0f64; total];
+    let dim_len = t.shape[dim];
+    let strides = contiguous_strides(&t.shape);
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        if idx[dim] == 0 {
+            let mut current = 0.0f64;
+            for step in 0..dim_len {
+                let mut step_idx = idx.clone();
+                step_idx[dim] = step;
+                current += t.get(&step_idx);
+                let flat_dest: usize = step_idx
+                    .iter()
+                    .zip(strides.iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                out_data[flat_dest] = current;
+            }
+        }
+        increment_index(&mut idx, &t.shape);
+    }
+    let buffer = t.buffer.from_f64_values(out_data)?;
+    Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+}
+
+/// `topk`.
+pub(crate) fn topk<KInt: DType>(
+    t: &CpuStorage,
+    k: usize,
+    dim: usize,
+    largest: bool,
+) -> Result<(CpuStorage, CpuStorage)> {
+    let shape = t.shape.to_vec();
+    if dim >= shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "topk",
+            expected: shape.to_vec(),
+            got: vec![dim],
+            msg: format!("topk: axis {} out of range", dim),
+        });
+    }
+    let k = k.min(shape[dim]);
+    let mut out_shape = shape.clone();
+    out_shape[dim] = k;
+
+    let mut base_shape = shape.clone();
+    base_shape[dim] = 1;
+    let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
+
+    let out_len = crate::cpu::stride::checked_numel(&out_shape)?;
+    // The values keep the operand's dtype. Accumulating them as `f64` and
+    // converting through the operand's own buffer at the end is what makes
+    // that true: the buffer used to be built as `F32` whatever was read,
+    // so a `f64` or `f16` operand came back relabelled and narrowed.
+    let mut out_vals = vec![0.0f64; out_len];
+    let mut out_indices = vec![0i64; out_len];
+
+    for i in 0..n_slices {
+        let mut rem = i;
+        let mut coords = vec![0usize; shape.len()];
+        for dd in (0..shape.len()).rev() {
+            coords[dd] = rem % base_shape[dd];
+            rem /= base_shape[dd];
+        }
+
+        let mut slice_vals = Vec::with_capacity(shape[dim]);
+        for j in 0..shape[dim] {
+            coords[dim] = j;
+            slice_vals.push((
+                t.get(&coords),
+                i64::try_from(j).map_err(|_| ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Reduction,
+                    expression: "topk index does not fit i64",
+                })?,
+            ));
+        }
+        if largest {
+            slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+        } else {
+            slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+        }
+
+        let mut out_coords = coords.clone();
+        for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
+            out_coords[dim] = j;
+            let flat = flatten_index(&out_coords, &out_shape);
+            out_vals[flat] = val;
+            out_indices[flat] = idx;
+        }
+    }
+    Ok((
+        CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, out_shape.to_vec()),
+        CpuStorage::from_contiguous(
+            index_buffer::<KInt>("topk", &out_indices)?,
+            out_shape.to_vec(),
+        ),
+    ))
+}
+
+/// `argsort`.
+pub(crate) fn argsort<KInt: DType>(
+    t: &CpuStorage,
+    dim: usize,
+    descending: bool,
+) -> Result<CpuStorage> {
+    let shape = t.shape.to_vec();
+    if dim >= shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "argsort",
+            expected: shape.to_vec(),
+            got: vec![dim],
+            msg: format!("argsort: axis {} out of range", dim),
+        });
+    }
+    let mut base_shape = shape.clone();
+    base_shape[dim] = 1;
+    let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
+    let mut out = vec![0i64; crate::cpu::stride::checked_numel(&shape)?];
+
+    for i in 0..n_slices {
+        let mut rem = i;
+        let mut coords = vec![0usize; shape.len()];
+        for dd in (0..shape.len()).rev() {
+            coords[dd] = rem % base_shape[dd];
+            rem /= base_shape[dd];
+        }
+
+        let mut slice_vals = Vec::with_capacity(shape[dim]);
+        for k in 0..shape[dim] {
+            coords[dim] = k;
+            slice_vals.push((
+                t.get(&coords),
+                i64::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Reduction,
+                    expression: "argsort index does not fit i64",
+                })?,
+            ));
+        }
+        if descending {
+            slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+        } else {
+            slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+        }
+        for (k, &(_, idx)) in slice_vals.iter().enumerate() {
+            coords[dim] = k;
+            let flat = flatten_index(&coords, &shape);
+            out[flat] = idx;
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        index_buffer::<KInt>("argsort", &out)?,
+        shape.to_vec(),
+    ))
+}
+
+// Legacy trait entry points remain for the public backend-authoring API. The
+// canonical descriptor path calls the concrete kernels above directly.
 impl<D: Device> ReductionOps<Self> for CpuBackendImpl<D> {
-    /// Sum every element of `t` into a single-element scalar storage (shape
-    /// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
-    /// scalar gradient uniformly back across `t`'s original shape.
-    fn sum_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        let mut sum = 0f64;
-        for _ in 0..total {
-            sum += t.get(&idx);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![sum as f32]), vec![]);
-
-        let original_shape = t.shape.to_vec();
-        let t_clone = t.clone(); // dtype reference for fill_like
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // grad_out is a scalar []; broadcast it to every element of
-                // the original shape (the backward of sum is "distribute
-                // everywhere").
-                let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                Ok(vec![fill_like(&t_clone, &original_shape, scalar_grad)?])
-            }),
-        });
-
-        Ok(out)
+    fn sum_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
+        sum_all(t)
     }
-
-    /// Mean of every element of `t`. Backward scales the incoming scalar
-    /// gradient by `1/n` before broadcasting back to the original shape.
-    fn mean_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        let mut sum = 0f64;
-        for _ in 0..total {
-            sum += t.get(&idx);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let mean = if total > 0 { sum / total as f64 } else { 0.0 };
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![mean as f32]), vec![]);
-
-        let original_shape = t.shape.to_vec();
-        let t_clone = t.clone();
-        let n = total as f64;
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                // d(mean)/d(x_i) = 1/n for each element.
-                let scaled = if n > 0.0 { scalar_grad / n } else { 0.0 };
-                Ok(vec![fill_like(&t_clone, &original_shape, scaled)?])
-            }),
-        });
-
-        Ok(out)
+    fn mean_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
+        mean_all(t)
     }
-
-    /// Maximum over every element of `t`, as a scalar (shape `[]`).
-    /// Independent flat iteration (mirrors `sum_all`'s structure, NOT a
-    /// reshape-then-axis-reduce composition, per RESEARCH.md Open Question 2).
-    /// Backward scatters the incoming scalar gradient to ONLY the single
-    /// global winning flat index, zero everywhere else.
-    fn max_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        let mut best_val = f64::NEG_INFINITY;
-        let mut best_flat_idx = 0usize;
-        for flat in 0..total {
-            let v = t.get(&idx);
-            if v > best_val {
-                best_val = v;
-                best_flat_idx = flat;
-            }
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut vals = vec![0.0f32; total];
-                vals[best_flat_idx] = scalar_grad as f32;
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn max_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
+        max_all(t)
     }
-
-    /// Minimum over every element of `t`, as a scalar (shape `[]`). Mirror of
-    /// `max_all` with strict `<` comparison.
-    fn min_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        let mut best_val = f64::INFINITY;
-        let mut best_flat_idx = 0usize;
-        for flat in 0..total {
-            let v = t.get(&idx);
-            if v < best_val {
-                best_val = v;
-                best_flat_idx = flat;
-            }
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut vals = vec![0.0f32; total];
-                vals[best_flat_idx] = scalar_grad as f32;
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn min_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
+        min_all(t)
     }
-
-    /// Sum over `dim`, removing that axis from the output shape.
-    /// (e.g. `[2, 3]` over dim 0 → `[3]`)
-    fn sum_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "sum_dim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!("sum_dim: axis {dim} out of range for shape {:?}", t.shape),
-            });
-        }
-        let out = sum_axis_squeeze(t, dim)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // Backward of sum_dim (squeeze): reinsert the axis with size 1,
-                // then broadcast back to the original shape.
-                let mut keepdim_shape = grad_out.shape.to_vec();
-                keepdim_shape.insert(dim, 1);
-                let keepdim = grad_out.reshape(&keepdim_shape)?;
-                let expanded = keepdim.broadcast_as(&original_shape)?;
-                // Materialize the broadcast view (walk all elements) so the
-                // gradient is a concrete contiguous tensor, not a strided view
-                // that upstream accumulation might mis-sum.
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut idx = vec![0usize; original_shape.len()];
-                let mut vals = Vec::with_capacity(total);
-                for _ in 0..total {
-                    vals.push(expanded.get(&idx) as f32);
-                    increment_index(&mut idx, &original_shape);
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn prod_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
+        prod_all(t)
     }
-
-    /// Sum over `dim`, keeping that axis as size 1.
-    /// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
-    fn sum_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "sum_keepdim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "sum_keepdim: axis {dim} out of range for shape {:?}",
-                    t.shape
-                ),
-            });
-        }
-        let out = sum_axis_keepdim(t, dim)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // Backward of sum_keepdim: broadcast the keepdim gradient
-                // (which already has size 1 on `dim`) back to the original
-                // shape, then materialize it.
-                let expanded = grad_out.broadcast_as(&original_shape)?;
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut idx = vec![0usize; original_shape.len()];
-                let mut vals = Vec::with_capacity(total);
-                for _ in 0..total {
-                    vals.push(expanded.get(&idx) as f32);
-                    increment_index(&mut idx, &original_shape);
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn sum_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        sum_dim(t, dim)
     }
-
-    /// Mean over `dim`, removing that axis from the output shape.
-    /// Thin wrapper over `sum_axis_squeeze`, divided by the axis length.
-    /// (e.g. `[2, 3]` over dim 0 → `[3]`, each value = column sum / 2)
-    fn mean_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "mean_dim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!("mean_dim: axis {dim} out of range for shape {:?}", t.shape),
-            });
-        }
-        let axis_len = t.shape[dim] as f64;
-        let summed = sum_axis_squeeze(t, dim)?;
-        let out_shape = summed.shape.to_vec();
-        let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
-        let mut idx = vec![0usize; out_shape.len()];
-        let mut vals = Vec::with_capacity(total);
-        for _ in 0..total {
-            vals.push((summed.get(&idx) / axis_len) as f32);
-            increment_index(&mut idx, &out_shape);
-        }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // Backward of mean_dim (squeeze): reinsert the axis with size
-                // 1, broadcast back to the original shape, then scale every
-                // materialized value by 1/axis_len (mirrors mean_all's 1/n
-                // relationship to sum_all).
-                let mut keepdim_shape = grad_out.shape.to_vec();
-                keepdim_shape.insert(dim, 1);
-                let keepdim = grad_out.reshape(&keepdim_shape)?;
-                let expanded = keepdim.broadcast_as(&original_shape)?;
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut idx = vec![0usize; original_shape.len()];
-                let mut vals = Vec::with_capacity(total);
-                for _ in 0..total {
-                    vals.push((expanded.get(&idx) / axis_len) as f32);
-                    increment_index(&mut idx, &original_shape);
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn mean_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        mean_dim(t, dim)
     }
-
-    /// Mean over `dim`, keeping that axis as size 1.
-    /// Thin wrapper over `sum_axis_keepdim`, divided by the axis length.
-    /// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
-    fn mean_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "mean_keepdim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "mean_keepdim: axis {dim} out of range for shape {:?}",
-                    t.shape
-                ),
-            });
-        }
-        let axis_len = t.shape[dim] as f64;
-        let summed = sum_axis_keepdim(t, dim)?;
-        let out_shape = summed.shape.to_vec();
-        let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
-        let mut idx = vec![0usize; out_shape.len()];
-        let mut vals = Vec::with_capacity(total);
-        for _ in 0..total {
-            vals.push((summed.get(&idx) / axis_len) as f32);
-            increment_index(&mut idx, &out_shape);
-        }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // Backward of mean_keepdim: broadcast the keepdim gradient
-                // (already size 1 on `dim`) back to the original shape, then
-                // scale by 1/axis_len.
-                let expanded = grad_out.broadcast_as(&original_shape)?;
-                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
-                let mut idx = vec![0usize; original_shape.len()];
-                let mut vals = Vec::with_capacity(total);
-                for _ in 0..total {
-                    vals.push((expanded.get(&idx) / axis_len) as f32);
-                    increment_index(&mut idx, &original_shape);
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vals),
-                    original_shape.to_vec(),
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn max_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        max_dim(t, dim)
     }
-
-    /// Maximum over `dim`, removing that axis from the output shape.
-    /// Backward routes gradient to exactly one winning element per output
-    /// position (T-02-07/T-02-08 mitigations).
-    fn max_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "max_dim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!("max_dim: axis {dim} out of range for shape {:?}", t.shape),
-            });
-        }
-        let (keepdim_out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
-        let mut squeeze_shape = keepdim_out.shape.to_vec();
-        squeeze_shape.remove(dim);
-        let out = keepdim_out
-            .reshape(&squeeze_shape)
-            .expect("max_dim: squeeze reshape of size-1 keepdim result cannot fail");
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![scatter_axis_grad(
-                    grad_out,
-                    &winning_flat_src_idx,
-                    &original_shape,
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn min_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        min_dim(t, dim)
     }
-
-    /// Maximum over `dim`, keeping that axis as size 1.
-    fn max_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "max_keepdim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "max_keepdim: axis {dim} out of range for shape {:?}",
-                    t.shape
-                ),
-            });
-        }
-        let (out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![scatter_axis_grad(
-                    grad_out,
-                    &winning_flat_src_idx,
-                    &original_shape,
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn prod_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        prod_dim(t, dim)
     }
-
-    /// Minimum over `dim`, removing that axis from the output shape. Mirror
-    /// of `max_dim` using `min_axis_with_indices`.
-    fn min_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "min_dim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!("min_dim: axis {dim} out of range for shape {:?}", t.shape),
-            });
-        }
-        let (keepdim_out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
-        let mut squeeze_shape = keepdim_out.shape.to_vec();
-        squeeze_shape.remove(dim);
-        let out = keepdim_out
-            .reshape(&squeeze_shape)
-            .expect("min_dim: squeeze reshape of size-1 keepdim result cannot fail");
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![scatter_axis_grad(
-                    grad_out,
-                    &winning_flat_src_idx,
-                    &original_shape,
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn sum_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        sum_keepdim(t, dim)
     }
-
-    /// Minimum over `dim`, keeping that axis as size 1. Mirror of
-    /// `max_keepdim` using `min_axis_with_indices`.
-    fn min_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if dim >= t.shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "min_keepdim",
-                expected: t.shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "min_keepdim: axis {dim} out of range for shape {:?}",
-                    t.shape
-                ),
-            });
-        }
-        let (out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![scatter_axis_grad(
-                    grad_out,
-                    &winning_flat_src_idx,
-                    &original_shape,
-                )])
-            }),
-        });
-
-        Ok(out)
+    fn mean_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        mean_keepdim(t, dim)
     }
-
-    /// Index of the maximum element. `Some(d)`: per-axis, axis removed from
-    /// the output shape (mirrors `max_dim`'s squeeze shape). `None`: fully
-    /// flattened, returns a scalar (shape `[]`) holding the single winning
-    /// flat index. Forward-only — `incin-core`'s `Tensor::argmax`
-    /// structurally forces `G = NoGrad` on the output regardless of the
-    /// input's own `G`, so this deliberately never calls `tape::push`
-    /// (T-02-09 mitigation; the one exception to this file's
-    /// every-other-method unconditional-push convention).
-    fn argmax<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        match dim {
-            Some(d) => {
-                if d >= t.shape.len() {
-                    return Err(Error::ShapeMismatch {
-                        op: "argmax",
-                        expected: t.shape.to_vec(),
-                        got: vec![d],
-                        msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
-                    });
-                }
-                let (_, winning_flat_src_idx) = max_axis_with_indices(t, d)?;
-                let mut out_shape = t.shape.to_vec();
-                out_shape[d] = 1;
-                // Convert each winning FLAT source index into its coordinate
-                // along `d` (the axis-position the winner occupied), not the
-                // flat index itself.
-                let idx_vals: Vec<i64> = winning_flat_src_idx
-                    .iter()
-                    .map(|&flat_src| {
-                        let multi = unflatten_index(flat_src, &t.shape);
-                        multi[d] as i64
-                    })
-                    .collect();
-                let keepdim_out = CpuStorage::from_contiguous(
-                    index_buffer::<KInt>("argmax", &idx_vals)?,
-                    out_shape.to_vec(),
-                );
-                let mut squeeze_shape = keepdim_out.shape.to_vec();
-                squeeze_shape.remove(d);
-                Ok(keepdim_out
-                    .reshape(&squeeze_shape)
-                    .expect("argmax: squeeze reshape of size-1 keepdim result cannot fail"))
-            }
-            None => {
-                let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-                let mut idx = vec![0usize; t.shape.len()];
-                let mut best_val = f64::NEG_INFINITY;
-                let mut best_flat_idx = 0i64;
-                for flat in 0..total {
-                    let v = t.get(&idx);
-                    if v > best_val {
-                        best_val = v;
-                        best_flat_idx = flat as i64;
-                    }
-                    if !t.shape.is_empty() {
-                        increment_index(&mut idx, &t.shape);
-                    }
-                }
-                Ok(CpuStorage::from_contiguous(
-                    index_buffer::<KInt>("argmax", &[best_flat_idx])?,
-                    vec![],
-                ))
-            }
-        }
+    fn max_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        max_keepdim(t, dim)
     }
-
-    /// Index of the minimum element. Mirror of `argmax` using
-    /// `min_axis_with_indices`. Forward-only, no `tape::push` (T-02-09).
-    fn argmin<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        match dim {
-            Some(d) => {
-                if d >= t.shape.len() {
-                    return Err(Error::ShapeMismatch {
-                        op: "argmin",
-                        expected: t.shape.to_vec(),
-                        got: vec![d],
-                        msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
-                    });
-                }
-                let (_, winning_flat_src_idx) = min_axis_with_indices(t, d)?;
-                let mut out_shape = t.shape.to_vec();
-                out_shape[d] = 1;
-                let idx_vals: Vec<i64> = winning_flat_src_idx
-                    .iter()
-                    .map(|&flat_src| {
-                        let multi = unflatten_index(flat_src, &t.shape);
-                        multi[d] as i64
-                    })
-                    .collect();
-                let keepdim_out = CpuStorage::from_contiguous(
-                    index_buffer::<KInt>("argmin", &idx_vals)?,
-                    out_shape.to_vec(),
-                );
-                let mut squeeze_shape = keepdim_out.shape.to_vec();
-                squeeze_shape.remove(d);
-                Ok(keepdim_out
-                    .reshape(&squeeze_shape)
-                    .expect("argmin: squeeze reshape of size-1 keepdim result cannot fail"))
-            }
-            None => {
-                let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-                let mut idx = vec![0usize; t.shape.len()];
-                let mut best_val = f64::INFINITY;
-                let mut best_flat_idx = 0i64;
-                for flat in 0..total {
-                    let v = t.get(&idx);
-                    if v < best_val {
-                        best_val = v;
-                        best_flat_idx = flat as i64;
-                    }
-                    if !t.shape.is_empty() {
-                        increment_index(&mut idx, &t.shape);
-                    }
-                }
-                Ok(CpuStorage::from_contiguous(
-                    index_buffer::<KInt>("argmin", &[best_flat_idx])?,
-                    vec![],
-                ))
-            }
-        }
+    fn min_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        min_keepdim(t, dim)
     }
-
-    fn prod_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        let mut prod = 1.0f64;
-        for _ in 0..total {
-            prod *= t.get(&idx);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let buffer = t.buffer.from_f64_values(vec![prod])?;
-        Ok(CpuStorage::from_contiguous(buffer, vec![]))
+    fn cumsum<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+        cumsum(t, dim)
     }
-
-    fn prod_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut out_shape = t.shape.to_vec();
-        out_shape.remove(dim);
-        let mut keep_shape = t.shape.to_vec();
-        keep_shape[dim] = 1;
-        let total: usize = crate::cpu::stride::validated_numel(&(keep_shape));
-        let mut prods = vec![1.0f64; total];
-        let src_total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..src_total {
-            let mut out_idx = idx.clone();
-            out_idx[dim] = 0;
-            let flat_out = flatten_index(&out_idx, &keep_shape);
-            prods[flat_out] *= t.get(&idx);
-            increment_index(&mut idx, &t.shape);
-        }
-        let buffer = t.buffer.from_f64_values(prods)?;
-        let storage = CpuStorage::from_contiguous(buffer, keep_shape);
-        storage.reshape(&out_shape)
+    fn argmax<K: DType, KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
+        argmax::<KInt>(t, dim)
     }
-
-    fn cumsum<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-        let mut out_data = vec![0.0f64; total];
-        let dim_len = t.shape[dim];
-        let strides = contiguous_strides(&t.shape);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            if idx[dim] == 0 {
-                let mut current = 0.0f64;
-                for step in 0..dim_len {
-                    let mut step_idx = idx.clone();
-                    step_idx[dim] = step;
-                    current += t.get(&step_idx);
-                    let flat_dest: usize = step_idx
-                        .iter()
-                        .zip(strides.iter())
-                        .map(|(&i, &s)| i * s)
-                        .sum();
-                    out_data[flat_dest] = current;
-                }
-            }
-            increment_index(&mut idx, &t.shape);
-        }
-        let buffer = t.buffer.from_f64_values(out_data)?;
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+    fn argmin<K: DType, KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
+        argmin::<KInt>(t, dim)
     }
-
-    /// `topk`.
     fn topk<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
+        t: &CpuStorage,
         k: usize,
         dim: usize,
         largest: bool,
-    ) -> Result<(
-        <Self as StorageBackend>::Storage<K>,
-        <Self as StorageBackend>::Storage<KInt>,
-    )> {
-        let shape = t.shape.to_vec();
-        if dim >= shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "topk",
-                expected: shape.to_vec(),
-                got: vec![dim],
-                msg: format!("topk: axis {} out of range", dim),
-            });
-        }
-        let k = k.min(shape[dim]);
-        let mut out_shape = shape.clone();
-        out_shape[dim] = k;
-
-        let mut base_shape = shape.clone();
-        base_shape[dim] = 1;
-        let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
-
-        let out_len = crate::cpu::stride::checked_numel(&out_shape)?;
-        // The values keep the operand's dtype. Accumulating them as `f64` and
-        // converting through the operand's own buffer at the end is what makes
-        // that true: the buffer used to be built as `F32` whatever was read,
-        // so a `f64` or `f16` operand came back relabelled and narrowed.
-        let mut out_vals = vec![0.0f64; out_len];
-        let mut out_indices = vec![0i64; out_len];
-
-        for i in 0..n_slices {
-            let mut rem = i;
-            let mut coords = vec![0usize; shape.len()];
-            for dd in (0..shape.len()).rev() {
-                coords[dd] = rem % base_shape[dd];
-                rem /= base_shape[dd];
-            }
-
-            let mut slice_vals = Vec::with_capacity(shape[dim]);
-            for j in 0..shape[dim] {
-                coords[dim] = j;
-                slice_vals.push((
-                    t.get(&coords),
-                    i64::try_from(j).map_err(|_| ShapeError::ArithmeticOverflow {
-                        operation: OperationKind::Reduction,
-                        expression: "topk index does not fit i64",
-                    })?,
-                ));
-            }
-            if largest {
-                slice_vals
-                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
-            } else {
-                slice_vals
-                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
-            }
-
-            let mut out_coords = coords.clone();
-            for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
-                out_coords[dim] = j;
-                let flat = flatten_index(&out_coords, &out_shape);
-                out_vals[flat] = val;
-                out_indices[flat] = idx;
-            }
-        }
-        Ok((
-            CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, out_shape.to_vec()),
-            CpuStorage::from_contiguous(
-                index_buffer::<KInt>("topk", &out_indices)?,
-                out_shape.to_vec(),
-            ),
-        ))
+    ) -> Result<(CpuStorage, CpuStorage)> {
+        topk::<KInt>(t, k, dim, largest)
     }
-
-    /// `argsort`.
     fn argsort<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
+        t: &CpuStorage,
         dim: usize,
         descending: bool,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        let shape = t.shape.to_vec();
-        if dim >= shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "argsort",
-                expected: shape.to_vec(),
-                got: vec![dim],
-                msg: format!("argsort: axis {} out of range", dim),
-            });
-        }
-        let mut base_shape = shape.clone();
-        base_shape[dim] = 1;
-        let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
-        let mut out = vec![0i64; crate::cpu::stride::checked_numel(&shape)?];
-
-        for i in 0..n_slices {
-            let mut rem = i;
-            let mut coords = vec![0usize; shape.len()];
-            for dd in (0..shape.len()).rev() {
-                coords[dd] = rem % base_shape[dd];
-                rem /= base_shape[dd];
-            }
-
-            let mut slice_vals = Vec::with_capacity(shape[dim]);
-            for k in 0..shape[dim] {
-                coords[dim] = k;
-                slice_vals.push((
-                    t.get(&coords),
-                    i64::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
-                        operation: OperationKind::Reduction,
-                        expression: "argsort index does not fit i64",
-                    })?,
-                ));
-            }
-            if descending {
-                slice_vals
-                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
-            } else {
-                slice_vals
-                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
-            }
-            for (k, &(_, idx)) in slice_vals.iter().enumerate() {
-                coords[dim] = k;
-                let flat = flatten_index(&coords, &shape);
-                out[flat] = idx;
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            index_buffer::<KInt>("argsort", &out)?,
-            shape.to_vec(),
-        ))
+    ) -> Result<CpuStorage> {
+        argsort::<KInt>(t, dim, descending)
     }
 }
 
