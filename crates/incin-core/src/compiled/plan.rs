@@ -9,6 +9,9 @@ use crate::exec::{DimExpr, OperationIdentity, ShapeExpr, SymbolEnvironment, Symb
 use crate::graph::ValueId;
 use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
 
+#[cfg(feature = "std")]
+use crate::exec::catalog::{CapturedDescriptor, Descriptor, op};
+
 /// Operation fusion strategy for graph compilation.
 #[derive(
     Debug, Default, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
@@ -297,6 +300,33 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             | OperationIdentity::Builtin(crate::prelude::OperationKind::Addmm) => {
                 inputs.first().cloned()
             }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::ReshapeExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let descriptor = decode_descriptor::<op::ReshapeExact>(node)?;
+                    Some(ShapeExpr::concrete(&descriptor.attributes().shape))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::TransposeExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let descriptor = decode_descriptor::<op::TransposeExact>(node)?;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        let attributes = descriptor.attributes();
+                        shape.dims.swap(attributes.first, attributes.second);
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
             _ => None,
         };
         let Some(shape) = shape else {
@@ -308,6 +338,23 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
         output.shape_expr = shape;
     }
     Ok(())
+}
+
+#[cfg(feature = "std")]
+fn decode_descriptor<O>(node: &crate::compiled::CapturedNode) -> Result<Descriptor<O>>
+where
+    O: crate::exec::catalog::CanonicalOperation,
+    O::Attributes: crate::exec::catalog::AttributeContract,
+{
+    let payload = node.descriptor_payload.as_ref().ok_or_else(|| {
+        Error::Msg(format!(
+            "compiled node {} has no captured descriptor",
+            node.id
+        ))
+    })?;
+    CapturedDescriptor::from_payload(O::ID, payload.schema, payload.payload.clone())
+        .decode()
+        .map_err(|error| Error::Msg(format!("invalid captured descriptor: {error}")))
 }
 
 fn broadcast_shapes(lhs: &ShapeExpr, rhs: &ShapeExpr) -> ShapeExpr {

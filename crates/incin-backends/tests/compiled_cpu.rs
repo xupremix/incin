@@ -4,7 +4,7 @@ use incin_backends::cpu::{CpuBuffer, CpuCompiledInvocation, CpuStorage};
 use incin_core::compiled::{CapturedGraph, CompileOptions, CompiledPlan};
 use incin_core::exec::OperationIdentity;
 use incin_core::exec::catalog::{
-    CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes, op,
+    CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op,
 };
 use incin_core::graph::Graph;
 use incin_core::prelude::{DTypeId, DeviceId, OperationKind, ShapeBuf};
@@ -23,6 +23,26 @@ where
 {
     let descriptor = Descriptor::<O>::infer_runtime(
         NoAttributes,
+        inputs.iter().map(|shape| meta(shape)).collect(),
+    )
+    .unwrap();
+    let captured = CapturedDescriptor::capture(descriptor.descriptor()).unwrap();
+    incin_core::graph::DescriptorPayload {
+        schema: captured.schema(),
+        payload: captured.payload().to_vec(),
+    }
+}
+
+fn payload_with<O>(
+    attributes: O::Attributes,
+    inputs: &[&[usize]],
+) -> incin_core::graph::DescriptorPayload
+where
+    O: incin_core::exec::catalog::CanonicalOperation,
+    O::Attributes: incin_core::exec::catalog::AttributeContract,
+{
+    let descriptor = Descriptor::<O>::infer_runtime(
+        attributes,
         inputs.iter().map(|shape| meta(shape)).collect(),
     )
     .unwrap();
@@ -65,6 +85,37 @@ fn compiled_cpu_executes_captured_relu_through_canonical_descriptor() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].get(&[0]), 0.0);
     assert_eq!(outputs[0].get(&[1]), 3.5);
+}
+
+#[test]
+fn compiled_cpu_executes_captured_reshape_through_canonical_descriptor() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2, 2], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![4], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::ReshapeExact),
+        vec![input],
+        vec![output],
+        Default::default(),
+        Some(payload_with::<op::ReshapeExact>(
+            ShapeAttributes { shape: vec![4] },
+            &[&[2, 2]],
+        )),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let input =
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2])
+            .unwrap();
+    let outputs = CpuCompiledInvocation::new(vec![input]).run(&plan).unwrap();
+    assert_eq!(outputs[0].shape.as_ref(), &[4]);
+    assert_eq!(outputs[0].get(&[3]), 4.0);
 }
 
 #[test]
