@@ -27,3 +27,10 @@ fn operation_semantics_matches_the_code_catalog() {
         path.display()
     );
 }
+
+#[test]
+fn generated_semantics_uses_structural_line_breaks() {
+    let document = incin_core::exec::operation_semantics_document();
+    assert!(!document.contains(r"\n"));
+    assert!(document.lines().count() > 100);
+}

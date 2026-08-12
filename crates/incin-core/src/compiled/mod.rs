@@ -20,4 +20,4 @@ pub use fold::{ConstantFolder, ShapeBucket, WeightPrepacker};
 pub use fusion::{FusedKernel, FusionBlocker, FusionCandidate, FusionPass};
 pub use manifest::ReproducibilityManifest;
 pub use plan::{CompileOptions, CompiledPlan, DynamicShapePolicy, FusionPolicy, ShapeGuard};
-pub use tuning::{BoundedPlanTuner, PlanTuningReport};
+pub use tuning::{BoundedPlanTuner, PlanTuningReport, TuningUnavailable};

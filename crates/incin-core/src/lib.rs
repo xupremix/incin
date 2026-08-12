@@ -68,7 +68,8 @@ pub mod experimental {
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
             ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
             FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
-            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, WeightPrepacker,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
+            WeightPrepacker,
         };
     }
 }

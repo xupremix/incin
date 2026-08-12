@@ -4353,14 +4353,14 @@ pub fn operation_semantics_document() -> alloc::string::String {
     );
     let _ = writeln!(
         out,
-        "Canonical operations: {}\\nBackend-executable operations: {}\\nNon-backend execution sites: {}\\n",
+        "Canonical operations: {}\nBackend-executable operations: {}\nNon-backend execution sites: {}\n",
         coverage.canonical, coverage.backend_executable, coverage.non_backend_executable
     );
-    out.push_str("| Execution site | Count |\\n|---|---:|\\n");
+    out.push_str("| Execution site | Count |\n|---|---:|\n");
     for (site, count) in coverage.by_site {
         let _ = writeln!(out, "| `{:?}` | {} |", site, count);
     }
-    out.push_str("\\n");
+    out.push('\n');
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
             alloc::string::String::from("many")
