@@ -46,7 +46,9 @@ fn local_placement_metadata_remains_zero_sized() {
 
 #[test]
 fn distributed_construction_rejects_integer_gradient_tracking() {
-    let storage = Tensor::<Dyn, B, i64>::zeros(vec![2, 8]).unwrap().into_inner();
+    let storage = Tensor::<Dyn, B, i64>::zeros(vec![2, 8])
+        .unwrap()
+        .into_inner();
     let error = ReplicatedIntegerTensor::try_from_distributed_storage(
         storage,
         Global::try_from_dims(&[2, 8]).unwrap(),
