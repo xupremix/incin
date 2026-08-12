@@ -750,14 +750,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn elementwise_dtype_gate_matches_rendered_float_family() {
-        for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
+    fn elementwise_dtype_gate_matches_supported_storage_family() {
+        for dtype in [
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::F32,
+            DTypeId::F64,
+            DTypeId::I64,
+        ] {
             validate_elementwise_dtype(dtype.descriptor(), "test").unwrap();
         }
-        assert!(matches!(
-            validate_elementwise_dtype(DTypeId::I64.descriptor(), "test"),
-            Err(Error::UnsupportedDType { .. })
-        ));
+        assert!(validate_elementwise_dtype(DTypeId::U32.descriptor(), "test").is_err());
     }
 
     #[test]
