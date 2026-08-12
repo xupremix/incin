@@ -81,23 +81,6 @@ impl CpuCompiledInvocation {
             .map(|storage| (storage.shape.to_vec(), storage.dtype))
             .collect::<Vec<(Vec<usize>, DTypeDescriptor)>>();
         plan.verify_inputs(&input_meta)?;
-        for value_id in &plan.graph.inputs {
-            let expected = &plan.graph.value_metadata[value_id].shape;
-            let actual = &input_meta[plan
-                .graph
-                .inputs
-                .iter()
-                .position(|id| id == value_id)
-                .unwrap()]
-            .0;
-            if expected != actual {
-                return Err(Error::Msg(format!(
-                    "compiled CPU lowering requires traced input shape {:?}, got {:?}",
-                    expected, actual
-                )));
-            }
-        }
-
         let mut slots = (0..plan.memory_plan.peak_live_slots())
             .map(|_| None::<CpuStorage>)
             .collect::<Vec<_>>();
@@ -211,25 +194,16 @@ where
     let descriptor: Descriptor<O> = captured
         .decode()
         .map_err(|error| Error::Msg(format!("invalid captured descriptor: {error}")))?;
-    let validated = descriptor
-        .revalidate()
-        .map_err(|error| Error::Msg(format!("captured descriptor failed validation: {error}")))?;
-    for (index, (handle, expected)) in inputs
+    let logical_inputs = inputs
         .iter()
-        .zip(validated.descriptor().inputs())
-        .enumerate()
-    {
-        if expected.shape.as_ref() != Some(&handle.shape)
-            || expected.dtype != Some(handle.dtype)
-            || expected.device != Some(handle.device)
-        {
-            return Err(Error::Msg(format!(
-                "compiled operation {} input {} does not match its captured descriptor",
-                O::ID,
-                index
-            )));
-        }
-    }
+        .map(|storage| incin_core::exec::catalog::LogicalTensorMeta {
+            shape: Some(storage.shape.clone().into()),
+            dtype: Some(storage.dtype),
+            device: Some(storage.device),
+        })
+        .collect();
+    let validated = Descriptor::<O>::infer_runtime(descriptor.attributes().clone(), logical_inputs)
+        .map_err(|error| Error::Msg(format!("runtime descriptor validation failed: {error}")))?;
     let handles = inputs
         .iter()
         .map(|storage| TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, _>(*storage))

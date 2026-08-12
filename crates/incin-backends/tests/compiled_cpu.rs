@@ -133,3 +133,42 @@ fn compiled_cpu_executes_a_chained_matrix_pipeline() {
     assert_eq!(outputs[0].get(&[1, 0]), 1.5);
     assert_eq!(outputs[0].get(&[1, 1]), 3.5);
 }
+
+#[test]
+fn compiled_cpu_accepts_a_new_symbolic_batch_extent() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![2, 3], DTypeId::F32, Some("x".into()));
+    let w = graph.add_value(vec![3, 2], DTypeId::F32, Some("w".into()));
+    let y = graph.add_value(vec![2, 2], DTypeId::F32, Some("y".into()));
+    graph.mark_input(x);
+    graph.mark_input(w);
+    graph.mark_output(y);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::MatMulExact),
+        vec![x, w],
+        vec![y],
+        Default::default(),
+        Some(payload::<op::MatMulExact>(&[&[2, 3], &[3, 2]])),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let x_storage = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]),
+        vec![3, 3],
+    )
+    .unwrap();
+    let w_storage = CpuStorage::try_from_contiguous(
+        CpuBuffer::F32(vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
+        vec![3, 2],
+    )
+    .unwrap();
+    let outputs = CpuCompiledInvocation::new(vec![x_storage, w_storage])
+        .run(&plan)
+        .unwrap();
+    assert_eq!(outputs[0].shape.as_ref(), &[3, 2]);
+    assert_eq!(outputs[0].get(&[2, 0]), 16.0);
+    assert_eq!(outputs[0].get(&[2, 1]), 17.0);
+}
