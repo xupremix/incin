@@ -271,7 +271,22 @@ pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStora
 
 pub(crate) fn canonical_softmax<D: Device>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
     let log_values = log_softmax::<D, f32>(t, dim)?;
-    canonical_unary(UnaryOp::Exp, &log_values)
+    canonical_exp(&log_values)
+}
+
+pub(crate) fn canonical_exp(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Exp, t)?;
+    let out_capture = out.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| g * o)?;
+            Ok(vec![grad])
+        }),
+    });
+    Ok(out)
 }
 
 fn elementwise_binary_numeric(
@@ -726,23 +741,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn exp<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Exp, t)?;
-
-        // exp'(x) = out (output-based).
-        let out_capture = out.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                    let deriv = o;
-                    g * deriv
-                })?;
-                Ok(vec![grad])
-            }),
-        });
-        Ok(out)
+        canonical_exp(t)
     }
 
     /// `neg`.
