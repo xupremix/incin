@@ -10,4 +10,4 @@ error: cannot construct `incin_core::exec::Descriptor<incin_core::exec::op::Add>
 8 |         marker: PhantomData,
   |         ------------------- private field
   |
-  = note: ...and other private field `inputs` that was not provided
+  = note: ...and other private fields `inputs` and `identity` that were not provided
