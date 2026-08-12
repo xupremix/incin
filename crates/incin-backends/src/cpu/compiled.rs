@@ -16,7 +16,15 @@ macro_rules! cpu_compiled_operations {
         $callback!(
             Add => op::Add,
             Relu => op::Relu,
+            ReshapeExact => op::ReshapeExact,
+            BroadcastAs => op::BroadcastAs,
             MatMulExact => op::MatMulExact,
+            TransposeExact => op::TransposeExact,
+            Narrow => op::Narrow,
+            FlattenExact => op::FlattenExact,
+            SliceExact => op::SliceExact,
+            ConcatExact => op::ConcatExact,
+            StackExact => op::StackExact,
             Linear => op::Linear,
             Addmm => op::Addmm,
         );
