@@ -170,7 +170,7 @@ impl Execute<CpuIdentityOperation> for CpuBackendImpl<Cpu> {
             .first()
             .and_then(|input| input.downcast_ref::<CpuStorage>())
             .cloned()
-            .ok_or_else(|| BackendError::InvalidInput {
+            .ok_or(BackendError::InvalidInput {
                 operation: incin_core::prelude::OperationKind::Pointwise,
                 reason: "cpu identity requires one CPU input",
             })
