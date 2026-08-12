@@ -1705,7 +1705,7 @@ impl<D: Device> Execute<op::BatchedMatMul> for CpuBackendImpl<D> {
             operation,
             training_mode(request.context),
         )?;
-        <Self as TensorOps<Self>>::bmm::<f32>(lhs, rhs)
+        crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
