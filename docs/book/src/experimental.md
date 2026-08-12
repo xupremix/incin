@@ -52,8 +52,11 @@ for CUDA launch parameters — `AutotunePolicy`, `KernelSignature`,
 
 Feature `compiled`. A structural prototype under
 `incin::experimental::compiled`. The crate's own documentation is blunt about
-it: *CPU execution is available through the compiled,cpu feature.* The types describe what a compiled
-execution surface would look like; nothing runs through them.
+it: CPU execution is available through the `compiled,cpu` feature. The generic
+plan builds symbolic guards and liveness information. `CpuCompiledPlan::compile`
+performs executable CPU admission, and `CpuCompiledInvocation` runs the admitted
+descriptor-backed subset. Unsupported operations and malformed descriptors fail
+during admission.
 
 ## Telemetry
 

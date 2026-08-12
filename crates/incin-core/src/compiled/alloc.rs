@@ -207,7 +207,12 @@ impl BufferSlot {
     }
 }
 
-/// A memory plan assigning each value to a buffer slot.
+/// A memory plan assigning each value to a logical executor buffer slot.
+///
+/// The slots are the storage handles used by an executable backend. Physical
+/// allocation reuse is backend policy; a backend may conservatively materialize
+/// a fresh storage object for each result while still honoring these liveness
+/// assignments.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MemoryPlan {
     assignments: BTreeMap<ValueId, BufferSlot>,
