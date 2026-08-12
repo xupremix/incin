@@ -261,8 +261,13 @@ fn dtype_view_preserves_target_backend_family() {
     let target = SentinelTarget;
     let _rebound = target.dtype::<i64>().unwrap();
 
-    fn assert_same_backend<B1: 'static, B2: 'static>() {
-        assert_eq!(core::any::TypeId::of::<B1>(), core::any::TypeId::of::<B2>());
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
+    fn assert_same_backend<B1, B2>()
+    where
+        B1: Same<B2>,
+        B2: Same<B1>,
+    {
     }
 
     assert_same_backend::<TargetBackendFor<DtypeView<SentinelTarget, i64>>, CpuBackendImpl<Cpu>>();
@@ -383,8 +388,13 @@ fn native_on_cpu_and_bare_cpu_resolve_same_backend_family() {
     let native_target = Native::on(Cpu);
     let bare_target = Cpu;
 
-    fn assert_same_backend<B1: 'static, B2: 'static>() {
-        assert_eq!(core::any::TypeId::of::<B1>(), core::any::TypeId::of::<B2>());
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
+    fn assert_same_backend<B1, B2>()
+    where
+        B1: Same<B2>,
+        B2: Same<B1>,
+    {
     }
 
     assert_same_backend::<TargetBackend<Target<Native, Cpu>>, TargetBackend<Cpu>>();
@@ -418,8 +428,13 @@ fn candle_dtype_view_preserves_candle_backend_family() {
     let candle_target = Candle::on(Cpu);
     let _rebound = candle_target.dtype::<i64>().unwrap();
 
-    fn assert_same_backend<B1: 'static, B2: 'static>() {
-        assert_eq!(core::any::TypeId::of::<B1>(), core::any::TypeId::of::<B2>());
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
+    fn assert_same_backend<B1, B2>()
+    where
+        B1: Same<B2>,
+        B2: Same<B1>,
+    {
     }
 
     assert_same_backend::<
