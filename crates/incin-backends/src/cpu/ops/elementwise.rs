@@ -367,6 +367,14 @@ pub(crate) fn canonical_elu(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_trunc(t: &CpuStorage) -> Result<CpuStorage> {
+    elementwise_unary_typed(UnaryOp::Trunc, t)
+}
+
+pub(crate) fn canonical_frac(t: &CpuStorage) -> Result<CpuStorage> {
+    elementwise_unary_typed(UnaryOp::Frac, t)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -1121,14 +1129,14 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn trunc<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Trunc, t)
+        canonical_trunc(t)
     }
 
     /// `frac`.
     fn frac<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Frac, t)
+        canonical_frac(t)
     }
 
     /// `fmod`.

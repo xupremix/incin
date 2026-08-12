@@ -31,9 +31,9 @@ use incin_core::prelude::{
 use super::CpuBackendImpl;
 use super::ops::elementwise::{
     canonical_abs, canonical_add_scalar, canonical_atan2, canonical_clamp, canonical_elu,
-    canonical_exp, canonical_fmod, canonical_mish, canonical_mul_scalar, canonical_neg,
-    canonical_powf, canonical_relu, canonical_remainder, canonical_softmax, canonical_sqrt,
-    canonical_step, canonical_unary,
+    canonical_exp, canonical_fmod, canonical_frac, canonical_mish, canonical_mul_scalar,
+    canonical_neg, canonical_powf, canonical_relu, canonical_remainder, canonical_softmax,
+    canonical_sqrt, canonical_step, canonical_trunc, canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1090,9 +1090,31 @@ unary_float_executors![
     (Atanh, atanh),
     (Erf, erf),
     (Rsqrt, rsqrt),
-    (Trunc, trunc),
-    (Frac, frac),
 ];
+
+macro_rules! direct_unary_no_grad_executors {
+    ($(($operation:ident, $kernel:path)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
+            type Output = CpuStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, op::$operation, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(
+                    self,
+                    request.inputs,
+                    operation,
+                    training_mode(request.context),
+                )?;
+                $kernel(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+            }
+        }
+    )*};
+}
+
+direct_unary_no_grad_executors![(Trunc, canonical_trunc), (Frac, canonical_frac),];
 
 impl<D: Device> Execute<op::Elu> for CpuBackendImpl<D> {
     type Output = CpuStorage;
