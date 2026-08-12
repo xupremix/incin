@@ -18,12 +18,25 @@ pub struct ShapeBucket {
 
 impl ShapeBucket {
     /// Creates a shape bucket with specified min and max dimension bounds.
-    #[must_use]
-    pub const fn new(min_shape: Vec<usize>, max_shape: Vec<usize>) -> Self {
-        Self {
+    pub fn new(min_shape: Vec<usize>, max_shape: Vec<usize>) -> Result<Self> {
+        if min_shape.len() != max_shape.len() {
+            return Err(Error::Msg(
+                "shape bucket bounds must have equal rank".into(),
+            ));
+        }
+        if min_shape
+            .iter()
+            .zip(max_shape.iter())
+            .any(|(min, max)| min > max)
+        {
+            return Err(Error::Msg(
+                "shape bucket minimum cannot exceed its maximum".into(),
+            ));
+        }
+        Ok(Self {
             min_shape,
             max_shape,
-        }
+        })
     }
 
     /// Checks if a given shape falls within this bucket's bounds.

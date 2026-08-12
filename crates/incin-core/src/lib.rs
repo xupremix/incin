@@ -70,11 +70,10 @@ pub mod experimental {
     pub mod compiled {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
-            CaptureSession, CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact,
-            CompiledPlan, ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker,
-            FusionCandidate, FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan,
-            PlanTuningReport, ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard,
-            WeightPrepacker,
+            CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
+            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, WeightPrepacker,
         };
     }
 }
