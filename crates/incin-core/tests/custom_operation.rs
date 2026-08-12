@@ -2,6 +2,7 @@
 
 extern crate incin_core as incin;
 
+use core::marker::PhantomData;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::cpu::{CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
@@ -15,11 +16,10 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, Device, DeviceId, DTypeId, Local, Shape, ShapeBuf, ShapeValue,
+    Backend, BackendError, Cpu, DTypeId, Device, DeviceId, Local, Shape, ShapeBuf, ShapeValue,
     TracingBackend, extract_graph,
 };
 use incin_core::test_utils::DummyBackend;
-use core::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct IdentityAttributes {
