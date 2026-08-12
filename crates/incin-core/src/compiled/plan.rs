@@ -135,6 +135,7 @@ impl CompiledPlan {
             }
         }
         propagate_symbolic_outputs(&mut graph)?;
+        validate_static_constraints(&graph)?;
         let mut symbols = SymbolTable::default();
         for value in graph.value_metadata.values() {
             for constraint in &value.shape_expr.constraints {
@@ -228,6 +229,38 @@ impl CompiledPlan {
     }
 }
 
+fn validate_static_constraints(graph: &CapturedGraph) -> Result<()> {
+    for value in graph.value_metadata.values() {
+        for constraint in &value.shape_expr.constraints {
+            let valid = match constraint {
+                crate::exec::Constraint::Equal { lhs, rhs } => lhs
+                    .evaluate(&[])
+                    .zip(rhs.evaluate(&[]))
+                    .map(|(l, r)| l == r),
+                crate::exec::Constraint::LowerBound { value, bound } => {
+                    value.evaluate(&[]).map(|value| value >= *bound)
+                }
+                crate::exec::Constraint::UpperBound { value, bound } => {
+                    value.evaluate(&[]).map(|value| value <= *bound)
+                }
+                crate::exec::Constraint::Divisible { value, divisor } => value
+                    .evaluate(&[])
+                    .map(|value| *divisor != 0 && value % divisor == 0),
+                crate::exec::Constraint::BroadcastCompatible { lhs, rhs } => lhs
+                    .evaluate(&[])
+                    .zip(rhs.evaluate(&[]))
+                    .map(|(lhs, rhs)| lhs == rhs || lhs == 1 || rhs == 1),
+            };
+            if valid == Some(false) {
+                return Err(Error::Msg(format!(
+                    "compiled graph contains a statically invalid shape constraint: {constraint:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
     for node in &graph.nodes {
         let inputs = node
@@ -266,19 +299,13 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             }
             _ => None,
         };
-        if let Some(shape) = shape {
-            output.shape_expr = shape;
-        } else if inputs.iter().any(|shape| {
-            shape
-                .dims
-                .iter()
-                .any(|dim| !matches!(dim, DimExpr::Const(_)))
-        }) {
+        let Some(shape) = shape else {
             return Err(Error::Msg(format!(
                 "compiled symbolic propagation does not support {:?}",
                 node.operation
             )));
-        }
+        };
+        output.shape_expr = shape;
     }
     Ok(())
 }
@@ -286,24 +313,29 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
 fn broadcast_shapes(lhs: &ShapeExpr, rhs: &ShapeExpr) -> ShapeExpr {
     let rank = lhs.dims.len().max(rhs.dims.len());
     let mut dims = Vec::with_capacity(rank);
+    let mut constraints = lhs.constraints.clone();
+    constraints.extend(rhs.constraints.iter().cloned());
     for offset in 0..rank {
-        let left = lhs
-            .dims
-            .get(lhs.dims.len().wrapping_sub(rank - offset))
-            .cloned()
-            .unwrap_or(DimExpr::Const(1));
-        let right = rhs
-            .dims
-            .get(rhs.dims.len().wrapping_sub(rank - offset))
-            .cloned()
-            .unwrap_or(DimExpr::Const(1));
+        let left = aligned_dim(&lhs.dims, rank, offset);
+        let right = aligned_dim(&rhs.dims, rank, offset);
+        constraints.push(crate::exec::Constraint::broadcast(
+            left.clone(),
+            right.clone(),
+        ));
         dims.push(DimExpr::Broadcast(Box::new(left), Box::new(right)).simplify());
     }
     ShapeExpr {
         rank: crate::exec::RankExpr::Static(rank),
         dims,
-        constraints: Vec::new(),
+        constraints,
     }
+}
+
+fn aligned_dim(dims: &[DimExpr], rank: usize, offset: usize) -> DimExpr {
+    let source_offset = rank.saturating_sub(dims.len());
+    dims.get(offset.saturating_sub(source_offset))
+        .cloned()
+        .unwrap_or(DimExpr::Const(1))
 }
 
 fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
@@ -313,23 +345,28 @@ fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
     let left_batch = ShapeExpr {
         rank: crate::exec::RankExpr::Static(lhs.dims.len() - 2),
         dims: lhs.dims[..lhs.dims.len() - 2].to_vec(),
-        constraints: Vec::new(),
+        constraints: lhs.constraints.clone(),
     };
     let right_batch = ShapeExpr {
         rank: crate::exec::RankExpr::Static(rhs.dims.len() - 2),
         dims: rhs.dims[..rhs.dims.len() - 2].to_vec(),
-        constraints: Vec::new(),
+        constraints: rhs.constraints.clone(),
     };
-    let mut result = broadcast_shapes(&left_batch, &right_batch).dims;
+    let batches = broadcast_shapes(&left_batch, &right_batch);
+    let mut result = batches.dims;
     result.push(lhs.dims[lhs.dims.len() - 2].clone());
     result.push(rhs.dims[rhs.dims.len() - 1].clone());
     Some(ShapeExpr {
         rank: crate::exec::RankExpr::Static(result.len()),
         dims: result,
-        constraints: vec![crate::exec::Constraint::equal(
-            lhs.dims[lhs.dims.len() - 1].clone(),
-            rhs.dims[rhs.dims.len() - 2].clone(),
-        )],
+        constraints: batches
+            .constraints
+            .into_iter()
+            .chain(core::iter::once(crate::exec::Constraint::equal(
+                lhs.dims[lhs.dims.len() - 1].clone(),
+                rhs.dims[rhs.dims.len() - 2].clone(),
+            )))
+            .collect(),
     })
 }
 
