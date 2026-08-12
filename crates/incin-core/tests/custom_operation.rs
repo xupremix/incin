@@ -30,7 +30,6 @@ impl Operation for CompanyIdentity {
         name: std::borrow::Cow::Borrowed("identity"),
         version: 1,
     };
-    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
 
     fn infer_outputs(
         attributes: &Self::Attributes,
@@ -60,7 +59,6 @@ impl Operation for PayloadOperation {
         name: std::borrow::Cow::Borrowed("payload"),
         version: 1,
     };
-    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
 
     fn infer_outputs(
         _: &Self::Attributes,

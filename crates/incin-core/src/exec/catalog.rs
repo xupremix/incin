@@ -699,9 +699,6 @@ macro_rules! define_catalog {
                     name: Cow::Borrowed($name),
                     version: 1,
                 };
-                const IDENTITY: crate::exec::OperationIdentity =
-                    crate::exec::OperationIdentity::Builtin(OperationKind::$variant);
-
                 fn infer_outputs(
                     attributes: &Self::Attributes,
                     inputs: &[LogicalTensorMeta],
@@ -880,13 +877,6 @@ pub trait Operation: Clone + fmt::Debug + 'static {
 
     const KEY: OperationKey;
 
-    /// Runtime capability identity for this exact operation.
-    ///
-    /// Built-ins use their compact catalog identity. Downstream operations
-    /// use their persistent `OperationKey`. Both forms share one descriptor
-    /// and execution path.
-    const IDENTITY: crate::exec::OperationIdentity;
-
     /// Infers output metadata from checked logical input metadata.
     fn infer_outputs(
         attributes: &Self::Attributes,
@@ -944,6 +934,7 @@ pub struct Descriptor<O: Operation> {
     attributes: O::Attributes,
     inputs: Vec<LogicalTensorMeta>,
     outputs: Vec<LogicalTensorMeta>,
+    identity: crate::exec::OperationIdentity,
     marker: PhantomData<fn() -> O>,
 }
 
@@ -968,11 +959,11 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
 
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
     fn trace_identity(&self) -> crate::exec::OperationIdentity {
-        O::IDENTITY.clone()
+        self.identity.clone()
     }
 
     fn trace_operation(&self) -> Option<crate::graph::OpType> {
-        let OperationIdentity::Builtin(operation) = O::IDENTITY else {
+        let OperationIdentity::Builtin(operation) = self.identity else {
             return None;
         };
         Some(match operation {
@@ -1044,7 +1035,7 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
     }
 
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId {
-        let OperationIdentity::Builtin(operation) = O::IDENTITY else {
+        let OperationIdentity::Builtin(operation) = self.identity else {
             return inputs.first().map_or(DTypeId::F32, |input| {
                 input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
             });
@@ -1086,6 +1077,11 @@ impl<O: Operation> Descriptor<O> {
     pub fn inputs(&self) -> &[LogicalTensorMeta] {
         &self.inputs
     }
+
+    #[must_use]
+    pub const fn identity(&self) -> &crate::exec::OperationIdentity {
+        &self.identity
+    }
 }
 
 impl<O: CanonicalOperation> Descriptor<O>
@@ -1115,6 +1111,7 @@ where
                 attributes,
                 inputs,
                 outputs,
+                identity: crate::exec::OperationIdentity::Builtin(O::ID),
                 marker: PhantomData,
             },
             crate::exec::ProofLevel::Dynamic,
@@ -3855,6 +3852,7 @@ impl<O: Operation> ValidatedInvocation<O> {
                     attributes,
                     inputs: inputs.clone(),
                     outputs,
+                    identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
                 crate::exec::ProofLevel::Dynamic,
@@ -3900,6 +3898,7 @@ impl<O: Operation> ValidatedInvocation<O> {
                     attributes,
                     inputs: inputs.clone(),
                     outputs,
+                    identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
                 crate::exec::ProofLevel::of::<S>(),
@@ -4169,6 +4168,7 @@ where
             attributes,
             inputs: inputs.clone(),
             outputs,
+            identity: crate::exec::OperationIdentity::Builtin(O::ID),
             marker: PhantomData,
         };
         Ok(Self {
@@ -4298,8 +4298,6 @@ mod tests {
             name: Cow::Borrowed("identity"),
             version: 1,
         };
-        const IDENTITY: crate::exec::OperationIdentity =
-            crate::exec::OperationIdentity::Custom(Self::KEY);
 
         fn infer_outputs(
             _: &Self::Attributes,
@@ -4350,8 +4348,6 @@ mod tests {
                     name: Cow::Borrowed($key),
                     version: 1,
                 };
-                const IDENTITY: crate::exec::OperationIdentity =
-                    crate::exec::OperationIdentity::Custom(Self::KEY);
 
                 fn infer_outputs(
                     _: &Self::Attributes,

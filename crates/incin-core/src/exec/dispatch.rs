@@ -163,11 +163,12 @@ where
     validate_execution_payload::<O>(&invocation, payload)?;
 
     let training = context.training();
-    if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
+    let identity = invocation.descriptor().identity();
+    if matches!(identity, OperationIdentity::Builtin(_)) {
         for handle in inputs {
             admit(
                 context.backend(),
-                &O::IDENTITY,
+                identity,
                 handle.metadata(),
                 training,
                 context.math_mode(),
@@ -180,7 +181,7 @@ where
                     continue;
                 };
                 let query = CapabilityQuery {
-                    operation: O::IDENTITY.clone(),
+                    operation: identity.clone(),
                     dtype,
                     layout: crate::exec::meta::LayoutClass::Contiguous,
                     rank: shape.len(),
@@ -243,11 +244,12 @@ where
     validate_execution_payload::<O>(&invocation, payload)?;
 
     let training = context.training();
-    if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
+    let identity = invocation.descriptor().identity();
+    if matches!(identity, OperationIdentity::Builtin(_)) {
         for handle in inputs {
             admit(
                 context.backend(),
-                &O::IDENTITY,
+                identity,
                 handle.metadata(),
                 training,
                 context.math_mode(),
@@ -271,7 +273,7 @@ where
                     continue;
                 };
                 let query = CapabilityQuery {
-                    operation: O::IDENTITY.clone(),
+                    operation: identity.clone(),
                     dtype,
                     layout: crate::exec::meta::LayoutClass::Contiguous,
                     rank: shape.len(),
@@ -306,7 +308,7 @@ where
     let attributes = invocation.descriptor().attributes();
     let data =
         (attributes as &dyn core::any::Any).downcast_ref::<crate::exec::catalog::DataAttributes>();
-    let operation = match O::IDENTITY {
+    let operation = match invocation.descriptor().identity() {
         OperationIdentity::Builtin(operation) => operation,
         OperationIdentity::Custom(_) => return Ok(()),
     };
@@ -315,17 +317,21 @@ where
             Some(bytes) if bytes.len() == data.payload.byte_len() => Ok(()),
             Some(bytes) => Err(CanonicalError::Descriptor(
                 crate::exec::catalog::DescriptorError::PayloadByteLength {
-                    operation,
+                    operation: *operation,
                     expected: data.payload.byte_len(),
                     actual: bytes.len(),
                 },
             )),
             None => Err(CanonicalError::Descriptor(
-                crate::exec::catalog::DescriptorError::PayloadMissing { operation },
+                crate::exec::catalog::DescriptorError::PayloadMissing {
+                    operation: *operation,
+                },
             )),
         },
         None if payload.is_some() => Err(CanonicalError::Descriptor(
-            crate::exec::catalog::DescriptorError::UnexpectedPayload { operation },
+            crate::exec::catalog::DescriptorError::UnexpectedPayload {
+                operation: *operation,
+            },
         )),
         None => Ok(()),
     }
@@ -346,12 +352,12 @@ pub fn support_for<O, B>(
     metadata: &TensorMeta,
 ) -> Result<SupportLevel, UnsupportedReason>
 where
-    O: Operation,
+    O: crate::exec::catalog::CanonicalOperation,
     B: Capabilities + crate::tensor::backend::StorageBackend,
 {
     admit(
         context.backend(),
-        &O::IDENTITY,
+        &OperationIdentity::Builtin(O::ID),
         metadata,
         context.training(),
         context.math_mode(),
