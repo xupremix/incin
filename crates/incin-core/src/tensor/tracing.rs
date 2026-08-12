@@ -257,7 +257,7 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                     .operation
                     .descriptor()
                     .trace_output_dtype(request.inputs)
-                    .ok_or_else(|| BackendError::InvalidInput {
+                    .ok_or(BackendError::InvalidInput {
                         operation: crate::shapes::error::OperationKind::Storage,
                         reason: "tracing requires output dtype metadata",
                     })?,

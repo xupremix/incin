@@ -155,14 +155,14 @@ impl ShapeExpr {
     }
 
     pub fn validate(&self, actual: &[usize]) -> Result<(), String> {
-        if let RankExpr::Static(rank) = self.rank {
-            if rank != actual.len() {
-                return Err(alloc::format!(
-                    "expected rank {}, got {}",
-                    rank,
-                    actual.len()
-                ));
-            }
+        if let RankExpr::Static(rank) = self.rank
+            && rank != actual.len()
+        {
+            return Err(alloc::format!(
+                "expected rank {}, got {}",
+                rank,
+                actual.len()
+            ));
         }
         let mut symbols = Vec::new();
         for (expr, value) in self.dims.iter().zip(actual.iter().copied()) {
