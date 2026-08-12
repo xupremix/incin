@@ -1034,10 +1034,8 @@ impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
     }
 }
 
-// The float family. Its kernel bodies still live on `FloatOps`, reached through
-// the same private compatibility adapter the reductions use: these are the
-// operations whose bodies move down next, and the macros below are shaped so
-// that moving one is a change to a single row.
+// Canonical elementwise executors use concrete CPU helpers. FloatOps remains
+// available to internal composed kernels and legacy tensor adapters.
 
 macro_rules! canonical_unary_executors {
     ($(($operation:ident, $helper:ident)),* $(,)?) => {
