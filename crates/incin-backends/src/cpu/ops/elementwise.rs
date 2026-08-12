@@ -151,6 +151,10 @@ pub(crate) fn canonical_relu(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_unary(op: UnaryOp, t: &CpuStorage) -> Result<CpuStorage> {
+    elementwise_unary_typed(op, t)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -1131,56 +1135,56 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn sign<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Sign, t)
+        canonical_unary(UnaryOp::Sign, t)
     }
 
     /// `floor`.
     fn floor<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Floor, t)
+        canonical_unary(UnaryOp::Floor, t)
     }
 
     /// `ceil`.
     fn ceil<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Ceil, t)
+        canonical_unary(UnaryOp::Ceil, t)
     }
 
     /// `round`.
     fn round<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Round, t)
+        canonical_unary(UnaryOp::Round, t)
     }
 
     /// `log2`.
     fn log2<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Log2, t)
+        canonical_unary(UnaryOp::Log2, t)
     }
 
     /// `log10`.
     fn log10<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Log10, t)
+        canonical_unary(UnaryOp::Log10, t)
     }
 
     /// `sin`.
     fn sin<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Sin, t)
+        canonical_unary(UnaryOp::Sin, t)
     }
 
     /// `cos`.
     fn cos<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_unary_typed(UnaryOp::Cos, t)
+        canonical_unary(UnaryOp::Cos, t)
     }
 }
 

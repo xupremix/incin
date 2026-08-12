@@ -29,7 +29,7 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
-use super::ops::elementwise::canonical_relu;
+use super::ops::elementwise::{canonical_relu, canonical_unary};
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1081,14 +1081,6 @@ unary_float_executors![
     (Tanh, tanh),
     (Sigmoid, sigmoid),
     (Swish, swish),
-    (Sign, sign),
-    (Floor, floor),
-    (Ceil, ceil),
-    (Round, round),
-    (Log2, log2),
-    (Log10, log10),
-    (Sin, sin),
-    (Cos, cos),
     (Tan, tan),
     (Asin, asin),
     (Acos, acos),
@@ -1102,6 +1094,40 @@ unary_float_executors![
     (Rsqrt, rsqrt),
     (Trunc, trunc),
     (Frac, frac),
+];
+
+macro_rules! direct_unary_float_executors {
+    ($(($operation:ident, $kernel:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
+            type Output = CpuStorage;
+
+            fn execute_shaped<ShapeTy: Shape>(
+                &self,
+                request: ExecutionRequest<'_, op::$operation, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(
+                    self,
+                    request.inputs,
+                    operation,
+                    training_mode(request.context),
+                )?;
+                canonical_unary(crate::cpu::ops::elementwise_kernel::UnaryOp::$kernel, input)
+                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            }
+        }
+    )*};
+}
+
+direct_unary_float_executors![
+    (Sign, Sign),
+    (Floor, Floor),
+    (Ceil, Ceil),
+    (Round, Round),
+    (Log2, Log2),
+    (Log10, Log10),
+    (Sin, Sin),
+    (Cos, Cos),
 ];
 
 /// Unary float operations parametrised by one scalar attribute.
