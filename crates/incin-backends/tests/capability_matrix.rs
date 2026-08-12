@@ -6,10 +6,7 @@ use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::{
-    Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps,
-    TensorOps,
-};
+use incin_core::backend_authoring::Backend;
 use incin_core::exec::catalog::{
     ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes, DataAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
@@ -24,6 +21,9 @@ use incin_core::exec::{
 use incin_core::prelude::{
     Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0,
     Reduction, ShapeBuf, ShapeValue,
+};
+use incin_core::tensor::backend::{
+    CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps, TensorOps,
 };
 
 use incin_core::tensor::arg_into::ArgInto;
