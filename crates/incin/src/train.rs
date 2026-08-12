@@ -583,7 +583,7 @@ impl Trainer {
     where
         B: Backend,
         // Generic over the loss's shape rather than fixed to `Dyn`, because a
-        // loss is a scalar: `mse_loss` returns `Tensor<()>`. Requiring `Dyn`
+        // loss is zero-rank. `mse_loss` returns a scalar tensor. Requiring `Dyn`
         // here would have meant every caller reshaping their loss to satisfy
         // the trainer, which is the trainer inventing work.
         S: incin_core::prelude::Shape + incin_core::prelude::DynShape,

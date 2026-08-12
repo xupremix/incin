@@ -71,7 +71,7 @@ impl<
     pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType, G2: RequiresGrad>(
         &self,
         target: &Tensor<S2, B, KT, G2>,
-    ) -> Result<Tensor<(), B, K, G>>
+    ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::CrossEntropyLoss>,
         <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
@@ -140,7 +140,7 @@ impl<
     pub fn mse_loss<S2: Shape, G2: RequiresGrad>(
         &self,
         target: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<(), B, K, G>>
+    ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::MseLoss> + crate::exec::Capabilities,
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
@@ -179,7 +179,7 @@ impl<
     pub fn l1_loss<S2: Shape, G2: RequiresGrad>(
         &self,
         target: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<(), B, K, G>>
+    ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::L1Loss> + crate::exec::Capabilities,
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
@@ -218,7 +218,7 @@ impl<
     pub fn bce_with_logits_loss<S2: Shape, G2: RequiresGrad>(
         &self,
         target: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<(), B, K, G>>
+    ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,

@@ -1142,59 +1142,12 @@ pub const fn fold_static_numel(extents: &[Option<usize>]) -> Option<usize> {
     Some(product)
 }
 
-impl Shape for () {
-    const RANK: Option<usize> = Some(0);
-    /// A scalar has no axis that could be dynamic, so everything about it is
-    /// known at compile time.
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Static;
-
-    /// One element, not zero: a scalar holds a value, it is not empty.
-    const STATIC_NUMEL: Option<usize> = Some(1);
-
-    /// The user-facing constructor argument type for this concrete shape.
-    type Arg = ();
-    /// Runtime values for this shape are held in `ShapeBuf`.
-    /// Converts a user-facing argument into canonical `ShapeBuf` storage.
-    fn resolve(_: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        Self::try_from_dims(&[]).map(|_| crate::shapes::ShapeBuf::scalar())
-    }
-    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        if dims.is_empty() {
-            Ok(())
-        } else {
-            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: crate::shapes::error::OperationKind::Storage,
-                rank: dims.len(),
-            })
-        }
-    }
-}
-
-impl PartialDynShape for () {
-    /// The compile-time-known number of dimensions.
-    const RANK: usize = 0;
-}
-
-impl<D: Dim> AppendDim<D> for () {
-    /// `Self`'s dimensions with `D` appended at the end.
-    type Output = DimCons<D, Nil>;
-}
-
-impl DynShape for () {
-    #[inline(always)]
-    /// Returns the number of dimensions.
-    fn rank(_: &ShapeBuf) -> usize {
-        0
-    }
-}
-
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
     /// `Self`'s dimensions with the last one replaced by `NewDim`.
     type Output = Dyn;
 }
 
-/// The 0-dimensional (scalar) shape - an alias for `()`.
-pub type Scalar = ();
+pub type Scalar = Nil;
 
 #[cfg(test)]
 mod tests {
@@ -1208,11 +1161,11 @@ mod tests {
     #[test]
     fn test_scalar_shape() {
         let scalar = ShapeBuf::scalar();
-        assert_eq!(<() as DynShape>::rank(&scalar), 0);
-        assert_eq!(<() as DynShape>::numel(&scalar), 1);
+        assert_eq!(<Nil as DynShape>::rank(&scalar), 0);
+        assert_eq!(<Nil as DynShape>::numel(&scalar), 1);
         let empty_dims: [usize; 0] = [];
         assert_eq!(scalar, empty_dims);
-        assert_eq!(<() as DynShape>::rank(&scalar), 0);
+        assert_eq!(<Nil as DynShape>::rank(&scalar), 0);
     }
 
     #[test]

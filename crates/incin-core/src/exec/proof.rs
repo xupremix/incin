@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn a_fully_typed_shape_proves_itself_statically() {
         assert_eq!(ProofLevel::of::<Static23>(), ProofLevel::Static);
-        assert_eq!(ProofLevel::of::<()>(), ProofLevel::Static);
+        assert_eq!(ProofLevel::of::<crate::shapes::Nil>(), ProofLevel::Static);
     }
 
     #[test]

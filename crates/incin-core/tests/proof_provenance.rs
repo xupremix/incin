@@ -14,7 +14,7 @@
 extern crate incin_core as incin;
 
 use incin_core::exec::ProofLevel;
-use incin_core::prelude::Dyn;
+use incin_core::prelude::{Dyn, Nil};
 use incin_macros::s;
 
 incin_core::dim!(Batch, Seq);
@@ -30,7 +30,7 @@ fn a_shape_written_entirely_in_typenum_is_fully_proved() {
 
 #[test]
 fn a_scalar_is_static_because_it_has_no_axis_to_be_dynamic() {
-    assert_eq!(ProofLevel::of::<()>(), ProofLevel::Static);
+    assert_eq!(ProofLevel::of::<Nil>(), ProofLevel::Static);
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn a_dynamic_operand_dominates_everything() {
     for other in [
         ProofLevel::of::<s![3, 4]>(),
         ProofLevel::of::<s![3, dyn]>(),
-        ProofLevel::of::<()>(),
+        ProofLevel::of::<Nil>(),
     ] {
         assert_eq!(dynamic.meet(other), ProofLevel::Dynamic);
     }

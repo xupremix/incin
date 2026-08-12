@@ -41,12 +41,12 @@ macro_rules! impl_reduction_op {
         $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(self) -> Result<Tensor<(), B, K, G>>
+        pub fn $method(self) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
         where
             B: Execute<op::$operation> + crate::exec::Capabilities,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
         {
-            let output_shape = crate::shapes::ShapeValue::<()>::try_new(
+            let output_shape = crate::shapes::ShapeValue::<crate::shapes::Nil>::try_new(
                 crate::shapes::ShapeBuf::scalar(),
             )
             .map_err(crate::prelude::Error::Shape)?;
@@ -54,7 +54,7 @@ macro_rules! impl_reduction_op {
             let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
             let inner = G::grad_mode(&self._grad)
                 .restrict(|| {
-                    crate::exec::dispatch::execute_shaped::<op::$operation, B, ()>(
+                    crate::exec::dispatch::execute_shaped::<op::$operation, B, crate::shapes::Nil>(
                         &context,
                         crate::exec::catalog::NoAttributes,
                         &[input],
@@ -396,7 +396,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
-    pub fn norm(&self, p: f64) -> Result<Tensor<(), B, K, G>>
+    pub fn norm(&self, p: f64) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
@@ -670,7 +670,7 @@ where
     <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
-    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
+    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
         let mean = self.clone().mean_all()?;
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
@@ -689,7 +689,7 @@ where
     }
 
     /// Computes the standard deviation over all elements.
-    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
+    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
         self.var_all(unbiased)?.sqrt()
     }
 }

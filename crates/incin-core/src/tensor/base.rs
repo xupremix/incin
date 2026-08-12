@@ -1054,13 +1054,6 @@ impl<B: Backend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
     }
 }
 
-impl<B: Backend, K: FloatDType, P: Placement> Tensor<(), B, K, Grad, P> {
-    /// Computes the backward pass for a scalar tensor.
-    pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
-        B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
-    }
-}
-
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
     /// Moves this tensor to the specified device, returning a new Tensor.
     pub fn to_device<D2: Device>(

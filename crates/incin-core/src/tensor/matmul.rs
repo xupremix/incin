@@ -378,7 +378,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     pub fn dot<S2: Shape>(
         &self,
         rhs: &Tensor<S2, B, K, G1>,
-    ) -> Result<Tensor<(), B, K, JoinedGrad<G1, G1>>>
+    ) -> Result<Tensor<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
         B: Execute<op::Mul> + Execute<op::SumAll> + crate::exec::Capabilities,

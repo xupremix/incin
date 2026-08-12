@@ -113,19 +113,6 @@ pub trait BroadcastShape<Rhs: Shape>: Shape {
     fn output_shape(lhs: &ShapeBuf, rhs: &ShapeBuf) -> core::result::Result<ShapeBuf, ShapeError>;
 }
 
-impl BroadcastShape<()> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = ();
-    #[inline(always)]
-    /// Computes the runtime `ShapeBuf` of `Output`.
-    fn output_shape(
-        _: &crate::shapes::ShapeBuf,
-        _: &crate::shapes::ShapeBuf,
-    ) -> core::result::Result<crate::shapes::ShapeBuf, ShapeError> {
-        Ok(crate::shapes::ShapeBuf::scalar())
-    }
-}
-
 // ============================================================================
 // Per-axis rule: the ways two axes may meet.
 // ============================================================================

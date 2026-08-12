@@ -63,11 +63,11 @@ pub trait MseReductionShape<S: Shape> {
 }
 impl<S: Shape> MseReductionShape<S> for Mean {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> MseReductionShape<S> for Sum {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> MseReductionShape<S> for NoneReduction {
     /// The output tensor type produced by this module's forward pass.
@@ -81,11 +81,11 @@ pub trait CrossEntropyReductionShape<S: Shape> {
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Mean {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Sum {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<
     S: Shape + crate::shapes::shape_ops::ReduceAt<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
@@ -104,11 +104,11 @@ pub trait BceReductionShape<S: Shape> {
 }
 impl<S: Shape> BceReductionShape<S> for Mean {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> BceReductionShape<S> for Sum {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> BceReductionShape<S> for NoneReduction {
     /// The output tensor type produced by this module's forward pass.
@@ -122,11 +122,11 @@ pub trait L1ReductionShape<S: Shape> {
 }
 impl<S: Shape> L1ReductionShape<S> for Mean {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> L1ReductionShape<S> for Sum {
     /// The output tensor type produced by this module's forward pass.
-    type Output = ();
+    type Output = crate::shapes::Nil;
 }
 impl<S: Shape> L1ReductionShape<S> for NoneReduction {
     /// The output tensor type produced by this module's forward pass.
