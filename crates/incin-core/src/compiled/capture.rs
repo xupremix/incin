@@ -149,6 +149,12 @@ impl CapturedGraph {
 
     /// Validates value linkage and topological ordering in a captured graph.
     pub fn validate(&self) -> Result<()> {
+        let node_ids: BTreeSet<NodeId> = self.nodes.iter().map(|node| node.id).collect();
+        if node_ids.len() != self.nodes.len() {
+            return Err(Error::Msg(String::from(
+                "captured graph contains duplicate node identifiers",
+            )));
+        }
         let value_ids: BTreeSet<ValueId> = self.values.iter().map(|value| value.id).collect();
         if value_ids.len() != self.values.len() {
             return Err(Error::Msg(String::from(

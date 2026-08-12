@@ -161,15 +161,6 @@ impl CompiledArtifact {
                 nodes.len()
             )));
         }
-        for (i, node) in nodes.iter().enumerate() {
-            if node.id != i {
-                return Err(Error::Msg(alloc::format!(
-                    "Artifact semantic failure: node at position {} has non-topological ID {}",
-                    i,
-                    node.id
-                )));
-            }
-        }
         Ok(())
     }
 

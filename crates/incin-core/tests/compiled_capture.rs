@@ -79,3 +79,17 @@ fn test_capture_rejects_duplicate_producer() {
 
     assert!(CapturedGraph::capture(&graph).is_err());
 }
+
+#[test]
+fn test_captured_graph_rejects_duplicate_node_ids() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![2], DTypeId::F32, Some("x".into()));
+    let out = graph.add_value(vec![2], DTypeId::F32, Some("out".into()));
+    graph.mark_input(x);
+    graph.mark_output(out);
+    graph.add_node(OpType::Relu, vec![x], vec![out], BTreeMap::new());
+    let mut captured = CapturedGraph::capture(&graph).expect("capture should succeed");
+    captured.nodes.push(captured.nodes[0].clone());
+
+    assert!(captured.validate().is_err());
+}
