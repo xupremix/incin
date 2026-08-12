@@ -39,7 +39,8 @@ use super::ops::elementwise::{
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
 use super::ops::shape_ops::{
-    diag_storage, div_scalar_storage, sub_scalar_storage, tril_storage, triu_storage,
+    diag_storage, div_scalar_storage, flatten_storage, narrow_storage, squeeze_storage,
+    sub_scalar_storage, transpose_storage, tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1773,14 +1774,17 @@ macro_rules! axis_tensor_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, training_mode(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as TensorOps<Self>>::$method::<f32>(input, axis)
+                $method(input, axis)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-axis_tensor_executors![(SqueezeExact, squeeze), (UnsqueezeExact, unsqueeze)];
+axis_tensor_executors![
+    (SqueezeExact, squeeze_storage),
+    (UnsqueezeExact, unsqueeze_storage)
+];
 
 /// Elementwise logical negation.
 impl<D: Device> Execute<op::LogicalNot> for CpuBackendImpl<D> {
@@ -1821,7 +1825,7 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::transpose::<f32>(input, attributes.first, attributes.second)
+        transpose_storage(input, attributes.first, attributes.second)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -1842,13 +1846,8 @@ impl<D: Device> Execute<op::Narrow> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::narrow::<f32>(
-            input,
-            attributes.axis,
-            attributes.start,
-            attributes.length,
-        )
-        .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        narrow_storage(input, attributes.axis, attributes.start, attributes.length)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1868,7 +1867,7 @@ impl<D: Device> Execute<op::FlattenExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::flatten::<f32>(input, attributes.start_axis, attributes.end_axis)
+        flatten_storage(input, attributes.start_axis, attributes.end_axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
