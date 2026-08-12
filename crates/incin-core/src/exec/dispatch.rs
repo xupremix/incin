@@ -308,16 +308,7 @@ where
         (attributes as &dyn core::any::Any).downcast_ref::<crate::exec::catalog::DataAttributes>();
     let operation = match O::IDENTITY {
         OperationIdentity::Builtin(operation) => operation,
-        OperationIdentity::Custom(_) => {
-            if payload.is_some() {
-                return Err(CanonicalError::Descriptor(
-                    crate::exec::catalog::DescriptorError::UnexpectedPayload {
-                        operation: crate::shapes::error::OperationKind::Storage,
-                    },
-                ));
-            }
-            return Ok(());
-        }
+        OperationIdentity::Custom(_) => return Ok(()),
     };
     match data {
         Some(data) => match payload {
