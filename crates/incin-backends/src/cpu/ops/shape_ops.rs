@@ -16,6 +16,7 @@ use incin_core::backend_authoring::{FloatOps, NumericOps, TensorOps};
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, DTypeId, Error, Result};
 
+use crate::cpu::ops::elementwise::elementwise_unary;
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
@@ -115,6 +116,14 @@ pub(crate) fn elementwise_cmp(
         }
     }
     Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), out_shape))
+}
+
+pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
+    elementwise_unary(t, |value| value - val)
+}
+
+pub(crate) fn div_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
+    elementwise_unary(t, |value| value / val)
 }
 
 impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
@@ -1075,38 +1084,14 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx) - val);
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out)?,
-            t.shape.to_vec(),
-        ))
+        sub_scalar_storage(t, val)
     }
 
     fn div_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx) / val);
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out)?,
-            t.shape.to_vec(),
-        ))
+        div_scalar_storage(t, val)
     }
 
     fn maximum<K: DType>(

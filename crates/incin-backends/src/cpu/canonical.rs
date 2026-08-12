@@ -38,6 +38,7 @@ use super::ops::elementwise::{
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
+use super::ops::shape_ops::{div_scalar_storage, sub_scalar_storage};
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1719,14 +1720,17 @@ macro_rules! scalar_tensor_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, training_mode(request.context))?;
                 let value = request.operation.descriptor().attributes().value;
-                <Self as TensorOps<Self>>::$method::<f32>(input, value)
+                $method(input, value)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-scalar_tensor_executors![(SubScalar, sub_scalar), (DivScalar, div_scalar)];
+scalar_tensor_executors![
+    (SubScalar, sub_scalar_storage),
+    (DivScalar, div_scalar_storage)
+];
 
 /// Triangular and diagonal views, parametrised by a signed diagonal offset.
 macro_rules! diagonal_tensor_executors {
