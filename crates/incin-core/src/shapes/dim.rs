@@ -53,6 +53,20 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     /// Semantic name carried by this axis, when it is named.
     const NAME: Option<&'static str> = None;
 
+    /// Projects this extent into the compiler-facing symbolic shape language.
+    /// Runtime values become symbols, while valid static proofs remain
+    /// constants. Invalid arithmetic is kept explicit as an unknown value.
+    #[inline]
+    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
+        match Self::STATIC {
+            StaticExtent::Value(value) => crate::exec::DimExpr::Const(value),
+            StaticExtent::RuntimeUnknown => crate::exec::DimExpr::Symbol(crate::exec::SymbolId(
+                base.saturating_add(axis as u32),
+            )),
+            StaticExtent::Invalid => crate::exec::DimExpr::Unknown,
+        }
+    }
+
     /// Tests semantic tag identity for the runtime named-lookup fallback.
     /// Untagged dimensions never match a named selector.
     #[inline]

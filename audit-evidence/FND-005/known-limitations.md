@@ -10,7 +10,7 @@ execution from the stable tensor path. The old operation-family traits remain
 only as backend-local adapters for fused kernels, host readback, tracing, and
 compatibility tests. They are not a second stable tensor execution path.
 
-Thirteen catalog entries use execution sites that the current `Execute` contract
+Sixteen catalog entries use execution sites that the current `Execute` contract
 cannot carry. They mutate through an operand, produce storage on another
 backend, or act on autograd state. Their blocking reasons are recorded in the
 generated CPU migration status and are not counted as missing CPU executors.

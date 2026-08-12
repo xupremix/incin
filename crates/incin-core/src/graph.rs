@@ -198,6 +198,18 @@ impl Graph {
         }
     }
 
+    /// Marks an input while retaining the typed frontend shape proof that
+    /// produced it. Runtime axes are assigned graph-local symbols; static
+    /// axes remain constants and therefore do not receive redundant guards.
+    pub fn mark_input_with_shape<S: crate::prelude::Shape>(&mut self, value_id: ValueId) {
+        if !self.inputs.contains(&value_id) {
+            self.inputs.push(value_id);
+        }
+        if let Some(value) = self.values.get_mut(&value_id) {
+            value.shape_expr = S::symbolic_expr(value_id as u32 * 10_000 + 1);
+        }
+    }
+
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);

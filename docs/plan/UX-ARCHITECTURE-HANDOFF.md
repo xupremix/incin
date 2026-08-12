@@ -93,7 +93,7 @@ does not, and is the document that is wrong.
 |---|---|---|---|---|
 | 1 | `OperationKind` / `op::X` / `Descriptor<O>` | 174 rows | generated from `operation_catalog.rs` | tests only |
 | 2 | Nine `Backend` family supertraits | — | `tensor/backend.rs` | **all production tensor ops** |
-| 3 | `graph::OpType` | 91 variants | `graph.rs`, hand-maintained | `compiled/capture.rs` |
+| 3 | canonical `OperationIdentity` | catalog-derived | `graph.rs` and `compiled/capture.rs` | canonical catalog |
 
 Vocabulary 3 has no reference to the catalog. So "capture records the same
 operation identity used for execution" is **false**: capture speaks 3,
@@ -639,10 +639,10 @@ possible and was not attempted; the default constructor was the priority.
 
 ### Step 3 — Unify capture's vocabulary with the catalog
 
-`graph::OpType` (91 hand-maintained variants) should be generated from
-`incin_operation_catalog!` like every other consumer, or capture should record
-`OperationKind` directly. Until this happens, "capture records the same
-identity as execution" cannot be asserted.
+Graph capture records `OperationIdentity` directly. Built-in identities come
+from the canonical operation catalog, while custom operations retain their
+namespaced `OperationKey`. Descriptor payloads and execution-site metadata are
+captured with each node.
 
 ### Step 4 — Axis-level shape contract
 

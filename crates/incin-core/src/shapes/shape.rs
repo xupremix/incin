@@ -65,6 +65,30 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// follows.
     const STATIC_NUMEL: Option<usize> = None;
 
+    /// Projects frontend shape knowledge into compiler-facing metadata.
+    /// Implementors outside the canonical structural engine receive an
+    /// honest unknown-dimension projection by default.
+    fn symbolic_expr(base: u32) -> crate::exec::ShapeExpr {
+        match Self::RANK {
+            Some(rank) => crate::exec::ShapeExpr {
+                rank: crate::exec::RankExpr::Static(rank),
+                dims: (0..rank)
+                    .map(|axis| {
+                        crate::exec::DimExpr::Symbol(crate::exec::SymbolId(
+                            base.saturating_add(axis as u32),
+                        ))
+                    })
+                    .collect(),
+                constraints: alloc::vec::Vec::new(),
+            },
+            None => crate::exec::ShapeExpr {
+                rank: crate::exec::RankExpr::Dynamic,
+                dims: alloc::vec::Vec::new(),
+                constraints: alloc::vec::Vec::new(),
+            },
+        }
+    }
+
     /// The user-facing constructor argument type (e.g. a tuple of
     /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
@@ -137,6 +161,17 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
         (crate::shapes::StaticExtent::Value(h), Some(t)) => h.checked_mul(t),
         _ => None,
     };
+
+    fn symbolic_expr(base: u32) -> crate::exec::ShapeExpr {
+        let tail = T::symbolic_expr(base.saturating_add(1));
+        let mut dims = alloc::vec![H::symbolic_expr(0, base)];
+        dims.extend(tail.dims);
+        crate::exec::ShapeExpr {
+            rank: crate::exec::RankExpr::Static(dims.len()),
+            dims,
+            constraints: tail.constraints,
+        }
+    }
 
     type Arg = (H::Arg, T::Arg);
     #[inline]
@@ -625,6 +660,9 @@ impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Rank
     const RANK: Option<usize> = Some(R::USIZE);
     const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
     const STATIC_NUMEL: Option<usize> = if R::USIZE == 0 { Some(1) } else { None };
+    fn symbolic_expr(base: u32) -> crate::exec::ShapeExpr {
+        crate::exec::ShapeExpr::symbolic(&(0..R::USIZE).map(|_| 0).collect::<Vec<_>>(), base)
+    }
     type Arg = crate::shapes::ShapeBuf;
     fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
         Self::try_from_dims(arg.as_ref()).map(|_| arg)

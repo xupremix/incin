@@ -63,7 +63,7 @@ Status vocabulary:
 | API-002 | User API | normal docs/examples do not require backend aliases/raw Tensor constructors | Implemented | PASS | P1 | docs search/build |
 | API-003 | User API | final end-to-end handoff example compiles | Implemented via `foundation_handoff_contract.rs` | PASS | P0 | `foundation_handoff_contract.rs` |
 | TRC-001 | Tracing | canonical public methods remain usable with tracing/capture backend | Verified compile | PASS | P1 | tracing compile tests |
-| TRC-002 | Graph IR | replace duplicate `graph::OpType` with canonical operation vocabulary | Deferred | DEFERRED | POST | explicitly post-foundation |
+| TRC-002 | Graph IR | replace duplicate graph operation vocabulary with canonical operation identity | Implemented | PASS | P0 | canonical graph identity and capture tests |
 | CMP-001 | Compiled execution | actual compiled graph execution/fusion | Deferred | DEFERRED | POST | explicitly post-foundation |
 | DIST-001 | Distributed | typed placement/mesh source compiles after foundation changes | Verified compile | PASS | P1 | distributed feature check |
 | CI-001 | Negative contracts | compile-fail contracts have correct `.stderr` snapshots | Verified clean (44 trybuild tests passing) | PASS | P0 | trybuild harness |

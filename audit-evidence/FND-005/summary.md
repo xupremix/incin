@@ -6,7 +6,7 @@ FND-005's completion condition is that stable CPU tensor methods no longer rely
 on the operation-family supertrait architecture. The 158 backend-executable
 operations are now migrated onto the durable descriptor contract and verified.
 
-The denominator is not 174. Thirteen catalog operations sit at an
+The denominator is not 174. Sixteen catalog operations sit at an
 `ExecutionSite` the `Execute` trait cannot carry at all: they write through an
 operand, produce storage on another backend, or act on autograd state. Those
 are gaps in the execution contract rather than unwritten executors, and
