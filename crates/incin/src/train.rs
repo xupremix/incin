@@ -1,7 +1,7 @@
 //! The automatic `Trainer` from `PROPOSALS.md` §2 (`UX-001`).
 //!
-//! §2's UX principles put this at level 1 of three — "select three devices and
-//! let Incin produce and explain a safe plan" — and the sentence after the list
+//! §2's UX principles put this at level 1 of three, "select three devices and
+//! let Incin produce and explain a safe plan", and the sentence after the list
 //! is what makes it a level rather than a convenience wrapper:
 //!
 //! > "Easy" must not mean silent CPU transfer, hidden padding, relaxed
@@ -87,7 +87,7 @@ impl Machine for HostMachine {
     }
 
     fn has_device(&self, device: DeviceId) -> bool {
-        // `detect::probe` answers per *family*, not per ordinal — it reports
+        // `detect::probe` answers per family, not per ordinal. It reports
         // whether the family has any usable device. That is the right answer at
         // ordinal 0 and no answer at all above it, so anything higher is
         // reported absent rather than guessed present. Being wrong in this
@@ -336,7 +336,7 @@ const fn feature_for(kind: DeviceKind) -> &'static str {
 
 /// Builds a [`Plan`], and with it a [`Trainer`].
 ///
-/// Separate from `Trainer` because §2's example calls `.build()?` — the
+/// Separate from `Trainer` because §2's example calls `.build()?`. The
 /// validation happens once, before training, and its result is a report the
 /// caller can read whether or not they go on to train.
 #[derive(Debug, Clone)]
@@ -517,7 +517,7 @@ pub struct FitOutcome {
     pub batches: usize,
     /// The loss of the last batch of the last epoch, if there was one.
     ///
-    /// `None` for an empty dataset, which is not an error — it is a dataset
+    /// `None` for an empty dataset, which is not an error. It is a dataset
     /// with no batches, and reporting zero batches and no loss says so more
     /// honestly than a loss of `0.0`.
     pub final_loss: Option<f32>,
@@ -525,7 +525,7 @@ pub struct FitOutcome {
 
 /// The automatic trainer from §2.
 ///
-/// Owns the loop — forward, loss, backward, step — and the [`Plan`] that says
+/// Owns the loop for forward, loss, backward, and step, plus the [`Plan`] that says
 /// where it will run. The loss itself stays in caller code, passed to
 /// [`fit`](Self::fit): what a model's loss is cannot be derived from the model,
 /// and a trainer that guessed would be guessing at the one thing training is.
@@ -539,7 +539,7 @@ impl Trainer {
     ///
     /// §2's example writes `Trainer::new(model, optimizer)`. The model and
     /// optimizer are not builder state here because nothing in the *plan*
-    /// depends on them — planning is about devices — and taking them early
+    /// depends on them. Planning is about devices, and taking them early
     /// would mean the builder's type parameters propagated into every error
     /// this module returns.
     #[must_use]
@@ -561,7 +561,7 @@ impl Trainer {
 
     /// Runs the training loop.
     ///
-    /// `data` is re-iterated once per epoch, which is why it is `Clone` — a
+    /// `data` is re-iterated once per epoch, which is why it is `Clone`. A
     /// `&DataLoader` is the intended argument and is `Copy`.
     ///
     /// `loss` receives the model and one batch and returns the scalar to

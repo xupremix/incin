@@ -145,7 +145,7 @@ fn a_usize_suffixed_literal_is_still_a_static_axis() {
 
 /// `shape!` carries geometry only. Generated tensors take the *target's* float
 /// dtype, so the same shape produces different element types from different
-/// targets — the shape argument has no say in it.
+/// targets. The shape argument has no say in it.
 #[test]
 fn dtype_comes_from_the_target_not_the_shape() {
     let as_f32: Tensor<s![2, 2], _, f32, NoGrad> = Cpu.zeros(shape![2, 2]).unwrap();
