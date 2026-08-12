@@ -991,7 +991,10 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
 
-    fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId;
+    fn trace_output_dtype(
+        &self,
+        inputs: &[crate::exec::request::TensorHandle<'_>],
+    ) -> Option<DTypeDescriptor>;
 }
 
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
@@ -999,11 +1002,12 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
         self.identity.clone()
     }
 
-    fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId {
+    fn trace_output_dtype(
+        &self,
+        inputs: &[crate::exec::request::TensorHandle<'_>],
+    ) -> Option<DTypeDescriptor> {
         let OperationIdentity::Builtin(operation) = self.identity else {
-            return inputs.first().map_or(DTypeId::F32, |input| {
-                input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
-            });
+            return inputs.first().map(|input| input.metadata().dtype);
         };
         match operation {
             OperationKind::CmpEq
@@ -1014,10 +1018,12 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
             | OperationKind::CmpGe
             | OperationKind::LogicalAnd
             | OperationKind::LogicalOr
-            | OperationKind::LogicalNot => DTypeId::Bool,
-            _ => inputs.first().map_or(DTypeId::F32, |input| {
-                input.metadata().dtype.builtin_id().unwrap_or(DTypeId::F32)
-            }),
+            | OperationKind::LogicalNot => Some(DTypeId::Bool.into()),
+            _ => self
+                .outputs
+                .first()
+                .and_then(|output| output.dtype)
+                .or_else(|| inputs.first().map(|input| input.metadata().dtype)),
         }
     }
 }

@@ -97,10 +97,10 @@ impl Graph {
         Self::default()
     }
 
-    pub fn add_value(
+    pub fn add_value<D: Into<DTypeDescriptor>>(
         &mut self,
         shape: Vec<usize>,
-        dtype: DTypeId,
+        dtype: D,
         name: Option<String>,
     ) -> ValueId {
         let id = self.next_value_id;
