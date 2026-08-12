@@ -26,7 +26,6 @@ impl Operation for CompanyOp {
         name: std::borrow::Cow::Borrowed("identity"),
         version: 1,
     };
-    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
 
     fn infer_outputs(
         attributes: &CompanyAttributes,

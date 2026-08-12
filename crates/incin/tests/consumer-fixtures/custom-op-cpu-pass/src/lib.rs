@@ -17,7 +17,6 @@ impl Operation for CompanyOp {
         version: 1,
     };
 
-    const IDENTITY: OperationIdentity = OperationIdentity::Custom(Self::KEY);
 
     fn infer_outputs(
         _: &(),
