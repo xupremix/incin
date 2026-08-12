@@ -16,7 +16,7 @@ pub(crate) mod err;
 mod operation_catalog;
 
 #[cfg(feature = "compiled")]
-mod compiled;
+pub mod compiled;
 pub mod dist;
 pub mod distributions;
 pub mod exec;

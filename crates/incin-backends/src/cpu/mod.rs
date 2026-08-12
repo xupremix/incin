@@ -24,6 +24,8 @@ pub use incin_core::backend_authoring::{
 pub use incin_core::prelude::*;
 
 mod canonical;
+#[cfg(feature = "compiled")]
+pub mod compiled;
 pub(crate) mod creation;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.
 pub(crate) mod gradcheck;

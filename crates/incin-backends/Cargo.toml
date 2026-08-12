@@ -25,6 +25,8 @@ std = [
 # std prelude and the autograd tape is a `thread_local!`, so `cpu` without `std`
 # was a combination the manifest offered and the crate never compiled under.
 cpu = ["std"]
+# Enables execution of compiled graphs through the canonical CPU descriptors.
+compiled = ["std", "cpu", "incin-core/compiled"]
 # **Experimental.** Device values as user-facing allocation targets
 # (`crates/incin-backends/src/target.rs`). Additive: it adds a surface and
 # changes none. Off by default until the prototype is judged.
