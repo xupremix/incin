@@ -303,6 +303,19 @@ fn a_mixed_binary_operation_records_when_any_operand_requires_grad() {
 }
 
 #[test]
+fn mixed_binary_output_is_grad_regardless_of_operand_order() {
+    let no_grad = Tensor::<s![2, 3], B, f32, NoGrad>::ones(()).unwrap();
+    let grad = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
+
+    let left = no_grad.clone().add(&grad).unwrap();
+    let right = grad.add(&no_grad).unwrap();
+
+    fn assert_grad<S: Shape, B: Backend, K: DType>(_: &Tensor<S, B, K, Grad>) {}
+    assert_grad(&left);
+    assert_grad(&right);
+}
+
+#[test]
 fn a_no_grad_scope_silences_a_grad_chain() {
     let (a, b) = grad_operands();
 
