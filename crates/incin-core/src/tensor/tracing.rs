@@ -874,7 +874,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         let shape = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(&inner), None);
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("axis"),
@@ -1059,7 +1059,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
 
         let v_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_v.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_v.as_ref().to_vec(),
+                Self::traced_dtype(&v_inner),
+                None,
+            );
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("k"),
@@ -1184,7 +1188,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
 
             // Add reshape parameters as a constant value
             let shape_val_id = g.add_value(vec![shape.len()], DTypeId::I64, None);
@@ -1216,7 +1224,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
             let mut attrs = alloc::collections::BTreeMap::new();
             // simple perm vector building for ONNX
             let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
@@ -1258,7 +1270,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
@@ -1282,7 +1298,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
@@ -1765,7 +1785,11 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
             let mut inputs = vec![x.value_id, weight.value_id];
             if let Some(b) = bias {
                 inputs.push(b.value_id);
@@ -1814,7 +1838,11 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(
+                shape_out.as_ref().to_vec(),
+                Self::traced_dtype(&inner),
+                None,
+            );
             let mut inputs = vec![x.value_id, weight.value_id];
             if let Some(b) = bias {
                 inputs.push(b.value_id);
@@ -1889,7 +1917,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), DTypeId::F32, None);
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(&inner), None);
             g.add_node(
                 OperationKind::Embedding,
                 vec![t.value_id, w.value_id],

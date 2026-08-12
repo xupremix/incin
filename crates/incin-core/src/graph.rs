@@ -157,6 +157,9 @@ impl Graph {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
+        if let Some(value) = self.values.get_mut(&value_id) {
+            value.shape_expr = ShapeExpr::symbolic(&value.shape, value_id as u32 * 10_000 + 1);
+        }
     }
 
     pub fn mark_output(&mut self, value_id: ValueId) {

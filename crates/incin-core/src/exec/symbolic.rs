@@ -126,6 +126,17 @@ impl ShapeExpr {
     }
 
     #[must_use]
+    pub fn symbolic(dims: &[usize], base: u32) -> Self {
+        Self {
+            rank: RankExpr::Static(dims.len()),
+            dims: (0..dims.len())
+                .map(|axis| DimExpr::Symbol(SymbolId(base.saturating_add(axis as u32))))
+                .collect(),
+            constraints: Vec::new(),
+        }
+    }
+
+    #[must_use]
     pub fn with_constraints(mut self, constraints: Vec<Constraint>) -> Self {
         self.constraints = constraints;
         self
