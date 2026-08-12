@@ -991,7 +991,9 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
 
-    fn trace_descriptor_payload(&self) -> Option<crate::graph::DescriptorPayload>;
+    fn trace_descriptor_payload(
+        &self,
+    ) -> core::result::Result<Option<crate::graph::DescriptorPayload>, &'static str>;
 
     fn trace_output_dtype(
         &self,
@@ -1004,18 +1006,21 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
         self.identity.clone()
     }
 
-    fn trace_descriptor_payload(&self) -> Option<crate::graph::DescriptorPayload> {
+    fn trace_descriptor_payload(
+        &self,
+    ) -> core::result::Result<Option<crate::graph::DescriptorPayload>, &'static str> {
         #[cfg(not(feature = "std"))]
         {
-            None
+            Err("descriptor capture requires the std serialization feature")
         }
         #[cfg(feature = "std")]
         {
-            let payload = postcard::to_allocvec(self).ok()?;
-            Some(crate::graph::DescriptorPayload {
+            let payload = postcard::to_allocvec(self)
+                .map_err(|_| "canonical descriptor serialization failed")?;
+            Ok(Some(crate::graph::DescriptorPayload {
                 schema: crate::exec::DescriptorSchemaVersion::CURRENT.get(),
                 payload,
-            })
+            }))
         }
     }
 

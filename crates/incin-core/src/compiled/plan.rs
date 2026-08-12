@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
-use crate::exec::{ShapeExpr, SymbolEnvironment, SymbolTable};
+use crate::exec::{DimExpr, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable};
 use crate::graph::ValueId;
 use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
 
@@ -114,7 +114,7 @@ pub struct CompiledPlan {
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
     #[must_use]
-    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
+    pub fn compile(mut graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
         if matches!(options.fusion, FusionPolicy::Enabled) {
             return Err(Error::Msg(
                 "compiled fusion is not available for executable plans".into(),
@@ -135,7 +135,14 @@ impl CompiledPlan {
                 )));
             }
         }
+        propagate_symbolic_outputs(&mut graph)?;
         let mut symbols = SymbolTable::default();
+        for value in graph.value_metadata.values() {
+            for constraint in &value.shape_expr.constraints {
+                symbols.constraints.push(constraint.clone());
+                collect_constraint_symbols(constraint, &mut symbols);
+            }
+        }
         let input_guards = graph
             .inputs
             .iter()
@@ -212,6 +219,7 @@ impl CompiledPlan {
             .iter()
             .flat_map(|guard| guard.shape.constraints.iter())
             .cloned()
+            .chain(self.symbols.constraints.iter().cloned())
             .collect::<Vec<_>>();
         environment
             .validate_constraints(&constraints)
@@ -219,6 +227,111 @@ impl CompiledPlan {
                 Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
             })
     }
+}
+
+fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
+    for node in &graph.nodes {
+        let inputs = node
+            .inputs
+            .iter()
+            .map(|value_id| {
+                graph
+                    .value_metadata
+                    .get(value_id)
+                    .map(|value| value.shape_expr.clone())
+                    .ok_or_else(|| Error::Msg(format!("missing metadata for value {value_id}")))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let Some(output_id) = node.outputs.first().copied() else {
+            return Err(Error::Msg(format!("node {} has no output", node.id)));
+        };
+        let output = graph
+            .value_metadata
+            .get_mut(&output_id)
+            .ok_or_else(|| Error::Msg(format!("missing metadata for value {output_id}")))?;
+        let shape = match node.operation {
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Relu) => {
+                inputs.first().cloned()
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Add) => inputs
+                .get(0)
+                .zip(inputs.get(1))
+                .map(|(lhs, rhs)| broadcast_shapes(lhs, rhs)),
+            OperationIdentity::Builtin(crate::prelude::OperationKind::MatMulExact) => inputs
+                .get(0)
+                .zip(inputs.get(1))
+                .and_then(|(lhs, rhs)| matmul_shape(lhs, rhs)),
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Linear)
+            | OperationIdentity::Builtin(crate::prelude::OperationKind::Addmm) => {
+                inputs.first().cloned()
+            }
+            _ => None,
+        };
+        if let Some(shape) = shape {
+            output.shape_expr = shape;
+        } else if inputs.iter().any(|shape| {
+            shape
+                .dims
+                .iter()
+                .any(|dim| !matches!(dim, DimExpr::Const(_)))
+        }) {
+            return Err(Error::Msg(format!(
+                "compiled symbolic propagation does not support {:?}",
+                node.operation
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn broadcast_shapes(lhs: &ShapeExpr, rhs: &ShapeExpr) -> ShapeExpr {
+    let rank = lhs.dims.len().max(rhs.dims.len());
+    let mut dims = Vec::with_capacity(rank);
+    for offset in 0..rank {
+        let left = lhs
+            .dims
+            .get(lhs.dims.len().wrapping_sub(rank - offset))
+            .cloned()
+            .unwrap_or(DimExpr::Const(1));
+        let right = rhs
+            .dims
+            .get(rhs.dims.len().wrapping_sub(rank - offset))
+            .cloned()
+            .unwrap_or(DimExpr::Const(1));
+        dims.push(DimExpr::Broadcast(Box::new(left), Box::new(right)).simplify());
+    }
+    ShapeExpr {
+        rank: crate::exec::RankExpr::Static(rank),
+        dims,
+        constraints: Vec::new(),
+    }
+}
+
+fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
+    if lhs.dims.len() < 2 || rhs.dims.len() < 2 {
+        return None;
+    }
+    let left_batch = ShapeExpr {
+        rank: crate::exec::RankExpr::Static(lhs.dims.len() - 2),
+        dims: lhs.dims[..lhs.dims.len() - 2].to_vec(),
+        constraints: Vec::new(),
+    };
+    let right_batch = ShapeExpr {
+        rank: crate::exec::RankExpr::Static(rhs.dims.len() - 2),
+        dims: rhs.dims[..rhs.dims.len() - 2].to_vec(),
+        constraints: Vec::new(),
+    };
+    let mut result = broadcast_shapes(&left_batch, &right_batch).dims;
+    result.push(lhs.dims[lhs.dims.len() - 2].clone());
+    result.push(rhs.dims[rhs.dims.len() - 1].clone());
+    Some(ShapeExpr {
+        rank: crate::exec::RankExpr::Static(result.len()),
+        dims: result,
+        constraints: vec![crate::exec::Constraint::equal(
+            lhs.dims[lhs.dims.len() - 1].clone(),
+            rhs.dims[rhs.dims.len() - 2].clone(),
+        )],
+    })
 }
 
 fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {

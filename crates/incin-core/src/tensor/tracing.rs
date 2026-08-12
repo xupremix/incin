@@ -273,12 +273,20 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                 .iter()
                 .filter_map(crate::exec::request::TensorHandle::tracing_value)
                 .collect();
+            let descriptor_payload = request
+                .operation
+                .descriptor()
+                .trace_descriptor_payload()
+                .map_err(|reason| BackendError::InvalidInput {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    reason,
+                })?;
             g.add_node_with_descriptor_payload(
                 request.operation.descriptor().trace_identity(),
                 inputs,
                 vec![output_id],
                 alloc::collections::BTreeMap::new(),
-                request.operation.descriptor().trace_descriptor_payload(),
+                descriptor_payload,
             );
             output_id
         };
