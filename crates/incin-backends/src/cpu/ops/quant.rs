@@ -1,8 +1,8 @@
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::QuantizedOps;
 use incin_core::prelude::*;
 use incin_core::prelude::{FloatDType, QuantDType};
+use incin_core::tensor::backend::QuantizedOps;
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -311,7 +311,7 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::backend_authoring::NumericOps;
+    use incin_core::tensor::backend::NumericOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;

@@ -11,7 +11,7 @@ extern crate incin_core as incin;
 
 use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::operations::ShapeAttributes;
-use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::catalog::{
     AttributeContract, AxisAttributes, Conv2dAttributes, Pool2dAttributes,
 };
@@ -22,6 +22,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
+use incin_core::tensor::backend::{ModuleOps, TensorOps};
 use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;

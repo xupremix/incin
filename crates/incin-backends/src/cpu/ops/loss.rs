@@ -25,10 +25,10 @@
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{FloatOps, LossOps, NumericOps, ReductionOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
+use incin_core::tensor::backend::{FloatOps, LossOps, NumericOps, ReductionOps};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 

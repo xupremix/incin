@@ -11,9 +11,9 @@
 //! (pre-broadcast) operand shapes.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{FloatOps, NumericOps};
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
+use incin_core::tensor::backend::{FloatOps, NumericOps};
 
 use crate::cpu::ops::elementwise_kernel::{self, BinaryOp, UnaryOp};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -1179,7 +1179,7 @@ pub(crate) fn log_softmax<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     dim: usize,
 ) -> Result<CpuStorage> {
-    use incin_core::backend_authoring::{FloatOps, NumericOps, ReductionOps};
+    use incin_core::tensor::backend::{FloatOps, NumericOps, ReductionOps};
 
     /// `B`.
     type B<D> = CpuBackendImpl<D>;
@@ -1199,7 +1199,7 @@ mod tests {
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
     use crate::cpu::tape;
-    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::tensor::backend::ReductionOps;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {

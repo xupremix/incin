@@ -5,12 +5,10 @@
 //! `StorageBackend`/`Capabilities`/`Execute` contract, so the descriptor path
 //! is not a CPU-only construction.
 
-use incin_core::backend_authoring::{
-    Descriptor, Execute, ExecutionRequest, FloatOps, ModuleOps, NumericOps, ReductionOps,
-    StorageBackend, TensorOps, op,
-};
+use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
+use incin_core::tensor::backend::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;

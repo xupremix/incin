@@ -1,7 +1,7 @@
 use crate::cpu::{CpuBackendImpl, CpuBuffer};
 use incin_core::backend_authoring::StorageBackend;
-use incin_core::backend_authoring::{Backend, OptimizerOps};
 use incin_core::prelude::{DType, Device, Result};
+use incin_core::tensor::backend::{Backend, OptimizerOps};
 
 impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
     /// Applies a fused AdamW optimization step on the backend.
@@ -77,7 +77,7 @@ impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
             return Ok(());
         }
 
-        incin_core::backend_authoring::adamw_step_composed::<Self, K>(
+        incin_core::tensor::backend::adamw_step_composed::<Self, K>(
             _var,
             _grad,
             _m,

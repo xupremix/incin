@@ -44,10 +44,10 @@
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::ReductionOps;
 use incin_core::prelude::Error;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
+use incin_core::tensor::backend::ReductionOps;
 
 use crate::cpu::ops::elementwise::increment_index;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

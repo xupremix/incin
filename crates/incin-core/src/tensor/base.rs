@@ -1307,7 +1307,7 @@ mod tests {
     /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
-        use crate::backend_authoring::{Backend, ModuleOps};
+        use crate::tensor::backend::{Backend, ModuleOps};
         type B = crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`

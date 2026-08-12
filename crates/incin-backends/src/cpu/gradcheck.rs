@@ -157,8 +157,8 @@ pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage]
 mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
-    use incin_core::backend_authoring::{NumericOps, ReductionOps};
     use incin_core::prelude::Cpu;
+    use incin_core::tensor::backend::{NumericOps, ReductionOps};
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

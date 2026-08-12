@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::ReductionOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::tensor::backend::ReductionOps<Self>
     for CandleBackend<D>
 {
     // This adapter does not route candle's product or cumulative sum yet.

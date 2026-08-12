@@ -6,7 +6,7 @@ use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 use candle_core as candle;
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::CreationOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::tensor::backend::CreationOps<Self>
     for CandleBackend<D>
 {
     // This adapter does not route candle's fill or sequence constructors yet.

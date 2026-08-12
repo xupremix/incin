@@ -40,10 +40,10 @@
 //! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
-use incin_core::backend_authoring::{NumericOps, TensorOps};
 use incin_core::prelude::Error;
 use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
 use incin_core::prelude::{DType, Result};
+use incin_core::tensor::backend::{NumericOps, TensorOps};
 
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
@@ -989,8 +989,8 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::backend_authoring::ReductionOps;
     use incin_core::prelude::Cpu;
+    use incin_core::tensor::backend::ReductionOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

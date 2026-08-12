@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::NumericOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::tensor::backend::NumericOps<Self>
     for CandleBackend<D>
 {
     /// Element-wise addition with broadcasting.

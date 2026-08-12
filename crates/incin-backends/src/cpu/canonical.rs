@@ -12,10 +12,7 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{
-    Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps,
-    StorageBackend, TensorOps,
-};
+use incin_core::backend_authoring::{Backend, Execute, ExecutionRequest, StorageBackend};
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
 };
@@ -26,6 +23,9 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
     Shape,
+};
+use incin_core::tensor::backend::{
+    CreationOps, FloatOps, LossOps, ModuleOps, QuantizedOps, TensorOps,
 };
 
 use super::CpuBackendImpl;
@@ -3335,7 +3335,7 @@ mod tests {
     #[test]
     fn canonical_and_legacy_gradients_are_identical() {
         use crate::cpu::tape;
-        use incin_core::backend_authoring::{NumericOps, ReductionOps};
+        use incin_core::tensor::backend::{NumericOps, ReductionOps};
 
         let context = context();
         let lhs = storage(&[0.5, 1.5, -2.0, 3.0], &[4]);

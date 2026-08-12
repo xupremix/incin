@@ -2,6 +2,7 @@ use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
+use incin_core::tensor::backend::*;
 
 /// WebGPU compute backend implementation for Incin.
 #[derive(Clone)]

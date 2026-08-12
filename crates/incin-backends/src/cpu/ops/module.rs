@@ -17,9 +17,9 @@
 //! (CPUBACK-08).
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::ModuleOps;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, Result};
+use incin_core::tensor::backend::ModuleOps;
 
 impl<D: Device> ModuleOps<Self> for CpuBackendImpl<D> {
     /// `layer_norm`.

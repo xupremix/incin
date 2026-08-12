@@ -18,11 +18,11 @@ use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::cuda::CudaBackendImpl;
 #[cfg(feature = "wgpu")]
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::backend_authoring::{FloatOps, ModuleOps, NumericOps};
-#[cfg(any(feature = "wgpu", feature = "cuda"))]
-use incin_core::backend_authoring::{LossOps, ReductionOps, TensorOps};
 use incin_core::exec::{TapeStorage, check_gradients};
 use incin_core::prelude::*;
+use incin_core::tensor::backend::{FloatOps, ModuleOps, NumericOps};
+#[cfg(any(feature = "wgpu", feature = "cuda"))]
+use incin_core::tensor::backend::{LossOps, ReductionOps, TensorOps};
 
 type CpuB = CpuBackendImpl;
 #[cfg(feature = "wgpu")]

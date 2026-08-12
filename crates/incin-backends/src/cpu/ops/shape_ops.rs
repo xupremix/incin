@@ -12,9 +12,9 @@
 //! node, unconditionally recorded).
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::{FloatOps, NumericOps, TensorOps};
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, DTypeId, Error, Result};
+use incin_core::tensor::backend::{FloatOps, NumericOps, TensorOps};
 
 use crate::cpu::ops::elementwise::elementwise_unary;
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};

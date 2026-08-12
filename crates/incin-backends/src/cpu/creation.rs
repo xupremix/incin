@@ -6,9 +6,9 @@
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::backend_authoring::CreationOps;
 use incin_core::prelude::*;
 use incin_core::prelude::{DType, DTypeId, DeviceId, Error, Result};
+use incin_core::tensor::backend::CreationOps;
 #[allow(unused_imports)]
 use rand::Rng;
 #[allow(unused_imports)]

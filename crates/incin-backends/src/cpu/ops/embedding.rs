@@ -138,8 +138,8 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
-    use incin_core::backend_authoring::ReductionOps;
     use incin_core::prelude::Cpu;
+    use incin_core::tensor::backend::ReductionOps;
 
     /// `B`.
     type B = CpuBackendImpl<Cpu>;
