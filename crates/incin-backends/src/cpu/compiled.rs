@@ -15,6 +15,9 @@ macro_rules! cpu_compiled_operations {
     ($callback:ident) => {
         $callback!(
             Add => op::Add,
+            Sub => op::Sub,
+            Mul => op::Mul,
+            Div => op::Div,
             Relu => op::Relu,
             ReshapeExact => op::ReshapeExact,
             BroadcastAs => op::BroadcastAs,
@@ -25,6 +28,8 @@ macro_rules! cpu_compiled_operations {
             SliceExact => op::SliceExact,
             ConcatExact => op::ConcatExact,
             StackExact => op::StackExact,
+            SumDim => op::SumDim,
+            SumKeepDim => op::SumKeepDim,
             Linear => op::Linear,
             Addmm => op::Addmm,
         );
