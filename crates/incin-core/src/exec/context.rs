@@ -159,6 +159,12 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
+    pub const fn with_training(mut self, training: bool) -> Self {
+        self.policy.training = training;
+        self
+    }
+
+    #[must_use]
     pub const fn precision_policy(&self) -> crate::exec::RuntimePrecisionPolicy {
         self.policy.precision
     }

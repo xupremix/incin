@@ -47,6 +47,7 @@ fn every_axis_moved() -> ExecutionPolicy {
         .with_determinism(Determinism::Required)
         .with_fallback(FallbackPolicy::AllowTransfer)
         .with_allocator(AllocatorPolicy::Pooled)
+        .with_training(true)
 }
 
 #[test]
@@ -64,6 +65,7 @@ fn a_fresh_context_denies_fallback_and_promises_no_determinism() {
     assert!(!context.fallback().allows_composition());
     assert!(!context.fallback().allows_transfer());
     assert!(!context.determinism().is_required());
+    assert!(!context.training());
 }
 
 #[test]
@@ -87,6 +89,10 @@ fn each_builder_moves_one_axis_and_leaves_the_others_alone() {
     let pooled = ExecutionContext::new(Probe(2)).with_allocator(AllocatorPolicy::Pooled);
     assert_eq!(pooled.allocator(), AllocatorPolicy::Pooled);
     assert_eq!(pooled.math_mode(), base.math_mode());
+
+    let training = ExecutionContext::new(Probe(2)).with_training(true);
+    assert!(training.training());
+    assert_eq!(training.grad_mode(), base.grad_mode());
 }
 
 #[test]
@@ -105,7 +111,8 @@ fn the_backend_survives_every_builder_and_comes_back_out_unchanged() {
         .with_math_mode(MathMode::Fast)
         .with_determinism(Determinism::Required)
         .with_fallback(FallbackPolicy::AllowTransfer)
-        .with_allocator(AllocatorPolicy::Pooled);
+        .with_allocator(AllocatorPolicy::Pooled)
+        .with_training(true);
 
     assert_eq!(context.backend(), &Probe(7));
     assert_eq!(context.policy(), every_axis_moved());
