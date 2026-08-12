@@ -64,7 +64,7 @@ Status vocabulary:
 | API-003 | User API | final end-to-end handoff example compiles | Implemented via `foundation_handoff_contract.rs` | PASS | P0 | `foundation_handoff_contract.rs` |
 | TRC-001 | Tracing | canonical public methods remain usable with tracing/capture backend | Verified compile | PASS | P1 | tracing compile tests |
 | TRC-002 | Graph IR | replace duplicate graph operation vocabulary with canonical operation identity | Implemented | PASS | P0 | canonical graph identity and capture tests |
-| CMP-001 | Compiled execution | actual compiled graph execution/fusion | Deferred | DEFERRED | POST | explicitly post-foundation |
+| CMP-001 | Compiled execution | canonical graph plans, symbolic guards, and descriptor-backed CPU execution | Implemented for the guarded CPU subset; fusion remains fail-closed | PASS | P1 | compiled CPU admission, dynamic-shape, artifact, and parity tests |
 | DIST-001 | Distributed | typed placement/mesh source compiles after foundation changes | Verified compile | PASS | P1 | distributed feature check |
 | CI-001 | Negative contracts | compile-fail contracts have correct `.stderr` snapshots | Verified clean (44 trybuild tests passing) | PASS | P0 | trybuild harness |
 | CI-002 | Feature matrix | CPU/CUDA/WGPU/Metal/Candle feature matrix is local + CI gate | Implemented | PASS | P0 | `cargo xtask feature-matrix` |
@@ -89,7 +89,7 @@ These decisions are fixed for this migration.
 | F-08 | Legacy operation-family traits may remain inside backend adapters temporarily, but normal Tensor/Module method bounds must converge on exact descriptors. |
 | F-09 | Frozen state is represented through gradient typestate, never a runtime trainable bool. |
 | F-10 | Model checkpoints must become dtype-heterogeneous before foundation freeze. |
-| F-11 | Capture IR unification and compiled execution are post-foundation features. |
+| F-11 | Capture IR unification and descriptor-backed compiled CPU execution are now implemented as an experimental substrate; fusion and broader backend lowering remain post-foundation. |
 | F-12 | GPU bool support is not required for foundation freeze; unsupported backends must reject honestly. |
 | F-13 | No automatic target/backend-selection redesign in this migration. |
 | F-14 | Do not add complex/FP4/ATen while closing the foundation. |
