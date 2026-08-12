@@ -440,6 +440,7 @@ fn custom_operations_are_recorded_with_their_key() {
         node.operation,
         OperationIdentity::Custom(CompanyIdentity::KEY)
     );
+    assert!(node.descriptor_payload.is_some());
 }
 
 #[test]
