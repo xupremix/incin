@@ -1,7 +1,7 @@
 error[E0046]: not all trait items implemented, missing: `reshape`, `transpose`, `matmul`, `broadcast_as`, `narrow`, `squeeze`, `stack`, `concat`, `slice`, `flatten`, `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `float_to_scalar`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `broadcast_left`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype`
-  --> tests/compile_fail/tensor_ops_has_no_unsupported_default.rs:17:1
+  --> tests/compile_fail/tensor_ops_has_no_unsupported_default.rs:18:1
    |
-17 | impl<B: Backend> TensorOps<B> for Incomplete<B> {}
+18 | impl<B: Backend> TensorOps<B> for Incomplete<B> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `reshape`, `transpose`, `matmul`, `broadcast_as`, `narrow`, `squeeze`, `stack`, `concat`, `slice`, `flatten`, `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `float_to_scalar`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `broadcast_left`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype` in implementation
    |
    = help: implement the missing item: `fn reshape<K>(_: &<B as StorageBackend>::Storage<K>, _: &[usize]) -> Result<<B as StorageBackend>::Storage<K>, incin_core::prelude::Error> where K: incin_core::prelude::DType { todo!() }`

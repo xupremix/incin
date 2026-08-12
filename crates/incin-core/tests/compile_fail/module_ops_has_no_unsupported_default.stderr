@@ -1,7 +1,7 @@
 error[E0046]: not all trait items implemented, missing: `layer_norm`, `batch_norm`, `embedding`, `conv1d`, `conv2d`, `conv_transpose2d`, `max_pool2d`, `avg_pool2d`, `adaptive_avg_pool2d`
-  --> tests/compile_fail/module_ops_has_no_unsupported_default.rs:15:1
+  --> tests/compile_fail/module_ops_has_no_unsupported_default.rs:16:1
    |
-15 | impl<B: Backend> ModuleOps<B> for Incomplete<B> {}
+16 | impl<B: Backend> ModuleOps<B> for Incomplete<B> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `layer_norm`, `batch_norm`, `embedding`, `conv1d`, `conv2d`, `conv_transpose2d`, `max_pool2d`, `avg_pool2d`, `adaptive_avg_pool2d` in implementation
    |
    = help: implement the missing item: `fn layer_norm<K>(_: &<B as StorageBackend>::Storage<K>, _: &<B as StorageBackend>::Storage<K>, _: Option<&<B as StorageBackend>::Storage<K>>, _: f32) -> Result<<B as StorageBackend>::Storage<K>, incin_core::prelude::Error> where K: incin_core::prelude::DType { todo!() }`
