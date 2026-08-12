@@ -30,8 +30,9 @@ use incin_core::prelude::{
 
 use super::CpuBackendImpl;
 use super::ops::elementwise::{
-    canonical_add_scalar, canonical_clamp, canonical_mul_scalar, canonical_neg, canonical_powf,
-    canonical_relu, canonical_step, canonical_unary,
+    canonical_add_scalar, canonical_atan2, canonical_clamp, canonical_fmod, canonical_mul_scalar,
+    canonical_neg, canonical_powf, canonical_relu, canonical_remainder, canonical_step,
+    canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1211,14 +1212,33 @@ macro_rules! binary_float_executors {
                 let rhs = operand(rhs, operation)?;
                 admitted(self, operation, lhs, training_mode(request.context))?;
                 admitted(self, operation, rhs, training_mode(request.context))?;
-                <Self as FloatOps<Self>>::$method::<f32>(lhs, rhs)
+                $method(lhs, rhs)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-binary_float_executors![(Atan2, atan2), (Fmod, fmod), (Remainder, remainder),];
+binary_float_executors![(Fmod, canonical_fmod), (Remainder, canonical_remainder),];
+
+impl<D: Device> Execute<op::Atan2> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::Atan2, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Atan2;
+        let [lhs, rhs] = request.inputs else {
+            return Err(invalid(operation, "operation expects exactly two operands"));
+        };
+        let lhs = operand(lhs, operation)?;
+        let rhs = operand(rhs, operation)?;
+        admitted(self, operation, lhs, training_mode(request.context))?;
+        admitted(self, operation, rhs, training_mode(request.context))?;
+        canonical_atan2(lhs, rhs).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
 
 /// Elementwise clamp, whose two bounds are a single typed attribute set.
 impl<D: Device> Execute<op::Clamp> for CpuBackendImpl<D> {

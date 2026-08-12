@@ -228,6 +228,47 @@ pub(crate) fn canonical_clamp(t: &CpuStorage, min: f64, max: f64) -> Result<CpuS
     elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
 }
 
+pub(crate) fn canonical_fmod(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)
+}
+
+pub(crate) fn canonical_remainder(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))
+}
+
+pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_binary(y, x, &y.shape, |y_value, x_value| y_value.atan2(x_value))?;
+    let (y_id, x_id, out_id) = (y.id, x.id, out.id);
+    let (y_capture, x_capture) = (y.clone(), x.clone());
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![y_id, x_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let denominator = elementwise_binary(
+                &y_capture,
+                &x_capture,
+                &grad_out.shape,
+                |y_value, x_value| x_value * x_value + y_value * y_value,
+            )?;
+            let grad_y =
+                elementwise_binary(grad_out, &x_capture, &grad_out.shape, |g, x_value| {
+                    g * x_value
+                })?;
+            let grad_y = elementwise_binary(&grad_y, &denominator, &grad_out.shape, |g, d| g / d)?;
+            let grad_x =
+                elementwise_binary(grad_out, &y_capture, &grad_out.shape, |g, y_value| {
+                    -g * y_value
+                })?;
+            let grad_x = elementwise_binary(&grad_x, &denominator, &grad_out.shape, |g, d| g / d)?;
+            Ok(vec![
+                tape::unbroadcast(&grad_y, &y_capture.shape)?,
+                tape::unbroadcast(&grad_x, &x_capture.shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -923,29 +964,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         y: &<Self as StorageBackend>::Storage<K>,
         x: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out_atan = elementwise_binary(y, x, &y.shape, |y_val, x_val| y_val.atan2(x_val))?;
-        let (y_id, x_id, out_id) = (y.id, x.id, out_atan.id);
-        let (y_cap, x_cap) = (y.clone(), x.clone());
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![y_id, x_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let denom = elementwise_binary(&y_cap, &x_cap, &grad_out.shape, |y_v, x_v| {
-                    x_v * x_v + y_v * y_v
-                })?;
-                let grad_y =
-                    elementwise_binary(grad_out, &x_cap, &grad_out.shape, |g, x_v| g * x_v)?;
-                let grad_y = elementwise_binary(&grad_y, &denom, &grad_out.shape, |gy, d| gy / d)?;
-                let grad_x =
-                    elementwise_binary(grad_out, &y_cap, &grad_out.shape, |g, y_v| -g * y_v)?;
-                let grad_x = elementwise_binary(&grad_x, &denom, &grad_out.shape, |gx, d| gx / d)?;
-                Ok(vec![
-                    tape::unbroadcast(&grad_y, &y_cap.shape)?,
-                    tape::unbroadcast(&grad_x, &x_cap.shape)?,
-                ])
-            }),
-        });
-        Ok(out_atan)
+        canonical_atan2(y, x)
     }
 
     /// `sinh`.
@@ -1106,7 +1125,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)
+        canonical_fmod(lhs, rhs)
     }
 
     /// `remainder`.
@@ -1114,7 +1133,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))
+        canonical_remainder(lhs, rhs)
     }
     /// `softmax`.
     fn softmax<K: DType>(
