@@ -184,7 +184,7 @@ fn compiled_cpu_admission_rejects_a_descriptorless_operation() {
         CompileOptions::new(),
     )
     .unwrap();
-    let error = incin_backends::cpu::CpuCompiledPlan::try_new(&plan).unwrap_err();
+    let error = incin_backends::cpu::CpuCompiledPlan::compile(&plan).unwrap_err();
     assert!(error.to_string().contains("no captured descriptor"));
 }
 
@@ -210,7 +210,7 @@ fn compiled_cpu_admission_rejects_a_malformed_descriptor() {
         CompileOptions::new(),
     )
     .unwrap();
-    let error = incin_backends::cpu::CpuCompiledPlan::try_new(&plan).unwrap_err();
+    let error = incin_backends::cpu::CpuCompiledPlan::compile(&plan).unwrap_err();
     assert!(error.to_string().contains("invalid captured descriptor"));
 }
 

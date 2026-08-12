@@ -59,9 +59,12 @@ pub struct CpuCompiledPlan {
 }
 
 impl CpuCompiledPlan {
-    /// Admits only nodes with a captured descriptor and an implemented CPU
-    /// canonical lowering.
-    pub fn try_new(plan: &CompiledPlan) -> Result<Self> {
+    /// Lowers a generic compiled plan into an executable CPU plan.
+    ///
+    /// This is the executable compilation boundary. It rejects operations
+    /// without a canonical CPU lowering and descriptors that cannot be
+    /// decoded and revalidated before any invocation is attempted.
+    pub fn compile(plan: &CompiledPlan) -> Result<Self> {
         for node in &plan.graph.nodes {
             if !matches!(node.operation, OperationIdentity::Builtin(operation) if supports_cpu_operation(operation))
             {
@@ -148,7 +151,7 @@ impl CpuCompiledInvocation {
 impl CpuCompiledInvocation {
     /// Executes the plan using the planner's buffer slots.
     pub fn run(self, plan: &CompiledPlan) -> Result<Vec<CpuStorage>> {
-        let admitted = CpuCompiledPlan::try_new(plan)?;
+        let admitted = CpuCompiledPlan::compile(plan)?;
         self.run_admitted(&admitted.plan)
     }
 
