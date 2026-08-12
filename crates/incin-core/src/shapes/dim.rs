@@ -198,6 +198,7 @@ pub trait AxisTag:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
     const NAME: &'static str;
+    const KEY: &'static str;
 
     /// Creates the canonical semantic selector for this axis tag.
     ///
@@ -342,6 +343,7 @@ macro_rules! __incin_dim_declare {
 
         impl $crate::shapes::AxisTag for $first {
             const NAME: &'static str = stringify!($first);
+            const KEY: &'static str = concat!(module_path!(), "::", stringify!($first));
         }
         impl $crate::shapes::AxisIdentity for $first {
             type Schema = $crate::shapes::AxisSchema<$first>;
@@ -358,6 +360,7 @@ macro_rules! __incin_dim_declare {
 
         impl $crate::shapes::AxisTag for $name {
             const NAME: &'static str = stringify!($name);
+            const KEY: &'static str = concat!(module_path!(), "::", stringify!($first), "::", stringify!($name));
         }
         impl $crate::shapes::AxisIdentity for $name {
             type Schema = $schema;
@@ -511,6 +514,7 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
             crate::exec::DimExpr::Symbol(id) => crate::exec::DimExpr::NamedSymbol {
                 id,
                 name: alloc::string::String::from(Tag::NAME),
+                identity: alloc::string::String::from(Tag::KEY),
             },
             other => other,
         }

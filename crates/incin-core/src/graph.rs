@@ -239,16 +239,16 @@ fn intern_named_symbols(
     ) -> crate::exec::DimExpr {
         use crate::exec::DimExpr;
         match expr {
-            DimExpr::NamedSymbol { name, .. } => {
-                let id = if let Some(id) = names.get(&name) {
+            DimExpr::NamedSymbol { name, identity, .. } => {
+                let id = if let Some(id) = names.get(&identity) {
                     *id
                 } else {
                     let id = crate::exec::SymbolId(*next_id);
                     *next_id = next_id.saturating_add(1);
-                    names.insert(name.clone(), id);
+                    names.insert(identity.clone(), id);
                     id
                 };
-                DimExpr::NamedSymbol { id, name }
+                DimExpr::NamedSymbol { id, name, identity }
             }
             DimExpr::Add(lhs, rhs) => DimExpr::Add(
                 Box::new(dim(*lhs, names, next_id)),

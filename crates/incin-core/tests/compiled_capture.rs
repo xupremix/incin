@@ -11,6 +11,7 @@ use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 incin_core::dim!(Batch);
+incin_core::dim!(Sequence);
 
 #[test]
 fn test_eager_graph_capture_and_validation() {
@@ -87,4 +88,28 @@ fn typed_named_projection_preserves_identity_and_shares_named_symbols() {
     assert!(matches!(first_expr, DimExpr::NamedSymbol { name, .. } if name == "Batch"));
     assert_eq!(first_expr, second_expr);
     assert_eq!(graph.values[&first].shape_expr.dims[1], DimExpr::Const(768));
+}
+
+#[test]
+fn typed_named_projection_does_not_merge_distinct_axis_tags() {
+    let mut graph = Graph::new();
+    let batch = graph.add_value(vec![7], DTypeId::F32, Some("batch".into()));
+    let sequence = graph.add_value(vec![9], DTypeId::F32, Some("sequence".into()));
+
+    graph.mark_input_with_shape::<incin::prelude::s![Batch]>(batch);
+    graph.mark_input_with_shape::<incin::prelude::s![Sequence]>(sequence);
+
+    let batch_expr = &graph.values[&batch].shape_expr.dims[0];
+    let sequence_expr = &graph.values[&sequence].shape_expr.dims[0];
+    assert_ne!(batch_expr, sequence_expr);
+    assert!(matches!(
+        batch_expr,
+        DimExpr::NamedSymbol { name, identity, .. }
+            if name == "Batch" && identity.ends_with("::Batch")
+    ));
+    assert!(matches!(
+        sequence_expr,
+        DimExpr::NamedSymbol { name, identity, .. }
+            if name == "Sequence" && identity.ends_with("::Sequence")
+    ));
 }

@@ -1,10 +1,32 @@
 #![cfg(feature = "compiled")]
 
-use incin_core::exec::ShapeExpr;
-use incin_core::exec::{Constraint, DimExpr, RankExpr, SymbolId};
+use incin_core::exec::{Constraint, DimExpr, RankExpr, ShapeExpr, SymbolEnvironment, SymbolId};
 use incin_core::experimental::compiled::{CapturedGraph, CompileOptions, CompiledPlan, ShapeGuard};
 use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+
+#[test]
+fn symbolic_validation_binds_named_symbols_before_composites() {
+    let symbol = SymbolId(7);
+    let shape = ShapeExpr {
+        rank: RankExpr::Static(2),
+        dims: vec![
+            DimExpr::Add(
+                Box::new(DimExpr::Symbol(symbol)),
+                Box::new(DimExpr::Const(1)),
+            ),
+            DimExpr::Symbol(symbol),
+        ],
+        constraints: vec![Constraint::equal(
+            DimExpr::Symbol(symbol),
+            DimExpr::Const(3),
+        )],
+    };
+    let mut environment = SymbolEnvironment::default();
+    shape
+        .bind_and_validate(&[4, 3], &mut environment)
+        .expect("direct symbol dimensions should bind composite expressions");
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 

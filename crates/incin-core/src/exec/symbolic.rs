@@ -18,6 +18,7 @@ pub struct SymbolId(pub u32);
 pub struct SymbolInfo {
     pub id: SymbolId,
     pub name: Option<String>,
+    pub identity: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -27,13 +28,16 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn register(&mut self, id: SymbolId, name: Option<String>) {
+    pub fn register(&mut self, id: SymbolId, name: Option<String>, identity: Option<String>) {
         if let Some(existing) = self.symbols.iter_mut().find(|symbol| symbol.id == id) {
             if existing.name.is_none() {
                 existing.name = name;
             }
+            if existing.identity.is_none() {
+                existing.identity = identity;
+            }
         } else {
-            self.symbols.push(SymbolInfo { id, name });
+            self.symbols.push(SymbolInfo { id, name, identity });
         }
     }
 
@@ -122,7 +126,11 @@ impl SymbolEnvironment {
 pub enum DimExpr {
     Const(usize),
     Symbol(SymbolId),
-    NamedSymbol { id: SymbolId, name: String },
+    NamedSymbol {
+        id: SymbolId,
+        name: String,
+        identity: String,
+    },
     Add(Box<DimExpr>, Box<DimExpr>),
     Sub(Box<DimExpr>, Box<DimExpr>),
     Mul(Box<DimExpr>, Box<DimExpr>),
@@ -339,6 +347,22 @@ impl ShapeExpr {
                 DimExpr::Symbol(id) => {
                     environment.bind(*id, value)?;
                 }
+                DimExpr::NamedSymbol { id, .. } => {
+                    environment.bind(*id, value)?;
+                }
+                _ => {}
+            }
+        }
+        for (expr, value) in self.dims.iter().zip(actual.iter().copied()) {
+            match expr {
+                DimExpr::Const(expected) if *expected != value => {
+                    return Err(alloc::format!(
+                        "expected dimension {}, got {}",
+                        expected,
+                        value
+                    ));
+                }
+                DimExpr::Symbol(_) | DimExpr::NamedSymbol { .. } => {}
                 _ => environment.validate_expr(expr, value)?,
             }
         }

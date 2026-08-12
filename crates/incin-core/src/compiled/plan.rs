@@ -336,8 +336,8 @@ fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
 fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
     match expr {
         crate::exec::DimExpr::Symbol(id) => symbols.register(*id, None),
-        crate::exec::DimExpr::NamedSymbol { id, name } => {
-            symbols.register(*id, Some(name.clone()));
+        crate::exec::DimExpr::NamedSymbol { id, name, identity } => {
+            symbols.register(*id, Some(name.clone()), Some(identity.clone()));
         }
         crate::exec::DimExpr::Add(lhs, rhs)
         | crate::exec::DimExpr::Sub(lhs, rhs)
