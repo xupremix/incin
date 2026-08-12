@@ -4,7 +4,8 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::graph::{Graph, NodeId, OpType, ValueId};
+use crate::exec::OperationIdentity;
+use crate::graph::{AttributeValue, Graph, NodeId, OpType, ValueId};
 use crate::prelude::{Error, Result};
 
 /// A single validated node in a captured graph.
@@ -14,17 +15,38 @@ pub struct CapturedNode {
     pub id: NodeId,
     /// Operation type of this node.
     pub op: OpType,
+    /// Exact execution identity when the node came from typed dispatch.
+    #[serde(default)]
+    pub identity: Option<OperationIdentity>,
+    /// Operation attributes required to reproduce its semantics.
+    #[serde(default)]
+    pub attributes: alloc::collections::BTreeMap<String, AttributeValue>,
     /// Value IDs consumed by this node as inputs.
     pub inputs: Vec<ValueId>,
     /// Value IDs produced by this node as outputs.
     pub outputs: Vec<ValueId>,
 }
 
+/// Metadata for a value in the captured graph.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct CapturedValue {
+    /// Value identifier.
+    pub id: ValueId,
+    /// Logical shape recorded at capture time.
+    pub shape: Vec<usize>,
+    /// Element datatype recorded at capture time.
+    pub dtype: crate::prelude::DTypeId,
+    /// Optional stable display name.
+    pub name: Option<String>,
+    /// Whether the value is backed by captured constant bytes.
+    pub initializer: bool,
+}
+
 /// Validated graph IR captured from an eager computation graph.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CapturedGraph {
     /// Value IDs defined in the graph.
-    pub values: Vec<ValueId>,
+    pub values: Vec<CapturedValue>,
     /// Input value IDs.
     pub inputs: Vec<ValueId>,
     /// Output value IDs.
@@ -40,7 +62,20 @@ impl CapturedGraph {
         let mut defined_values = BTreeSet::new();
 
         for &val_id in &graph.inputs {
+            if !graph.values.contains_key(&val_id) {
+                return Err(Error::Msg(String::from(
+                    "graph input refers to an undefined value",
+                )));
+            }
             defined_values.insert(val_id);
+        }
+
+        for val_id in graph.initializers.keys() {
+            if !graph.values.contains_key(val_id) {
+                return Err(Error::Msg(String::from(
+                    "graph initializer refers to an undefined value",
+                )));
+            }
         }
 
         for val_id in graph.values.keys() {
@@ -52,34 +87,55 @@ impl CapturedGraph {
         let mut nodes = Vec::with_capacity(graph.nodes.len());
         for node in &graph.nodes {
             for &in_id in &node.inputs {
-                if !graph.values.contains_key(&in_id) && !defined_values.contains(&in_id) {
+                if !defined_values.contains(&in_id) {
                     return Err(Error::Msg(String::from(
-                        "undefined input value in eager graph node",
+                        "undefined or forward-referenced input value in eager graph node",
                     )));
                 }
             }
 
             for &out_id in &node.outputs {
-                defined_values.insert(out_id);
+                if !graph.values.contains_key(&out_id) {
+                    return Err(Error::Msg(String::from(
+                        "node produces an undefined graph value",
+                    )));
+                }
+                if !defined_values.insert(out_id) {
+                    return Err(Error::Msg(String::from(
+                        "graph value is produced more than once",
+                    )));
+                }
             }
 
             nodes.push(CapturedNode {
                 id: node.id,
                 op: node.op,
+                identity: node.identity.clone(),
+                attributes: node.attributes.clone(),
                 inputs: node.inputs.clone(),
                 outputs: node.outputs.clone(),
             });
         }
 
         for &out_id in &graph.outputs {
-            if !defined_values.contains(&out_id) && !graph.values.contains_key(&out_id) {
+            if !defined_values.contains(&out_id) {
                 return Err(Error::Msg(String::from(
                     "undefined output value in captured graph",
                 )));
             }
         }
 
-        let values: Vec<ValueId> = graph.values.keys().copied().collect();
+        let values = graph
+            .values
+            .values()
+            .map(|value| CapturedValue {
+                id: value.id,
+                shape: value.shape.clone(),
+                dtype: value.dtype,
+                name: value.name.clone(),
+                initializer: graph.initializers.contains_key(&value.id),
+            })
+            .collect();
 
         Ok(Self {
             values,
@@ -99,5 +155,11 @@ impl CapturedGraph {
     #[must_use]
     pub fn value_count(&self) -> usize {
         self.values.len()
+    }
+
+    /// Returns captured metadata for a value.
+    #[must_use]
+    pub fn value(&self, id: ValueId) -> Option<&CapturedValue> {
+        self.values.iter().find(|value| value.id == id)
     }
 }

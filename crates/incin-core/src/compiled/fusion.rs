@@ -139,6 +139,8 @@ impl FusionPass {
                 new_nodes.push(CapturedNode {
                     id: producer.id,
                     op: producer.op,
+                    identity: producer.identity.clone(),
+                    attributes: producer.attributes.clone(),
                     inputs: producer.inputs.clone(),
                     outputs: consumer.outputs.clone(),
                 });

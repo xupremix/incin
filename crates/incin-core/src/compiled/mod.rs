@@ -15,7 +15,7 @@ pub use alloc::{
 pub use artifact::{
     ARTIFACT_FORMAT_VERSION, ARTIFACT_MAGIC, ArtifactHeader, ArtifactVersion, CompiledArtifact,
 };
-pub use capture::{CapturedGraph, CapturedNode};
+pub use capture::{CapturedGraph, CapturedNode, CapturedValue};
 pub use fold::{ConstantFolder, ShapeBucket, WeightPrepacker};
 pub use fusion::{FusedKernel, FusionBlocker, FusionCandidate, FusionPass};
 pub use manifest::ReproducibilityManifest;

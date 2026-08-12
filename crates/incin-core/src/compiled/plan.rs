@@ -113,7 +113,11 @@ impl CompiledPlan {
         let input_guards = graph
             .inputs
             .iter()
-            .map(|&in_id| ShapeGuard::new(in_id, Vec::new(), DTypeId::F32))
+            .filter_map(|&in_id| {
+                graph
+                    .value(in_id)
+                    .map(|value| ShapeGuard::new(in_id, value.shape.clone(), value.dtype))
+            })
             .collect();
 
         Self {
@@ -125,9 +129,13 @@ impl CompiledPlan {
 
     /// Validates dynamic guards for provided inputs.
     pub fn verify_input(&self, index: usize, shape: &[usize], dtype: DTypeId) -> Result<()> {
-        if let Some(guard) = self.input_guards.get(index) {
-            guard.check(shape, dtype)?;
-        }
-        Ok(())
+        let guard = self.input_guards.get(index).ok_or_else(|| {
+            Error::Msg(alloc::format!(
+                "compiled input index {} is out of range; expected {} inputs",
+                index,
+                self.input_guards.len()
+            ))
+        })?;
+        guard.check(shape, dtype)
     }
 }

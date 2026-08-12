@@ -22,6 +22,10 @@ fn test_compiled_plan_construction_and_guards() {
     let plan = CompiledPlan::compile(captured, options);
 
     assert_eq!(plan.input_guards.len(), 2);
+    assert!(plan.verify_input(0, &[2, 4], DTypeId::F32).is_ok());
+    assert!(plan.verify_input(1, &[4, 8], DTypeId::F32).is_ok());
+    assert!(plan.verify_input(0, &[2, 5], DTypeId::F32).is_err());
+    assert!(plan.verify_input(2, &[1], DTypeId::F32).is_err());
 }
 
 #[test]
