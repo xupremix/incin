@@ -253,13 +253,9 @@ fn built_in_creation_requires_the_declared_payload() {
         payload: incin_core::exec::catalog::CreationPayload::Bytes { byte_len: 4 },
     };
 
-    let error = execute_with_payload::<op::TensorFromBytes, _>(
-        &context,
-        attributes.clone(),
-        &[],
-        None,
-    )
-    .unwrap_err();
+    let error =
+        execute_with_payload::<op::TensorFromBytes, _>(&context, attributes.clone(), &[], None)
+            .unwrap_err();
     assert!(matches!(
         error,
         incin_core::exec::CanonicalError::Descriptor(
@@ -269,13 +265,9 @@ fn built_in_creation_requires_the_declared_payload() {
         )
     ));
 
-    let error = execute_with_payload::<op::TensorFromBytes, _>(
-        &context,
-        attributes,
-        &[],
-        Some(&[1, 2]),
-    )
-    .unwrap_err();
+    let error =
+        execute_with_payload::<op::TensorFromBytes, _>(&context, attributes, &[], Some(&[1, 2]))
+            .unwrap_err();
     assert!(matches!(
         error,
         incin_core::exec::CanonicalError::Descriptor(
