@@ -272,7 +272,7 @@ impl CollectiveTuningProblem {
     {
         Self::new_dyn(
             Operation::KIND,
-            K::DTYPE,
+            K::DESCRIPTOR.builtin_id().unwrap_or(DTypeId::F32),
             Elements::USIZE,
             group,
             topology,
