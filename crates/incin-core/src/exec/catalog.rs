@@ -1007,7 +1007,11 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
         inputs: &[crate::exec::request::TensorHandle<'_>],
     ) -> Option<DTypeDescriptor> {
         let OperationIdentity::Builtin(operation) = self.identity else {
-            return inputs.first().map(|input| input.metadata().dtype);
+            return self
+                .outputs
+                .first()
+                .and_then(|output| output.dtype)
+                .or_else(|| inputs.first().map(|input| input.metadata().dtype));
         };
         match operation {
             OperationKind::CmpEq
