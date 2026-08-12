@@ -101,6 +101,38 @@ fn invocation_guards_share_symbols_across_inputs() {
 }
 
 #[test]
+fn compiled_matmul_propagates_input_symbols_and_contraction_constraints() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 4], DTypeId::F32, Some("x".into()));
+    let w = graph.add_value(vec![4, 3], DTypeId::F32, Some("w".into()));
+    let y = graph.add_value(vec![8, 3], DTypeId::F32, Some("y".into()));
+    graph.mark_input(x);
+    graph.mark_input(w);
+    graph.mark_output(y);
+    graph.add_node(
+        OperationKind::MatMulExact,
+        vec![x, w],
+        vec![y],
+        BTreeMap::new(),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let output = &plan.graph.value_metadata[&y].shape_expr;
+    assert!(matches!(output.dims[0], DimExpr::Symbol(_)));
+    assert!(matches!(output.dims[1], DimExpr::Symbol(_)));
+    assert!(
+        plan.symbols
+            .constraints
+            .iter()
+            .any(|constraint| { matches!(constraint, Constraint::Equal { .. }) })
+    );
+}
+
+#[test]
 fn composite_dimensions_are_validated_after_symbol_binding() {
     let hidden = DimExpr::Symbol(SymbolId(21));
     let shape = ShapeExpr {
