@@ -5,6 +5,16 @@ use incin_backends::dispatch::DispatchBackend;
 use incin_backends::target::{EngineOn, Native, TargetBackendFor, TensorTarget};
 use incin_core::prelude::{Cpu, Dyn, ShapeBuf, StorageBackend};
 
+trait Same<T> {}
+impl<T> Same<T> for T {}
+
+fn assert_same_type<A, B>()
+where
+    A: Same<B>,
+    B: Same<A>,
+{
+}
+
 #[test]
 fn test_single_generic_backend_types() {
     // Assert CpuBackendImpl is single-generic: CpuBackendImpl<Cpu>
@@ -70,28 +80,19 @@ fn test_single_generic_backend_types() {
 
 #[test]
 fn test_tensor_target_single_generic_backend() {
-    assert_eq!(
-        core::any::TypeId::of::<TargetBackendFor<Cpu>>(),
-        core::any::TypeId::of::<CpuBackendImpl<Cpu>>()
-    );
+    assert_same_type::<TargetBackendFor<Cpu>, CpuBackendImpl<Cpu>>();
 }
 
 #[test]
 fn test_engine_on_single_generic_backend() {
-    assert_eq!(
-        core::any::TypeId::of::<<Native as EngineOn<Cpu>>::Backend>(),
-        core::any::TypeId::of::<CpuBackendImpl<Cpu>>()
-    );
+    assert_same_type::<<Native as EngineOn<Cpu>>::Backend, CpuBackendImpl<Cpu>>();
 }
 
 #[test]
 fn test_8a_same_native_cpu_backend_across_dtypes() {
     use incin_backends::target::{Target, precision};
     type NativeTarget = Target<Native, Cpu, precision::Default>;
-    assert_eq!(
-        core::any::TypeId::of::<<NativeTarget as TensorTarget>::Backend>(),
-        core::any::TypeId::of::<CpuBackendImpl<Cpu>>()
-    );
+    assert_same_type::<<NativeTarget as TensorTarget>::Backend, CpuBackendImpl<Cpu>>();
 }
 
 #[cfg(feature = "external-candle")]
@@ -100,10 +101,7 @@ fn test_8b_same_candle_cpu_backend_across_dtypes() {
     use incin_backends::external::candle::CandleBackend;
     use incin_backends::target::{Candle, Target, precision};
     type CandleTarget = Target<Candle, Cpu, precision::Default>;
-    assert_eq!(
-        core::any::TypeId::of::<<CandleTarget as TensorTarget>::Backend>(),
-        core::any::TypeId::of::<CandleBackend<Cpu>>()
-    );
+    assert_same_type::<<CandleTarget as TensorTarget>::Backend, CandleBackend<Cpu>>();
 }
 
 #[cfg(feature = "external-candle")]
@@ -114,10 +112,10 @@ fn test_8c_dtype_view_preserves_engine() {
     use incin_core::prelude::DtypeView;
     let target = incin_backends::target::Candle::on(Cpu);
     let view = target.dtype::<i64>().unwrap();
-    assert_eq!(
-        core::any::TypeId::of::<<DtypeView<incin_backends::target::Target<incin_backends::target::Candle, Cpu>, i64> as TensorTarget>::Backend>(),
-        core::any::TypeId::of::<CandleBackend<Cpu>>()
-    );
+    assert_same_type::<
+        <DtypeView<incin_backends::target::Target<incin_backends::target::Candle, Cpu>, i64> as TensorTarget>::Backend,
+        CandleBackend<Cpu>,
+    >();
     let _ = view;
 }
 
@@ -133,14 +131,8 @@ fn test_8d_parameter_dtype_is_independent() {
     type ParamF32 = Param<Dyn, CpuBackendImpl<Cpu>, f32>;
     type ParamF64 = Param<Dyn, CpuBackendImpl<Cpu>, f64>;
 
-    assert_eq!(
-        core::any::TypeId::of::<ParamF32>(),
-        core::any::TypeId::of::<Param<Dyn, CpuBackendImpl<Cpu>, f32>>()
-    );
-    assert_eq!(
-        core::any::TypeId::of::<ParamF64>(),
-        core::any::TypeId::of::<Param<Dyn, CpuBackendImpl<Cpu>, f64>>()
-    );
+    assert_same_type::<ParamF32, Param<Dyn, CpuBackendImpl<Cpu>, f32>>();
+    assert_same_type::<ParamF64, Param<Dyn, CpuBackendImpl<Cpu>, f64>>();
 }
 
 #[test]
