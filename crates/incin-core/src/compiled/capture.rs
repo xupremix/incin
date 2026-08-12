@@ -4,7 +4,8 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::graph::{Graph, NodeId, OpType, ValueId};
+use crate::exec::OperationIdentity;
+use crate::graph::{Graph, NodeId, ValueId};
 use crate::prelude::{Error, Result};
 
 /// A single validated node in a captured graph.
@@ -13,7 +14,8 @@ pub struct CapturedNode {
     /// Node identifier in the original eager graph.
     pub id: NodeId,
     /// Operation type of this node.
-    pub op: OpType,
+    pub operation: OperationIdentity,
+    pub attributes: alloc::collections::BTreeMap<String, crate::graph::AttributeValue>,
     /// Value IDs consumed by this node as inputs.
     pub inputs: Vec<ValueId>,
     /// Value IDs produced by this node as outputs.
@@ -65,7 +67,8 @@ impl CapturedGraph {
 
             nodes.push(CapturedNode {
                 id: node.id,
-                op: node.op,
+                operation: node.operation.clone(),
+                attributes: node.attributes.clone(),
                 inputs: node.inputs.clone(),
                 outputs: node.outputs.clone(),
             });

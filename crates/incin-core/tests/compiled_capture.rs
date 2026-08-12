@@ -1,8 +1,10 @@
 #![cfg(feature = "compiled")]
 
+use incin_core::exec::OperationIdentity;
 use incin_core::experimental::compiled::CapturedGraph;
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 #[test]
@@ -16,14 +18,17 @@ fn test_eager_graph_capture_and_validation() {
     graph.mark_input(y);
     graph.mark_output(z);
 
-    graph.add_node(OpType::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     assert_eq!(captured.node_count(), 1);
     assert_eq!(captured.value_count(), 3);
     assert_eq!(captured.inputs, vec![x, y]);
     assert_eq!(captured.outputs, vec![z]);
-    assert_eq!(captured.nodes[0].op, OpType::MatMul);
+    assert_eq!(
+        captured.nodes[0].operation,
+        OperationIdentity::Builtin(OperationKind::MatMul)
+    );
 }
 
 #[test]

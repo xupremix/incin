@@ -952,7 +952,6 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 /// admission and descriptor execution. It is not a second operation catalog.
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
-    fn trace_operation(&self) -> Option<crate::graph::OpType>;
 
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId;
 }
@@ -960,78 +959,6 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
     fn trace_identity(&self) -> crate::exec::OperationIdentity {
         self.identity.clone()
-    }
-
-    fn trace_operation(&self) -> Option<crate::graph::OpType> {
-        let OperationIdentity::Builtin(operation) = self.identity else {
-            return None;
-        };
-        Some(match operation {
-            OperationKind::Add => crate::graph::OpType::Add,
-            OperationKind::Sub => crate::graph::OpType::Sub,
-            OperationKind::Mul => crate::graph::OpType::Mul,
-            OperationKind::Div => crate::graph::OpType::Div,
-            OperationKind::CmpEq => crate::graph::OpType::CmpEq,
-            OperationKind::CmpNe => crate::graph::OpType::CmpNe,
-            OperationKind::CmpLt => crate::graph::OpType::CmpLt,
-            OperationKind::CmpLe => crate::graph::OpType::CmpLe,
-            OperationKind::CmpGt => crate::graph::OpType::CmpGt,
-            OperationKind::CmpGe => crate::graph::OpType::CmpGe,
-            OperationKind::LogicalAnd => crate::graph::OpType::LogicalAnd,
-            OperationKind::LogicalOr => crate::graph::OpType::LogicalOr,
-            OperationKind::LogicalNot => crate::graph::OpType::LogicalNot,
-            OperationKind::Relu => crate::graph::OpType::Relu,
-            OperationKind::Step => crate::graph::OpType::Step,
-            OperationKind::Mish => crate::graph::OpType::Mish,
-            OperationKind::Elu => crate::graph::OpType::Elu,
-            OperationKind::Gelu => crate::graph::OpType::Gelu,
-            OperationKind::Abs => crate::graph::OpType::Abs,
-            OperationKind::Exp => crate::graph::OpType::Exp,
-            OperationKind::Neg => crate::graph::OpType::Neg,
-            OperationKind::Sqrt => crate::graph::OpType::Sqrt,
-            OperationKind::Log => crate::graph::OpType::Log,
-            OperationKind::Tanh => crate::graph::OpType::Tanh,
-            OperationKind::Sigmoid => crate::graph::OpType::Sigmoid,
-            OperationKind::Swish => crate::graph::OpType::Swish,
-            OperationKind::Softmax => crate::graph::OpType::Softmax,
-            OperationKind::AddScalar => crate::graph::OpType::AddScalar,
-            OperationKind::MulScalar => crate::graph::OpType::MulScalar,
-            OperationKind::SubScalar => crate::graph::OpType::SubScalar,
-            OperationKind::DivScalar => crate::graph::OpType::DivScalar,
-            OperationKind::MatMulExact => crate::graph::OpType::MatMul,
-            OperationKind::ReshapeExact => crate::graph::OpType::Reshape,
-            OperationKind::TransposeExact => crate::graph::OpType::Transpose,
-            OperationKind::FlattenExact | OperationKind::SqueezeExact => {
-                crate::graph::OpType::Reshape
-            }
-            OperationKind::BroadcastAs | OperationKind::BroadcastLeft => {
-                crate::graph::OpType::Broadcast
-            }
-            OperationKind::Narrow => crate::graph::OpType::Narrow,
-            OperationKind::SliceExact => crate::graph::OpType::Slice,
-            OperationKind::StackExact => crate::graph::OpType::Stack,
-            OperationKind::ConcatExact => crate::graph::OpType::Concat,
-            OperationKind::ToDType => crate::graph::OpType::ToDtype,
-            OperationKind::WhereCond => crate::graph::OpType::WhereCond,
-            OperationKind::Gather => crate::graph::OpType::Gather,
-            OperationKind::SumAll => crate::graph::OpType::SumAll,
-            OperationKind::MeanAll => crate::graph::OpType::MeanAll,
-            OperationKind::MaxAll => crate::graph::OpType::MaxAll,
-            OperationKind::MinAll => crate::graph::OpType::MinAll,
-            OperationKind::SumDim | OperationKind::SumKeepDim => crate::graph::OpType::SumDim,
-            OperationKind::MeanDim | OperationKind::MeanKeepDim => crate::graph::OpType::MeanDim,
-            OperationKind::MaxDim | OperationKind::MaxKeepDim => crate::graph::OpType::MaxDim,
-            OperationKind::MinDim | OperationKind::MinKeepDim => crate::graph::OpType::MinDim,
-            OperationKind::Conv1dExact => crate::graph::OpType::Conv1d,
-            OperationKind::Conv2dExact => crate::graph::OpType::Conv2d,
-            OperationKind::ConvTranspose2d => crate::graph::OpType::ConvTranspose2d,
-            OperationKind::MaxPool2d => crate::graph::OpType::MaxPool2d,
-            OperationKind::AvgPool2d => crate::graph::OpType::AvgPool2d,
-            OperationKind::AdaptiveAvgPool2dExact => crate::graph::OpType::AdaptiveAvgPool2d,
-            OperationKind::LayerNorm => crate::graph::OpType::LayerNorm,
-            OperationKind::BatchNorm => crate::graph::OpType::BatchNorm,
-            _ => return None,
-        })
     }
 
     fn trace_output_dtype(&self, inputs: &[crate::exec::request::TensorHandle<'_>]) -> DTypeId {
@@ -4262,6 +4189,58 @@ pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatal
     OPERATION_CATALOG
         .iter()
         .find(|row| row.operation == operation)
+}
+
+/// Explicit ONNX projection for canonical built-in operations.
+/// Unsupported operations return `None` instead of being silently renamed.
+#[must_use]
+pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
+    Some(match operation {
+        OperationKind::Add => "Add",
+        OperationKind::Sub => "Sub",
+        OperationKind::Mul => "Mul",
+        OperationKind::Div => "Div",
+        OperationKind::MatMulExact | OperationKind::BatchedMatMul => "MatMul",
+        OperationKind::Relu => "Relu",
+        OperationKind::Exp => "Exp",
+        OperationKind::Neg => "Neg",
+        OperationKind::Sqrt => "Sqrt",
+        OperationKind::Log => "Log",
+        OperationKind::Tanh => "Tanh",
+        OperationKind::Sigmoid => "Sigmoid",
+        OperationKind::Softmax => "Softmax",
+        OperationKind::ReshapeExact => "Reshape",
+        OperationKind::TransposeExact => "Transpose",
+        OperationKind::ConcatExact => "Concat",
+        OperationKind::StackExact => "Concat",
+        OperationKind::Conv1dExact | OperationKind::Conv2dExact => "Conv",
+        OperationKind::ConvTranspose2d => "ConvTranspose",
+        OperationKind::MaxPool2d => "MaxPool",
+        OperationKind::AvgPool2d => "AveragePool",
+        OperationKind::AdaptiveAvgPool2dExact => "GlobalAveragePool",
+        OperationKind::CmpEq => "Equal",
+        OperationKind::CmpLt => "Less",
+        OperationKind::CmpLe => "LessOrEqual",
+        OperationKind::CmpGt => "Greater",
+        OperationKind::CmpGe => "GreaterOrEqual",
+        OperationKind::LogicalAnd => "And",
+        OperationKind::LogicalOr => "Or",
+        OperationKind::LogicalNot => "Not",
+        OperationKind::Maximum => "Max",
+        OperationKind::Minimum => "Min",
+        OperationKind::WhereCond => "Where",
+        OperationKind::Gather => "GatherElements",
+        OperationKind::IndexSelect => "Gather",
+        OperationKind::Scatter => "ScatterElements",
+        OperationKind::Unsqueeze => "Unsqueeze",
+        OperationKind::Repeat => "Tile",
+        OperationKind::Pad => "Pad",
+        OperationKind::Triu | OperationKind::Tril => "Trilu",
+        OperationKind::PixelShuffle => "DepthToSpace",
+        OperationKind::GroupNorm => "GroupNormalization",
+        OperationKind::InstanceNorm => "InstanceNormalization",
+        _ => return None,
+    })
 }
 
 /// Render the human-reviewed semantics inventory from the code catalog.

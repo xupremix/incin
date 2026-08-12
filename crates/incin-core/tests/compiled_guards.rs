@@ -1,8 +1,9 @@
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{CapturedGraph, CompileOptions, CompiledPlan, ShapeGuard};
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 #[test]
@@ -15,7 +16,7 @@ fn test_compiled_plan_construction_and_guards() {
     graph.mark_input(x);
     graph.mark_input(y);
     graph.mark_output(z);
-    graph.add_node(OpType::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let options = CompileOptions::default();

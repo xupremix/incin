@@ -3,8 +3,9 @@
 use incin_core::experimental::compiled::{
     AllocationPlanner, CapturedGraph, LivenessInterval, LivenessMap, MemoryPlan, SavedTensorSet,
 };
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 #[test]
@@ -17,7 +18,7 @@ fn test_liveness_analysis_basic() {
     graph.mark_input(x);
     graph.mark_input(y);
     graph.mark_output(z);
-    graph.add_node(OpType::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let liveness = LivenessMap::compute(&captured);
@@ -40,7 +41,7 @@ fn test_allocation_planner_peak_memory() {
     graph.mark_input(x);
     graph.mark_input(y);
     graph.mark_output(z);
-    graph.add_node(OpType::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let liveness = LivenessMap::compute(&captured);
@@ -63,7 +64,7 @@ fn test_saved_tensor_extends_liveness() {
 
     graph.mark_input(x);
     graph.mark_output(y);
-    graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let mut liveness = LivenessMap::compute(&captured);
@@ -90,7 +91,7 @@ fn test_saved_tensor_does_not_shrink_liveness() {
 
     graph.mark_input(x);
     graph.mark_output(y);
-    graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let mut liveness = LivenessMap::compute(&captured);
@@ -129,7 +130,12 @@ fn memory_plan_deserialization_revalidates_slots_and_round_trips() {
     let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
     graph.mark_input(input);
     graph.mark_output(output);
-    graph.add_node(OpType::Relu, vec![input], vec![output], BTreeMap::new());
+    graph.add_node(
+        OperationKind::Relu,
+        vec![input],
+        vec![output],
+        BTreeMap::new(),
+    );
 
     let captured = CapturedGraph::capture(&graph).unwrap();
     let liveness = LivenessMap::compute(&captured);

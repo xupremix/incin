@@ -1,8 +1,9 @@
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{CapturedGraph, FusionPass};
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 #[test]
@@ -16,9 +17,9 @@ fn test_fusion_detects_pointwise_chain_candidates() {
     graph.mark_input(x);
     graph.mark_output(out);
 
-    graph.add_node(OpType::Add, vec![x, x], vec![y], BTreeMap::new());
-    graph.add_node(OpType::Relu, vec![y], vec![z], BTreeMap::new());
-    graph.add_node(OpType::Mul, vec![z, x], vec![out], BTreeMap::new());
+    graph.add_node(OperationKind::Add, vec![x, x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Relu, vec![y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::Mul, vec![z, x], vec![out], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let pass = FusionPass;
@@ -26,8 +27,8 @@ fn test_fusion_detects_pointwise_chain_candidates() {
 
     // Add->Relu should be a candidate (both pointwise, output not in graph outputs)
     assert!(!candidates.is_empty());
-    assert_eq!(candidates[0].producer_op, OpType::Add);
-    assert_eq!(candidates[0].consumer_op, OpType::Relu);
+    assert_eq!(candidates[0].producer_op, OperationKind::Add);
+    assert_eq!(candidates[0].consumer_op, OperationKind::Relu);
 }
 
 #[test]
@@ -40,8 +41,8 @@ fn test_fusion_apply_reduces_node_count() {
     graph.mark_input(x);
     graph.mark_output(out);
 
-    graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
-    graph.add_node(OpType::Neg, vec![y], vec![out], BTreeMap::new());
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Neg, vec![y], vec![out], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let pass = FusionPass;

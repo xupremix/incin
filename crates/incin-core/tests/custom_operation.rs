@@ -436,10 +436,9 @@ fn custom_operations_are_recorded_with_their_key() {
     .unwrap();
     let graph = extract_graph();
     let node = graph.nodes.last().expect("custom trace node");
-    assert_eq!(node.op, incin_core::graph::OpType::Custom);
     assert_eq!(
-        node.identity,
-        Some(OperationIdentity::Custom(CompanyIdentity::KEY))
+        node.operation,
+        OperationIdentity::Custom(CompanyIdentity::KEY)
     );
 }
 

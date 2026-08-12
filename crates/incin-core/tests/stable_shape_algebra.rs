@@ -5,7 +5,7 @@ extern crate incin_core as incin;
 
 use incin_core::axis;
 use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
-use incin_core::exec::{AxisSet, ExecutionDescriptor, RankSupport};
+use incin_core::exec::{AxisSet, ExecutionDescriptor, OperationIdentity, RankSupport};
 use incin_core::prelude::*;
 
 static TRACE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -391,12 +391,8 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
 
     assert_eq!(output.dims(), [2, 3]);
     let graph = incin_core::prelude::extract_graph();
-    assert!(
-        graph
-            .nodes
-            .iter()
-            .any(|node| node.op == incin_core::graph::OpType::Add)
-    );
+    assert!(graph.nodes.iter().any(|node| node.operation
+        == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Add)));
 }
 
 #[test]
@@ -414,7 +410,9 @@ fn exact_tracing_records_boolean_comparison_output_dtype() {
     let node = graph
         .nodes
         .iter()
-        .find(|node| node.op == incin_core::graph::OpType::CmpEq)
+        .find(|node| {
+            node.operation == OperationIdentity::Builtin(incin_core::prelude::OperationKind::CmpEq)
+        })
         .expect("comparison node should be traced");
     let output = graph
         .values
@@ -435,16 +433,8 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let _reshaped = relu.reshape::<s![3, 2]>(((), ((), ()))).unwrap();
 
     let graph = incin_core::prelude::extract_graph();
-    assert!(
-        graph
-            .nodes
-            .iter()
-            .any(|node| node.op == incin_core::graph::OpType::Relu)
-    );
-    assert!(
-        graph
-            .nodes
-            .iter()
-            .any(|node| node.op == incin_core::graph::OpType::Reshape)
-    );
+    assert!(graph.nodes.iter().any(|node| node.operation
+        == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Relu)));
+    assert!(graph.nodes.iter().any(|node| node.operation
+        == OperationIdentity::Builtin(incin_core::prelude::OperationKind::ReshapeExact)));
 }

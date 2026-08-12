@@ -3,8 +3,9 @@
 use incin_core::experimental::compiled::{
     ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 fn make_test_plan() -> CompiledPlan {
@@ -13,7 +14,7 @@ fn make_test_plan() -> CompiledPlan {
     let y = graph.add_value(vec![4], DTypeId::F32, Some("y".into()));
     graph.mark_input(x);
     graph.mark_output(y);
-    graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     CompiledPlan::compile(captured, CompileOptions::new())
 }

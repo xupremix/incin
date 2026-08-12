@@ -3,8 +3,15 @@
 use alloc::vec::Vec;
 
 use crate::compiled::capture::{CapturedGraph, CapturedNode};
-use crate::graph::OpType;
+use crate::prelude::OperationKind;
 use crate::prelude::Result;
+
+fn builtin_operation(identity: &crate::exec::OperationIdentity) -> Option<OperationKind> {
+    match identity {
+        crate::exec::OperationIdentity::Builtin(operation) => Some(*operation),
+        crate::exec::OperationIdentity::Custom(_) => None,
+    }
+}
 
 /// Describes why two operations may not be fused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,9 +32,9 @@ pub struct FusionCandidate {
     /// Index of the consumer node in the topological order.
     pub consumer_idx: usize,
     /// The producer op type.
-    pub producer_op: OpType,
+    pub producer_op: OperationKind,
     /// The consumer op type.
-    pub consumer_op: OpType,
+    pub consumer_op: OperationKind,
 }
 
 /// A fused kernel: replaces a chain of nodes with a single entry.
@@ -36,7 +43,7 @@ pub struct FusedKernel {
     /// Indices of the original nodes fused into this kernel.
     pub source_node_indices: Vec<usize>,
     /// The leading op type of the fused kernel.
-    pub primary_op: OpType,
+    pub primary_op: OperationKind,
 }
 
 /// Safe fusion pass that identifies fusable chains and produces fused kernels.
@@ -46,9 +53,9 @@ pub struct FusionPass;
 impl FusionPass {
     /// Determines whether two adjacent ops are fusable.
     #[must_use]
-    fn can_fuse(producer: OpType, consumer: OpType) -> bool {
+    fn can_fuse(producer: OperationKind, consumer: OperationKind) -> bool {
         // Only fuse pointwise chains for safety
-        use OpType::*;
+        use OperationKind::*;
         let is_pointwise = |op| {
             matches!(
                 op,
@@ -92,12 +99,18 @@ impl FusionPass {
                 .iter()
                 .any(|out_id| graph.outputs.contains(out_id));
 
-            if is_chained && !output_is_graph_output && Self::can_fuse(node.op, next.op) {
+            let Some(producer) = builtin_operation(&node.operation) else {
+                continue;
+            };
+            let Some(consumer) = builtin_operation(&next.operation) else {
+                continue;
+            };
+            if is_chained && !output_is_graph_output && Self::can_fuse(producer, consumer) {
                 candidates.push(FusionCandidate {
                     producer_idx: i,
                     consumer_idx: i + 1,
-                    producer_op: node.op,
-                    consumer_op: next.op,
+                    producer_op: producer,
+                    consumer_op: consumer,
                 });
             }
         }
@@ -138,13 +151,18 @@ impl FusionPass {
                 // Fused node: takes producer's inputs, produces consumer's outputs
                 new_nodes.push(CapturedNode {
                     id: producer.id,
-                    op: producer.op,
+                    operation: producer.operation.clone(),
+                    attributes: producer.attributes.clone(),
                     inputs: producer.inputs.clone(),
                     outputs: consumer.outputs.clone(),
                 });
                 kernels.push(FusedKernel {
                     source_node_indices: alloc::vec![cand.producer_idx, cand.consumer_idx],
-                    primary_op: producer.op,
+                    primary_op: builtin_operation(&producer.operation).ok_or_else(|| {
+                        crate::err::Error::Msg(alloc::string::String::from(
+                            "custom operations cannot be fused",
+                        ))
+                    })?,
                 });
                 i += 1;
                 continue;

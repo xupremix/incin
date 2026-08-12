@@ -50,7 +50,21 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     // Nodes
     for node in &graph.nodes {
         let mut n = onnx::NodeProto::default();
-        n.op_type = Some(node.op.as_str().to_string());
+        let onnx_name = match &node.operation {
+            crate::exec::OperationIdentity::Builtin(operation) => {
+                crate::exec::catalog::onnx_name(*operation)
+                    .ok_or_else(|| anyhow::anyhow!("operation {operation} has no ONNX mapping"))?
+            }
+            crate::exec::OperationIdentity::Custom(key) => {
+                return Err(anyhow::anyhow!(
+                    "custom operation {}/{} v{} has no ONNX mapping",
+                    key.namespace,
+                    key.name,
+                    key.version
+                ));
+            }
+        };
+        n.op_type = Some(onnx_name.to_string());
         n.input = node.inputs.iter().map(|x| x.to_string()).collect();
         n.output = node.outputs.iter().map(|x| x.to_string()).collect();
 

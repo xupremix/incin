@@ -7,8 +7,9 @@ use std::collections::BTreeMap;
 use incin_core::experimental::compiled::{
     BoundedPlanTuner, CapturedGraph, CompileOptions, CompiledPlan,
 };
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 
 fn make_test_plan_with_nodes(node_count: usize) -> CompiledPlan {
     let mut graph = Graph::new();
@@ -17,7 +18,7 @@ fn make_test_plan_with_nodes(node_count: usize) -> CompiledPlan {
     let mut prev = first;
     for i in 0..node_count {
         let next = graph.add_value(vec![4], DTypeId::F32, Some(format!("x{}", i + 1)));
-        graph.add_node(OpType::Relu, vec![prev], vec![next], BTreeMap::new());
+        graph.add_node(OperationKind::Relu, vec![prev], vec![next], BTreeMap::new());
         prev = next;
     }
     graph.mark_output(prev);

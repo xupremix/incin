@@ -3,8 +3,9 @@
 use incin_core::experimental::compiled::{
     CapturedGraph, ConstantFolder, ShapeBucket, WeightPrepacker,
 };
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 #[test]
@@ -17,7 +18,7 @@ fn incomplete_compiled_passes_fail_closed() {
     graph.mark_input(x);
     graph.mark_input(y);
     graph.mark_output(z);
-    graph.add_node(OpType::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
 
