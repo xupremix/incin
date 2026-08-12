@@ -171,7 +171,7 @@ impl KernelKey {
         shape_bucket: ShapeBucket,
         alignment: AlignmentClass,
     ) -> Result<Self> {
-        let _req = PrecisionRequest::new(
+        let req = PrecisionRequest::new(
             policy_family,
             dtype.descriptor(),
             dtype.descriptor(),
@@ -293,7 +293,7 @@ struct CudaScalarSpec {
 
 impl CudaScalarSpec {
     fn for_float(dtype: DTypeId, op: &'static str) -> Result<Self> {
-        let _req = PrecisionRequest::new(
+        let req = PrecisionRequest::new(
             OperationKind::Pointwise,
             dtype.descriptor(),
             dtype.descriptor(),
@@ -1030,7 +1030,7 @@ pub(crate) fn render_cuda_reduction(
     contiguous_last_axis: bool,
 ) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_reduction")?;
-    let _req = PrecisionRequest::new(
+    let req = PrecisionRequest::new(
         incin_core::prelude::OperationKind::Reduction,
         dtype.descriptor(),
         dtype.descriptor(),
@@ -1277,7 +1277,7 @@ extern "C" __global__ void {entry_point}(
 #[allow(dead_code)]
 pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
-    let _req = PrecisionRequest::new(
+    let req = PrecisionRequest::new(
         incin_core::prelude::OperationKind::Normalization,
         dtype.descriptor(),
         dtype.descriptor(),

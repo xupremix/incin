@@ -347,6 +347,7 @@ pub(crate) enum TuningDecision {
 }
 
 #[cfg(any(feature = "autotune", test))]
+#[derive(Clone, Debug)]
 pub(crate) struct TuningPermit {
     key: Option<TuningKey>,
 }

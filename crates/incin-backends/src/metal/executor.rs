@@ -1,11 +1,9 @@
 //! Descriptor execution for the Metal backend.
 
-use incin_core::backend_authoring::{
-    Descriptor, Execute, ExecutionRequest, ModuleOps, NumericOps, ReductionOps, StorageBackend,
-    TensorOps, op,
-};
+use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
+use incin_core::tensor::backend::{ModuleOps, NumericOps, ReductionOps, TensorOps};
 
 use super::backend::MetalBackendImpl;
 use super::storage::MetalStorage;

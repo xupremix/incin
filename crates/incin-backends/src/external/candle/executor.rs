@@ -16,8 +16,8 @@
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{
-    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, SupportLevel, TensorMeta,
-    UnsupportedReason,
+    Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
+    TensorMeta, UnsupportedReason,
 };
 use incin_core::prelude::{
     BackendError, DType, Device, OperationKind, Result, Shape, ShapeBuf, StrideBuf,
@@ -105,18 +105,30 @@ impl<D: Device> Capabilities for CandleBackend<D> {
         // the kind of unearned capability claim `EXE-005` exists to prevent.
         if super::convert::to_candle_dtype(query.dtype).is_err() {
             return SupportLevel::Unsupported(UnsupportedReason::DType {
-                operation: query.operation,
+                operation: match query.operation {
+                    OperationIdentity::Builtin(operation) => operation,
+                    OperationIdentity::Custom(_) => OperationKind::Storage,
+                },
                 dtype: query.dtype,
             });
         }
         match query.operation {
-            OperationKind::MatMulExact
-            | OperationKind::ReshapeExact
-            | OperationKind::Zeros
-            | OperationKind::Ones
-            | OperationKind::UniformRandom
-            | OperationKind::NormalRandom => SupportLevel::Native,
-            operation => SupportLevel::Unsupported(UnsupportedReason::Operation { operation }),
+            OperationIdentity::Builtin(
+                OperationKind::MatMulExact
+                | OperationKind::ReshapeExact
+                | OperationKind::Zeros
+                | OperationKind::Ones
+                | OperationKind::UniformRandom
+                | OperationKind::NormalRandom,
+            ) => SupportLevel::Native,
+            OperationIdentity::Builtin(operation) => {
+                SupportLevel::Unsupported(UnsupportedReason::Operation { operation })
+            }
+            OperationIdentity::Custom(_) => {
+                SupportLevel::Unsupported(UnsupportedReason::Operation {
+                    operation: OperationKind::Storage,
+                })
+            }
         }
     }
 }

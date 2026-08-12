@@ -30,8 +30,9 @@ use incin_core::dist::{
 };
 use incin_core::exec::ReduceOp;
 use incin_core::prelude::{
-    DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor, TensorOps,
+    DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor,
 };
+use incin_core::tensor::backend::TensorOps;
 
 use crate::cuda::backend::CudaBackendImpl;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
@@ -621,7 +622,13 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = parameter.dtype();
+        let dtype = parameter
+            .builtin_dtype_id()
+            .ok_or(NcclTransportError::Collective(
+                CollectiveError::UnsupportedDType {
+                    dtype: parameter.dtype().builtin_id().unwrap_or(DTypeId::F32),
+                },
+            ))?;
         validate_data_parallel_dtype(dtype)?;
         let parameter_storage = parameter.inner();
         let input = gradients
@@ -656,7 +663,13 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = input.dtype();
+        let dtype = input
+            .builtin_dtype_id()
+            .ok_or(NcclTransportError::Collective(
+                CollectiveError::UnsupportedDType {
+                    dtype: input.dtype().builtin_id().unwrap_or(DTypeId::F32),
+                },
+            ))?;
         validate_tensor_parallel_dtype(dtype)?;
         let input = input.inner();
         let descriptor =
@@ -711,7 +724,7 @@ impl NcclTransport {
             .map_err(|error| NcclTransportError::Cuda(error.to_string()))?;
         let buffer = CudaBuffer {
             len: descriptor.output_elements(),
-            dtype,
+            dtype: dtype.descriptor(),
             data: std::sync::Arc::new(output),
             device: self.context.clone(),
             device_id: self.device_ordinal,
@@ -767,7 +780,7 @@ impl NcclTransport {
             validate_tensor_parallel_shapes(descriptor, collective, input_shape, global_shape)?;
 
         let (flat, first_event) = self.execute_tensor_parallel_flat(id, collective, input)?;
-        let storage = reassemble_tensor_parallel_storage::<T, D, K>(
+        let storage = reassemble_tensor_parallel_storage::<D, K>(
             &flat,
             collective,
             &local_shape,
@@ -814,7 +827,13 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = input.dtype();
+        let dtype = input
+            .builtin_dtype_id()
+            .ok_or(NcclTransportError::Collective(
+                CollectiveError::UnsupportedDType {
+                    dtype: input.dtype().builtin_id().unwrap_or(DTypeId::F32),
+                },
+            ))?;
         validate_pipeline_dtype(dtype)?;
         let input = input.inner();
         let descriptor =
@@ -870,7 +889,7 @@ impl NcclTransport {
             .map_err(|error| NcclTransportError::Cuda(error.to_string()))?;
         let buffer = CudaBuffer {
             len: descriptor.output_elements(),
-            dtype,
+            dtype: dtype.descriptor(),
             data: std::sync::Arc::new(output),
             device: self.context.clone(),
             device_id: self.device_ordinal,
@@ -951,7 +970,7 @@ impl NcclTransport {
             .map_err(|error| NcclTransportError::Cuda(error.to_string()))?;
         let buffer = CudaBuffer {
             len: descriptor.output_elements(),
-            dtype,
+            dtype: dtype.descriptor(),
             data: std::sync::Arc::new(output),
             device: self.context.clone(),
             device_id: self.device_ordinal,
