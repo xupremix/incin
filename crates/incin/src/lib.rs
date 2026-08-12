@@ -123,7 +123,8 @@ pub mod experimental {
     pub use incin_macros::{mesh, parallel, placement};
 
     #[cfg(feature = "compiled")]
-    /// Structural compiled-execution prototype. It does not execute graphs yet.
+    /// Compiled graph plans and symbolic guards. CPU execution is exposed by
+    /// the matching `compiled,cpu` features.
     pub use incin_core::experimental::compiled;
 
     #[cfg(feature = "autotune")]

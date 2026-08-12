@@ -52,7 +52,7 @@ for CUDA launch parameters — `AutotunePolicy`, `KernelSignature`,
 
 Feature `compiled`. A structural prototype under
 `incin::experimental::compiled`. The crate's own documentation is blunt about
-it: *it does not execute graphs yet.* The types describe what a compiled
+it: *CPU execution is available through the compiled,cpu feature.* The types describe what a compiled
 execution surface would look like; nothing runs through them.
 
 ## Telemetry

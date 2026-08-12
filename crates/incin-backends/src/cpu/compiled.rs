@@ -17,6 +17,48 @@ pub struct CpuCompiledInvocation {
     pub inputs: Vec<CpuStorage>,
 }
 
+/// CPU compiled plan after backend lowering admission.
+#[derive(Debug, Clone)]
+pub struct CpuCompiledPlan {
+    plan: CompiledPlan,
+}
+
+impl CpuCompiledPlan {
+    /// Admits only nodes with a captured descriptor and an implemented CPU
+    /// canonical lowering.
+    pub fn try_new(plan: &CompiledPlan) -> Result<Self> {
+        for node in &plan.graph.nodes {
+            let supported = matches!(
+                node.operation,
+                OperationIdentity::Builtin(
+                    incin_core::prelude::OperationKind::Add
+                        | incin_core::prelude::OperationKind::Relu
+                        | incin_core::prelude::OperationKind::MatMulExact
+                        | incin_core::prelude::OperationKind::Linear
+                        | incin_core::prelude::OperationKind::Addmm
+                )
+            );
+            if !supported {
+                return Err(Error::Msg(format!(
+                    "compiled CPU lowering does not support {:?}",
+                    node.operation
+                )));
+            }
+            if node.descriptor_payload.is_none() {
+                return Err(Error::Msg(format!(
+                    "compiled CPU node {} has no captured descriptor",
+                    node.id
+                )));
+            }
+        }
+        Ok(Self { plan: plan.clone() })
+    }
+
+    pub fn run(&self, invocation: CpuCompiledInvocation) -> Result<Vec<CpuStorage>> {
+        invocation.run_admitted(&self.plan)
+    }
+}
+
 impl CpuCompiledInvocation {
     /// Constructs an invocation from owned CPU input storages.
     #[must_use]
@@ -28,12 +70,33 @@ impl CpuCompiledInvocation {
 impl CpuCompiledInvocation {
     /// Executes the plan using the planner's buffer slots.
     pub fn run(self, plan: &CompiledPlan) -> Result<Vec<CpuStorage>> {
+        let admitted = CpuCompiledPlan::try_new(plan)?;
+        self.run_admitted(&admitted.plan)
+    }
+
+    fn run_admitted(self, plan: &CompiledPlan) -> Result<Vec<CpuStorage>> {
         let input_meta = self
             .inputs
             .iter()
             .map(|storage| (storage.shape.to_vec(), storage.dtype))
             .collect::<Vec<(Vec<usize>, DTypeDescriptor)>>();
         plan.verify_inputs(&input_meta)?;
+        for value_id in &plan.graph.inputs {
+            let expected = &plan.graph.value_metadata[value_id].shape;
+            let actual = &input_meta[plan
+                .graph
+                .inputs
+                .iter()
+                .position(|id| id == value_id)
+                .unwrap()]
+            .0;
+            if expected != actual {
+                return Err(Error::Msg(format!(
+                    "compiled CPU lowering requires traced input shape {:?}, got {:?}",
+                    expected, actual
+                )));
+            }
+        }
 
         let mut slots = (0..plan.memory_plan.peak_live_slots())
             .map(|_| None::<CpuStorage>)
@@ -151,6 +214,22 @@ where
     let validated = descriptor
         .revalidate()
         .map_err(|error| Error::Msg(format!("captured descriptor failed validation: {error}")))?;
+    for (index, (handle, expected)) in inputs
+        .iter()
+        .zip(validated.descriptor().inputs())
+        .enumerate()
+    {
+        if expected.shape.as_ref() != Some(&handle.shape)
+            || expected.dtype != Some(handle.dtype)
+            || expected.device != Some(handle.device)
+        {
+            return Err(Error::Msg(format!(
+                "compiled operation {} input {} does not match its captured descriptor",
+                O::ID,
+                index
+            )));
+        }
+    }
     let handles = inputs
         .iter()
         .map(|storage| TensorHandle::from_storage::<CpuBackendImpl<Cpu>, Dyn, _>(*storage))

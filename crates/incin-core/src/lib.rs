@@ -61,7 +61,8 @@ pub mod loss {
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
     #[cfg(feature = "compiled")]
-    /// Structural compiled-execution prototype. It does not execute graphs yet.
+    /// Compiled graph plans and symbolic guards. CPU execution is exposed by
+    /// the matching `incin-backends/compiled` feature.
     pub mod compiled {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,

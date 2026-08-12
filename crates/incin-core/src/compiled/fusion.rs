@@ -128,60 +128,9 @@ impl FusionPass {
             return Ok((graph.clone(), Vec::new()));
         }
 
-        let fused_pairs: alloc::collections::BTreeSet<usize> =
-            candidates.iter().map(|c| c.consumer_idx).collect();
-
-        let mut new_nodes: Vec<CapturedNode> = Vec::new();
-        let mut kernels: Vec<FusedKernel> = Vec::new();
-
-        let mut i = 0;
-        while i < graph.nodes.len() {
-            // Check if this node is a fusion consumer (producer was already merged)
-            if fused_pairs.contains(&i) {
-                // Already merged, skip because it was incorporated into the previous kernel
-                i += 1;
-                continue;
-            }
-
-            // Check if this node is a fusion producer
-            let fusion = candidates.iter().find(|c| c.producer_idx == i);
-            if let Some(cand) = fusion {
-                let producer = &graph.nodes[cand.producer_idx];
-                let consumer = &graph.nodes[cand.consumer_idx];
-                // Fused node: takes producer's inputs, produces consumer's outputs
-                new_nodes.push(CapturedNode {
-                    id: producer.id,
-                    operation: producer.operation.clone(),
-                    execution_site: producer.execution_site,
-                    attributes: producer.attributes.clone(),
-                    descriptor_payload: producer.descriptor_payload.clone(),
-                    inputs: producer.inputs.clone(),
-                    outputs: consumer.outputs.clone(),
-                });
-                kernels.push(FusedKernel {
-                    source_node_indices: alloc::vec![cand.producer_idx, cand.consumer_idx],
-                    primary_op: builtin_operation(&producer.operation).ok_or_else(|| {
-                        crate::err::Error::Msg(alloc::string::String::from(
-                            "custom operations cannot be fused",
-                        ))
-                    })?,
-                });
-                i += 1;
-                continue;
-            }
-
-            new_nodes.push(graph.nodes[i].clone());
-            i += 1;
-        }
-
-        let fused_graph = CapturedGraph {
-            values: graph.values.clone(),
-            value_metadata: graph.value_metadata.clone(),
-            inputs: graph.inputs.clone(),
-            outputs: graph.outputs.clone(),
-            nodes: new_nodes,
-        };
-
-        Ok((fused_graph, kernels))
+        let _ = (graph, candidates);
+        Err(crate::err::Error::Msg(
+            "compiled fusion has no executable fused descriptor lowering".into(),
+        ))
     }
 }

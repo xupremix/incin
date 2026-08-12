@@ -39,7 +39,7 @@ features is the one configuration that is genuinely `no_std`.
 | `train` | The preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
 | `telemetry` | Backend telemetry hooks; `cargo incin doctor` also reports the run directory under this feature. |
 | `autotune` | CUDA launch autotuning. Implies `cuda`. |
-| `compiled` | Curated preview types for compiled execution. Structural only — it does not execute graphs yet. |
+| `compiled` | Curated preview types for compiled plans and guards. Add `cpu` for the executable CPU lowering. |
 | `test-utils` | Test-only backends (`DummyBackend`) and test utilities. |
 
 ## Distributed
