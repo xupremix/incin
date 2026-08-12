@@ -1,5 +1,6 @@
 //! Immutable compiled execution plans and dynamic runtime guards.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -327,6 +328,62 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Narrow) => {
+                #[cfg(feature = "std")]
+                {
+                    let descriptor = decode_descriptor::<op::Narrow>(node)?;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        let attributes = descriptor.attributes();
+                        if let Some(extent) = shape.dims.get_mut(attributes.axis) {
+                            *extent = DimExpr::Const(attributes.length);
+                        }
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::FlattenExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let descriptor = decode_descriptor::<op::FlattenExact>(node)?;
+                    inputs.first().map(|input| {
+                        let attributes = descriptor.attributes();
+                        flatten_symbolic(input, attributes.start_axis, attributes.end_axis)
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::SliceExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let descriptor = decode_descriptor::<op::SliceExact>(node)?;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims = descriptor
+                            .attributes()
+                            .ranges
+                            .iter()
+                            .map(|(start, end)| {
+                                end.checked_sub(*start)
+                                    .map(DimExpr::Const)
+                                    .unwrap_or(DimExpr::Unknown)
+                            })
+                            .collect();
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
             _ => None,
         };
         let Some(shape) = shape else {
@@ -383,6 +440,24 @@ fn aligned_dim(dims: &[DimExpr], rank: usize, offset: usize) -> DimExpr {
     dims.get(offset.saturating_sub(source_offset))
         .cloned()
         .unwrap_or(DimExpr::Const(1))
+}
+
+fn flatten_symbolic(input: &ShapeExpr, start: usize, end: usize) -> ShapeExpr {
+    let mut dims = Vec::with_capacity(input.dims.len().saturating_sub(end - start));
+    dims.extend_from_slice(&input.dims[..start]);
+    let flattened = input.dims[start..=end]
+        .iter()
+        .cloned()
+        .fold(DimExpr::Const(1), |lhs, rhs| {
+            DimExpr::Mul(Box::new(lhs), Box::new(rhs)).simplify()
+        });
+    dims.push(flattened);
+    dims.extend_from_slice(&input.dims[end + 1..]);
+    ShapeExpr {
+        rank: crate::exec::RankExpr::Static(dims.len()),
+        dims,
+        constraints: input.constraints.clone(),
+    }
 }
 
 fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
