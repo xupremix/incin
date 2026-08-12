@@ -33,6 +33,11 @@ pub fn tracing_mark_input(value_id: ValueId) {
     TRACING_GRAPH.lock().mark_input(value_id);
 }
 
+/// Marks a traced tensor input while retaining its frontend shape proof.
+pub fn tracing_mark_input_typed<S: crate::prelude::Shape>(value_id: ValueId) {
+    TRACING_GRAPH.lock().mark_input_with_shape::<S>(value_id);
+}
+
 /// Mark `value_id` as a graph output (e.g. for ONNX export / visualization).
 pub fn tracing_mark_output(value_id: ValueId) {
     TRACING_GRAPH.lock().mark_output(value_id);

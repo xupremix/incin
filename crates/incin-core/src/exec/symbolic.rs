@@ -122,7 +122,9 @@ impl SymbolEnvironment {
 pub enum DimExpr {
     Const(usize),
     Symbol(SymbolId),
+    NamedSymbol { id: SymbolId, name: String },
     Add(Box<DimExpr>, Box<DimExpr>),
+    Sub(Box<DimExpr>, Box<DimExpr>),
     Mul(Box<DimExpr>, Box<DimExpr>),
     ExactDiv(Box<DimExpr>, Box<DimExpr>),
     Broadcast(Box<DimExpr>, Box<DimExpr>),
@@ -150,6 +152,14 @@ impl DimExpr {
                 (Self::Const(1), rhs) | (rhs, Self::Const(1)) => rhs,
                 (lhs, rhs) => Self::Mul(Box::new(lhs), Box::new(rhs)),
             },
+            Self::Sub(lhs, rhs) => match (*lhs, *rhs) {
+                (Self::Const(lhs), Self::Const(rhs)) => lhs
+                    .checked_sub(rhs)
+                    .map(Self::Const)
+                    .unwrap_or(Self::Unknown),
+                (lhs, Self::Const(0)) => lhs,
+                (lhs, rhs) => Self::Sub(Box::new(lhs), Box::new(rhs)),
+            },
             Self::ExactDiv(lhs, rhs) => match (*lhs, *rhs) {
                 (Self::Const(lhs), Self::Const(rhs)) if rhs != 0 => lhs
                     .checked_div(rhs)
@@ -171,11 +181,12 @@ impl DimExpr {
     pub fn evaluate(&self, symbols: &[(SymbolId, usize)]) -> Option<usize> {
         match self {
             Self::Const(value) => Some(*value),
-            Self::Symbol(id) => symbols
+            Self::Symbol(id) | Self::NamedSymbol { id, .. } => symbols
                 .iter()
                 .find(|(candidate, _)| candidate == id)
                 .map(|(_, value)| *value),
             Self::Add(lhs, rhs) => lhs.evaluate(symbols)?.checked_add(rhs.evaluate(symbols)?),
+            Self::Sub(lhs, rhs) => lhs.evaluate(symbols)?.checked_sub(rhs.evaluate(symbols)?),
             Self::Mul(lhs, rhs) => lhs.evaluate(symbols)?.checked_mul(rhs.evaluate(symbols)?),
             Self::ExactDiv(lhs, rhs) => {
                 let lhs = lhs.evaluate(symbols)?;
@@ -202,10 +213,13 @@ impl DimExpr {
     fn evaluate_env(&self, environment: &SymbolEnvironment) -> Option<usize> {
         match self {
             Self::Const(value) => Some(*value),
-            Self::Symbol(id) => environment.get(*id),
+            Self::Symbol(id) | Self::NamedSymbol { id, .. } => environment.get(*id),
             Self::Add(lhs, rhs) => lhs
                 .evaluate_env(environment)?
                 .checked_add(rhs.evaluate_env(environment)?),
+            Self::Sub(lhs, rhs) => lhs
+                .evaluate_env(environment)?
+                .checked_sub(rhs.evaluate_env(environment)?),
             Self::Mul(lhs, rhs) => lhs
                 .evaluate_env(environment)?
                 .checked_mul(rhs.evaluate_env(environment)?),

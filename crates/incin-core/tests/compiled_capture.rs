@@ -10,6 +10,8 @@ use incin_core::prelude::DTypeId;
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
+incin_core::dim!(Batch);
+
 #[test]
 fn test_eager_graph_capture_and_validation() {
     let mut graph = Graph::new();
@@ -70,4 +72,19 @@ fn typed_input_projection_keeps_static_axes_and_symbols_runtime_axes() {
     let expression = &graph.values[&input].shape_expr;
     assert!(matches!(expression.dims[0], DimExpr::Symbol(SymbolId(_))));
     assert_eq!(expression.dims[1], DimExpr::Const(768));
+}
+
+#[test]
+fn typed_named_projection_preserves_identity_and_shares_named_symbols() {
+    let mut graph = Graph::new();
+    let first = graph.add_value(vec![7, 768], DTypeId::F32, Some("first".into()));
+    let second = graph.add_value(vec![9, 768], DTypeId::F32, Some("second".into()));
+    graph.mark_input_with_shape::<incin::prelude::s![Batch, 768]>(first);
+    graph.mark_input_with_shape::<incin::prelude::s![Batch, 768]>(second);
+
+    let first_expr = &graph.values[&first].shape_expr.dims[0];
+    let second_expr = &graph.values[&second].shape_expr.dims[0];
+    assert!(matches!(first_expr, DimExpr::NamedSymbol { name, .. } if name == "Batch"));
+    assert_eq!(first_expr, second_expr);
+    assert_eq!(graph.values[&first].shape_expr.dims[1], DimExpr::Const(768));
 }

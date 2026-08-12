@@ -1,5 +1,6 @@
 use crate::exec::{ExecutionSite, OperationIdentity, ShapeExpr};
 use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -63,6 +64,10 @@ pub struct Graph {
     pub initializers: BTreeMap<ValueId, Vec<u8>>,
     next_value_id: usize,
     next_node_id: usize,
+    #[serde(default)]
+    named_symbols: BTreeMap<String, crate::exec::SymbolId>,
+    #[serde(default)]
+    next_symbol_id: u32,
 }
 
 mod string_key_map {
@@ -205,8 +210,13 @@ impl Graph {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
+        let shape_expr = intern_named_symbols(
+            S::symbolic_expr(value_id as u32 * 10_000 + 1),
+            &mut self.named_symbols,
+            &mut self.next_symbol_id,
+        );
         if let Some(value) = self.values.get_mut(&value_id) {
-            value.shape_expr = S::symbolic_expr(value_id as u32 * 10_000 + 1);
+            value.shape_expr = shape_expr;
         }
     }
 
@@ -214,5 +224,96 @@ impl Graph {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);
         }
+    }
+}
+
+fn intern_named_symbols(
+    expr: ShapeExpr,
+    names: &mut BTreeMap<String, crate::exec::SymbolId>,
+    next_id: &mut u32,
+) -> ShapeExpr {
+    fn dim(
+        expr: crate::exec::DimExpr,
+        names: &mut BTreeMap<String, crate::exec::SymbolId>,
+        next_id: &mut u32,
+    ) -> crate::exec::DimExpr {
+        use crate::exec::DimExpr;
+        match expr {
+            DimExpr::NamedSymbol { name, .. } => {
+                let id = if let Some(id) = names.get(&name) {
+                    *id
+                } else {
+                    let id = crate::exec::SymbolId(*next_id);
+                    *next_id = next_id.saturating_add(1);
+                    names.insert(name.clone(), id);
+                    id
+                };
+                DimExpr::NamedSymbol { id, name }
+            }
+            DimExpr::Add(lhs, rhs) => DimExpr::Add(
+                Box::new(dim(*lhs, names, next_id)),
+                Box::new(dim(*rhs, names, next_id)),
+            ),
+            DimExpr::Sub(lhs, rhs) => DimExpr::Sub(
+                Box::new(dim(*lhs, names, next_id)),
+                Box::new(dim(*rhs, names, next_id)),
+            ),
+            DimExpr::Mul(lhs, rhs) => DimExpr::Mul(
+                Box::new(dim(*lhs, names, next_id)),
+                Box::new(dim(*rhs, names, next_id)),
+            ),
+            DimExpr::ExactDiv(lhs, rhs) => DimExpr::ExactDiv(
+                Box::new(dim(*lhs, names, next_id)),
+                Box::new(dim(*rhs, names, next_id)),
+            ),
+            DimExpr::Broadcast(lhs, rhs) => DimExpr::Broadcast(
+                Box::new(dim(*lhs, names, next_id)),
+                Box::new(dim(*rhs, names, next_id)),
+            ),
+            other => other,
+        }
+    }
+
+    ShapeExpr {
+        rank: expr.rank,
+        dims: expr
+            .dims
+            .into_iter()
+            .map(|value| dim(value, names, next_id))
+            .collect(),
+        constraints: expr
+            .constraints
+            .into_iter()
+            .map(|constraint| match constraint {
+                crate::exec::Constraint::Equal { lhs, rhs } => crate::exec::Constraint::Equal {
+                    lhs: dim(lhs, names, next_id),
+                    rhs: dim(rhs, names, next_id),
+                },
+                crate::exec::Constraint::BroadcastCompatible { lhs, rhs } => {
+                    crate::exec::Constraint::BroadcastCompatible {
+                        lhs: dim(lhs, names, next_id),
+                        rhs: dim(rhs, names, next_id),
+                    }
+                }
+                crate::exec::Constraint::LowerBound { value, bound } => {
+                    crate::exec::Constraint::LowerBound {
+                        value: dim(value, names, next_id),
+                        bound,
+                    }
+                }
+                crate::exec::Constraint::UpperBound { value, bound } => {
+                    crate::exec::Constraint::UpperBound {
+                        value: dim(value, names, next_id),
+                        bound,
+                    }
+                }
+                crate::exec::Constraint::Divisible { value, divisor } => {
+                    crate::exec::Constraint::Divisible {
+                        value: dim(value, names, next_id),
+                        divisor,
+                    }
+                }
+            })
+            .collect(),
     }
 }

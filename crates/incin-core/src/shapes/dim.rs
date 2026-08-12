@@ -424,7 +424,7 @@ const fn static_exact_div(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent 
 }
 
 macro_rules! static_op_dim {
-    ( $name:ident $op:ident) => {
+    ( $name:ident $op:ident $symbolic:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
         pub struct $name<A, B>(pub core::marker::PhantomData<(A, B)>);
 
@@ -433,6 +433,14 @@ macro_rules! static_op_dim {
             const STATIC: StaticExtent = $op(A::STATIC, B::STATIC);
 
             type Arg = usize;
+
+            fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
+                crate::exec::DimExpr::$symbolic(
+                    alloc::boxed::Box::new(A::symbolic_expr(axis, base)),
+                    alloc::boxed::Box::new(B::symbolic_expr(axis, base.saturating_add(1))),
+                )
+                .simplify()
+            }
 
             fn resolve_arg(
                 arg: Self::Arg,
@@ -458,11 +466,11 @@ macro_rules! static_op_dim {
     };
 }
 
-static_op_dim!( AddDim static_add );
+static_op_dim!( AddDim static_add Add );
 
-static_op_dim!( CheckedSubDim static_sub );
+static_op_dim!( CheckedSubDim static_sub Sub );
 
-static_op_dim!( ExactDivDim static_exact_div);
+static_op_dim!( ExactDivDim static_exact_div ExactDiv);
 
 /// A dimension that pairs a semantic tag with a dimension extent (e.g. `NamedDim<Channels, ConstDim<64>>`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -496,6 +504,17 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     const STATIC: StaticExtent = Extent::STATIC;
     const NAME: Option<&'static str> = Some(Tag::NAME);
     type Arg = Extent::Arg;
+
+    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
+        match Extent::symbolic_expr(axis, base) {
+            crate::exec::DimExpr::Const(value) => crate::exec::DimExpr::Const(value),
+            crate::exec::DimExpr::Symbol(id) => crate::exec::DimExpr::NamedSymbol {
+                id,
+                name: alloc::string::String::from(Tag::NAME),
+            },
+            other => other,
+        }
+    }
 
     #[inline]
     fn matches_tag<Other: AxisTag>() -> bool {
@@ -532,6 +551,14 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
     };
 
     type Arg = usize;
+
+    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
+        crate::exec::DimExpr::Mul(
+            alloc::boxed::Box::new(A::symbolic_expr(axis, base)),
+            alloc::boxed::Box::new(B::symbolic_expr(axis, base.saturating_add(1))),
+        )
+        .simplify()
+    }
 
     fn resolve_arg(
         arg: Self::Arg,

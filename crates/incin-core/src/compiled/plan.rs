@@ -224,7 +224,11 @@ impl CompiledPlan {
 fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
     match expr {
         crate::exec::DimExpr::Symbol(id) => symbols.register(*id, None),
+        crate::exec::DimExpr::NamedSymbol { id, name } => {
+            symbols.register(*id, Some(name.clone()));
+        }
         crate::exec::DimExpr::Add(lhs, rhs)
+        | crate::exec::DimExpr::Sub(lhs, rhs)
         | crate::exec::DimExpr::Mul(lhs, rhs)
         | crate::exec::DimExpr::ExactDiv(lhs, rhs)
         | crate::exec::DimExpr::Broadcast(lhs, rhs) => {
