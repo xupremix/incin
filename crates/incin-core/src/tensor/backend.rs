@@ -338,7 +338,16 @@ pub trait Backend:
     /// [`NanPolicy`](crate::exec::NanPolicy), an ambient execution-policy axis
     /// every backend's walk reads, rather than a second method that also
     /// decided to abort the process on failure.
-    fn backward<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads>;
+    fn backward<K: DType>(
+        _t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Self::Grads> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "backward",
+            },
+        )))
+    }
 
     /// Runs backpropagation with an explicit output cotangent.
     fn backward_with<K: DType>(
@@ -356,26 +365,62 @@ pub trait Backend:
     /// returned by `backward`. `None` if `t` received no gradient (e.g. it
     /// wasn't reachable from the tensor `backward` was called on).
     fn get_grad<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>>;
+        _t: &<Self as StorageBackend>::Storage<K>,
+        _grads: &Self::Grads,
+    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
+        Ok(None)
+    }
 
     /// Serializes storage to a flat, dtype-native byte buffer (row-major,
     /// no header) --- the inverse of `from_bytes`.
-    fn to_bytes<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
+    fn to_bytes<K: DType>(
+        _t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<u8>> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "tensor readback",
+            },
+        )))
+    }
     /// Reconstructs storage from raw bytes produced by `to_bytes`,
     /// validating that `bytes.len()` matches `shape`/`dtype`'s expected size.
     fn from_bytes<K: DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>>;
+        _bytes: &[u8],
+        _shape: &[usize],
+        _dtype: DTypeDescriptor,
+        _device: &DeviceId,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "tensor creation from bytes",
+            },
+        )))
+    }
 
     /// Views a trainable variable as a plain tensor storage handle.
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<<Self as StorageBackend>::Storage<K>>;
+    fn var_as_tensor<K: DType>(
+        _var: &Self::RawVar,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "trainable variables",
+            },
+        )))
+    }
     /// Promotes a plain tensor storage handle into a trainable variable.
-    fn var_from_tensor<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::RawVar>;
+    fn var_from_tensor<K: DType>(
+        _t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Self::RawVar> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "trainable variables",
+            },
+        )))
+    }
     /// Overwrites a variable's value in place (e.g. an optimizer step),
     /// without changing its identity for gradient-tracking purposes.
     ///
@@ -384,9 +429,16 @@ pub trait Backend:
     /// bytes. Optimizers rely on that contract to roll back a multi-parameter
     /// commit when a later assignment fails.
     fn assign_var<K: DType>(
-        var: &mut Self::RawVar,
-        tensor: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<()>;
+        _var: &mut Self::RawVar,
+        _tensor: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<()> {
+        Err(crate::err::Error::Backend(BackendError::unsupported(
+            Self::BACKEND_NAME,
+            crate::exec::UnsupportedReason::MissingDeviceFeature {
+                feature: "trainable variables",
+            },
+        )))
+    }
 }
 
 /// Transfers storage and variables from one backend to a backend on `NewD`.
