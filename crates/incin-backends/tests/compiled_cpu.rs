@@ -4,13 +4,15 @@ use incin_backends::cpu::{CpuBuffer, CpuCompiledInvocation, CpuStorage};
 use incin_core::compiled::{
     ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
+use incin_core::dist::placement::Local;
 use incin_core::exec::OperationIdentity;
 use incin_core::exec::catalog::{
     AxisAttributes, CapturedDescriptor, Descriptor, LinearAttributes, LogicalTensorMeta,
     NoAttributes, ShapeAttributes, op,
 };
+use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
 use incin_core::graph::Graph;
-use incin_core::prelude::{DTypeId, DeviceId, OperationKind, ShapeBuf};
+use incin_core::prelude::{Cpu, DTypeId, DeviceId, OperationKind, ShapeBuf};
 
 fn meta(shape: &[usize]) -> LogicalTensorMeta {
     LogicalTensorMeta {
@@ -88,6 +90,48 @@ fn compiled_cpu_executes_captured_relu_through_canonical_descriptor() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].get(&[0]), 0.0);
     assert_eq!(outputs[0].get(&[1]), 3.5);
+}
+
+#[test]
+fn compiled_cpu_relu_matches_canonical_eager_dispatch() {
+    let input =
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![-2.0, 0.5, 3.5, -1.0]), vec![2, 2])
+            .unwrap();
+
+    let eager_context = ExecutionContext::new(incin_backends::cpu::CpuBackendImpl::<Cpu>::new());
+    let eager_handle =
+        TensorHandle::from_storage::<incin_backends::cpu::CpuBackendImpl<Cpu>, f32, Local>(&input);
+    let eager =
+        dispatch::execute::<op::Relu, _>(&eager_context, NoAttributes, &[eager_handle]).unwrap();
+
+    let descriptor =
+        Descriptor::<op::Relu>::infer_runtime(NoAttributes, vec![meta(&[2, 2])]).unwrap();
+    let captured = CapturedDescriptor::capture(descriptor.descriptor()).unwrap();
+    let mut graph = Graph::new();
+    let input_id = graph.add_value(vec![2, 2], DTypeId::F32, Some("input".into()));
+    let output_id = graph.add_value(vec![2, 2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input_id);
+    graph.mark_output(output_id);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Relu),
+        vec![input_id],
+        vec![output_id],
+        Default::default(),
+        Some(incin_core::graph::DescriptorPayload {
+            schema: captured.schema(),
+            payload: captured.payload().to_vec(),
+        }),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let compiled = CpuCompiledInvocation::new(vec![input]).run(&plan).unwrap();
+
+    for index in [[0, 0], [0, 1], [1, 0], [1, 1]] {
+        assert_eq!(eager.get(&index), compiled[0].get(&index));
+    }
 }
 
 #[test]
