@@ -11,7 +11,7 @@ use incin_core::exec::catalog::CreationAttributes;
 use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
-use incin_core::prelude::{BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
+use incin_core::prelude::{Backend, BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
 use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -79,6 +79,18 @@ impl StorageBackend for CompanyBackend {
         _storage: &Self::Storage<K>,
     ) -> &incin_core::backend_authoring::TensorMeta {
         unreachable!("the custom operation test has no input storage")
+    }
+}
+
+impl Backend for CompanyBackend {
+    type RawVar = ();
+    type Grads = ();
+    type InnerBackend = Self;
+
+    fn shape<K: incin_core::prelude::DType>(
+        _storage: &<Self as StorageBackend>::Storage<K>,
+    ) -> ShapeBuf {
+        ShapeBuf::SCALAR
     }
 }
 
