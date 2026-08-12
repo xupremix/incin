@@ -1,8 +1,8 @@
 use incin::backend_authoring::{
-    Backend, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationIdentity,
-    OperationKey, StorageBackend,
+    Backend, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
+    StorageBackend,
 };
-use incin::prelude::{BackendError, Cpu, Device, Shape};
+use incin::prelude::{BackendError, Cpu, Shape};
 use incin_backends::cpu::{CpuBackendImpl, CpuStorage};
 
 #[derive(Debug, Clone)]

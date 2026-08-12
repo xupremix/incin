@@ -1136,6 +1136,10 @@ pub enum DescriptorCaptureError {
         expected: OperationKind,
         actual: OperationKind,
     },
+    CustomIdentity {
+        expected: OperationKind,
+        actual: OperationKey,
+    },
     Schema {
         expected: u32,
         actual: u32,
@@ -1151,6 +1155,10 @@ impl fmt::Display for DescriptorCaptureError {
             Self::Identity { expected, actual } => write!(
                 f,
                 "captured descriptor identity {actual} does not match {expected}"
+            ),
+            Self::CustomIdentity { expected, actual } => write!(
+                f,
+                "captured descriptor identity {actual:?} does not match builtin {expected}"
             ),
             Self::Schema { expected, actual } => write!(
                 f,
@@ -1206,14 +1214,20 @@ impl CapturedDescriptor {
         let descriptor: Descriptor<O> =
             postcard::from_bytes(&self.payload).map_err(DescriptorCaptureError::Decode)?;
         if descriptor.identity != crate::exec::OperationIdentity::Builtin(O::ID) {
-            let actual = match descriptor.identity {
-                crate::exec::OperationIdentity::Builtin(operation) => operation,
-                crate::exec::OperationIdentity::Custom(_) => O::ID,
+            return match descriptor.identity {
+                crate::exec::OperationIdentity::Builtin(actual) => {
+                    Err(DescriptorCaptureError::Identity {
+                        expected: O::ID,
+                        actual,
+                    })
+                }
+                crate::exec::OperationIdentity::Custom(actual) => {
+                    Err(DescriptorCaptureError::CustomIdentity {
+                        expected: O::ID,
+                        actual,
+                    })
+                }
             };
-            return Err(DescriptorCaptureError::Identity {
-                expected: O::ID,
-                actual,
-            });
         }
         Ok(descriptor)
     }
@@ -5429,7 +5443,9 @@ mod tests {
         tampered.payload = postcard::to_allocvec(&forged).unwrap();
         assert!(matches!(
             tampered.decode::<op::Conv2dExact>(),
-            Err(DescriptorCaptureError::Identity { .. }) | Err(DescriptorCaptureError::Decode(_))
+            Err(DescriptorCaptureError::Identity { .. })
+                | Err(DescriptorCaptureError::CustomIdentity { .. })
+                | Err(DescriptorCaptureError::Decode(_))
         ));
     }
 

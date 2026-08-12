@@ -3,7 +3,7 @@ use incin::backend_authoring::operations::{
 };
 use incin::backend_authoring::{
     Alignment, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
-    ExecutionRequest, Operation, OperationIdentity, OperationKey, ShapeBuf, StorageBackend,
+    ExecutionRequest, Operation, OperationKey, ShapeBuf, StorageBackend,
     SupportLevel, TensorBackend, TensorMeta,
 };
 use incin::prelude::{
