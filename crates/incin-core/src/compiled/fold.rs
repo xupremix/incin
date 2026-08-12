@@ -8,12 +8,28 @@ use crate::graph::ValueId;
 use crate::prelude::{Error, Result};
 
 /// A bounded shape bucket for dynamic shape alignment.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ShapeBucket {
     /// Bounded minimum shape dimensions.
     pub min_shape: Vec<usize>,
     /// Bounded maximum shape dimensions.
     pub max_shape: Vec<usize>,
+}
+
+#[derive(serde::Deserialize)]
+struct WireShapeBucket {
+    min_shape: Vec<usize>,
+    max_shape: Vec<usize>,
+}
+
+impl<'de> serde::Deserialize<'de> for ShapeBucket {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let wire = <WireShapeBucket as serde::Deserialize>::deserialize(deserializer)?;
+        Self::new(wire.min_shape, wire.max_shape).map_err(D::Error::custom)
+    }
 }
 
 impl ShapeBucket {

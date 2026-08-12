@@ -57,3 +57,9 @@ fn shape_bucket_rejects_invalid_bounds() {
     assert!(ShapeBucket::new(vec![1], vec![1, 2]).is_err());
     assert!(ShapeBucket::new(vec![3], vec![2]).is_err());
 }
+
+#[test]
+fn shape_bucket_deserialization_rejects_invalid_bounds() {
+    let malformed = serde_json::json!({"min_shape": [3], "max_shape": [2]});
+    assert!(serde_json::from_value::<ShapeBucket>(malformed).is_err());
+}
