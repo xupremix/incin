@@ -28,7 +28,7 @@ fn make_test_plan_with_nodes(node_count: usize) -> CompiledPlan {
 
 #[test]
 fn test_bounded_plan_tuning_evaluation() {
-    // Build a plan with 10 nodes — node_count drives the baseline latency proxy
+    // Build a plan with 10 nodes for the unavailable-measurement check.
     let plan = make_test_plan_with_nodes(10);
 
     let tuner = BoundedPlanTuner::new(10, 1.15);

@@ -22,7 +22,7 @@ pub struct PlanTuningReport {
     pub is_bounded: bool,
 }
 
-/// Bounded plan tuner that benchmarks candidate kernel placements and execution schedules.
+/// Bounded plan tuner interface for measured kernel placements and schedules.
 #[derive(Debug, Clone)]
 pub struct BoundedPlanTuner {
     pub max_iterations: usize,
