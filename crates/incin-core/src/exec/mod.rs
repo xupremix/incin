@@ -96,7 +96,7 @@ pub use precision::{
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,
 };
 pub use proof::{ProofLevel, Validated};
-pub use rule::{MatMulRule, ReshapeRule, ShapeRule};
+pub use rule::{MatMulRule, ReduceKeepRule, ReduceRule, ReshapeRule, ShapeRule};
 
 pub use request::TensorHandle;
 pub use spec::{AxisSet, DescriptorSchemaVersion, ExecutionDescriptor, ReduceOp};

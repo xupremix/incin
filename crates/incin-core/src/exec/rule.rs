@@ -10,7 +10,7 @@ use super::proof::{ProofLevel, Validated};
 use super::spec::ExecutionDescriptor;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
-use crate::shapes::idx::StaticCursor;
+use crate::shapes::idx::{AxisSelector, StaticCursor};
 use crate::shapes::reshape::ReshapeShape;
 use crate::shapes::shape::{DynShape, Shape, ShapeValue};
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
@@ -61,6 +61,18 @@ fn agree(
         }
     }
     Ok(())
+}
+
+fn cursor_axis<C: StaticCursor>(rank: usize) -> Result<usize, ShapeError> {
+    AxisSelector::new(&[C::INDEX])
+        .normalize(rank)
+        .map_err(|error| match error {
+            crate::err::Error::Shape(error) => error,
+            _ => ShapeError::InvalidAxis { axis: rank, rank },
+        })?
+        .into_iter()
+        .next()
+        .ok_or(ShapeError::InvalidAxis { axis: rank, rank })
 }
 
 /// Canonical batched matrix multiplication shape rule.
@@ -182,6 +194,13 @@ where
         operands: &Self::Operands,
         args: Self::Args,
     ) -> Result<Validated<Self::Descriptor>, ShapeError> {
+        let expected_axis = cursor_axis::<C>(operands.rank())?;
+        if args.axis != expected_axis {
+            return Err(ShapeError::InvalidAxis {
+                axis: args.axis,
+                rank: operands.rank(),
+            });
+        }
         let expected = S::reduce_shape(operands).map_err(|error| match error {
             crate::err::Error::Shape(error) => error,
             _ => ShapeError::TargetShapeRejected {
@@ -239,6 +258,13 @@ where
         operands: &Self::Operands,
         args: Self::Args,
     ) -> Result<Validated<Self::Descriptor>, ShapeError> {
+        let expected_axis = cursor_axis::<C>(operands.rank())?;
+        if args.axis != expected_axis {
+            return Err(ShapeError::InvalidAxis {
+                axis: args.axis,
+                rank: operands.rank(),
+            });
+        }
         let descriptor = Descriptor::<op::SumKeepDim>::infer_runtime(
             args,
             alloc::vec![LogicalTensorMeta {

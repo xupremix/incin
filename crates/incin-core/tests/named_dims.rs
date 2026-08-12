@@ -2,6 +2,8 @@
 
 extern crate incin_core as incin;
 
+use incin_core::exec::catalog::AxisAttributes;
+use incin_core::exec::{ReduceKeepRule, ReduceRule, ShapeRule};
 use incin_core::prelude::*;
 use incin_core::shapes::StaticExtent;
 use incin_core::shapes::SwapAt;
@@ -62,6 +64,21 @@ fn structural_sum_rules_preserve_typed_outputs() {
 
     let kept = tensor.sum_keepdim::<Next<Here>>().unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
+}
+
+#[test]
+fn reduction_rules_reject_axes_that_do_not_match_the_structural_cursor() {
+    type S = s![Batch: 2, Channels: 2];
+    let dims = ShapeBuf::from_slice(&[2, 2]);
+
+    assert!(
+        <ReduceRule as ShapeRule<(S, Next<Here>)>>::lower(&dims, AxisAttributes { axis: 0 })
+            .is_err()
+    );
+    assert!(
+        <ReduceKeepRule as ShapeRule<(S, Next<Here>)>>::lower(&dims, AxisAttributes { axis: 0 },)
+            .is_err()
+    );
 }
 
 #[test]
