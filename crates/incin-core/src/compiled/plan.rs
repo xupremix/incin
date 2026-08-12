@@ -44,7 +44,7 @@ pub struct CompileOptions {
 
 impl CompileOptions {
     /// Creates default compilation options.
-    #[must_use]
+    #[must_use = "compiled plans must be handled or reported"]
     pub const fn new() -> Self {
         Self {
             fusion: FusionPolicy::Enabled,
@@ -108,23 +108,29 @@ pub struct CompiledPlan {
 
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
-    #[must_use]
-    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Self {
+    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
+        graph.validate()?;
         let input_guards = graph
             .inputs
             .iter()
-            .filter_map(|&in_id| {
-                graph
-                    .value(in_id)
-                    .map(|value| ShapeGuard::new(in_id, value.shape.clone(), value.dtype))
+            .map(|&in_id| {
+                graph.value(in_id).map_or_else(
+                    || {
+                        Err(Error::Msg(alloc::format!(
+                            "compiled input {} has no metadata",
+                            in_id
+                        )))
+                    },
+                    |value| Ok(ShapeGuard::new(in_id, value.shape.clone(), value.dtype)),
+                )
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
-        Self {
+        Ok(Self {
             graph,
             options,
             input_guards,
-        }
+        })
     }
 
     /// Validates dynamic guards for provided inputs.

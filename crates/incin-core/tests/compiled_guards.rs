@@ -19,7 +19,7 @@ fn test_compiled_plan_construction_and_guards() {
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let options = CompileOptions::default();
-    let plan = CompiledPlan::compile(captured, options);
+    let plan = CompiledPlan::compile(captured, options).expect("plan should compile");
 
     assert_eq!(plan.input_guards.len(), 2);
     assert!(plan.verify_input(0, &[2, 4], DTypeId::F32).is_ok());

@@ -15,7 +15,7 @@ fn make_test_plan() -> CompiledPlan {
     graph.mark_output(y);
     graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
-    CompiledPlan::compile(captured, CompileOptions::new())
+    CompiledPlan::compile(captured, CompileOptions::new()).expect("plan should compile")
 }
 
 fn current_version() -> ArtifactVersion {
