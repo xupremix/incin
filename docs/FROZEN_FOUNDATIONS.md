@@ -41,12 +41,12 @@ treated as settled.
 
 | Surface | Why it still moves |
 |---|---|
-| The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Thirteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
+| The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Sixteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
 | The nine operation-family traits | They remain only as backend-local implementation adapters and special execution sites. The stable tensor surface no longer depends on them |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot state the tight per-operand pair directly, and no longer needs to: `INDEX_AND_F32_DTYPES` states the *union* the row can honestly claim, the same trick `descriptor_min_rank` already used for rank, and the descriptor's own per-operand contract (already `TypedContract`/hand-cased in `validate`, not something this added) rejects the wrong combination before any capability query runs. Both operations that needed it — `embedding` and `cross_entropy_loss` — are migrated on that technique, so no struct change to `CapabilityRule` was needed or made |
 | `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
-| `Execute`'s reachable sites | Thirteen operations have an `ExecutionSite` the trait cannot carry: they mutate through an operand, produce storage on another backend, or act on autograd state. `ExecutionSite::blocking_reason` states which |
+| `Execute`'s reachable sites | Sixteen operations have an `ExecutionSite` the trait cannot carry: they mutate through an operand, produce storage on another backend, or act on autograd state. `ExecutionSite::blocking_reason` states which |
 
 ## Next steps, in dependency order
 
@@ -54,7 +54,7 @@ Each step is blocked by the one above it, and the reason is stated rather than
 implied.
 
 The canonical CPU migration is complete for all 158 backend-executable
-operations. Thirteen catalog entries remain at explicit non-backend execution
+operations. Sixteen catalog entries remain at explicit non-backend execution
 sites and are not counted as missing kernel executors.
 
 The dtype-set blocker is closed. `embedding` and `cross_entropy_loss` were the
@@ -72,7 +72,7 @@ executor enforcing whichever operand the union cannot pin down alone. No
 2. **Add a distribution registry**, mapping a name and a parameter buffer back
    to a sampler, which is the whole of what `sample` needs.
 3. **Widen `Execute` to the sites it cannot reach**, or split them off into a
-   contract that can. Thirteen operations are not pending migrations at all,
+   contract that can. Sixteen operations are not pending migrations at all,
    and counting them as such overstates the remaining work by roughly 30%.
 4. **Remove the nine supertraits from `Backend`** and bound each stable tensor
    method by the capability it actually uses. This is the step that ends the

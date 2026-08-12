@@ -148,7 +148,10 @@ fn main() -> anyhow::Result<()> {
             println!(
                 "Node {} ({}): x={:.1}, y={:.1}, z={:.1} -> px={:.1}, py={:.1}",
                 node.id,
-                node.op.as_str(),
+                match &node.operation {
+                    incin_core::exec::OperationIdentity::Builtin(operation) => operation.name(),
+                    incin_core::exec::OperationIdentity::Custom(key) => key.name.as_ref(),
+                },
                 x,
                 y,
                 z,

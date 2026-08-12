@@ -283,7 +283,7 @@ completion record.
 
 ### What has an executor today, and what does not
 
-`Execute` cannot carry every operation — thirteen sit at a non-`Kernel`
+`Execute` cannot carry every operation. Sixteen sit at a non-backend
 `ExecutionSite` (`Mutation` — writes through an operand, e.g.
 `Tensor::add_`; `DeviceTransfer` — produces storage on another backend;
 `GraphState` — acts on autograd state, e.g. `backward`) and are excluded from
@@ -534,7 +534,7 @@ queued.
    matrices the current `RecurrentAttributes` cannot name).
 2. Add a distribution registry mapping a name and parameter buffer to a
    sampler — unblocks `sample`.
-3. Widen `Execute` to reach the thirteen non-`Kernel`-sited operations, or
+3. Widen `Execute` to reach the sixteen non-backend-sited operations, or
    split them into a contract that can carry them.
 4. **Remove the nine operation-family supertraits from `Backend`**, bounding
    each stable tensor method by only the capability it uses. This is the step
@@ -555,7 +555,7 @@ queued.
   `DispatchGrads` currently have no Metal variant, so a `Dyn`-device
   operation on Apple Silicon returns `BackendUnavailable` even where Metal
   itself implements the operation.
-- `graph::OpType` unification (91 hand-maintained variants) and the
+- canonical graph operation metadata and the
   `AxisContract` step referenced in `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.
 - Extend the `S::STATIC_NUMEL` specialization in §6 beyond the CPU creation
   family to other shape-sensitive kernels, now that one real, measured

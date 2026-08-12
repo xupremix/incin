@@ -151,7 +151,8 @@ All types are re-exported through `incin_core::prelude`.
 
 ```rust
 use incin_core::prelude::*;
-use incin_core::graph::{Graph, OpType};
+use incin_core::graph::Graph;
+use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
 let mut graph = Graph::new();
@@ -159,7 +160,7 @@ let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
 let y = graph.add_value(vec![4], DTypeId::F32, Some("y".into()));
 graph.mark_input(x);
 graph.mark_output(y);
-graph.add_node(OpType::Relu, vec![x], vec![y], BTreeMap::new());
+graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
 
 let captured = CapturedGraph::capture(&graph)?;
 let plan = CompiledPlan::compile(captured, CompileOptions::new());

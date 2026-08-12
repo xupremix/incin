@@ -1,4 +1,5 @@
 use alloc::collections::BTreeMap;
+use incin_core::exec::{OperationIdentity, catalog::catalog_entry};
 use incin_telemetry::events::{Event, GraphSnapshotEvent};
 use incin_viz_plugin_api::event::{KeyCode, PanelEvent, PanelMouseEvent};
 use incin_viz_plugin_api::panel::Panel;
@@ -22,6 +23,15 @@ pub enum ViewMode {
     Canvas3D,
     /// Canvas2 d.
     Canvas2D,
+}
+
+fn operation_label(operation: &OperationIdentity) -> String {
+    match operation {
+        OperationIdentity::Builtin(operation) => catalog_entry(*operation)
+            .map(|entry| entry.name.to_string())
+            .unwrap_or_else(|| operation.name().to_string()),
+        OperationIdentity::Custom(key) => format!("{}/{}@{}", key.namespace, key.name, key.version),
+    }
 }
 
 /// Graph module list panel.
@@ -175,7 +185,7 @@ impl Panel for GraphModuleListPanel {
                 .map(|m| {
                     Row::new(vec![
                         Cell::from(m.id.to_string()),
-                        Cell::from(m.op.as_str().to_string()),
+                        Cell::from(operation_label(&m.operation)),
                         Cell::from(format!("{:?}", m.inputs)),
                     ])
                 })
@@ -282,11 +292,11 @@ impl Panel for GraphModuleListPanel {
                     for node in &snapshot.graph.nodes {
                         if let Some(&(x, y, z)) = positions.get(&node.id) {
                             let (px, py) = project(x, y, z);
-                            let color = match node.op.as_str() {
-                                "MatMul" | "Gemm" => Color::Yellow,
-                                "Relu" | "Gelu" => Color::Green,
-                                "Add" | "Sub" | "Mul" => Color::Blue,
-                                "Transpose" | "Reshape" => Color::Magenta,
+                            let color = match operation_label(&node.operation).as_str() {
+                                "matmul_exact" | "batched_matmul" => Color::Yellow,
+                                "relu" | "gelu" => Color::Green,
+                                "add" | "sub" | "mul" => Color::Blue,
+                                "transpose_exact" | "reshape_exact" => Color::Magenta,
                                 _ => Color::Cyan,
                             };
                             ctx.draw(&Points {
@@ -319,7 +329,7 @@ impl Panel for GraphModuleListPanel {
                                     String::new()
                                 };
 
-                                let op_label = format!("[ {} ]", node.op.as_str());
+                                let op_label = format!("[ {} ]", operation_label(&node.operation));
                                 let label_y_offset = max_abs_y * 0.06;
                                 let label_x_offset = -(max_abs_x * 0.01 * op_label.len() as f64);
 

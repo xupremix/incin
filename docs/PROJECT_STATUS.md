@@ -30,9 +30,9 @@ verified product capability.
 | Invariant-bearing values and allocation arithmetic | **Complete and dynamically verified** for the FND-002 opacity, checked-construction, serialization, feature, compile-contract, Clippy, package, workspace, doctest, and rustdoc gates | The workspace-wide formatting baseline still reports pre-existing drift outside the task diff; accelerator execution remains hardware-blocked | Stable values plus backend-authoring/experimental internals | `audit-evidence/FND-002/` | FND-003 typed failure and rollback contracts |
 | Typed failures, scalar conversion, and optimizer rollback | **Complete and dynamically verified** for FND-003 | Legacy free-form compatibility variants remain but are not used for new foundation paths; operator outputs are intentionally source-breaking `Result` values | Stable root/prelude plus backend contracts | `audit-evidence/FND-003/` | FND-004 operation semantics |
 | Canonical operation semantics and descriptors | **Complete and dynamically verified** for FND-004: 174 exact identities declared once, typed `Descriptor<O>` per operation, per-operand rank contracts, fail-closed output inference, and exact-identity capability resolution | Execution is not migrated; this task freezes semantics only | Backend-authoring contract plus generated docs | `audit-evidence/FND-004/` | FND-005 CPU migration |
-| Canonical execution path | **Complete and dynamically verified** for FND-005: `exec::dispatch` validates against real storage metadata, queries the exact capability row, derives output metadata, and dispatches to `Execute<Descriptor<O>>` | Thirteen explicit non-backend execution sites still need separate contracts | Backend-authoring internals | `audit-evidence/FND-005/` | Future special execution contracts |
+| Canonical execution path | **Complete and dynamically verified** for FND-005: `exec::dispatch` validates against real storage metadata, queries the exact capability row, derives output metadata, and dispatches to `Execute<Descriptor<O>>` | Sixteen explicit non-backend execution sites are derived from `OPERATION_CATALOG` and carried into captured graph nodes | Backend-authoring internals | `audit-evidence/FND-005/` | Future special execution contracts |
 | CPU eager tensor execution | **Complete for the backend-executable catalog**: 158 of 158 operations execute canonically, with forward and gradient parity coverage | Recurrent and distribution execution sites remain outside the backend-executable denominator | Stable CPU surface | `audit-evidence/FND-005/cpu-migration-status.md` | Future special execution contracts |
-| Typed descriptor execution | **Complete** for backend-executable operations | Thirteen catalog entries sit at an `ExecutionSite` the `Execute` trait cannot carry at all | Backend-authoring/experimental internals | `audit-evidence/FND-005/summary.md` | Future special execution contracts |
+| Typed descriptor execution | **Complete** for backend-executable operations | Sixteen catalog entries sit at an `ExecutionSite` the `Execute` trait cannot carry at all | Backend-authoring/experimental internals | `audit-evidence/FND-005/summary.md` | Future special execution contracts |
 | Compiled execution | **Structural prototype** for capture, plans, and artifacts | No validated executable/run path | `experimental::compiled`, opt-in `compiled` feature | Containment test and compiled feature check | Deferred compiled CPU vertical slice |
 | Constant folding and weight prepacking | **Intentionally unsupported** with typed errors | No transformations are implemented | `experimental::compiled` | `fnd000-test-compiled-containment.txt` | Deferred until canonical CPU descriptors |
 | ONNX macro import | **Partial** stateless eager expansion | No initializers, control flow, custom domains, attributes, or broad opset coverage | `experimental::{model, import_model}` | Macro unit tests and FND-001 facade contracts | Real ONNX initializer/state loading (deferred) |
@@ -48,14 +48,14 @@ task is not started until the prior task's acceptance gate is truthfully met.
 FND-000 through FND-005 have passed their archived acceptance gates. FND-005 is
 complete for the backend-executable catalog: stable CPU tensor methods use
 exact descriptor execution, and 158 of 158 backend-executable operations have
-canonical CPU executors. Thirteen catalog entries remain at explicit
+canonical CPU executors. Sixteen catalog entries remain at explicit
 non-backend execution sites, each with a recorded reason.
 `audit-evidence/FND-005/summary.md` records what was delivered and what
 remains, and `audit-evidence/FND-005/cpu-migration-status.md` is generated from
 the registrations so the migrated count cannot be overstated by hand.
 
 The denominator is the backend-executable subset rather than the whole catalog.
-Thirteen operations sit at an `ExecutionSite` that `Execute` cannot carry: they
+Sixteen operations sit at an `ExecutionSite` that `Execute` cannot carry: they
 write through an operand, produce storage on another backend, or act on
 autograd state. Those need the execution contract changed before an executor
 could exist, so counting them as pending migrations would overstate the
