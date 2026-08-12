@@ -447,6 +447,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
+        let validated = <crate::exec::ReshapeRule as crate::exec::ShapeRule<(S, S2)>>::lower(
+            &(self.shape_buf_value(), new_shape_field.clone()),
+            (),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let new_shape_field = validated.into_descriptor().output_shape().cloned().ok_or(
+            crate::prelude::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
+                operation: OperationKind::Reshape,
+                rank: S2::RANK.unwrap_or(0),
+            }),
+        )?;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
             .map_err(crate::prelude::Error::Shape)?;
 

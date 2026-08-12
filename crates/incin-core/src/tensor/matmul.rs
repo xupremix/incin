@@ -343,8 +343,22 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         B: Execute<op::MatMulExact> + crate::exec::Capabilities,
         <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     {
-        let output_dims = S1::output_shape(&self.shape_buf_value(), &rhs.shape_buf_value())
-            .map_err(crate::prelude::Error::Shape)?;
+        let validated = <crate::exec::MatMulRule as crate::exec::ShapeRule<(S1, S2)>>::lower(
+            &(self.shape_buf_value(), rhs.shape_buf_value()),
+            (),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let descriptor = validated.into_descriptor();
+        let output_dims =
+            descriptor
+                .output_shape()
+                .cloned()
+                .ok_or(crate::prelude::Error::Shape(
+                    crate::shapes::ShapeError::TargetShapeRejected {
+                        operation: crate::shapes::OperationKind::MatMul,
+                        rank: 0,
+                    },
+                ))?;
         let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(output_dims)
             .map_err(crate::prelude::Error::Shape)?;
         let joined_grad =

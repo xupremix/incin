@@ -55,6 +55,8 @@ pub mod precision;
 pub mod proof;
 /// Checked, type-erased inputs for descriptor execution.
 pub mod request;
+/// Typed frontend shape rules that mint validated exact descriptors.
+pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
 /// The backend-neutral autograd tape.
@@ -94,6 +96,7 @@ pub use precision::{
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,
 };
 pub use proof::{ProofLevel, Validated};
+pub use rule::{MatMulRule, ReshapeRule, ShapeRule};
 
 pub use request::TensorHandle;
 pub use spec::{AxisSet, DescriptorSchemaVersion, ExecutionDescriptor, ReduceOp};
