@@ -32,7 +32,7 @@ use super::CpuBackendImpl;
 use super::ops::elementwise::{
     canonical_abs, canonical_add_scalar, canonical_atan2, canonical_clamp, canonical_exp,
     canonical_fmod, canonical_mul_scalar, canonical_neg, canonical_powf, canonical_relu,
-    canonical_remainder, canonical_softmax, canonical_step, canonical_unary,
+    canonical_remainder, canonical_softmax, canonical_sqrt, canonical_step, canonical_unary,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1076,7 +1076,6 @@ unary_float_executors![
     (Mish, mish),
     (Elu, elu),
     (Gelu, gelu),
-    (Sqrt, sqrt),
     (Log, log),
     (Tanh, tanh),
     (Sigmoid, sigmoid),
@@ -1095,6 +1094,24 @@ unary_float_executors![
     (Trunc, trunc),
     (Frac, frac),
 ];
+
+impl<D: Device> Execute<op::Sqrt> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::Sqrt, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Sqrt;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        canonical_sqrt(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
 
 impl<D: Device> Execute<op::Abs> for CpuBackendImpl<D> {
     type Output = CpuStorage;
