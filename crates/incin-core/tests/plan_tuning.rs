@@ -54,3 +54,11 @@ fn test_bounded_plan_tuning_empty_graph_does_not_panic() {
     assert!(report.is_bounded);
     assert!(report.baseline_latency_us > 0.0);
 }
+
+#[test]
+fn test_tuning_target_rejects_insufficient_analytical_gain() {
+    let plan = make_test_plan_with_nodes(1);
+    let report = BoundedPlanTuner::new(5, 100.0).tune_plan(&plan);
+    assert_eq!(report.tuned_latency_us, report.baseline_latency_us);
+    assert_eq!(report.speedup_ratio, 1.0);
+}

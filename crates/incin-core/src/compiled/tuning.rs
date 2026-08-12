@@ -1,4 +1,4 @@
-//! Bounded plan tuning measured against a single-device baseline (`DST-013`).
+//! Bounded analytical plan scoring (`DST-013`).
 
 use crate::compiled::CompiledPlan;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ pub struct PlanTuningReport {
     pub is_bounded: bool,
 }
 
-/// Bounded plan tuner that benchmarks candidate kernel placements and execution schedules.
+/// Bounded analytical scorer for candidate kernel placements.
 #[derive(Debug, Clone)]
 pub struct BoundedPlanTuner {
     pub max_iterations: usize,
@@ -28,8 +28,10 @@ impl BoundedPlanTuner {
         }
     }
 
-    /// Tunes execution parameters for a given plan within defined iteration bounds.
-    /// Uses the node count as a workload proxy for a single-device baseline.
+    /// Scores a plan within defined iteration bounds.
+    ///
+    /// This does not execute kernels and must not be presented as a measured
+    /// performance result.
     pub fn tune_plan(&self, plan: &CompiledPlan) -> PlanTuningReport {
         // Baseline latency: proportional to op count as a single-GPU proxy (microseconds)
         let node_count = plan.graph.node_count().max(1) as f64;
@@ -47,6 +49,15 @@ impl BoundedPlanTuner {
             }
         }
 
+        let speedup = if best_latency > 0.0 {
+            baseline / best_latency
+        } else {
+            1.0
+        };
+
+        if speedup < self.min_speedup_target {
+            best_latency = baseline;
+        }
         let speedup = if best_latency > 0.0 {
             baseline / best_latency
         } else {

@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use crate::compiled::capture::{CapturedGraph, CapturedNode};
+use crate::compiled::capture::CapturedGraph;
 use crate::graph::OpType;
 use crate::prelude::Result;
 
@@ -71,38 +71,12 @@ impl FusionPass {
     }
 
     /// Identifies fusion candidates in a captured graph.
+    ///
+    /// Fusion is disabled until the compiled IR can represent the complete
+    /// ordered operation sequence and all consumer inputs.
     pub fn find_candidates(&self, graph: &CapturedGraph) -> Vec<FusionCandidate> {
-        let mut candidates = Vec::new();
-
-        for (i, node) in graph.nodes.iter().enumerate() {
-            if i + 1 >= graph.nodes.len() {
-                break;
-            }
-            let next = &graph.nodes[i + 1];
-
-            // Check that the producer's output is consumed by the next node only
-            let producer_outputs = &node.outputs;
-            let consumer_inputs = &next.inputs;
-
-            // Output is used as input to the next and not a graph output
-            let is_chained = producer_outputs
-                .iter()
-                .any(|out_id| consumer_inputs.contains(out_id));
-            let output_is_graph_output = producer_outputs
-                .iter()
-                .any(|out_id| graph.outputs.contains(out_id));
-
-            if is_chained && !output_is_graph_output && Self::can_fuse(node.op, next.op) {
-                candidates.push(FusionCandidate {
-                    producer_idx: i,
-                    consumer_idx: i + 1,
-                    producer_op: node.op,
-                    consumer_op: next.op,
-                });
-            }
-        }
-
-        candidates
+        let _ = graph;
+        Vec::new()
     }
 
     /// Applies fusion candidates to produce a new [`CapturedGraph`] with fused kernels.
@@ -111,58 +85,8 @@ impl FusionPass {
         graph: &CapturedGraph,
         candidates: &[FusionCandidate],
     ) -> Result<(CapturedGraph, Vec<FusedKernel>)> {
-        if candidates.is_empty() {
-            return Ok((graph.clone(), Vec::new()));
-        }
-
-        let fused_pairs: alloc::collections::BTreeSet<usize> =
-            candidates.iter().map(|c| c.consumer_idx).collect();
-
-        let mut new_nodes: Vec<CapturedNode> = Vec::new();
-        let mut kernels: Vec<FusedKernel> = Vec::new();
-
-        let mut i = 0;
-        while i < graph.nodes.len() {
-            // Check if this node is a fusion consumer (producer was already merged)
-            if fused_pairs.contains(&i) {
-                // Already merged — skip, it was incorporated into the previous kernel
-                i += 1;
-                continue;
-            }
-
-            // Check if this node is a fusion producer
-            let fusion = candidates.iter().find(|c| c.producer_idx == i);
-            if let Some(cand) = fusion {
-                let producer = &graph.nodes[cand.producer_idx];
-                let consumer = &graph.nodes[cand.consumer_idx];
-                // Fused node: takes producer's inputs, produces consumer's outputs
-                new_nodes.push(CapturedNode {
-                    id: producer.id,
-                    op: producer.op,
-                    identity: producer.identity.clone(),
-                    attributes: producer.attributes.clone(),
-                    inputs: producer.inputs.clone(),
-                    outputs: consumer.outputs.clone(),
-                });
-                kernels.push(FusedKernel {
-                    source_node_indices: alloc::vec![cand.producer_idx, cand.consumer_idx],
-                    primary_op: producer.op,
-                });
-                i += 1;
-                continue;
-            }
-
-            new_nodes.push(graph.nodes[i].clone());
-            i += 1;
-        }
-
-        let fused_graph = CapturedGraph {
-            values: graph.values.clone(),
-            inputs: graph.inputs.clone(),
-            outputs: graph.outputs.clone(),
-            nodes: new_nodes,
-        };
-
-        Ok((fused_graph, kernels))
+        let _ = candidates;
+        graph.validate()?;
+        Ok((graph.clone(), Vec::new()))
     }
 }
