@@ -390,6 +390,23 @@ pub(crate) fn canonical_log(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_tanh(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Tanh, t)?;
+    let out_capture = out.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                g * (1.0 - o * o)
+            })?;
+            Ok(vec![grad])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -815,23 +832,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn tanh<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Tanh, t)?;
-
-        // tanh'(x) = 1 - out^2 (output-based).
-        let out_capture = out.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                    let deriv = 1.0 - o * o;
-                    g * deriv
-                })?;
-                Ok(vec![grad])
-            }),
-        });
-        Ok(out)
+        canonical_tanh(t)
     }
 
     /// `sigmoid`.
