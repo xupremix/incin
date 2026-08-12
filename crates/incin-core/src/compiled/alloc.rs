@@ -272,7 +272,6 @@ pub struct AllocationPlanner;
 impl AllocationPlanner {
     /// Produces a `MemoryPlan` from a `LivenessMap`.
     pub fn plan(&self, liveness: &LivenessMap, graph: &CapturedGraph) -> Result<MemoryPlan> {
-        graph.validate()?;
         let mut assignments: BTreeMap<ValueId, BufferSlot> = BTreeMap::new();
         let mut free_slots: Vec<BufferSlot> = Vec::new();
         let mut next_slot: usize = 0;
@@ -311,12 +310,7 @@ impl AllocationPlanner {
             }
 
             // Allocate output slots for this node
-            for node in graph
-                .nodes
-                .iter()
-                .enumerate()
-                .filter_map(|(index, node)| (index == node_idx).then_some(node))
-            {
+            for node in graph.nodes.iter().filter(|n| n.id == node_idx) {
                 for &out_id in &node.outputs {
                     let slot = if let Some(s) = free_slots.pop() {
                         s

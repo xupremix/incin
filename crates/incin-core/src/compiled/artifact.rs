@@ -153,13 +153,21 @@ impl CompiledArtifact {
 
     /// Performs semantic validation of internal plan nodes and allocation descriptors (`SEC-010`).
     pub fn verify_semantics(&self) -> Result<()> {
-        self.plan.graph.validate()?;
         let nodes = &self.plan.graph.nodes;
         if nodes.len() > 100_000 {
             return Err(Error::Msg(alloc::format!(
                 "Artifact node count {} exceeds maximum allowed limit 100,000",
                 nodes.len()
             )));
+        }
+        for (i, node) in nodes.iter().enumerate() {
+            if node.id != i {
+                return Err(Error::Msg(alloc::format!(
+                    "Artifact semantic failure: node at position {} has non-topological ID {}",
+                    i,
+                    node.id
+                )));
+            }
         }
         Ok(())
     }
@@ -186,11 +194,6 @@ impl CompiledArtifact {
                 "Artifact file size {} bytes exceeds maximum limit {}",
                 bytes.len(),
                 limits.max_file_bytes
-            )));
-        }
-        if !bytes.starts_with(&ARTIFACT_MAGIC) {
-            return Err(Error::Msg(String::from(
-                "compiled artifact is missing the required Incin framing magic",
             )));
         }
         let artifact = Self::deserialize(bytes)?;

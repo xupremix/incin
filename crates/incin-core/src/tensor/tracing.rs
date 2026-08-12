@@ -4,7 +4,6 @@ use crate::graph::{Graph, OpType, ValueId};
 use crate::prelude::*;
 use crate::tensor::backend::*;
 // removed RefCell
-use alloc::sync::Arc;
 use spin::{Lazy, Mutex};
 
 // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): this used
@@ -14,69 +13,6 @@ use spin::{Lazy, Mutex};
 // crates actually need (draining/snapshotting the graph, marking an input/
 // output value) — everything else about `Graph`'s shape stays encapsulated.
 pub(crate) static TRACING_GRAPH: Lazy<Mutex<Graph>> = Lazy::new(|| Mutex::new(Graph::new()));
-
-/// An owned tracing session with graph state isolated from other sessions.
-#[derive(Clone, Default)]
-pub struct CaptureSession {
-    graph: Arc<Mutex<Graph>>,
-}
-
-impl CaptureSession {
-    /// Creates an empty capture session.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Takes the graph recorded in this session and starts a fresh graph.
-    pub fn extract_graph(&self) -> Graph {
-        let mut graph = self.graph.lock();
-        core::mem::take(&mut *graph)
-    }
-
-    /// Returns a snapshot without draining the session.
-    #[must_use]
-    pub fn snapshot(&self) -> Graph {
-        self.graph.lock().clone()
-    }
-
-    /// Marks a value as a graph input in this session.
-    pub fn mark_input(&self, value_id: ValueId) {
-        self.graph.lock().mark_input(value_id);
-    }
-
-    /// Marks a value as a graph output in this session.
-    pub fn mark_output(&self, value_id: ValueId) {
-        self.graph.lock().mark_output(value_id);
-    }
-
-    /// Adds a value and returns its session-local identifier.
-    pub fn add_value(
-        &self,
-        shape: alloc::vec::Vec<usize>,
-        dtype: DTypeId,
-        name: Option<alloc::string::String>,
-    ) -> ValueId {
-        self.graph.lock().add_value(shape, dtype, name)
-    }
-
-    /// Adds a node while preserving its typed execution identity.
-    pub fn add_node_with_identity(
-        &self,
-        op: OpType,
-        inputs: alloc::vec::Vec<ValueId>,
-        outputs: alloc::vec::Vec<ValueId>,
-        attributes: alloc::collections::BTreeMap<
-            alloc::string::String,
-            crate::graph::AttributeValue,
-        >,
-        identity: Option<crate::exec::OperationIdentity>,
-    ) -> usize {
-        self.graph
-            .lock()
-            .add_node_with_identity(op, inputs, outputs, attributes, identity)
-    }
-}
 
 /// Drain the process-wide tracing graph, returning everything recorded since
 /// the last call (or since startup).

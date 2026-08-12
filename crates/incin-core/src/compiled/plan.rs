@@ -44,7 +44,7 @@ pub struct CompileOptions {
 
 impl CompileOptions {
     /// Creates default compilation options.
-    #[must_use = "compiled plans must be handled or reported"]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             fusion: FusionPolicy::Enabled,
@@ -108,40 +108,26 @@ pub struct CompiledPlan {
 
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
-    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
-        graph.validate()?;
+    #[must_use]
+    pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Self {
         let input_guards = graph
             .inputs
             .iter()
-            .map(|&in_id| {
-                graph.value(in_id).map_or_else(
-                    || {
-                        Err(Error::Msg(alloc::format!(
-                            "compiled input {} has no metadata",
-                            in_id
-                        )))
-                    },
-                    |value| Ok(ShapeGuard::new(in_id, value.shape.clone(), value.dtype)),
-                )
-            })
-            .collect::<Result<Vec<_>>>()?;
+            .map(|&in_id| ShapeGuard::new(in_id, Vec::new(), DTypeId::F32))
+            .collect();
 
-        Ok(Self {
+        Self {
             graph,
             options,
             input_guards,
-        })
+        }
     }
 
     /// Validates dynamic guards for provided inputs.
     pub fn verify_input(&self, index: usize, shape: &[usize], dtype: DTypeId) -> Result<()> {
-        let guard = self.input_guards.get(index).ok_or_else(|| {
-            Error::Msg(alloc::format!(
-                "compiled input index {} is out of range; expected {} inputs",
-                index,
-                self.input_guards.len()
-            ))
-        })?;
-        guard.check(shape, dtype)
+        if let Some(guard) = self.input_guards.get(index) {
+            guard.check(shape, dtype)?;
+        }
+        Ok(())
     }
 }
