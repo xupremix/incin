@@ -174,10 +174,10 @@ theme = "shape"
 status = "complete"
 deps = ["SHP-001"]
 target = ["crates/incin-macros/src/rank.rs", "crates/incin-core/src/shapes/"]
-deliverable = "One rank generator behind a single MAX_RANK; closes the ElementCount rank-4 versus Shape rank-8 gap"
+deliverable = "Historical rank-ladder milestone retained for audit context; the current shape engine uses structural recursion without a semantic MAX_RANK"
 evidence = ["cargo test -p incin-core --test rank_matrix"]
 completed_on = "2026-07-27"
-completed_evidence = "cargo test -p incin-core --test rank_matrix -> 13 passed; 0 failed; full workspace 746 passed, 0 failed. MAX_RANK now lives only in crates/incin-macros/src/rank.rs and is re-exported as incin_core::shapes::MAX_RANK (a proc-macro crate cannot export a const, and a second copy would reintroduce the drift). rank_sweep! generates every ladder from it, with nine forms covering the argument shapes the existing macro_rules families accept, including two-dimensional rank-pair sweeps for broadcast prepend and rank x axis sweeps for concat and stack; a `max` above MAX_RANK is rejected so no rule can set its own ceiling. All 19 rules now sit at their correct ceiling: 17 rank-preserving at 8, and AppendDim/StackShape at 7 because their Output gains an axis and is bounded by Shape. Nothing sits above the ceiling. Closes the RFC's motivating gap, ElementCount 4->8. Notable finds: ReplaceLastDim generated impls to rank 12, four ranks at which no tuple implements Shape at all, so they could never be selected; HasChannels1D and HasChannels2D each held for exactly ONE rank, so (C, L) and (C, H, W) -- the unbatched forms their own docs name as valid -- did not implement them. 48 hand-written per-axis impls in concat.rs and stack.rs replaced by two macros. Recorded cost: raising a marker trait from one impl to eight loses rustc's 'but trait X is implemented for it' hint, so those diagnostics are less specific; the on_unimplemented note still carries the guidance and the compile failure is unchanged. 11 compile_fail expectations regenerated, every case still errors. The audit tool needed three corrections to measure this honestly, all documented in the inventory. Compile time unchanged (incin-core check ~1.4s). no-default-features clean"
+completed_evidence = "Historical evidence from the pre-structural migration. The former MAX_RANK and rank_sweep ladder were removed during the canonical structural migration. The current architecture uses structural recursion without a semantic rank ceiling."
 deviations = []
 
 [[task]]

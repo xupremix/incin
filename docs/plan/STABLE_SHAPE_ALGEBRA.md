@@ -109,15 +109,14 @@ At runtime, all shape extents and strides are flattened into contiguous, inline 
 
 ---
 
-## 5. Generic `[usize; N]` Fixed-Rank Shapes
+## 5. Generic `[usize; N]` Shape Arguments
 
-Generic array shapes `[usize; N]` are implemented generically for any `const N: usize`:
+Generic arrays `[usize; N]` are constructor adapters for runtime dimensions.
+They resolve to `Dyn` and do not form a second known-rank shape engine. Exact
+known-rank runtime shapes use `Ranked<R>`.
 
-```rust
-impl<const N: usize> Shape for [usize; N] { ... }
-```
-
-`[usize; N]` support requires no macro generation, macro expansion, or explicit rank caps (supporting `N = 0, 1, 8, 16, 32, 64, 200...`).
+Array arguments require no macro generation or explicit rank cap. The array
+length only describes the input value supplied to the constructor.
 
 ---
 
