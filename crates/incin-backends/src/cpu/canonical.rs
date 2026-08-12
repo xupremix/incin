@@ -29,7 +29,10 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
-use super::ops::elementwise::{canonical_neg, canonical_relu, canonical_step, canonical_unary};
+use super::ops::elementwise::{
+    canonical_add_scalar, canonical_mul_scalar, canonical_neg, canonical_powf, canonical_relu,
+    canonical_step, canonical_unary,
+};
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1177,7 +1180,7 @@ macro_rules! scalar_float_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, training_mode(request.context))?;
                 let value = request.operation.descriptor().attributes().value;
-                <Self as FloatOps<Self>>::$method::<f32>(input, value)
+                $method(input, value)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -1185,9 +1188,9 @@ macro_rules! scalar_float_executors {
 }
 
 scalar_float_executors![
-    (AddScalar, add_scalar_float),
-    (MulScalar, mul_scalar_float),
-    (Powf, powf),
+    (AddScalar, canonical_add_scalar),
+    (MulScalar, canonical_mul_scalar),
+    (Powf, canonical_powf),
 ];
 
 /// Binary elementwise float operations over broadcast operands.

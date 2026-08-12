@@ -184,6 +184,46 @@ pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_add_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::AddScalar(scalar), t)?;
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+    });
+    Ok(out)
+}
+
+pub(crate) fn canonical_mul_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::MulScalar(scalar), t)?;
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut scaled = Vec::with_capacity(total);
+            let mut idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..total {
+                scaled.push(grad_out.get(&idx) * scalar);
+                if !grad_out.shape.is_empty() {
+                    increment_index(&mut idx, &grad_out.shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(scaled)?,
+                grad_out.shape.to_vec(),
+            )])
+        }),
+    });
+    Ok(out)
+}
+
+pub(crate) fn canonical_powf(t: &CpuStorage, exponent: f64) -> Result<CpuStorage> {
+    elementwise_unary_typed(UnaryOp::Powf(exponent), t)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -504,17 +544,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::AddScalar(scalar), t)?;
-
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            // Gradient passes through unchanged (same shape, no unbroadcast
-            // needed — scalar ops don't change shape).
-            backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
-        });
-        Ok(out)
+        canonical_add_scalar(t, scalar)
     }
 
     /// `mul_scalar_float`.
@@ -522,31 +552,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::MulScalar(scalar), t)?;
-
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            // Gradient scales by the same constant (same shape, no
-            // unbroadcast needed).
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
-                let mut scaled = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    scaled.push(grad_out.get(&idx) * scalar);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(scaled)?,
-                    grad_out.shape.to_vec(),
-                )])
-            }),
-        });
-        Ok(out)
+        canonical_mul_scalar(t, scalar)
     }
 
     /// `relu`.
