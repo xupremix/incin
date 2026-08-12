@@ -150,3 +150,23 @@ fn memory_plan_deserialization_revalidates_slots_and_round_trips() {
     malformed["peak_live_slots"] = serde_json::json!(0);
     assert!(serde_json::from_value::<MemoryPlan>(malformed).is_err());
 }
+
+#[test]
+fn allocation_uses_topological_position_not_node_identifier() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(OpType::Relu, vec![input], vec![output], BTreeMap::new());
+
+    let mut captured = CapturedGraph::capture(&graph).expect("capture should succeed");
+    captured.nodes[0].id = 42;
+    captured.validate().expect("non-sequential IDs are valid");
+    let liveness = LivenessMap::compute(&captured);
+    let plan = AllocationPlanner
+        .plan(&liveness, &captured)
+        .expect("planning should succeed");
+
+    assert!(plan.assignments().contains_key(&output));
+}
