@@ -438,3 +438,25 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     assert!(graph.nodes.iter().any(|node| node.operation
         == OperationIdentity::Builtin(incin_core::prelude::OperationKind::ReshapeExact)));
 }
+
+#[test]
+fn typed_tracing_preserves_runtime_and_static_input_axes() {
+    let _guard = TRACE_TEST_LOCK.lock().unwrap();
+    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type S = s![usize, 768];
+
+    let _ = incin_core::prelude::extract_graph();
+    let input: Tensor<S, B, f32> = Tensor::zeros((7usize, ())).unwrap();
+    incin_core::prelude::tracing_mark_input_typed::<S>(input.inner().value_id);
+
+    let graph = incin_core::prelude::extract_graph();
+    let value = graph.values.get(&input.inner().value_id).unwrap();
+    assert!(matches!(
+        value.shape_expr.dims[0],
+        incin_core::exec::DimExpr::Symbol(_)
+    ));
+    assert_eq!(
+        value.shape_expr.dims[1],
+        incin_core::exec::DimExpr::Const(768)
+    );
+}
