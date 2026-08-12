@@ -38,7 +38,9 @@ use super::ops::elementwise::{
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
-use super::ops::shape_ops::{div_scalar_storage, sub_scalar_storage};
+use super::ops::shape_ops::{
+    diag_storage, div_scalar_storage, sub_scalar_storage, tril_storage, triu_storage,
+};
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1745,14 +1747,18 @@ macro_rules! diagonal_tensor_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, training_mode(request.context))?;
                 let offset = request.operation.descriptor().attributes().offset;
-                <Self as TensorOps<Self>>::$method::<f32>(input, offset)
+                $method(input, offset)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-diagonal_tensor_executors![(Triu, triu), (Tril, tril), (Diag, diag)];
+diagonal_tensor_executors![
+    (Triu, triu_storage),
+    (Tril, tril_storage),
+    (Diag, diag_storage)
+];
 
 /// Rank-changing views parametrised by a single axis.
 macro_rules! axis_tensor_executors {
