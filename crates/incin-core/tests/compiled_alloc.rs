@@ -57,6 +57,34 @@ fn test_allocation_planner_peak_memory() {
 }
 
 #[test]
+fn allocation_planner_reuses_slots_after_an_intermediate_dies() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![4], DTypeId::F32, Some("input".into()));
+    let first = graph.add_value(vec![4], DTypeId::F32, Some("first".into()));
+    let output = graph.add_value(vec![4], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Relu,
+        vec![input],
+        vec![first],
+        BTreeMap::new(),
+    );
+    graph.add_node(
+        OperationKind::Relu,
+        vec![first],
+        vec![output],
+        BTreeMap::new(),
+    );
+
+    let captured = CapturedGraph::capture(&graph).unwrap();
+    let liveness = LivenessMap::compute(&captured);
+    let plan = AllocationPlanner.plan(&liveness, &captured).unwrap();
+
+    assert_eq!(plan.assignments()[&input], plan.assignments()[&output]);
+}
+
+#[test]
 fn test_saved_tensor_extends_liveness() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));

@@ -68,6 +68,28 @@ fn compiled_cpu_executes_captured_relu_through_canonical_descriptor() {
 }
 
 #[test]
+fn compiled_cpu_admission_rejects_a_descriptorless_operation() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Relu,
+        vec![input],
+        vec![output],
+        Default::default(),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let error = incin_backends::cpu::CpuCompiledPlan::try_new(&plan).unwrap_err();
+    assert!(error.to_string().contains("no captured descriptor"));
+}
+
+#[test]
 fn compiled_cpu_executes_a_chained_matrix_pipeline() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![2, 3], DTypeId::F32, Some("x".into()));
