@@ -68,3 +68,33 @@ fn symbolic_guard_accepts_valid_alternatives_and_rejects_bad_relations() {
     assert!(guard.check(&[32, 767], DTypeId::F16.into()).is_err());
     assert!(guard.check(&[0, 768], DTypeId::F16.into()).is_err());
 }
+
+#[test]
+fn invocation_guards_share_symbols_across_inputs() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 768], DTypeId::F32, Some("x".into()));
+    let w = graph.add_value(vec![768, 3072], DTypeId::F32, Some("w".into()));
+    graph.mark_input(x);
+    graph.mark_input(w);
+    graph.values.get_mut(&x).unwrap().shape_expr.dims[1] = DimExpr::Symbol(SymbolId(7));
+    graph.values.get_mut(&w).unwrap().shape_expr.dims[0] = DimExpr::Symbol(SymbolId(7));
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    );
+
+    assert!(
+        plan.verify_inputs(&[
+            (vec![8, 768], DTypeId::F32.into()),
+            (vec![768, 3072], DTypeId::F32.into()),
+        ])
+        .is_ok()
+    );
+    assert!(
+        plan.verify_inputs(&[
+            (vec![8, 512], DTypeId::F32.into()),
+            (vec![768, 3072], DTypeId::F32.into()),
+        ])
+        .is_err()
+    );
+}

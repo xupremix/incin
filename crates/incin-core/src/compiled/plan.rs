@@ -4,7 +4,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
-use crate::exec::ShapeExpr;
+use crate::exec::{ShapeExpr, SymbolEnvironment, SymbolTable};
 use crate::graph::ValueId;
 use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
 
@@ -104,20 +104,27 @@ pub struct CompiledPlan {
     pub options: CompileOptions,
     /// Dynamic shape guards for graph inputs.
     pub input_guards: Vec<ShapeGuard>,
+    pub symbols: SymbolTable,
 }
 
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
     #[must_use]
     pub fn compile(graph: CapturedGraph, options: CompileOptions) -> Self {
+        let mut symbols = SymbolTable::default();
         let input_guards = graph
             .inputs
             .iter()
             .filter_map(|&in_id| {
-                graph
-                    .value_metadata
-                    .get(&in_id)
-                    .map(|value| ShapeGuard::new(in_id, value.shape_expr.clone(), value.dtype))
+                graph.value_metadata.get(&in_id).map(|value| {
+                    for expr in &value.shape_expr.dims {
+                        collect_symbols(expr, &mut symbols);
+                    }
+                    for constraint in &value.shape_expr.constraints {
+                        collect_constraint_symbols(constraint, &mut symbols);
+                    }
+                    ShapeGuard::new(in_id, value.shape_expr.clone(), value.dtype)
+                })
             })
             .collect();
 
@@ -125,6 +132,7 @@ impl CompiledPlan {
             graph,
             options,
             input_guards,
+            symbols,
         }
     }
 
@@ -138,5 +146,72 @@ impl CompiledPlan {
             ))
         })?;
         guard.check(shape, dtype.into())
+    }
+
+    pub fn verify_inputs(&self, inputs: &[(Vec<usize>, DTypeDescriptor)]) -> Result<()> {
+        if inputs.len() != self.input_guards.len() {
+            return Err(Error::Msg(alloc::format!(
+                "compiled invocation expected {} inputs, got {}",
+                self.input_guards.len(),
+                inputs.len()
+            )));
+        }
+        let mut environment = self.symbols.environment();
+        for (guard, (shape, dtype)) in self.input_guards.iter().zip(inputs) {
+            if guard.expected_dtype != *dtype {
+                return Err(Error::DTypeStorageMismatch {
+                    expected: guard.expected_dtype,
+                    got: *dtype,
+                });
+            }
+            guard
+                .shape
+                .bind_and_validate(shape, &mut environment)
+                .map_err(|reason| {
+                    Error::Msg(alloc::format!(
+                        "shape guard failed for input value {}: {}",
+                        guard.value_id,
+                        reason
+                    ))
+                })?;
+        }
+        let constraints = self
+            .input_guards
+            .iter()
+            .flat_map(|guard| guard.shape.constraints.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        environment
+            .validate_constraints(&constraints)
+            .map_err(|reason| {
+                Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
+            })
+    }
+}
+
+fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
+    match expr {
+        crate::exec::DimExpr::Symbol(id) => symbols.register(*id, None),
+        crate::exec::DimExpr::Add(lhs, rhs)
+        | crate::exec::DimExpr::Mul(lhs, rhs)
+        | crate::exec::DimExpr::ExactDiv(lhs, rhs)
+        | crate::exec::DimExpr::Broadcast(lhs, rhs) => {
+            collect_symbols(lhs, symbols);
+            collect_symbols(rhs, symbols);
+        }
+        crate::exec::DimExpr::Const(_) | crate::exec::DimExpr::Unknown => {}
+    }
+}
+
+fn collect_constraint_symbols(constraint: &crate::exec::Constraint, symbols: &mut SymbolTable) {
+    match constraint {
+        crate::exec::Constraint::Equal { lhs, rhs }
+        | crate::exec::Constraint::BroadcastCompatible { lhs, rhs } => {
+            collect_symbols(lhs, symbols);
+            collect_symbols(rhs, symbols);
+        }
+        crate::exec::Constraint::LowerBound { value, .. }
+        | crate::exec::Constraint::UpperBound { value, .. }
+        | crate::exec::Constraint::Divisible { value, .. } => collect_symbols(value, symbols),
     }
 }

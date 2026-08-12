@@ -5,11 +5,122 @@
 //! that must be checked when a compiled graph is called.
 
 use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct SymbolId(pub u32);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct SymbolInfo {
+    pub id: SymbolId,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SymbolTable {
+    pub symbols: Vec<SymbolInfo>,
+    pub constraints: Vec<Constraint>,
+}
+
+impl Default for SymbolTable {
+    fn default() -> Self {
+        Self {
+            symbols: Vec::new(),
+            constraints: Vec::new(),
+        }
+    }
+}
+
+impl SymbolTable {
+    pub fn register(&mut self, id: SymbolId, name: Option<String>) {
+        if let Some(existing) = self.symbols.iter_mut().find(|symbol| symbol.id == id) {
+            if existing.name.is_none() {
+                existing.name = name;
+            }
+        } else {
+            self.symbols.push(SymbolInfo { id, name });
+        }
+    }
+
+    #[must_use]
+    pub fn environment(&self) -> SymbolEnvironment {
+        SymbolEnvironment::default()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SymbolEnvironment {
+    bindings: BTreeMap<SymbolId, usize>,
+}
+
+impl SymbolEnvironment {
+    pub fn bind(&mut self, id: SymbolId, value: usize) -> Result<(), String> {
+        if let Some(previous) = self.bindings.insert(id, value)
+            && previous != value
+        {
+            return Err(alloc::format!(
+                "symbol {:?} was {}, got {}",
+                id,
+                previous,
+                value
+            ));
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn get(&self, id: SymbolId) -> Option<usize> {
+        self.bindings.get(&id).copied()
+    }
+
+    pub fn validate_expr(&self, expr: &DimExpr, actual: usize) -> Result<(), String> {
+        let value = expr
+            .evaluate_env(self)
+            .ok_or_else(|| alloc::format!("symbolic dimension {:?} remains unresolved", expr))?;
+        if value == actual {
+            Ok(())
+        } else {
+            Err(alloc::format!(
+                "expected expression {:?} = {}, got {}",
+                expr,
+                value,
+                actual
+            ))
+        }
+    }
+
+    pub fn validate_constraints(&self, constraints: &[Constraint]) -> Result<(), String> {
+        for constraint in constraints {
+            let valid = match constraint {
+                Constraint::Equal { lhs, rhs } => lhs
+                    .evaluate_env(self)
+                    .zip(rhs.evaluate_env(self))
+                    .is_some_and(|(l, r)| l == r),
+                Constraint::LowerBound { value, bound } => value
+                    .evaluate_env(self)
+                    .is_some_and(|value| value >= *bound),
+                Constraint::UpperBound { value, bound } => value
+                    .evaluate_env(self)
+                    .is_some_and(|value| value <= *bound),
+                Constraint::Divisible { value, divisor } => value
+                    .evaluate_env(self)
+                    .is_some_and(|value| *divisor != 0 && value % divisor == 0),
+                Constraint::BroadcastCompatible { lhs, rhs } => lhs
+                    .evaluate_env(self)
+                    .zip(rhs.evaluate_env(self))
+                    .is_some_and(|(lhs, rhs)| lhs == rhs || lhs == 1 || rhs == 1),
+            };
+            if !valid {
+                return Err(alloc::format!("shape constraint failed: {:?}", constraint));
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DimExpr {
@@ -91,6 +202,38 @@ impl DimExpr {
             Self::Unknown => None,
         }
     }
+
+    fn evaluate_env(&self, environment: &SymbolEnvironment) -> Option<usize> {
+        match self {
+            Self::Const(value) => Some(*value),
+            Self::Symbol(id) => environment.get(*id),
+            Self::Add(lhs, rhs) => lhs
+                .evaluate_env(environment)?
+                .checked_add(rhs.evaluate_env(environment)?),
+            Self::Mul(lhs, rhs) => lhs
+                .evaluate_env(environment)?
+                .checked_mul(rhs.evaluate_env(environment)?),
+            Self::ExactDiv(lhs, rhs) => {
+                let lhs = lhs.evaluate_env(environment)?;
+                let rhs = rhs.evaluate_env(environment)?;
+                (rhs != 0 && lhs % rhs == 0).then_some(lhs / rhs)
+            }
+            Self::Broadcast(lhs, rhs) => {
+                let lhs = lhs.evaluate_env(environment)?;
+                let rhs = rhs.evaluate_env(environment)?;
+                if lhs == rhs {
+                    Some(lhs)
+                } else if lhs == 1 {
+                    Some(rhs)
+                } else if rhs == 1 {
+                    Some(lhs)
+                } else {
+                    None
+                }
+            }
+            Self::Unknown => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -155,6 +298,16 @@ impl ShapeExpr {
     }
 
     pub fn validate(&self, actual: &[usize]) -> Result<(), String> {
+        let mut environment = SymbolEnvironment::default();
+        self.bind_and_validate(actual, &mut environment)?;
+        environment.validate_constraints(&self.constraints)
+    }
+
+    pub fn bind_and_validate(
+        &self,
+        actual: &[usize],
+        environment: &mut SymbolEnvironment,
+    ) -> Result<(), String> {
         if let RankExpr::Static(rank) = self.rank
             && rank != actual.len()
         {
@@ -164,7 +317,6 @@ impl ShapeExpr {
                 actual.len()
             ));
         }
-        let mut symbols = Vec::new();
         for (expr, value) in self.dims.iter().zip(actual.iter().copied()) {
             match expr {
                 DimExpr::Const(expected) if *expected != value => {
@@ -175,45 +327,9 @@ impl ShapeExpr {
                     ));
                 }
                 DimExpr::Symbol(id) => {
-                    if let Some((_, previous)) =
-                        symbols.iter().find(|(candidate, _)| candidate == id)
-                    {
-                        if *previous != value {
-                            return Err(alloc::format!(
-                                "symbol {:?} was {}, got {}",
-                                id,
-                                previous,
-                                value
-                            ));
-                        }
-                    } else {
-                        symbols.push((*id, value));
-                    }
+                    environment.bind(*id, value)?;
                 }
-                _ => {}
-            }
-        }
-        for constraint in &self.constraints {
-            let valid = match constraint {
-                Constraint::Equal { lhs, rhs } => lhs.evaluate(&symbols) == rhs.evaluate(&symbols),
-                Constraint::LowerBound { value, bound } => value
-                    .evaluate(&symbols)
-                    .is_some_and(|value| value >= *bound),
-                Constraint::UpperBound { value, bound } => value
-                    .evaluate(&symbols)
-                    .is_some_and(|value| value <= *bound),
-                Constraint::Divisible { value, divisor } => value
-                    .evaluate(&symbols)
-                    .is_some_and(|value| *divisor != 0 && value % divisor == 0),
-                Constraint::BroadcastCompatible { lhs, rhs } => {
-                    match (lhs.evaluate(&symbols), rhs.evaluate(&symbols)) {
-                        (Some(lhs), Some(rhs)) => lhs == rhs || lhs == 1 || rhs == 1,
-                        _ => false,
-                    }
-                }
-            };
-            if !valid {
-                return Err(alloc::format!("shape constraint failed: {:?}", constraint));
+                _ => environment.validate_expr(expr, value)?,
             }
         }
         Ok(())
