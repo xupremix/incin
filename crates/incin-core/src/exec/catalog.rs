@@ -202,6 +202,44 @@ impl ExecutionSite {
     }
 }
 
+/// Counts derived directly from the canonical operation catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationCoverage {
+    pub canonical: usize,
+    pub backend_executable: usize,
+    pub non_backend_executable: usize,
+    pub by_site: [(ExecutionSite, usize); 7],
+}
+
+/// Return operation coverage without maintaining a second count.
+#[must_use]
+pub fn operation_coverage() -> OperationCoverage {
+    let mut by_site = [
+        (ExecutionSite::Kernel, 0),
+        (ExecutionSite::Creation, 0),
+        (ExecutionSite::HostReadback, 0),
+        (ExecutionSite::Composed, 0),
+        (ExecutionSite::Mutation, 0),
+        (ExecutionSite::DeviceTransfer, 0),
+        (ExecutionSite::GraphState, 0),
+    ];
+    let mut backend_executable = 0;
+    for row in OPERATION_CATALOG {
+        if row.site.is_backend_executable() {
+            backend_executable += 1;
+        }
+        if let Some((_, count)) = by_site.iter_mut().find(|(site, _)| *site == row.site) {
+            *count += 1;
+        }
+    }
+    OperationCoverage {
+        canonical: OPERATION_CATALOG.len(),
+        backend_executable,
+        non_backend_executable: OPERATION_CATALOG.len() - backend_executable,
+        by_site,
+    }
+}
+
 /// One immutable row derived from the authoritative operation declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationCatalogEntry {
@@ -4247,9 +4285,20 @@ pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
 #[must_use]
 pub fn operation_semantics_document() -> alloc::string::String {
     use core::fmt::Write as _;
+    let coverage = operation_coverage();
     let mut out = alloc::string::String::from(
         "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
     );
+    let _ = writeln!(
+        out,
+        "Canonical operations: {}\\nBackend-executable operations: {}\\nNon-backend execution sites: {}\\n",
+        coverage.canonical, coverage.backend_executable, coverage.non_backend_executable
+    );
+    out.push_str("| Execution site | Count |\\n|---|---:|\\n");
+    for (site, count) in coverage.by_site {
+        let _ = writeln!(out, "| `{:?}` | {} |", site, count);
+    }
+    out.push_str("\\n");
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
             alloc::string::String::from("many")
@@ -4462,6 +4511,25 @@ mod tests {
             assert!(names.insert(row.name), "duplicate name {}", row.name);
             assert_eq!(row.operation.name(), row.name);
         }
+    }
+
+    #[test]
+    fn coverage_is_derived_from_catalog_rows() {
+        let coverage = operation_coverage();
+        assert_eq!(coverage.canonical, OPERATION_CATALOG.len());
+        assert_eq!(
+            coverage.backend_executable + coverage.non_backend_executable,
+            coverage.canonical
+        );
+        assert_eq!(
+            coverage
+                .by_site
+                .iter()
+                .map(|(_, count)| count)
+                .sum::<usize>(),
+            coverage.canonical
+        );
+        assert_eq!(coverage.non_backend_executable, 16);
     }
 
     /// The execution site agrees with the arity and output rules that were

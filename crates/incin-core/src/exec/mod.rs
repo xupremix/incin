@@ -76,7 +76,7 @@ pub use catalog::{
 // knowing which submodule its type was declared in.
 pub use catalog::{
     BroadcastingRule, DTypeRule, EmptyRule, ExecutionSite, GradientRule, LayoutRule, NumericRule,
-    OutputRule, SemanticProfile,
+    OperationCoverage, OutputRule, SemanticProfile, operation_coverage,
 };
 #[cfg(feature = "std")]
 pub use catalog::{CapturedDescriptor, DescriptorCaptureError};

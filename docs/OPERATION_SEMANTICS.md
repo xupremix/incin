@@ -4,7 +4,15 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-| `tensor_from_data` | `Descriptor<op::TensorFromData>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `TensorArgsData` |
+Canonical operations: 174\nBackend-executable operations: 158\nNon-backend execution sites: 16\n
+| Execution site | Count |\n|---|---:|\n| `Kernel` | 140 |
+| `Creation` | 13 |
+| `HostReadback` | 5 |
+| `Composed` | 3 |
+| `Mutation` | 9 |
+| `DeviceTransfer` | 1 |
+| `GraphState` | 3 |
+\n| `tensor_from_data` | `Descriptor<op::TensorFromData>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `TensorArgsData` |
 | `tensor_from_bytes` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `Descriptor<op::TensorToBytes>` | `NoAttributes` | `HostReadback` | 1-1 / 0-0 | 0-18446744073709551615 | `None` | `TypedContract` / `HostValue` | `Allowed` / `NotApplicable` | `None` | yes | `PreserveOrMaterialize` | `Tensor::to_bytes` |
 | `zeros` | `Descriptor<op::Zeros>` | `CreationAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `CreationOps::zeros` |

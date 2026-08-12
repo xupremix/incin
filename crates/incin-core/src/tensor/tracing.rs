@@ -2085,11 +2085,19 @@ mod tests {
     /// process-wide `TRACING_GRAPH`.
     fn op_for_output(value_id: ValueId) -> OperationKind {
         let g = TRACING_GRAPH.lock();
-        g.nodes
+        let operation = g
+            .nodes
             .iter()
             .find(|n| n.outputs.contains(&value_id))
             .unwrap_or_else(|| panic!("no node found producing value {value_id}"))
-            .op
+            .operation
+            .clone();
+        match operation {
+            crate::exec::OperationIdentity::Builtin(operation) => operation,
+            crate::exec::OperationIdentity::Custom(_) => {
+                panic!("tracing test expects a built-in operation")
+            }
+        }
     }
 
     #[test]
