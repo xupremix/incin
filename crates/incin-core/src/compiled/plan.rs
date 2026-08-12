@@ -308,10 +308,27 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 .first()
                 .zip(inputs.get(1))
                 .and_then(|(lhs, rhs)| matmul_shape(lhs, rhs)),
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Linear)
-            | OperationIdentity::Builtin(crate::prelude::OperationKind::Addmm) => {
-                inputs.first().cloned()
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Linear) => {
+                #[cfg(feature = "std")]
+                {
+                    let _descriptor = decode_descriptor::<op::Linear>(node)?;
+                    inputs
+                        .first()
+                        .zip(inputs.get(1))
+                        .map(|(input, weight)| linear_shape(input, weight))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
             }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Addmm) => inputs
+                .first()
+                .zip(inputs.get(1))
+                .zip(inputs.get(2))
+                .and_then(|((addend, lhs), rhs)| {
+                    matmul_shape(lhs, rhs).map(|product| broadcast_shapes(addend, &product))
+                }),
             OperationIdentity::Builtin(crate::prelude::OperationKind::ReshapeExact) => {
                 #[cfg(feature = "std")]
                 {
@@ -576,6 +593,19 @@ fn flatten_symbolic(input: &ShapeExpr, start: usize, end: usize) -> ShapeExpr {
         dims,
         constraints: input.constraints.clone(),
     }
+}
+
+fn linear_shape(input: &ShapeExpr, weight: &ShapeExpr) -> ShapeExpr {
+    let mut shape = input.clone();
+    if let (Some(last), Some(output)) = (shape.dims.last_mut(), weight.dims.first()) {
+        let input_width = last.clone();
+        *last = output.clone();
+        shape.constraints.push(crate::exec::Constraint::equal(
+            input_width,
+            weight.dims.get(1).cloned().unwrap_or(DimExpr::Unknown),
+        ));
+    }
+    shape
 }
 
 fn matmul_shape(lhs: &ShapeExpr, rhs: &ShapeExpr) -> Option<ShapeExpr> {
