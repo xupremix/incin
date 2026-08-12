@@ -384,6 +384,113 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::SqueezeExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::SqueezeExact>(node)?
+                        .attributes()
+                        .axis;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims.remove(axis);
+                        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::UnsqueezeExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::UnsqueezeExact>(node)?
+                        .attributes()
+                        .axis;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims.insert(axis, DimExpr::Const(1));
+                        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::SumDim) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::SumDim>(node)?.attributes().axis;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims.remove(axis);
+                        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::SumKeepDim) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::SumKeepDim>(node)?.attributes().axis;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims[axis] = DimExpr::Const(1);
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::ConcatExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::ConcatExact>(node)?
+                        .attributes()
+                        .axis;
+                    inputs.first().map(|first| {
+                        let mut shape = first.clone();
+                        shape.dims[axis] =
+                            inputs
+                                .iter()
+                                .skip(1)
+                                .fold(shape.dims[axis].clone(), |lhs, rhs| {
+                                    DimExpr::Add(Box::new(lhs), Box::new(rhs.dims[axis].clone()))
+                                        .simplify()
+                                });
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(crate::prelude::OperationKind::StackExact) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = decode_descriptor::<op::StackExact>(node)?.attributes().axis;
+                    inputs.first().map(|input| {
+                        let mut shape = input.clone();
+                        shape.dims.insert(axis, DimExpr::Const(inputs.len()));
+                        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
+                        shape
+                    })
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
             _ => None,
         };
         let Some(shape) = shape else {
