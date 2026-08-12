@@ -11,7 +11,9 @@ use incin_core::exec::catalog::CreationAttributes;
 use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
-use incin_core::prelude::{Backend, BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue};
+use incin_core::prelude::{
+    Backend, BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue, TracingBackend, extract_graph,
+};
 use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -211,6 +213,30 @@ fn custom_identity_is_derived_from_the_operation_key() {
         &expected,
     )
     .unwrap();
+}
+
+#[test]
+fn custom_operations_are_recorded_with_their_key() {
+    let _ = extract_graph();
+    let context = ExecutionContext::new(TracingBackend::<CompanyBackend>::default());
+    let expected =
+        ShapeValue::<incin::prelude::s![2, 3]>::try_new(ShapeBuf::from_slice(&[2, 3])).unwrap();
+    let _ = execute_shaped::<CompanyIdentity, _, incin::prelude::s![2, 3]>(
+        &context,
+        IdentityAttributes {
+            shape: ShapeBuf::from_slice(&[2, 3]),
+        },
+        &[],
+        &expected,
+    )
+    .unwrap();
+    let graph = extract_graph();
+    let node = graph.nodes.last().expect("custom trace node");
+    assert_eq!(node.op, incin_core::graph::OpType::Custom);
+    assert_eq!(
+        node.identity,
+        Some(OperationIdentity::Custom(CompanyIdentity::KEY))
+    );
 }
 
 #[test]

@@ -12,6 +12,8 @@ pub type NodeId = usize;
 /// recorded by `TracingBackend` and consumed by ONNX export (`as_str`
 /// supplies the exported node's `op_type` string) and graph visualization.
 pub enum OpType {
+    /// An operation outside the built-in graph vocabulary.
+    Custom,
     /// Index of the maximum element.
     ArgMax,
     /// Index of the minimum element.
@@ -203,6 +205,7 @@ impl OpType {
     /// name, e.g. `Linear` -> `"Gemm"`, `Conv1d`/`Conv2d` -> `"Conv"`).
     pub fn as_str(&self) -> &'static str {
         match self {
+            OpType::Custom => "Custom",
             OpType::ArgMax => "ArgMax",
             OpType::ArgMin => "ArgMin",
             OpType::Add => "Add",

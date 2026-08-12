@@ -266,15 +266,18 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                 .iter()
                 .filter_map(crate::exec::request::TensorHandle::tracing_value)
                 .collect();
-            if let Some(operation) = request.operation.descriptor().trace_operation() {
-                g.add_node_with_identity(
-                    operation,
-                    inputs,
-                    vec![output_id],
-                    alloc::collections::BTreeMap::new(),
-                    Some(request.operation.descriptor().trace_identity()),
-                );
-            }
+            let operation = request
+                .operation
+                .descriptor()
+                .trace_operation()
+                .unwrap_or(crate::graph::OpType::Custom);
+            g.add_node_with_identity(
+                operation,
+                inputs,
+                vec![output_id],
+                alloc::collections::BTreeMap::new(),
+                Some(request.operation.descriptor().trace_identity()),
+            );
             output_id
         };
 
