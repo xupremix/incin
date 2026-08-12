@@ -87,6 +87,20 @@ pub struct Tensor<
     pub(crate) _placement: P::Field,
 }
 
+fn validate_gradient_dtype<B: Backend, K: DType, G: RequiresGrad>(
+    dtype: &K::Field,
+    grad: &G::Field,
+) -> Result<()> {
+    if G::requires_grad(grad) && !K::descriptor(dtype).is_float() {
+        return Err(Error::UnsupportedDType {
+            dtype: K::descriptor(dtype),
+            backend: B::BACKEND_NAME,
+            op: "gradient tracking",
+        });
+    }
+    Ok(())
+}
+
 /// Proof that raw storage and tensor metadata may be joined without repeating
 /// their invariant checks inside the constructor.
 ///
@@ -233,6 +247,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         grad: G::Field,
         placement: P::Field,
     ) -> Result<Tensor<T, B, K, G, P>> {
+        validate_gradient_dtype::<B, K, G>(&dtype, &grad)?;
         let expected = shape.shape_buf().as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got.as_ref() {
@@ -563,17 +578,6 @@ fn validate_reshard_proof<O>(
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> {
-    fn validate_gradient_dtype(dtype: &K::Field, grad: &G::Field) -> Result<()> {
-        if G::requires_grad(grad) && !K::descriptor(dtype).is_float() {
-            return Err(Error::UnsupportedDType {
-                dtype: K::descriptor(dtype),
-                backend: B::BACKEND_NAME,
-                op: "gradient tracking",
-            });
-        }
-        Ok(())
-    }
-
     /// Joins component parts after this module has witnessed their invariants.
     fn from_parts_witnessed(
         inner: B::Storage<K>,
@@ -604,7 +608,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
-        Self::validate_gradient_dtype(&dtype, &grad)?;
+        validate_gradient_dtype::<B, K, G>(&dtype, &grad)?;
         let expected = shape.shape_buf().as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got.as_ref() {
@@ -667,7 +671,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
-        Self::validate_gradient_dtype(&dtype, &grad)?;
+        validate_gradient_dtype::<B, K, G>(&dtype, &grad)?;
         S::validate_dims(shape.as_ref()).map_err(crate::err::Error::Shape)?;
         let expected = shape.as_ref().to_vec();
         let got = B::shape(&inner);
