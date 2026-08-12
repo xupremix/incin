@@ -3,7 +3,14 @@
 //! These adapters delegate execution to external tensor ecosystems and are
 //! intentionally separate from Incin native CPU, CUDA, and WGPU backends.
 
-pub use incin_core::backend_authoring::*;
+pub use incin_core::backend_authoring::{
+    execute, execute_shaped, execute_shaped_with_payload, execute_with_payload, Alignment,
+    AttributeContract, Backend, CanonicalOperation, Capabilities, CapabilityQuery,
+    CapabilityRegistry, Descriptor, DescriptorError, Execute, ExecuteOutput, ExecutionContext,
+    ExecutionDescriptor, ExecutionRequest, LogicalTensorMeta, Operation, OperationIdentity,
+    OperationKey, OperationCatalogEntry, ShapeBuf, StorageBackend, StorageOutput, SupportLevel,
+    SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated,
+};
 pub use incin_core::prelude::*;
 
 /// The conformance suite an external backend runs against itself (`EXE-010`).
