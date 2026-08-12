@@ -5,7 +5,7 @@ use crate::tensor::backend::StorageBackend;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-/// A type-level marker for whether a `Tensor` tracks gradients — `Grad`
+/// A type-level marker for whether a `Tensor` tracks gradients: `Grad`
 /// (always tracks), `NoGrad` (never tracks), or `Dyn` (decided at runtime).
 pub trait RequiresGrad:
     GradJoin<Self, Output = Self> + 'static + Clone + Debug + Send + Sync + Eq + PartialEq
@@ -54,7 +54,7 @@ where
 }
 
 /// A `RequiresGrad` whose value is fully known at compile time (`Grad` or
-/// `NoGrad`, as opposed to `Dyn`) — takes no constructor argument.
+/// `NoGrad`, as opposed to `Dyn`), takes no constructor argument.
 pub trait ConstRequiresGrad: RequiresGrad<Arg = ()> {
     /// The compile-time-known gradient-tracking value.
     const REQUIRES_GRAD: bool;
@@ -82,7 +82,7 @@ impl RequiresGrad for Dyn {
     }
 }
 impl RequiresGrad for Grad {
-    /// No argument needed — always tracks gradients.
+    /// No argument needed. This marker always tracks gradients.
     type Arg = ();
     /// Zero-sized: the value is fixed by the type.
     type Field = PhantomData<Self>;
@@ -96,7 +96,7 @@ impl RequiresGrad for Grad {
     }
 }
 impl RequiresGrad for NoGrad {
-    /// No argument needed — never tracks gradients.
+    /// No argument needed. This marker never tracks gradients.
     type Arg = ();
     /// Zero-sized: the value is fixed by the type.
     type Field = PhantomData<Self>;

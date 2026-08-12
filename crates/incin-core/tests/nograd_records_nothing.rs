@@ -3,8 +3,8 @@
 //! PROPOSALS.md sec. 1.2.5 states it as an obligation rather than a
 //! preference: "`NoGrad` must produce no autograd node and save no
 //! backward-only tensor." Before this row nothing carried the marker down to
-//! the layer that records — `cpu/tape.rs` said so at the declaration of
-//! `push`, per D-05 — so the obligation was unmet and untestable in the same
+//! the layer that records. `cpu/tape.rs` said so at the declaration of
+//! `push`, per D-05, so the obligation was unmet and untestable in the same
 //! breath.
 //!
 //! The tests below are in three groups, and the order matters. The first two
@@ -43,7 +43,7 @@ fn each_marker_derives_the_mode_its_name_promises() {
 #[test]
 fn the_mode_cannot_disagree_with_requires_grad() {
     // The derivation is a default body over `requires_grad`, so this holds by
-    // construction — which is the point. Asserting it here is what makes a
+    // construction, which is the point. Asserting it here makes a
     // future impl that overrides `grad_mode` into a test failure rather than a
     // tensor that claims gradients and silently records none.
     for (field, marker) in [(true, "Dyn(true)"), (false, "Dyn(false)")] {
