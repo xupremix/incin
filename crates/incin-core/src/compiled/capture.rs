@@ -4,7 +4,7 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::exec::OperationIdentity;
+use crate::exec::{ExecutionSite, OperationIdentity};
 use crate::graph::{Graph, NodeId, Value, ValueId};
 use crate::prelude::{Error, Result};
 
@@ -15,6 +15,7 @@ pub struct CapturedNode {
     pub id: NodeId,
     /// Operation type of this node.
     pub operation: OperationIdentity,
+    pub execution_site: Option<ExecutionSite>,
     pub attributes: alloc::collections::BTreeMap<String, crate::graph::AttributeValue>,
     /// Value IDs consumed by this node as inputs.
     pub inputs: Vec<ValueId>,
@@ -70,6 +71,7 @@ impl CapturedGraph {
             nodes.push(CapturedNode {
                 id: node.id,
                 operation: node.operation.clone(),
+                execution_site: node.execution_site,
                 attributes: node.attributes.clone(),
                 inputs: node.inputs.clone(),
                 outputs: node.outputs.clone(),

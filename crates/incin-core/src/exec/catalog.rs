@@ -137,7 +137,7 @@ pub enum LayoutRule {
 ///
 /// [`ExecutionSite::is_backend_executable`] is the predicate that separates the
 /// two. Every variant states its own reason rather than deferring to prose.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ExecutionSite {
     /// Operands in, one allocation out. `Execute<O>` expresses this
     /// directly, so an unmigrated operation here is unfinished work rather than

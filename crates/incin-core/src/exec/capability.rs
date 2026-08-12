@@ -13,6 +13,18 @@ pub enum OperationIdentity {
     Custom(OperationKey),
 }
 
+impl OperationIdentity {
+    #[must_use]
+    pub fn execution_site(&self) -> Option<super::catalog::ExecutionSite> {
+        match self {
+            Self::Builtin(operation) => {
+                super::catalog::catalog_entry(*operation).map(|row| row.site)
+            }
+            Self::Custom(_) => None,
+        }
+    }
+}
+
 /// A complete runtime support question for one physical execution path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CapabilityQuery {

@@ -1,4 +1,4 @@
-use crate::exec::{OperationIdentity, ShapeExpr};
+use crate::exec::{ExecutionSite, OperationIdentity, ShapeExpr};
 use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
@@ -26,6 +26,7 @@ pub struct Value {
 pub struct Node {
     pub id: NodeId,
     pub operation: OperationIdentity,
+    pub execution_site: Option<ExecutionSite>,
     pub inputs: Vec<ValueId>,
     pub outputs: Vec<ValueId>,
     pub attributes: BTreeMap<String, AttributeValue>,
@@ -143,9 +144,11 @@ impl Graph {
     ) -> NodeId {
         let id = self.next_node_id;
         self.next_node_id += 1;
+        let execution_site = operation.execution_site();
         self.nodes.push(Node {
             id,
             operation,
+            execution_site,
             inputs,
             outputs,
             attributes,
