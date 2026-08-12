@@ -27,6 +27,17 @@ fn symbolic_validation_binds_named_symbols_before_composites() {
         .bind_and_validate(&[4, 3], &mut environment)
         .expect("direct symbol dimensions should bind composite expressions");
 }
+
+#[test]
+fn unresolved_symbolic_constraints_are_reported_as_unresolved() {
+    let error = SymbolEnvironment::default()
+        .validate_constraints(&[Constraint::equal(
+            DimExpr::Symbol(SymbolId(91)),
+            DimExpr::Const(4),
+        )])
+        .unwrap_err();
+    assert!(error.contains("remains unresolved"));
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 

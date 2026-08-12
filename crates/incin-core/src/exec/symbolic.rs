@@ -95,27 +95,36 @@ impl SymbolEnvironment {
 
     pub fn validate_constraints(&self, constraints: &[Constraint]) -> Result<(), String> {
         for constraint in constraints {
-            let valid = match constraint {
+            let result = match constraint {
                 Constraint::Equal { lhs, rhs } => lhs
                     .evaluate_env(self)
                     .zip(rhs.evaluate_env(self))
-                    .is_some_and(|(l, r)| l == r),
-                Constraint::LowerBound { value, bound } => value
-                    .evaluate_env(self)
-                    .is_some_and(|value| value >= *bound),
-                Constraint::UpperBound { value, bound } => value
-                    .evaluate_env(self)
-                    .is_some_and(|value| value <= *bound),
+                    .map(|(l, r)| l == r),
+                Constraint::LowerBound { value, bound } => {
+                    value.evaluate_env(self).map(|value| value >= *bound)
+                }
+                Constraint::UpperBound { value, bound } => {
+                    value.evaluate_env(self).map(|value| value <= *bound)
+                }
                 Constraint::Divisible { value, divisor } => value
                     .evaluate_env(self)
-                    .is_some_and(|value| *divisor != 0 && value % divisor == 0),
+                    .map(|value| *divisor != 0 && value % divisor == 0),
                 Constraint::BroadcastCompatible { lhs, rhs } => lhs
                     .evaluate_env(self)
                     .zip(rhs.evaluate_env(self))
-                    .is_some_and(|(lhs, rhs)| lhs == rhs || lhs == 1 || rhs == 1),
+                    .map(|(lhs, rhs)| lhs == rhs || lhs == 1 || rhs == 1),
             };
-            if !valid {
-                return Err(alloc::format!("shape constraint failed: {:?}", constraint));
+            match result {
+                Some(true) => {}
+                Some(false) => {
+                    return Err(alloc::format!("shape constraint failed: {:?}", constraint));
+                }
+                None => {
+                    return Err(alloc::format!(
+                        "shape constraint remains unresolved: {:?}",
+                        constraint
+                    ));
+                }
             }
         }
         Ok(())
