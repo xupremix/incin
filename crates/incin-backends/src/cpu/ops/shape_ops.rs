@@ -267,6 +267,52 @@ pub(crate) fn diag_storage(t: &CpuStorage, k: i64) -> Result<CpuStorage> {
     ))
 }
 
+pub(crate) fn group_norm_storage(t: &CpuStorage, groups: usize, eps: f64) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    if groups == 0 {
+        return Err(Error::Msg("group_norm: groups must be non-zero".into()));
+    }
+    let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+    if channels % groups != 0 {
+        return Err(Error::Msg(
+            "group_norm: channels must be divisible by groups".into(),
+        ));
+    }
+    let (batch, spatial) = if t.shape.len() >= 2 {
+        (t.shape[0], t.shape[2..].iter().product::<usize>())
+    } else {
+        (1, total)
+    };
+    let group_size = channels / groups * spatial;
+    let mut out = Vec::with_capacity(total);
+    for run in 0..batch * groups {
+        let mut sum = 0.0;
+        let mut sq_sum = 0.0;
+        for i in 0..group_size {
+            let index = crate::cpu::ops::elementwise::flat_to_nd(run * group_size + i, &t.shape);
+            let value = t.get(&index);
+            sum += value;
+            sq_sum += value * value;
+        }
+        let mean = sum / group_size as f64;
+        let variance = (sq_sum / group_size as f64 - mean * mean).max(0.0);
+        let inv_std = 1.0 / (variance + eps).sqrt();
+        for i in 0..group_size {
+            let index = crate::cpu::ops::elementwise::flat_to_nd(run * group_size + i, &t.shape);
+            out.push((t.get(&index) - mean) * inv_std);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        t.buffer.from_f64_values(out)?,
+        t.shape.to_vec(),
+    ))
+}
+
+pub(crate) fn instance_norm_storage(t: &CpuStorage, eps: f64) -> Result<CpuStorage> {
+    let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+    group_norm_storage(t, channels, eps)
+}
+
 fn triangular_storage(t: &CpuStorage, k: i64, upper: bool) -> Result<CpuStorage> {
     let rank = t.shape.len();
     let total = crate::cpu::stride::checked_numel(&t.shape)?;
@@ -1331,69 +1377,14 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         groups: usize,
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        if groups == 0 {
-            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
-        }
-        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        if channels % groups != 0 {
-            return Err(Error::Msg(
-                "group_norm: channels must be divisible by groups".into(),
-            ));
-        }
-        // Group normalization statistics are per sample, over one group of
-        // channels and all of that group's spatial positions. A tensor is
-        // `[batch, channels, spatial..]`, so a group occupies
-        // `channels / groups * spatial` elements and there are
-        // `batch * groups` of them, not `groups`. Dividing `total` by `groups`
-        // instead spans samples, which only agrees with the definition when
-        // batch is 1 and is silently wrong above it.
-        //
-        // Rank under 2 has no channel axis to split, so it is one group over
-        // the whole tensor, which is what `groups == 1` already forces.
-        let (batch, spatial) = if t.shape.len() >= 2 {
-            (t.shape[0], t.shape[2..].iter().product::<usize>())
-        } else {
-            (1, total)
-        };
-        // Flat index is `(n * channels + c) * spatial + s`, so a group is a
-        // contiguous run and run `n * groups + g` starts at `run * group_size`.
-        // That keeps the outputs in flat order and lets them be pushed in
-        // sequence, as `from_contiguous` below expects.
-        let group_size = channels / groups * spatial;
-        let mut out = Vec::with_capacity(total);
-        for run in 0..batch * groups {
-            let mut sum = 0.0f64;
-            let mut sq_sum = 0.0f64;
-            for i in 0..group_size {
-                let flat_i = run * group_size + i;
-                let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
-                let val = t.get(&multi_i);
-                sum += val;
-                sq_sum += val * val;
-            }
-            let mean = sum / group_size as f64;
-            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
-            let inv_std = 1.0 / (var + eps).sqrt();
-            for i in 0..group_size {
-                let flat_i = run * group_size + i;
-                let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
-                let norm_val = (t.get(&multi_i) - mean) * inv_std;
-                out.push(norm_val);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out)?,
-            t.shape.to_vec(),
-        ))
+        group_norm_storage(t, groups, eps)
     }
 
     fn instance_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        Self::group_norm::<K>(t, channels, eps)
+        instance_norm_storage(t, eps)
     }
 }
 

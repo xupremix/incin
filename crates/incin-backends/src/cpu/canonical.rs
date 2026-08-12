@@ -42,8 +42,9 @@ use super::ops::elementwise::{
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
 use super::ops::shape_ops::{
-    diag_storage, div_scalar_storage, flatten_storage, narrow_storage, squeeze_storage,
-    sub_scalar_storage, transpose_storage, tril_storage, triu_storage, unsqueeze_storage,
+    diag_storage, div_scalar_storage, flatten_storage, group_norm_storage, instance_norm_storage,
+    narrow_storage, squeeze_storage, sub_scalar_storage, transpose_storage, tril_storage,
+    triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -2251,7 +2252,7 @@ impl<D: Device> Execute<op::GroupNorm> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::group_norm::<f32>(input, attributes.groups, attributes.epsilon)
+        group_norm_storage(input, attributes.groups, attributes.epsilon)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -2407,7 +2408,7 @@ impl<D: Device> Execute<op::InstanceNorm> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let epsilon = request.operation.descriptor().attributes().epsilon;
-        <Self as TensorOps<Self>>::instance_norm::<f32>(input, epsilon)
+        instance_norm_storage(input, epsilon)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
