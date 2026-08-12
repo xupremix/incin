@@ -105,8 +105,10 @@ fn dyn_f64_mean_uses_the_same_reference_transport_path() {
     let plan = builder.finish().unwrap();
     let descriptor = &plan.collective_plan().descriptors()[0];
     let buffers = [
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![1.0]), DTypeId::F64).unwrap(),
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![3.0]), DTypeId::F64).unwrap(),
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![1.0]), DTypeId::F64.into())
+            .unwrap(),
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![3.0]), DTypeId::F64.into())
+            .unwrap(),
     ];
     let reduced = ReferenceTransport
         .all_reduce(

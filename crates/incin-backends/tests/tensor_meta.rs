@@ -142,10 +142,8 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
 #[test]
 #[ignore = "requires a CUDA device and driver"]
 fn cuda_metadata_reports_the_measured_device_allocation_alignment() {
-    type CudaB = incin_backends::cuda::CudaBackendImpl<
-        f32,
-        incin_core::prelude::CudaN<incin_core::typenum::U0>,
-    >;
+    type CudaB =
+        incin_backends::cuda::CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
 
     let values = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
     let storage = CudaB::from_bytes::<f32>(

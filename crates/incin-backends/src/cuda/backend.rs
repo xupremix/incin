@@ -3405,11 +3405,23 @@ mod tests {
 
     #[test]
     fn byte_length_uses_authoritative_storage_dtype() {
-        assert_eq!(checked_storage_byte_len(7, DTypeId::F16).unwrap(), 14);
-        assert_eq!(checked_storage_byte_len(7, DTypeId::BF16).unwrap(), 14);
-        assert_eq!(checked_storage_byte_len(7, DTypeId::F32).unwrap(), 28);
-        assert_eq!(checked_storage_byte_len(7, DTypeId::F64).unwrap(), 56);
-        assert!(checked_storage_byte_len(usize::MAX, DTypeId::F64).is_err());
+        assert_eq!(
+            checked_storage_byte_len(7, DTypeId::F16.into()).unwrap(),
+            14
+        );
+        assert_eq!(
+            checked_storage_byte_len(7, DTypeId::BF16.into()).unwrap(),
+            14
+        );
+        assert_eq!(
+            checked_storage_byte_len(7, DTypeId::F32.into()).unwrap(),
+            28
+        );
+        assert_eq!(
+            checked_storage_byte_len(7, DTypeId::F64.into()).unwrap(),
+            56
+        );
+        assert!(checked_storage_byte_len(usize::MAX, DTypeId::F64.into()).is_err());
     }
 
     #[test]
@@ -3422,13 +3434,13 @@ mod tests {
             DTypeId::F64,
             DTypeId::I64,
         ] {
-            validate_cuda_storage(dtype, &device, "test").unwrap();
+            validate_cuda_storage(dtype.into(), &device, "test").unwrap();
         }
         assert!(matches!(
-            validate_cuda_storage(DTypeId::U32, &device, "test"),
+            validate_cuda_storage(DTypeId::U32.into(), &device, "test"),
             Err(Error::UnsupportedDType { .. })
         ));
-        assert!(validate_cuda_storage(DTypeId::F32, &DeviceId::cpu(), "test").is_err());
+        assert!(validate_cuda_storage(DTypeId::F32.into(), &DeviceId::cpu(), "test").is_err());
     }
 
     #[test]
@@ -3448,7 +3460,25 @@ mod tests {
     type B = CudaBackendImpl<Cuda>;
 
     fn cuda_f32(shape: &[usize], values: Vec<f32>) -> CudaStorage {
-        cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
+        cuda_from_f32(
+            shape,
+            DTypeId::F32.into(),
+            &DeviceId::cuda(0),
+            values,
+            "test",
+        )
+        .unwrap()
+    }
+
+    fn cuda_bool(shape: &[usize], values: Vec<bool>) -> CudaStorage {
+        let bytes: Vec<u8> = values.into_iter().map(u8::from).collect();
+        cuda_from_bytes(
+            shape,
+            DTypeId::Bool.into(),
+            DeviceId::cuda(0).ordinal(),
+            &bytes,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -3583,7 +3613,13 @@ mod tests {
 
     fn cuda_i64(shape: &[usize], values: Vec<i64>) -> CudaStorage {
         let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
-        cuda_from_bytes(shape, DTypeId::I64, DeviceId::cuda(0).ordinal(), &bytes).unwrap()
+        cuda_from_bytes(
+            shape,
+            DTypeId::I64.into(),
+            DeviceId::cuda(0).ordinal(),
+            &bytes,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -4091,7 +4127,14 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn float_to_scalar_rejects_a_non_f32_dtype() {
-        let t = cuda_from_f32(&[1], DTypeId::F64, &DeviceId::cuda(0), vec![3.5], "test").unwrap();
+        let t = cuda_from_f32(
+            &[1],
+            DTypeId::F64.into(),
+            &DeviceId::cuda(0),
+            vec![3.5],
+            "test",
+        )
+        .unwrap();
         assert!(matches!(
             <B as TensorOps<B>>::float_to_scalar::<f32>(&t),
             Err(Error::UnsupportedDType { .. })
@@ -4164,7 +4207,7 @@ mod tests {
     fn test_logical_and() {
         let a = cuda_f32(&[4], vec![1.0, 1.0, 0.0, 0.0]);
         let b = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
-        let out = <B as TensorOps<B>>::logical_and::<f32>(&a, &b).unwrap();
+        let out = <B as TensorOps<B>>::logical_and(&a, &b).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
     }
 
@@ -4172,7 +4215,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_logical_not() {
         let a = cuda_f32(&[4], vec![1.0, 0.0, 2.0, 0.0]);
-        let out = <B as TensorOps<B>>::logical_not::<f32>(&a).unwrap();
+        let out = <B as TensorOps<B>>::logical_not(&a).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![0.0, 1.0, 0.0, 1.0]);
     }
 
@@ -4223,7 +4266,7 @@ mod tests {
     }
 
     fn cuda_f64(shape: &[usize], values: Vec<f64>) -> CudaStorage {
-        cuda_from_bytes(shape, DTypeId::F64, 0, bytemuck::cast_slice(&values)).unwrap()
+        cuda_from_bytes(shape, DTypeId::F64.into(), 0, bytemuck::cast_slice(&values)).unwrap()
     }
 
     #[test]
@@ -4319,7 +4362,7 @@ mod tests {
     fn test_masked_fill() {
         let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
-        let out = <B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).unwrap();
+        let out = <B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![-1.0, 2.0, -1.0, 4.0]);
     }
 
@@ -4328,7 +4371,7 @@ mod tests {
     fn masked_fill_rejects_a_mismatched_mask_shape() {
         let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let mask = cuda_f32(&[2], vec![1.0, 0.0]);
-        assert!(<B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).is_err());
+        assert!(<B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).is_err());
     }
 
     #[test]
@@ -4508,18 +4551,27 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_full() {
-        let out =
-            <B as CreationOps<B>>::full::<f32>(3.5, &[2, 2], DTypeId::F32, &DeviceId::cuda(0))
-                .unwrap();
+        let out = <B as CreationOps<B>>::full::<f32>(
+            3.5,
+            &[2, 2],
+            DTypeId::F32.into(),
+            &DeviceId::cuda(0),
+        )
+        .unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.5, 3.5, 3.5, 3.5]);
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_arange() {
-        let out =
-            <B as CreationOps<B>>::arange::<f32>(1.0, 2.0, &[4], DTypeId::F32, &DeviceId::cuda(0))
-                .unwrap();
+        let out = <B as CreationOps<B>>::arange::<f32>(
+            1.0,
+            2.0,
+            &[4],
+            DTypeId::F32.into(),
+            &DeviceId::cuda(0),
+        )
+        .unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 3.0, 5.0, 7.0]);
     }
 
@@ -4530,7 +4582,7 @@ mod tests {
             0.0,
             10.0,
             &[5],
-            DTypeId::F32,
+            DTypeId::F32.into(),
             &DeviceId::cuda(0),
         )
         .unwrap();

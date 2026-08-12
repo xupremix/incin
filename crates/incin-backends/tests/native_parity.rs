@@ -50,16 +50,27 @@ fn as_i64_bytes(v: &[i64]) -> Vec<u8> {
 }
 
 /// Make storage.
-fn make_storage<B: Backend>(data: &[f32], shape: &[usize]) -> B::Storage<f32> {
-    B::from_bytes::<f32>(&as_bytes(data), shape, DTypeId::F32, &DeviceId::cpu())
-        .expect("from_bytes")
+fn make_storage<B>(data: &[f32], shape: &[usize]) -> B::Storage<f32>
+where
+    B: Backend + CreationOps<B>,
+{
+    B::from_bytes::<f32>(
+        &as_bytes(data),
+        shape,
+        DTypeId::F32.into(),
+        &DeviceId::cpu(),
+    )
+    .expect("from_bytes")
 }
 
 /// Reshape `t` to 1D before reading it out via `float_to_vec1` (Pitfall 5) —
 /// `CpuBackendImpl::float_to_vec1` errors on any rank != 1 input, so every
 /// non-scalar, non-1D output/gradient must be flattened first. Scalar (rank
 /// 0) outputs are read via `float_to_scalar` instead.
-fn read_flat<B: Backend>(t: &B::Storage<f32>) -> Vec<f64> {
+fn read_flat<B>(t: &B::Storage<f32>) -> Vec<f64>
+where
+    B: Backend + TensorOps<B> + FloatOps<B>,
+{
     let shape = B::shape::<f32>(t);
     let total: usize = shape.iter().product::<usize>().max(1);
     if shape.is_empty() {
@@ -77,11 +88,14 @@ fn read_flat<B: Backend>(t: &B::Storage<f32>) -> Vec<f64> {
 /// output isn't already scalar, drives `B::backward`, and returns
 /// (forward_values, gradient_values) — both read back flattened to 1D
 /// (Pitfall 5).
-fn run_and_grad<B: Backend>(
+fn run_and_grad<B>(
     op: impl Fn(&B::Storage<f32>) -> B::Storage<f32>,
     input_data: &[f32],
     input_shape: &[usize],
-) -> (Vec<f64>, Vec<f64>) {
+) -> (Vec<f64>, Vec<f64>)
+where
+    B: Backend + CreationOps<B> + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+{
     let x_stor = make_storage::<B>(input_data, input_shape);
     let x_var = B::var_from_tensor::<f32>(&x_stor).expect("var_from_tensor");
     let x = B::var_as_tensor::<f32>(&x_var).expect("var_as_tensor");
@@ -107,13 +121,16 @@ fn run_and_grad<B: Backend>(
 
 /// Two-input generic op-under-test variant for add/sub/mul/div/matmul.
 /// Returns (forward_values, lhs_gradient_values, rhs_gradient_values).
-fn run_and_grad2<B: Backend>(
+fn run_and_grad2<B>(
     op: impl Fn(&B::Storage<f32>, &B::Storage<f32>) -> B::Storage<f32>,
     lhs_data: &[f32],
     lhs_shape: &[usize],
     rhs_data: &[f32],
     rhs_shape: &[usize],
-) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+) -> (Vec<f64>, Vec<f64>, Vec<f64>)
+where
+    B: Backend + CreationOps<B> + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+{
     let lhs_stor = make_storage::<B>(lhs_data, lhs_shape);
     let rhs_stor = make_storage::<B>(rhs_data, rhs_shape);
     let lhs_var = B::var_from_tensor::<f32>(&lhs_stor).expect("var_from_tensor lhs");
@@ -176,8 +193,8 @@ fn assert_close(a: &[f64], b: &[f64], tol: f64, label: &str) {
 #[test]
 /// Parity test between CPU and WGPU backends for `zeros_parity`.
 fn zeros_parity() {
-    let n = NB::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
-    let c = CB::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
+    let n = NB::zeros::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
+    let c = CB::zeros::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "zeros");
 }
@@ -185,8 +202,8 @@ fn zeros_parity() {
 #[test]
 /// Parity test between CPU and WGPU backends for `ones_parity`.
 fn ones_parity() {
-    let n = NB::ones::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
-    let c = CB::ones::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
+    let n = NB::ones::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
+    let c = CB::ones::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "ones");
 }
@@ -1008,7 +1025,7 @@ fn embedding_forward_and_backward_parity() {
     let c_idx = CB::from_bytes::<i64>(
         &as_i64_bytes(&indices),
         &[2],
-        DTypeId::I64,
+        DTypeId::I64.into(),
         &DeviceId::cpu(),
     )
     .unwrap();
@@ -1318,9 +1335,13 @@ fn cross_entropy_loss_forward_and_backward_parity() {
         &[2, 3],
     );
 
-    let c_target =
-        CB::from_bytes::<i64>(&as_i64_bytes(&[1, 2]), &[2], DTypeId::I64, &DeviceId::cpu())
-            .unwrap();
+    let c_target = CB::from_bytes::<i64>(
+        &as_i64_bytes(&[1, 2]),
+        &[2],
+        DTypeId::I64.into(),
+        &DeviceId::cpu(),
+    )
+    .unwrap();
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |p| CB::cross_entropy_loss::<f32, i64>(p, &c_target, Reduction::Mean).unwrap(),
         &pred,

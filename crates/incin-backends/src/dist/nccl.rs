@@ -2322,7 +2322,10 @@ mod tests {
         .unwrap();
         incin_core::dist::PipelinePlanBuilder::build_static::<
             f32,
-            (incin_core::typenum::U2,),
+            incin_core::shapes::DimCons<
+                incin_core::shapes::Static<incin_core::typenum::U2>,
+                incin_core::shapes::Nil,
+            >,
             incin_core::typenum::U2,
             incin_core::dist::GPipe,
         >(
@@ -2931,7 +2934,7 @@ mod tests {
 
         let static_input =
             Tensor::<incin_core::prelude::Dyn, B>::from_slice(&rank_major, vec![12]).unwrap();
-        let static_output = reassemble_tensor_parallel_storage::<f32, D, f32>(
+        let static_output = reassemble_tensor_parallel_storage::<D, f32>(
             static_input.inner(),
             collective,
             &[2, 3],
@@ -2947,7 +2950,7 @@ mod tests {
                 (vec![12], DTypeId::F32),
             )
             .unwrap();
-        let dyn_output = reassemble_tensor_parallel_storage::<f32, D, incin_core::prelude::Dyn>(
+        let dyn_output = reassemble_tensor_parallel_storage::<D, incin_core::prelude::Dyn>(
             dyn_input.inner(),
             collective,
             &[2, 3],

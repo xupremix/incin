@@ -184,7 +184,7 @@ fn dyn_f64_uses_the_same_three_collective_paths() {
     let descriptors = plan.collective_plan().descriptors();
 
     let dyn_buffer = |values| {
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(values), DTypeId::F64).unwrap()
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(values), DTypeId::F64.into()).unwrap()
     };
     let column = ReferenceTransport
         .all_gather(

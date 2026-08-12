@@ -10,7 +10,6 @@ use incin_backends::prelude::*;
 use incin_backends::target::Native;
 use incin_core::nn::init::{self, InitContext, InitPlan, ParameterRole};
 use incin_core::nn::linear::{Linear, linear};
-use incin_core::nn::module::Module;
 use incin_core::nn::param::{Frozen, Trainable};
 use incin_core::prelude::*;
 
@@ -28,10 +27,10 @@ fn test_init_plan_lowering() {
     assert_eq!(p_ones, InitPlan::Ones);
 
     // 2. Constant
-    let p_const = init::constant(3.14)
+    let p_const = init::constant(3.2)
         .plan(InitContext::new(ParameterRole::Weight))
         .unwrap();
-    assert_eq!(p_const, InitPlan::Constant(3.14));
+    assert_eq!(p_const, InitPlan::Constant(3.2));
 
     // 3. Xavier Uniform with Fan (in = 100, out = 400)
     let ctx = InitContext::new(ParameterRole::Weight).with_fan(100, 400);

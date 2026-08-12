@@ -118,11 +118,11 @@ fn test_metal_custom_capability_rejection() {
 #[cfg(feature = "external-candle")]
 #[test]
 fn test_candle_custom_capability_rejection() {
-    use incin_backends::candle::CandleBackendImpl;
+    use incin_backends::external::candle::CandleBackend;
     let descriptor = TestOpaque16::DESCRIPTOR;
     let field = <Dyn as DType>::init(descriptor);
     let device = DeviceId::CPU;
     let err =
-        <CandleBackendImpl<Dyn> as SupportsDType<Dyn>>::resolve_dtype(&field, &device).unwrap_err();
+        <CandleBackend<Cpu> as SupportsDType<Dyn>>::resolve_dtype(&field, &device).unwrap_err();
     assert!(matches!(err, Error::UnsupportedDType { .. }));
 }

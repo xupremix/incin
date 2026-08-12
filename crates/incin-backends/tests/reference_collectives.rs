@@ -154,9 +154,9 @@ fn send_recv_is_global_and_its_adjoint_reverses_the_peers() {
 fn dynamic_dtype_is_checked_and_executes_the_same_collective() {
     let transport = ReferenceTransport;
     let inputs = [
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![1.0, 2.0]), DTypeId::F64)
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![1.0, 2.0]), DTypeId::F64.into())
             .unwrap(),
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![3.0, 4.0]), DTypeId::F64)
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(vec![3.0, 4.0]), DTypeId::F64.into())
             .unwrap(),
     ];
     let output = transport
@@ -168,7 +168,8 @@ fn dynamic_dtype_is_checked_and_executes_the_same_collective() {
     );
 
     assert_eq!(
-        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F32(vec![1.0]), DTypeId::F64).unwrap_err(),
+        ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F32(vec![1.0]), DTypeId::F64.into())
+            .unwrap_err(),
         CollectiveError::BufferDType {
             values: DTypeId::F32,
             typed: DTypeId::F64,

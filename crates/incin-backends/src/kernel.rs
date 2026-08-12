@@ -5,6 +5,7 @@
 //! Cartesian product of operations, dtypes, layouts, and devices.
 
 use alloc::{boxed::Box, string::String};
+#[cfg(feature = "cuda")]
 use incin_core::exec::PrecisionRequest;
 use incin_core::exec::{LayoutClass, MathMode};
 use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
@@ -140,7 +141,7 @@ pub struct KernelKey {
 
 impl KernelKey {
     pub fn cuda(
-        policy_family: OperationKind,
+        _policy_family: OperationKind,
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
@@ -148,7 +149,7 @@ impl KernelKey {
         access: KernelAccess,
     ) -> Result<Self> {
         Self::cuda_with_signature(
-            policy_family,
+            _policy_family,
             family,
             operation,
             dtype,
@@ -161,7 +162,7 @@ impl KernelKey {
     }
 
     pub fn cuda_with_signature(
-        policy_family: OperationKind,
+        _policy_family: OperationKind,
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
@@ -174,7 +175,7 @@ impl KernelKey {
         #[cfg(feature = "cuda")]
         let policy = {
             let req = PrecisionRequest::new(
-                policy_family,
+                _policy_family,
                 dtype.descriptor(),
                 dtype.descriptor(),
                 layout_class,

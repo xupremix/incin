@@ -104,7 +104,8 @@ fn two_networked_cuda_ranks_static_and_dyn() {
     };
     let f64_bytes = encode_f64(&f64_values);
     let f64_device = stream.clone_htod(&f64_bytes).expect("copy f64 input");
-    let f64_input = NcclBuffer::<Dyn>::try_from_device_bytes(f64_device, 2, DTypeId::F64).unwrap();
+    let f64_input =
+        NcclBuffer::<Dyn>::try_from_device_bytes(f64_device, 2, DTypeId::F64.into()).unwrap();
     let (f64_output, f64_event) = transport.execute(&f64_input).expect("Dyn all-reduce");
     f64_event.wait_timeout(timeout).expect("Dyn completion");
     let f64_host = stream

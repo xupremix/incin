@@ -10,8 +10,6 @@ extern crate incin_core as incin;
 use incin_backends::nn_target::InitOnTarget;
 use incin_backends::prelude::*;
 use incin_backends::target::Native;
-use incin_core::nn::module::Module;
-use incin_core::nn::param::{Frozen, Trainable};
 use incin_core::prelude::*;
 
 #[test]

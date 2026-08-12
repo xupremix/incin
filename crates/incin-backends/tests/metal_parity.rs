@@ -165,6 +165,7 @@ fn test_metal_descriptor_execution() {
             operation: &validated,
             inputs: &inputs,
             context: &context,
+            payload: None,
         })
         .expect("descriptor matmul must execute");
 
@@ -185,6 +186,7 @@ fn test_metal_descriptor_execution() {
             operation: &reshape_val,
             inputs: &reshape_inputs,
             context: &context,
+            payload: None,
         })
         .expect("descriptor reshape must execute");
 

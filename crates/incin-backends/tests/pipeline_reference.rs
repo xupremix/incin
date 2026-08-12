@@ -53,7 +53,12 @@ fn mesh() -> DeviceMesh<TwoRankPipeline> {
 
 #[test]
 fn static_f32_gpipe_forward_and_gradients_match_one_device() {
-    let plan = PipelinePlanBuilder::build_static::<f32, (U2,), U3, GPipe>(
+    let plan = PipelinePlanBuilder::build_static::<
+        f32,
+        incin_core::shapes::DimCons<incin_core::shapes::Static<U2>, incin_core::shapes::Nil>,
+        U3,
+        GPipe,
+    >(
         &mesh(),
         0,
         PipelineBoundaryId::new(1).unwrap(),
@@ -86,7 +91,12 @@ fn dyn_f64_one_f_one_b_uses_the_same_transfers_and_matches_one_device() {
     let found = execute_dyn_f64(&plan, &inputs);
     assert_eq!(found, expected);
 
-    let static_plan = PipelinePlanBuilder::build_static::<f64, (U2,), U3, OneForwardOneBackward>(
+    let static_plan = PipelinePlanBuilder::build_static::<
+        f64,
+        incin_core::shapes::DimCons<incin_core::shapes::Static<U2>, incin_core::shapes::Nil>,
+        U3,
+        OneForwardOneBackward,
+    >(
         &mesh(),
         0,
         PipelineBoundaryId::new(2).unwrap(),
@@ -172,7 +182,8 @@ fn execute_dyn_f64(plan: &PipelinePlan, inputs: &[[f64; 2]; 3]) -> (Vec<f64>, [f
     {
         let microbatch = semantic.microbatch();
         let buffer = |values| {
-            ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(values), DTypeId::F64).unwrap()
+            ReferenceBuffer::<Dyn>::try_new(ReferenceValues::F64(values), DTypeId::F64.into())
+                .unwrap()
         };
         match semantic.transfer() {
             PipelineTransfer::ForwardActivation => {

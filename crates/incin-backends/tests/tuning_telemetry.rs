@@ -48,7 +48,13 @@ fn tuning_provenance_and_explain_formatting() {
     .unwrap();
 
     let decision = disabled
-        .decide(&context, key.clone(), &[candidate.clone()], 12345, 12345)
+        .decide(
+            &context,
+            key.clone(),
+            std::slice::from_ref(&candidate),
+            12345,
+            12345,
+        )
         .unwrap();
 
     let selection = match decision {

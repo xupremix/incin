@@ -12,7 +12,7 @@ use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::catalog::LogicalTensorMeta;
 use incin_core::exec::{
     Capabilities, CapabilityQuery, Descriptor, ExecutionContext, LayoutClass, MathMode,
-    SupportLevel, TensorHandle, Validated, op,
+    OperationIdentity, SupportLevel, TensorHandle, Validated, op,
 };
 use incin_core::prelude::{BackendError, Cpu, DTypeId, Local, OperationKind, ShapeBuf};
 
@@ -57,6 +57,7 @@ fn execute(
         operation: validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     })
 }
 
@@ -116,6 +117,7 @@ fn the_binder_requires_exactly_two_inputs() {
             operation: &validated,
             inputs: &inputs,
             context: &context,
+            payload: None,
         })
         .expect_err("a one-operand matmul request must not execute");
 
@@ -170,6 +172,7 @@ fn execute_reshape(
         operation: validated,
         inputs: &inputs,
         context: &context,
+        payload: None,
     })
 }
 
@@ -219,7 +222,7 @@ fn capabilities_now_answer_for_the_operations_the_adapter_routes() {
     // claim `EXE-005` exists to prevent.
     let backend = TestBackend::default();
     let query = |operation| CapabilityQuery {
-        operation,
+        operation: OperationIdentity::Builtin(operation),
         dtype: DTypeId::F32.into(),
         layout: LayoutClass::Contiguous,
         rank: 2,

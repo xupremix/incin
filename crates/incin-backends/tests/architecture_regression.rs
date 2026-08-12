@@ -108,8 +108,7 @@ fn test_8b_same_candle_cpu_backend_across_dtypes() {
 #[test]
 fn test_8c_dtype_view_preserves_engine() {
     use incin_backends::external::candle::CandleBackend;
-    use incin_backends::target::{DtypeTarget, TargetExt};
-    use incin_core::prelude::DtypeView;
+    use incin_backends::target::{DtypeTarget, DtypeView};
     let target = incin_backends::target::Candle::on(Cpu);
     let view = target.dtype::<i64>().unwrap();
     assert_same_type::<

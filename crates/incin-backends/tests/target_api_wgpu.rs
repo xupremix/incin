@@ -49,7 +49,7 @@ fn with_dtype_refuses_a_dtype_the_accelerator_cannot_store() {
     let device = gpu.device_id().unwrap();
     let refused =
         <incin_backends::wgpu::WgpuBackendImpl<Wgpu> as SupportsDType<Dyn>>::resolve_dtype(
-            &DTypeId::F64,
+            &DTypeId::F64.into(),
             &device,
         )
         .expect_err("the wgpu storage row lists f32 only");

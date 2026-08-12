@@ -6,7 +6,7 @@ use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::Backend;
+use incin_core::backend_authoring::{Backend, StorageBackend};
 use incin_core::exec::catalog::{
     ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes, DataAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
@@ -2032,7 +2032,7 @@ type CudaB =
     incin_backends::cuda::CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
 
 #[cfg(feature = "cuda")]
-fn cuda_f32(shape: &[usize], values: &[f32]) -> <CudaB as Backend>::Storage<f32> {
+fn cuda_f32(shape: &[usize], values: &[f32]) -> <CudaB as StorageBackend>::Storage<f32> {
     CudaB::from_bytes::<f32>(
         bytemuck::cast_slice(values),
         shape,
@@ -2046,7 +2046,7 @@ fn cuda_f32(shape: &[usize], values: &[f32]) -> <CudaB as Backend>::Storage<f32>
 fn execute_cuda_probe(
     operation: OperationKind,
     layout: LayoutClass,
-) -> <CudaB as Backend>::Storage<f32> {
+) -> <CudaB as StorageBackend>::Storage<f32> {
     let storage = |shape: &[usize], values: &[f32]| {
         let value = cuda_f32(shape, values);
         if layout == LayoutClass::Strided && shape.len() == 2 {

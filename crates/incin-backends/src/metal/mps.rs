@@ -187,8 +187,10 @@ mod tests {
 
     #[test]
     fn reduction_candidate_thresholds_are_consistent() {
-        assert!(REDUCTION_MPS_THRESHOLD > 0);
-        assert!(REDUCTION_MPS_THRESHOLD < POINTWISE_MPS_THRESHOLD);
+        const {
+            assert!(REDUCTION_MPS_THRESHOLD > 0);
+            assert!(REDUCTION_MPS_THRESHOLD < POINTWISE_MPS_THRESHOLD);
+        }
 
         let small = MpsReductionCandidate::preferred(REDUCTION_MPS_THRESHOLD - 1);
         assert_eq!(small, MpsReductionCandidate::Native);
@@ -196,7 +198,9 @@ mod tests {
 
     #[test]
     fn matmul_candidate_thresholds_are_consistent() {
-        assert!(MATMUL_MPS_THRESHOLD > 0);
+        const {
+            assert!(MATMUL_MPS_THRESHOLD > 0);
+        }
 
         // Native for very small matrices.
         let tiny = MpsMatMulCandidate::preferred(1, 1, 1);
@@ -210,7 +214,9 @@ mod tests {
 
     #[test]
     fn normalization_candidate_thresholds_are_consistent() {
-        assert!(NORMALIZATION_MPS_THRESHOLD > 0);
+        const {
+            assert!(NORMALIZATION_MPS_THRESHOLD > 0);
+        }
 
         let small = MpsNormalizationCandidate::preferred(NORMALIZATION_MPS_THRESHOLD - 1);
         assert_eq!(small, MpsNormalizationCandidate::Native);
@@ -224,9 +230,11 @@ mod tests {
         // compile time whether this host *is* Apple Silicon, so we only
         // assert the invariant that is knowable without hardware.
         #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-        assert!(
-            !MPS_AVAILABLE,
-            "MPS_AVAILABLE must be false on non-Apple-Silicon"
-        );
+        const {
+            assert!(
+                !MPS_AVAILABLE,
+                "MPS_AVAILABLE must be false on non-Apple-Silicon"
+            );
+        }
     }
 }

@@ -2,6 +2,8 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
 use incin_core::exec::LayoutClass;
+#[cfg(test)]
+use incin_core::prelude::DTypeId;
 use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 fn validate_kernel_abi(

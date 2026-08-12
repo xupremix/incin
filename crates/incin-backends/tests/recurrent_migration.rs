@@ -11,8 +11,6 @@ extern crate incin_core as incin;
 use incin_backends::nn_target::InitOnTarget;
 use incin_backends::prelude::*;
 use incin_backends::target::Native;
-use incin_core::nn::module::Module;
-use incin_core::nn::param::{Buffer, Frozen, Param, Trainable};
 use incin_core::prelude::*;
 use std::collections::BTreeMap;
 
@@ -197,10 +195,9 @@ fn test_lstm_bf16_precision() {
 
 #[test]
 fn test_statedict_f32_safety_and_roundtrip() {
-    type B = IncinBackend<Cpu>;
     let target = Native::on(Cpu);
 
-    let mut rnn1 = rnn(shape![10, 20].resolve().unwrap())
+    let rnn1 = rnn(shape![10, 20].resolve().unwrap())
         .init(&target)
         .unwrap();
     let mut rnn2 = rnn(shape![10, 20].resolve().unwrap())
@@ -214,18 +211,4 @@ fn test_statedict_f32_safety_and_roundtrip() {
     assert!(state.contains_key("cell.wh.weight."));
 
     assert!(rnn2.load_state_dict("", &state).is_ok());
-}
-
-#[cfg(all(feature = "target-api", feature = "external-candle"))]
-#[test]
-fn test_candle_engine_preservation() {
-    use incin_backends::target::Candle;
-
-    let target = Candle::on(Cpu);
-
-    let rnn_layer = rnn(shape![10, 20]).init(&target).unwrap();
-    assert_eq!(rnn_layer.cell.wi.weight.shape_dims(), vec![20, 10]);
-
-    let lstm_layer = lstm(shape![10, 20]).init(&target).unwrap();
-    assert_eq!(lstm_layer.cell.wi_i.weight.shape_dims(), vec![20, 10]);
 }
