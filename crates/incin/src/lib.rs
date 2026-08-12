@@ -58,7 +58,7 @@
 //!         })
 //!     }
 //!
-//!     pub fn forward(&self, x: Tensor<s![2, 768], Backend>) -> Result<Tensor<s![2, 10], Backend>>
+//!     pub fn forward(&self, x: Tensor<s![2, 768], Backend>) -> Result<Tensor<s![2, 10], Backend, f32, Grad>>
 //!     {
 //!         self.net.forward(x)
 //!     }
