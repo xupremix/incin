@@ -14,7 +14,7 @@
 
 use incin_core::backend_authoring::{
     Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps,
-    ReductionOps, StorageBackend, TensorOps,
+    StorageBackend, TensorOps,
 };
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
@@ -2120,8 +2120,7 @@ impl<D: Device> Execute<op::RmsNorm> for CpuBackendImpl<D> {
         // broadcasts back against the operand.
         let axis = input.shape.len().saturating_sub(1);
         let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
-        let mean =
-            <Self as ReductionOps<Self>>::mean_keepdim::<f32>(&squared, axis).map_err(wrap)?;
+        let mean = crate::cpu::ops::reduce::mean_keepdim(&squared, axis).map_err(wrap)?;
         let guarded =
             <Self as FloatOps<Self>>::add_scalar_float::<f32>(&mean, epsilon).map_err(wrap)?;
         let scale = <Self as FloatOps<Self>>::sqrt::<f32>(&guarded).map_err(wrap)?;
@@ -2401,7 +2400,7 @@ impl<D: Device> Execute<op::Dot> for CpuBackendImpl<D> {
         )?;
         let product = crate::cpu::ops::elementwise::mul_storage(lhs, rhs)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
-        <Self as ReductionOps<Self>>::sum_all::<f32>(&product)
+        crate::cpu::ops::reduce::sum_all(&product)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -2644,14 +2643,14 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
         _: &VarianceAttributes,
     ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
         let count = input.shape.iter().product::<usize>();
-        Ok((<Self as ReductionOps<Self>>::mean_all::<f32>(input)?, count))
+        Ok((crate::cpu::ops::reduce::mean_all(input)?, count))
     }
 
     fn sum_over_all(
         input: &CpuStorage,
         _: &VarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_all::<f32>(input)
+        crate::cpu::ops::reduce::sum_all(input)
     }
 
     /// The mean keeps the axis so it broadcasts back against the operand, and
@@ -2662,7 +2661,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
         let count = input.shape.get(attributes.axis).copied().unwrap_or(0);
         Ok((
-            <Self as ReductionOps<Self>>::mean_keepdim::<f32>(input, attributes.axis)?,
+            crate::cpu::ops::reduce::mean_keepdim(input, attributes.axis)?,
             count,
         ))
     }
@@ -2671,14 +2670,14 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_dim::<f32>(input, attributes.axis)
+        crate::cpu::ops::reduce::sum_dim(input, attributes.axis)
     }
 
     fn sum_along_axis_keeping_it(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
     ) -> incin_core::prelude::Result<CpuStorage> {
-        <Self as ReductionOps<Self>>::sum_keepdim::<f32>(input, attributes.axis)
+        crate::cpu::ops::reduce::sum_keepdim(input, attributes.axis)
     }
 }
 
@@ -2735,16 +2734,16 @@ impl<D: Device> Execute<op::Norm> for CpuBackendImpl<D> {
 
         if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
             let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
-            return <Self as ReductionOps<Self>>::sum_all::<f32>(&magnitude).map_err(wrap);
+            return crate::cpu::ops::reduce::sum_all(&magnitude).map_err(wrap);
         }
         if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
             let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
-            let summed = <Self as ReductionOps<Self>>::sum_all::<f32>(&squared).map_err(wrap)?;
+            let summed = crate::cpu::ops::reduce::sum_all(&squared).map_err(wrap)?;
             return <Self as FloatOps<Self>>::sqrt::<f32>(&summed).map_err(wrap);
         }
         let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
         let raised = <Self as FloatOps<Self>>::powf::<f32>(&magnitude, order).map_err(wrap)?;
-        let summed = <Self as ReductionOps<Self>>::sum_all::<f32>(&raised).map_err(wrap)?;
+        let summed = crate::cpu::ops::reduce::sum_all(&raised).map_err(wrap)?;
         <Self as FloatOps<Self>>::powf::<f32>(&summed, 1.0 / order).map_err(wrap)
     }
 }
