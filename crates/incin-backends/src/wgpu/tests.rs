@@ -4,7 +4,6 @@ use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use crate::wgpu::{WgpuBackendImpl, WgpuVar};
 use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
-use incin_core::tensor::backend::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
 /// `storage`.

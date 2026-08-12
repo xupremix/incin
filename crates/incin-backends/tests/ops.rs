@@ -2,7 +2,6 @@
 
 use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
-use incin_core::tensor::backend::*;
 
 /// Cbackend.
 type CBackend = incin_backends::cpu::CpuBackendImpl;

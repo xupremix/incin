@@ -171,17 +171,19 @@ impl KernelKey {
         shape_bucket: ShapeBucket,
         alignment: AlignmentClass,
     ) -> Result<Self> {
-        let req = PrecisionRequest::new(
-            policy_family,
-            dtype.descriptor(),
-            dtype.descriptor(),
-            layout_class,
-            1,
-            false,
-            MathMode::Fast,
-        );
         #[cfg(feature = "cuda")]
-        let policy = crate::cuda::backend::native_precision(&req)?;
+        let policy = {
+            let req = PrecisionRequest::new(
+                policy_family,
+                dtype.descriptor(),
+                dtype.descriptor(),
+                layout_class,
+                1,
+                false,
+                MathMode::Fast,
+            );
+            crate::cuda::backend::native_precision(&req)?
+        };
         #[cfg(not(feature = "cuda"))]
         let policy = {
             let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
@@ -293,17 +295,19 @@ struct CudaScalarSpec {
 
 impl CudaScalarSpec {
     fn for_float(dtype: DTypeId, op: &'static str) -> Result<Self> {
-        let req = PrecisionRequest::new(
-            OperationKind::Pointwise,
-            dtype.descriptor(),
-            dtype.descriptor(),
-            LayoutClass::Contiguous,
-            1,
-            false,
-            MathMode::Fast,
-        );
         #[cfg(feature = "cuda")]
-        let policy = crate::cuda::backend::native_precision(&req)?;
+        let policy = {
+            let req = PrecisionRequest::new(
+                OperationKind::Pointwise,
+                dtype.descriptor(),
+                dtype.descriptor(),
+                LayoutClass::Contiguous,
+                1,
+                false,
+                MathMode::Fast,
+            );
+            crate::cuda::backend::native_precision(&req)?
+        };
         #[cfg(not(feature = "cuda"))]
         let policy = {
             let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
@@ -1030,17 +1034,19 @@ pub(crate) fn render_cuda_reduction(
     contiguous_last_axis: bool,
 ) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_reduction")?;
-    let req = PrecisionRequest::new(
-        incin_core::prelude::OperationKind::Reduction,
-        dtype.descriptor(),
-        dtype.descriptor(),
-        LayoutClass::Contiguous,
-        1,
-        false,
-        MathMode::Fast,
-    );
     #[cfg(feature = "cuda")]
-    let policy = crate::cuda::backend::native_precision(&req)?;
+    let policy = {
+        let req = PrecisionRequest::new(
+            incin_core::prelude::OperationKind::Reduction,
+            dtype.descriptor(),
+            dtype.descriptor(),
+            LayoutClass::Contiguous,
+            1,
+            false,
+            MathMode::Fast,
+        );
+        crate::cuda::backend::native_precision(&req)?
+    };
     #[cfg(not(feature = "cuda"))]
     let policy = {
         let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
@@ -1277,17 +1283,19 @@ extern "C" __global__ void {entry_point}(
 #[allow(dead_code)]
 pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
-    let req = PrecisionRequest::new(
-        incin_core::prelude::OperationKind::Normalization,
-        dtype.descriptor(),
-        dtype.descriptor(),
-        LayoutClass::Contiguous,
-        1,
-        false,
-        MathMode::Fast,
-    );
     #[cfg(feature = "cuda")]
-    let policy = crate::cuda::backend::native_precision(&req)?;
+    let policy = {
+        let req = PrecisionRequest::new(
+            incin_core::prelude::OperationKind::Normalization,
+            dtype.descriptor(),
+            dtype.descriptor(),
+            LayoutClass::Contiguous,
+            1,
+            false,
+            MathMode::Fast,
+        );
+        crate::cuda::backend::native_precision(&req)?
+    };
     #[cfg(not(feature = "cuda"))]
     let policy = {
         let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
