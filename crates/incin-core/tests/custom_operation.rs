@@ -3,16 +3,20 @@
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;
+use incin_backends::cpu::{CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
     StorageBackend, execute, execute_shaped, execute_with_payload,
 };
+use incin_core::exec::TensorHandle;
 use incin_core::exec::catalog::CreationAttributes;
+use incin_core::exec::catalog::NoAttributes;
 use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, DTypeId, Shape, ShapeBuf, ShapeValue, TracingBackend, extract_graph,
+    Backend, BackendError, Cpu, DTypeId, Local, Shape, ShapeBuf, ShapeValue, TracingBackend,
+    extract_graph,
 };
 use incin_core::test_utils::DummyBackend;
 
@@ -67,6 +71,25 @@ impl Operation for PayloadOperation {
         _: &[LogicalTensorMeta],
     ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
         Ok(Vec::new())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CpuIdentityOperation;
+
+impl Operation for CpuIdentityOperation {
+    type Attributes = NoAttributes;
+    const KEY: OperationKey = OperationKey {
+        namespace: std::borrow::Cow::Borrowed("company.example"),
+        name: std::borrow::Cow::Borrowed("cpu_identity"),
+        version: 1,
+    };
+
+    fn infer_outputs(
+        _: &Self::Attributes,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+        Ok(inputs.first().cloned().into_iter().collect())
     }
 }
 
@@ -132,6 +155,25 @@ impl Execute<PayloadOperation> for CompanyBackend {
         request: ExecutionRequest<'_, PayloadOperation, Self>,
     ) -> Result<Self::Output, BackendError> {
         Ok(request.payload.unwrap_or_default().to_vec())
+    }
+}
+
+impl Execute<CpuIdentityOperation> for CpuBackendImpl<Cpu> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<S: Shape>(
+        &self,
+        request: ExecutionRequest<'_, CpuIdentityOperation, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        request
+            .inputs
+            .first()
+            .and_then(|input| input.downcast_ref::<CpuStorage>())
+            .cloned()
+            .ok_or_else(|| BackendError::InvalidInput {
+                operation: incin_core::prelude::OperationKind::Pointwise,
+                reason: "cpu identity requires one CPU input",
+            })
     }
 }
 
@@ -256,6 +298,17 @@ fn downstream_backend_can_execute_a_builtin_operation() {
     )
     .unwrap();
     assert_eq!(output, ProofLevel::Static);
+}
+
+#[test]
+fn custom_operation_returns_backend_owned_storage() {
+    let input = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![2.0, 4.0]), vec![2]).unwrap();
+    let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&input);
+    let context = ExecutionContext::new(CpuBackendImpl::<Cpu>::default());
+    let output = execute::<CpuIdentityOperation, _>(&context, NoAttributes, &[handle]).unwrap();
+    assert_eq!(output.shape.as_ref(), &[2]);
+    assert_eq!(output.get(&[0]), 2.0);
+    assert_eq!(output.get(&[1]), 4.0);
 }
 
 #[test]
