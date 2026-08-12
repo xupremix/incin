@@ -1,6 +1,7 @@
 #![cfg(feature = "compiled")]
 
 use incin_core::exec::OperationIdentity;
+use incin_core::exec::{DimExpr, SymbolId};
 use incin_core::experimental::compiled::CapturedGraph;
 use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
@@ -18,7 +19,12 @@ fn test_eager_graph_capture_and_validation() {
     graph.mark_input(y);
     graph.mark_output(z);
 
-    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(
+        OperationKind::MatMulExact,
+        vec![x, y],
+        vec![z],
+        BTreeMap::new(),
+    );
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     assert_eq!(captured.node_count(), 1);
@@ -27,7 +33,19 @@ fn test_eager_graph_capture_and_validation() {
     assert_eq!(captured.outputs, vec![z]);
     assert_eq!(
         captured.nodes[0].operation,
-        OperationIdentity::Builtin(OperationKind::MatMul)
+        OperationIdentity::Builtin(OperationKind::MatMulExact)
+    );
+    assert_eq!(
+        captured.nodes[0].execution_site,
+        Some(incin_core::exec::ExecutionSite::Kernel)
+    );
+    assert!(matches!(
+        captured.value_metadata[&x].shape_expr.dims[0],
+        DimExpr::Symbol(SymbolId(_))
+    ));
+    assert_eq!(
+        captured.value_metadata[&x].dtype.builtin_id(),
+        Some(DTypeId::F32)
     );
 }
 

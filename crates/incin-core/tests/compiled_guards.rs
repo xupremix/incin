@@ -18,7 +18,12 @@ fn test_compiled_plan_construction_and_guards() {
     graph.mark_input(x);
     graph.mark_input(y);
     graph.mark_output(z);
-    graph.add_node(OperationKind::MatMul, vec![x, y], vec![z], BTreeMap::new());
+    graph.add_node(
+        OperationKind::MatMulExact,
+        vec![x, y],
+        vec![z],
+        BTreeMap::new(),
+    );
 
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let options = CompileOptions::default();

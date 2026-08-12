@@ -130,7 +130,7 @@ pub enum LayoutRule {
 /// kind of implementation is even possible, and it exists because the CPU
 /// migration's remainder used to be one number. One number implies every
 /// unmigrated operation is the same kind of missing work. It is not: most are a
-/// kernel nobody has routed yet, but thirteen of them cannot be an
+/// kernel nobody has routed yet, but sixteen of them cannot be an
 /// `Execute<O>` implementation as that trait is currently written,
 /// so counting them beside a missing kernel describes a task that does not
 /// exist and hides one that does.
