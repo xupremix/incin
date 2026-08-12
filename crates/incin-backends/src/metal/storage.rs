@@ -6,28 +6,35 @@ use core::fmt::Debug;
 
 pub use incin_core::exec::TensorId;
 use incin_core::exec::{Alignment, TapeStorage, TensorMeta};
-use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, Result};
+#[cfg(test)]
+use incin_core::prelude::DTypeId;
+use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
 
 /// Storage access mode for Metal buffers on Apple Silicon and macOS.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum MetalStorageMode {
     /// Shared memory — CPU and GPU access the same physical memory space.
     /// Default for Apple Silicon unified memory architectures.
+    #[default]
     Shared,
     /// Managed memory — explicitly synchronized between CPU and GPU systems.
     Managed,
     /// Private memory — GPU access only, inaccessible directly from CPU host.
     Private,
-}
-
-impl Default for MetalStorageMode {
-    fn default() -> Self {
-        Self::Shared
-    }
 }
 
 /// Returns whether the host architecture operates under Apple Silicon unified memory rules.
@@ -97,13 +104,12 @@ impl MetalStorage {
         let span_elements = metadata
             .strides
             .checked_span(&metadata.shape, OperationKind::Storage)?;
-        let end = metadata
-            .offset_elements
-            .checked_add(span_elements)
-            .ok_or_else(|| incin_core::shapes::ShapeError::ArithmeticOverflow {
+        let end = metadata.offset_elements.checked_add(span_elements).ok_or(
+            incin_core::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::Storage,
                 expression: "offset + span",
-            })?;
+            },
+        )?;
         let required_bytes = metadata.dtype.size_bytes(end, OperationKind::Storage)?;
         if required_bytes > bytes.len() {
             return Err(Error::InvalidByteLength {
@@ -198,7 +204,7 @@ impl MetalStorage {
             self.metadata
                 .offset_elements
                 .checked_add(span_elements)
-                .ok_or_else(|| incin_core::shapes::ShapeError::ArithmeticOverflow {
+                .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
                     operation: OperationKind::Storage,
                     expression: "offset + span",
                 })?,

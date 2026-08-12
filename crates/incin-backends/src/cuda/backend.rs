@@ -1,7 +1,6 @@
 use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
-use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
 use incin_core::prelude::*;
 
 /// CUDA compute backend implementation for Incin.
@@ -3172,19 +3171,6 @@ fn cuda_binary_f32_elementwise(
         .map(|(&a, &b)| f(a, b))
         .collect();
     upload_f32_from_host(&lhs.buffer, lhs.shape.to_vec(), out)
-}
-
-/// Shared host round-trip for a unary F32 elementwise op with no CUDA
-/// kernel. Not autograd-wired, matching CPU's `logical_not`.
-fn cuda_unary_f32_elementwise(
-    op: &'static str,
-    t: &CudaStorage,
-    f: impl Fn(f32) -> f32,
-) -> Result<CudaStorage> {
-    cuda_require_f32(t.buffer.dtype, op)?;
-    let data = download_f32_host(t)?;
-    let out: Vec<f32> = data.iter().map(|&v| f(v)).collect();
-    upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
 }
 
 /// Shared host round-trip for a scalar F32 elementwise op with no CUDA

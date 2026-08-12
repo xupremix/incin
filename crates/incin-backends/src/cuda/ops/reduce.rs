@@ -1,8 +1,8 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::iteration::OperandIteration;
 use alloc::sync::Arc;
-use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
-use incin_core::prelude::{DTypeDescriptor, DTypeId, Error, OperationKind, Result};
+use incin_core::exec::PrecisionRequest;
+use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
 
 fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
     i32::try_from(value)

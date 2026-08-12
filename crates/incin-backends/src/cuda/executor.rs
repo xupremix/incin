@@ -5,7 +5,7 @@
 //! `StorageBackend`/`Capabilities`/`Execute` contract, so the descriptor path
 //! is not a CPU-only construction.
 
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
 use incin_core::tensor::backend::{ModuleOps, ReductionOps, TensorOps};
@@ -28,7 +28,6 @@ impl_data_creation_executors!(CudaBackendImpl<D>, CudaStorage);
 /// The descriptor states the contracted extents and the broadcast batch; a
 /// stride of 0 on a batch axis is the descriptor's own record that the operand
 /// is broadcast along it, so that axis is required to be 1 rather than equal.
-
 macro_rules! impl_cuda_canonical {
     ($(($op:ident, $func:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
@@ -248,24 +247,29 @@ macro_rules! impl_cuda_reduction_dim {
 }
 
 impl_cuda_reduction_all![
-    (SumAll, |input| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::sum_all::<f32>(input)),
-    (MeanAll, |input| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::mean_all::<f32>(input)),
-    (MaxAll, |input| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::max_all::<f32>(input)),
-    (MinAll, |input| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::min_all::<f32>(input)),
+    (
+        SumAll,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::sum_all::<f32>
+    ),
+    (
+        MeanAll,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::mean_all::<f32>
+    ),
+    (
+        MaxAll,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::max_all::<f32>
+    ),
+    (
+        MinAll,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::min_all::<f32>
+    ),
 ];
 
 impl_cuda_reduction_dim![
-    (SumDim, |input, axis| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::sum_dim::<f32>(input, axis)),
+    (
+        SumDim,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::sum_dim::<f32>
+    ),
     (SumKeepDim, |input, axis| {
         <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::sum_keepdim::<f32>(input, axis)
     }),
@@ -275,15 +279,17 @@ impl_cuda_reduction_dim![
     (MeanKeepDim, |input, axis| {
         <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::mean_keepdim::<f32>(input, axis)
     }),
-    (MaxDim, |input, axis| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::max_dim::<f32>(input, axis)),
+    (
+        MaxDim,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::max_dim::<f32>
+    ),
     (MaxKeepDim, |input, axis| {
         <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::max_keepdim::<f32>(input, axis)
     }),
-    (MinDim, |input, axis| <CudaBackendImpl<D> as ReductionOps<
-        CudaBackendImpl<D>,
-    >>::min_dim::<f32>(input, axis)),
+    (
+        MinDim,
+        <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::min_dim::<f32>
+    ),
     (MinKeepDim, |input, axis| {
         <CudaBackendImpl<D> as ReductionOps<CudaBackendImpl<D>>>::min_keepdim::<f32>(input, axis)
     }),

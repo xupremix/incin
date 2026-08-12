@@ -2,9 +2,7 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
 use incin_core::exec::LayoutClass;
-use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, OperationKind, Result};
-
-use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
+use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 fn validate_kernel_abi(
     kernel: &crate::kernel::RenderedKernel,
@@ -185,16 +183,15 @@ where
         validate_kernel_abi(&kernel, dtype)?;
         #[cfg(feature = "autotune")]
         {
-            if let Some(key) = selection
+            if selection
                 .tuning_permit
                 .as_ref()
                 .and_then(|permit| permit.key())
+                .is_some_and(|key| kernel.key.tuning_problem_id() != key.problem)
             {
-                if kernel.key.tuning_problem_id() != key.problem {
-                    return Err(Error::Msg(
-                        "CUDA pointwise candidate changed canonical tuning problem".into(),
-                    ));
-                }
+                return Err(Error::Msg(
+                    "CUDA pointwise candidate changed canonical tuning problem".into(),
+                ));
             }
         }
         if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel.cache_key).is_none() {

@@ -9,7 +9,6 @@ use incin_core::shapes::ShapeBuf;
 
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
-use incin_core::exec::{PrecisionCapabilities, PrecisionRequest};
 
 /// Metal compute backend implementation for Incin.
 #[derive(Clone)]
@@ -58,18 +57,6 @@ pub(crate) fn validate_metal_storage_dtype(dtype: DTypeDescriptor, op: &'static 
             op,
         })
     }
-}
-
-pub(crate) fn require_metal_builtin_dtype(
-    descriptor: DTypeDescriptor,
-    op: &'static str,
-) -> Result<DTypeId> {
-    validate_metal_storage_dtype(descriptor, op)?;
-    descriptor.builtin_id().ok_or(Error::UnsupportedDType {
-        dtype: descriptor,
-        backend: "Metal",
-        op,
-    })
 }
 
 pub(crate) fn native_precision(
@@ -810,7 +797,7 @@ fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage
         .metadata()
         .shape()
         .checked_numel(OperationKind::Storage)?;
-    let new_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape))
+    let new_numel: usize = incin_core::prelude::ShapeBuf::from_slice(shape)
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     if numel != new_numel {
         return Err(Error::ShapeMismatch {
@@ -849,13 +836,13 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
     let mut out_dims = dims.to_vec();
     out_dims.swap(dim0, dim1);
 
-    let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_dims))
+    let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&out_dims)
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let bytes = storage.as_bytes()?;
     let in_slice: &[f32] = bytemuck::cast_slice(bytes);
     let mut out_data = vec![0.0f32; numel];
 
-    for idx in 0..numel {
+    for (idx, output) in out_data.iter_mut().enumerate().take(numel) {
         let mut curr = idx;
         let mut multi = vec![0; out_dims.len()];
         for i in (0..out_dims.len()).rev() {
@@ -869,7 +856,7 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
             in_idx += multi[i] * stride;
             stride *= dims[i];
         }
-        out_data[idx] = in_slice[in_idx];
+        *output = in_slice[in_idx];
     }
 
     let shape_buf = ShapeBuf::from_slice(&out_dims);
@@ -1592,7 +1579,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
-        let total: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims))
+        let total: usize = incin_core::prelude::ShapeBuf::from_slice(dims)
             .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let sum = Self::sum_all::<K>(t)?;
         scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)

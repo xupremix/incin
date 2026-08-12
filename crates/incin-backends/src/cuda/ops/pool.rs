@@ -198,9 +198,9 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     let f = dispatcher.get_function("pool", "scatter_pool_grad_2d")?;
     let stream = go_buf.device.default_stream();
 
-    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(grad_out.shape))
+    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&grad_out.shape)
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
-    let in_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(input_shape))
+    let in_total: usize = incin_core::prelude::ShapeBuf::from_slice(input_shape)
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
 

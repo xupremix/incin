@@ -14,7 +14,7 @@
 //! adapter being rewritten, which is the property `EXE-010`'s backend-authoring
 //! template needs to document.
 
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
     TensorMeta, UnsupportedReason,

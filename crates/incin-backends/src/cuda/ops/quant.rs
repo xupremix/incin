@@ -34,7 +34,9 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let num_blocks = n / 32;
     debug_assert_eq!(
         core::mem::size_of::<BlockQ8_0>(),
-        incin_core::prelude::DTypeId::Q8_0.block_bytes()
+        incin_core::prelude::DTypeId::Q8_0
+            .encoding()
+            .bytes_per_block()
     );
 
     // `len` is a logical element count for every other CUDA buffer, and
