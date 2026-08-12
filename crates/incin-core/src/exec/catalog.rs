@@ -991,6 +991,9 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
 
+    #[cfg(feature = "std")]
+    fn trace_descriptor_payload(&self) -> Option<crate::graph::DescriptorPayload>;
+
     fn trace_output_dtype(
         &self,
         inputs: &[crate::exec::request::TensorHandle<'_>],
@@ -1000,6 +1003,15 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
     fn trace_identity(&self) -> crate::exec::OperationIdentity {
         self.identity.clone()
+    }
+
+    #[cfg(feature = "std")]
+    fn trace_descriptor_payload(&self) -> Option<crate::graph::DescriptorPayload> {
+        let payload = postcard::to_allocvec(self).ok()?;
+        Some(crate::graph::DescriptorPayload {
+            schema: crate::exec::DescriptorSchemaVersion::CURRENT.get(),
+            payload,
+        })
     }
 
     fn trace_output_dtype(

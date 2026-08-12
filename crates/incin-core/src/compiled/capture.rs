@@ -17,6 +17,7 @@ pub struct CapturedNode {
     pub operation: OperationIdentity,
     pub execution_site: Option<ExecutionSite>,
     pub attributes: alloc::collections::BTreeMap<String, crate::graph::AttributeValue>,
+    pub descriptor_payload: Option<crate::graph::DescriptorPayload>,
     /// Value IDs consumed by this node as inputs.
     pub inputs: Vec<ValueId>,
     /// Value IDs produced by this node as outputs.
@@ -73,6 +74,7 @@ impl CapturedGraph {
                 operation: node.operation.clone(),
                 execution_site: node.execution_site,
                 attributes: node.attributes.clone(),
+                descriptor_payload: node.descriptor_payload.clone(),
                 inputs: node.inputs.clone(),
                 outputs: node.outputs.clone(),
             });

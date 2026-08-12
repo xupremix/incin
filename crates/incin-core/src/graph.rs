@@ -30,6 +30,15 @@ pub struct Node {
     pub inputs: Vec<ValueId>,
     pub outputs: Vec<ValueId>,
     pub attributes: BTreeMap<String, AttributeValue>,
+    /// Versioned bytes of the canonical typed descriptor, when capture runs
+    /// with the standard serialization support enabled.
+    pub descriptor_payload: Option<DescriptorPayload>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DescriptorPayload {
+    pub schema: u32,
+    pub payload: Vec<u8>,
 }
 
 /// A graph attribute value. The canonical typed descriptor remains the source
@@ -152,6 +161,30 @@ impl Graph {
             inputs,
             outputs,
             attributes,
+            descriptor_payload: None,
+        });
+        id
+    }
+
+    pub fn add_node_with_descriptor_payload(
+        &mut self,
+        operation: OperationIdentity,
+        inputs: Vec<ValueId>,
+        outputs: Vec<ValueId>,
+        attributes: BTreeMap<String, AttributeValue>,
+        descriptor_payload: Option<DescriptorPayload>,
+    ) -> NodeId {
+        let id = self.next_node_id;
+        self.next_node_id += 1;
+        let execution_site = operation.execution_site();
+        self.nodes.push(Node {
+            id,
+            operation,
+            execution_site,
+            inputs,
+            outputs,
+            attributes,
+            descriptor_payload,
         });
         id
     }
