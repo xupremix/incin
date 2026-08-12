@@ -170,6 +170,7 @@ fn bmm_preserves_named_static_output_type() {
     let rhs: Tensor<R, B> = Tensor::ones(()).unwrap();
     let output = lhs.bmm(&rhs).unwrap();
 
-    assert_same::<_, Tensor<Expected, B>>();
+    fn output_type(_: &Tensor<Expected, B>) {}
+    output_type(&output);
     assert_eq!(output.shape_buf().as_ref(), &[25, 3, 5]);
 }
