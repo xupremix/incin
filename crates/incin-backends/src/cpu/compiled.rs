@@ -76,6 +76,23 @@ impl CpuCompiledPlan {
                     node.id
                 )));
             }
+            let payload = node.descriptor_payload.as_ref().ok_or_else(|| {
+                Error::Msg(format!(
+                    "compiled CPU node {} has no captured descriptor",
+                    node.id
+                ))
+            })?;
+            validate_cpu_descriptor_dispatch(
+                match &node.operation {
+                    OperationIdentity::Builtin(operation) => *operation,
+                    OperationIdentity::Custom(key) => {
+                        return Err(Error::Msg(format!(
+                            "compiled CPU lowering does not support custom operation {key:?}"
+                        )));
+                    }
+                },
+                payload,
+            )?;
         }
         Ok(Self { plan: plan.clone() })
     }
@@ -83,6 +100,41 @@ impl CpuCompiledPlan {
     pub fn run(&self, invocation: CpuCompiledInvocation) -> Result<Vec<CpuStorage>> {
         invocation.run_admitted(&self.plan)
     }
+}
+
+macro_rules! validate_cpu_descriptor_dispatch {
+    ($($kind:ident => $descriptor:ty,)*) => {
+        fn validate_cpu_descriptor_dispatch(
+            operation: incin_core::prelude::OperationKind,
+            payload: &incin_core::graph::DescriptorPayload,
+        ) -> Result<()> {
+            match operation {
+                $(incin_core::prelude::OperationKind::$kind => {
+                    validate_descriptor::<$descriptor>(payload)
+                })*
+                _ => Err(Error::Msg(format!(
+                    "compiled CPU lowering does not support {operation}"
+                ))),
+            }
+        }
+    };
+}
+
+cpu_compiled_operations!(validate_cpu_descriptor_dispatch);
+
+fn validate_descriptor<O>(payload: &incin_core::graph::DescriptorPayload) -> Result<()>
+where
+    O: CanonicalOperation,
+    O::Attributes: incin_core::exec::catalog::AttributeContract,
+{
+    let captured = CapturedDescriptor::from_payload(O::ID, payload.schema, payload.payload.clone());
+    let descriptor: Descriptor<O> = captured
+        .decode()
+        .map_err(|error| Error::Msg(format!("invalid captured descriptor: {error}")))?;
+    descriptor
+        .revalidate()
+        .map_err(|error| Error::Msg(format!("captured descriptor validation failed: {error}")))?;
+    Ok(())
 }
 
 impl CpuCompiledInvocation {
