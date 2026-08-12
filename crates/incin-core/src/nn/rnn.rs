@@ -429,8 +429,12 @@ where
 ///     Linear::<s![20, 20], DefaultBackend>::build(())?,
 /// );
 /// let rnn = RNN::<s![10, 20], DefaultBackend>::new(cell);
-/// let input = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
-/// let h0   = Tensor::<s![2, 20], DefaultBackend>::zeros(()).unwrap();
+/// let input = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(())
+///     .unwrap()
+///     .require_grad();
+/// let h0 = Tensor::<s![2, 20], DefaultBackend>::zeros(())
+///     .unwrap()
+///     .require_grad();
 /// let (output, h_n) = rnn.forward((input, h0)).unwrap();
 /// // output shape: [2, 5, 20], h_n shape: [2, 20]
 /// # Ok(()) }
