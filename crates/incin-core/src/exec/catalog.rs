@@ -1109,6 +1109,23 @@ where
             crate::exec::ProofLevel::Dynamic,
         ))
     }
+
+    /// Revalidate a captured descriptor before execution.
+    pub fn revalidate(&self) -> Result<crate::exec::Validated<Self>, DescriptorError> {
+        self.attributes.validate(O::ID, &self.inputs)?;
+        let outputs = O::infer_outputs(&self.attributes, &self.inputs)?;
+        if outputs != self.outputs {
+            return Err(DescriptorError::MetadataMismatch {
+                operation: O::ID,
+                output: 0,
+                field: "outputs",
+            });
+        }
+        Ok(crate::exec::Validated::new(
+            self.clone(),
+            crate::exec::ProofLevel::Dynamic,
+        ))
+    }
 }
 
 /// Storage-free serialized descriptor capture. The exact identity is outside
@@ -1167,6 +1184,14 @@ impl std::error::Error for DescriptorCaptureError {}
 
 #[cfg(feature = "std")]
 impl CapturedDescriptor {
+    pub fn from_payload(operation: OperationKind, schema: u32, payload: Vec<u8>) -> Self {
+        Self {
+            operation,
+            schema,
+            payload,
+        }
+    }
+
     pub fn capture<O: CanonicalOperation>(
         descriptor: &Descriptor<O>,
     ) -> Result<Self, DescriptorCaptureError>
