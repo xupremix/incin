@@ -330,6 +330,26 @@ pub(crate) fn canonical_sqrt(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_mish(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
+    let t_capture = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let softplus = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
+                let tanh = softplus.tanh();
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                g * (tanh + x * sigmoid * (1.0 - tanh * tanh))
+            })?;
+            Ok(vec![grad])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -679,25 +699,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn mish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
-
-        let t_capture = t.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                    let sp = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
-                    let th = sp.tanh();
-                    let sig = 1.0 / (1.0 + (-x).exp());
-                    let deriv = th + x * sig * (1.0 - th * th);
-                    g * deriv
-                })?;
-                Ok(vec![grad])
-            }),
-        });
-        Ok(out)
+        canonical_mish(t)
     }
 
     /// `elu`.
