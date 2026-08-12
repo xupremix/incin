@@ -52,6 +52,6 @@ pub mod prelude {
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
     pub use super::matmul::MatMulShape;
     pub use super::tracing::{
-        TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
+        CaptureSession, TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
     };
 }

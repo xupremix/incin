@@ -70,10 +70,11 @@ pub mod experimental {
     pub mod compiled {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
-            CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
-            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
-            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, WeightPrepacker,
+            CaptureSession, CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact,
+            CompiledPlan, ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker,
+            FusionCandidate, FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan,
+            PlanTuningReport, ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard,
+            WeightPrepacker,
         };
     }
 }
@@ -207,13 +208,13 @@ pub mod prelude {
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
-        ArgInto, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, ConstDType,
-        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
-        DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
-        IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
-        StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs, TensorArgsData,
-        TensorElement, TracingBackend, TransferTo, extract_graph, tracing_mark_input,
-        tracing_mark_output,
+        ArgInto, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, CaptureSession,
+        ConstDType, ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device,
+        DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad,
+        GradJoin, IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType,
+        RequiresGrad, StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs,
+        TensorArgsData, TensorElement, TracingBackend, TransferTo, extract_graph,
+        tracing_mark_input, tracing_mark_output,
     };
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};

@@ -448,3 +448,18 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
             .any(|node| node.op == incin_core::graph::OpType::Reshape)
     );
 }
+
+#[test]
+fn capture_sessions_keep_graphs_independent() {
+    use incin_core::prelude::CaptureSession;
+
+    let first = CaptureSession::new();
+    let second = CaptureSession::new();
+    first.mark_input(7);
+    second.mark_input(11);
+
+    assert_eq!(first.snapshot().inputs, vec![7]);
+    assert_eq!(second.snapshot().inputs, vec![11]);
+    assert!(first.snapshot().outputs.is_empty());
+    assert!(second.snapshot().outputs.is_empty());
+}
