@@ -418,7 +418,7 @@ fn exact_tracing_records_boolean_comparison_output_dtype() {
         .values
         .get(&node.outputs[0])
         .expect("comparison output should be traced");
-    assert_eq!(output.dtype, DTypeId::Bool);
+    assert_eq!(output.dtype.builtin_id(), Some(DTypeId::Bool));
 }
 
 #[test]

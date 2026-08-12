@@ -59,6 +59,7 @@ pub mod request;
 pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
+pub mod symbolic;
 /// The backend-neutral autograd tape.
 pub mod tape;
 
@@ -71,6 +72,7 @@ pub use catalog::{
     OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, ValidatedInvocation,
     catalog_entry, op, operation_semantics_document,
 };
+pub use symbolic::{Constraint, DimExpr, RankExpr, ShapeExpr, SymbolId};
 // The classification fields of a catalog entry, re-exported beside the entry
 // itself. Reading one of these fields off a public struct should not require
 // knowing which submodule its type was declared in.

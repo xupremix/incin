@@ -4,8 +4,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
+use crate::exec::ShapeExpr;
 use crate::graph::ValueId;
-use crate::prelude::{DTypeId, Error, Result};
+use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
 
 /// Operation fusion strategy for graph compilation.
 #[derive(
@@ -59,36 +60,39 @@ pub struct ShapeGuard {
     /// Value ID in the captured graph.
     pub value_id: ValueId,
     /// Expected tensor shape.
-    pub expected_shape: Vec<usize>,
-    /// Expected element datatype.
-    pub expected_dtype: DTypeId,
+    pub shape: ShapeExpr,
+    /// Expected logical datatype.
+    pub expected_dtype: DTypeDescriptor,
 }
 
 impl ShapeGuard {
     /// Creates a new guard for a value ID with expected shape and datatype.
     #[must_use]
-    pub fn new(value_id: ValueId, expected_shape: Vec<usize>, expected_dtype: DTypeId) -> Self {
+    pub fn new(value_id: ValueId, shape: ShapeExpr, expected_dtype: DTypeDescriptor) -> Self {
         Self {
             value_id,
-            expected_shape,
+            shape,
             expected_dtype,
         }
     }
 
     /// Verifies actual runtime shape and datatype against this guard.
-    pub fn check(&self, actual_shape: &[usize], actual_dtype: DTypeId) -> Result<()> {
+    pub fn check(&self, actual_shape: &[usize], actual_dtype: DTypeDescriptor) -> Result<()> {
         if self.expected_dtype != actual_dtype {
             return Err(Error::DTypeStorageMismatch {
-                expected: self.expected_dtype.into(),
-                got: actual_dtype.into(),
+                expected: self
+                    .expected_dtype
+                    .builtin_id()
+                    .unwrap_or(DTypeId::F32)
+                    .into(),
+                got: actual_dtype.builtin_id().unwrap_or(DTypeId::F32).into(),
             });
         }
-        if self.expected_shape != actual_shape {
+        if let Err(reason) = self.shape.validate(actual_shape) {
             return Err(Error::Msg(alloc::format!(
-                "shape guard failed for input value {}: expected {:?}, got {:?}",
+                "shape guard failed for input value {}: {}",
                 self.value_id,
-                self.expected_shape,
-                actual_shape
+                reason
             )));
         }
         Ok(())
@@ -113,7 +117,12 @@ impl CompiledPlan {
         let input_guards = graph
             .inputs
             .iter()
-            .map(|&in_id| ShapeGuard::new(in_id, Vec::new(), DTypeId::F32))
+            .filter_map(|&in_id| {
+                graph
+                    .value_metadata
+                    .get(&in_id)
+                    .map(|value| ShapeGuard::new(in_id, value.shape_expr.clone(), value.dtype))
+            })
             .collect();
 
         Self {
@@ -126,7 +135,7 @@ impl CompiledPlan {
     /// Validates dynamic guards for provided inputs.
     pub fn verify_input(&self, index: usize, shape: &[usize], dtype: DTypeId) -> Result<()> {
         if let Some(guard) = self.input_guards.get(index) {
-            guard.check(shape, dtype)?;
+            guard.check(shape, dtype.into())?;
         }
         Ok(())
     }

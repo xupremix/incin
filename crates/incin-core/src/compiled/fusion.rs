@@ -174,6 +174,7 @@ impl FusionPass {
 
         let fused_graph = CapturedGraph {
             values: graph.values.clone(),
+            value_metadata: graph.value_metadata.clone(),
             inputs: graph.inputs.clone(),
             outputs: graph.outputs.clone(),
             nodes: new_nodes,

@@ -1,5 +1,5 @@
-use crate::exec::OperationIdentity;
-use crate::prelude::{DTypeId, OperationKind};
+use crate::exec::{OperationIdentity, ShapeExpr};
+use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -15,7 +15,8 @@ pub type NodeId = usize;
 pub struct Value {
     pub id: ValueId,
     pub shape: Vec<usize>,
-    pub dtype: DTypeId,
+    pub shape_expr: ShapeExpr,
+    pub dtype: DTypeDescriptor,
     pub name: Option<String>,
 }
 
@@ -104,12 +105,14 @@ impl Graph {
     ) -> ValueId {
         let id = self.next_value_id;
         self.next_value_id += 1;
+        let shape_expr = ShapeExpr::concrete(&shape);
         self.values.insert(
             id,
             Value {
                 id,
                 shape,
-                dtype,
+                shape_expr,
+                dtype: dtype.into(),
                 name,
             },
         );

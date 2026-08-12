@@ -1,5 +1,7 @@
 #![cfg(feature = "compiled")]
 
+use incin_core::exec::ShapeExpr;
+use incin_core::exec::{Constraint, DimExpr, RankExpr, SymbolId};
 use incin_core::experimental::compiled::{CapturedGraph, CompileOptions, CompiledPlan, ShapeGuard};
 use incin_core::graph::Graph;
 use incin_core::prelude::DTypeId;
@@ -27,12 +29,36 @@ fn test_compiled_plan_construction_and_guards() {
 
 #[test]
 fn test_shape_guard_verification() {
-    let guard = ShapeGuard::new(0, vec![2, 4], DTypeId::F32);
-    assert!(guard.check(&[2, 4], DTypeId::F32).is_ok());
+    let guard = ShapeGuard::new(0, ShapeExpr::concrete(&[2, 4]), DTypeId::F32.into());
+    assert!(guard.check(&[2, 4], DTypeId::F32.into()).is_ok());
 
     // Mismatched shape fails
-    assert!(guard.check(&[2, 5], DTypeId::F32).is_err());
+    assert!(guard.check(&[2, 5], DTypeId::F32.into()).is_err());
 
     // Mismatched dtype fails
-    assert!(guard.check(&[2, 4], DTypeId::F16).is_err());
+    assert!(guard.check(&[2, 4], DTypeId::F16.into()).is_err());
+}
+
+#[test]
+fn symbolic_guard_accepts_valid_alternatives_and_rejects_bad_relations() {
+    let batch = DimExpr::Symbol(SymbolId(1));
+    let shape = ShapeExpr {
+        rank: RankExpr::Static(2),
+        dims: vec![batch.clone(), DimExpr::Const(768)],
+        constraints: vec![
+            Constraint::LowerBound {
+                value: batch.clone(),
+                bound: 1,
+            },
+            Constraint::Divisible {
+                value: batch.clone(),
+                divisor: 1,
+            },
+        ],
+    };
+    let guard = ShapeGuard::new(0, shape, DTypeId::F16.into());
+    assert!(guard.check(&[1, 768], DTypeId::F16.into()).is_ok());
+    assert!(guard.check(&[32, 768], DTypeId::F16.into()).is_ok());
+    assert!(guard.check(&[32, 767], DTypeId::F16.into()).is_err());
+    assert!(guard.check(&[0, 768], DTypeId::F16.into()).is_err());
 }

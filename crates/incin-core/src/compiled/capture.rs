@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::exec::OperationIdentity;
-use crate::graph::{Graph, NodeId, ValueId};
+use crate::graph::{Graph, NodeId, Value, ValueId};
 use crate::prelude::{Error, Result};
 
 /// A single validated node in a captured graph.
@@ -27,6 +27,8 @@ pub struct CapturedNode {
 pub struct CapturedGraph {
     /// Value IDs defined in the graph.
     pub values: Vec<ValueId>,
+    /// Captured value metadata used by compilation and guards.
+    pub value_metadata: alloc::collections::BTreeMap<ValueId, Value>,
     /// Input value IDs.
     pub inputs: Vec<ValueId>,
     /// Output value IDs.
@@ -86,6 +88,7 @@ impl CapturedGraph {
 
         Ok(Self {
             values,
+            value_metadata: graph.values.clone(),
             inputs: graph.inputs.clone(),
             outputs: graph.outputs.clone(),
             nodes,

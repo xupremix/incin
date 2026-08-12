@@ -27,13 +27,13 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     // Add inputs
     for &in_id in &graph.inputs {
         let val = &graph.values[&in_id];
-        onnx_graph.input.push(value_to_value_info(val));
+        onnx_graph.input.push(value_to_value_info(val)?);
     }
 
     // Add outputs
     for &out_id in &graph.outputs {
         let val = &graph.values[&out_id];
-        onnx_graph.output.push(value_to_value_info(val));
+        onnx_graph.output.push(value_to_value_info(val)?);
     }
 
     // Initializers
@@ -42,7 +42,11 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
         let mut tensor = onnx::TensorProto::default();
         tensor.name = Some(val.id.to_string());
         tensor.dims = val.shape.iter().map(|&x| x as i64).collect();
-        tensor.data_type = Some(dtype_to_onnx(val.dtype) as i32);
+        tensor.data_type = Some(dtype_to_onnx(
+            val.dtype
+                .builtin_id()
+                .ok_or_else(|| Error::Msg("ONNX export requires a built-in dtype".into()))?,
+        ) as i32);
         tensor.raw_data = Some(bytes.clone());
         onnx_graph.initializer.push(tensor);
     }
@@ -129,12 +133,16 @@ fn dtype_to_onnx(dt: DTypeId) -> onnx::tensor_proto::DataType {
 }
 
 /// `value_to_value_info`.
-fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
+fn value_to_value_info(val: &crate::graph::Value) -> anyhow::Result<onnx::ValueInfoProto> {
     let mut vi = onnx::ValueInfoProto::default();
     vi.name = Some(val.id.to_string());
 
     let mut tensor_type = onnx::type_proto::Tensor::default();
-    tensor_type.elem_type = Some(dtype_to_onnx(val.dtype) as i32);
+    tensor_type.elem_type = Some(dtype_to_onnx(
+        val.dtype
+            .builtin_id()
+            .ok_or_else(|| Error::Msg("ONNX export requires a built-in dtype".into()))?,
+    ) as i32);
 
     let mut shape = onnx::TensorShapeProto::default();
     for &d in &val.shape {
@@ -149,7 +157,7 @@ fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
     let mut t = onnx::TypeProto::default();
     t.value = Some(onnx::type_proto::Value::TensorType(tensor_type));
     vi.r#type = Some(t);
-    vi
+    Ok(vi)
 }
 
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
