@@ -29,6 +29,7 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
+use super::ops::elementwise::canonical_relu;
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -1049,8 +1050,25 @@ macro_rules! unary_float_executors {
     )*};
 }
 
+impl<D: Device> Execute<op::Relu> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute_shaped<ShapeTy: Shape>(
+        &self,
+        request: ExecutionRequest<'_, op::Relu, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Relu;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        canonical_relu(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
 unary_float_executors![
-    (Relu, relu),
     (Step, step),
     (Mish, mish),
     (Elu, elu),

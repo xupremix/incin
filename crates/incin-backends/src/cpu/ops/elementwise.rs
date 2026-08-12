@@ -133,6 +133,24 @@ pub(crate) fn elementwise_binary(
     Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
 }
 
+pub(crate) fn canonical_relu(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Relu, t)?;
+    let t_capture = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let deriv = if x > 0.0 { 1.0 } else { 0.0 };
+                g * deriv
+            })?;
+            Ok(vec![grad])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -502,24 +520,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn relu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Relu, t)?;
-
-        // relu'(x) = 1 if x > 0 else 0 (input-based; strict `>`, zero
-        // gradient at the x=0 boundary).
-        let t_capture = t.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                    let deriv = if x > 0.0 { 1.0 } else { 0.0 };
-                    g * deriv
-                })?;
-                Ok(vec![grad])
-            }),
-        });
-        Ok(out)
+        canonical_relu(t)
     }
 
     /// `step`.
