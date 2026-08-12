@@ -15,6 +15,7 @@ use crate::prelude::{
 use crate::shapes::Nil;
 use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
+use core::marker::PhantomData;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 /// A marker used as `Shape`, `DType`, `Device`, or their runtime-chosen
@@ -1054,23 +1055,49 @@ impl<B: Backend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
-    /// Moves this tensor to the specified device, returning a new Tensor.
+impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, NoGrad, P> {
+    /// Moves this tensor to the specified device as a detached tensor.
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,
-    ) -> Result<Tensor<S, <B as TransferTo<D2>>::Output, K, G>>
+    ) -> Result<Tensor<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>>
     where
         B: TransferTo<D2>,
         <B as TransferTo<D2>>::Output: SupportsDType<K>,
     {
         let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
-        Tensor::from_shape_value(
+        Tensor::<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
             new_inner,
             self._shape.clone(),
             self._dtype.clone(),
             _device.clone(),
-            self._grad.clone(),
+            PhantomData,
+            self._placement.clone(),
+        )
+    }
+}
+
+impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
+    /// Moves a tracked tensor to another device and starts a detached tensor.
+    ///
+    /// A storage transfer does not carry the source backend tape, so retaining
+    /// `Grad` here would falsely promise a connected graph.
+    pub fn to_device<D2: Device>(
+        &self,
+        _device: &D2::Field,
+    ) -> Result<Tensor<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>>
+    where
+        B: TransferTo<D2>,
+        <B as TransferTo<D2>>::Output: SupportsDType<K>,
+    {
+        let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
+        Tensor::<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
+            new_inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            _device.clone(),
+            PhantomData,
+            self._placement.clone(),
         )
     }
 }

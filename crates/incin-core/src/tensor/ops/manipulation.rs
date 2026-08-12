@@ -18,6 +18,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::prelude::NoGrad;
 use crate::prelude::{
     Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -27,6 +28,7 @@ use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{FlattenAt, SwapAxes};
 use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::ops::*;
+use core::marker::PhantomData;
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -2303,13 +2305,13 @@ where
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
 {
     /// The same tensor, rebuilt on backend `NewD`.
-    type Output = Tensor<S, <B as TransferTo<NewD>>::Output, K, G>;
-    /// Transfers storage to device `arg`, keeping shape/dtype/grad-tracking.
+    type Output = Tensor<S, <B as TransferTo<NewD>>::Output, K, NoGrad>;
+    /// Transfers storage to device `arg` and detaches graph tracking.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = G::grad_mode(&self._grad)
             .restrict(|| B::transfer_storage(&self.inner, &self._dtype, &field))?;
-        Tensor::from_shape_value(inner, self._shape, self._dtype, field, self._grad)
+        Tensor::from_shape_value(inner, self._shape, self._dtype, field, PhantomData)
     }
 }
 
