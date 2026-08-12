@@ -6,7 +6,7 @@ use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::Backend;
+use incin_core::backend_authoring::{Backend, StorageBackend};
 use incin_core::exec::catalog::{
     ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes, DataAttributes,
     DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,

@@ -11,7 +11,6 @@ pub mod capability;
 #[cfg(feature = "std")]
 pub mod capability_docs;
 pub mod codegen;
-pub use backend_kind::BackendFor;
 #[macro_use]
 #[cfg(any(
     feature = "cpu",
@@ -106,10 +105,10 @@ pub mod nn_target;
 pub mod target;
 
 pub mod prelude {
+    #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+    pub use super::IncinBackend;
     #[cfg(feature = "std")]
     pub use super::detect::{detect_device, detect_device_in};
-    #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
-    pub use super::{BackendFor, IncinBackend};
     pub use super::{EngineBackend, NativeBackend};
 
     // Extension methods only resolve when their trait is in scope, so the
