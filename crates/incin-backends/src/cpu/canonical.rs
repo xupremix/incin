@@ -1039,25 +1039,6 @@ impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
 // operations whose bodies move down next, and the macros below are shaped so
 // that moving one is a change to a single row.
 
-/// Unary elementwise float operations, which take no attributes.
-macro_rules! unary_float_executors {
-    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
-        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
-            type Output = CpuStorage;
-
-            fn execute_shaped<ShapeTy: Shape>(
-                &self,
-                request: ExecutionRequest<'_, op::$operation, Self>,
-            ) -> Result<CpuStorage, BackendError> {
-                let operation = OperationKind::$operation;
-                let input = reduction_operand(self, request.inputs, operation, training_mode(request.context))?;
-                <Self as FloatOps<Self>>::$method::<f32>(input)
-                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
-            }
-        }
-    )*};
-}
-
 macro_rules! canonical_unary_executors {
     ($(($operation:ident, $helper:ident)),* $(,)?) => {
         $(
