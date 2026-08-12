@@ -108,6 +108,18 @@ pub enum Constraint {
     BroadcastCompatible { lhs: DimExpr, rhs: DimExpr },
 }
 
+impl Constraint {
+    #[must_use]
+    pub fn equal(lhs: DimExpr, rhs: DimExpr) -> Self {
+        Self::Equal { lhs, rhs }
+    }
+
+    #[must_use]
+    pub fn broadcast(lhs: DimExpr, rhs: DimExpr) -> Self {
+        Self::BroadcastCompatible { lhs, rhs }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ShapeExpr {
     pub rank: RankExpr,

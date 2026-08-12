@@ -25,6 +25,7 @@ fn test_compiled_plan_construction_and_guards() {
     let plan = CompiledPlan::compile(captured, options);
 
     assert_eq!(plan.input_guards.len(), 2);
+    assert!(plan.verify_input(2, &[1], DTypeId::F32).is_err());
 }
 
 #[test]

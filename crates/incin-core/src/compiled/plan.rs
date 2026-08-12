@@ -130,9 +130,13 @@ impl CompiledPlan {
 
     /// Validates dynamic guards for provided inputs.
     pub fn verify_input(&self, index: usize, shape: &[usize], dtype: DTypeId) -> Result<()> {
-        if let Some(guard) = self.input_guards.get(index) {
-            guard.check(shape, dtype.into())?;
-        }
-        Ok(())
+        let guard = self.input_guards.get(index).ok_or_else(|| {
+            Error::Msg(alloc::format!(
+                "compiled input guard index {} is out of range ({} inputs)",
+                index,
+                self.input_guards.len()
+            ))
+        })?;
+        guard.check(shape, dtype.into())
     }
 }
