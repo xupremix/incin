@@ -37,8 +37,8 @@ fn an_expression_axis_becomes_a_runtime_axis_and_the_literals_stay_static() {
     assert_eq!(t.dims().as_ref(), &[5, 784]);
 }
 
-/// `shape!` produces canonical structural shapes, while array form preserves
-/// rank as `[usize; N]`.
+/// `shape!` produces canonical structural shapes, while array form is a
+/// runtime-rank adapter.
 #[test]
 fn all_runtime_axes_still_keep_the_rank() {
     let rows = 3usize;
@@ -47,8 +47,8 @@ fn all_runtime_axes_still_keep_the_rank() {
     let kept: Tensor<RuntimeShape2, _, f32, NoGrad> = Cpu.zeros(shape![rows, cols]).unwrap();
     assert_eq!(kept.dims().as_ref(), &[3, 4]);
 
-    // The array form preserves rank as a fixed-size array type [usize; 2].
-    let array_ranked: Tensor<[usize; 2], _, f32, NoGrad> = Cpu.zeros([rows, cols]).unwrap();
+    // Arrays are constructor adapters and resolve to the canonical Dyn shape.
+    let array_ranked: Tensor<Dyn, _, f32, NoGrad> = Cpu.zeros([rows, cols]).unwrap();
     assert_eq!(array_ranked.dims(), [3, 4]);
 
     // Vec form is dynamic rank Dyn.

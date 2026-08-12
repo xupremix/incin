@@ -86,39 +86,6 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError>;
 }
 
-impl<const N: usize> Shape for [usize; N] {
-    const RANK: Option<usize> = Some(N);
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
-    const STATIC_NUMEL: Option<usize> = if N == 0 { Some(1) } else { None };
-    type Arg = [usize; N];
-    #[inline(always)]
-    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
-        Self::try_from_dims(&arg)
-    }
-
-    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
-        if dims.len() == N {
-            Ok(())
-        } else {
-            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
-                operation: crate::shapes::error::OperationKind::Storage,
-                rank: dims.len(),
-            })
-        }
-    }
-}
-
-impl<const N: usize> DynShape for [usize; N] {
-    #[inline(always)]
-    fn rank(_: &ShapeBuf) -> usize {
-        N
-    }
-}
-
-impl<const N: usize> PartialDynShape for [usize; N] {
-    const RANK: usize = N;
-}
-
 /// Terminator node for canonical recursive fixed-rank shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct Nil;
@@ -960,11 +927,8 @@ impl<S: Shape + DynShape> ShapeSpec for ShapeValue<S> {
     }
 }
 
-impl<const N: usize> ShapeSpec for [usize; N]
-where
-    [usize; N]: Shape + DynShape,
-{
-    type Shape = [usize; N];
+impl<const N: usize> ShapeSpec for [usize; N] {
+    type Shape = Dyn;
 
     fn resolve(self) -> Result<ShapeValue<Self::Shape>, crate::err::Error> {
         ShapeValue::try_new(crate::shapes::ShapeBuf::from_slice(&self))
@@ -1181,10 +1145,10 @@ mod tests {
     fn test_array_shape() {
         let shape: [usize; 3] = [2, 3, 4];
         let field = ShapeBuf::from_slice(&shape);
-        assert_eq!(<[usize; 3] as DynShape>::rank(&field), 3);
-        assert_eq!(<[usize; 3] as DynShape>::numel(&field), 24);
+        assert_eq!(<Ranked<typenum::U3> as DynShape>::rank(&field), 3);
+        assert_eq!(<Ranked<typenum::U3> as DynShape>::numel(&field), 24);
         assert_eq!(field.dims(), &[2, 3, 4]);
-        assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
+        assert_eq!(<Ranked<typenum::U3> as PartialDynShape>::RANK, 3);
     }
 
     #[test]

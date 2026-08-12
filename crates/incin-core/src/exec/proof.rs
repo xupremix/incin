@@ -323,10 +323,13 @@ mod tests {
     }
 
     #[test]
-    fn an_array_shape_knows_its_rank_but_not_its_extents() {
-        assert_eq!(ProofLevel::of::<[usize; 3]>(), ProofLevel::Mixed);
-        assert!(ProofLevel::of::<[usize; 3]>().has_static_rank());
-        assert!(!ProofLevel::of::<[usize; 3]>().is_static());
+    fn a_ranked_shape_knows_its_rank_but_not_its_extents() {
+        assert_eq!(
+            ProofLevel::of::<crate::shapes::Ranked<typenum::U3>>(),
+            ProofLevel::Mixed
+        );
+        assert!(ProofLevel::of::<crate::shapes::Ranked<typenum::U3>>().has_static_rank());
+        assert!(!ProofLevel::of::<crate::shapes::Ranked<typenum::U3>>().is_static());
     }
 
     #[test]
