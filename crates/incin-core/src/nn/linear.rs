@@ -1,3 +1,4 @@
+use crate::backend_authoring::TensorBackend;
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
 use crate::prelude::*;
@@ -322,10 +323,7 @@ impl<
 impl<S, B, Bias, K: DType, Train: TrainState> Linear<S, B, Bias, K, Train>
 where
     S: LinearShape,
-    B: Backend
-        + SupportsDType<K>
-        + crate::tensor::backend::SupportsDType<K>
-        + crate::nn::param::ParameterInit<K>,
+    B: TensorBackend<K> + crate::nn::param::ParameterInit<K>,
     Bias: crate::nn::optional::OptionalField,
     <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,

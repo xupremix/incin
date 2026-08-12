@@ -160,7 +160,7 @@ where
 
     let invocation = O::infer_invocation(attributes, logical)?;
 
-    let training = context.grad_mode() == GradMode::Enabled;
+    let training = context.training();
     if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
         for handle in inputs {
             admit(
@@ -238,7 +238,7 @@ where
 
     let invocation = O::infer_invocation_typed(attributes, logical, expected)?;
 
-    let training = context.grad_mode() == GradMode::Enabled;
+    let training = context.training();
     if matches!(O::IDENTITY, OperationIdentity::Builtin(_)) {
         for handle in inputs {
             admit(
@@ -314,7 +314,7 @@ where
         context.backend(),
         &O::IDENTITY,
         metadata,
-        context.grad_mode() == GradMode::Enabled,
+        context.training(),
         context.math_mode(),
     )
 }

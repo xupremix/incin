@@ -326,6 +326,7 @@ pub struct ExecutionPolicy {
     pub determinism: Determinism,
     pub fallback: FallbackPolicy,
     pub allocator: AllocatorPolicy,
+    pub training: bool,
     pub grad_mode: GradMode,
     pub nan_policy: NanPolicy,
     pub precision: crate::exec::RuntimePrecisionPolicy,
@@ -333,8 +334,8 @@ pub struct ExecutionPolicy {
 
 impl ExecutionPolicy {
     /// The default policy, spelled out: precise arithmetic, no determinism
-    /// promise, no fallback of any kind, a direct allocator, and gradient
-    /// recording permitted.
+    /// promise, no fallback of any kind, a direct allocator, evaluation mode,
+    /// and gradient recording permitted.
     ///
     /// `GradMode::Enabled` is the only default here that permits rather than
     /// forbids, and it has to be: the ambient value is the *ceiling* a
@@ -348,6 +349,7 @@ impl ExecutionPolicy {
             determinism: Determinism::Permitted,
             fallback: FallbackPolicy::Deny,
             allocator: AllocatorPolicy::Direct,
+            training: false,
             grad_mode: GradMode::Enabled,
             nan_policy: NanPolicy::Permit,
             precision: crate::exec::RuntimePrecisionPolicy::fp32(),
@@ -375,6 +377,12 @@ impl ExecutionPolicy {
     #[must_use]
     pub const fn with_allocator(mut self, allocator: AllocatorPolicy) -> Self {
         self.allocator = allocator;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_training(mut self, training: bool) -> Self {
+        self.training = training;
         self
     }
 

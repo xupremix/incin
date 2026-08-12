@@ -124,6 +124,11 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
+    pub const fn training(&self) -> bool {
+        self.policy.training
+    }
+
+    #[must_use]
     pub const fn with_math_mode(mut self, math_mode: MathMode) -> Self {
         self.policy.math_mode = math_mode;
         self
