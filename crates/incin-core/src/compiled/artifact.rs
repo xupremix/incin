@@ -153,6 +153,7 @@ impl CompiledArtifact {
 
     /// Performs semantic validation of internal plan nodes and allocation descriptors (`SEC-010`).
     pub fn verify_semantics(&self) -> Result<()> {
+        self.plan.graph.validate()?;
         let nodes = &self.plan.graph.nodes;
         if nodes.len() > 100_000 {
             return Err(Error::Msg(alloc::format!(

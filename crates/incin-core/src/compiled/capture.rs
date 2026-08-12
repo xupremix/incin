@@ -137,12 +137,66 @@ impl CapturedGraph {
             })
             .collect();
 
-        Ok(Self {
+        let captured = Self {
             values,
             inputs: graph.inputs.clone(),
             outputs: graph.outputs.clone(),
             nodes,
-        })
+        };
+        captured.validate()?;
+        Ok(captured)
+    }
+
+    /// Validates value linkage and topological ordering in a captured graph.
+    pub fn validate(&self) -> Result<()> {
+        let value_ids: BTreeSet<ValueId> = self.values.iter().map(|value| value.id).collect();
+        if value_ids.len() != self.values.len() {
+            return Err(Error::Msg(String::from(
+                "captured graph contains duplicate value metadata",
+            )));
+        }
+
+        let mut defined_values = BTreeSet::new();
+        for &value_id in &self.inputs {
+            if !value_ids.contains(&value_id) {
+                return Err(Error::Msg(String::from(
+                    "captured graph input refers to an undefined value",
+                )));
+            }
+            defined_values.insert(value_id);
+        }
+        for value in &self.values {
+            if value.initializer {
+                defined_values.insert(value.id);
+            }
+        }
+
+        for node in &self.nodes {
+            if node.inputs.iter().any(|id| !defined_values.contains(id)) {
+                return Err(Error::Msg(String::from(
+                    "captured graph contains an undefined or forward-referenced input",
+                )));
+            }
+            for &output in &node.outputs {
+                if !value_ids.contains(&output) {
+                    return Err(Error::Msg(String::from(
+                        "captured graph node produces an undefined value",
+                    )));
+                }
+                if !defined_values.insert(output) {
+                    return Err(Error::Msg(String::from(
+                        "captured graph value is produced more than once",
+                    )));
+                }
+            }
+        }
+
+        if self.outputs.iter().any(|id| !defined_values.contains(id)) {
+            return Err(Error::Msg(String::from(
+                "captured graph output refers to an undefined value",
+            )));
+        }
+        Ok(())
     }
 
     /// Number of nodes in the captured graph.

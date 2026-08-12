@@ -105,3 +105,15 @@ fn test_artifact_load_happy_path() {
     let loaded = CompiledArtifact::load(&bytes, &version).expect("load should succeed");
     assert_eq!(loaded.header.label, "load_test");
 }
+
+#[test]
+fn test_artifact_rejects_invalid_captured_graph() {
+    let mut plan = make_test_plan();
+    let value_id = plan.graph.inputs[0];
+    plan.graph.nodes[0].inputs[0] = 999;
+    let artifact = CompiledArtifact::new(plan, current_version(), "invalid_graph".into())
+        .expect("artifact creation should succeed");
+    let bytes = artifact.serialize().expect("serialization should succeed");
+    assert!(CompiledArtifact::load(&bytes, &current_version()).is_err());
+    assert_ne!(value_id, 999);
+}
