@@ -1183,31 +1183,35 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
                 dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
                 payload: incin_core::exec::catalog::CreationPayload::Typed {
-                    bytes: bytes.clone(),
+                    byte_len: bytes.len(),
                     dtype: DTypeId::F32.descriptor(),
                 },
             };
             match operation {
                 OperationKind::TensorFromData => {
-                    dispatch::execute_shaped::<op::TensorFromData, _, Dyn>(
+                    dispatch::execute_shaped_with_payload::<op::TensorFromData, _, Dyn>(
                         &context,
                         typed_attributes,
                         &[],
                         &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
+                        Some(&bytes),
                     )
                     .unwrap()
                 }
                 OperationKind::TensorFromBytes => {
-                    dispatch::execute_shaped::<op::TensorFromBytes, _, Dyn>(
+                    dispatch::execute_shaped_with_payload::<op::TensorFromBytes, _, Dyn>(
                         &context,
                         DataAttributes {
                             shape: vec![2],
                             dtype: DTypeId::F32.descriptor(),
                             device: DeviceId::cpu(),
-                            payload: incin_core::exec::catalog::CreationPayload::Bytes(bytes),
+                            payload: incin_core::exec::catalog::CreationPayload::Bytes {
+                                byte_len: bytes.len(),
+                            },
                         },
                         &[],
                         &ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap(),
+                        Some(&bytes),
                     )
                     .unwrap()
                 }

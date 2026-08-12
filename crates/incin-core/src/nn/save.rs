@@ -263,16 +263,19 @@ where
             ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape)).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let inner = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
+        let inner = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
             &context,
             DataAttributes {
                 shape: shape.clone(),
                 dtype: dtype.descriptor(),
                 device: *device,
-                payload: CreationPayload::Bytes(bytes.to_vec()),
+                payload: CreationPayload::Bytes {
+                    byte_len: bytes.len(),
+                },
             },
             &[],
             &expected,
+            Some(bytes),
         )?
         .into();
         mapped_tensors.insert(name.to_string(), inner);
@@ -514,16 +517,19 @@ where
             ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&final_shape)).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
-        let storage = dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
+        let storage = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
             &context,
             DataAttributes {
                 shape: final_shape.clone(),
                 dtype: dtype_id.descriptor(),
                 device: DeviceId::cpu(),
-                payload: CreationPayload::Bytes(final_bytes.clone()),
+                payload: CreationPayload::Bytes {
+                    byte_len: final_bytes.len(),
+                },
             },
             &[],
             &expected,
+            Some(&final_bytes),
         )?
         .into();
         let tensor = Tensor::<Dyn, B>::from_parts(

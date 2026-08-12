@@ -822,26 +822,28 @@ attributes! {
     AdamWAttributes { learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64, weight_decay: f64, step: usize }
 }
 
-/// Owned bytes used by the data-creation descriptors.
+/// Small payload metadata used by the data-creation descriptors.
 ///
 /// `TensorFromData` records the dtype of its native source values, while
 /// `TensorFromBytes` records that its bytes were supplied without a native
-/// scalar type. Both forms remain part of the descriptor so validation occurs
-/// before capability lookup or backend execution.
+/// scalar type. The bytes themselves travel separately as a borrowed execution
+/// payload and never become part of the semantic descriptor.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CreationPayload {
     Typed {
-        bytes: Vec<u8>,
+        byte_len: usize,
         dtype: DTypeDescriptor,
     },
-    Bytes(Vec<u8>),
+    Bytes {
+        byte_len: usize,
+    },
 }
 
 impl CreationPayload {
     #[must_use]
-    pub fn bytes(&self) -> &[u8] {
+    pub const fn byte_len(&self) -> usize {
         match self {
-            Self::Typed { bytes, .. } | Self::Bytes(bytes) => bytes,
+            Self::Typed { byte_len, .. } | Self::Bytes { byte_len } => *byte_len,
         }
     }
 }
@@ -1549,7 +1551,7 @@ impl AttributeContract for DataAttributes {
                     });
                 }
             }
-            (OperationKind::TensorFromBytes, CreationPayload::Bytes(_)) => {}
+            (OperationKind::TensorFromBytes, CreationPayload::Bytes { .. }) => {}
             (OperationKind::TensorFromData, _) => {
                 return Err(DescriptorError::PayloadKind {
                     operation,
@@ -1571,7 +1573,7 @@ impl AttributeContract for DataAttributes {
                 operation,
             )
             .map_err(DescriptorError::Shape)?;
-        let actual = self.payload.bytes().len();
+        let actual = self.payload.byte_len();
         if actual != expected {
             return Err(DescriptorError::PayloadByteLength {
                 operation,
@@ -5638,7 +5640,7 @@ mod tests {
                 shape: vec![2],
                 dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
-                payload: CreationPayload::Bytes(vec![0; 7]),
+                payload: CreationPayload::Bytes { byte_len: 7 },
             },
             Vec::new(),
         )
@@ -5662,7 +5664,7 @@ mod tests {
                 dtype: DTypeId::F32.descriptor(),
                 device: DeviceId::cpu(),
                 payload: CreationPayload::Typed {
-                    bytes: vec![0; 8],
+                    byte_len: 8,
                     dtype: DTypeId::I64.descriptor(),
                 },
             },

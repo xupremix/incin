@@ -264,8 +264,11 @@ macro_rules! data_executors {
                     return Err(invalid(operation, "data creation takes no operand"));
                 }
                 let attributes = request.operation.descriptor().attributes();
+                let bytes = request
+                    .payload
+                    .ok_or_else(|| invalid(operation, "data creation requires borrowed bytes"))?;
                 <Self as Backend>::from_bytes::<f32>(
-                    attributes.payload.bytes(),
+                    bytes,
                     &attributes.shape,
                     attributes.dtype,
                     &attributes.device,

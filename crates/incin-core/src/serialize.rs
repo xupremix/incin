@@ -18,18 +18,23 @@ where
     let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(shape)).map_err(Error::Shape)?;
     let context =
         ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
-    Ok(dispatch::execute_shaped::<op::TensorFromBytes, B, Dyn>(
-        &context,
-        DataAttributes {
-            shape: shape.to_vec(),
-            dtype,
-            device: *device,
-            payload: CreationPayload::Bytes(bytes.to_vec()),
-        },
-        &[],
-        &expected,
+    Ok(
+        dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
+            &context,
+            DataAttributes {
+                shape: shape.to_vec(),
+                dtype,
+                device: *device,
+                payload: CreationPayload::Bytes {
+                    byte_len: bytes.len(),
+                },
+            },
+            &[],
+            &expected,
+            Some(bytes),
+        )
+        .map(Into::into)?,
     )
-    .map(Into::into)?)
 }
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
