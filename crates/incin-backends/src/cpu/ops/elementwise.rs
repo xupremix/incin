@@ -289,6 +289,30 @@ pub(crate) fn canonical_exp(t: &CpuStorage) -> Result<CpuStorage> {
     Ok(out)
 }
 
+pub(crate) fn canonical_abs(t: &CpuStorage) -> Result<CpuStorage> {
+    let out = elementwise_unary_typed(UnaryOp::Abs, t)?;
+    let t_capture = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let derivative = if x > 0.0 {
+                    1.0
+                } else if x < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                };
+                g * derivative
+            })?;
+            Ok(vec![grad])
+        }),
+    });
+    Ok(out)
+}
+
 fn elementwise_binary_numeric(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -712,29 +736,7 @@ impl<D: Device> FloatOps<Self> for CpuBackendImpl<D> {
     fn abs<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = elementwise_unary_typed(UnaryOp::Abs, t)?;
-
-        // abs'(x) = sign(x) (input-based).
-        let t_capture = t.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                    let deriv = if x > 0.0 {
-                        1.0
-                    } else if x < 0.0 {
-                        -1.0
-                    } else {
-                        0.0
-                    };
-                    g * deriv
-                })?;
-                Ok(vec![grad])
-            }),
-        });
-        Ok(out)
+        canonical_abs(t)
     }
 
     /// `exp`.
