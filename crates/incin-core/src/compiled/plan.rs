@@ -113,7 +113,6 @@ pub struct CompiledPlan {
 
 impl CompiledPlan {
     /// Creates a compiled plan from a captured graph and options, initializing input guards.
-    #[must_use]
     pub fn compile(mut graph: CapturedGraph, options: CompileOptions) -> Result<Self> {
         if matches!(options.fusion, FusionPolicy::Enabled) {
             return Err(Error::Msg(
@@ -254,11 +253,11 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 inputs.first().cloned()
             }
             OperationIdentity::Builtin(crate::prelude::OperationKind::Add) => inputs
-                .get(0)
+                .first()
                 .zip(inputs.get(1))
                 .map(|(lhs, rhs)| broadcast_shapes(lhs, rhs)),
             OperationIdentity::Builtin(crate::prelude::OperationKind::MatMulExact) => inputs
-                .get(0)
+                .first()
                 .zip(inputs.get(1))
                 .and_then(|(lhs, rhs)| matmul_shape(lhs, rhs)),
             OperationIdentity::Builtin(crate::prelude::OperationKind::Linear)
