@@ -2470,7 +2470,16 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         dilation: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_pool2d(&x.inner, kernel_size, stride, padding, dilation)?;
-        Ok(Self::trace_unary(OperationKind::MaxPool2d, x, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::MaxPool2d, K>(
+            x,
+            &inner,
+            crate::exec::catalog::Pool2dAttributes {
+                kernel: [kernel_size.0, kernel_size.1],
+                stride: [stride.0, stride.1],
+                padding: [padding.0, padding.1],
+                dilation: [dilation.0, dilation.1],
+            },
+        )
     }
 
     /// Delegates to `B::avg_pool2d`, additionally recording an `OperationKind::AvgPool2d` node.
@@ -2481,7 +2490,15 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         padding: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::avg_pool2d(&x.inner, kernel_size, stride, padding)?;
-        Ok(Self::trace_unary(OperationKind::AvgPool2d, x, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::AvgPool2d, K>(
+            x,
+            &inner,
+            crate::exec::catalog::AvgPool2dAttributes {
+                kernel: [kernel_size.0, kernel_size.1],
+                stride: [stride.0, stride.1],
+                padding: [padding.0, padding.1],
+            },
+        )
     }
 
     /// Delegates to `B::adaptive_avg_pool2d`, additionally recording an `OperationKind::AdaptiveAvgPool2d` node.
@@ -2490,11 +2507,16 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         output_size: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::adaptive_avg_pool2d(&x.inner, output_size)?;
-        Ok(Self::trace_unary(
-            OperationKind::AdaptiveAvgPool2d,
+        Self::trace_canonical_shape_with_attributes::<
+            crate::exec::catalog::op::AdaptiveAvgPool2dExact,
+            K,
+        >(
             x,
             &inner,
-        ))
+            crate::exec::catalog::AdaptivePool2dAttributes {
+                output: [output_size.0, output_size.1],
+            },
+        )
     }
 
     /// Delegates to `B::embedding`, additionally recording an `OperationKind::Embedding` node.
@@ -2526,7 +2548,20 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         eps: f32,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::layer_norm(&x.inner, &weight.inner, bias.map(|b| &b.inner), eps)?;
-        Ok(Self::trace_unary(OperationKind::LayerNorm, x, &inner))
+        let mut inputs = alloc::vec![x];
+        inputs.push(weight);
+        if let Some(bias) = bias {
+            inputs.push(bias);
+        }
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::LayerNorm, K>(
+            &inputs,
+            &inner,
+            crate::exec::catalog::LayerNormAttributes {
+                normalized_shape: B::shape(&weight.inner).as_ref().to_vec(),
+                epsilon: f64::from(eps),
+                has_bias: bias.is_some(),
+            },
+        )
     }
 
     /// Delegates to `B::batch_norm`, additionally recording an `OperationKind::BatchNorm` node.
@@ -2548,7 +2583,32 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             e,
             momentum,
         )?;
-        Ok(Self::trace_unary(OperationKind::BatchNorm, t, &inner))
+        let mut inputs = alloc::vec![t];
+        if let Some(w) = w {
+            inputs.push(w);
+        }
+        if let Some(b) = b {
+            inputs.push(b);
+        }
+        if let Some(rm) = rm {
+            inputs.push(rm);
+        }
+        if let Some(rv) = rv {
+            inputs.push(rv);
+        }
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::BatchNorm, K>(
+            &inputs,
+            &inner,
+            crate::exec::catalog::BatchNormAttributes {
+                epsilon: f64::from(e),
+                momentum,
+                training: rm.is_none(),
+                has_weight: w.is_some(),
+                has_bias: b.is_some(),
+                has_running_mean: rm.is_some(),
+                has_running_variance: rv.is_some(),
+            },
+        )
     }
 
     /// Delegates to `B::conv_transpose2d`, additionally recording an `OperationKind::ConvTranspose2d` node.
@@ -2573,7 +2633,22 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             dilation,
             groups,
         )?;
-        Ok(Self::trace_unary(OperationKind::ConvTranspose2d, t, &inner))
+        let mut inputs = alloc::vec![t, w];
+        if let Some(b) = b {
+            inputs.push(b);
+        }
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::ConvTranspose2d, K>(
+            &inputs,
+            &inner,
+            crate::exec::catalog::ConvTranspose2dAttributes {
+                stride: [stride, stride],
+                padding: [padding, padding],
+                output_padding: [output_padding, output_padding],
+                dilation: [dilation, dilation],
+                groups,
+                has_bias: b.is_some(),
+            },
+        )
     }
 }
 
