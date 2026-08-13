@@ -1742,19 +1742,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {
         let inner = B::tensor_to_dtype::<K1, K2>(&t.inner, dtype)?;
-        let shape = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), dtype, None);
-            g.add_node(
-                OperationKind::ToDType,
-                vec![t.value_id],
-                vec![out_id],
-                alloc::collections::BTreeMap::new(),
-            );
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_unary_types_with_attributes::<crate::exec::catalog::op::ToDType, K1, K2>(
+            t,
+            &inner,
+            crate::exec::catalog::DTypeAttributes { dtype },
+        )
     }
 
     /// Delegates to `B::broadcast_as`, additionally recording an `OperationKind::Broadcast` node.
