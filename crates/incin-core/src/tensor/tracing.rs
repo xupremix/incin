@@ -103,6 +103,29 @@ impl<V> From<TracingTensor<V>> for TracingVar<V> {
 }
 
 impl<B: Backend> TracingBackend<B> {
+    fn canonical_graph_attributes<O>(
+        descriptor: &crate::exec::catalog::Descriptor<O>,
+    ) -> Result<alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        #[cfg(feature = "std")]
+        {
+            Ok(descriptor
+                .trace_attributes()
+                .map_err(|reason| BackendError::InvalidInput {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    reason,
+                })?)
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let _ = descriptor;
+            Ok(alloc::collections::BTreeMap::new())
+        }
+    }
+
     fn traced_dtype<K: super::dtype::DType>(storage: &B::Storage<K>) -> DTypeDescriptor {
         B::storage_dtype(storage).unwrap_or_else(|| K::descriptor(&K::Field::default()))
     }
@@ -145,6 +168,7 @@ impl<B: Backend> TracingBackend<B> {
                 operation: crate::shapes::error::OperationKind::Storage,
                 reason,
             })?;
+        let attributes = Self::canonical_graph_attributes(descriptor.descriptor())?;
         let shape = B::shape(inner_res);
         let mut graph = TRACING_GRAPH.lock();
         let output_id =
@@ -155,7 +179,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![t.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            attributes,
             payload,
         );
         Ok(TracingTensor {
@@ -202,7 +226,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![t.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -251,7 +275,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![t.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -301,7 +325,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             tensors.iter().map(|tensor| tensor.value_id).collect(),
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -344,7 +368,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             input_ids,
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -401,7 +425,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![lhs.value_id, rhs.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -461,7 +485,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![lhs.value_id, rhs.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -518,7 +542,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![lhs.value_id, rhs.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {

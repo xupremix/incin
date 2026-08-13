@@ -1029,6 +1029,14 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
 
+    #[cfg(feature = "std")]
+    fn trace_attributes(
+        &self,
+    ) -> core::result::Result<
+        alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>,
+        &'static str,
+    >;
+
     fn trace_descriptor_payload(
         &self,
     ) -> core::result::Result<Option<crate::graph::DescriptorPayload>, &'static str>;
@@ -1042,6 +1050,19 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
 impl<O: Operation> TraceDescriptor for Descriptor<O> {
     fn trace_identity(&self) -> crate::exec::OperationIdentity {
         self.identity.clone()
+    }
+
+    #[cfg(feature = "std")]
+    fn trace_attributes(
+        &self,
+    ) -> core::result::Result<
+        alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>,
+        &'static str,
+    >
+    where
+        O::Attributes: serde::Serialize,
+    {
+        project_trace_attributes(&self.attributes)
     }
 
     fn trace_descriptor_payload(
@@ -1468,6 +1489,62 @@ impl fmt::Display for DescriptorError {
 impl std::error::Error for DescriptorError {}
 
 /// Validation implemented by each concrete typed attribute schema.
+#[cfg(feature = "std")]
+fn project_trace_attributes<T: serde::Serialize + ?Sized>(
+    value: &T,
+) -> core::result::Result<
+    alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>,
+    &'static str,
+> {
+    let value =
+        serde_json::to_value(value).map_err(|_| "canonical attribute serialization failed")?;
+    let serde_json::Value::Object(fields) = value else {
+        return Ok(alloc::collections::BTreeMap::new());
+    };
+    let mut attributes = alloc::collections::BTreeMap::new();
+    for (name, value) in fields {
+        let converted = match value {
+            serde_json::Value::Number(number) => number
+                .as_i64()
+                .map(crate::graph::AttributeValue::Int)
+                .or_else(|| {
+                    number
+                        .as_f64()
+                        .map(|value| crate::graph::AttributeValue::Float(value as f32))
+                }),
+            serde_json::Value::String(value) => Some(crate::graph::AttributeValue::String(value)),
+            serde_json::Value::Array(values) if values.iter().all(serde_json::Value::is_number) => {
+                if values.iter().all(|value| value.as_i64().is_some()) {
+                    Some(crate::graph::AttributeValue::Ints(
+                        values
+                            .iter()
+                            .filter_map(serde_json::Value::as_i64)
+                            .collect(),
+                    ))
+                } else {
+                    Some(crate::graph::AttributeValue::Floats(
+                        values
+                            .iter()
+                            .filter_map(serde_json::Value::as_f64)
+                            .map(|value| value as f32)
+                            .collect(),
+                    ))
+                }
+            }
+            serde_json::Value::Bool(value) => {
+                Some(crate::graph::AttributeValue::Int(i64::from(value)))
+            }
+            serde_json::Value::Array(_)
+            | serde_json::Value::Null
+            | serde_json::Value::Object(_) => None,
+        };
+        if let Some(value) = converted {
+            attributes.insert(name, value);
+        }
+    }
+    Ok(attributes)
+}
+
 pub trait AttributeContract {
     fn validate(
         &self,
@@ -1497,6 +1574,21 @@ pub trait AttributeContract {
     }
     fn optional_bias(&self) -> Option<bool> {
         None
+    }
+
+    /// Projects serializable scalar and array attributes for graph consumers.
+    /// The typed attribute struct remains the semantic source of truth.
+    #[cfg(feature = "std")]
+    fn trace_attributes(
+        &self,
+    ) -> core::result::Result<
+        alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>,
+        &'static str,
+    >
+    where
+        Self: serde::Serialize,
+    {
+        project_trace_attributes(self)
     }
 }
 
