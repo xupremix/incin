@@ -73,6 +73,49 @@ fn compiled_unary_inference_preserves_symbolic_shape() {
         plan.graph.value_metadata[&input].shape_expr
     );
 }
+
+#[test]
+fn compiled_reduction_inference_preserves_axis_semantics() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![8, 4], DTypeId::F32, Some("input".into()));
+    let reduced = graph.add_value(vec![8], DTypeId::F32, Some("reduced".into()));
+    let kept = graph.add_value(vec![8, 1], DTypeId::F32, Some("kept".into()));
+    graph.mark_input(input);
+    graph.mark_output(kept);
+    graph.add_node(
+        OperationKind::SumDim,
+        vec![input],
+        vec![reduced],
+        [(
+            String::from("axis"),
+            incin_core::graph::AttributeValue::Int(1),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    graph.add_node(
+        OperationKind::SumKeepDim,
+        vec![reduced],
+        vec![kept],
+        [(
+            String::from("axis"),
+            incin_core::graph::AttributeValue::Int(0),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    assert_eq!(plan.graph.value_metadata[&reduced].shape_expr.dims.len(), 1);
+    assert_eq!(
+        plan.graph.value_metadata[&kept].shape_expr.dims,
+        vec![DimExpr::Const(1)]
+    );
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 

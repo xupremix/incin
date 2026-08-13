@@ -184,6 +184,39 @@ impl<B: Backend> TracingBackend<B> {
             value_id,
         }
     }
+
+    fn trace_unary_with_attributes<K: super::dtype::DType, KOut: super::dtype::DType>(
+        operation: OperationKind,
+        t: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<KOut>,
+        attributes: alloc::collections::BTreeMap<
+            alloc::string::String,
+            crate::graph::AttributeValue,
+        >,
+    ) -> TracingTensor<B::Storage<KOut>> {
+        let shape = B::shape(inner_res);
+        let value_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+            g.add_node(operation, vec![t.value_id], vec![out_id], attributes);
+            out_id
+        };
+        TracingTensor {
+            inner: inner_res.clone(),
+            value_id,
+        }
+    }
+}
+
+fn axis_attributes(
+    axis: usize,
+) -> alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue> {
+    let mut attributes = alloc::collections::BTreeMap::new();
+    attributes.insert(
+        alloc::string::String::from("axis"),
+        crate::graph::AttributeValue::Int(axis as i64),
+    );
+    attributes
 }
 
 impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
@@ -970,7 +1003,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sum_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::SumDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::SumDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::sum_keepdim`, additionally recording an `OperationKind::SumDim` node.
@@ -979,7 +1017,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sum_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::SumDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::SumKeepDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::mean_dim`, additionally recording an `OperationKind::MeanDim` node.
@@ -988,7 +1031,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mean_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MeanDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MeanDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::mean_keepdim`, additionally recording an `OperationKind::MeanDim` node.
@@ -997,7 +1045,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mean_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MeanDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MeanKeepDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::max_dim`, additionally recording an `OperationKind::MaxDim` node.
@@ -1006,7 +1059,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MaxDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MaxDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::max_keepdim`, additionally recording an `OperationKind::MaxDim` node.
@@ -1015,7 +1073,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MaxDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MaxKeepDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::min_dim`, additionally recording an `OperationKind::MinDim` node.
@@ -1024,7 +1087,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::min_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MinDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MinDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::min_keepdim`, additionally recording an `OperationKind::MinDim` node.
@@ -1033,7 +1101,12 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::min_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::MinDim, t, &inner))
+        Ok(Self::trace_unary_with_attributes(
+            OperationKind::MinKeepDim,
+            t,
+            &inner,
+            axis_attributes(dim),
+        ))
     }
 
     /// Delegates to `B::argmax`, additionally recording an `OperationKind::ArgMax` node.

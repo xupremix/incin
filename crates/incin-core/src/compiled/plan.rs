@@ -465,13 +465,38 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             OperationIdentity::Builtin(crate::prelude::OperationKind::SumDim) => {
                 #[cfg(feature = "std")]
                 {
-                    let axis = decode_descriptor::<op::SumDim>(node)?.attributes().axis;
-                    inputs.first().map(|input| {
-                        let mut shape = input.clone();
-                        shape.dims.remove(axis);
-                        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
-                        shape
-                    })
+                    let axis = node_attribute_axis(node)?;
+                    inputs.first().map(|input| remove_axis(input, axis))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(
+                crate::prelude::OperationKind::MeanDim
+                | crate::prelude::OperationKind::MaxDim
+                | crate::prelude::OperationKind::MinDim,
+            ) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = node_attribute_axis(node)?;
+                    inputs.first().map(|input| remove_axis(input, axis))
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
+            OperationIdentity::Builtin(
+                crate::prelude::OperationKind::MeanKeepDim
+                | crate::prelude::OperationKind::MaxKeepDim
+                | crate::prelude::OperationKind::MinKeepDim,
+            ) => {
+                #[cfg(feature = "std")]
+                {
+                    let axis = node_attribute_axis(node)?;
+                    inputs.first().map(|input| keep_axis(input, axis))
                 }
                 #[cfg(not(feature = "std"))]
                 {
@@ -481,12 +506,8 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             OperationIdentity::Builtin(crate::prelude::OperationKind::SumKeepDim) => {
                 #[cfg(feature = "std")]
                 {
-                    let axis = decode_descriptor::<op::SumKeepDim>(node)?.attributes().axis;
-                    inputs.first().map(|input| {
-                        let mut shape = input.clone();
-                        shape.dims[axis] = DimExpr::Const(1);
-                        shape
-                    })
+                    let axis = node_attribute_axis(node)?;
+                    inputs.first().map(|input| keep_axis(input, axis))
                 }
                 #[cfg(not(feature = "std"))]
                 {
@@ -544,6 +565,39 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
         output.shape_expr = shape;
     }
     Ok(())
+}
+
+#[cfg(feature = "std")]
+fn node_attribute_axis(node: &crate::compiled::CapturedNode) -> Result<usize> {
+    node.attributes
+        .get("axis")
+        .and_then(|value| match value {
+            crate::graph::AttributeValue::Int(axis) => usize::try_from(*axis).ok(),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            Error::Msg(format!(
+                "compiled node {} has no valid axis attribute",
+                node.id
+            ))
+        })
+}
+
+fn remove_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
+    let mut shape = input.clone();
+    if axis < shape.dims.len() {
+        shape.dims.remove(axis);
+        shape.rank = crate::exec::RankExpr::Static(shape.dims.len());
+    }
+    shape
+}
+
+fn keep_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
+    let mut shape = input.clone();
+    if let Some(dim) = shape.dims.get_mut(axis) {
+        *dim = DimExpr::Const(1);
+    }
+    shape
 }
 
 #[cfg(feature = "std")]
