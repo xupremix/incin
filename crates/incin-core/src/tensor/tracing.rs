@@ -269,6 +269,53 @@ impl<B: Backend> TracingBackend<B> {
             value_id: output_id,
         })
     }
+
+    fn trace_canonical_unary_with_attributes<O, K: super::dtype::DType>(
+        t: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<K>,
+        attributes: O::Attributes,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            attributes,
+            vec![crate::exec::catalog::LogicalTensorMeta {
+                shape: Some(B::shape(&t.inner)),
+                dtype: Some(Self::traced_dtype(&t.inner)),
+                device: Some(B::metadata(&t.inner).device),
+            }],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical unary descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let shape = B::shape(inner_res);
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id =
+            graph.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![t.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
 }
 
 fn axis_attributes(
@@ -1077,12 +1124,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sum_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::SumDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::SumDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::sum_keepdim`, additionally recording an `OperationKind::SumDim` node.
@@ -1091,12 +1137,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sum_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::SumKeepDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::SumKeepDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::mean_dim`, additionally recording an `OperationKind::MeanDim` node.

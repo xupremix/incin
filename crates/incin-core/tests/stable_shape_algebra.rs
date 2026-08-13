@@ -449,6 +449,27 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
 }
 
 #[test]
+fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
+    let _guard = TRACE_TEST_LOCK.lock().unwrap();
+    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type S = s![2, 3];
+
+    let _ = incin_core::prelude::extract_graph();
+    let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
+    let _reduced = input.sum::<Next<Here>>().unwrap();
+
+    let graph = incin_core::prelude::extract_graph();
+    let node = graph
+        .nodes
+        .iter()
+        .find(|node| {
+            node.operation == OperationIdentity::Builtin(incin_core::prelude::OperationKind::SumDim)
+        })
+        .expect("reduction node should be traced");
+    assert!(node.descriptor_payload.is_some());
+}
+
+#[test]
 fn typed_tracing_preserves_runtime_and_static_input_axes() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
     type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
