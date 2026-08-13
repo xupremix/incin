@@ -1,5 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
+#[cfg(feature = "compiled")]
+use crate::compiled::CapturedGraph;
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::prelude::*;
@@ -107,6 +109,30 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     std::fs::write(path, buf)?;
 
     Ok(())
+}
+
+#[cfg(feature = "compiled")]
+/// Exports validated captured IR through the same canonical ONNX projection.
+pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    let mut eager = Graph::new();
+    eager.values = graph.value_metadata.clone();
+    eager.nodes = graph
+        .nodes
+        .iter()
+        .map(|node| crate::graph::Node {
+            id: node.id,
+            operation: node.operation.clone(),
+            execution_site: node.execution_site,
+            inputs: node.inputs.clone(),
+            outputs: node.outputs.clone(),
+            attributes: node.attributes.clone(),
+            descriptor_payload: node.descriptor_payload.clone(),
+        })
+        .collect();
+    eager.inputs = graph.inputs.clone();
+    eager.outputs = graph.outputs.clone();
+    eager.initializers = graph.initializers.clone();
+    export_to_onnx(&eager, path)
 }
 
 /// `dtype_to_onnx`.
