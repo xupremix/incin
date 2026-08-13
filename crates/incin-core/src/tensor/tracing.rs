@@ -908,7 +908,11 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::add_scalar_float(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OperationKind::AddScalar, t, &inner))
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::AddScalar, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ScalarAttributes { value: scalar },
+        )
     }
 
     /// Delegates to `B::mul_scalar_float`, additionally recording an
@@ -918,7 +922,11 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mul_scalar_float(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OperationKind::MulScalar, t, &inner))
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MulScalar, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ScalarAttributes { value: scalar },
+        )
     }
 
     /// Delegates to `B::relu`, additionally recording an
@@ -1002,7 +1010,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::log(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Log, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Log, K>(t, &inner)
     }
 
     /// Delegates to `B::tanh`, additionally recording an
@@ -1011,7 +1019,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::tanh(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Tanh, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Tanh, K>(t, &inner)
     }
 
     /// Delegates to `B::sigmoid`, additionally recording an
@@ -1020,7 +1028,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sigmoid(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Sigmoid, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Sigmoid, K>(t, &inner)
     }
 
     /// Delegates to `B::swish`, additionally recording an
@@ -1029,7 +1037,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::swish(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Swish, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Swish, K>(t, &inner)
     }
 
     /// Delegates to `B::softmax`, additionally recording an
@@ -1091,7 +1099,7 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sum_all(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::SumAll, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::SumAll, K>(t, &inner)
     }
 
     /// Delegates to `B::mean_all`, additionally recording an `OperationKind::MeanAll` node.
@@ -1099,7 +1107,7 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mean_all(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::MeanAll, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::MeanAll, K>(t, &inner)
     }
 
     /// Delegates to `B::max_all`, additionally recording an `OperationKind::MaxAll` node.
@@ -1107,7 +1115,7 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_all(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::MaxAll, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::MaxAll, K>(t, &inner)
     }
 
     /// Delegates to `B::min_all`, additionally recording an `OperationKind::MinAll` node.
@@ -1115,7 +1123,7 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::min_all(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::MinAll, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::MinAll, K>(t, &inner)
     }
 
     /// Delegates to `B::sum_dim`, additionally recording an `OperationKind::SumDim` node.
