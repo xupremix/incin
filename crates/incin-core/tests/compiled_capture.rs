@@ -162,6 +162,38 @@ fn typed_named_projection_preserves_identity_and_shares_named_symbols() {
 }
 
 #[test]
+fn named_derived_dimension_retains_name_and_expression_in_capture() {
+    use incin_core::shapes::{ConstDim, DimCons, MulDim, NamedDim, Nil};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    struct Batch;
+
+    impl incin_core::shapes::AxisTag for Batch {
+        const NAME: &'static str = "Batch";
+        const KEY: &'static str = "compiled_capture::derived::Batch";
+    }
+
+    type Shape = DimCons<NamedDim<Batch, MulDim<usize, ConstDim<2>>>, Nil>;
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![8], DTypeId::F32, Some("input".into()));
+    graph.mark_input_with_shape::<Shape>(input);
+
+    let expression = &graph.values[&input].shape_expr.dims[0];
+    assert!(matches!(
+        expression,
+                DimExpr::NamedExpr { name, identity, expr, .. }
+            if name == "Batch"
+                && identity == "compiled_capture::derived::Batch"
+                && matches!(
+                    expr.as_ref(),
+                    DimExpr::Mul(lhs, rhs)
+                        if matches!(lhs.as_ref(), DimExpr::Symbol(_))
+                            && matches!(rhs.as_ref(), DimExpr::Const(2))
+                )
+    ));
+}
+
+#[test]
 fn typed_named_projection_does_not_merge_distinct_axis_tags() {
     let mut graph = Graph::new();
     let batch = graph.add_value(vec![7], DTypeId::F32, Some("batch".into()));
