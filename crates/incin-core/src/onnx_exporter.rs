@@ -178,6 +178,62 @@ fn value_to_value_info(val: &crate::graph::Value) -> anyhow::Result<onnx::ValueI
     Ok(vi)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::exec::OperationIdentity;
+    use crate::exec::catalog::{Descriptor, LogicalTensorMeta, NoAttributes, TraceDescriptor, op};
+
+    #[test]
+    fn export_uses_canonical_identity_and_projected_attributes() {
+        let descriptor = Descriptor::<op::Add>::infer_runtime(
+            NoAttributes,
+            vec![
+                LogicalTensorMeta {
+                    shape: Some(crate::shapes::ShapeBuf::from_slice(&[2, 3])),
+                    dtype: Some(crate::prelude::DTypeId::F32.into()),
+                    device: Some(crate::prelude::DeviceId::cpu()),
+                },
+                LogicalTensorMeta {
+                    shape: Some(crate::shapes::ShapeBuf::from_slice(&[2, 3])),
+                    dtype: Some(crate::prelude::DTypeId::F32.into()),
+                    device: Some(crate::prelude::DeviceId::cpu()),
+                },
+            ],
+        )
+        .expect("descriptor should validate");
+        let mut graph = Graph::new();
+        let input = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
+        let rhs = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
+        let output = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
+        graph.add_node_with_descriptor_payload(
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Add),
+            vec![input, rhs],
+            vec![output],
+            descriptor
+                .descriptor()
+                .trace_attributes()
+                .expect("attributes should project"),
+            descriptor
+                .descriptor()
+                .trace_descriptor_payload()
+                .expect("payload should serialize"),
+        );
+        graph.inputs.push(input);
+        graph.outputs.push(output);
+
+        let path =
+            std::env::temp_dir().join(format!("incin-onnx-{}-{}.onnx", std::process::id(), output));
+        export_to_onnx(&graph, &path).expect("canonical graph should export");
+        let bytes = std::fs::read(&path).expect("export should be readable");
+        let model = onnx::ModelProto::decode(bytes.as_slice()).expect("export should decode");
+        let node = &model.graph.expect("graph should exist").node[0];
+        assert_eq!(node.op_type.as_deref(), Some("Add"));
+        assert!(node.attribute.is_empty());
+        std::fs::remove_file(path).expect("test export should be removable");
+    }
+}
+
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
     /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
