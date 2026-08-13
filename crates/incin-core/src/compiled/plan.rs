@@ -747,6 +747,15 @@ fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
         crate::exec::DimExpr::NamedSymbol { id, name, identity } => {
             symbols.register(*id, Some(name.clone()), Some(identity.clone()));
         }
+        crate::exec::DimExpr::NamedExpr {
+            expr,
+            id,
+            name,
+            identity,
+        } => {
+            symbols.register(*id, Some(name.clone()), Some(identity.clone()));
+            collect_symbols(expr, symbols);
+        }
         crate::exec::DimExpr::Add(lhs, rhs)
         | crate::exec::DimExpr::Sub(lhs, rhs)
         | crate::exec::DimExpr::Mul(lhs, rhs)

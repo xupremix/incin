@@ -342,6 +342,34 @@ fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
                 let _ = source;
                 DimExpr::NamedSymbol { id, name, identity }
             }
+            DimExpr::NamedExpr {
+                expr,
+                id: _,
+                name,
+                identity,
+            } => {
+                let id = if let Some(id) = names.get(&identity) {
+                    *id
+                } else {
+                    let id = fresh();
+                    *next_id = (*next_id).max(id.0.saturating_add(1));
+                    names.insert(identity.clone(), id);
+                    id
+                };
+                let expr = dim(*expr, anonymous, names, next_id, fresh);
+                match expr {
+                    DimExpr::Symbol(_) | DimExpr::NamedSymbol { .. } => {
+                        DimExpr::NamedSymbol { id, name, identity }
+                    }
+                    DimExpr::Const(value) => DimExpr::Const(value),
+                    expr => DimExpr::NamedExpr {
+                        expr: Box::new(expr),
+                        id,
+                        name,
+                        identity,
+                    },
+                }
+            }
             DimExpr::Add(lhs, rhs) => DimExpr::Add(
                 Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
                 Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
@@ -434,6 +462,7 @@ fn collect_shape_symbols(expr: &ShapeExpr, symbols: &mut BTreeSet<crate::exec::S
                 dim(lhs, symbols);
                 dim(rhs, symbols);
             }
+            crate::exec::DimExpr::NamedExpr { expr, .. } => dim(expr, symbols),
             crate::exec::DimExpr::Const(_)
             | crate::exec::DimExpr::Fresh(_)
             | crate::exec::DimExpr::NamedFresh { .. }

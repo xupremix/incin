@@ -153,6 +153,13 @@ pub enum DimExpr {
         name: String,
         identity: String,
     },
+    /// A derived dimension that retains the semantic identity of its axis.
+    NamedExpr {
+        expr: Box<DimExpr>,
+        id: SymbolId,
+        name: String,
+        identity: String,
+    },
     Add(Box<DimExpr>, Box<DimExpr>),
     Sub(Box<DimExpr>, Box<DimExpr>),
     Mul(Box<DimExpr>, Box<DimExpr>),
@@ -167,6 +174,17 @@ impl DimExpr {
     #[must_use]
     pub fn simplify(self) -> Self {
         match self {
+            Self::NamedExpr {
+                expr,
+                id,
+                name,
+                identity,
+            } => Self::NamedExpr {
+                expr: Box::new(expr.simplify()),
+                id,
+                name,
+                identity,
+            },
             Self::Add(lhs, rhs) => match (*lhs, *rhs) {
                 (Self::Const(lhs), Self::Const(rhs)) => lhs
                     .checked_add(rhs)
@@ -228,6 +246,11 @@ impl DimExpr {
                 .find(|(candidate, _)| candidate == id)
                 .map(|(_, value)| *value),
             Self::Fresh(_) | Self::NamedFresh { .. } => None,
+            Self::NamedExpr { expr, id, .. } => symbols
+                .iter()
+                .find(|(candidate, _)| candidate == id)
+                .map(|(_, value)| *value)
+                .or_else(|| expr.evaluate(symbols)),
             Self::Add(lhs, rhs) => lhs.evaluate(symbols)?.checked_add(rhs.evaluate(symbols)?),
             Self::Sub(lhs, rhs) => lhs.evaluate(symbols)?.checked_sub(rhs.evaluate(symbols)?),
             Self::Mul(lhs, rhs) => lhs.evaluate(symbols)?.checked_mul(rhs.evaluate(symbols)?),
@@ -260,6 +283,9 @@ impl DimExpr {
             Self::Const(value) => Some(*value),
             Self::Symbol(id) | Self::NamedSymbol { id, .. } => environment.get(*id),
             Self::Fresh(_) | Self::NamedFresh { .. } => None,
+            Self::NamedExpr { expr, id, .. } => environment
+                .get(*id)
+                .or_else(|| expr.evaluate_env(environment)),
             Self::Add(lhs, rhs) => lhs
                 .evaluate_env(environment)?
                 .checked_add(rhs.evaluate_env(environment)?),
@@ -397,6 +423,9 @@ impl ShapeExpr {
                 DimExpr::NamedSymbol { id, .. } => {
                     environment.bind(*id, value)?;
                 }
+                DimExpr::NamedExpr { id, .. } => {
+                    environment.bind(*id, value)?;
+                }
                 DimExpr::Fresh(_) | DimExpr::NamedFresh { .. } => {
                     return Err(alloc::format!(
                         "unallocated frontend symbol in compiled shape expression: {:?}",
@@ -417,6 +446,9 @@ impl ShapeExpr {
                     ));
                 }
                 DimExpr::Symbol(_) | DimExpr::NamedSymbol { .. } => {}
+                DimExpr::NamedExpr { expr, .. } => {
+                    environment.validate_expr(expr, value)?;
+                }
                 DimExpr::Fresh(_) | DimExpr::NamedFresh { .. } => {
                     return Err(alloc::format!(
                         "unallocated frontend symbol in compiled shape expression: {:?}",

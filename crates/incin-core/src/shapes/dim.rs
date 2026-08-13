@@ -509,14 +509,11 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     type Arg = Extent::Arg;
 
     fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
-        match Extent::symbolic_expr(axis, base) {
-            crate::exec::DimExpr::Const(value) => crate::exec::DimExpr::Const(value),
-            crate::exec::DimExpr::Fresh(source) => crate::exec::DimExpr::NamedFresh {
-                source,
-                name: alloc::string::String::from(Tag::NAME),
-                identity: alloc::string::String::from(Tag::KEY),
-            },
-            other => other,
+        crate::exec::DimExpr::NamedExpr {
+            expr: alloc::boxed::Box::new(Extent::symbolic_expr(axis, base)),
+            id: crate::exec::SymbolId(base.saturating_add(axis as u32)),
+            name: alloc::string::String::from(Tag::NAME),
+            identity: alloc::string::String::from(Tag::KEY),
         }
     }
 
