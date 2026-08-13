@@ -601,7 +601,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![t.value_id],
             vec![first_id, second_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok((first_id, second_id))
@@ -649,7 +649,7 @@ impl<B: Backend> TracingBackend<B> {
             descriptor.descriptor().trace_identity(),
             vec![t.value_id],
             vec![output_id],
-            alloc::collections::BTreeMap::new(),
+            Self::canonical_graph_attributes(descriptor.descriptor())?,
             payload,
         );
         Ok(TracingTensor {
@@ -657,17 +657,6 @@ impl<B: Backend> TracingBackend<B> {
             value_id: output_id,
         })
     }
-}
-
-fn axis_attributes(
-    axis: usize,
-) -> alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue> {
-    let mut attributes = alloc::collections::BTreeMap::new();
-    attributes.insert(
-        alloc::string::String::from("axis"),
-        crate::graph::AttributeValue::Int(axis as i64),
-    );
-    attributes
 }
 
 impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
@@ -701,8 +690,12 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
     }
 }
 
-impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
-    crate::tensor::backend::Execute<O> for TracingBackend<B>
+impl<
+    B: Backend + crate::tensor::backend::Execute<O>,
+    O: crate::exec::catalog::Operation + crate::exec::catalog::CanonicalOperation,
+> crate::tensor::backend::Execute<O> for TracingBackend<B>
+where
+    O::Attributes: crate::exec::catalog::AttributeContract,
 {
     type Output = TracingTensor<B::Output>;
 
@@ -774,7 +767,12 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                 request.operation.descriptor().trace_identity(),
                 inputs,
                 vec![output_id],
-                alloc::collections::BTreeMap::new(),
+                Self::canonical_graph_attributes(request.operation.descriptor()).map_err(|_| {
+                    BackendError::InvalidInput {
+                        operation: crate::shapes::error::OperationKind::Storage,
+                        reason: "tracing canonical attribute projection failed",
+                    }
+                })?,
                 descriptor_payload,
             );
             output_id
