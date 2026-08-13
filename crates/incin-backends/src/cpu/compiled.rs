@@ -165,6 +165,30 @@ impl CpuCompiledInvocation {
         let mut slots = (0..plan.memory_plan.peak_live_slots())
             .map(|_| None::<CpuStorage>)
             .collect::<Vec<_>>();
+
+        let backend = CpuBackendImpl::<Cpu>::default();
+        for (value_id, bytes) in &plan.graph.initializers {
+            let value = plan.graph.value_metadata.get(value_id).ok_or_else(|| {
+                Error::Msg(format!(
+                    "initializer value {value_id} has no captured metadata"
+                ))
+            })?;
+            let storage = <CpuBackendImpl<Cpu> as incin_core::prelude::Backend>::from_bytes::<Dyn>(
+                bytes,
+                &value.shape,
+                value.dtype,
+                &incin_core::prelude::DeviceId::cpu(),
+            )?;
+            let slot = plan
+                .memory_plan
+                .assignments()
+                .get(value_id)
+                .ok_or_else(|| {
+                    Error::Msg(format!("missing allocation for initializer value {value_id}"))
+                })?;
+            slots[slot.index()] = Some(storage);
+        }
+
         for (value_id, storage) in plan.graph.inputs.iter().copied().zip(self.inputs) {
             let slot = plan
                 .memory_plan
@@ -176,7 +200,6 @@ impl CpuCompiledInvocation {
             slots[slot.index()] = Some(storage);
         }
 
-        let backend = CpuBackendImpl::<Cpu>::default();
         let context = ExecutionContext::new(backend);
         for node in &plan.graph.nodes {
             let OperationIdentity::Builtin(operation) = node.operation else {

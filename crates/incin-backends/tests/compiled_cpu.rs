@@ -93,6 +93,41 @@ fn compiled_cpu_executes_captured_relu_through_canonical_descriptor() {
 }
 
 #[test]
+fn compiled_cpu_executes_with_captured_initializer() {
+    let descriptor = Descriptor::<op::Relu>::infer_runtime(NoAttributes, vec![meta(&[2])]).unwrap();
+    let captured = CapturedDescriptor::capture(descriptor.descriptor()).unwrap();
+
+    let mut graph = Graph::new();
+    let weights = graph.add_value(vec![2], DTypeId::F32, Some("weights".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.initializers.insert(
+        weights,
+        bytemuck::cast_slice(&[-2.0f32, 3.5f32]).to_vec(),
+    );
+    graph.mark_output(output);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Relu),
+        vec![weights],
+        vec![output],
+        Default::default(),
+        Some(incin_core::graph::DescriptorPayload {
+            schema: captured.schema(),
+            payload: captured.payload().to_vec(),
+        }),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let outputs = CpuCompiledInvocation::new(Vec::new()).run(&plan).unwrap();
+
+    assert_eq!(outputs[0].get(&[0]), 0.0);
+    assert_eq!(outputs[0].get(&[1]), 3.5);
+}
+
+#[test]
 fn compiled_cpu_relu_matches_canonical_eager_dispatch() {
     let input =
         CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![-2.0, 0.5, 3.5, -1.0]), vec![2, 2])

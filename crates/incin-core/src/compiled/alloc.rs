@@ -78,9 +78,9 @@ impl LivenessMap {
     pub fn compute(graph: &CapturedGraph) -> Self {
         let mut intervals: BTreeMap<ValueId, LivenessInterval> = BTreeMap::new();
 
-        // Input values are live from the beginning
-        for &input in &graph.inputs {
-            intervals.insert(input, LivenessInterval::new(0, 0));
+        // Inputs and graph-owned constants are live from the beginning.
+        for &value in graph.inputs.iter().chain(graph.initializers.keys()) {
+            intervals.insert(value, LivenessInterval::new(0, 0));
         }
 
         // Walk nodes and track def/use
@@ -283,8 +283,8 @@ impl AllocationPlanner {
         let mut peak_live_slots: usize = 0;
         let mut currently_live: BTreeSet<ValueId> = BTreeSet::new();
 
-        // Pre-assign slots to graph inputs
-        for &input in &graph.inputs {
+        // Pre-assign slots to graph inputs and graph-owned constants.
+        for &input in graph.inputs.iter().chain(graph.initializers.keys()) {
             let slot = BufferSlot::new(next_slot);
             next_slot = next_slot
                 .checked_add(1)
