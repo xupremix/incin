@@ -119,6 +119,8 @@ impl<B: Backend> TracingBackend<B> {
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+            let metadata = B::metadata(inner_res);
+            let _ = g.set_value_placement(out_id, Some(metadata.device), Some(metadata.layout));
             g.add_node(
                 operation,
                 vec![lhs.value_id, rhs.value_id],
@@ -146,6 +148,8 @@ impl<B: Backend> TracingBackend<B> {
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+            let metadata = B::metadata(inner_res);
+            let _ = g.set_value_placement(out_id, Some(metadata.device), Some(metadata.layout));
             g.add_node(
                 operation,
                 inputs,
@@ -198,6 +202,8 @@ impl<B: Backend> TracingBackend<B> {
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+            let metadata = B::metadata(inner_res);
+            let _ = g.set_value_placement(out_id, Some(metadata.device), Some(metadata.layout));
             g.add_node(operation, vec![t.value_id], vec![out_id], attributes);
             out_id
         };
@@ -301,6 +307,11 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
                     })?,
                 None,
             );
+            let metadata = request.inputs.first().map(|input| input.metadata());
+            if let Some(metadata) = metadata {
+                let _ =
+                    g.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+            }
             let inputs = request
                 .inputs
                 .iter()
