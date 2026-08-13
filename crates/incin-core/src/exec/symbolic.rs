@@ -94,7 +94,7 @@ impl SymbolEnvironment {
     }
 
     pub fn validate_constraints(&self, constraints: &[Constraint]) -> Result<(), String> {
-        for constraint in constraints {
+        for (index, constraint) in constraints.iter().enumerate() {
             let result = match constraint {
                 Constraint::Equal { lhs, rhs } => lhs
                     .evaluate_env(self)
@@ -117,11 +117,16 @@ impl SymbolEnvironment {
             match result {
                 Some(true) => {}
                 Some(false) => {
-                    return Err(alloc::format!("shape constraint failed: {:?}", constraint));
+                    return Err(alloc::format!(
+                        "shape constraint {} failed: {:?}",
+                        index,
+                        constraint
+                    ));
                 }
                 None => {
                     return Err(alloc::format!(
-                        "shape constraint remains unresolved: {:?}",
+                        "shape constraint {} remains unresolved: {:?}",
+                        index,
                         constraint
                     ));
                 }
@@ -376,11 +381,12 @@ impl ShapeExpr {
                 actual.len()
             ));
         }
-        for (expr, value) in self.dims.iter().zip(actual.iter().copied()) {
+        for (axis, (expr, value)) in self.dims.iter().zip(actual.iter().copied()).enumerate() {
             match expr {
                 DimExpr::Const(expected) if *expected != value => {
                     return Err(alloc::format!(
-                        "expected dimension {}, got {}",
+                        "axis {} expected dimension {}, got {}",
+                        axis,
                         expected,
                         value
                     ));
@@ -400,11 +406,12 @@ impl ShapeExpr {
                 _ => {}
             }
         }
-        for (expr, value) in self.dims.iter().zip(actual.iter().copied()) {
+        for (axis, (expr, value)) in self.dims.iter().zip(actual.iter().copied()).enumerate() {
             match expr {
                 DimExpr::Const(expected) if *expected != value => {
                     return Err(alloc::format!(
-                        "expected dimension {}, got {}",
+                        "axis {} expected dimension {}, got {}",
+                        axis,
                         expected,
                         value
                     ));
