@@ -2491,36 +2491,21 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             dilation,
             groups,
         )?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-            let mut inputs = vec![x.value_id, weight.value_id];
-            if let Some(b) = bias {
-                inputs.push(b.value_id);
-            }
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("strides"),
-                crate::graph::AttributeValue::Ints(vec![stride as i64]),
-            );
-            attrs.insert(
-                alloc::string::String::from("pads"),
-                crate::graph::AttributeValue::Ints(vec![padding as i64, padding as i64]),
-            );
-            attrs.insert(
-                alloc::string::String::from("dilations"),
-                crate::graph::AttributeValue::Ints(vec![dilation as i64]),
-            );
-
-            g.add_node(OperationKind::Conv1d, inputs, vec![out_id], attrs);
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        let mut tensors = alloc::vec![x, weight];
+        if let Some(b) = bias {
+            tensors.push(b);
+        }
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::Conv1dExact, K>(
+            &tensors,
+            &inner,
+            crate::exec::catalog::Conv1dAttributes {
+                stride,
+                padding,
+                dilation,
+                groups,
+                has_bias: bias.is_some(),
+            },
+        )
     }
 
     /// Delegates to `B::conv2d`, additionally recording an
@@ -2544,41 +2529,21 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             dilation,
             groups,
         )?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-            let mut inputs = vec![x.value_id, weight.value_id];
-            if let Some(b) = bias {
-                inputs.push(b.value_id);
-            }
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("strides"),
-                crate::graph::AttributeValue::Ints(vec![stride as i64, stride as i64]),
-            );
-            attrs.insert(
-                alloc::string::String::from("pads"),
-                crate::graph::AttributeValue::Ints(vec![
-                    padding as i64,
-                    padding as i64,
-                    padding as i64,
-                    padding as i64,
-                ]),
-            );
-            attrs.insert(
-                alloc::string::String::from("dilations"),
-                crate::graph::AttributeValue::Ints(vec![dilation as i64, dilation as i64]),
-            );
-
-            g.add_node(OperationKind::Conv2d, inputs, vec![out_id], attrs);
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        let mut tensors = alloc::vec![x, weight];
+        if let Some(b) = bias {
+            tensors.push(b);
+        }
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::Conv2dExact, K>(
+            &tensors,
+            &inner,
+            crate::exec::catalog::Conv2dAttributes {
+                stride: [stride, stride],
+                padding: [padding, padding],
+                dilation: [dilation, dilation],
+                groups,
+                has_bias: bias.is_some(),
+            },
+        )
     }
 
     /// Delegates to `B::max_pool2d`, additionally recording an `OperationKind::MaxPool2d` node.
@@ -2645,19 +2610,9 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         w: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::embedding(&t.inner, &w.inner)?;
-        let shape = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(&inner), None);
-            g.add_node(
-                OperationKind::Embedding,
-                vec![t.value_id, w.value_id],
-                vec![out_id],
-                alloc::collections::BTreeMap::new(),
-            );
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::EmbeddingExact, KInt, K, K>(
+            t, w, &inner,
+        )
     }
 
     /// Delegates to `B::layer_norm`, additionally recording an `OperationKind::LayerNorm` node.
