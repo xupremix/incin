@@ -166,6 +166,71 @@ fn compiled_matmul_propagates_input_symbols_and_contraction_constraints() {
 }
 
 #[test]
+fn compiled_broadcast_right_aligns_symbolic_shapes() {
+    let mut graph = Graph::new();
+    let lhs = graph.add_value(vec![8, 4], DTypeId::F32, Some("lhs".into()));
+    let rhs = graph.add_value(vec![4], DTypeId::F32, Some("rhs".into()));
+    let out = graph.add_value(vec![8, 4], DTypeId::F32, Some("out".into()));
+    graph.mark_input(lhs);
+    graph.mark_input(rhs);
+    graph.mark_output(out);
+    graph.add_node(
+        OperationKind::Add,
+        vec![lhs, rhs],
+        vec![out],
+        BTreeMap::new(),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let output = &plan.graph.value_metadata[&out].shape_expr;
+    assert_eq!(output.dims.len(), 2);
+    assert!(matches!(output.dims[0], DimExpr::Symbol(_)));
+    assert!(matches!(
+        output.dims[1],
+        DimExpr::Broadcast(_, _) | DimExpr::Symbol(_)
+    ));
+    assert!(
+        plan.verify_inputs(&[
+            (vec![3, 4], DTypeId::F32.into()),
+            (vec![4], DTypeId::F32.into()),
+        ])
+        .is_ok()
+    );
+}
+
+#[test]
+fn compiled_broadcast_rejects_symbolic_incompatible_runtime_axes() {
+    let mut graph = Graph::new();
+    let lhs = graph.add_value(vec![8, 4], DTypeId::F32, Some("lhs".into()));
+    let rhs = graph.add_value(vec![3, 4], DTypeId::F32, Some("rhs".into()));
+    let out = graph.add_value(vec![8, 4], DTypeId::F32, Some("out".into()));
+    graph.mark_input(lhs);
+    graph.mark_input(rhs);
+    graph.mark_output(out);
+    graph.add_node(
+        OperationKind::Add,
+        vec![lhs, rhs],
+        vec![out],
+        BTreeMap::new(),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    assert!(
+        plan.verify_inputs(&[
+            (vec![8, 4], DTypeId::F32.into()),
+            (vec![3, 4], DTypeId::F32.into()),
+        ])
+        .is_err()
+    );
+}
+
+#[test]
 fn composite_dimensions_are_validated_after_symbol_binding() {
     let hidden = DimExpr::Symbol(SymbolId(21));
     let shape = ShapeExpr {

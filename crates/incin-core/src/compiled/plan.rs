@@ -572,9 +572,13 @@ fn broadcast_shapes(lhs: &ShapeExpr, rhs: &ShapeExpr) -> ShapeExpr {
 
 fn aligned_dim(dims: &[DimExpr], rank: usize, offset: usize) -> DimExpr {
     let source_offset = rank.saturating_sub(dims.len());
-    dims.get(offset.saturating_sub(source_offset))
-        .cloned()
-        .unwrap_or(DimExpr::Const(1))
+    if offset < source_offset {
+        DimExpr::Const(1)
+    } else {
+        dims.get(offset - source_offset)
+            .cloned()
+            .unwrap_or(DimExpr::Const(1))
+    }
 }
 
 fn flatten_symbolic(input: &ShapeExpr, start: usize, end: usize) -> ShapeExpr {
