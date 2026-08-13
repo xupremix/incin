@@ -107,6 +107,16 @@ impl<B: Backend> TracingBackend<B> {
         B::storage_dtype(storage).unwrap_or_else(|| K::descriptor(&K::Field::default()))
     }
 
+    fn record_value<K: super::dtype::DType>(storage: &B::Storage<K>) -> ValueId {
+        let shape = B::shape(storage);
+        let dtype = Self::traced_dtype(storage);
+        let metadata = B::metadata(storage);
+        let mut graph = TRACING_GRAPH.lock();
+        let value_id = graph.add_value(shape.as_ref().to_vec(), dtype, None);
+        let _ = graph.set_value_placement(value_id, Some(metadata.device), Some(metadata.layout));
+        value_id
+    }
+
     /// Records a binary op's output as a new graph node with `lhs`/`rhs`
     /// as its inputs, wrapping `inner_res` with the new node's id.
     fn trace_binary<K1: super::dtype::DType, K2: super::dtype::DType, KOut: super::dtype::DType>(
@@ -470,6 +480,8 @@ impl<B: Backend> Backend for TracingBackend<B> {
             let mut g = TRACING_GRAPH.lock();
             let id = g.add_value(shape.to_vec(), dtype, None);
             g.initializers.insert(id, bytes.to_vec());
+            let metadata = B::metadata(&inner);
+            let _ = g.set_value_placement(id, Some(metadata.device), Some(metadata.layout));
             id
         };
         Ok(TracingTensor { inner, value_id })
@@ -498,7 +510,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::zeros(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -510,7 +522,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::ones(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -523,7 +535,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::full(val, shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -537,7 +549,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::arange(start, step, shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -551,7 +563,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::linspace(start, end, shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -563,7 +575,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::rand(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -575,7 +587,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::randn(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = Self::record_value(&inner);
         Ok(TracingTensor { inner, value_id })
     }
 
@@ -587,7 +599,8 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_zeros::<K>(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let tensor = B::var_as_tensor::<K>(&inner)?;
+        let value_id = Self::record_value(&tensor);
         Ok(TracingVar { inner, value_id })
     }
 
@@ -599,7 +612,8 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_ones::<K>(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let tensor = B::var_as_tensor::<K>(&inner)?;
+        let value_id = Self::record_value(&tensor);
         Ok(TracingVar { inner, value_id })
     }
 
@@ -611,7 +625,8 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_rand::<K>(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let tensor = B::var_as_tensor::<K>(&inner)?;
+        let value_id = Self::record_value(&tensor);
         Ok(TracingVar { inner, value_id })
     }
 
@@ -623,7 +638,8 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_randn::<K>(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let tensor = B::var_as_tensor::<K>(&inner)?;
+        let value_id = Self::record_value(&tensor);
         Ok(TracingVar { inner, value_id })
     }
 }
