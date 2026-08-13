@@ -465,7 +465,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             OperationIdentity::Builtin(crate::prelude::OperationKind::SumDim) => {
                 #[cfg(feature = "std")]
                 {
-                    let axis = node_attribute_axis(node)?;
+                    let axis = node_attribute_axis_or_sum_descriptor(node)?;
                     inputs.first().map(|input| remove_axis(input, axis))
                 }
                 #[cfg(not(feature = "std"))]
@@ -480,7 +480,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             ) => {
                 #[cfg(feature = "std")]
                 {
-                    let axis = node_attribute_axis(node)?;
+                    let axis = node_attribute_axis_or_sum_keep_descriptor(node)?;
                     inputs.first().map(|input| remove_axis(input, axis))
                 }
                 #[cfg(not(feature = "std"))]
@@ -581,6 +581,24 @@ fn node_attribute_axis(node: &crate::compiled::CapturedNode) -> Result<usize> {
                 node.id
             ))
         })
+}
+
+#[cfg(feature = "std")]
+fn node_attribute_axis_or_sum_descriptor(node: &crate::compiled::CapturedNode) -> Result<usize> {
+    if node.descriptor_payload.is_some() {
+        return Ok(decode_descriptor::<op::SumDim>(node)?.attributes().axis);
+    }
+    node_attribute_axis(node)
+}
+
+#[cfg(feature = "std")]
+fn node_attribute_axis_or_sum_keep_descriptor(
+    node: &crate::compiled::CapturedNode,
+) -> Result<usize> {
+    if node.descriptor_payload.is_some() {
+        return Ok(decode_descriptor::<op::SumKeepDim>(node)?.attributes().axis);
+    }
+    node_attribute_axis(node)
 }
 
 fn remove_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
