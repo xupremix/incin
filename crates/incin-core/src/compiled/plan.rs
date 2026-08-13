@@ -303,6 +303,17 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 | crate::prelude::OperationKind::Swish
                 | crate::prelude::OperationKind::LogicalNot,
             ) => inputs.first().cloned(),
+            OperationIdentity::Builtin(crate::prelude::OperationKind::Softmax) => {
+                #[cfg(feature = "std")]
+                {
+                    let _axis = node_attribute_axis(node)?;
+                    inputs.first().cloned()
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    None
+                }
+            }
             OperationIdentity::Builtin(
                 crate::prelude::OperationKind::AddScalar
                 | crate::prelude::OperationKind::SubScalar

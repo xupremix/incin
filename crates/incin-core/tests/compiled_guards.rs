@@ -116,6 +116,36 @@ fn compiled_reduction_inference_preserves_axis_semantics() {
         vec![DimExpr::Const(1)]
     );
 }
+
+#[test]
+fn compiled_softmax_inference_preserves_shape_and_requires_axis_metadata() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![8, 4], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![8, 4], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Softmax,
+        vec![input],
+        vec![output],
+        [(
+            String::from("axis"),
+            incin_core::graph::AttributeValue::Int(1),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        plan.graph.value_metadata[&output].shape_expr,
+        plan.graph.value_metadata[&input].shape_expr
+    );
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
