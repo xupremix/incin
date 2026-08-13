@@ -60,9 +60,9 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
         match Self::STATIC {
             StaticExtent::Value(value) => crate::exec::DimExpr::Const(value),
-            StaticExtent::RuntimeUnknown => crate::exec::DimExpr::Fresh(
-                base.saturating_add(axis as u32),
-            ),
+            StaticExtent::RuntimeUnknown => {
+                crate::exec::DimExpr::Fresh(base.saturating_add(axis as u32))
+            }
             StaticExtent::Invalid => crate::exec::DimExpr::Unknown,
         }
     }
