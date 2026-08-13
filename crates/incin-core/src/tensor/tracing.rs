@@ -416,6 +416,49 @@ impl<B: Backend> TracingBackend<B> {
         })
     }
 
+    fn trace_canonical_inputs_with_attributes<O, KOut: super::dtype::DType>(
+        input_ids: alloc::vec::Vec<ValueId>,
+        inputs: alloc::vec::Vec<crate::exec::catalog::LogicalTensorMeta>,
+        inner_res: &B::Storage<KOut>,
+        attributes: O::Attributes,
+    ) -> Result<TracingTensor<B::Storage<KOut>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(attributes, inputs)
+            .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical heterogeneous descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            input_ids,
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
+
     fn trace_canonical_binary<O, K: super::dtype::DType>(
         lhs: &TracingTensor<B::Storage<K>>,
         rhs: &TracingTensor<B::Storage<K>>,
@@ -1918,11 +1961,28 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         on_false: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::where_cond::<K>(&mask.inner, &on_true.inner, &on_false.inner)?;
-        Ok(Self::trace_nary(
-            OperationKind::WhereCond,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::WhereCond, K>(
             alloc::vec![mask.value_id, on_true.value_id, on_false.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&mask.inner)),
+                    dtype: Some(Self::traced_dtype(&mask.inner)),
+                    device: Some(B::metadata(&mask.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&on_true.inner)),
+                    dtype: Some(Self::traced_dtype(&on_true.inner)),
+                    device: Some(B::metadata(&on_true.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&on_false.inner)),
+                    dtype: Some(Self::traced_dtype(&on_false.inner)),
+                    device: Some(B::metadata(&on_false.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::NoAttributes,
+        )
     }
 
     /// Delegates to `B::gather`, recording an `OperationKind::Gather` node.
@@ -1932,11 +1992,23 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         index: &<Self as StorageBackend>::Storage<KInt>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::gather::<K, KInt>(&t.inner, dim, &index.inner)?;
-        Ok(Self::trace_nary(
-            OperationKind::Gather,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::Gather, K>(
             alloc::vec![t.value_id, index.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&t.inner)),
+                    dtype: Some(Self::traced_dtype(&t.inner)),
+                    device: Some(B::metadata(&t.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&index.inner)),
+                    dtype: Some(Self::traced_dtype(&index.inner)),
+                    device: Some(B::metadata(&index.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::scatter`, recording an `OperationKind::Scatter` node whose
@@ -1948,11 +2020,31 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         src: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::scatter::<K, KInt>(&t.inner, dim, &index.inner, &src.inner)?;
-        Ok(Self::trace_nary(
-            OperationKind::Scatter,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::Scatter, K>(
             alloc::vec![t.value_id, index.value_id, src.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&t.inner)),
+                    dtype: Some(Self::traced_dtype(&t.inner)),
+                    device: Some(B::metadata(&t.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&index.inner)),
+                    dtype: Some(Self::traced_dtype(&index.inner)),
+                    device: Some(B::metadata(&index.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&src.inner)),
+                    dtype: Some(Self::traced_dtype(&src.inner)),
+                    device: Some(B::metadata(&src.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::ScatterAttributes {
+                axis: dim,
+                duplicate_indices: crate::exec::catalog::DuplicateIndexRule::LastWriteWins,
+            },
+        )
     }
 
     /// Delegates to `B::index_select`, recording an `OperationKind::IndexSelect` node.
@@ -1962,11 +2054,23 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         index: &<Self as StorageBackend>::Storage<KInt>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::index_select::<K, KInt>(&t.inner, dim, &index.inner)?;
-        Ok(Self::trace_nary(
-            OperationKind::IndexSelect,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::IndexSelect, K>(
             alloc::vec![t.value_id, index.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&t.inner)),
+                    dtype: Some(Self::traced_dtype(&t.inner)),
+                    device: Some(B::metadata(&t.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&index.inner)),
+                    dtype: Some(Self::traced_dtype(&index.inner)),
+                    device: Some(B::metadata(&index.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::masked_fill`, recording an `OperationKind::MaskedFill` node.
@@ -1976,11 +2080,23 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         value: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::masked_fill::<K>(&t.inner, &mask.inner, value)?;
-        Ok(Self::trace_nary(
-            OperationKind::MaskedFill,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::MaskedFill, K>(
             alloc::vec![t.value_id, mask.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&t.inner)),
+                    dtype: Some(Self::traced_dtype(&t.inner)),
+                    device: Some(B::metadata(&t.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&mask.inner)),
+                    dtype: Some(Self::traced_dtype(&mask.inner)),
+                    device: Some(B::metadata(&mask.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::ScalarAttributes { value },
+        )
     }
 
     /// Delegates to `B::unsqueeze`, recording an `OperationKind::Unsqueeze` node.
@@ -2241,11 +2357,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::addmm(&mat.inner, &mat1.inner, &mat2.inner, beta, alpha)?;
-        Ok(Self::trace_nary(
-            OperationKind::Addmm,
-            alloc::vec![mat.value_id, mat1.value_id, mat2.value_id],
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::Addmm, K>(
+            &[mat, mat1, mat2],
             &inner,
-        ))
+            crate::exec::catalog::AddmmAttributes { alpha, beta },
+        )
     }
 
     /// Delegates to `B::bmm`, recording an `OperationKind::Bmm` node.
@@ -2275,15 +2391,19 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
             mask.map(|m| &m.inner),
             scale,
         )?;
-        let mut inputs = alloc::vec![q.value_id, k.value_id, v.value_id];
-        if let Some(m) = mask {
-            inputs.push(m.value_id);
-        }
-        Ok(Self::trace_nary(
-            OperationKind::ScaledDotProductAttention,
-            inputs,
+        let tensors = if let Some(m) = mask {
+            alloc::vec![q, k, v, m]
+        } else {
+            alloc::vec![q, k, v]
+        };
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::ScaledDotProductAttention, K>(
+            &tensors,
             &inner,
-        ))
+            crate::exec::catalog::AttentionAttributes {
+                scale,
+                has_mask: mask.is_some(),
+            },
+        )
     }
 
     /// Delegates to `B::unfold`, recording an `OperationKind::Unfold` node.
