@@ -83,7 +83,10 @@ fn capture_preserves_optional_value_placement_metadata() {
     let captured = CapturedGraph::capture(&graph).unwrap();
     let value = &captured.value_metadata[&input];
     assert_eq!(value.device, Some(incin_core::prelude::DeviceId::cpu()));
-    assert_eq!(value.layout, Some(incin_core::exec::LayoutClass::Contiguous));
+    assert_eq!(
+        value.layout,
+        Some(incin_core::exec::LayoutClass::Contiguous)
+    );
 }
 
 #[test]
