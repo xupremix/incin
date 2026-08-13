@@ -113,3 +113,49 @@ fn typed_named_projection_does_not_merge_distinct_axis_tags() {
             if name == "Sequence" && identity.ends_with("::Sequence")
     ));
 }
+
+#[test]
+fn graph_symbol_allocator_keeps_anonymous_and_named_axes_disjoint() {
+    let mut graph = Graph::new();
+    let anonymous = graph.add_value(vec![2, 3], DTypeId::F32, Some("anonymous".into()));
+    let named = graph.add_value(vec![5], DTypeId::F32, Some("named".into()));
+    graph.mark_input(anonymous);
+    graph.mark_input_with_shape::<incin::prelude::s![Batch]>(named);
+
+    let anonymous_ids = graph.values[&anonymous]
+        .shape_expr
+        .dims
+        .iter()
+        .filter_map(|expr| match expr {
+            DimExpr::Symbol(id) | DimExpr::NamedSymbol { id, .. } => Some(*id),
+            _ => None,
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let named_id = match &graph.values[&named].shape_expr.dims[0] {
+        DimExpr::NamedSymbol { id, .. } => *id,
+        other => panic!("expected named symbol, got {other:?}"),
+    };
+    assert!(!anonymous_ids.contains(&named_id));
+    assert_eq!(anonymous_ids.len(), 2);
+}
+
+#[test]
+fn graph_symbol_allocator_survives_serialization_and_continues_fresh_ids() {
+    let mut graph = Graph::new();
+    let first = graph.add_value(vec![2], DTypeId::F32, Some("first".into()));
+    graph.mark_input(first);
+    let encoded = serde_json::to_vec(&graph).unwrap();
+    let mut restored: Graph = serde_json::from_slice(&encoded).unwrap();
+    let second = restored.add_value(vec![3], DTypeId::F32, Some("second".into()));
+    restored.mark_input(second);
+
+    let first_id = match restored.values[&first].shape_expr.dims[0] {
+        DimExpr::Symbol(id) => id,
+        ref other => panic!("expected anonymous symbol, got {other:?}"),
+    };
+    let second_id = match restored.values[&second].shape_expr.dims[0] {
+        DimExpr::Symbol(id) => id,
+        ref other => panic!("expected anonymous symbol, got {other:?}"),
+    };
+    assert_ne!(first_id, second_id);
+}

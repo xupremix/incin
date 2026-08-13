@@ -1,7 +1,7 @@
 use crate::exec::{ExecutionSite, OperationIdentity, ShapeExpr};
 use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
 use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -198,8 +198,12 @@ impl Graph {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
-        if let Some(value) = self.values.get_mut(&value_id) {
-            value.shape_expr = ShapeExpr::symbolic(&value.shape, value_id as u32 * 10_000 + 1);
+        if let Some(shape) = self.values.get(&value_id).map(|value| value.shape.clone()) {
+            let shape = ShapeExpr::symbolic(&shape, 1);
+            let remapped = self.remap_input_symbols(shape);
+            if let Some(value) = self.values.get_mut(&value_id) {
+                value.shape_expr = remapped;
+            }
         }
     }
 
@@ -210,11 +214,7 @@ impl Graph {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
-        let shape_expr = intern_named_symbols(
-            S::symbolic_expr(value_id as u32 * 10_000 + 1),
-            &mut self.named_symbols,
-            &mut self.next_symbol_id,
-        );
+        let shape_expr = self.remap_input_symbols(S::symbolic_expr(1));
         if let Some(value) = self.values.get_mut(&value_id) {
             value.shape_expr = shape_expr;
         }
@@ -225,50 +225,90 @@ impl Graph {
             self.outputs.push(value_id);
         }
     }
+
+    fn remap_input_symbols(&mut self, expr: ShapeExpr) -> ShapeExpr {
+        let mut anonymous = BTreeMap::new();
+        let mut used = BTreeSet::new();
+        for value in self.values.values() {
+            collect_shape_symbols(&value.shape_expr, &mut used);
+        }
+        used.extend(self.named_symbols.values().copied());
+        let mut next = self.next_symbol_id;
+        let mut named_next = next;
+        let remapped = remap_shape_symbols(
+            expr,
+            &mut anonymous,
+            &mut self.named_symbols,
+            &mut named_next,
+            || loop {
+                let candidate = crate::exec::SymbolId(next);
+                next = next.saturating_add(1);
+                if used.insert(candidate) {
+                    break candidate;
+                }
+            },
+        );
+        self.next_symbol_id = next;
+        remapped
+    }
 }
 
-fn intern_named_symbols(
+fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
     expr: ShapeExpr,
+    anonymous: &mut BTreeMap<crate::exec::SymbolId, crate::exec::SymbolId>,
     names: &mut BTreeMap<String, crate::exec::SymbolId>,
     next_id: &mut u32,
+    mut fresh: F,
 ) -> ShapeExpr {
     fn dim(
         expr: crate::exec::DimExpr,
+        anonymous: &mut BTreeMap<crate::exec::SymbolId, crate::exec::SymbolId>,
         names: &mut BTreeMap<String, crate::exec::SymbolId>,
         next_id: &mut u32,
+        fresh: &mut impl FnMut() -> crate::exec::SymbolId,
     ) -> crate::exec::DimExpr {
         use crate::exec::DimExpr;
         match expr {
+            DimExpr::Symbol(id) => {
+                let mapped = if let Some(mapped) = anonymous.get(&id) {
+                    *mapped
+                } else {
+                    let mapped = fresh();
+                    anonymous.insert(id, mapped);
+                    mapped
+                };
+                DimExpr::Symbol(mapped)
+            }
             DimExpr::NamedSymbol { name, identity, .. } => {
                 let id = if let Some(id) = names.get(&identity) {
                     *id
                 } else {
-                    let id = crate::exec::SymbolId(*next_id);
-                    *next_id = next_id.saturating_add(1);
+                    let id = fresh();
+                    *next_id = (*next_id).max(id.0.saturating_add(1));
                     names.insert(identity.clone(), id);
                     id
                 };
                 DimExpr::NamedSymbol { id, name, identity }
             }
             DimExpr::Add(lhs, rhs) => DimExpr::Add(
-                Box::new(dim(*lhs, names, next_id)),
-                Box::new(dim(*rhs, names, next_id)),
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
             DimExpr::Sub(lhs, rhs) => DimExpr::Sub(
-                Box::new(dim(*lhs, names, next_id)),
-                Box::new(dim(*rhs, names, next_id)),
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
             DimExpr::Mul(lhs, rhs) => DimExpr::Mul(
-                Box::new(dim(*lhs, names, next_id)),
-                Box::new(dim(*rhs, names, next_id)),
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
             DimExpr::ExactDiv(lhs, rhs) => DimExpr::ExactDiv(
-                Box::new(dim(*lhs, names, next_id)),
-                Box::new(dim(*rhs, names, next_id)),
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
             DimExpr::Broadcast(lhs, rhs) => DimExpr::Broadcast(
-                Box::new(dim(*lhs, names, next_id)),
-                Box::new(dim(*rhs, names, next_id)),
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
             other => other,
         }
@@ -279,41 +319,75 @@ fn intern_named_symbols(
         dims: expr
             .dims
             .into_iter()
-            .map(|value| dim(value, names, next_id))
+            .map(|value| dim(value, anonymous, names, next_id, &mut fresh))
             .collect(),
         constraints: expr
             .constraints
             .into_iter()
             .map(|constraint| match constraint {
                 crate::exec::Constraint::Equal { lhs, rhs } => crate::exec::Constraint::Equal {
-                    lhs: dim(lhs, names, next_id),
-                    rhs: dim(rhs, names, next_id),
+                    lhs: dim(lhs, anonymous, names, next_id, &mut fresh),
+                    rhs: dim(rhs, anonymous, names, next_id, &mut fresh),
                 },
                 crate::exec::Constraint::BroadcastCompatible { lhs, rhs } => {
                     crate::exec::Constraint::BroadcastCompatible {
-                        lhs: dim(lhs, names, next_id),
-                        rhs: dim(rhs, names, next_id),
+                        lhs: dim(lhs, anonymous, names, next_id, &mut fresh),
+                        rhs: dim(rhs, anonymous, names, next_id, &mut fresh),
                     }
                 }
                 crate::exec::Constraint::LowerBound { value, bound } => {
                     crate::exec::Constraint::LowerBound {
-                        value: dim(value, names, next_id),
+                        value: dim(value, anonymous, names, next_id, &mut fresh),
                         bound,
                     }
                 }
                 crate::exec::Constraint::UpperBound { value, bound } => {
                     crate::exec::Constraint::UpperBound {
-                        value: dim(value, names, next_id),
+                        value: dim(value, anonymous, names, next_id, &mut fresh),
                         bound,
                     }
                 }
                 crate::exec::Constraint::Divisible { value, divisor } => {
                     crate::exec::Constraint::Divisible {
-                        value: dim(value, names, next_id),
+                        value: dim(value, anonymous, names, next_id, &mut fresh),
                         divisor,
                     }
                 }
             })
             .collect(),
+    }
+}
+
+fn collect_shape_symbols(expr: &ShapeExpr, symbols: &mut BTreeSet<crate::exec::SymbolId>) {
+    fn dim(expr: &crate::exec::DimExpr, symbols: &mut BTreeSet<crate::exec::SymbolId>) {
+        match expr {
+            crate::exec::DimExpr::Symbol(id) | crate::exec::DimExpr::NamedSymbol { id, .. } => {
+                symbols.insert(*id);
+            }
+            crate::exec::DimExpr::Add(lhs, rhs)
+            | crate::exec::DimExpr::Sub(lhs, rhs)
+            | crate::exec::DimExpr::Mul(lhs, rhs)
+            | crate::exec::DimExpr::ExactDiv(lhs, rhs)
+            | crate::exec::DimExpr::Broadcast(lhs, rhs) => {
+                dim(lhs, symbols);
+                dim(rhs, symbols);
+            }
+            crate::exec::DimExpr::Const(_) | crate::exec::DimExpr::Unknown => {}
+        }
+    }
+    for value in &expr.dims {
+        dim(value, symbols);
+    }
+    for constraint in &expr.constraints {
+        match constraint {
+            crate::exec::Constraint::Equal { lhs, rhs }
+            | crate::exec::Constraint::BroadcastCompatible { lhs, rhs } => {
+                dim(lhs, symbols);
+                dim(rhs, symbols);
+            }
+            crate::exec::Constraint::LowerBound { value, .. }
+            | crate::exec::Constraint::UpperBound { value, .. }
+            | crate::exec::Constraint::Divisible { value, .. } => dim(value, symbols),
+        }
     }
 }
