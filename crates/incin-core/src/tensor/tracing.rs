@@ -1150,12 +1150,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mean_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MeanDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MeanDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::mean_keepdim`, additionally recording an `OperationKind::MeanDim` node.
@@ -1164,12 +1163,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mean_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MeanKeepDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MeanKeepDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::max_dim`, additionally recording an `OperationKind::MaxDim` node.
@@ -1178,12 +1176,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MaxDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MaxDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::max_keepdim`, additionally recording an `OperationKind::MaxDim` node.
@@ -1192,12 +1189,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::max_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MaxKeepDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MaxKeepDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::min_dim`, additionally recording an `OperationKind::MinDim` node.
@@ -1206,12 +1202,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::min_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MinDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MinDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::min_keepdim`, additionally recording an `OperationKind::MinDim` node.
@@ -1220,12 +1215,11 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::min_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary_with_attributes(
-            OperationKind::MinKeepDim,
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::MinKeepDim, K>(
             t,
             &inner,
-            axis_attributes(dim),
-        ))
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::argmax`, additionally recording an `OperationKind::ArgMax` node.

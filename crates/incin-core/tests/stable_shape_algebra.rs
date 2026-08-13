@@ -457,6 +457,7 @@ fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
     let _ = incin_core::prelude::extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let _reduced = input.sum::<Next<Here>>().unwrap();
+    let _kept = input.sum_keepdim::<Next<Here>>().unwrap();
 
     let graph = incin_core::prelude::extract_graph();
     let node = graph
@@ -467,6 +468,15 @@ fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
         })
         .expect("reduction node should be traced");
     assert!(node.descriptor_payload.is_some());
+    let kept = graph
+        .nodes
+        .iter()
+        .find(|node| {
+            node.operation
+                == OperationIdentity::Builtin(incin_core::prelude::OperationKind::SumKeepDim)
+        })
+        .expect("keepdim node should be traced");
+    assert!(kept.descriptor_payload.is_some());
 }
 
 #[test]
