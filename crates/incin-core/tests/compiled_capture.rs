@@ -288,3 +288,34 @@ fn graph_symbol_allocator_survives_serialization_and_continues_fresh_ids() {
     };
     assert_ne!(first_id, second_id);
 }
+
+#[test]
+fn graph_operation_identity_attributes_and_descriptor_round_trip() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Relu),
+        vec![input],
+        vec![output],
+        [(
+            String::from("mode"),
+            incin_core::graph::AttributeValue::Int(1),
+        )]
+        .into_iter()
+        .collect(),
+        Some(incin_core::graph::DescriptorPayload {
+            schema: 1,
+            payload: vec![4, 5, 6],
+        }),
+    );
+
+    let restored: Graph = serde_json::from_slice(&serde_json::to_vec(&graph).unwrap()).unwrap();
+    assert_eq!(restored.nodes, graph.nodes);
+    assert_eq!(
+        restored.nodes[0].operation,
+        OperationIdentity::Builtin(OperationKind::Relu)
+    );
+}
