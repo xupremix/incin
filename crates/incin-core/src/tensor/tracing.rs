@@ -317,6 +317,55 @@ impl<B: Backend> TracingBackend<B> {
         })
     }
 
+    fn trace_canonical_shape_with_attributes<O, K: super::dtype::DType>(
+        t: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<K>,
+        attributes: O::Attributes,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            attributes,
+            vec![crate::exec::catalog::LogicalTensorMeta {
+                shape: Some(B::shape(&t.inner)),
+                dtype: Some(Self::traced_dtype(&t.inner)),
+                device: Some(B::metadata(&t.inner).device),
+            }],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical shape descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![t.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
+
     fn trace_canonical_binary<O, K: super::dtype::DType>(
         lhs: &TracingTensor<B::Storage<K>>,
         rhs: &TracingTensor<B::Storage<K>>,
@@ -1439,7 +1488,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::broadcast_as(&t.inner, shape)?;
-        Ok(Self::trace_unary(OperationKind::Broadcast, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::BroadcastAs, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ShapeAttributes {
+                shape: shape.to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::reshape`, additionally recording an
@@ -1521,7 +1576,15 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         len: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::narrow(&t.inner, dim, start, len)?;
-        Ok(Self::trace_unary(OperationKind::Narrow, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Narrow, K>(
+            t,
+            &inner,
+            crate::exec::catalog::NarrowAttributes {
+                axis: dim,
+                start,
+                length: len,
+            },
+        )
     }
 
     /// Delegates to `B::concat`, additionally recording an
@@ -1586,7 +1649,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         ranges: &[(usize, usize)],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::slice(&t.inner, ranges)?;
-        Ok(Self::trace_unary(OperationKind::Slice, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::SliceExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::SliceAttributes {
+                ranges: ranges.to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::flatten`, additionally recording a
@@ -1597,7 +1666,14 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         end_dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::flatten(&t.inner, start_dim, end_dim)?;
-        Ok(Self::trace_unary(OperationKind::Reshape, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::FlattenExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::FlattenAttributes {
+                start_axis: start_dim,
+                end_axis: end_dim,
+            },
+        )
     }
 
     /// Delegates to `B::squeeze`, additionally recording a
@@ -1607,7 +1683,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::squeeze(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::Reshape, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::ReshapeExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ShapeAttributes {
+                shape: B::shape(&inner).as_ref().to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::broadcast_left`, additionally recording an `OperationKind::Broadcast` node.
@@ -1616,7 +1698,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::broadcast_left(&t.inner, shape)?;
-        Ok(Self::trace_unary(OperationKind::Broadcast, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::BroadcastLeft, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ShapeAttributes {
+                shape: shape.to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::matmul`, additionally recording an `OperationKind::MatMul` node.
