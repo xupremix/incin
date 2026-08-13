@@ -532,6 +532,62 @@ impl<B: Backend> TracingBackend<B> {
             value_id: output_id,
         })
     }
+
+    fn trace_canonical_two_outputs<O, K, KOut>(
+        t: &TracingTensor<B::Storage<K>>,
+        first: &B::Storage<K>,
+        second: &B::Storage<KOut>,
+        attributes: O::Attributes,
+    ) -> Result<(ValueId, ValueId)>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+        K: super::dtype::DType,
+        KOut: super::dtype::DType,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            attributes,
+            vec![crate::exec::catalog::LogicalTensorMeta {
+                shape: Some(B::shape(&t.inner)),
+                dtype: Some(Self::traced_dtype(&t.inner)),
+                device: Some(B::metadata(&t.inner).device),
+            }],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical multi-output descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let first_id = graph.add_value(
+            B::shape(first).as_ref().to_vec(),
+            Self::traced_dtype(first),
+            None,
+        );
+        let second_id = graph.add_value(
+            B::shape(second).as_ref().to_vec(),
+            Self::traced_dtype(second),
+            None,
+        );
+        let metadata = B::metadata(first);
+        let _ = graph.set_value_placement(first_id, Some(metadata.device), Some(metadata.layout));
+        let metadata = B::metadata(second);
+        let _ = graph.set_value_placement(second_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![t.value_id],
+            vec![first_id, second_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok((first_id, second_id))
+    }
 }
 
 fn axis_attributes(
@@ -1465,52 +1521,18 @@ impl<B: Backend + ReductionOps<B>> ReductionOps<Self> for TracingBackend<B> {
     )> {
         let (v_inner, i_inner) = B::topk(&t.inner, k, dim, largest)?;
 
-        let shape_v = B::shape(&v_inner);
-        let shape_i = B::shape(&i_inner);
-
-        let v_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_v.as_ref().to_vec(),
-                Self::traced_dtype(&v_inner),
-                None,
-            );
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("k"),
-                crate::graph::AttributeValue::Int(k as i64),
-            );
-            attrs.insert(
-                alloc::string::String::from("axis"),
-                crate::graph::AttributeValue::Int(dim as i64),
-            );
-            attrs.insert(
-                alloc::string::String::from("largest"),
-                crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
-            );
-            g.add_node(OperationKind::TopK, vec![t.value_id], vec![out_id], attrs);
-            out_id
-        };
-
-        let i_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_i.as_ref().to_vec(), DTypeId::U32, None);
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("k"),
-                crate::graph::AttributeValue::Int(k as i64),
-            );
-            attrs.insert(
-                alloc::string::String::from("axis"),
-                crate::graph::AttributeValue::Int(dim as i64),
-            );
-            attrs.insert(
-                alloc::string::String::from("largest"),
-                crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
-            );
-            g.add_node(OperationKind::TopK, vec![t.value_id], vec![out_id], attrs);
-            out_id
-        };
+        let (v_id, i_id) =
+            Self::trace_canonical_two_outputs::<crate::exec::catalog::op::TopK, K, KInt>(
+                t,
+                &v_inner,
+                &i_inner,
+                crate::exec::catalog::TopKAttributes {
+                    k,
+                    axis: dim,
+                    largest,
+                    index_dtype: Self::traced_dtype(&i_inner),
+                },
+            )?;
 
         Ok((
             TracingTensor {
