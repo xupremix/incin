@@ -17,7 +17,9 @@ use crate::shapes::{OperationKind, ShapeBuf, ShapeError, StrideBuf};
 /// [`Strided`](Self::Strided). The remaining variants describe relationships
 /// between operands or operation-specific access patterns and replace the
 /// former backend-local unary, binary, and kernel layout enums.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum LayoutClass {
     /// General strided access.
     Strided,

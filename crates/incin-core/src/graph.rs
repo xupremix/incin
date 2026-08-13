@@ -1,4 +1,4 @@
-use crate::exec::{ExecutionSite, OperationIdentity, ShapeExpr};
+use crate::exec::{ExecutionSite, LayoutClass, OperationIdentity, ShapeExpr};
 use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
@@ -18,6 +18,12 @@ pub struct Value {
     pub shape: Vec<usize>,
     pub shape_expr: ShapeExpr,
     pub dtype: DTypeDescriptor,
+    /// Logical placement when known at capture time.
+    #[serde(default)]
+    pub device: Option<crate::prelude::DeviceId>,
+    /// Layout fact when the capture backend can establish one.
+    #[serde(default)]
+    pub layout: Option<LayoutClass>,
     pub name: Option<String>,
 }
 
@@ -128,10 +134,29 @@ impl Graph {
                 shape,
                 shape_expr,
                 dtype: dtype.into(),
+                device: None,
+                layout: None,
                 name,
             },
         );
         id
+    }
+
+    /// Records physical metadata that was available for a captured value.
+    pub fn set_value_placement(
+        &mut self,
+        value_id: ValueId,
+        device: Option<crate::prelude::DeviceId>,
+        layout: Option<LayoutClass>,
+    ) -> crate::prelude::Result<()> {
+        let value = self.values.get_mut(&value_id).ok_or_else(|| {
+            crate::prelude::Error::Msg(alloc::format!(
+                "cannot set metadata for unknown graph value {value_id}"
+            ))
+        })?;
+        value.device = device;
+        value.layout = layout;
+        Ok(())
     }
 
     pub fn add_node(

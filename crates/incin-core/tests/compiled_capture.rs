@@ -68,6 +68,25 @@ fn capture_preserves_initializer_payloads() {
 }
 
 #[test]
+fn capture_preserves_optional_value_placement_metadata() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    graph
+        .set_value_placement(
+            input,
+            Some(incin_core::prelude::DeviceId::cpu()),
+            Some(incin_core::exec::LayoutClass::Contiguous),
+        )
+        .unwrap();
+    graph.mark_input(input);
+
+    let captured = CapturedGraph::capture(&graph).unwrap();
+    let value = &captured.value_metadata[&input];
+    assert_eq!(value.device, Some(incin_core::prelude::DeviceId::cpu()));
+    assert_eq!(value.layout, Some(incin_core::exec::LayoutClass::Contiguous));
+}
+
+#[test]
 fn test_eager_graph_capture_rejects_undefined_output() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![2, 4], DTypeId::F32, Some("x".into()));
