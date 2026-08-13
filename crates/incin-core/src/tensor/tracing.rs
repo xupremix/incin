@@ -533,6 +533,63 @@ impl<B: Backend> TracingBackend<B> {
         })
     }
 
+    fn trace_canonical_binary_with_attributes<O, K: super::dtype::DType>(
+        lhs: &TracingTensor<B::Storage<K>>,
+        rhs: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<K>,
+        attributes: O::Attributes,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            attributes,
+            vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&lhs.inner)),
+                    dtype: Some(Self::traced_dtype(&lhs.inner)),
+                    device: Some(B::metadata(&lhs.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&rhs.inner)),
+                    dtype: Some(Self::traced_dtype(&rhs.inner)),
+                    device: Some(B::metadata(&rhs.inner).device),
+                },
+            ],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical attributed binary descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![lhs.value_id, rhs.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
+
     fn trace_canonical_two_outputs<O, K, KOut>(
         t: &TracingTensor<B::Storage<K>>,
         first: &B::Storage<K>,
@@ -1932,7 +1989,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::unsqueeze(&t.inner, dim)?;
-        Ok(Self::trace_unary(OperationKind::Unsqueeze, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::UnsqueezeExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::repeat`, recording an `OperationKind::Repeat` node.
@@ -1941,7 +2002,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         repeats: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::repeat(&t.inner, repeats)?;
-        Ok(Self::trace_unary(OperationKind::Repeat, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Repeat, K>(
+            t,
+            &inner,
+            crate::exec::catalog::RepeatAttributes {
+                repeats: repeats.to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::pad`, recording an `OperationKind::Pad` node.
@@ -1951,7 +2018,14 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::pad(&t.inner, padding, val)?;
-        Ok(Self::trace_unary(OperationKind::Pad, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Pad, K>(
+            t,
+            &inner,
+            crate::exec::catalog::PadAttributes {
+                padding: padding.to_vec(),
+                value: val,
+            },
+        )
     }
 
     /// Delegates to `B::triu`, recording an `OperationKind::Triu` node.
@@ -1960,7 +2034,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::triu(&t.inner, k)?;
-        Ok(Self::trace_unary(OperationKind::Triu, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Triu, K>(
+            t,
+            &inner,
+            crate::exec::catalog::DiagonalAttributes { offset: k },
+        )
     }
 
     /// Delegates to `B::tril`, recording an `OperationKind::Tril` node.
@@ -1969,7 +2047,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::tril(&t.inner, k)?;
-        Ok(Self::trace_unary(OperationKind::Tril, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Tril, K>(
+            t,
+            &inner,
+            crate::exec::catalog::DiagonalAttributes { offset: k },
+        )
     }
 
     /// Delegates to `B::diag`, recording an `OperationKind::Diag` node.
@@ -1978,7 +2060,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::diag(&t.inner, k)?;
-        Ok(Self::trace_unary(OperationKind::Diag, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Diag, K>(
+            t,
+            &inner,
+            crate::exec::catalog::DiagonalAttributes { offset: k },
+        )
     }
 
     /// Delegates to `B::cmp_eq`, recording an `OperationKind::CmpEq` node.
@@ -2109,7 +2195,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::maximum(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Maximum, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Maximum, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::minimum`, recording an `OperationKind::Minimum` node.
@@ -2118,7 +2204,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::minimum(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Minimum, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Minimum, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::abs_diff`, recording an `OperationKind::AbsDiff` node.
@@ -2127,7 +2213,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::abs_diff(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::AbsDiff, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::AbsDiff, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::lerp`, recording an `OperationKind::Lerp` node.
@@ -2137,7 +2223,12 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         weight: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::lerp(&start.inner, &end.inner, weight)?;
-        Ok(Self::trace_binary(OperationKind::Lerp, start, end, &inner))
+        Self::trace_canonical_binary_with_attributes::<crate::exec::catalog::op::Lerp, K>(
+            start,
+            end,
+            &inner,
+            crate::exec::catalog::LerpAttributes { weight },
+        )
     }
 
     /// Delegates to `B::addmm`, recording an `OperationKind::Addmm` node whose inputs
@@ -2163,12 +2254,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::bmm(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(
-            OperationKind::BatchedMatMul,
-            lhs,
-            rhs,
-            &inner,
-        ))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::BatchedMatMul, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::scaled_dot_product_attention`, recording an
@@ -2208,7 +2294,15 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         step: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::unfold(&t.inner, dim, size, step)?;
-        Ok(Self::trace_unary(OperationKind::Unfold, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::Unfold, K>(
+            t,
+            &inner,
+            crate::exec::catalog::UnfoldAttributes {
+                axis: dim,
+                size,
+                step,
+            },
+        )
     }
 
     /// Delegates to `B::pixel_shuffle`, recording an `OperationKind::PixelShuffle` node.
@@ -2217,7 +2311,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         upscale_factor: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::pixel_shuffle(&t.inner, upscale_factor)?;
-        Ok(Self::trace_unary(OperationKind::PixelShuffle, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::PixelShuffle, K>(
+            t,
+            &inner,
+            crate::exec::catalog::PixelShuffleAttributes { upscale_factor },
+        )
     }
 
     /// Delegates to `B::group_norm`, recording an `OperationKind::GroupNorm` node.
@@ -2227,7 +2325,14 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::group_norm(&t.inner, groups, eps)?;
-        Ok(Self::trace_unary(OperationKind::GroupNorm, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::GroupNorm, K>(
+            t,
+            &inner,
+            crate::exec::catalog::GroupNormAttributes {
+                groups,
+                epsilon: eps,
+            },
+        )
     }
 
     /// Delegates to `B::instance_norm`, recording an `OperationKind::InstanceNorm` node.
@@ -2236,7 +2341,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::instance_norm(&t.inner, eps)?;
-        Ok(Self::trace_unary(OperationKind::InstanceNorm, t, &inner))
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::InstanceNorm, K>(
+            t,
+            &inner,
+            crate::exec::catalog::EpsilonAttributes { epsilon: eps },
+        )
     }
 }
 
