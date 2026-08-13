@@ -224,7 +224,9 @@ impl CpuCompiledInvocation {
                 .assignments()
                 .get(value_id)
                 .ok_or_else(|| {
-                    Error::Msg(format!("missing allocation for initializer value {value_id}"))
+                    Error::Msg(format!(
+                        "missing allocation for initializer value {value_id}"
+                    ))
                 })?;
             slots[slot.index()] = Some(storage);
         }

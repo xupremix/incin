@@ -122,8 +122,20 @@ fn compiled_cpu_function_reuses_admitted_plan() {
 
     let first = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![-1.0, 2.0]), vec![2]).unwrap();
     let second = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![3.0, -4.0]), vec![2]).unwrap();
-    assert_eq!(function.run(CpuCompiledInvocation::new(vec![first])).unwrap()[0].get(&[1]), 2.0);
-    assert_eq!(function.run(CpuCompiledInvocation::new(vec![second])).unwrap()[0].get(&[0]), 3.0);
+    assert_eq!(
+        function
+            .run(CpuCompiledInvocation::new(vec![first]))
+            .unwrap()[0]
+            .get(&[1]),
+        2.0
+    );
+    assert_eq!(
+        function
+            .run(CpuCompiledInvocation::new(vec![second]))
+            .unwrap()[0]
+            .get(&[0]),
+        3.0
+    );
 }
 
 #[test]
@@ -134,10 +146,9 @@ fn compiled_cpu_executes_with_captured_initializer() {
     let mut graph = Graph::new();
     let weights = graph.add_value(vec![2], DTypeId::F32, Some("weights".into()));
     let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
-    graph.initializers.insert(
-        weights,
-        bytemuck::cast_slice(&[-2.0f32, 3.5f32]).to_vec(),
-    );
+    graph
+        .initializers
+        .insert(weights, bytemuck::cast_slice(&[-2.0f32, 3.5f32]).to_vec());
     graph.mark_output(output);
     graph.add_node_with_descriptor_payload(
         OperationIdentity::Builtin(OperationKind::Relu),
