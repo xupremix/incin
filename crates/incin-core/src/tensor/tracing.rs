@@ -887,21 +887,21 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::step(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Step, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Step, K>(t, &inner)
     }
 
     fn mish<K: super::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mish(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Mish, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Mish, K>(t, &inner)
     }
 
     fn elu<K: super::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::elu(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Elu, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Elu, K>(t, &inner)
     }
 
     /// Delegates to `B::gelu`, additionally recording an
@@ -910,7 +910,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::gelu(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Gelu, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Gelu, K>(t, &inner)
     }
 
     /// Delegates to `B::abs`, additionally recording an
@@ -919,7 +919,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::abs(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Abs, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Abs, K>(t, &inner)
     }
 
     /// Delegates to `B::exp`, additionally recording an
@@ -937,7 +937,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::neg(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Neg, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Neg, K>(t, &inner)
     }
 
     /// Delegates to `B::sqrt`, additionally recording an
@@ -946,7 +946,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sqrt(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Sqrt, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Sqrt, K>(t, &inner)
     }
 
     /// Delegates to `B::log`, additionally recording an
