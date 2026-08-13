@@ -46,6 +46,60 @@ macro_rules! supports_cpu_operation {
 
 cpu_compiled_operations!(supports_cpu_operation);
 
+/// Canonical metadata for one operation admitted by the compiled CPU path.
+///
+/// The operation identity and semantic fields come from the core catalog.
+/// This type only reports the backend lowering subset and does not define a
+/// second operation vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CpuCompiledSupport {
+    pub operation: incin_core::prelude::OperationKind,
+    pub name: &'static str,
+    pub descriptor: &'static str,
+    pub execution_site: incin_core::exec::ExecutionSite,
+    pub capture_eligible: bool,
+}
+
+macro_rules! compiled_support_report {
+    ($($kind:ident => $descriptor:ty,)*) => {
+        fn compiled_support_report_impl() -> core::result::Result<Vec<CpuCompiledSupport>, &'static str> {
+            let mut report = Vec::new();
+            $(push_compiled_support(
+                &mut report,
+                incin_core::prelude::OperationKind::$kind,
+            )?;)*
+            Ok(report)
+        }
+    };
+}
+
+fn push_compiled_support(
+    report: &mut Vec<CpuCompiledSupport>,
+    operation: incin_core::prelude::OperationKind,
+) -> core::result::Result<(), &'static str> {
+    let entry = incin_core::exec::catalog::catalog_entry(operation)
+        .ok_or("compiled CPU operation is missing from the canonical catalog")?;
+    if !entry.site.is_backend_executable() {
+        return Err("compiled CPU operation is not backend executable");
+    }
+    report.push(CpuCompiledSupport {
+        operation,
+        name: entry.name,
+        descriptor: entry.descriptor,
+        execution_site: entry.site,
+        capture_eligible: entry.capture_eligible,
+    });
+    Ok(())
+}
+
+cpu_compiled_operations!(compiled_support_report);
+
+/// Returns the canonical metadata for operations admitted by compiled CPU.
+#[must_use]
+pub fn compiled_support() -> core::result::Result<Vec<CpuCompiledSupport>, &'static str> {
+    compiled_support_report_impl()
+}
+
 /// Inputs and outputs for one executable CPU compiled invocation.
 #[derive(Debug, Clone)]
 pub struct CpuCompiledInvocation {

@@ -1,6 +1,8 @@
 #![cfg(feature = "compiled")]
 
-use incin_backends::cpu::{CpuBuffer, CpuCompiledFunction, CpuCompiledInvocation, CpuStorage};
+use incin_backends::cpu::{
+    CpuBuffer, CpuCompiledFunction, CpuCompiledInvocation, CpuStorage, compiled_support,
+};
 use incin_core::compiled::{
     ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
@@ -19,6 +21,20 @@ fn meta(shape: &[usize]) -> LogicalTensorMeta {
         shape: Some(ShapeBuf::from_slice(shape)),
         dtype: Some(DTypeId::F32.descriptor()),
         device: Some(DeviceId::cpu()),
+    }
+}
+
+#[test]
+fn compiled_cpu_support_report_comes_from_canonical_catalog() {
+    let report = compiled_support().unwrap();
+    assert!(!report.is_empty());
+    for supported in report {
+        let entry = incin_core::exec::catalog::catalog_entry(supported.operation).unwrap();
+        assert_eq!(supported.name, entry.name);
+        assert_eq!(supported.descriptor, entry.descriptor);
+        assert_eq!(supported.execution_site, entry.site);
+        assert!(supported.capture_eligible);
+        assert!(entry.site.is_backend_executable());
     }
 }
 
