@@ -56,6 +56,31 @@ fn symbolic_minimum_and_maximum_simplify_and_evaluate() {
     assert_eq!(lower.evaluate(&[]), Some(4));
     assert_eq!(upper.evaluate(&[]), Some(9));
 }
+
+#[test]
+fn compiled_unary_inference_preserves_symbolic_shape() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![8, 768], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![8, 768], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Exp,
+        vec![input],
+        vec![output],
+        std::collections::BTreeMap::new(),
+    );
+
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        plan.graph.value_metadata[&output].shape_expr,
+        plan.graph.value_metadata[&input].shape_expr
+    );
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
