@@ -107,8 +107,7 @@ impl<B: Backend> TracingBackend<B> {
         descriptor: &crate::exec::catalog::Descriptor<O>,
     ) -> Result<alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>>
     where
-        O: crate::exec::catalog::CanonicalOperation,
-        O::Attributes: crate::exec::catalog::AttributeContract,
+        O: crate::exec::catalog::Operation,
     {
         #[cfg(feature = "std")]
         {
@@ -690,12 +689,8 @@ impl<B: Backend> crate::tensor::backend::StorageBackend for TracingBackend<B> {
     }
 }
 
-impl<
-    B: Backend + crate::tensor::backend::Execute<O>,
-    O: crate::exec::catalog::Operation + crate::exec::catalog::CanonicalOperation,
-> crate::tensor::backend::Execute<O> for TracingBackend<B>
-where
-    O::Attributes: crate::exec::catalog::AttributeContract,
+impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
+    crate::tensor::backend::Execute<O> for TracingBackend<B>
 {
     type Output = TracingTensor<B::Output>;
 
