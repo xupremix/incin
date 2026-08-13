@@ -145,6 +145,8 @@ pub enum DimExpr {
     Mul(Box<DimExpr>, Box<DimExpr>),
     ExactDiv(Box<DimExpr>, Box<DimExpr>),
     Broadcast(Box<DimExpr>, Box<DimExpr>),
+    Min(Box<DimExpr>, Box<DimExpr>),
+    Max(Box<DimExpr>, Box<DimExpr>),
     Unknown,
 }
 
@@ -190,6 +192,16 @@ impl DimExpr {
                 (Self::Const(lhs), Self::Const(rhs)) if lhs == rhs => Self::Const(lhs),
                 (lhs, rhs) => Self::Broadcast(Box::new(lhs), Box::new(rhs)),
             },
+            Self::Min(lhs, rhs) => match (*lhs, *rhs) {
+                (Self::Const(lhs), Self::Const(rhs)) => Self::Const(lhs.min(rhs)),
+                (lhs, rhs) if lhs == rhs => lhs,
+                (lhs, rhs) => Self::Min(Box::new(lhs), Box::new(rhs)),
+            },
+            Self::Max(lhs, rhs) => match (*lhs, *rhs) {
+                (Self::Const(lhs), Self::Const(rhs)) => Self::Const(lhs.max(rhs)),
+                (lhs, rhs) if lhs == rhs => lhs,
+                (lhs, rhs) => Self::Max(Box::new(lhs), Box::new(rhs)),
+            },
             other => other,
         }
     }
@@ -223,6 +235,8 @@ impl DimExpr {
                     None
                 }
             }
+            Self::Min(lhs, rhs) => Some(lhs.evaluate(symbols)?.min(rhs.evaluate(symbols)?)),
+            Self::Max(lhs, rhs) => Some(lhs.evaluate(symbols)?.max(rhs.evaluate(symbols)?)),
             Self::Unknown => None,
         }
     }
@@ -258,6 +272,14 @@ impl DimExpr {
                     None
                 }
             }
+            Self::Min(lhs, rhs) => Some(
+                lhs.evaluate_env(environment)?
+                    .min(rhs.evaluate_env(environment)?),
+            ),
+            Self::Max(lhs, rhs) => Some(
+                lhs.evaluate_env(environment)?
+                    .max(rhs.evaluate_env(environment)?),
+            ),
             Self::Unknown => None,
         }
     }

@@ -310,6 +310,14 @@ fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
                 Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
                 Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
             ),
+            DimExpr::Min(lhs, rhs) => DimExpr::Min(
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
+            ),
+            DimExpr::Max(lhs, rhs) => DimExpr::Max(
+                Box::new(dim(*lhs, anonymous, names, next_id, fresh)),
+                Box::new(dim(*rhs, anonymous, names, next_id, fresh)),
+            ),
             other => other,
         }
     }
@@ -368,7 +376,9 @@ fn collect_shape_symbols(expr: &ShapeExpr, symbols: &mut BTreeSet<crate::exec::S
             | crate::exec::DimExpr::Sub(lhs, rhs)
             | crate::exec::DimExpr::Mul(lhs, rhs)
             | crate::exec::DimExpr::ExactDiv(lhs, rhs)
-            | crate::exec::DimExpr::Broadcast(lhs, rhs) => {
+            | crate::exec::DimExpr::Broadcast(lhs, rhs)
+            | crate::exec::DimExpr::Min(lhs, rhs)
+            | crate::exec::DimExpr::Max(lhs, rhs) => {
                 dim(lhs, symbols);
                 dim(rhs, symbols);
             }

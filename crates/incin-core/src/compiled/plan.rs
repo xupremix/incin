@@ -654,7 +654,9 @@ fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
         | crate::exec::DimExpr::Sub(lhs, rhs)
         | crate::exec::DimExpr::Mul(lhs, rhs)
         | crate::exec::DimExpr::ExactDiv(lhs, rhs)
-        | crate::exec::DimExpr::Broadcast(lhs, rhs) => {
+        | crate::exec::DimExpr::Broadcast(lhs, rhs)
+        | crate::exec::DimExpr::Min(lhs, rhs)
+        | crate::exec::DimExpr::Max(lhs, rhs) => {
             collect_symbols(lhs, symbols);
             collect_symbols(rhs, symbols);
         }

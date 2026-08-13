@@ -38,6 +38,24 @@ fn unresolved_symbolic_constraints_are_reported_as_unresolved() {
         .unwrap_err();
     assert!(error.contains("remains unresolved"));
 }
+
+#[test]
+fn symbolic_minimum_and_maximum_simplify_and_evaluate() {
+    let lower = DimExpr::Min(
+        Box::new(DimExpr::Const(4)),
+        Box::new(DimExpr::Const(9)),
+    )
+    .simplify();
+    let upper = DimExpr::Max(
+        Box::new(DimExpr::Const(4)),
+        Box::new(DimExpr::Const(9)),
+    )
+    .simplify();
+    assert_eq!(lower, DimExpr::Const(4));
+    assert_eq!(upper, DimExpr::Const(9));
+    assert_eq!(lower.evaluate(&[]), Some(4));
+    assert_eq!(upper.evaluate(&[]), Some(9));
+}
 use incin_core::prelude::OperationKind;
 use std::collections::BTreeMap;
 
