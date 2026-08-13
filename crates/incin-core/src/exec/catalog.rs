@@ -4317,7 +4317,9 @@ pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
         OperationKind::ReshapeExact => "Reshape",
         OperationKind::TransposeExact => "Transpose",
         OperationKind::ConcatExact => "Concat",
-        OperationKind::StackExact => "Concat",
+        // Stack inserts a new dimension and cannot be represented by ONNX
+        // Concat without an explicit unsqueeze lowering and descriptor
+        // payload. Keep the projection fail closed until that lowering exists.
         OperationKind::Conv1dExact | OperationKind::Conv2dExact => "Conv",
         OperationKind::ConvTranspose2d => "ConvTranspose",
         OperationKind::MaxPool2d => "MaxPool",
