@@ -55,11 +55,60 @@ fn test_eager_graph_capture_and_validation() {
 }
 
 #[test]
+fn capture_preserves_initializer_payloads() {
+    let mut graph = Graph::new();
+    let weights = graph.add_value(vec![2, 2], DTypeId::F32, Some("weights".into()));
+    graph.initializers.insert(weights, vec![0; 16]);
+    graph.mark_output(weights);
+
+    let captured = CapturedGraph::capture(&graph).expect("initializer capture should succeed");
+    assert_eq!(captured.initializers.get(&weights), Some(&vec![0; 16]));
+    assert!(captured.inputs.is_empty());
+    assert_eq!(captured.outputs, vec![weights]);
+}
+
+#[test]
 fn test_eager_graph_capture_rejects_undefined_output() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![2, 4], DTypeId::F32, Some("x".into()));
     graph.mark_input(x);
     graph.mark_output(999); // Undefined value ID 999
+
+    assert!(CapturedGraph::capture(&graph).is_err());
+}
+
+#[test]
+fn capture_rejects_undefined_node_input_even_when_metadata_exists() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let unbound = graph.add_value(vec![2], DTypeId::F32, Some("unbound".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Add,
+        vec![input, unbound],
+        vec![output],
+        BTreeMap::new(),
+    );
+
+    assert!(CapturedGraph::capture(&graph).is_err());
+}
+
+#[test]
+fn capture_rejects_duplicate_or_missing_node_definitions() {
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let output = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input);
+    graph.mark_output(output);
+    graph.add_node(
+        OperationKind::Relu,
+        vec![input],
+        vec![output],
+        BTreeMap::new(),
+    );
+    graph.nodes.push(graph.nodes[0].clone());
 
     assert!(CapturedGraph::capture(&graph).is_err());
 }

@@ -31,6 +31,9 @@ pub struct CapturedGraph {
     pub values: Vec<ValueId>,
     /// Captured value metadata used by compilation and guards.
     pub value_metadata: alloc::collections::BTreeMap<ValueId, Value>,
+    /// Serialized bytes for graph-owned constant values.
+    #[serde(default)]
+    pub initializers: alloc::collections::BTreeMap<ValueId, Vec<u8>>,
     /// Input value IDs.
     pub inputs: Vec<ValueId>,
     /// Output value IDs.
@@ -46,19 +49,43 @@ impl CapturedGraph {
         let mut defined_values = BTreeSet::new();
 
         for &val_id in &graph.inputs {
-            defined_values.insert(val_id);
+            if !graph.values.contains_key(&val_id) {
+                return Err(Error::Msg(String::from(
+                    "graph input is missing value metadata",
+                )));
+            }
+            if graph.initializers.contains_key(&val_id) {
+                return Err(Error::Msg(String::from(
+                    "graph input cannot also be an initializer",
+                )));
+            }
+            if !defined_values.insert(val_id) {
+                return Err(Error::Msg(String::from("duplicate graph input value")));
+            }
         }
 
-        for val_id in graph.values.keys() {
-            if graph.initializers.contains_key(val_id) {
-                defined_values.insert(*val_id);
+        for val_id in graph.initializers.keys() {
+            if !graph.values.contains_key(val_id) {
+                return Err(Error::Msg(String::from(
+                    "initializer is missing value metadata",
+                )));
+            }
+            if !defined_values.insert(*val_id) {
+                return Err(Error::Msg(String::from(
+                    "initializer overlaps a graph input",
+                )));
             }
         }
 
         let mut nodes = Vec::with_capacity(graph.nodes.len());
-        for node in &graph.nodes {
+        for (expected_id, node) in graph.nodes.iter().enumerate() {
+            if node.id != expected_id {
+                return Err(Error::Msg(String::from(
+                    "graph nodes are not in canonical topological order",
+                )));
+            }
             for &in_id in &node.inputs {
-                if !graph.values.contains_key(&in_id) && !defined_values.contains(&in_id) {
+                if !defined_values.contains(&in_id) {
                     return Err(Error::Msg(String::from(
                         "undefined input value in eager graph node",
                     )));
@@ -66,7 +93,16 @@ impl CapturedGraph {
             }
 
             for &out_id in &node.outputs {
-                defined_values.insert(out_id);
+                if !graph.values.contains_key(&out_id) {
+                    return Err(Error::Msg(String::from(
+                        "graph node output is missing value metadata",
+                    )));
+                }
+                if !defined_values.insert(out_id) {
+                    return Err(Error::Msg(String::from(
+                        "graph node defines a value more than once",
+                    )));
+                }
             }
 
             nodes.push(CapturedNode {
@@ -81,7 +117,7 @@ impl CapturedGraph {
         }
 
         for &out_id in &graph.outputs {
-            if !defined_values.contains(&out_id) && !graph.values.contains_key(&out_id) {
+            if !defined_values.contains(&out_id) {
                 return Err(Error::Msg(String::from(
                     "undefined output value in captured graph",
                 )));
@@ -93,6 +129,7 @@ impl CapturedGraph {
         Ok(Self {
             values,
             value_metadata: graph.values.clone(),
+            initializers: graph.initializers.clone(),
             inputs: graph.inputs.clone(),
             outputs: graph.outputs.clone(),
             nodes,
