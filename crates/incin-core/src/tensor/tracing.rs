@@ -2780,12 +2780,29 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         reduction: crate::nn::loss::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::cross_entropy_loss(&logits.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(
-            OperationKind::CrossEntropyLoss,
-            logits,
-            targets,
+        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::CrossEntropyLoss, K>(
+            alloc::vec![logits.value_id, targets.value_id],
+            alloc::vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&logits.inner)),
+                    dtype: Some(Self::traced_dtype(&logits.inner)),
+                    device: Some(B::metadata(&logits.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&targets.inner)),
+                    dtype: Some(Self::traced_dtype(&targets.inner)),
+                    device: Some(B::metadata(&targets.inner).device),
+                },
+            ],
             &inner,
-        ))
+            crate::exec::catalog::LossAttributes {
+                reduction: match reduction {
+                    crate::nn::loss::Reduction::None => crate::exec::catalog::LossReduction::None,
+                    crate::nn::loss::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
+                    crate::nn::loss::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
+                },
+            },
+        )
     }
 
     /// Delegates to `B::mse_loss`, additionally recording an `OperationKind::MseLoss` node.
@@ -2795,12 +2812,17 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         reduction: crate::nn::loss::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mse_loss(&predictions.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(
-            OperationKind::MseLoss,
-            predictions,
-            targets,
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::MseLoss, K>(
+            &[predictions, targets],
             &inner,
-        ))
+            crate::exec::catalog::LossAttributes {
+                reduction: match reduction {
+                    crate::nn::loss::Reduction::None => crate::exec::catalog::LossReduction::None,
+                    crate::nn::loss::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
+                    crate::nn::loss::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
+                },
+            },
+        )
     }
 
     /// Delegates to `B::l1_loss`, additionally recording an `OperationKind::L1Loss` node.
@@ -2810,12 +2832,17 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         reduction: crate::nn::loss::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::l1_loss(&predictions.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(
-            OperationKind::L1Loss,
-            predictions,
-            targets,
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::L1Loss, K>(
+            &[predictions, targets],
             &inner,
-        ))
+            crate::exec::catalog::LossAttributes {
+                reduction: match reduction {
+                    crate::nn::loss::Reduction::None => crate::exec::catalog::LossReduction::None,
+                    crate::nn::loss::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
+                    crate::nn::loss::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
+                },
+            },
+        )
     }
 
     /// Delegates to `B::bce_with_logits_loss`, additionally recording an `OperationKind::BceWithLogitsLoss` node.
@@ -2825,12 +2852,17 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         _r: crate::nn::loss::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner, _r)?;
-        Ok(Self::trace_binary(
-            OperationKind::BceWithLogitsLoss,
-            logits,
-            targets,
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::BceWithLogitsLoss, K>(
+            &[logits, targets],
             &inner,
-        ))
+            crate::exec::catalog::LossAttributes {
+                reduction: match _r {
+                    crate::nn::loss::Reduction::None => crate::exec::catalog::LossReduction::None,
+                    crate::nn::loss::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
+                    crate::nn::loss::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
+                },
+            },
+        )
     }
 }
 
