@@ -1203,24 +1203,11 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::softmax(&t.inner, dim)?;
-        let shape = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape.as_ref().to_vec(), Self::traced_dtype(&inner), None);
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("axis"),
-                crate::graph::AttributeValue::Int(dim as i64),
-            );
-            g.add_node(
-                OperationKind::Softmax,
-                vec![t.value_id],
-                vec![out_id],
-                attrs,
-            );
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::Softmax, K>(
+            t,
+            &inner,
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 }
 
@@ -1952,7 +1939,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sub_scalar(&t.inner, val)?;
-        Ok(Self::trace_unary(OperationKind::SubScalar, t, &inner))
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::SubScalar, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ScalarAttributes { value: val },
+        )
     }
 
     /// Delegates to `B::div_scalar`, recording an `OperationKind::DivScalar` node.
@@ -1961,7 +1952,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::div_scalar(&t.inner, val)?;
-        Ok(Self::trace_unary(OperationKind::DivScalar, t, &inner))
+        Self::trace_canonical_unary_with_attributes::<crate::exec::catalog::op::DivScalar, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ScalarAttributes { value: val },
+        )
     }
 
     /// Delegates to `B::maximum`, recording an `OperationKind::Maximum` node.
