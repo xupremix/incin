@@ -1,5 +1,6 @@
 //! Backend-neutral capability queries and deterministic registry resolution.
 
+use alloc::borrow::ToOwned;
 use core::fmt;
 
 use crate::exec::catalog::OperationKey;
