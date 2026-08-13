@@ -27,7 +27,7 @@ mod canonical;
 #[cfg(feature = "compiled")]
 pub mod compiled;
 #[cfg(feature = "compiled")]
-pub use compiled::{CpuCompiledInvocation, CpuCompiledPlan};
+pub use compiled::{CpuCompiledFunction, CpuCompiledInvocation, CpuCompiledPlan};
 pub(crate) mod creation;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.
 pub(crate) mod gradcheck;

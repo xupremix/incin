@@ -58,6 +58,15 @@ pub struct CpuCompiledPlan {
     plan: CompiledPlan,
 }
 
+/// An admitted executable CPU function backed by one immutable compiled plan.
+///
+/// Admission happens once at construction. Each invocation only validates its
+/// runtime inputs against the captured guards and executes the admitted nodes.
+#[derive(Debug, Clone)]
+pub struct CpuCompiledFunction {
+    plan: CpuCompiledPlan,
+}
+
 impl CpuCompiledPlan {
     /// Lowers a generic compiled plan into an executable CPU plan.
     ///
@@ -100,8 +109,39 @@ impl CpuCompiledPlan {
         Ok(Self { plan: plan.clone() })
     }
 
+    /// Creates a reusable executable function from a generic compiled plan.
+    pub fn function(plan: &CompiledPlan) -> Result<CpuCompiledFunction> {
+        Ok(CpuCompiledFunction {
+            plan: Self::compile(plan)?,
+        })
+    }
+
     pub fn run(&self, invocation: CpuCompiledInvocation) -> Result<Vec<CpuStorage>> {
         invocation.run_admitted(&self.plan)
+    }
+}
+
+impl CpuCompiledFunction {
+    /// Compiles and admits a generic plan once for repeated invocation.
+    pub fn compile(plan: &CompiledPlan) -> Result<Self> {
+        CpuCompiledPlan::function(plan)
+    }
+
+    /// Invokes the admitted function with ordered graph inputs.
+    pub fn run(&self, invocation: CpuCompiledInvocation) -> Result<Vec<CpuStorage>> {
+        self.plan.run(invocation)
+    }
+
+    /// Returns the number of caller-provided graph inputs.
+    #[must_use]
+    pub fn input_count(&self) -> usize {
+        self.plan.plan.graph.inputs.len()
+    }
+
+    /// Returns the number of graph outputs produced by the function.
+    #[must_use]
+    pub fn output_count(&self) -> usize {
+        self.plan.plan.graph.outputs.len()
     }
 }
 

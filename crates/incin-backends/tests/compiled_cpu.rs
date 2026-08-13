@@ -1,6 +1,6 @@
 #![cfg(feature = "compiled")]
 
-use incin_backends::cpu::{CpuBuffer, CpuCompiledInvocation, CpuStorage};
+use incin_backends::cpu::{CpuBuffer, CpuCompiledFunction, CpuCompiledInvocation, CpuStorage};
 use incin_core::compiled::{
     ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
@@ -90,6 +90,40 @@ fn compiled_cpu_executes_captured_relu_through_canonical_descriptor() {
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].get(&[0]), 0.0);
     assert_eq!(outputs[0].get(&[1]), 3.5);
+}
+
+#[test]
+fn compiled_cpu_function_reuses_admitted_plan() {
+    let descriptor = Descriptor::<op::Relu>::infer_runtime(NoAttributes, vec![meta(&[2])]).unwrap();
+    let captured = CapturedDescriptor::capture(descriptor.descriptor()).unwrap();
+    let mut graph = Graph::new();
+    let input_id = graph.add_value(vec![2], DTypeId::F32, Some("input".into()));
+    let output_id = graph.add_value(vec![2], DTypeId::F32, Some("output".into()));
+    graph.mark_input(input_id);
+    graph.mark_output(output_id);
+    graph.add_node_with_descriptor_payload(
+        OperationIdentity::Builtin(OperationKind::Relu),
+        vec![input_id],
+        vec![output_id],
+        Default::default(),
+        Some(incin_core::graph::DescriptorPayload {
+            schema: captured.schema(),
+            payload: captured.payload().to_vec(),
+        }),
+    );
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+    let function = CpuCompiledFunction::compile(&plan).unwrap();
+    assert_eq!(function.input_count(), 1);
+    assert_eq!(function.output_count(), 1);
+
+    let first = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![-1.0, 2.0]), vec![2]).unwrap();
+    let second = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![3.0, -4.0]), vec![2]).unwrap();
+    assert_eq!(function.run(CpuCompiledInvocation::new(vec![first])).unwrap()[0].get(&[1]), 2.0);
+    assert_eq!(function.run(CpuCompiledInvocation::new(vec![second])).unwrap()[0].get(&[0]), 3.0);
 }
 
 #[test]
