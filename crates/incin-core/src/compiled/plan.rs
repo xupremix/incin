@@ -4,11 +4,14 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::backend_authoring::TensorMeta;
 use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
-use crate::exec::{DimExpr, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable};
+use crate::exec::{
+    DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+};
 use crate::graph::ValueId;
-use crate::prelude::{DTypeDescriptor, DTypeId, Error, Result};
+use crate::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, Result};
 
 #[cfg(feature = "std")]
 use crate::exec::catalog::{CapturedDescriptor, Descriptor, op};
@@ -61,7 +64,7 @@ impl CompileOptions {
 }
 
 /// A dynamic runtime guard verifying shape and datatype expectations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ShapeGuard {
     /// Value ID in the captured graph.
     pub value_id: ValueId,
@@ -69,6 +72,10 @@ pub struct ShapeGuard {
     pub shape: ShapeExpr,
     /// Expected logical datatype.
     pub expected_dtype: DTypeDescriptor,
+    /// Device required when capture established one.
+    pub expected_device: Option<DeviceId>,
+    /// Layout required when capture established one.
+    pub expected_layout: Option<LayoutClass>,
 }
 
 impl ShapeGuard {
@@ -79,7 +86,16 @@ impl ShapeGuard {
             value_id,
             shape,
             expected_dtype,
+            expected_device: None,
+            expected_layout: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_metadata(mut self, device: Option<DeviceId>, layout: Option<LayoutClass>) -> Self {
+        self.expected_device = device;
+        self.expected_layout = layout;
+        self
     }
 
     /// Verifies actual runtime shape and datatype against this guard.
@@ -95,6 +111,31 @@ impl ShapeGuard {
                 "shape guard failed for input value {}: {}",
                 self.value_id,
                 reason
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn check_metadata(&self, metadata: &TensorMeta) -> Result<()> {
+        self.check(metadata.shape.as_ref(), metadata.dtype)?;
+        if let Some(expected) = self.expected_device
+            && expected != metadata.device
+        {
+            return Err(Error::Msg(alloc::format!(
+                "shape guard failed for input value {}: expected device {:?}, got {:?}",
+                self.value_id,
+                expected,
+                metadata.device
+            )));
+        }
+        if let Some(expected) = self.expected_layout
+            && expected != metadata.layout
+        {
+            return Err(Error::Msg(alloc::format!(
+                "shape guard failed for input value {}: expected layout {}, got {}",
+                self.value_id,
+                expected.as_str(),
+                metadata.layout.as_str()
             )));
         }
         Ok(())
@@ -163,6 +204,7 @@ impl CompiledPlan {
                         DynamicShapePolicy::Strict => ShapeExpr::concrete(&value.shape),
                     };
                     ShapeGuard::new(in_id, shape, value.dtype)
+                        .with_metadata(value.device, value.layout)
                 })
             })
             .collect();
@@ -210,6 +252,42 @@ impl CompiledPlan {
             guard
                 .shape
                 .bind_and_validate(shape, &mut environment)
+                .map_err(|reason| {
+                    Error::Msg(alloc::format!(
+                        "shape guard failed for input value {}: {}",
+                        guard.value_id,
+                        reason
+                    ))
+                })?;
+        }
+        let constraints = self
+            .input_guards
+            .iter()
+            .flat_map(|guard| guard.shape.constraints.iter())
+            .cloned()
+            .chain(self.symbols.constraints.iter().cloned())
+            .collect::<Vec<_>>();
+        environment
+            .validate_constraints(&constraints)
+            .map_err(|reason| {
+                Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
+            })
+    }
+
+    pub fn verify_input_metadata(&self, inputs: &[&TensorMeta]) -> Result<()> {
+        if inputs.len() != self.input_guards.len() {
+            return Err(Error::Msg(alloc::format!(
+                "compiled invocation expected {} inputs, got {}",
+                self.input_guards.len(),
+                inputs.len()
+            )));
+        }
+        let mut environment = self.symbols.environment();
+        for (guard, metadata) in self.input_guards.iter().zip(inputs) {
+            guard.check_metadata(metadata)?;
+            guard
+                .shape
+                .bind_and_validate(metadata.shape.as_ref(), &mut environment)
                 .map_err(|reason| {
                     Error::Msg(alloc::format!(
                         "shape guard failed for input value {}: {}",

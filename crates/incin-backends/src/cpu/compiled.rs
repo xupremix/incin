@@ -7,7 +7,7 @@ use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::compiled::CompiledPlan;
 use incin_core::exec::catalog::{CanonicalOperation, CapturedDescriptor, Descriptor, op};
 use incin_core::exec::{ExecutionContext, OperationIdentity, TensorHandle};
-use incin_core::prelude::{Cpu, DTypeDescriptor, Dyn, Error, Result};
+use incin_core::prelude::{Cpu, Dyn, Error, Result};
 
 use super::{CpuBackendImpl, CpuStorage};
 
@@ -253,9 +253,9 @@ impl CpuCompiledInvocation {
         let input_meta = self
             .inputs
             .iter()
-            .map(|storage| (storage.shape.to_vec(), storage.dtype))
-            .collect::<Vec<(Vec<usize>, DTypeDescriptor)>>();
-        plan.verify_inputs(&input_meta)?;
+            .map(|storage| storage.metadata())
+            .collect::<Vec<_>>();
+        plan.verify_input_metadata(&input_meta)?;
         let mut slots = (0..plan.memory_plan.peak_live_slots())
             .map(|_| None::<CpuStorage>)
             .collect::<Vec<_>>();
