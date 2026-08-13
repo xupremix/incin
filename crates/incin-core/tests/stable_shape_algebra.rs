@@ -435,6 +435,15 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let graph = incin_core::prelude::extract_graph();
     assert!(graph.nodes.iter().any(|node| node.operation
         == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Relu)));
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .find(|node| node.operation
+                == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Relu))
+            .and_then(|node| node.descriptor_payload.as_ref())
+            .is_some()
+    );
     assert!(graph.nodes.iter().any(|node| node.operation
         == OperationIdentity::Builtin(incin_core::prelude::OperationKind::ReshapeExact)));
 }

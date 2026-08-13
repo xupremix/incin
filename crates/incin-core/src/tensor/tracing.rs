@@ -222,6 +222,53 @@ impl<B: Backend> TracingBackend<B> {
             value_id,
         }
     }
+
+    fn trace_canonical_unary<O, K: super::dtype::DType>(
+        t: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<K>,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation<
+                Attributes = crate::exec::catalog::NoAttributes,
+            >,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            crate::exec::catalog::NoAttributes,
+            vec![crate::exec::catalog::LogicalTensorMeta {
+                shape: Some(B::shape(&t.inner)),
+                dtype: Some(Self::traced_dtype(&t.inner)),
+                device: Some(B::metadata(&t.inner).device),
+            }],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical unary descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let shape = B::shape(inner_res);
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id =
+            graph.add_value(shape.as_ref().to_vec(), Self::traced_dtype(inner_res), None);
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![t.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
 }
 
 fn axis_attributes(
@@ -833,7 +880,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::relu(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Relu, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Relu, K>(t, &inner)
     }
 
     fn step<K: super::dtype::DType>(
@@ -881,7 +928,7 @@ impl<B: Backend + FloatOps<B>> FloatOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::exp(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::Exp, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::Exp, K>(t, &inner)
     }
 
     /// Delegates to `B::neg`, additionally recording an
