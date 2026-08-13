@@ -20,6 +20,7 @@ run. If one of these is wrong, the source is wrong. Never edit them by hand.
 |---|---|---|
 | [capabilities.md](capabilities.md) | the backend capability registrations | `INCIN_DOCS=overwrite cargo test -p incin-backends --test generated_docs` |
 | [OPERATION_SEMANTICS.md](OPERATION_SEMANTICS.md) | `incin_core::exec::OPERATION_CATALOG` | `INCIN_DOCS=overwrite cargo test -p incin-core --test generated_operation_semantics` |
+| [operation-coverage.md](operation-coverage.md) | `incin_core::exec::OPERATION_CATALOG` execution-site counts | `INCIN_DOCS=overwrite cargo test -p incin-core --test generated_operation_coverage` |
 | [audit/shape-proof-inventory.md](audit/shape-proof-inventory.md) | the shape-proof sites in the tree | `tools/audit-shapes.sh --check` |
 
 `audit-evidence/FND-005/cpu-migration-status.md` is generated the same way, by

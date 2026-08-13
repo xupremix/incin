@@ -70,7 +70,7 @@ pub use capability::{
 pub use catalog::{
     AttributeContract, CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta,
     OPERATION_CATALOG, Operation, OperationCatalogEntry, OperationKey, ValidatedInvocation,
-    catalog_entry, op, operation_semantics_document,
+    catalog_entry, op, operation_coverage_document, operation_semantics_document,
 };
 pub use symbolic::{
     Constraint, DimExpr, RankExpr, ShapeExpr, SymbolEnvironment, SymbolId, SymbolInfo, SymbolTable,

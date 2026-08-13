@@ -240,6 +240,44 @@ pub fn operation_coverage() -> OperationCoverage {
     }
 }
 
+/// Render the operation coverage report from the canonical catalog.
+#[must_use]
+pub fn operation_coverage_document() -> alloc::string::String {
+    use core::fmt::Write;
+
+    let coverage = operation_coverage();
+    let mut document = alloc::string::String::from(
+        "# Canonical operation coverage\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative.\n\n",
+    );
+    let _ = writeln!(document, "- Canonical operations: {}", coverage.canonical);
+    let _ = writeln!(
+        document,
+        "- Backend-executable operations: {}",
+        coverage.backend_executable
+    );
+    let _ = writeln!(
+        document,
+        "- Non-backend execution sites: {}\n",
+        coverage.non_backend_executable
+    );
+    document.push_str("| Execution site | Operations |\n|---|---:|\n");
+    for (site, count) in coverage.by_site {
+        let _ = writeln!(document, "| `{site:?}` | {count} |");
+    }
+    document
+        .push_str("\n## Non-backend operations\n\n| Operation | Site | Reason |\n|---|---|---|\n");
+    for row in OPERATION_CATALOG {
+        if let Some(reason) = row.site.blocking_reason() {
+            let _ = writeln!(
+                document,
+                "| `{}` | `{:?}` | {} |",
+                row.name, row.site, reason
+            );
+        }
+    }
+    document
+}
+
 /// One immutable row derived from the authoritative operation declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationCatalogEntry {
