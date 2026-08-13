@@ -23,6 +23,26 @@ impl OperationIdentity {
             Self::Custom(_) => None,
         }
     }
+
+    /// Stable human-readable identity used by graph consumers.
+    #[must_use]
+    pub fn display_name(&self) -> alloc::string::String {
+        match self {
+            Self::Builtin(operation) => super::catalog::catalog_entry(*operation)
+                .map(|entry| entry.name.to_owned())
+                .unwrap_or_else(|| operation.name().to_owned()),
+            Self::Custom(key) => alloc::format!("{}/{}@{}", key.namespace, key.name, key.version),
+        }
+    }
+
+    /// Explicit ONNX projection for this identity.
+    #[must_use]
+    pub fn onnx_name(&self) -> Option<&'static str> {
+        match self {
+            Self::Builtin(operation) => super::catalog::onnx_name(*operation),
+            Self::Custom(_) => None,
+        }
+    }
 }
 
 /// A complete runtime support question for one physical execution path.

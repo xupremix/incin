@@ -1,5 +1,5 @@
 use alloc::collections::BTreeMap;
-use incin_core::exec::{OperationIdentity, catalog::catalog_entry};
+use incin_core::exec::OperationIdentity;
 use incin_telemetry::events::{Event, GraphSnapshotEvent};
 use incin_viz_plugin_api::event::{KeyCode, PanelEvent, PanelMouseEvent};
 use incin_viz_plugin_api::panel::Panel;
@@ -26,12 +26,7 @@ pub enum ViewMode {
 }
 
 fn operation_label(operation: &OperationIdentity) -> String {
-    match operation {
-        OperationIdentity::Builtin(operation) => catalog_entry(*operation)
-            .map(|entry| entry.name.to_string())
-            .unwrap_or_else(|| operation.name().to_string()),
-        OperationIdentity::Custom(key) => format!("{}/{}@{}", key.namespace, key.name, key.version),
-    }
+    operation.display_name()
 }
 
 /// Graph module list panel.
