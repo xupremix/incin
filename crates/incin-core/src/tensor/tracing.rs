@@ -472,6 +472,66 @@ impl<B: Backend> TracingBackend<B> {
             value_id: output_id,
         })
     }
+
+    fn trace_canonical_binary_types<O, K1, K2, KOut>(
+        lhs: &TracingTensor<B::Storage<K1>>,
+        rhs: &TracingTensor<B::Storage<K2>>,
+        inner_res: &B::Storage<KOut>,
+    ) -> Result<TracingTensor<B::Storage<KOut>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation<
+                Attributes = crate::exec::catalog::NoAttributes,
+            >,
+        K1: super::dtype::DType,
+        K2: super::dtype::DType,
+        KOut: super::dtype::DType,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            crate::exec::catalog::NoAttributes,
+            vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&lhs.inner)),
+                    dtype: Some(Self::traced_dtype(&lhs.inner)),
+                    device: Some(B::metadata(&lhs.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&rhs.inner)),
+                    dtype: Some(Self::traced_dtype(&rhs.inner)),
+                    device: Some(B::metadata(&rhs.inner).device),
+                },
+            ],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical typed binary descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![lhs.value_id, rhs.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
 }
 
 fn axis_attributes(
@@ -1849,7 +1909,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_eq(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpEq, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpEq, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::cmp_ne`, recording an `OperationKind::CmpNe` node.
@@ -1858,7 +1920,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_ne(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpNe, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpNe, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::cmp_lt`, recording an `OperationKind::CmpLt` node.
@@ -1867,7 +1931,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_lt(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpLt, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpLt, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::cmp_le`, recording an `OperationKind::CmpLe` node.
@@ -1876,7 +1942,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_le(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpLe, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpLe, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::cmp_gt`, recording an `OperationKind::CmpGt` node.
@@ -1885,7 +1953,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_gt(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpGt, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpGt, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::cmp_ge`, recording an `OperationKind::CmpGe` node.
@@ -1894,7 +1964,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::cmp_ge(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::CmpGe, lhs, rhs, &inner))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::CmpGe, K, K, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::logical_and`, recording an `OperationKind::LogicalAnd` node.
@@ -1903,12 +1975,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::logical_and(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(
-            OperationKind::LogicalAnd,
-            lhs,
-            rhs,
-            &inner,
-        ))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::LogicalAnd, bool, bool, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::logical_or`, recording an `OperationKind::LogicalOr` node.
@@ -1917,12 +1986,9 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::logical_or(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(
-            OperationKind::LogicalOr,
-            lhs,
-            rhs,
-            &inner,
-        ))
+        Self::trace_canonical_binary_types::<crate::exec::catalog::op::LogicalOr, bool, bool, bool>(
+            lhs, rhs, &inner,
+        )
     }
 
     /// Delegates to `B::logical_not`, recording an `OperationKind::LogicalNot` node.
@@ -1930,7 +1996,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         t: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         let inner = B::logical_not(&t.inner)?;
-        Ok(Self::trace_unary(OperationKind::LogicalNot, t, &inner))
+        Self::trace_canonical_unary::<crate::exec::catalog::op::LogicalNot, bool>(t, &inner)
     }
 
     /// Delegates to `B::sub_scalar`, recording an `OperationKind::SubScalar` node.
