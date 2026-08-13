@@ -366,6 +366,56 @@ impl<B: Backend> TracingBackend<B> {
         })
     }
 
+    fn trace_canonical_multi_shape<O, K: super::dtype::DType>(
+        tensors: &[&TracingTensor<B::Storage<K>>],
+        inner_res: &B::Storage<K>,
+        attributes: O::Attributes,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation,
+        O::Attributes: crate::exec::catalog::AttributeContract,
+    {
+        let inputs = tensors
+            .iter()
+            .map(|tensor| crate::exec::catalog::LogicalTensorMeta {
+                shape: Some(B::shape(&tensor.inner)),
+                dtype: Some(Self::traced_dtype(&tensor.inner)),
+                device: Some(B::metadata(&tensor.inner).device),
+            })
+            .collect();
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(attributes, inputs)
+            .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical multi-input descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            tensors.iter().map(|tensor| tensor.value_id).collect(),
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
+
     fn trace_canonical_binary<O, K: super::dtype::DType>(
         lhs: &TracingTensor<B::Storage<K>>,
         rhs: &TracingTensor<B::Storage<K>>,
@@ -1505,32 +1555,13 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::reshape(&t.inner, shape)?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-
-            // Add reshape parameters as a constant value
-            let shape_val_id = g.add_value(vec![shape.len()], DTypeId::I64, None);
-            let mut bytes = Vec::new();
-            for &s in shape {
-                bytes.extend_from_slice(&(s as i64).to_le_bytes());
-            }
-            g.initializers.insert(shape_val_id, bytes);
-
-            g.add_node(
-                OperationKind::Reshape,
-                vec![t.value_id, shape_val_id],
-                vec![out_id],
-                alloc::collections::BTreeMap::new(),
-            );
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::ReshapeExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::ShapeAttributes {
+                shape: shape.to_vec(),
+            },
+        )
     }
 
     /// Delegates to `B::transpose`, additionally recording an
@@ -1541,31 +1572,14 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         dim2: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::transpose(&t.inner, dim1, dim2)?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-            let mut attrs = alloc::collections::BTreeMap::new();
-            // simple perm vector building for ONNX
-            let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
-            perm.swap(dim1, dim2);
-            attrs.insert(
-                alloc::string::String::from("perm"),
-                crate::graph::AttributeValue::Ints(perm),
-            );
-            g.add_node(
-                OperationKind::Transpose,
-                vec![t.value_id],
-                vec![out_id],
-                attrs,
-            );
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_shape_with_attributes::<crate::exec::catalog::op::TransposeExact, K>(
+            t,
+            &inner,
+            crate::exec::catalog::TransposeAttributes {
+                first: dim1,
+                second: dim2,
+            },
+        )
     }
 
     /// Delegates to `B::narrow`, additionally recording an `OperationKind::Narrow` node.
@@ -1595,24 +1609,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inners: Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
         let inner = B::concat(&inners, dim)?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-            let inputs = tensors.iter().map(|t| t.value_id).collect();
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("axis"),
-                crate::graph::AttributeValue::Int(dim as i64),
-            );
-            g.add_node(OperationKind::Concat, inputs, vec![out_id], attrs);
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::ConcatExact, K>(
+            tensors,
+            &inner,
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::stack`, additionally recording an
@@ -1623,24 +1624,11 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inners: Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
         let inner = B::stack(&inners, dim)?;
-        let shape_out = B::shape(&inner);
-        let value_id = {
-            let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(
-                shape_out.as_ref().to_vec(),
-                Self::traced_dtype(&inner),
-                None,
-            );
-            let inputs = tensors.iter().map(|t| t.value_id).collect();
-            let mut attrs = alloc::collections::BTreeMap::new();
-            attrs.insert(
-                alloc::string::String::from("axis"),
-                crate::graph::AttributeValue::Int(dim as i64),
-            );
-            g.add_node(OperationKind::Stack, inputs, vec![out_id], attrs);
-            out_id
-        };
-        Ok(TracingTensor { inner, value_id })
+        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::StackExact, K>(
+            tensors,
+            &inner,
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
     }
 
     /// Delegates to `B::slice`, additionally recording an `OperationKind::Slice` node.
