@@ -316,6 +316,63 @@ impl<B: Backend> TracingBackend<B> {
             value_id: output_id,
         })
     }
+
+    fn trace_canonical_binary<O, K: super::dtype::DType>(
+        lhs: &TracingTensor<B::Storage<K>>,
+        rhs: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<K>,
+    ) -> Result<TracingTensor<B::Storage<K>>>
+    where
+        O: crate::exec::catalog::CanonicalOperation<
+                Attributes = crate::exec::catalog::NoAttributes,
+            >,
+    {
+        let descriptor = crate::exec::catalog::Descriptor::<O>::infer_runtime(
+            crate::exec::catalog::NoAttributes,
+            vec![
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&lhs.inner)),
+                    dtype: Some(Self::traced_dtype(&lhs.inner)),
+                    device: Some(B::metadata(&lhs.inner).device),
+                },
+                crate::exec::catalog::LogicalTensorMeta {
+                    shape: Some(B::shape(&rhs.inner)),
+                    dtype: Some(Self::traced_dtype(&rhs.inner)),
+                    device: Some(B::metadata(&rhs.inner).device),
+                },
+            ],
+        )
+        .map_err(|_| BackendError::InvalidInput {
+            operation: crate::shapes::error::OperationKind::Storage,
+            reason: "tracing canonical binary descriptor validation failed",
+        })?;
+        let payload = descriptor
+            .descriptor()
+            .trace_descriptor_payload()
+            .map_err(|reason| BackendError::InvalidInput {
+                operation: crate::shapes::error::OperationKind::Storage,
+                reason,
+            })?;
+        let mut graph = TRACING_GRAPH.lock();
+        let output_id = graph.add_value(
+            B::shape(inner_res).as_ref().to_vec(),
+            Self::traced_dtype(inner_res),
+            None,
+        );
+        let metadata = B::metadata(inner_res);
+        let _ = graph.set_value_placement(output_id, Some(metadata.device), Some(metadata.layout));
+        graph.add_node_with_descriptor_payload(
+            descriptor.descriptor().trace_identity(),
+            vec![lhs.value_id, rhs.value_id],
+            vec![output_id],
+            alloc::collections::BTreeMap::new(),
+            payload,
+        );
+        Ok(TracingTensor {
+            inner: inner_res.clone(),
+            value_id: output_id,
+        })
+    }
 }
 
 fn axis_attributes(
@@ -797,7 +854,7 @@ impl<B: Backend + NumericOps<B>> NumericOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::add(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Add, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Add, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::sub`, additionally recording an `OperationKind.Sub` node.
@@ -806,7 +863,7 @@ impl<B: Backend + NumericOps<B>> NumericOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::sub(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Sub, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Sub, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::mul`, additionally recording an `OperationKind.Mul` node.
@@ -815,7 +872,7 @@ impl<B: Backend + NumericOps<B>> NumericOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::mul(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Mul, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Mul, K>(lhs, rhs, &inner)
     }
 
     /// Delegates to `B::div`, additionally recording an `OperationKind.Div` node.
@@ -824,7 +881,7 @@ impl<B: Backend + NumericOps<B>> NumericOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::div(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::Div, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::Div, K>(lhs, rhs, &inner)
     }
 }
 
@@ -1568,7 +1625,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::matmul(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OperationKind::MatMul, lhs, rhs, &inner))
+        Self::trace_canonical_binary::<crate::exec::catalog::op::MatMulExact, K>(lhs, rhs, &inner)
     }
     /// Delegates to `B::float_to_scalar`.
     fn float_to_scalar<K: super::dtype::DType>(
