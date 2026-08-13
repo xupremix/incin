@@ -74,9 +74,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
                 rank: crate::exec::RankExpr::Static(rank),
                 dims: (0..rank)
                     .map(|axis| {
-                        crate::exec::DimExpr::Symbol(crate::exec::SymbolId(
-                            base.saturating_add(axis as u32),
-                        ))
+                        crate::exec::DimExpr::Fresh(base.saturating_add(axis as u32))
                     })
                     .collect(),
                 constraints: alloc::vec::Vec::new(),

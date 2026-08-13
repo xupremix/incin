@@ -674,7 +674,10 @@ fn collect_symbols(expr: &crate::exec::DimExpr, symbols: &mut SymbolTable) {
             collect_symbols(lhs, symbols);
             collect_symbols(rhs, symbols);
         }
-        crate::exec::DimExpr::Const(_) | crate::exec::DimExpr::Unknown => {}
+        crate::exec::DimExpr::Const(_)
+        | crate::exec::DimExpr::Fresh(_)
+        | crate::exec::DimExpr::NamedFresh { .. }
+        | crate::exec::DimExpr::Unknown => {}
     }
 }
 

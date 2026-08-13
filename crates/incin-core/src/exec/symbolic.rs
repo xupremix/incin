@@ -134,6 +134,14 @@ impl SymbolEnvironment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DimExpr {
     Const(usize),
+    /// A frontend-local symbol token. It must be allocated by graph capture
+    /// before this expression is used as compiled metadata.
+    Fresh(u32),
+    NamedFresh {
+        source: u32,
+        name: String,
+        identity: String,
+    },
     Symbol(SymbolId),
     NamedSymbol {
         id: SymbolId,
@@ -214,6 +222,7 @@ impl DimExpr {
                 .iter()
                 .find(|(candidate, _)| candidate == id)
                 .map(|(_, value)| *value),
+            Self::Fresh(_) | Self::NamedFresh { .. } => None,
             Self::Add(lhs, rhs) => lhs.evaluate(symbols)?.checked_add(rhs.evaluate(symbols)?),
             Self::Sub(lhs, rhs) => lhs.evaluate(symbols)?.checked_sub(rhs.evaluate(symbols)?),
             Self::Mul(lhs, rhs) => lhs.evaluate(symbols)?.checked_mul(rhs.evaluate(symbols)?),
@@ -245,6 +254,7 @@ impl DimExpr {
         match self {
             Self::Const(value) => Some(*value),
             Self::Symbol(id) | Self::NamedSymbol { id, .. } => environment.get(*id),
+            Self::Fresh(_) | Self::NamedFresh { .. } => None,
             Self::Add(lhs, rhs) => lhs
                 .evaluate_env(environment)?
                 .checked_add(rhs.evaluate_env(environment)?),
@@ -334,7 +344,7 @@ impl ShapeExpr {
         Self {
             rank: RankExpr::Static(dims.len()),
             dims: (0..dims.len())
-                .map(|axis| DimExpr::Symbol(SymbolId(base.saturating_add(axis as u32))))
+                .map(|axis| DimExpr::Fresh(base.saturating_add(axis as u32)))
                 .collect(),
             constraints: Vec::new(),
         }
@@ -381,6 +391,12 @@ impl ShapeExpr {
                 DimExpr::NamedSymbol { id, .. } => {
                     environment.bind(*id, value)?;
                 }
+                DimExpr::Fresh(_) | DimExpr::NamedFresh { .. } => {
+                    return Err(alloc::format!(
+                        "unallocated frontend symbol in compiled shape expression: {:?}",
+                        expr
+                    ));
+                }
                 _ => {}
             }
         }
@@ -394,6 +410,12 @@ impl ShapeExpr {
                     ));
                 }
                 DimExpr::Symbol(_) | DimExpr::NamedSymbol { .. } => {}
+                DimExpr::Fresh(_) | DimExpr::NamedFresh { .. } => {
+                    return Err(alloc::format!(
+                        "unallocated frontend symbol in compiled shape expression: {:?}",
+                        expr
+                    ));
+                }
                 _ => environment.validate_expr(expr, value)?,
             }
         }

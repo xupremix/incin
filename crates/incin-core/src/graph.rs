@@ -269,6 +269,17 @@ fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
     ) -> crate::exec::DimExpr {
         use crate::exec::DimExpr;
         match expr {
+            DimExpr::Fresh(source) => {
+                let source = crate::exec::SymbolId(source);
+                let mapped = if let Some(mapped) = anonymous.get(&source) {
+                    *mapped
+                } else {
+                    let mapped = fresh();
+                    anonymous.insert(source, mapped);
+                    mapped
+                };
+                DimExpr::Symbol(mapped)
+            }
             DimExpr::Symbol(id) => {
                 let mapped = if let Some(mapped) = anonymous.get(&id) {
                     *mapped
@@ -288,6 +299,22 @@ fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
                     names.insert(identity.clone(), id);
                     id
                 };
+                DimExpr::NamedSymbol { id, name, identity }
+            }
+            DimExpr::NamedFresh {
+                source,
+                name,
+                identity,
+            } => {
+                let id = if let Some(id) = names.get(&identity) {
+                    *id
+                } else {
+                    let id = fresh();
+                    *next_id = (*next_id).max(id.0.saturating_add(1));
+                    names.insert(identity.clone(), id);
+                    id
+                };
+                let _ = source;
                 DimExpr::NamedSymbol { id, name, identity }
             }
             DimExpr::Add(lhs, rhs) => DimExpr::Add(
@@ -382,7 +409,10 @@ fn collect_shape_symbols(expr: &ShapeExpr, symbols: &mut BTreeSet<crate::exec::S
                 dim(lhs, symbols);
                 dim(rhs, symbols);
             }
-            crate::exec::DimExpr::Const(_) | crate::exec::DimExpr::Unknown => {}
+            crate::exec::DimExpr::Const(_)
+            | crate::exec::DimExpr::Fresh(_)
+            | crate::exec::DimExpr::NamedFresh { .. }
+            | crate::exec::DimExpr::Unknown => {}
         }
     }
     for value in &expr.dims {
