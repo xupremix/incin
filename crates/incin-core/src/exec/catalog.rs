@@ -4728,7 +4728,13 @@ mod tests {
                 .sum::<usize>(),
             coverage.canonical
         );
-        assert_eq!(coverage.non_backend_executable, 16);
+        assert_eq!(
+            coverage.non_backend_executable,
+            OPERATION_CATALOG
+                .iter()
+                .filter(|row| !row.site.is_backend_executable())
+                .count()
+        );
     }
 
     /// The execution site agrees with the arity and output rules that were
