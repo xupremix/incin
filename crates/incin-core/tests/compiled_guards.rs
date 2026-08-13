@@ -1,9 +1,10 @@
 #![cfg(feature = "compiled")]
 
+use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
 use incin_core::exec::{Constraint, DimExpr, RankExpr, ShapeExpr, SymbolEnvironment, SymbolId};
 use incin_core::experimental::compiled::{CapturedGraph, CompileOptions, CompiledPlan, ShapeGuard};
 use incin_core::graph::Graph;
-use incin_core::prelude::DTypeId;
+use incin_core::prelude::{DTypeId, DeviceId, ShapeBuf};
 
 #[test]
 fn symbolic_validation_binds_named_symbols_before_composites() {
@@ -184,6 +185,27 @@ fn test_shape_guard_verification() {
 
     // Mismatched dtype fails
     assert!(guard.check(&[2, 4], DTypeId::F16.into()).is_err());
+}
+
+#[test]
+fn metadata_guard_rejects_known_device_and_layout_mismatches() {
+    let metadata = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[2, 4]),
+        <f32 as incin_core::prelude::ConstDType>::DESCRIPTOR,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        8,
+    )
+    .unwrap();
+    let shape = ShapeExpr::concrete(&[2, 4]);
+
+    let wrong_device = ShapeGuard::new(0, shape.clone(), DTypeId::F32.into())
+        .with_metadata(Some(DeviceId::cuda(0)), None);
+    assert!(wrong_device.check_metadata(&metadata).is_err());
+
+    let wrong_layout = ShapeGuard::new(0, shape, DTypeId::F32.into())
+        .with_metadata(None, Some(LayoutClass::Strided));
+    assert!(wrong_layout.check_metadata(&metadata).is_err());
 }
 
 #[test]

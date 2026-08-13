@@ -361,7 +361,12 @@ fn remap_shape_symbols<F: FnMut() -> crate::exec::SymbolId>(
                     DimExpr::Symbol(_) | DimExpr::NamedSymbol { .. } => {
                         DimExpr::NamedSymbol { id, name, identity }
                     }
-                    DimExpr::Const(value) => DimExpr::Const(value),
+                    DimExpr::Const(value) => DimExpr::NamedExpr {
+                        expr: Box::new(DimExpr::Const(value)),
+                        id,
+                        name,
+                        identity,
+                    },
                     expr => DimExpr::NamedExpr {
                         expr: Box::new(expr),
                         id,

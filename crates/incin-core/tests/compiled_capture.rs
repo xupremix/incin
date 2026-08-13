@@ -194,6 +194,32 @@ fn named_derived_dimension_retains_name_and_expression_in_capture() {
 }
 
 #[test]
+fn named_static_dimension_retains_name_and_constant_value_in_capture() {
+    use incin_core::shapes::{ConstDim, DimCons, NamedDim, Nil};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    struct Hidden;
+
+    impl incin_core::shapes::AxisTag for Hidden {
+        const NAME: &'static str = "Hidden";
+        const KEY: &'static str = "compiled_capture::static::Hidden";
+    }
+
+    type Shape = DimCons<NamedDim<Hidden, ConstDim<768>>, Nil>;
+    let mut graph = Graph::new();
+    let input = graph.add_value(vec![768], DTypeId::F32, Some("input".into()));
+    graph.mark_input_with_shape::<Shape>(input);
+
+    assert!(matches!(
+        &graph.values[&input].shape_expr.dims[0],
+        DimExpr::NamedExpr { name, identity, expr, .. }
+            if name == "Hidden"
+                && identity == "compiled_capture::static::Hidden"
+                && matches!(expr.as_ref(), DimExpr::Const(768))
+    ));
+}
+
+#[test]
 fn typed_named_projection_does_not_merge_distinct_axis_tags() {
     let mut graph = Graph::new();
     let batch = graph.add_value(vec![7], DTypeId::F32, Some("batch".into()));
