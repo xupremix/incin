@@ -2619,6 +2619,7 @@ impl<B: Backend + crate::tensor::backend::legacy::ModuleOps<B>> ModuleOps<Self> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::OperationKind;
     use crate::tensor::backend::dummy::DummyBackend;
     use crate::tensor::device::Cpu;
 
