@@ -43,8 +43,45 @@ fn storage(shape: &[usize], values: &[f32]) -> CandleStorage {
     CandleStorage::try_new(tensor).expect("a candle tensor must yield checked metadata")
 }
 
+fn lower_add(lhs: &[usize], rhs: &[usize]) -> Validated<Descriptor<op::Add>> {
+    Descriptor::<op::Add>::infer_runtime(
+        NoAttributes,
+        vec![
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(lhs)),
+                dtype: None,
+                device: None,
+            },
+            LogicalTensorMeta {
+                shape: Some(ShapeBuf::from_slice(rhs)),
+                dtype: None,
+                device: None,
+            },
+        ],
+    )
+    .expect("test operands must be valid add shapes")
+}
+
 fn execute(
     validated: &Validated<Descriptor<op::MatMulExact>>,
+    lhs: &CandleStorage,
+    rhs: &CandleStorage,
+) -> Result<CandleStorage, BackendError> {
+    let context = ExecutionContext::new(TestBackend::default());
+    let inputs = [
+        TensorHandle::from_storage::<TestBackend, f32, Local>(lhs),
+        TensorHandle::from_storage::<TestBackend, f32, Local>(rhs),
+    ];
+    context.backend().execute(ExecutionRequest {
+        operation: validated,
+        inputs: &inputs,
+        context: &context,
+        payload: None,
+    })
+}
+
+fn execute_add(
+    validated: &Validated<Descriptor<op::Add>>,
     lhs: &CandleStorage,
     rhs: &CandleStorage,
 ) -> Result<CandleStorage, BackendError> {
@@ -88,6 +125,23 @@ fn rank2_descriptor_execution_produces_the_declared_output() {
         .to_vec1::<f32>()
         .unwrap();
     assert_eq!(values, vec![58., 64., 139., 154.]);
+}
+
+#[test]
+fn canonical_add_descriptor_execution_broadcasts_and_preserves_values() {
+    let lhs = storage(&[2, 1], &[1., 2.]);
+    let rhs = storage(&[1, 3], &[10., 20., 30.]);
+    let output = execute_add(&lower_add(&[2, 1], &[1, 3]), &lhs, &rhs)
+        .expect("a valid add descriptor must execute");
+
+    assert_eq!(output.metadata().shape().dims(), &[2, 3]);
+    let values = output
+        .tensor()
+        .flatten_all()
+        .unwrap()
+        .to_vec1::<f32>()
+        .unwrap();
+    assert_eq!(values, vec![11., 21., 31., 12., 22., 32.]);
 }
 
 #[test]
@@ -232,6 +286,10 @@ fn capabilities_now_answer_for_the_operations_the_adapter_routes() {
 
     assert!(matches!(
         backend.support(&query(OperationKind::ReshapeExact)),
+        SupportLevel::Native
+    ));
+    assert!(matches!(
+        backend.support(&query(OperationKind::Add)),
         SupportLevel::Native
     ));
     assert!(matches!(
