@@ -8,7 +8,7 @@
 use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::{
     Backend, ConversionFailure, Device, DeviceId, DeviceKind, DType, DTypeDescriptor, DTypeId,
-    Error, FloatToIntPolicy, OperationKind, Result, StorageBackend, TransferTo,
+    Error, FloatToIntPolicy, OperationKind, Result, StorageBackend, StorageTransfer,
     convert_f64_to_i64,
 };
 use incin_core::__backend_compat::legacy::CreationOps;
@@ -679,7 +679,7 @@ mod tests {
     /// Same-device transfer returns equivalent destination-native storage.
     fn transfer_to_cpu_returns_equivalent_storage() {
         let t = TestBackend::zeros::<f32>(&[3], DTypeId::F32.descriptor(), &dev()).unwrap();
-        let t2 = <TestBackend as TransferTo<Cpu>>::transfer_storage::<f32>(
+        let t2 = <TestBackend as StorageTransfer<Cpu>>::transfer_storage::<f32>(
             &t,
             &Default::default(),
             &Default::default(),

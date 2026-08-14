@@ -6,7 +6,7 @@ use incin_core::prelude::{Cpu, Dyn, ShapeBuf};
 
 macro_rules! impl_transfer {
     ($source:ty) => {
-        impl<D: Device, NewD: Device> incin_core::prelude::TransferTo<NewD> for $source
+        impl<D: Device, NewD: Device> incin_core::prelude::StorageTransfer<NewD> for $source
         where
             crate::target::Native: crate::target::EngineOn<NewD>,
             $source: HostInterop,
@@ -55,6 +55,14 @@ macro_rules! impl_transfer {
                 )
             }
 
+        }
+
+        impl<D: Device, NewD: Device> incin_core::prelude::TransferTo<NewD> for $source
+        where
+            crate::target::Native: crate::target::EngineOn<NewD>,
+            $source: HostInterop,
+            crate::IncinBackend<NewD>: HostInterop,
+        {
             fn transfer_var<K: DType>(
                 variable: &Self::Var<K>,
                 dtype: &K::Field,
@@ -74,16 +82,8 @@ macro_rules! impl_transfer {
                         got,
                     });
                 }
-                let destination = NewD::to_incin(device)?;
-                let dtype_descriptor =
-                    <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
-                let shape = Self::shape::<K>(&source);
-                let bytes = Self::to_bytes::<K>(&source)?;
-                let storage = <Self::Output as HostInterop>::from_bytes::<K>(
-                    &bytes,
-                    &shape,
-                    dtype_descriptor,
-                    &destination,
+                let storage = <Self as incin_core::prelude::StorageTransfer<NewD>>::transfer_storage(
+                    &source, dtype, device,
                 )?;
                 <Self::Output as VariableBackend>::var_from_tensor(&storage)
             }

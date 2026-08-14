@@ -218,7 +218,7 @@ use super::*;
             .saturating_add(1)
     }
 
-    impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
+    impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> StorageTransfer<NewD>
         for DummyBackend<D>
     {
         type Output = DummyBackend<NewD>;
@@ -234,6 +234,11 @@ use super::*;
             Ok(storage.clone())
         }
 
+    }
+
+    impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
+        for DummyBackend<D>
+    {
         fn transfer_var<K: DType>(
             variable: &Self::Var<K>,
             _dtype: &K::Field,

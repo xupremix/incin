@@ -231,7 +231,7 @@ pub mod backend_authoring {
         DescriptorError, Execute, ExecuteOutput, ExecutionContext, ExecutionDescriptor,
         ExecutionRequest, LogicalTensorMeta, LossScaling, Operation, OperationIdentity,
         OperationKey, PrecisionSpec, RuntimePrecisionPolicy, ShapeBuf, StorageBackend,
-        StorageOutput, SupportLevel, SupportsDType, TensorBackend, TensorMeta, TransferBackend,
+        StorageOutput, StorageTransfer, SupportLevel, SupportsDType, TensorBackend, TensorMeta, TransferBackend,
         TransferTo, VariableTransfer, UnsupportedReason, Validated, VariableBackend, HostInterop, HostReadback,
     };
     pub use incin_core::backend_authoring::{
@@ -503,7 +503,7 @@ pub mod prelude {
         FloatToIntPolicy, Grad, Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup,
         NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
-        ShapeValue, ComputeStats,
+        ShapeValue, ComputeStats, SupportsDType,
         Slice, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };

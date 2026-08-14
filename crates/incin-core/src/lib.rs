@@ -40,7 +40,7 @@ pub use typenum;
 #[doc(hidden)]
 pub mod __macro_support {
     pub use crate::nn::{ComputeStats, LayerStats, StateDict, StateLoadPlan, StateMutVisitor, StatePath, StateSnapshot, StateVisitor, VisitState, VisitStateMut};
-    pub use crate::tensor::backend::{SupportsDType, TransferTo};
+    pub use crate::tensor::backend::{StorageTransfer, SupportsDType, TransferTo, VariableBackend};
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 }
 
@@ -85,7 +85,7 @@ pub mod backend_authoring {
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
         AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop, HostReadback,
-        StorageBackend, StorageOutput, SupportsDType, TensorBackend, TransferBackend, TransferTo, VariableTransfer,
+        StorageBackend, StorageOutput, StorageTransfer, SupportsDType, TensorBackend, TransferBackend, TransferTo, VariableTransfer,
         VariableBackend,
     };
     /// Read the tracing graph mid-flight, without draining it.

@@ -540,7 +540,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let ident = &t.ident;
                     if backend_generic.as_ref() == Some(ident) {
                         args.push(
-                            quote! { <#ident as #macro_support::TransferTo<__NewD>>::Output },
+                            quote! { <#ident as #macro_support::StorageTransfer<__NewD>>::Output },
                         );
                     } else if t.bounds.iter().any(|b| {
                         if let syn::TypeParamBound::Trait(tb) = b {
@@ -794,6 +794,10 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         where_clause
             .predicates
             .push(syn::parse_quote!(#b_ident: #macro_support::TransferTo<__NewD>));
+        where_clause.predicates.push(syn::parse_quote!(
+            <#b_ident as #macro_support::StorageTransfer<__NewD>>::Output:
+                #macro_support::VariableBackend
+        ));
 
         let mut dtype_param_found = false;
         for param in &input.generics.params {
@@ -814,14 +818,14 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     dtype_param_found = true;
                     where_clause
                         .predicates
-                        .push(syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<#ident>));
+                        .push(syn::parse_quote!(<#b_ident as #macro_support::StorageTransfer<__NewD>>::Output: #macro_support::SupportsDType<#ident>));
                 }
             }
         }
         if !dtype_param_found {
             where_clause
                 .predicates
-                .push(syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<f32>));
+                .push(syn::parse_quote!(<#b_ident as #macro_support::StorageTransfer<__NewD>>::Output: #macro_support::SupportsDType<f32>));
         }
         let (impl_g, _, to_device_where_clause) = impl_generics_with_newd.split_for_impl();
         quote! {

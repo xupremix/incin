@@ -215,13 +215,13 @@ fn transfer_to_device_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0];
     let n0 = make_storage::<NB>(&data, &[4]);
     let c0 = make_storage::<CB>(&data, &[4]);
-    let n = <NB as TransferTo<Cpu>>::transfer_storage::<f32>(
+    let n = <NB as StorageTransfer<Cpu>>::transfer_storage::<f32>(
         &n0,
         &Default::default(),
         &Default::default(),
     )
     .unwrap();
-    let c = <CB as TransferTo<Cpu>>::transfer_storage::<f32>(
+    let c = <CB as StorageTransfer<Cpu>>::transfer_storage::<f32>(
         &c0,
         &Default::default(),
         &Default::default(),

@@ -1017,13 +1017,13 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
     }
 }
 
-impl<B, NewD> TransferTo<NewD> for TracingBackend<B>
+impl<B, NewD> StorageTransfer<NewD> for TracingBackend<B>
 where
-    B: Backend + TransferTo<NewD> + crate::tensor::backend::HostInterop,
-    <B as TransferTo<NewD>>::Output: crate::tensor::backend::HostInterop,
+    B: Backend + StorageTransfer<NewD> + crate::tensor::backend::HostInterop,
+    <B as StorageTransfer<NewD>>::Output: crate::tensor::backend::HostInterop,
     NewD: crate::tensor::device::Device,
 {
-    type Output = TracingBackend<<B as TransferTo<NewD>>::Output>;
+    type Output = TracingBackend<<B as StorageTransfer<NewD>>::Output>;
 
     fn transfer_storage<K: super::dtype::DType>(
         storage: &Self::Storage<K>,
@@ -1037,7 +1037,7 @@ where
         let bytes = B::to_bytes(&storage.inner)?;
         let device_id = NewD::to_incin(device)?;
         let dtype_id = <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &device_id)?;
-        let inner = <<B as TransferTo<NewD>>::Output as HostInterop>::from_bytes::<K>(
+        let inner = <<B as StorageTransfer<NewD>>::Output as HostInterop>::from_bytes::<K>(
             &bytes, &shape, dtype_id, &device_id,
         )?;
         Ok(TracingTensor {
@@ -1046,6 +1046,15 @@ where
         })
     }
 
+}
+
+impl<B, NewD> TransferTo<NewD> for TracingBackend<B>
+where
+    B: Backend + TransferTo<NewD> + crate::tensor::backend::HostInterop,
+    <B as StorageTransfer<NewD>>::Output: crate::tensor::backend::HostInterop,
+    NewD: crate::tensor::device::Device,
+    <B as StorageTransfer<NewD>>::Output: VariableBackend<Device = NewD>,
+{
     fn transfer_var<K: DType>(
         variable: &Self::Var<K>,
         dtype: &K::Field,
@@ -1059,10 +1068,10 @@ where
         let bytes = B::to_bytes(&source)?;
         let device_id = NewD::to_incin(device)?;
         let dtype_id = <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &device_id)?;
-        let storage = <<B as TransferTo<NewD>>::Output as HostInterop>::from_bytes::<K>(
+        let storage = <<B as StorageTransfer<NewD>>::Output as HostInterop>::from_bytes::<K>(
             &bytes, &shape, dtype_id, &device_id,
         )?;
-        let inner = <<B as TransferTo<NewD>>::Output as VariableBackend>::var_from_tensor(&storage)?;
+        let inner = <<B as StorageTransfer<NewD>>::Output as VariableBackend>::var_from_tensor(&storage)?;
         Ok(TracingVar {
             inner,
             value_id: variable.value_id,

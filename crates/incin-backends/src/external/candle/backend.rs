@@ -184,7 +184,7 @@ impl<D: Device> incin_core::exec::PrecisionCapabilities for CandleBackend<D> {
     }
 }
 
-impl<D, NewD> incin_core::prelude::TransferTo<NewD> for CandleBackend<D>
+impl<D, NewD> incin_core::prelude::StorageTransfer<NewD> for CandleBackend<D>
 where
     D: incin_core::prelude::Device,
     NewD: incin_core::prelude::Device,
@@ -209,6 +209,13 @@ where
         CandleStorage::try_new(transferred)
     }
 
+}
+
+impl<D, NewD> incin_core::prelude::TransferTo<NewD> for CandleBackend<D>
+where
+    D: incin_core::prelude::Device,
+    NewD: incin_core::prelude::Device,
+{
     fn transfer_var<K: incin_core::prelude::DType>(
         variable: &Self::Var<K>,
         dtype: &K::Field,
@@ -218,7 +225,9 @@ where
         Self::Output: SupportsDType<K>,
     {
         let storage = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
-        let transferred = Self::transfer_storage(&storage, dtype, device)?;
+        let transferred = <Self as incin_core::prelude::StorageTransfer<NewD>>::transfer_storage(
+            &storage, dtype, device,
+        )?;
         <Self::Output as VariableBackend>::var_from_tensor::<K>(&transferred)
     }
 }

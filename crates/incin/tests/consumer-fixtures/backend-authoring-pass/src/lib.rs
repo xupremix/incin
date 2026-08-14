@@ -120,6 +120,16 @@ impl incin::backend_authoring::HostInterop for CompanyBackend {
         }
 }
 
+impl incin::backend_authoring::HostReadback for CompanyBackend {
+    fn float_to_vec1<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<f64>> {
+        Ok(Vec::new())
+    }
+
+    fn int_to_vec1<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<i64>> {
+        Ok(Vec::new())
+    }
+}
+
 impl VariableBackend for CompanyBackend {
     type Var<K: DType> = ShapeBuf;
 
@@ -271,7 +281,7 @@ pub fn inference_only_backend_runs_builtin_operation() -> ShapeBuf {
 
 pub fn inference_only_backend_can_transfer_tensor() -> incin::prelude::Result<incin::Tensor<incin::prelude::Dyn, InferenceBackend, f32>> {
     let tensor = incin::Tensor::<incin::prelude::Dyn, InferenceBackend, f32>::zeros(vec![2, 3])?;
-    tensor.to_device(&())
+    tensor.to_device(&Default::default())
 }
 
 pub fn built_in_operation_contract<B>()
