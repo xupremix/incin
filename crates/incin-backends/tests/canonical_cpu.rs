@@ -704,7 +704,7 @@ fn a_declared_bias_must_be_supplied() {
 }
 
 /// Every unary float identity the CPU advertises, executed canonically and
-/// compared against the `FloatOps` method the catalog names as its source.
+/// compared against the `` method the catalog names as its source.
 ///
 /// The operand is `0.5` throughout, which is inside the domain of all 33
 /// functions listed. `acosh` is undefined there and is checked separately, by
@@ -714,7 +714,7 @@ fn a_declared_bias_must_be_supplied() {
 /// than silently proving nothing.
 #[test]
 fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
-    use incin_core::__backend_compat::legacy::FloatOps;
+    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![0.5, 0.5, 0.5, 0.5], vec![2, 2]);
@@ -723,199 +723,199 @@ fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
         {
             let c = dispatch::execute::<op::Relu, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::relu::<f32>(&input).unwrap();
+            let l = TestBackend::relu::<f32>(&input).unwrap();
             ("relu", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Step, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::step::<f32>(&input).unwrap();
+            let l = TestBackend::step::<f32>(&input).unwrap();
             ("step", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Mish, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::mish::<f32>(&input).unwrap();
+            let l = TestBackend::mish::<f32>(&input).unwrap();
             ("mish", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Elu, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::elu::<f32>(&input).unwrap();
+            let l = TestBackend::elu::<f32>(&input).unwrap();
             ("elu", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Gelu, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::gelu::<f32>(&input).unwrap();
+            let l = TestBackend::gelu::<f32>(&input).unwrap();
             ("gelu", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Abs, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::abs::<f32>(&input).unwrap();
+            let l = TestBackend::abs::<f32>(&input).unwrap();
             ("abs", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Exp, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::exp::<f32>(&input).unwrap();
+            let l = TestBackend::exp::<f32>(&input).unwrap();
             ("exp", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Neg, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::neg::<f32>(&input).unwrap();
+            let l = TestBackend::neg::<f32>(&input).unwrap();
             ("neg", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Sqrt, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::sqrt::<f32>(&input).unwrap();
+            let l = TestBackend::sqrt::<f32>(&input).unwrap();
             ("sqrt", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Log, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::log::<f32>(&input).unwrap();
+            let l = TestBackend::log::<f32>(&input).unwrap();
             ("log", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Tanh, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::tanh::<f32>(&input).unwrap();
+            let l = TestBackend::tanh::<f32>(&input).unwrap();
             ("tanh", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Sigmoid, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::sigmoid::<f32>(&input).unwrap();
+            let l = TestBackend::sigmoid::<f32>(&input).unwrap();
             ("sigmoid", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Swish, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::swish::<f32>(&input).unwrap();
+            let l = TestBackend::swish::<f32>(&input).unwrap();
             ("swish", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Sign, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::sign::<f32>(&input).unwrap();
+            let l = TestBackend::sign::<f32>(&input).unwrap();
             ("sign", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Floor, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::floor::<f32>(&input).unwrap();
+            let l = TestBackend::floor::<f32>(&input).unwrap();
             ("floor", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Ceil, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::ceil::<f32>(&input).unwrap();
+            let l = TestBackend::ceil::<f32>(&input).unwrap();
             ("ceil", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Round, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::round::<f32>(&input).unwrap();
+            let l = TestBackend::round::<f32>(&input).unwrap();
             ("round", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Log2, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::log2::<f32>(&input).unwrap();
+            let l = TestBackend::log2::<f32>(&input).unwrap();
             ("log2", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Log10, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::log10::<f32>(&input).unwrap();
+            let l = TestBackend::log10::<f32>(&input).unwrap();
             ("log10", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Sin, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::sin::<f32>(&input).unwrap();
+            let l = TestBackend::sin::<f32>(&input).unwrap();
             ("sin", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Cos, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::cos::<f32>(&input).unwrap();
+            let l = TestBackend::cos::<f32>(&input).unwrap();
             ("cos", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Tan, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::tan::<f32>(&input).unwrap();
+            let l = TestBackend::tan::<f32>(&input).unwrap();
             ("tan", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Asin, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::asin::<f32>(&input).unwrap();
+            let l = TestBackend::asin::<f32>(&input).unwrap();
             ("asin", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Acos, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::acos::<f32>(&input).unwrap();
+            let l = TestBackend::acos::<f32>(&input).unwrap();
             ("acos", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Atan, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::atan::<f32>(&input).unwrap();
+            let l = TestBackend::atan::<f32>(&input).unwrap();
             ("atan", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Sinh, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::sinh::<f32>(&input).unwrap();
+            let l = TestBackend::sinh::<f32>(&input).unwrap();
             ("sinh", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Cosh, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::cosh::<f32>(&input).unwrap();
+            let l = TestBackend::cosh::<f32>(&input).unwrap();
             ("cosh", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Asinh, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::asinh::<f32>(&input).unwrap();
+            let l = TestBackend::asinh::<f32>(&input).unwrap();
             ("asinh", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Atanh, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::atanh::<f32>(&input).unwrap();
+            let l = TestBackend::atanh::<f32>(&input).unwrap();
             ("atanh", values(&c), values(&l), dims(&c))
         },
         {
             let c =
                 dispatch::execute::<op::Erf, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::erf::<f32>(&input).unwrap();
+            let l = TestBackend::erf::<f32>(&input).unwrap();
             ("erf", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Rsqrt, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::rsqrt::<f32>(&input).unwrap();
+            let l = TestBackend::rsqrt::<f32>(&input).unwrap();
             ("rsqrt", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Trunc, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::trunc::<f32>(&input).unwrap();
+            let l = TestBackend::trunc::<f32>(&input).unwrap();
             ("trunc", values(&c), values(&l), dims(&c))
         },
         {
             let c = dispatch::execute::<op::Frac, _>(&context, NoAttributes, &[handle(&input)])
                 .unwrap();
-            let l = <TestBackend as FloatOps<TestBackend>>::frac::<f32>(&input).unwrap();
+            let l = TestBackend::frac::<f32>(&input).unwrap();
             ("frac", values(&c), values(&l), dims(&c))
         },
     ];
@@ -936,13 +936,13 @@ fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
 /// `acosh` is undefined below one, so it gets its own operand.
 #[test]
 fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
-    use incin_core::__backend_compat::legacy::FloatOps;
+    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let canonical =
         dispatch::execute::<op::Acosh, _>(&context, NoAttributes, &[handle(&input)]).unwrap();
-    let legacy = <TestBackend as FloatOps<TestBackend>>::acosh::<f32>(&input).unwrap();
+    let legacy = TestBackend::acosh::<f32>(&input).unwrap();
     assert!(values(&canonical).iter().all(|value| value.is_finite()));
     assert_eq!(values(&canonical), values(&legacy));
 }
@@ -952,7 +952,7 @@ fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
 #[test]
 fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::{AxisAttributes, ClampAttributes, ScalarAttributes};
-    use incin_core::__backend_compat::legacy::FloatOps;
+    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![-1.5, 0.5, 2.5, 3.5], vec![2, 2]);
@@ -966,7 +966,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&add_scalar),
         values(
-            &<TestBackend as FloatOps<TestBackend>>::add_scalar_float::<f32>(&input, 2.0).unwrap()
+            &TestBackend::add_scalar_float::<f32>(&input, 2.0).unwrap()
         )
     );
 
@@ -979,7 +979,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&mul_scalar),
         values(
-            &<TestBackend as FloatOps<TestBackend>>::mul_scalar_float::<f32>(&input, 3.0).unwrap()
+            &TestBackend::mul_scalar_float::<f32>(&input, 3.0).unwrap()
         )
     );
 
@@ -992,7 +992,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&powf),
-        values(&<TestBackend as FloatOps<TestBackend>>::powf::<f32>(&positive, 2.0).unwrap())
+        values(&TestBackend::powf::<f32>(&positive, 2.0).unwrap())
     );
 
     let clamped = dispatch::execute::<op::Clamp, _>(
@@ -1003,7 +1003,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&clamped),
-        values(&<TestBackend as FloatOps<TestBackend>>::clamp::<f32>(&input, 0.0, 2.0).unwrap()),
+        values(&TestBackend::clamp::<f32>(&input, 0.0, 2.0).unwrap()),
     );
     // The bounds must actually have been applied, not merely passed along.
     assert!(
@@ -1020,7 +1020,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&softmaxed),
-        values(&<TestBackend as FloatOps<TestBackend>>::softmax::<f32>(&input, 1).unwrap())
+        values(&TestBackend::softmax::<f32>(&input, 1).unwrap())
     );
     for row in values(&softmaxed).chunks(2) {
         assert!(
@@ -1033,7 +1033,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
 /// The binary float operations, over two broadcast operands.
 #[test]
 fn the_binary_float_operations_match_their_legacy_counterparts() {
-    use incin_core::__backend_compat::legacy::FloatOps;
+    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let lhs = f32_storage(vec![1.0, -2.0, 3.5, -4.5], vec![4]);
@@ -1044,7 +1044,7 @@ fn the_binary_float_operations_match_their_legacy_counterparts() {
             .unwrap();
     assert_eq!(
         values(&atan2),
-        values(&<TestBackend as FloatOps<TestBackend>>::atan2::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::atan2::<f32>(&lhs, &rhs).unwrap())
     );
 
     let fmod =
@@ -1052,7 +1052,7 @@ fn the_binary_float_operations_match_their_legacy_counterparts() {
             .unwrap();
     assert_eq!(
         values(&fmod),
-        values(&<TestBackend as FloatOps<TestBackend>>::fmod::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::fmod::<f32>(&lhs, &rhs).unwrap())
     );
 
     let remainder = dispatch::execute::<op::Remainder, _>(
@@ -1063,7 +1063,7 @@ fn the_binary_float_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&remainder),
-        values(&<TestBackend as FloatOps<TestBackend>>::remainder::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::remainder::<f32>(&lhs, &rhs).unwrap())
     );
 }
 
@@ -1103,7 +1103,7 @@ fn softmax_refuses_a_dtype_it_does_not_advertise() {
 }
 
 /// Parity for the binary tensor family, which the catalog routes through
-/// `TensorOps` rather than `FloatOps` because these operations preserve the
+/// `TensorOps` rather than `` because these operations preserve the
 /// operand dtype and carry no gradient.
 #[test]
 fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {

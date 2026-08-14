@@ -31,7 +31,7 @@ use incin::prelude::*;
 use incin::typenum::U0;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::cuda::CudaBackendImpl;
-use incin_core::__backend_compat::legacy::{FloatOps};
+use incin_core::__backend_compat::legacy::{};
 
 type CudaB = CudaBackendImpl<CudaN<U0>>;
 type CpuB = CpuBackendImpl;

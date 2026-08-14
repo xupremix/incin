@@ -971,7 +971,7 @@ macro_rules! scalar_executors {
                     },
                 )?;
                 let value = request.operation.descriptor().attributes().value;
-                <Self as FloatOps<Self>>::$method::<Dyn>(input, value).map_err(|error| {
+                Self::$method::<Dyn>(input, value).map_err(|error| {
                     BackendError::Execution {
                         operation,
                         message: alloc::format!("{error}").into(),
@@ -1873,131 +1873,131 @@ impl<D: Device> DispatchBackend<D> {
         dispatch_binary!(lhs, rhs, div)
     }
 }
-impl<D: Device> FloatOps<Self> for DispatchBackend<D> {
-    fn relu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+impl<D: Device> DispatchBackend<D> {
+    pub fn relu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, relu)
     }
-    fn step<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn step<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, step)
     }
-    fn mish<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn mish<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, mish)
     }
-    fn elu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn elu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, elu)
     }
-    fn gelu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn gelu<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, gelu)
     }
-    fn abs<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn abs<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, abs)
     }
-    fn exp<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn exp<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, exp)
     }
-    fn neg<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn neg<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, neg)
     }
-    fn sqrt<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sqrt<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sqrt)
     }
-    fn log<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn log<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, log)
     }
-    fn tanh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn tanh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, tanh)
     }
-    fn sigmoid<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sigmoid<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sigmoid)
     }
-    fn swish<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn swish<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, swish)
     }
-    fn softmax<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn softmax<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_unary!(t, softmax, dim)
     }
-    fn add_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+    pub fn add_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, add_scalar_float, scalar)
     }
-    fn mul_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+    pub fn mul_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, mul_scalar_float, scalar)
     }
-    fn powf<K: DType>(t: &DispatchStorage, exponent: f64) -> Result<DispatchStorage> {
+    pub fn powf<K: DType>(t: &DispatchStorage, exponent: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, powf, exponent)
     }
-    fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+    pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, clamp, min, max)
     }
-    fn sign<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sign<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sign)
     }
-    fn floor<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn floor<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, floor)
     }
-    fn ceil<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn ceil<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, ceil)
     }
-    fn round<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn round<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, round)
     }
-    fn log2<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn log2<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, log2)
     }
-    fn log10<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn log10<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, log10)
     }
-    fn sin<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sin<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sin)
     }
-    fn cos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, cos)
     }
-    fn tan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn tan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, tan)
     }
-    fn asin<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn asin<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, asin)
     }
-    fn acos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn acos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, acos)
     }
-    fn atan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn atan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, atan)
     }
-    fn atan2<K: DType>(y: &DispatchStorage, x: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn atan2<K: DType>(y: &DispatchStorage, x: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(y, x, atan2)
     }
-    fn sinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sinh)
     }
-    fn cosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, cosh)
     }
-    fn asinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn asinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, asinh)
     }
-    fn acosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn acosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, acosh)
     }
-    fn atanh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn atanh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, atanh)
     }
-    fn erf<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn erf<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, erf)
     }
-    fn rsqrt<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn rsqrt<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, rsqrt)
     }
-    fn trunc<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn trunc<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, trunc)
     }
-    fn frac<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn frac<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, frac)
     }
-    fn fmod<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn fmod<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, fmod)
     }
-    fn remainder<K: DType>(
+    pub fn remainder<K: DType>(
         lhs: &DispatchStorage,
         rhs: &DispatchStorage,
     ) -> Result<DispatchStorage> {

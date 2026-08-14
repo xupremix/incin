@@ -149,7 +149,7 @@ fn test_matmul_square() {
 /// `test_relu`.
 fn test_relu() {
     let a = storage(vec![-2.0, -1.0, 0.0, 1.0, 2.0], vec![5]);
-    let out = <B as FloatOps<B>>::relu::<f32>(&a).unwrap();
+    let out = B::relu::<f32>(&a).unwrap();
     assert_eq!(readback(&out), vec![0.0, 0.0, 0.0, 1.0, 2.0]);
 }
 
@@ -157,7 +157,7 @@ fn test_relu() {
 /// `test_neg`.
 fn test_neg() {
     let a = storage(vec![1.0, -2.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::neg::<f32>(&a).unwrap();
+    let out = B::neg::<f32>(&a).unwrap();
     assert_eq!(readback(&out), vec![-1.0, 2.0, -3.0]);
 }
 
@@ -165,7 +165,7 @@ fn test_neg() {
 /// `test_abs`.
 fn test_abs() {
     let a = storage(vec![-3.0, 0.0, 4.0], vec![3]);
-    let out = <B as FloatOps<B>>::abs::<f32>(&a).unwrap();
+    let out = B::abs::<f32>(&a).unwrap();
     assert_eq!(readback(&out), vec![3.0, 0.0, 4.0]);
 }
 
@@ -173,7 +173,7 @@ fn test_abs() {
 /// `test_sqrt`.
 fn test_sqrt() {
     let a = storage(vec![4.0, 9.0, 16.0], vec![3]);
-    let out = <B as FloatOps<B>>::sqrt::<f32>(&a).unwrap();
+    let out = B::sqrt::<f32>(&a).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[2.0, 3.0, 4.0], 1e-5));
 }
 
@@ -181,11 +181,11 @@ fn test_sqrt() {
 /// `test_exp_log`.
 fn test_exp_log() {
     let a = storage(vec![0.0, 1.0, 2.0], vec![3]);
-    let exp_out = <B as FloatOps<B>>::exp::<f32>(&a).unwrap();
+    let exp_out = B::exp::<f32>(&a).unwrap();
     let expected_exp = [1.0f32, std::f32::consts::E, std::f32::consts::E.powi(2)];
     assert!(vec_approx_eq(&readback(&exp_out), &expected_exp, 1e-5));
 
-    let log_out = <B as FloatOps<B>>::log::<f32>(&exp_out).unwrap();
+    let log_out = B::log::<f32>(&exp_out).unwrap();
     assert!(vec_approx_eq(&readback(&log_out), &[0.0, 1.0, 2.0], 1e-5));
 }
 
@@ -193,7 +193,7 @@ fn test_exp_log() {
 /// `test_sigmoid`.
 fn test_sigmoid() {
     let a = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::sigmoid::<f32>(&a).unwrap();
+    let out = B::sigmoid::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 0.5, 1e-5));
 }
 
@@ -201,7 +201,7 @@ fn test_sigmoid() {
 /// `test_tanh`.
 fn test_tanh() {
     let a = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::tanh::<f32>(&a).unwrap();
+    let out = B::tanh::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 0.0, 1e-5));
 }
 
@@ -210,7 +210,7 @@ fn test_tanh() {
 fn test_swish() {
     // swish(x) = x * sigmoid(x); swish(0) = 0
     let a = storage(vec![0.0, 1.0], vec![2]);
-    let out = <B as FloatOps<B>>::swish::<f32>(&a).unwrap();
+    let out = B::swish::<f32>(&a).unwrap();
     let data = readback(&out);
     assert!(approx_eq(data[0], 0.0, 1e-5));
     // swish(1) = 1 * sigmoid(1) ≈ 0.7311
@@ -221,7 +221,7 @@ fn test_swish() {
 /// `test_gelu`.
 fn test_gelu() {
     let a = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::gelu::<f32>(&a).unwrap();
+    let out = B::gelu::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 0.0, 1e-5));
 }
 
@@ -229,7 +229,7 @@ fn test_gelu() {
 /// `test_add_scalar`.
 fn test_add_scalar() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::add_scalar_float::<f32>(&a, 10.0).unwrap();
+    let out = B::add_scalar_float::<f32>(&a, 10.0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[11.0, 12.0, 13.0], 1e-5));
 }
 
@@ -237,7 +237,7 @@ fn test_add_scalar() {
 /// `test_mul_scalar`.
 fn test_mul_scalar() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&a, 3.0).unwrap();
+    let out = B::mul_scalar_float::<f32>(&a, 3.0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[3.0, 6.0, 9.0], 1e-5));
 }
 
@@ -245,7 +245,7 @@ fn test_mul_scalar() {
 /// `test_softmax`.
 fn test_softmax() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
-    let out = <B as FloatOps<B>>::softmax::<f32>(&a, 1).unwrap();
+    let out = B::softmax::<f32>(&a, 1).unwrap();
     let data = readback(&out);
     // Sum should be 1
     let sum: f32 = data.iter().sum();
@@ -1030,7 +1030,7 @@ fn div_backward_matches_quotient_rule() {
 #[test]
 fn mul_scalar_float_backward_scales_gradient() {
     let t = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&t, 2.5).unwrap();
+    let out = B::mul_scalar_float::<f32>(&t, 2.5).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     assert!(vec_approx_eq(&readback(gt), &[2.5, 2.5, 2.5], 1e-5));
@@ -1039,7 +1039,7 @@ fn mul_scalar_float_backward_scales_gradient() {
 #[test]
 fn relu_backward_zero_at_boundary() {
     let t = storage(vec![-2.0, 0.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::relu::<f32>(&t).unwrap();
+    let out = B::relu::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     // Strict `>` boundary: zero gradient at x=0, matching the CPU backend.
@@ -1049,7 +1049,7 @@ fn relu_backward_zero_at_boundary() {
 #[test]
 fn neg_backward_is_constant_negative_one() {
     let t = storage(vec![1.0, -2.0, 3.0], vec![3]);
-    let out = <B as FloatOps<B>>::neg::<f32>(&t).unwrap();
+    let out = B::neg::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     assert!(vec_approx_eq(&readback(gt), &[-1.0, -1.0, -1.0], 1e-5));
@@ -1058,7 +1058,7 @@ fn neg_backward_is_constant_negative_one() {
 #[test]
 fn abs_backward_matches_sign() {
     let t = storage(vec![-2.5, 0.0, 3.5], vec![3]);
-    let out = <B as FloatOps<B>>::abs::<f32>(&t).unwrap();
+    let out = B::abs::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     assert!(vec_approx_eq(&readback(gt), &[-1.0, 0.0, 1.0], 1e-5));
@@ -1067,7 +1067,7 @@ fn abs_backward_matches_sign() {
 #[test]
 fn sqrt_backward_matches_one_over_two_sqrt() {
     let t = storage(vec![4.0, 9.0], vec![2]);
-    let out = <B as FloatOps<B>>::sqrt::<f32>(&t).unwrap();
+    let out = B::sqrt::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     // 1/(2*sqrt(4))=0.25, 1/(2*sqrt(9))=1/6
@@ -1077,7 +1077,7 @@ fn sqrt_backward_matches_one_over_two_sqrt() {
 #[test]
 fn exp_backward_equals_output() {
     let t = storage(vec![0.0, 1.0], vec![2]);
-    let out = <B as FloatOps<B>>::exp::<f32>(&t).unwrap();
+    let out = B::exp::<f32>(&t).unwrap();
     let out_vals = readback(&out);
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
@@ -1087,7 +1087,7 @@ fn exp_backward_equals_output() {
 #[test]
 fn log_backward_matches_reciprocal() {
     let t = storage(vec![1.0, 2.0, 4.0], vec![3]);
-    let out = <B as FloatOps<B>>::log::<f32>(&t).unwrap();
+    let out = B::log::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     assert!(vec_approx_eq(&readback(gt), &[1.0, 0.5, 0.25], 1e-4));
@@ -1096,7 +1096,7 @@ fn log_backward_matches_reciprocal() {
 #[test]
 fn sigmoid_backward_matches_out_times_one_minus_out() {
     let t = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::sigmoid::<f32>(&t).unwrap();
+    let out = B::sigmoid::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     // sigmoid(0)=0.5, deriv = 0.5*0.5 = 0.25
@@ -1106,7 +1106,7 @@ fn sigmoid_backward_matches_out_times_one_minus_out() {
 #[test]
 fn tanh_backward_matches_one_minus_out_squared() {
     let t = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::tanh::<f32>(&t).unwrap();
+    let out = B::tanh::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     // tanh(0)=0, deriv = 1 - 0^2 = 1
@@ -1116,7 +1116,7 @@ fn tanh_backward_matches_one_minus_out_squared() {
 #[test]
 fn swish_backward_matches_analytic_derivative_at_zero() {
     let t = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::swish::<f32>(&t).unwrap();
+    let out = B::swish::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).unwrap();
     // swish(0)=0, sigmoid(0)=0.5, deriv = out + sig*(1-out) = 0 + 0.5*1 = 0.5
@@ -1183,7 +1183,7 @@ fn chained_ops_accumulate_gradient_through_multiple_hops() {
     let b = storage(vec![3.0], vec![1]);
     let ab = B::mul::<f32>(&a, &b).unwrap();
     let out = B::add::<f32>(&ab, &a).unwrap();
-    let loss = <B as FloatOps<B>>::relu::<f32>(&out).unwrap();
+    let loss = B::relu::<f32>(&out).unwrap();
 
     let grads = <B as Backend>::backward::<f32>(&loss).unwrap();
     let ga = grads.get(a.id).expect("a should have a gradient");
@@ -1201,7 +1201,7 @@ fn chained_ops_accumulate_gradient_through_multiple_hops() {
 #[test]
 fn softmax_backward_is_tape_tracked() {
     let t = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
-    let out = <B as FloatOps<B>>::softmax::<f32>(&t, 1).unwrap();
+    let out = B::softmax::<f32>(&t, 1).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have a gradient");
     // Softmax output sum is 1, and backward seeded with 1 should sum to 0
@@ -1223,7 +1223,7 @@ fn softmax_gradient_via_nontrivial_loss_matches_finite_difference() {
     let t = storage(vec![1.0, 2.0, 5.0], vec![1, 3]);
     let weight = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let sm = <B as FloatOps<B>>::softmax::<f32>(&inputs[0], 1).unwrap();
+        let sm = B::softmax::<f32>(&inputs[0], 1).unwrap();
         let weighted = B::mul::<f32>(&sm, &inputs[1]).unwrap();
         <B as ReductionOps<B>>::sum_all::<f32>(&weighted).unwrap()
     };
@@ -1289,7 +1289,7 @@ fn embedding_backward_handles_nonzero_indices() {
 #[test]
 fn gelu_backward_matches_derivative() {
     let t = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+    let out = B::gelu::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     // gelu'(0) = 0.5
@@ -1299,7 +1299,7 @@ fn gelu_backward_matches_derivative() {
 #[test]
 fn elu_backward_matches_derivative() {
     let t = storage(vec![1.0, -1.0], vec![2]);
-    let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+    let out = B::elu::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     // elu'(1) = 1.0, elu'(-1) = exp(-1) ≈ 0.367879
@@ -1310,7 +1310,7 @@ fn elu_backward_matches_derivative() {
 #[test]
 fn mish_backward_matches_derivative() {
     let t = storage(vec![0.0], vec![1]);
-    let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+    let out = B::mish::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     // mish'(0) = tanh(ln(2)) ≈ 0.6

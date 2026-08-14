@@ -10,7 +10,7 @@ use incin_core::exec::{Descriptor, ExecutionContext, TapeStorage, TensorHandle, 
 // not prelude. This file asked the prelude for them, which never had them, and
 // nothing noticed because no CI job compiles the Metal test targets.
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, FloatOps, ReductionOps,
+    Execute, ExecutionRequest, ReductionOps,
 };
 use incin_core::prelude::{Backend, DTypeId, DeviceId, Local, ShapeBuf};
 
@@ -117,7 +117,7 @@ fn test_metal_forward_ops() {
     let div = TestBackend::div::<f32>(&b, &a).unwrap();
     assert_eq!(read_storage(&div), vec![5.0, 3.0, 2.3333333, 2.0]);
 
-    let relu = <TestBackend as FloatOps<TestBackend>>::relu::<f32>(&create_storage(
+    let relu = TestBackend::relu::<f32>(&create_storage(
         &[4],
         &[-1.0, 0.0, 2.0, -3.0],
     ))

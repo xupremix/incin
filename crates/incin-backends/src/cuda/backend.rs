@@ -798,7 +798,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// `sub_scalar`. Same host round-trip; not autograd-wired, matching
-    /// CPU's `TensorOps` scalar methods (as opposed to `FloatOps`'s
+    /// CPU's `TensorOps` scalar methods (as opposed to ``'s
     /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
     fn sub_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -933,8 +933,8 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
         Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU
@@ -966,13 +966,13 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         let scores: CudaStorage = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
             Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
-        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
         <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 
@@ -1456,7 +1456,7 @@ fn push_unary_tape_entry(
     });
 }
 
-impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
+impl<D: Device> CudaBackendImpl<D> {
     // No CUDA kernel is launched for these yet. They are declared rather than
     // inherited so the gap is visible from the backend that has it.
     crate::unsupported::unsupported_float_ops! {
@@ -1467,7 +1467,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         binary: atan2, fmod, remainder;
     }
 
-    fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("relu", "x > 0.0f ? x : 0.0f", t)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1484,7 +1484,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn sigmoid<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn sigmoid<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op(
             "sigmoid",
             "1.0f / (1.0f + expf(-x))",
@@ -1517,7 +1517,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn tanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn tanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("tanh", "tanhf(x)", t)?;
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1545,7 +1545,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn swish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn swish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out =
             crate::cuda::ops::elementwise::launch_unary_op("swish", "x / (1.0f + expf(-x))", t)?;
         let t_capture = t.clone();
@@ -1592,7 +1592,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
     /// verbatim from `cpu/ops/elementwise_kernel.rs`'s `UnaryOp::Mish` /
     /// `cpu/ops/elementwise.rs::mish`'s backward closure — not re-derived —
     /// including the `x > 20` softplus overflow guard.
-    fn mish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn mish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let softplus_expr = "x > 20.0f ? x : logf(1.0f + expf(x))";
         let sp = crate::cuda::ops::elementwise::launch_unary_op("softplus", softplus_expr, t)?;
         let th = crate::cuda::ops::elementwise::launch_unary_op("tanhf", "tanhf(x)", &sp)?;
@@ -1648,7 +1648,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
     /// `elu(x) = x > 0 ? x : exp(x) - 1`. Backward is output-based
     /// (`o > 0 ? 1 : o + 1`), ported verbatim from
     /// `cpu/ops/elementwise.rs::elu`'s backward closure.
-    fn elu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn elu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op(
             "elu",
             "x > 0.0f ? x : expf(x) - 1.0f",
@@ -1677,7 +1677,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
     /// and needed a polynomial approximation). Backward ported verbatim from
     /// `cpu/ops/elementwise.rs::gelu`'s backward closure (input-based:
     /// `cdf(x) + x * pdf(x)`).
-    fn gelu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn gelu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let cdf_expr = "0.5f * (1.0f + erff(x * 0.7071067811865476f))";
         let cdf = crate::cuda::ops::elementwise::launch_unary_op("gelu_cdf", cdf_expr, t)?;
         let out =
@@ -1712,7 +1712,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)?;
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1728,7 +1728,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn log<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn log<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("log", "logf(x)", t)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1744,7 +1744,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn sqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn sqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("sqrt", "sqrtf(x)", t)?;
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1761,7 +1761,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn neg<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn neg<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", t)?;
         push_unary_tape_entry(t.id, out.id, |grad_out| {
             crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)
@@ -1769,7 +1769,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn abs<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn abs<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("abs", "fabsf(x)", t)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1790,7 +1790,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out =
             crate::cuda::ops::elementwise::launch_unary_op("step", "x > 0.0f ? 1.0f : 0.0f", t)?;
         push_unary_tape_entry(t.id, out.id, |grad_out| {
@@ -1799,14 +1799,14 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn add_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
+    pub fn add_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
         let expr = format!("x + ({:.8}f)", scalar as f32);
         let out = crate::cuda::ops::elementwise::launch_unary_op("add_scalar", &expr, t)?;
         push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
         Ok(out)
     }
 
-    fn mul_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
+    pub fn mul_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
         let expr = format!("x * ({:.8}f)", scalar as f32);
         let out = crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, t)?;
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -1816,7 +1816,7 @@ impl<D: Device> FloatOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn softmax<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn softmax<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let ls = log_softmax::<K, D>(t, dim)?;
         Self::exp::<K>(&ls)
     }
@@ -2893,7 +2893,7 @@ impl<D: Device> CudaBackendImpl<D> {
         reduction: incin_core::prelude::Reduction,
     ) -> Result<CudaStorage> {
         let diff = Self::sub::<K>(pred, target)?;
-        let absolute = <Self as FloatOps<Self>>::abs::<K>(&diff)?;
+        let absolute = Self::abs::<K>(&diff)?;
         match reduction {
             incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&absolute),
             incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&absolute),
@@ -2906,14 +2906,14 @@ impl<D: Device> CudaBackendImpl<D> {
         target: &CudaStorage,
         reduction: incin_core::prelude::Reduction,
     ) -> Result<CudaStorage> {
-        let max_x_0 = <Self as FloatOps<Self>>::relu::<K>(pred)?;
+        let max_x_0 = Self::relu::<K>(pred)?;
         let x_times_target = Self::mul::<K>(pred, target)?;
         let term1 = Self::sub::<K>(&max_x_0, &x_times_target)?;
-        let abs_x = <Self as FloatOps<Self>>::abs::<K>(pred)?;
-        let neg_abs_x = <Self as FloatOps<Self>>::neg::<K>(&abs_x)?;
-        let exp_neg_abs_x = <Self as FloatOps<Self>>::exp::<K>(&neg_abs_x)?;
-        let one_plus = <Self as FloatOps<Self>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
-        let term2 = <Self as FloatOps<Self>>::log::<K>(&one_plus)?;
+        let abs_x = Self::abs::<K>(pred)?;
+        let neg_abs_x = Self::neg::<K>(&abs_x)?;
+        let exp_neg_abs_x = Self::exp::<K>(&neg_abs_x)?;
+        let one_plus = Self::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
+        let term2 = Self::log::<K>(&one_plus)?;
         let loss = Self::add::<K>(&term1, &term2)?;
         match reduction {
             incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss),
@@ -3862,7 +3862,7 @@ mod tests {
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's
     // the free loss helpers (`incin-backends/src/legacy.rs`),
-    // which compose entirely from ``/`FloatOps`/`ReductionOps`
+    // which compose entirely from ``/``/`ReductionOps`
     // (already wired on CUDA). These tests exist to prove that resolution
     // actually compiles and runs correctly, not to add new functionality.
 
@@ -3913,7 +3913,7 @@ mod tests {
     fn mish_forward_matches_hand_computed_value() {
         // mish(0) = 0 * tanh(ln(2)) = 0
         let t = cuda_f32(&[1], vec![0.0]);
-        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+        let out = B::mish::<f32>(&t).unwrap();
         assert_eq!(out.shape, vec![1]);
     }
 
@@ -3922,7 +3922,7 @@ mod tests {
     fn mish_backward_produces_gradient() {
         let t = cuda_f32(&[3], vec![-1.0, 0.0, 1.0]);
         let t_id = t.id;
-        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+        let out = B::mish::<f32>(&t).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t_id).expect("mish input should have a gradient");
         assert_eq!(g.shape, vec![3]);
@@ -3933,7 +3933,7 @@ mod tests {
     fn elu_forward_matches_hand_computed_value() {
         // elu(1) = 1 ; elu(-1) = exp(-1) - 1
         let t = cuda_f32(&[2], vec![1.0, -1.0]);
-        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+        let out = B::elu::<f32>(&t).unwrap();
         assert_eq!(out.shape, vec![2]);
     }
 
@@ -3942,7 +3942,7 @@ mod tests {
     fn elu_backward_produces_gradient() {
         let t = cuda_f32(&[2], vec![1.0, -1.0]);
         let t_id = t.id;
-        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+        let out = B::elu::<f32>(&t).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t_id).expect("elu input should have a gradient");
         assert_eq!(g.shape, vec![2]);
@@ -3953,7 +3953,7 @@ mod tests {
     fn gelu_forward_matches_hand_computed_value() {
         // gelu(0) = 0 * 0.5 * (1 + erf(0)) = 0
         let t = cuda_f32(&[1], vec![0.0]);
-        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+        let out = B::gelu::<f32>(&t).unwrap();
         assert_eq!(out.shape, vec![1]);
     }
 
@@ -3962,7 +3962,7 @@ mod tests {
     fn gelu_backward_produces_gradient() {
         let t = cuda_f32(&[3], vec![-1.0, 0.0, 1.0]);
         let t_id = t.id;
-        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+        let out = B::gelu::<f32>(&t).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t_id).expect("gelu input should have a gradient");
         assert_eq!(g.shape, vec![3]);

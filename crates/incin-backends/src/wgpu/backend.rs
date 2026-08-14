@@ -651,7 +651,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FloatOps  (scalar + unary activations)
+//   (scalar + unary activations)
 // ─────────────────────────────────────────────────────────────────────────────
 /// `unary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
@@ -675,7 +675,7 @@ fn scalar_op<T: DType>(t: &WgpuStorage, scalar: f64, op_mode: u32) -> Result<Wgp
 }
 
 /// Push a single-input `TapeEntry` whose backward closure is `grad_fn`.
-/// Shared by every unary `FloatOps` impl below to avoid repeating the
+/// Shared by every unary `` impl below to avoid repeating the
 /// `TapeEntry { output_id, input_ids: vec![t.id], backward: ... }`
 /// boilerplate at each of the ~10 call sites.
 fn push_unary_tape_entry(
@@ -690,7 +690,7 @@ fn push_unary_tape_entry(
     });
 }
 
-impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     // No WGSL kernel exists for these yet. They are declared rather than
     // inherited so the shader gap is visible from the backend that has it.
     crate::unsupported::unsupported_float_ops! {
@@ -702,7 +702,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `add_scalar_float`.
-    fn add_scalar_float<K: DType>(
+    pub fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -713,7 +713,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mul_scalar_float`.
-    fn mul_scalar_float<K: DType>(
+    pub fn mul_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -725,7 +725,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `relu`.
-    fn relu<K: DType>(
+    pub fn relu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 0)?;
@@ -738,7 +738,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `step`.
-    fn step<K: DType>(
+    pub fn step<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 10)?;
@@ -747,7 +747,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `elu`.
-    fn elu<K: DType>(
+    pub fn elu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 12)?;
@@ -757,7 +757,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         });
         Ok(out)
     }
-    fn gelu<K: DType>(
+    pub fn gelu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 1)?;
@@ -767,7 +767,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         });
         Ok(out)
     }
-    fn mish<K: DType>(
+    pub fn mish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 11)?;
@@ -778,7 +778,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `tanh`.
-    fn tanh<K: DType>(
+    pub fn tanh<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 2)?;
@@ -793,7 +793,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sigmoid`.
-    fn sigmoid<K: DType>(
+    pub fn sigmoid<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 3)?;
@@ -808,7 +808,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `abs`.
-    fn abs<K: DType>(
+    pub fn abs<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 4)?;
@@ -826,7 +826,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `neg`.
-    fn neg<K: DType>(
+    pub fn neg<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 5)?;
@@ -835,7 +835,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sqrt`.
-    fn sqrt<K: DType>(
+    pub fn sqrt<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 6)?;
@@ -848,7 +848,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `exp`.
-    fn exp<K: DType>(
+    pub fn exp<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 7)?;
@@ -860,7 +860,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `log`.
-    fn log<K: DType>(
+    pub fn log<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 8)?;
@@ -872,7 +872,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `swish`.
-    fn swish<K: DType>(
+    pub fn swish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 9)?;
@@ -891,7 +891,7 @@ impl<D: Device> FloatOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `softmax`.
-    fn softmax<K: DType>(
+    pub fn softmax<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1230,13 +1230,13 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
             Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
-        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
         <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 
@@ -1480,8 +1480,8 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
         Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU.
@@ -1602,7 +1602,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `sub_scalar`. Not autograd-wired: matches CPU, whose `TensorOps`
-    /// scalar/comparison methods (as opposed to `FloatOps`'s
+    /// scalar/comparison methods (as opposed to ``'s
     /// `add_scalar_float`/`mul_scalar_float`) carry no backward closure.
     fn sub_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,

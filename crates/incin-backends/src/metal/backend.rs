@@ -960,9 +960,9 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ─── FloatOps ───────────────────────────────────────────────────────────────
+// ───  ───────────────────────────────────────────────────────────────
 
-impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
+impl<D: Device> MetalBackendImpl<D> {
     crate::unsupported::unsupported_float_ops! {
         unary:
             sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
@@ -972,7 +972,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         binary: atan2, fmod, remainder;
     }
 
-    fn add_scalar_float<K: DType>(
+    pub fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -986,7 +986,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mul_scalar_float<K: DType>(
+    pub fn mul_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1002,7 +1002,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn relu<K: DType>(
+    pub fn relu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| if x > 0.0 { x } else { 0.0 })?;
@@ -1024,7 +1024,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn step<K: DType>(
+    pub fn step<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| if x > 0.0 { 1.0 } else { 0.0 })?;
@@ -1039,7 +1039,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn elu<K: DType>(
+    pub fn elu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| if x > 0.0 { x } else { x.exp() - 1.0 })?;
@@ -1061,7 +1061,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn gelu<K: DType>(
+    pub fn gelu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| {
@@ -1092,7 +1092,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mish<K: DType>(
+    pub fn mish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x * (1.0 + x.exp()).ln().tanh())?;
@@ -1119,7 +1119,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn tanh<K: DType>(
+    pub fn tanh<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x.tanh())?;
@@ -1141,7 +1141,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn sigmoid<K: DType>(
+    pub fn sigmoid<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| 1.0 / (1.0 + (-x).exp()))?;
@@ -1163,7 +1163,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn abs<K: DType>(
+    pub fn abs<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x.abs())?;
@@ -1193,7 +1193,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn neg<K: DType>(
+    pub fn neg<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| -x)?;
@@ -1208,7 +1208,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn sqrt<K: DType>(
+    pub fn sqrt<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x.sqrt())?;
@@ -1230,7 +1230,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn exp<K: DType>(
+    pub fn exp<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x.exp())?;
@@ -1251,7 +1251,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn log<K: DType>(
+    pub fn log<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x.ln())?;
@@ -1273,7 +1273,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn swish<K: DType>(
+    pub fn swish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op_metal(t, |x| x / (1.0 + (-x).exp()))?;
@@ -1298,7 +1298,7 @@ impl<D: Device> FloatOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn softmax<K: DType>(
+    pub fn softmax<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2260,7 +2260,7 @@ impl<D: Device> TensorOps<Self> for MetalBackendImpl<D> {
 
     /// `sub_scalar`. Reuses `scalar_op_metal`, already used by
     /// `mul_scalar_float` above; not autograd-wired, matching CPU's
-    /// `TensorOps` scalar methods (as opposed to `FloatOps`'s
+    /// `TensorOps` scalar methods (as opposed to ``'s
     /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
     fn sub_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -2379,8 +2379,8 @@ impl<D: Device> TensorOps<Self> for MetalBackendImpl<D> {
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
         Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching every
@@ -2411,14 +2411,14 @@ impl<D: Device> TensorOps<Self> for MetalBackendImpl<D> {
         let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
         let d_k = *q.metadata().shape().dims().last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
             Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
         let attn_dim = scores.metadata().shape().dims().len() - 1;
-        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, attn_dim)?;
+        let attn = Self::softmax::<K>(&masked_scores, attn_dim)?;
         <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 

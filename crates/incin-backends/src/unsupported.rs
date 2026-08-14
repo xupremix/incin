@@ -1,6 +1,6 @@
 //! Explicit declarations for operations a backend does not implement.
 //!
-//! `FloatOps` used to give every method a default body returning
+//! `` used to give every method a default body returning
 //! [`Error::UnsupportedBackendOperation`], so a backend covering sixteen of its
 //! forty-two operations looked exactly like one covering all forty-two. The
 //! refusal was real but invisible: it lived in the trait, not in the backend
@@ -28,14 +28,14 @@ macro_rules! unsupported_float_ops {
         binary: $($binary:ident),* $(,)?;
     ) => {
         $(
-            fn $unary<K: DType>(
+            pub fn $unary<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
             ) -> Result<<Self as StorageBackend>::Storage<K>> {
                 Err($crate::unsupported::unsupported::<Self>(stringify!($unary)))
             }
         )*
         $(
-            fn $exponent<K: DType>(
+            pub fn $exponent<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
                 _exponent: f64,
             ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -43,7 +43,7 @@ macro_rules! unsupported_float_ops {
             }
         )*
         $(
-            fn $bounds<K: DType>(
+            pub fn $bounds<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
                 _min: f64,
                 _max: f64,
@@ -52,7 +52,7 @@ macro_rules! unsupported_float_ops {
             }
         )*
         $(
-            fn $binary<K: DType>(
+            pub fn $binary<K: DType>(
                 _lhs: &<Self as StorageBackend>::Storage<K>,
                 _rhs: &<Self as StorageBackend>::Storage<K>,
             ) -> Result<<Self as StorageBackend>::Storage<K>> {

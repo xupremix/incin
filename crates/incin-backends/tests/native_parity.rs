@@ -20,7 +20,7 @@ use incin_backends::external::candle::CandleBackend;
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::HostInterop;
-use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps, TensorOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -68,7 +68,7 @@ where
 /// 0) outputs are read via `float_to_scalar` instead.
 fn read_flat<B>(t: &B::Storage<f32>) -> Vec<f64>
 where
-    B: Backend + TensorOps<B> + FloatOps<B>,
+    B: Backend + TensorOps<B> + <B>,
 {
     let shape = B::shape::<f32>(t);
     let total: usize = shape.iter().product::<usize>().max(1);
@@ -93,7 +93,7 @@ fn run_and_grad<B>(
     input_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+    B: Backend + HostInterop + TensorOps<B> + <B> + ReductionOps<B>,
 {
     let x_stor = make_storage::<B>(input_data, input_shape);
     let x_var = B::var_from_tensor::<f32>(&x_stor).expect("var_from_tensor");
@@ -128,7 +128,7 @@ fn run_and_grad2<B>(
     rhs_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+    B: Backend + HostInterop + TensorOps<B> + <B> + ReductionOps<B>,
 {
     let lhs_stor = make_storage::<B>(lhs_data, lhs_shape);
     let rhs_stor = make_storage::<B>(rhs_data, rhs_shape);
@@ -292,7 +292,7 @@ fn div_forward_and_backward_parity() {
     assert_close(&gb_n, &gb_c, 1e-2, "div backward rhs");
 }
 
-// ── FloatOps (13 unary/scalar kernels) ──────────────────────────────────────
+// ──  (13 unary/scalar kernels) ──────────────────────────────────────
 
 #[test]
 /// Verifies numerical parity of forward and backward pass between backends for `relu_forward_and_backward_parity`.

@@ -20,7 +20,7 @@ use incin_core::exec::OPERATION_CATALOG;
 /// `Backend` and `StorageBackend` are deliberately absent: they carry identity
 /// and lifecycle, not semantic operations, and FND-005 keeps them that way.
 const OPERATION_TRAITS: &[&str] = &[
-    "FloatOps",
+    "",
     "",
     "TensorOps",
     "ReductionOps",

@@ -8,7 +8,7 @@
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
-use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps, TensorOps};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
@@ -381,7 +381,7 @@ macro_rules! impl_wgpu_unary_float {
                     return Err(invalid(OperationKind::$op, "unary operation expects 1 input"));
                 };
                 let input = input.downcast_ref::<WgpuStorage>().ok_or_else(|| invalid(OperationKind::$op, "input is not WGPU storage"))?;
-                <Self as FloatOps<Self>>::$method::<f32>(input).map_err(|e| kernel_error("Wgpu", OperationKind::$op, e))
+                Self::$method::<f32>(input).map_err(|e| kernel_error("Wgpu", OperationKind::$op, e))
             }
         }
     )*};

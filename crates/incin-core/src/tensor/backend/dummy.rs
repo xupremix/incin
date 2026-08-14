@@ -313,7 +313,7 @@ use super::*;
     ///
     /// `DummyBackend` exists to exercise shape behavior, so covering these by
     /// hand would add a hundred lines that all say `Ok(t.clone())`. They are
-    /// listed rather than inherited because `FloatOps` no longer supplies a
+    /// listed rather than inherited because `` no longer supplies a
     /// default body: an operation this backend does not model has to be
     /// visible here.
     macro_rules! shape_preserving_float_ops {
@@ -360,101 +360,101 @@ use super::*;
 
     /// Every activation and scalar op is shape-preserving, so each is a
     /// plain clone of the input shape.
-    impl<D: Device + Clone + 'static> FloatOps<Self> for DummyBackend<D> {
+    impl<D: Device + Clone + 'static> DummyBackend<D> {
         /// Returns `t`'s shape unchanged.
-        fn add_scalar_float<K: DType>(
+        pub fn add_scalar_float<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn mul_scalar_float<K: DType>(
+        pub fn mul_scalar_float<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn relu<K: DType>(
+        pub fn relu<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn step<K: DType>(
+        pub fn step<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn mish<K: DType>(
+        pub fn mish<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn elu<K: DType>(
+        pub fn elu<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn gelu<K: DType>(
+        pub fn gelu<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn abs<K: DType>(
+        pub fn abs<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn exp<K: DType>(
+        pub fn exp<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn neg<K: DType>(
+        pub fn neg<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn sqrt<K: DType>(
+        pub fn sqrt<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn log<K: DType>(
+        pub fn log<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn tanh<K: DType>(
+        pub fn tanh<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn sigmoid<K: DType>(
+        pub fn sigmoid<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn swish<K: DType>(
+        pub fn swish<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged (`dim` is not validated).
-        fn softmax<K: DType>(
+        pub fn softmax<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {

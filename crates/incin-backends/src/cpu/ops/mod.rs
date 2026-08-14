@@ -1,7 +1,7 @@
 //! Operator implementations for `CpuBackendImpl<D>`.
 //!
 //! * `elementwise` — `::{add,sub,mul,div}` and
-//!   `FloatOps::{add_scalar_float,mul_scalar_float,relu,gelu,…}` (all
+//!   `::{add_scalar_float,mul_scalar_float,relu,gelu,…}` (all
 //!   unary-kernel stubs included).
 //! * `matmul` — naive stride-aware 2D `matmul_impl` (plain function, called
 //!   by `shape_ops`'s `TensorOps::matmul` method).
