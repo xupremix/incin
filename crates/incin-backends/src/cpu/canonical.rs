@@ -47,7 +47,7 @@ use super::ops::shape_ops::{
     masked_fill_storage, narrow_storage, pad_storage, repeat_storage, scatter_storage,
     slice_storage,
     squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
-    unfold_storage,
+    pixel_shuffle_storage, unfold_storage,
     where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
@@ -2202,7 +2202,7 @@ impl<D: Device> Execute<op::PixelShuffle> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let factor = request.operation.descriptor().attributes().upscale_factor;
-        <Self as TensorOps<Self>>::pixel_shuffle::<f32>(input, factor)
+        pixel_shuffle_storage(input, factor)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

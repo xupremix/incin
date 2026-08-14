@@ -153,6 +153,46 @@ pub(crate) fn unfold_storage(
     ))
 }
 
+pub(crate) fn pixel_shuffle_storage(
+    t: &CpuStorage,
+    upscale_factor: usize,
+) -> Result<CpuStorage> {
+    if t.shape.len() != 4 {
+        return Err(Error::Msg(
+            "pixel_shuffle expects 4D tensor (N, C, H, W)".into(),
+        ));
+    }
+    let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let r = upscale_factor;
+    let r_sq = r * r;
+    if c % r_sq != 0 {
+        return Err(Error::Msg(
+            "pixel_shuffle channels must be divisible by upscale_factor^2".into(),
+        ));
+    }
+    let out_c = c / r_sq;
+    let out_h = h * r;
+    let out_w = w * r;
+    let out_shape = vec![n, out_c, out_h, out_w];
+    let total: usize = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; 4];
+    for _ in 0..total {
+        let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
+        let h_in = h_out / r;
+        let w_in = w_out / r;
+        let r_h = h_out % r;
+        let r_w = w_out % r;
+        let c_in = c_out * r_sq + r_h * r + r_w;
+        out.push(t.get(&[b, c_in, h_in, w_in]));
+        crate::cpu::storage::increment_index(&mut idx, &out_shape);
+    }
+    Ok(CpuStorage::from_contiguous(
+        t.buffer.from_f64_values(out)?,
+        out_shape,
+    ))
+}
+
 pub(crate) fn flatten_storage(
     t: &CpuStorage,
     start_dim: usize,
