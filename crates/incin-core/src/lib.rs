@@ -82,11 +82,20 @@ pub mod backend_authoring {
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        AutogradBackend, Backend, CreationOps, Execute, ExecuteOutput, ExecutionRequest, FloatOps,
-        HostInterop, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps, ReductionOps,
-        StorageBackend, StorageOutput, SupportsDType, TensorBackend, TensorOps, TransferBackend,
-        TransferTo, VariableBackend,
+        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop,
+        StorageBackend, StorageOutput, SupportsDType, TensorBackend, TransferBackend, TransferTo,
+        VariableBackend,
     };
+    /// Compatibility adapters for backend implementations that still use the
+    /// pre-descriptor operation-family traits. New tensor code must use
+    /// [`Execute`] and exact operation descriptors instead.
+    #[doc(hidden)]
+    pub mod legacy {
+        pub use crate::tensor::backend::{
+            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
+            ReductionOps, TensorOps,
+        };
+    }
     /// Read the tracing graph mid-flight, without draining it.
     ///
     /// Here rather than in the prelude because the caller is a backend's tape
