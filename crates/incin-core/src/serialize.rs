@@ -199,3 +199,106 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
         self.load_state_dict(&snapshot)
     }
 }
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+
+    fn fixture() -> StateSnapshot {
+        let mut snapshot = StateSnapshot::new();
+        for (index, dtype) in [
+            DTypeId::F32,
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::I64,
+            DTypeId::U32,
+            DTypeId::U8,
+            DTypeId::Bool,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let descriptor = dtype.descriptor();
+            let byte_len = descriptor
+                .size_bytes(32, crate::shapes::error::OperationKind::Storage)
+                .expect("fixture dtype has storage bytes");
+            snapshot
+                .insert(
+                    StatePath::new(format!("entry_{index}")).expect("fixture path is canonical"),
+                    StateValue::new(
+                        ShapeBuf::from_slice(&[32]),
+                        descriptor,
+                        vec![index as u8; byte_len],
+                        if index % 2 == 0 {
+                            StateRole::Parameter
+                        } else {
+                            StateRole::Buffer
+                        },
+                    )
+                    .expect("fixture value is valid"),
+                )
+                .expect("fixture paths are unique");
+        }
+        snapshot
+    }
+
+    #[test]
+    fn safetensors_round_trips_exact_supported_native_dtypes() {
+        let path = std::env::temp_dir().join(format!(
+            "incin-state-serialize-{}.safetensors",
+            std::process::id()
+        ));
+        let expected = fixture();
+        serialize_snapshot_safetensors(&expected, &path).expect("serialize snapshot");
+        let actual = deserialize_snapshot_safetensors(&path).expect("deserialize snapshot");
+        assert_eq!(actual, expected);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn postcard_round_trips_exact_supported_native_dtypes() {
+        let path = std::env::temp_dir().join(format!(
+            "incin-state-serialize-{}.postcard",
+            std::process::id()
+        ));
+        let expected = fixture();
+        serialize_snapshot_postcard(&expected, &path).expect("serialize snapshot");
+        let actual = deserialize_snapshot_postcard(&path).expect("deserialize snapshot");
+        assert_eq!(actual, expected);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn postcard_supports_q8_and_safetensors_rejects_it_explicitly() {
+        let descriptor = DTypeId::Q8_0.descriptor();
+        let bytes = descriptor
+            .size_bytes(32, crate::shapes::error::OperationKind::Storage)
+            .expect("q8 fixture has storage bytes");
+        let mut snapshot = StateSnapshot::new();
+        snapshot
+            .insert(
+                StatePath::new("quantized").expect("canonical path"),
+                StateValue::new(
+                    ShapeBuf::from_slice(&[32]),
+                    descriptor,
+                    vec![0; bytes],
+                    StateRole::Parameter,
+                )
+                .expect("q8 fixture is valid"),
+            )
+            .expect("unique path");
+        let postcard_path =
+            std::env::temp_dir().join(format!("incin-state-q8-{}.postcard", std::process::id()));
+        serialize_snapshot_postcard(&snapshot, &postcard_path).expect("serialize q8");
+        assert_eq!(
+            deserialize_snapshot_postcard(&postcard_path).expect("deserialize q8"),
+            snapshot
+        );
+        std::fs::remove_file(&postcard_path).ok();
+
+        let safetensors_path =
+            std::env::temp_dir().join(format!("incin-state-q8-{}.safetensors", std::process::id()));
+        assert!(serialize_snapshot_safetensors(&snapshot, &safetensors_path).is_err());
+        std::fs::remove_file(safetensors_path).ok();
+    }
+}
