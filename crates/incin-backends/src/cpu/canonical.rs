@@ -21,9 +21,8 @@ use incin_core::exec::{
     UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
+    BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Reduction,
 };
-use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
@@ -39,7 +38,10 @@ use super::ops::elementwise::{
 };
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
-use super::ops::loss::{bce_with_logits_loss_storage, l1_loss_storage, mse_loss_storage};
+use super::ops::loss::{
+    bce_with_logits_loss_storage, cross_entropy_loss_storage, l1_loss_storage,
+    mse_loss_storage,
+};
 use super::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
@@ -3062,7 +3064,7 @@ impl<D: Device> Execute<op::CrossEntropyLoss> for CpuBackendImpl<D> {
         )?;
         f32_only(operation, &[Some(logits)])?;
         let reduction = loss_reduction(request.operation.descriptor().attributes().reduction);
-        <Self as LossOps<Self>>::cross_entropy_loss::<f32, i64>(logits, target, reduction)
+        cross_entropy_loss_storage::<D>(logits, target, reduction)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

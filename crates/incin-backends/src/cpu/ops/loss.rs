@@ -80,6 +80,63 @@ pub(crate) fn bce_with_logits_loss_storage(
     reduce_loss(loss, reduction)
 }
 
+pub(crate) fn cross_entropy_loss_storage<D: Device>(
+    pred: &CpuStorage,
+    target: &CpuStorage,
+    reduction: Reduction,
+) -> Result<CpuStorage> {
+    if pred.shape.len() != 2 {
+        return Err(ShapeError::RankMismatch {
+            operation: OperationKind::Reduction,
+            expected: RankExpectation::Exactly(2),
+            actual: pred.shape.len(),
+        }
+        .into());
+    }
+    let batch = pred.shape[0];
+    let classes = pred.shape[1];
+    if target.shape.as_ref() != [batch] {
+        return Err(ShapeError::DimensionMismatch {
+            operation: OperationKind::Reduction,
+            axis: Axis::Index(0),
+            lhs: batch,
+            rhs: target.shape.first().copied().unwrap_or(0),
+            constraint: DimensionConstraint::Equal,
+        }
+        .into());
+    }
+    let log_probs = crate::cpu::ops::elementwise::log_softmax::<D, f32>(pred, 1)?;
+    let one_hot_total = ShapeBuf::from_slice(&[batch, classes])
+        .checked_numel(OperationKind::Storage)?;
+    let mut one_hot_buf = vec![0.0f32; one_hot_total];
+    for batch_index in 0..batch {
+        let class_index = target.get_i64_checked(&[batch_index], "cross_entropy_target")?;
+        let class_index = usize::try_from(class_index).map_err(|_| Error::InvalidConversion {
+            operation: "cross_entropy_target",
+            from: DTypeId::I64.descriptor(),
+            to: DTypeId::U32.descriptor(),
+            reason: ConversionFailure::OutOfRange,
+        })?;
+        if class_index >= classes {
+            return Err(ShapeError::InvalidParameter {
+                operation: OperationKind::Reduction,
+                parameter: "target class index",
+                value: class_index,
+            }
+            .into());
+        }
+        one_hot_buf[batch_index * classes + class_index] = 1.0;
+    }
+    let one_hot = CpuStorage::from_contiguous(
+        CpuBuffer::F32(one_hot_buf),
+        vec![batch, classes],
+    );
+    let picked = crate::cpu::ops::elementwise::mul_storage(&log_probs, &one_hot)?;
+    let summed = crate::cpu::ops::reduce::sum_dim(&picked, 1)?;
+    let per_nll = crate::cpu::ops::elementwise::canonical_neg(&summed)?;
+    reduce_loss(per_nll, reduction)
+}
+
 impl<D: Device> LossOps<Self> for CpuBackendImpl<D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
