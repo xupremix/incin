@@ -17,6 +17,21 @@ documents remain outputs of the source and tests.
 - `docs`: binding contracts, status notes, guides, and this handoff.
 - `tools`: reproducibility and repository checks.
 
+## Canonical handoff snapshot
+
+Create the handoff artifact only with:
+
+```text
+tools/export-snapshot.sh <output.zip>
+```
+
+The command requires a clean tracked checkout, builds the ZIP from `HEAD`,
+compares its file set with tracked source, unpacks that exact ZIP, verifies the
+required workspace and check files, runs the architecture, large-file, and
+public-API gates inside the unpacked copy, and runs the smallest no-default
+feature core check when Cargo is available. The ZIP, not `cargo package`, is
+the handoff artifact and its validation result.
+
 ## Layer diagram
 
 ```text
@@ -131,8 +146,8 @@ tensor-layer ownership-transfer contract; module fields delegate to it.
 cargo check -p incin-core --lib --no-default-features
 cargo test -p incin-core --lib <focused_test>
 cargo test -p incin --test foundation_handoff_contract --features target-api,cpu
-tools/check-package.sh
 tools/check-architecture.sh
+tools/export-snapshot.sh /tmp/incin-handoff.zip
 ```
 
 Begin with the smallest crate and feature set that exercises the changed
