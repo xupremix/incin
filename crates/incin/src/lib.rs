@@ -107,12 +107,7 @@ pub use incin_macros::module;
 pub mod __macro_support {
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
     pub use incin_core::backend_authoring::{SupportsDType, TransferTo};
-    pub use incin_core::nn::{
-        AutorefComputeStats, AutorefComputeStatsFallback, AutorefNamedLayers,
-        AutorefNamedLayersFallback, AutorefParameters, AutorefParametersFallback, AutorefShapeInfo,
-        AutorefShapeInfoFallback, AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode,
-        AutorefTrainModeFallback, ComputeStats, LayerStats,
-    };
+    pub use incin_core::nn::{ComputeStats, LayerStats};
 }
 
 /// Unstable APIs that carry no compatibility guarantee.

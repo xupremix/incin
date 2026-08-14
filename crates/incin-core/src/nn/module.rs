@@ -170,194 +170,6 @@ pub trait Parameters<B: Backend> {
     }
 }
 
-#[doc(hidden)]
-/// Autoref-specialization fallback: the `&&T` blanket impl every type gets
-/// "for free," used so `#[module]`-derived fields that don't implement
-/// `Parameters` (plain scalars, markers) contribute nothing instead of
-/// failing to compile. Method resolution prefers `AutorefParameters`'s `&T`
-/// impl when it applies, falling back to this `&&T` impl otherwise.
-pub trait AutorefParametersFallback<B: Backend> {
-    /// No-op: contributes no parameters.
-    fn maybe_parameters(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
-    ) {
-    }
-}
-impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefParametersFallback` for any type that actually
-/// implements `Parameters`.
-pub trait AutorefParameters<B: Backend> {
-    /// Delegates to `Parameters::named_parameters`.
-    fn maybe_parameters(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
-    );
-}
-impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
-    #[inline]
-    /// Delegates to `Parameters::named_parameters`.
-    fn maybe_parameters(
-        &self,
-        _marker: core::marker::PhantomData<B>,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
-    ) {
-        self.named_parameters(prefix, map);
-    }
-}
-
-#[doc(hidden)]
-/// Autoref-specialization fallback for fields without state.
-pub trait AutorefStateDictFallback<B: Backend> {
-    fn maybe_collect_state(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        Ok(())
-    }
-    fn maybe_prepare_state(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _snapshot: &crate::nn::StateSnapshot,
-        _plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        Ok(())
-    }
-    fn maybe_commit_state(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
-impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
-
-#[doc(hidden)]
-/// Preferred autoref delegation for fields implementing `StateDict`.
-pub trait AutorefStateDict<B: Backend> {
-    fn maybe_collect_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()>;
-    fn maybe_prepare_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()>;
-    fn maybe_commit_state(
-        &mut self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()>;
-}
-
-// For mutable operations
-impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
-    fn maybe_collect_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        (**self).collect_state(path, snapshot)
-    }
-    fn maybe_prepare_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        (**self).prepare_state(path, snapshot, plan)
-    }
-    fn maybe_commit_state(
-        &mut self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        (*self).commit_state(path, plan)
-    }
-}
-
-// For immutable operations (state_dict uses &self)
-impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
-    fn maybe_collect_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        (**self).collect_state(path, snapshot)
-    }
-    fn maybe_prepare_state(
-        &self,
-        _: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        (**self).prepare_state(path, snapshot, plan)
-    }
-    fn maybe_commit_state(
-        &mut self,
-        _: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[doc(hidden)]
-/// Autoref-specialization fallback for `TrainMode`: fields that don't
-/// implement it (plain scalars, markers, and — currently — `BatchNorm2d`,
-/// see `TrainMode`'s own doc) silently do nothing instead of failing to
-/// compile.
-pub trait AutorefTrainModeFallback {
-    /// No-op: nothing to switch.
-    fn maybe_set_training(&mut self, _training: bool) {}
-}
-impl<T> AutorefTrainModeFallback for &mut &mut T {
-    fn maybe_set_training(&mut self, _training: bool) {}
-}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefTrainModeFallback` for any type that actually
-/// implements `TrainMode`.
-pub trait AutorefTrainMode {
-    /// Delegates to `TrainMode::set_training`.
-    fn maybe_set_training(&mut self, training: bool);
-}
-impl<T: TrainMode> AutorefTrainMode for &mut T {
-    #[inline]
-    /// Delegates to `TrainMode::set_training`.
-    fn maybe_set_training(&mut self, training: bool) {
-        (*self).set_training(training);
-    }
-}
-
 /// Recursively switches a module (and every submodule reachable through
 /// `#[module]`-derived fields) between training and evaluation behavior —
 /// `#[module]` auto-implements this exactly like it does `Parameters`/
@@ -372,16 +184,7 @@ impl<T: TrainMode> AutorefTrainMode for &mut T {
 /// with a bare `impl TrainMode for X {}` — this is what makes it possible
 /// for [`Sequential`] to require `L1: TrainMode, L2: TrainMode` (see its own
 /// impl below) without forcing every existing layer type to implement real
-/// logic. That bound is a deliberate, *required* departure from the
-/// `AutorefTrainMode`/`AutorefTrainModeFallback` pair above:
-/// autoref-specialization only resolves to the "real" impl when the
-/// compiler can *prove* the bound holds at the point the generic code is
-/// checked, which is impossible for `Sequential<L1, L2>`'s bare, unbounded
-/// `L1`/`L2` type parameters — so `Sequential` mirrors `Parameters`/
-/// `StateDict`'s own existing pattern instead (explicit bounds, direct
-/// calls), not the autoref trick, which is only safe to use where a field's
-/// type is concretely known at the `impl` site (exactly what `#[module]`'s
-/// generated code and `Param`/`Buffer` fields always are).
+/// logic. Containers use explicit trait bounds and direct field calls.
 ///
 /// ## What this currently affects
 ///
@@ -435,6 +238,34 @@ pub trait TrainMode {
     #[inline]
     fn eval(&mut self) {
         self.set_training(false);
+    }
+}
+
+/// Explicit field contract used by module traversal and diagnostics.
+pub trait ShapeInfo {
+    /// Returns a compact shape description when the field owns tensor-shaped state.
+    fn shape_info(&self) -> Option<String>;
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
+    ShapeInfo for crate::nn::param::Param<S, B, K, Train>
+{
+    fn shape_info(&self) -> Option<String> {
+        Some(format!("{:?}", self.shape_dims()))
+    }
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType> ShapeInfo
+    for crate::nn::param::Buffer<S, B, K>
+{
+    fn shape_info(&self) -> Option<String> {
+        Some(format!("{:?}", self.shape_dims()))
+    }
+}
+
+impl<T: ShapeInfo> ShapeInfo for Option<T> {
+    fn shape_info(&self) -> Option<String> {
+        self.as_ref().and_then(ShapeInfo::shape_info)
     }
 }
 
@@ -882,84 +713,38 @@ impl<T: NamedLayers> NamedLayers for Option<T> {
     }
 }
 
-#[doc(hidden)]
-/// Autoref-specialization fallback for `NamedLayers`: fields that don't
-/// implement it report no structure (`None`) instead of failing to compile.
-pub trait AutorefNamedLayersFallback {
-    /// `None`: this field contributes no layer-structure node.
-    fn maybe_layer_structure(&self, _prefix: &str) -> Option<Vec<LayerNode>> {
-        None
-    }
-}
-impl<T> AutorefNamedLayersFallback for &&T {}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefNamedLayersFallback` for any type that actually
-/// implements `NamedLayers`.
-pub trait AutorefNamedLayers {
-    /// Delegates to `NamedLayers::layer_structure`, wrapped in `Some`.
-    fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>>;
-}
-impl<T: NamedLayers> AutorefNamedLayers for &T {
-    #[inline]
-    /// Delegates to `NamedLayers::layer_structure`, wrapped in `Some`.
-    fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>> {
-        Some(self.layer_structure(prefix))
-    }
-}
-
-#[doc(hidden)]
-/// Autoref-specialization fallback for shape-info reporting: fields with
-/// no known shape (not a `Param`/`Buffer`) report `None` instead of
-/// failing to compile.
-pub trait AutorefShapeInfoFallback {
-    /// `None`: this field has no shape to report.
-    fn maybe_shape_info(&self) -> Option<String> {
-        None
-    }
-}
-impl<T> AutorefShapeInfoFallback for &&T {}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefShapeInfoFallback` for `Param`/`Buffer` fields (and
-/// anything else with a known shape).
-pub trait AutorefShapeInfo {
-    /// Renders this field's shape as a debug string, if it has one.
-    fn maybe_shape_info(&self) -> Option<String>;
-}
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
-    AutorefShapeInfo for &crate::nn::param::Param<S, B, K, Train>
-{
-    #[inline]
-    /// Renders the parameter's dimensions, e.g. `[128, 256]`.
-    fn maybe_shape_info(&self) -> Option<String> {
-        Some(format!("{:?}", self.shape_dims()))
-    }
-}
-impl<S: Shape + DynShape, B: Backend, K: DType> AutorefShapeInfo
-    for &crate::nn::param::Buffer<S, B, K>
-{
-    #[inline]
-    /// Renders the buffer's dimensions, e.g. `[128, 256]`.
-    fn maybe_shape_info(&self) -> Option<String> {
-        Some(format!("{:?}", self.shape_dims()))
-    }
-}
-impl<T> AutorefShapeInfo for &Option<T>
-where
-    for<'a> &'a T: AutorefShapeInfo,
-{
-    #[inline]
-    /// Delegates to the wrapped value's shape info; `None` for `None`.
-    fn maybe_shape_info(&self) -> Option<String> {
-        if let Some(val) = self {
-            (&val).maybe_shape_info()
-        } else {
-            None
+impl<T: TrainMode> TrainMode for Option<T> {
+    fn set_training(&mut self, training: bool) {
+        if let Some(value) = self {
+            value.set_training(training);
         }
     }
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
+    NamedLayers for crate::nn::param::Param<S, B, K, Train>
+{
+    fn layer_structure(&self, _prefix: &str) -> Vec<LayerNode> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType> NamedLayers
+    for crate::nn::param::Buffer<S, B, K>
+{
+    fn layer_structure(&self, _prefix: &str) -> Vec<LayerNode> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState> TrainMode
+    for crate::nn::param::Param<S, B, K, Train>
+{
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType> TrainMode
+    for crate::nn::param::Buffer<S, B, K>
+{
 }
 
 /// A macro to easily build Sequential models with many layers.

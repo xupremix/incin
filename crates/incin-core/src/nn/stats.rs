@@ -1,7 +1,7 @@
 //! Runtime model statistics (parameter count, multiply-accumulates) — the v1
 //! ("ships now, not `const`") half of `docs/growth/04-compile-time-stats.md`.
 //! `ComputeStats` is auto-derived for every `#[module]` struct (summing each
-//! field's contribution, exactly like `NamedLayers`/`AutorefShapeInfo`); a
+//! field's contribution, exactly like `NamedLayers` and state traversal; a
 //! leaf layer with a known compute formula (currently just [`crate::nn::linear::Linear`])
 //! opts out of that default via `#[module(no_stats)]` and hand-implements
 //! this trait with its real formula instead.
@@ -89,34 +89,6 @@ pub trait ComputeStats {
     }
 }
 
-#[doc(hidden)]
-/// Autoref-specialization fallback: fields with no known stats (anything
-/// that isn't `ComputeStats`) contribute nothing instead of failing to
-/// compile — mirrors [`crate::nn::module::AutorefShapeInfoFallback`].
-pub trait AutorefComputeStatsFallback {
-    /// `None`: this field contributes no stats.
-    fn maybe_compute_stats(&self, _batch: u64) -> Option<LayerStats> {
-        None
-    }
-}
-impl<T> AutorefComputeStatsFallback for &&T {}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefComputeStatsFallback` for any type that actually
-/// implements `ComputeStats`.
-pub trait AutorefComputeStats {
-    /// Delegates to `ComputeStats::compute_stats`, wrapped in `Some`.
-    fn maybe_compute_stats(&self, batch: u64) -> Option<LayerStats>;
-}
-impl<T: ComputeStats> AutorefComputeStats for &T {
-    #[inline]
-    /// Delegates to `ComputeStats::compute_stats`, wrapped in `Some`.
-    fn maybe_compute_stats(&self, batch: u64) -> Option<LayerStats> {
-        Some(self.compute_stats(batch))
-    }
-}
-
 impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState> ComputeStats
     for Param<S, B, K, Train>
 {
@@ -128,6 +100,12 @@ impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainSt
             params: validated_parameter_count(&self.shape_dims()),
             macs: 0,
         }
+    }
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType> ComputeStats for Buffer<S, B, K> {
+    fn compute_stats(&self, _batch: u64) -> LayerStats {
+        LayerStats::default()
     }
 }
 

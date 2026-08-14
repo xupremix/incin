@@ -310,66 +310,43 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     state_dict_field_types.push(field.ty.clone());
 
                     param_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefParameters, AutorefParametersFallback};
-                            (&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #fname_str), map);
-                        }
+                        #k_crate::prelude::Parameters::named_parameters(
+                            &self.#fname, &#format_mac("{}{}", prefix, #fname_str), map);
                     });
                     collect_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&&self.#fname).maybe_collect_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::collect_state(
+                            &self.#fname, &child_path, snapshot)?;
                     });
                     prepare_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&&self.#fname).maybe_prepare_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot, plan)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::prepare_state(
+                            &self.#fname, &child_path, snapshot, plan)?;
                     });
                     commit_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&mut &mut self.#fname).maybe_commit_state(core::marker::PhantomData::<#b_ident>, &child_path, plan)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::commit_state(
+                            &mut self.#fname, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefNamedLayers, AutorefNamedLayersFallback};
-                            let child_prefix = if prefix.is_empty() {
-                                #macro_support::String::from(#fname_str)
-                            } else {
-                                #format_mac("{}.{}", prefix, #fname_str)
-                            };
-                            if let Some(nodes) = (&&self.#fname).maybe_layer_structure(&child_prefix) {
-                                children.extend(nodes);
-                            }
-                        }
+                        let child_prefix = if prefix.is_empty() {
+                            #macro_support::String::from(#fname_str)
+                        } else {
+                            #format_mac("{}.{}", prefix, #fname_str)
+                        };
+                        children.extend(#k_crate::prelude::NamedLayers::layer_structure(
+                            &self.#fname, &child_prefix));
                     });
                     shape_info_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefShapeInfo, AutorefShapeInfoFallback};
-                            if let Some(sh) = (&&self.#fname).maybe_shape_info() {
-                                shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
-                            }
+                        if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#fname) {
+                            shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
                         }
                     });
                     stats_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefComputeStats, AutorefComputeStatsFallback};
-                            if let Some(s) = (&&self.#fname).maybe_compute_stats(batch) {
-                                total += s;
-                            }
-                        }
+                        total += #k_crate::prelude::ComputeStats::compute_stats(&self.#fname, batch);
                     });
                     train_mode_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefTrainMode, AutorefTrainModeFallback};
-                            (&mut &mut self.#fname).maybe_set_training(training);
-                        }
+                        #k_crate::prelude::TrainMode::set_training(&mut self.#fname, training);
                     });
                     to_device_fields.push(quote! {
                         #fname: #k_crate::prelude::ToDevice::to_device(self.#fname, arg)?
@@ -409,66 +386,43 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     state_dict_field_types.push(field.ty.clone());
 
                     param_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefParameters, AutorefParametersFallback};
-                            (&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #idx_str), map);
-                        }
+                        #k_crate::prelude::Parameters::named_parameters(
+                            &self.#idx, &#format_mac("{}{}", prefix, #idx_str), map);
                     });
                     collect_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&&self.#idx).maybe_collect_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::collect_state(
+                            &self.#idx, &child_path, snapshot)?;
                     });
                     prepare_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&&self.#idx).maybe_prepare_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot, plan)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::prepare_state(
+                            &self.#idx, &child_path, snapshot, plan)?;
                     });
                     commit_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            let child_path = path.child(#state_component);
-                            (&mut &mut self.#idx).maybe_commit_state(core::marker::PhantomData::<#b_ident>, &child_path, plan)?;
-                        }
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::StateDict::commit_state(
+                            &mut self.#idx, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefNamedLayers, AutorefNamedLayersFallback};
-                            let child_prefix = if prefix.is_empty() {
-                                #macro_support::String::from(#idx_str)
-                            } else {
-                                #format_mac("{}.{}", prefix, #idx_str)
-                            };
-                            if let Some(nodes) = (&&self.#idx).maybe_layer_structure(&child_prefix) {
-                                children.extend(nodes);
-                            }
-                        }
+                        let child_prefix = if prefix.is_empty() {
+                            #macro_support::String::from(#idx_str)
+                        } else {
+                            #format_mac("{}.{}", prefix, #idx_str)
+                        };
+                        children.extend(#k_crate::prelude::NamedLayers::layer_structure(
+                            &self.#idx, &child_prefix));
                     });
                     shape_info_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefShapeInfo, AutorefShapeInfoFallback};
-                            if let Some(sh) = (&&self.#idx).maybe_shape_info() {
-                                shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
-                            }
+                        if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#idx) {
+                            shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
                         }
                     });
                     stats_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefComputeStats, AutorefComputeStatsFallback};
-                            if let Some(s) = (&&self.#idx).maybe_compute_stats(batch) {
-                                total += s;
-                            }
-                        }
+                        total += #k_crate::prelude::ComputeStats::compute_stats(&self.#idx, batch);
                     });
                     train_mode_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefTrainMode, AutorefTrainModeFallback};
-                            (&mut &mut self.#idx).maybe_set_training(training);
-                        }
+                        #k_crate::prelude::TrainMode::set_training(&mut self.#idx, training);
                     });
 
                     to_device_fields.push(quote! {

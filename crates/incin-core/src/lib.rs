@@ -37,13 +37,7 @@ pub use typenum;
 /// Implementation details used by procedural macros expanded inside this crate.
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::nn::{
-        AutorefComputeStats, AutorefComputeStatsFallback, AutorefNamedLayers,
-        AutorefNamedLayersFallback, AutorefParameters, AutorefParametersFallback, AutorefShapeInfo,
-        AutorefShapeInfoFallback, AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode,
-        AutorefTrainModeFallback, ComputeStats, LayerStats, StateLoadPlan, StatePath,
-        StateSnapshot,
-    };
+    pub use crate::nn::{ComputeStats, LayerStats, StateLoadPlan, StatePath, StateSnapshot};
     pub use crate::tensor::backend::{SupportsDType, TransferTo};
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 }
@@ -173,7 +167,7 @@ pub mod prelude {
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
         module::{
-            LayerNode, Module, NamedLayers, Parameters, Sequential, StateDict, TrainMode,
+            LayerNode, Module, NamedLayers, Parameters, Sequential, ShapeInfo, StateDict, TrainMode,
         },
         optional::{False, OptionalField, True},
         param::{Buffer, Frozen, Param, TrainState, Trainable},
