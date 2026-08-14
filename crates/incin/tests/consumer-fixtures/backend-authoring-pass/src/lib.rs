@@ -4,7 +4,7 @@ use incin::backend_authoring::operations::{
 use incin::backend_authoring::{
     Alignment, AutogradBackend, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
     ExecutionRequest, Operation, OperationKey, ShapeBuf, StorageBackend,
-    SupportLevel, TensorBackend, TensorMeta, VariableBackend,
+    StorageTransfer, SupportLevel, TensorBackend, TensorMeta, VariableBackend,
 };
 use incin::prelude::{
     BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, Shape,
@@ -195,6 +195,23 @@ impl Execute<op::Zeros> for InferenceBackend {
 
 impl Backend for InferenceBackend {
     type InnerBackend = Self;
+}
+
+// Storage movement is an independent capability: this backend deliberately
+// has no `VariableBackend` implementation.
+impl StorageTransfer<Cpu> for InferenceBackend {
+    type Output = Self;
+
+    fn transfer_storage<K: DType>(
+        storage: &<Self as StorageBackend>::Storage<K>,
+        _dtype: &K::Field,
+        _device: &<Cpu as incin::prelude::Device>::Field,
+    ) -> incin::prelude::Result<<Self::Output as StorageBackend>::Storage<K>>
+    where
+        Self::Output: incin::prelude::SupportsDType<K>,
+    {
+        Ok(storage.clone())
+    }
 }
 
 pub fn accepts_backend_contract<B, O>()
