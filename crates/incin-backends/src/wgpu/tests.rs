@@ -266,7 +266,7 @@ fn test_softmax() {
 /// `test_sum_all`.
 fn test_sum_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
-    let out = <B as ReductionOps<B>>::sum_all::<f32>(&a).unwrap();
+    let out = B::sum_all::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 10.0, 1e-4));
 }
 
@@ -274,7 +274,7 @@ fn test_sum_all() {
 /// `test_mean_all`.
 fn test_mean_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
-    let out = <B as ReductionOps<B>>::mean_all::<f32>(&a).unwrap();
+    let out = B::mean_all::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 2.5, 1e-4));
 }
 
@@ -282,7 +282,7 @@ fn test_mean_all() {
 /// `test_max_all`.
 fn test_max_all() {
     let a = storage(vec![3.0, 1.0, 4.0, 1.0, 5.0, 9.0], vec![6]);
-    let out = <B as ReductionOps<B>>::max_all::<f32>(&a).unwrap();
+    let out = B::max_all::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], 9.0, 1e-4));
 }
 
@@ -290,7 +290,7 @@ fn test_max_all() {
 /// `test_min_all`.
 fn test_min_all() {
     let a = storage(vec![3.0, 1.0, 4.0, -2.0, 5.0], vec![5]);
-    let out = <B as ReductionOps<B>>::min_all::<f32>(&a).unwrap();
+    let out = B::min_all::<f32>(&a).unwrap();
     assert!(approx_eq(readback(&out)[0], -2.0, 1e-4));
 }
 
@@ -299,7 +299,7 @@ fn test_min_all() {
 fn test_sum_dim() {
     // [[1,2,3],[4,5,6]] sum along dim 0 -> [5,7,9]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::sum_dim::<f32>(&a, 0).unwrap();
+    let out = B::sum_dim::<f32>(&a, 0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[5.0, 7.0, 9.0], 1e-4));
     assert_eq!(out.shape, vec![3]);
 }
@@ -308,7 +308,7 @@ fn test_sum_dim() {
 /// `test_sum_keepdim`.
 fn test_sum_keepdim() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::sum_keepdim::<f32>(&a, 0).unwrap();
+    let out = B::sum_keepdim::<f32>(&a, 0).unwrap();
     assert_eq!(out.shape, vec![1, 3]);
 }
 
@@ -316,7 +316,7 @@ fn test_sum_keepdim() {
 /// `test_mean_dim`.
 fn test_mean_dim() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::mean_dim::<f32>(&a, 0).unwrap();
+    let out = B::mean_dim::<f32>(&a, 0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[2.5, 3.5, 4.5], 1e-4));
 }
 
@@ -324,14 +324,14 @@ fn test_mean_dim() {
 /// `test_max_dim`.
 fn test_max_dim() {
     let a = storage(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::max_dim::<f32>(&a, 0).unwrap();
+    let out = B::max_dim::<f32>(&a, 0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[4.0, 5.0, 6.0], 1e-4));
 }
 #[test]
 /// `test_argmax_flat`.
 fn test_argmax_flat() {
     let a = storage(vec![1.0, 5.0, 3.0, 9.0, 2.0], vec![5]);
-    let out = <B as ReductionOps<B>>::argmax::<f32, u32>(&a, None).unwrap();
+    let out = B::argmax::<f32, u32>(&a, None).unwrap();
     assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 3);
 }
 
@@ -339,7 +339,7 @@ fn test_argmax_flat() {
 /// `test_argmin_flat`.
 fn test_argmin_flat() {
     let a = storage(vec![3.0, -1.0, 5.0], vec![3]);
-    let out = <B as ReductionOps<B>>::argmin::<f32, u32>(&a, None).unwrap();
+    let out = B::argmin::<f32, u32>(&a, None).unwrap();
     assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 1);
 }
 
@@ -1225,7 +1225,7 @@ fn softmax_gradient_via_nontrivial_loss_matches_finite_difference() {
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let sm = B::softmax::<f32>(&inputs[0], 1).unwrap();
         let weighted = B::mul::<f32>(&sm, &inputs[1]).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&weighted).unwrap()
+        B::sum_all::<f32>(&weighted).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t, weight], 1e-3);
     assert!(
@@ -1402,7 +1402,7 @@ fn layer_norm_backward_matches_finite_difference() {
         let out =
             <B as ModuleOps<B>>::layer_norm::<f32>(&inputs[0], &inputs[1], Some(&inputs[2]), eps)
                 .unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t, weight, bias], 1e-3);
     assert!(
@@ -1430,7 +1430,7 @@ fn batch_norm_backward_matches_finite_difference() {
             0.1,
         )
         .unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t, weight, bias, running_mean, running_var], 1e-3);
     assert!(
@@ -1450,7 +1450,7 @@ fn avg_pool2d_backward_matches_finite_difference() {
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
             <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0)).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1470,7 +1470,7 @@ fn avg_pool2d_backward_accumulates_over_overlapping_windows() {
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
             <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1491,7 +1491,7 @@ fn max_pool2d_backward_matches_finite_difference() {
         let out =
             <B as ModuleOps<B>>::max_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0), (1, 1))
                 .unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1509,7 +1509,7 @@ fn adaptive_avg_pool2d_backward_matches_finite_difference_with_uneven_windows() 
     let t = storage(data, vec![1, 1, 5, 5]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inputs[0], (3, 3)).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     // Larger fd-eps than the other pooling tests: with 25 summed elements
     // and uneven per-position window counts, eps=1e-3's finite-difference
@@ -1533,7 +1533,7 @@ fn adaptive_avg_pool2d_backward_matches_finite_difference_with_uneven_windows() 
 #[test]
 fn max_all_backward_routes_gradient_to_winning_element() {
     let t = storage(vec![1.0, 5.0, 3.0, 4.0], vec![2, 2]);
-    let out = <B as ReductionOps<B>>::max_all::<f32>(&t).unwrap();
+    let out = B::max_all::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     assert!(vec_approx_eq(&readback(gt), &[0.0, 1.0, 0.0, 0.0], 1e-5));
@@ -1542,7 +1542,7 @@ fn max_all_backward_routes_gradient_to_winning_element() {
 #[test]
 fn min_all_backward_routes_gradient_to_winning_element() {
     let t = storage(vec![1.0, 5.0, -3.0, 4.0], vec![2, 2]);
-    let out = <B as ReductionOps<B>>::min_all::<f32>(&t).unwrap();
+    let out = B::min_all::<f32>(&t).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     assert!(vec_approx_eq(&readback(gt), &[0.0, 0.0, 1.0, 0.0], 1e-5));
@@ -1554,8 +1554,8 @@ fn max_dim_backward_matches_finite_difference() {
     // near-tie a finite-difference perturbation could flip the argmax on.
     let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ReductionOps<B>>::max_dim::<f32>(&inputs[0], 0).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        let out = B::max_dim::<f32>(&inputs[0], 0).unwrap();
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1568,8 +1568,8 @@ fn max_dim_backward_matches_finite_difference() {
 fn min_dim_backward_matches_finite_difference() {
     let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ReductionOps<B>>::min_dim::<f32>(&inputs[0], 1).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        let out = B::min_dim::<f32>(&inputs[0], 1).unwrap();
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1587,7 +1587,7 @@ fn max_dim_backward_never_double_counts_when_multiple_output_positions_share_no_
         vec![9.0, 1.0, 2.0, 3.0, 9.0, 4.0, 5.0, 6.0, 9.0],
         vec![3, 3],
     );
-    let out = <B as ReductionOps<B>>::max_dim::<f32>(&t, 1).unwrap();
+    let out = B::max_dim::<f32>(&t, 1).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let gt = grads.get(t.id).expect("t should have gradient");
     assert!(vec_approx_eq(
@@ -1606,8 +1606,8 @@ fn max_keepdim_backward_matches_finite_difference() {
     // end-to-end proof through log_softmax specifically.
     let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ReductionOps<B>>::max_keepdim::<f32>(&inputs[0], 0).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        let out = B::max_keepdim::<f32>(&inputs[0], 0).unwrap();
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1620,8 +1620,8 @@ fn max_keepdim_backward_matches_finite_difference() {
 fn min_keepdim_backward_matches_finite_difference() {
     let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ReductionOps<B>>::min_keepdim::<f32>(&inputs[0], 1).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        let out = B::min_keepdim::<f32>(&inputs[0], 1).unwrap();
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
     assert!(
@@ -1829,7 +1829,7 @@ fn addmm_backward_matches_hand_computed_gradients() {
 #[test]
 fn test_cumsum() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::cumsum::<f32>(&a, 1).unwrap();
+    let out = B::cumsum::<f32>(&a, 1).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]);
 }
@@ -1837,21 +1837,21 @@ fn test_cumsum() {
 #[test]
 fn cumsum_along_the_outer_axis_accumulates_down_each_column() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
-    let out = <B as ReductionOps<B>>::cumsum::<f32>(&a, 0).unwrap();
+    let out = B::cumsum::<f32>(&a, 0).unwrap();
     assert_eq!(readback(&out), vec![1.0, 2.0, 4.0, 6.0, 9.0, 12.0]);
 }
 
 #[test]
 fn test_prod_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
-    let out = <B as ReductionOps<B>>::prod_all::<f32>(&a).unwrap();
+    let out = B::prod_all::<f32>(&a).unwrap();
     assert_eq!(readback(&out), vec![24.0]);
 }
 
 #[test]
 fn test_prod_dim() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as ReductionOps<B>>::prod_dim::<f32>(&a, 1).unwrap();
+    let out = B::prod_dim::<f32>(&a, 1).unwrap();
     assert_eq!(out.shape, vec![2]);
     assert_eq!(readback(&out), vec![6.0, 120.0]);
 }
@@ -1869,7 +1869,7 @@ fn unsqueeze_is_tape_tracked_through_reshapes_backward() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out = B::unsqueeze::<f32>(&inputs[0], 0).unwrap();
-        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+        B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[a], 1e-3);
     assert!(
@@ -1932,7 +1932,7 @@ fn a_broadcast_bias_add_unbroadcasts_its_gradient() {
     let bias = storage(vec![10.0, 20.0, 30.0], vec![3]);
 
     let sum = B::add::<f32>(&lhs, &bias).unwrap();
-    let loss = <B as ReductionOps<B>>::sum_all::<f32>(&sum).unwrap();
+    let loss = B::sum_all::<f32>(&sum).unwrap();
     let grads = B::backward::<f32>(&loss).unwrap();
 
     // Every element contributes once, so d(loss)/d(lhs) is all ones and

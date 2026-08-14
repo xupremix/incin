@@ -4,9 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::ReductionOps<Self>
-    for CandleBackend<D>
-{
+impl<D: incin_core::prelude::Device> CandleBackend<D> {
     // This adapter does not route candle's product or cumulative sum yet.
     crate::unsupported::unsupported_reduction_ops! {
         all: prod_all;
@@ -14,7 +12,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     }
 
     /// Sums all elements into a scalar tensor.
-    fn sum_all<K: incin_core::prelude::DType>(
+    pub fn sum_all<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -24,7 +22,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Averages all elements into a scalar tensor.
-    fn mean_all<K: incin_core::prelude::DType>(
+    pub fn mean_all<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -34,7 +32,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Reduces to the maximum element as a scalar tensor.
-    fn max_all<K: incin_core::prelude::DType>(
+    pub fn max_all<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -44,7 +42,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Reduces to the minimum element as a scalar tensor.
-    fn min_all<K: incin_core::prelude::DType>(
+    pub fn min_all<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -55,7 +53,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     }
 
     /// Sums along `dim`, removing it from the shape.
-    fn sum_dim<K: incin_core::prelude::DType>(
+    pub fn sum_dim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -66,7 +64,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Sums along `dim`, keeping it as a size-1 dimension.
-    fn sum_keepdim<K: incin_core::prelude::DType>(
+    pub fn sum_keepdim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -78,7 +76,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     }
 
     /// Averages along `dim`, removing it from the shape.
-    fn mean_dim<K: incin_core::prelude::DType>(
+    pub fn mean_dim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -89,7 +87,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Averages along `dim`, keeping it as a size-1 dimension.
-    fn mean_keepdim<K: incin_core::prelude::DType>(
+    pub fn mean_keepdim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -100,7 +98,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Reduces to the maximum along `dim`, removing it from the shape.
-    fn max_dim<K: incin_core::prelude::DType>(
+    pub fn max_dim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -112,7 +110,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     }
     /// Reduces to the maximum along `dim`, keeping it as a size-1
     /// dimension.
-    fn max_keepdim<K: incin_core::prelude::DType>(
+    pub fn max_keepdim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -123,7 +121,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
         CandleStorage::try_new(res)
     }
     /// Reduces to the minimum along `dim`, removing it from the shape.
-    fn min_dim<K: incin_core::prelude::DType>(
+    pub fn min_dim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -135,7 +133,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     }
     /// Reduces to the minimum along `dim`, keeping it as a size-1
     /// dimension.
-    fn min_keepdim<K: incin_core::prelude::DType>(
+    pub fn min_keepdim<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -148,7 +146,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
 
     /// Returns the index of the maximum element, along `dim` if given,
     /// otherwise over the flattened tensor.
-    fn argmax<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn argmax<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
@@ -169,7 +167,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
 
     /// Returns the index of the minimum element, along `dim` if given,
     /// otherwise over the flattened tensor.
-    fn argmin<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn argmin<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
@@ -190,7 +188,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
 
     /// `topk` is not natively available in candle; returns an error
     /// instead of panicking so callers can handle the unsupported case.
-    fn topk<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn topk<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _k: usize,
         _dim: usize,
@@ -208,7 +206,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Reduc
     /// Sorts indices along the last dimension using candle's native
     /// `argsort_last_dim`. For non-last dimensions, transposes to last
     /// and back.
-    fn argsort<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn argsort<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         descending: bool,

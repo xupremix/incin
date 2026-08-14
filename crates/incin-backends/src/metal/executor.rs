@@ -3,7 +3,7 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
-use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps};
+use incin_core::__backend_compat::legacy::{ModuleOps};
 
 use super::backend::MetalBackendImpl;
 use super::storage::MetalStorage;
@@ -234,26 +234,26 @@ macro_rules! impl_metal_reduction_dim {
 impl_metal_reduction_all![
     (
         SumAll,
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::sum_all::<f32>
+        MetalBackendImpl::<D>::sum_all::<f32>
     ),
     (
         MeanAll,
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::mean_all::<f32>
+        MetalBackendImpl::<D>::mean_all::<f32>
     ),
 ];
 
 impl_metal_reduction_dim![
     (SumDim, |input, axis| {
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::sum_dim::<f32>(input, axis)
+        MetalBackendImpl::<D>::sum_dim::<f32>(input, axis)
     }),
     (SumKeepDim, |input, axis| {
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::sum_keepdim::<f32>(input, axis)
+        MetalBackendImpl::<D>::sum_keepdim::<f32>(input, axis)
     }),
     (MeanDim, |input, axis| {
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::mean_dim::<f32>(input, axis)
+        MetalBackendImpl::<D>::mean_dim::<f32>(input, axis)
     }),
     (MeanKeepDim, |input, axis| {
-        <MetalBackendImpl<D> as ReductionOps<MetalBackendImpl<D>>>::mean_keepdim::<f32>(input, axis)
+        MetalBackendImpl::<D>::mean_keepdim::<f32>(input, axis)
     }),
 ];
 

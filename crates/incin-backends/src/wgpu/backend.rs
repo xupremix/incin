@@ -2152,7 +2152,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ReductionOps
+//
 // ─────────────────────────────────────────────────────────────────────────────
 /// `reduce_all_to_storage`.
 pub fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
@@ -2362,13 +2362,13 @@ pub fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: 
     });
 }
 
-impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// `cumsum`. No shader for this — a prefix scan does not fit the
     /// per-workgroup reduction shape `reduce.wgsl`/`reduce_dim.wgsl` compute
     /// — so it uses the same host-readback/upload pattern as the structural
     /// ops above, matching CPU's own per-row running-sum walk exactly. Not
     /// autograd-wired, matching CPU.
-    fn cumsum<K: DType>(
+    pub fn cumsum<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2395,13 +2395,13 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `prod_all`. Not autograd-wired, matching CPU.
-    fn prod_all<K: DType>(
+    pub fn prod_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         reduce_all_to_storage(t, 3)
     }
     /// `prod_dim`. Not autograd-wired, matching CPU.
-    fn prod_dim<K: DType>(
+    pub fn prod_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2409,7 +2409,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `sum_all`.
-    fn sum_all<K: DType>(
+    pub fn sum_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 0)?;
@@ -2425,7 +2425,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_all`.
-    fn mean_all<K: DType>(
+    pub fn mean_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let sum = reduce_all_to_storage(t, 0)?;
@@ -2444,7 +2444,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `max_all`.
-    fn max_all<K: DType>(
+    pub fn max_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 1)?;
@@ -2452,7 +2452,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `min_all`.
-    fn min_all<K: DType>(
+    pub fn min_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 2)?;
@@ -2461,7 +2461,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `sum_dim`.
-    fn sum_dim<K: DType>(
+    pub fn sum_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2481,7 +2481,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sum_keepdim`.
-    fn sum_keepdim<K: DType>(
+    pub fn sum_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2498,7 +2498,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_dim`.
-    fn mean_dim<K: DType>(
+    pub fn mean_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2521,7 +2521,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_keepdim`.
-    fn mean_keepdim<K: DType>(
+    pub fn mean_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2541,7 +2541,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `max_dim`.
-    fn max_dim<K: DType>(
+    pub fn max_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2564,7 +2564,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     /// need `log_softmax` to detach `M`. Matches the CPU backend, whose
     /// `max_keepdim` is fully wired and whose composed `log_softmax` (same
     /// formula) passes `softmax_gradcheck`/`log_softmax_gradcheck`.
-    fn max_keepdim<K: DType>(
+    pub fn max_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2573,7 +2573,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `min_dim`.
-    fn min_dim<K: DType>(
+    pub fn min_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2585,7 +2585,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     ///
     /// Autograd-wired the same way as `min_dim` — see `max_keepdim`'s doc
     /// comment above.
-    fn min_keepdim<K: DType>(
+    pub fn min_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2595,7 +2595,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `argmax`.
-    fn argmax<K: DType, KInt: DType>(
+    pub fn argmax<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
@@ -2652,7 +2652,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `argmin`.
-    fn argmin<K: DType, KInt: DType>(
+    pub fn argmin<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
@@ -2709,7 +2709,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `topk`.
-    fn topk<K: DType, KInt: DType>(
+    pub fn topk<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: usize,
         dim: usize,
@@ -2779,7 +2779,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `argsort`.
-    fn argsort<K: DType, KInt: DType>(
+    pub fn argsort<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         descending: bool,
@@ -2846,7 +2846,7 @@ impl<D: Device> ReductionOps<Self> for WgpuBackendImpl<D> {
 /// Gather a `[B, Cin, H, W]` buffer (row-major) into a
 /// `[B, H_out*W_out, Cin*Kh*Kw]` column matrix. Out-of-bounds positions
 /// (i.e. positions in the padded region) contribute 0.0.
-fn im2col_2d_cpu(
+pub fn im2col_2d_cpu(
     input: &[f32],
     b: usize,
     cin: usize,
@@ -2898,7 +2898,7 @@ fn im2col_2d_cpu(
 
 /// Scatter-ADD a `[B, H_out*W_out, Cin*Kh*Kw]` gradient back into a
 /// zero-initialized `[B, Cin, H, W]` buffer.
-fn col2im_2d_cpu(
+pub fn col2im_2d_cpu(
     cols_grad: &[f32],
     b: usize,
     cin: usize,
@@ -2948,7 +2948,7 @@ fn col2im_2d_cpu(
 
 /// Batched matrix multiply on CPU: lhs `[B, M, K]` × rhs `[B, K, N]` → `[B, M, N]`.
 /// Used inside conv backward closures.
-fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Result<Vec<f32>> {
+pub fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::MatMul)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -2966,7 +2966,7 @@ fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> 
 }
 
 /// Transpose the last two dimensions of a `[B, M, N]` tensor → `[B, N, M]`.
-fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+pub fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::Transpose)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -2980,7 +2980,7 @@ fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<
 }
 
 /// Sum a `[B, M, N]` buffer over its leading batch axis → `[M, N]`.
-fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+pub fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -3000,7 +3000,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// Forward-only conv2d (no tape entry). Used by both `conv1d` and `conv2d`
     /// so they can push exactly ONE clean tape entry each for their respective
     /// grad shapes, rather than having nested entries from the internal matmul.
-    fn conv2d_no_tape<K: DType>(
+    pub fn conv2d_no_tape<K: DType>(
         t: &WgpuStorage,
         weight: &WgpuStorage,
         stride: usize,
@@ -3080,7 +3080,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 /// derives strides from shape), so pooling backward closures — which read
 /// buffers back to a flat host `Vec` — can compute this directly instead of
 /// pulling in `cpu::stride`.
-fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
+pub fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
     let strides = StrideBuf::contiguous_for(&ShapeBuf::from_slice(shape), OperationKind::Storage)?;
     strides
         .strides()
@@ -3094,7 +3094,7 @@ fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
 /// own `h_start`/`h_end` computation (`shaders/pool2d.wgsl`, mode 0) exactly —
 /// never derives an equivalent fixed kernel_size/stride, which is wrong
 /// whenever `input_size` doesn't evenly divide `output_size`.
-fn adaptive_window_bounds(
+pub fn adaptive_window_bounds(
     input_size: usize,
     output_size: usize,
     i: usize,
@@ -3125,7 +3125,7 @@ fn adaptive_window_bounds(
     Ok((start, end))
 }
 
-fn pool_output_dim(
+pub fn pool_output_dim(
     input: usize,
     kernel: usize,
     stride: usize,
@@ -3174,7 +3174,7 @@ fn pool_output_dim(
         })
 }
 
-fn conv_transpose_output_dim(
+pub fn conv_transpose_output_dim(
     input: usize,
     kernel: usize,
     stride: usize,

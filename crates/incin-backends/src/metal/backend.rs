@@ -1333,27 +1333,27 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ─── ReductionOps ───────────────────────────────────────────────────────────
+// ───  ───────────────────────────────────────────────────────────
 
-impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
+impl<D: Device> MetalBackendImpl<D> {
     /// `max_all`. Same host round-trip as `sum_all` above, plus a real
     /// gradient matching CPU's own: the winning element's flat position is
     /// recorded and only that position receives `grad_out`'s value on the
     /// way back, everything else zero.
-    fn max_all<K: DType>(
+    pub fn max_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         extremum_all_metal(t, true)
     }
     /// `min_all`. Mirror of `max_all` with a strict `<` comparison.
-    fn min_all<K: DType>(
+    pub fn min_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         extremum_all_metal(t, false)
     }
     /// `prod_all`. Same host round-trip as `sum_all`. Not autograd-wired,
     /// matching CPU.
-    fn prod_all<K: DType>(
+    pub fn prod_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
@@ -1363,28 +1363,28 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
 
     /// `max_dim`. Same host round-trip as `sum_dim`, plus the same
     /// winning-position gradient routing as `max_all`.
-    fn max_dim<K: DType>(
+    pub fn max_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         extremum_dim_metal(t, dim, false, true)
     }
     /// `min_dim`.
-    fn min_dim<K: DType>(
+    pub fn min_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         extremum_dim_metal(t, dim, false, false)
     }
     /// `max_keepdim`.
-    fn max_keepdim<K: DType>(
+    pub fn max_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         extremum_dim_metal(t, dim, true, true)
     }
     /// `min_keepdim`.
-    fn min_keepdim<K: DType>(
+    pub fn min_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1392,7 +1392,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
     }
     /// `prod_dim`. Same host round-trip as `sum_dim`. Not autograd-wired,
     /// matching CPU.
-    fn prod_dim<K: DType>(
+    pub fn prod_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1422,7 +1422,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
     }
     /// `cumsum`. Same host round-trip as `sum_dim`. Not autograd-wired,
     /// matching CPU.
-    fn cumsum<K: DType>(
+    pub fn cumsum<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1453,7 +1453,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         upload_f32_metal(t, in_shape, out)
     }
 
-    fn sum_dim<K: DType>(
+    pub fn sum_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1470,7 +1470,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn sum_keepdim<K: DType>(
+    pub fn sum_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1487,7 +1487,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mean_dim<K: DType>(
+    pub fn mean_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1506,7 +1506,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mean_keepdim<K: DType>(
+    pub fn mean_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1525,7 +1525,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn sum_all<K: DType>(
+    pub fn sum_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
@@ -1558,7 +1558,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mean_all<K: DType>(
+    pub fn mean_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
@@ -1568,21 +1568,21 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
     }
 
-    fn argmax<K: DType, KInt: DType>(
+    pub fn argmax<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         Err(unsupported("argmax"))
     }
 
-    fn argmin<K: DType, KInt: DType>(
+    pub fn argmin<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         Err(unsupported("argmin"))
     }
 
-    fn topk<K: DType, KInt: DType>(
+    pub fn topk<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _k: usize,
         _dim: usize,
@@ -1594,7 +1594,7 @@ impl<D: Device> ReductionOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("topk"))
     }
 
-    fn argsort<K: DType, KInt: DType>(
+    pub fn argsort<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: usize,
         _descending: bool,

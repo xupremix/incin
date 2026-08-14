@@ -10,8 +10,7 @@ use incin_core::exec::{Descriptor, ExecutionContext, TapeStorage, TensorHandle, 
 // not prelude. This file asked the prelude for them, which never had them, and
 // nothing noticed because no CI job compiles the Metal test targets.
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, ReductionOps,
-};
+    Execute, ExecutionRequest, };
 use incin_core::prelude::{Backend, DTypeId, DeviceId, Local, ShapeBuf};
 
 type TestBackend = MetalBackendImpl<incin_core::prelude::Metal>;
@@ -124,7 +123,7 @@ fn test_metal_forward_ops() {
     .unwrap();
     assert_eq!(read_storage(&relu), vec![0.0, 0.0, 2.0, 0.0]);
 
-    let sum = <TestBackend as ReductionOps<TestBackend>>::sum_dim::<f32>(&a, 1).unwrap();
+    let sum = TestBackend::sum_dim::<f32>(&a, 1).unwrap();
     assert_eq!(read_storage(&sum), vec![3.0, 7.0]);
 }
 
@@ -134,7 +133,7 @@ fn test_metal_autograd_backward() {
     let w = create_storage(&[2, 2], &[0.5, -1.0, 2.0, 1.5]);
 
     let xw = TestBackend::mul::<f32>(&x, &w).unwrap();
-    let loss = <TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&xw).unwrap();
+    let loss = TestBackend::sum_all::<f32>(&xw).unwrap();
 
     let grads = TestBackend::backward::<f32>(&loss).expect("backward execution should succeed");
     let gx = TestBackend::get_grad::<f32>(&x, &grads)

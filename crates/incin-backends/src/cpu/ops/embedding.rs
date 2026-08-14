@@ -139,7 +139,6 @@ mod tests {
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
     use incin_core::prelude::Cpu;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     /// `B`.
     type B = CpuBackendImpl<Cpu>;
@@ -213,7 +212,7 @@ mod tests {
         let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
         // Manually seed grad_out as ones (mirrors ones_like seeding via a
         // sum_all-style consumer) by summing the output through the real
-        // ReductionOps::sum_all so tape::backward seeds correctly.
+        // ::sum_all so tape::backward seeds correctly.
         let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(w.id).expect("weight should have gradient");

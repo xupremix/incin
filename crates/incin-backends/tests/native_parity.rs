@@ -20,7 +20,7 @@ use incin_backends::external::candle::CandleBackend;
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::HostInterop;
-use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps};
+use incin_core::__backend_compat::legacy::{ModuleOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -93,7 +93,7 @@ fn run_and_grad<B>(
     input_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + <B> + <B> + ReductionOps<B>,
+    B: Backend + HostInterop + <B> + <B> + <B>,
 {
     let x_stor = make_storage::<B>(input_data, input_shape);
     let x_var = B::var_from_tensor::<f32>(&x_stor).expect("var_from_tensor");
@@ -128,7 +128,7 @@ fn run_and_grad2<B>(
     rhs_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + <B> + <B> + ReductionOps<B>,
+    B: Backend + HostInterop + <B> + <B> + <B>,
 {
     let lhs_stor = make_storage::<B>(lhs_data, lhs_shape);
     let rhs_stor = make_storage::<B>(rhs_data, rhs_shape);
@@ -479,7 +479,7 @@ fn mul_scalar_float_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "mul_scalar_float backward");
 }
 
-// ── ReductionOps (12 float-output reductions; argmax/argmin in Task 2) ─────
+// ──  (12 float-output reductions; argmax/argmin in Task 2) ─────
 
 #[test]
 /// Verifies numerical parity of forward and backward pass between backends for `sum_all_forward_and_backward_parity`.
@@ -797,7 +797,7 @@ fn broadcast_left_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "broadcast_left backward");
 }
 
-// ── ReductionOps: argmax/argmin (forward-only, no backward — non-
+// ── : argmax/argmin (forward-only, no backward — non-
 //    differentiable integer-index output, confirmed by 05-AUDIT.md's
 //    backward-rule audit). `float_to_scalar`/`float_to_vec1` are used to
 //    read the index values back out purely through the `Backend` trait: on

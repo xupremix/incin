@@ -111,7 +111,7 @@ pub(crate) use unsupported_creation_ops;
 /// collapse the whole tensor or act along one axis.
 ///
 /// CUDA and Metal both still invoke this; WGPU no longer does, now that
-/// every `ReductionOps` method has a real implementation. Same
+/// every `` method has a real implementation. Same
 /// feature-gating artifact as `unsupported_creation_ops`/
 /// `unsupported_tensor_ops` above: provably unused only under feature
 /// combinations that build WGPU without CUDA or Metal.

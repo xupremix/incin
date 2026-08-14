@@ -23,7 +23,7 @@ const OPERATION_TRAITS: &[&str] = &[
     "",
     "",
     "",
-    "ReductionOps",
+    "",
     "ModuleOps",
 ];
 

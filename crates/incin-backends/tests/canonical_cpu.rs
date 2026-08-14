@@ -377,7 +377,6 @@ fn support_for_reports_the_same_level_the_executor_enforces() {
 #[test]
 fn every_advertised_reduction_matches_its_legacy_counterpart() {
     use incin_core::exec::catalog::AxisAttributes;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0], vec![2, 3]);
@@ -390,7 +389,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
                 &dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&input)])
                     .unwrap(),
             ),
-            values(&<TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&input).unwrap()),
+            values(&TestBackend::sum_all::<f32>(&input).unwrap()),
         ),
         (
             "mean_all",
@@ -398,7 +397,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
                 &dispatch::execute::<op::MeanAll, _>(&context, NoAttributes, &[handle(&input)])
                     .unwrap(),
             ),
-            values(&<TestBackend as ReductionOps<TestBackend>>::mean_all::<f32>(&input).unwrap()),
+            values(&TestBackend::mean_all::<f32>(&input).unwrap()),
         ),
         (
             "max_all",
@@ -406,7 +405,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
                 &dispatch::execute::<op::MaxAll, _>(&context, NoAttributes, &[handle(&input)])
                     .unwrap(),
             ),
-            values(&<TestBackend as ReductionOps<TestBackend>>::max_all::<f32>(&input).unwrap()),
+            values(&TestBackend::max_all::<f32>(&input).unwrap()),
         ),
         (
             "min_all",
@@ -414,7 +413,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
                 &dispatch::execute::<op::MinAll, _>(&context, NoAttributes, &[handle(&input)])
                     .unwrap(),
             ),
-            values(&<TestBackend as ReductionOps<TestBackend>>::min_all::<f32>(&input).unwrap()),
+            values(&TestBackend::min_all::<f32>(&input).unwrap()),
         ),
         (
             "prod_all",
@@ -422,7 +421,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
                 &dispatch::execute::<op::ProdAll, _>(&context, NoAttributes, &[handle(&input)])
                     .unwrap(),
             ),
-            values(&<TestBackend as ReductionOps<TestBackend>>::prod_all::<f32>(&input).unwrap()),
+            values(&TestBackend::prod_all::<f32>(&input).unwrap()),
         ),
     ];
     for (name, canonical, legacy) in whole {
@@ -435,42 +434,42 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
             let c = dispatch::execute::<op::SumDim, _>(&context, attributes(), &[handle(&input)])
                 .unwrap();
             let l =
-                <TestBackend as ReductionOps<TestBackend>>::sum_dim::<f32>(&input, axis).unwrap();
+                TestBackend::sum_dim::<f32>(&input, axis).unwrap();
             ("sum_dim", values(&c), values(&l), dims(&c), dims(&l))
         },
         {
             let c = dispatch::execute::<op::MeanDim, _>(&context, attributes(), &[handle(&input)])
                 .unwrap();
             let l =
-                <TestBackend as ReductionOps<TestBackend>>::mean_dim::<f32>(&input, axis).unwrap();
+                TestBackend::mean_dim::<f32>(&input, axis).unwrap();
             ("mean_dim", values(&c), values(&l), dims(&c), dims(&l))
         },
         {
             let c = dispatch::execute::<op::MaxDim, _>(&context, attributes(), &[handle(&input)])
                 .unwrap();
             let l =
-                <TestBackend as ReductionOps<TestBackend>>::max_dim::<f32>(&input, axis).unwrap();
+                TestBackend::max_dim::<f32>(&input, axis).unwrap();
             ("max_dim", values(&c), values(&l), dims(&c), dims(&l))
         },
         {
             let c = dispatch::execute::<op::MinDim, _>(&context, attributes(), &[handle(&input)])
                 .unwrap();
             let l =
-                <TestBackend as ReductionOps<TestBackend>>::min_dim::<f32>(&input, axis).unwrap();
+                TestBackend::min_dim::<f32>(&input, axis).unwrap();
             ("min_dim", values(&c), values(&l), dims(&c), dims(&l))
         },
         {
             let c = dispatch::execute::<op::ProdDim, _>(&context, attributes(), &[handle(&input)])
                 .unwrap();
             let l =
-                <TestBackend as ReductionOps<TestBackend>>::prod_dim::<f32>(&input, axis).unwrap();
+                TestBackend::prod_dim::<f32>(&input, axis).unwrap();
             ("prod_dim", values(&c), values(&l), dims(&c), dims(&l))
         },
         {
             let c =
                 dispatch::execute::<op::SumKeepDim, _>(&context, attributes(), &[handle(&input)])
                     .unwrap();
-            let l = <TestBackend as ReductionOps<TestBackend>>::sum_keepdim::<f32>(&input, axis)
+            let l = TestBackend::sum_keepdim::<f32>(&input, axis)
                 .unwrap();
             ("sum_keepdim", values(&c), values(&l), dims(&c), dims(&l))
         },
@@ -478,7 +477,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
             let c =
                 dispatch::execute::<op::MeanKeepDim, _>(&context, attributes(), &[handle(&input)])
                     .unwrap();
-            let l = <TestBackend as ReductionOps<TestBackend>>::mean_keepdim::<f32>(&input, axis)
+            let l = TestBackend::mean_keepdim::<f32>(&input, axis)
                 .unwrap();
             ("mean_keepdim", values(&c), values(&l), dims(&c), dims(&l))
         },
@@ -486,7 +485,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
             let c =
                 dispatch::execute::<op::MaxKeepDim, _>(&context, attributes(), &[handle(&input)])
                     .unwrap();
-            let l = <TestBackend as ReductionOps<TestBackend>>::max_keepdim::<f32>(&input, axis)
+            let l = TestBackend::max_keepdim::<f32>(&input, axis)
                 .unwrap();
             ("max_keepdim", values(&c), values(&l), dims(&c), dims(&l))
         },
@@ -494,7 +493,7 @@ fn every_advertised_reduction_matches_its_legacy_counterpart() {
             let c =
                 dispatch::execute::<op::MinKeepDim, _>(&context, attributes(), &[handle(&input)])
                     .unwrap();
-            let l = <TestBackend as ReductionOps<TestBackend>>::min_keepdim::<f32>(&input, axis)
+            let l = TestBackend::min_keepdim::<f32>(&input, axis)
                 .unwrap();
             ("min_keepdim", values(&c), values(&l), dims(&c), dims(&l))
         },
@@ -714,7 +713,6 @@ fn a_declared_bias_must_be_supplied() {
 /// than silently proving nothing.
 #[test]
 fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
-    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![0.5, 0.5, 0.5, 0.5], vec![2, 2]);
@@ -936,7 +934,6 @@ fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
 /// `acosh` is undefined below one, so it gets its own operand.
 #[test]
 fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
-    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
@@ -952,7 +949,6 @@ fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
 #[test]
 fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::{AxisAttributes, ClampAttributes, ScalarAttributes};
-    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let input = f32_storage(vec![-1.5, 0.5, 2.5, 3.5], vec![2, 2]);
@@ -1033,7 +1029,6 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
 /// The binary float operations, over two broadcast operands.
 #[test]
 fn the_binary_float_operations_match_their_legacy_counterparts() {
-    use incin_core::__backend_compat::legacy::;
 
     let context = context();
     let lhs = f32_storage(vec![1.0, -2.0, 3.5, -4.5], vec![4]);
@@ -1811,7 +1806,6 @@ fn an_attention_mask_declaration_must_match_the_operand_count() {
 #[test]
 fn the_index_returning_reductions_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::{ArgsortAttributes, AxisAttributes, IndexReductionAttributes};
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
@@ -1828,7 +1822,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
     assert_eq!(
         values(&argmax),
         values(
-            &<TestBackend as ReductionOps<TestBackend>>::argmax::<f32, i64>(&input, Some(1))
+            &TestBackend::argmax::<f32, i64>(&input, Some(1))
                 .unwrap()
         )
     );
@@ -1865,7 +1859,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
             .expect("cumsum routes");
     assert_eq!(
         values(&cumsum),
-        values(&<TestBackend as ReductionOps<TestBackend>>::cumsum::<f32>(&input, 1).unwrap())
+        values(&TestBackend::cumsum::<f32>(&input, 1).unwrap())
     );
     assert_eq!(values(&cumsum), vec![3.0, 4.0, 2.0, 6.0]);
 }
@@ -1877,7 +1871,6 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
 #[test]
 fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
     use incin_core::exec::catalog::TopKAttributes;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
@@ -1895,7 +1888,7 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
     .expect("topk routes");
 
     let (legacy_values, legacy_indices) =
-        <TestBackend as ReductionOps<TestBackend>>::topk::<f32, u32>(&input, 1, 1, true).unwrap();
+        TestBackend::topk::<f32, u32>(&input, 1, 1, true).unwrap();
     assert_eq!(values(&selected), values(&legacy_values));
     assert_eq!(values(&indices), values(&legacy_indices));
 
@@ -1919,7 +1912,6 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
 #[test]
 fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
     use incin_core::exec::catalog::IndexReductionAttributes;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
@@ -1962,7 +1954,7 @@ fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
 
     // The legacy path is the one the stable tensor surface still uses, so it
     // has to agree rather than merely not error.
-    let legacy = <TestBackend as ReductionOps<TestBackend>>::argmax::<f32, u32>(&input, Some(1))
+    let legacy = TestBackend::argmax::<f32, u32>(&input, Some(1))
         .expect("the legacy path honours the index dtype");
     assert_eq!(legacy.dtype, DTypeId::U32.descriptor());
 }

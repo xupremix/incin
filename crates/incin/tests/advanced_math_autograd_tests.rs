@@ -2,7 +2,6 @@
 
 use incin::backend_authoring::*;
 use incin::prelude::*;
-use incin_core::__backend_compat::legacy::;
 
 #[test]
 fn test_trigonometric_and_transcendental_ops() -> Result<()> {

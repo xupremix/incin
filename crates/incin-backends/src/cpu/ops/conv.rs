@@ -982,7 +982,6 @@ mod tests {
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
     use incin_core::prelude::Cpu;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

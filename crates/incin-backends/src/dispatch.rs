@@ -2004,8 +2004,8 @@ impl<D: Device> DispatchBackend<D> {
         dispatch_binary!(lhs, rhs, remainder)
     }
 }
-impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
-    fn argmax<K: DType, KInt: DType>(
+impl<D: Device> DispatchBackend<D> {
+    pub fn argmax<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: Option<usize>,
     ) -> Result<DispatchStorage> {
@@ -2025,7 +2025,7 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn argmin<K: DType, KInt: DType>(
+    pub fn argmin<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: Option<usize>,
     ) -> Result<DispatchStorage> {
@@ -2045,7 +2045,7 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn argsort<K: DType, KInt: DType>(
+    pub fn argsort<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: usize,
         descending: bool,
@@ -2068,7 +2068,7 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
     }
     // `topk` returns a value/index pair rather than one storage, so it does
     // not fit `dispatch_same_device!` and is routed by hand.
-    fn topk<K: DType, KInt: DType>(
+    pub fn topk<K: DType, KInt: DType>(
         t: &DispatchStorage,
         k: usize,
         dim: usize,
@@ -2113,54 +2113,54 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn sum_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sum_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, sum_all)
     }
-    fn mean_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn mean_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, mean_all)
     }
-    fn max_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn max_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, max_all)
     }
-    fn min_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn min_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, min_all)
     }
-    fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, sum_dim, dim)
     }
-    fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, sum_keepdim, dim)
     }
-    fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, mean_dim, dim)
     }
-    fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, mean_keepdim, dim)
     }
-    fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, max_dim, dim)
     }
-    fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, max_keepdim, dim)
     }
-    fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, min_dim, dim)
     }
-    fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, min_keepdim, dim)
     }
-    fn prod_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn prod_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, prod_all)
     }
-    fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, prod_dim, dim)
     }
-    fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_reduction_unary!(t, cumsum, dim)
     }
 }
 impl<D: Device> DispatchBackend<D> {
-    fn quantize<K: FloatDType, Q: QuantDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn quantize<K: FloatDType, Q: QuantDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => crate::cpu::ops::quant::quantize_storage(value)
@@ -2177,7 +2177,7 @@ impl<D: Device> DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn dequantize<Q: QuantDType, K: FloatDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn dequantize<Q: QuantDType, K: FloatDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => crate::cpu::ops::quant::dequantize_storage(value)
@@ -2194,7 +2194,7 @@ impl<D: Device> DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn quantized_matmul<Q: QuantDType>(
+    pub fn quantized_matmul<Q: QuantDType>(
         lhs: &DispatchStorage,
         rhs: &DispatchStorage,
     ) -> Result<DispatchStorage> {

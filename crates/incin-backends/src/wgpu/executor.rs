@@ -8,7 +8,7 @@
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
-use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps};
+use incin_core::__backend_compat::legacy::{ModuleOps};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
@@ -316,56 +316,56 @@ macro_rules! impl_wgpu_reduction_dim {
 impl_wgpu_reduction_all![
     (
         SumAll,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::sum_all::<f32>
+        WgpuBackendImpl::<D>::sum_all::<f32>
     ),
     (
         MeanAll,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::mean_all::<f32>
+        WgpuBackendImpl::<D>::mean_all::<f32>
     ),
     (
         MaxAll,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::max_all::<f32>
+        WgpuBackendImpl::<D>::max_all::<f32>
     ),
     (
         MinAll,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::min_all::<f32>
+        WgpuBackendImpl::<D>::min_all::<f32>
     ),
     (
         ProdAll,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::prod_all::<f32>
+        WgpuBackendImpl::<D>::prod_all::<f32>
     ),
 ];
 
 impl_wgpu_reduction_dim![
     (
         SumDim,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::sum_dim::<f32>
+        WgpuBackendImpl::<D>::sum_dim::<f32>
     ),
     (SumKeepDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::sum_keepdim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::sum_keepdim::<f32>(input, axis)
     }),
     (MeanDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::mean_dim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::mean_dim::<f32>(input, axis)
     }),
     (MeanKeepDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::mean_keepdim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::mean_keepdim::<f32>(input, axis)
     }),
     (
         MaxDim,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::max_dim::<f32>
+        WgpuBackendImpl::<D>::max_dim::<f32>
     ),
     (MaxKeepDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::max_keepdim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::max_keepdim::<f32>(input, axis)
     }),
     (
         MinDim,
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::min_dim::<f32>
+        WgpuBackendImpl::<D>::min_dim::<f32>
     ),
     (MinKeepDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::min_keepdim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::min_keepdim::<f32>(input, axis)
     }),
     (ProdDim, |input, axis| {
-        <WgpuBackendImpl<D> as ReductionOps<WgpuBackendImpl<D>>>::prod_dim::<f32>(input, axis)
+        WgpuBackendImpl::<D>::prod_dim::<f32>(input, axis)
     }),
 ];
 

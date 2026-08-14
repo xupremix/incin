@@ -1973,21 +1973,21 @@ impl<D: Device> CudaBackendImpl<D> {
         Self::randn::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 }
-impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
+impl<D: Device> CudaBackendImpl<D> {
     // No product-reduction or prefix-scan kernel exists yet.
     /// `prod_all`. No CUDA kernel: not touching the real reduction
     /// kernel-rendering machinery `sum_all`/`max_all`/etc below use, for
     /// the same reason nothing else in this pass does — instead the same
     /// host round-trip as everything else here. Not autograd-wired,
     /// matching CPU.
-    fn prod_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn prod_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         cuda_require_f32(t.buffer.dtype, "prod_all")?;
         let data = download_f32_host(t)?;
         let product: f32 = data.iter().product();
         upload_f32_from_host(&t.buffer, vec![], vec![product])
     }
     /// `prod_dim`. Same host round-trip as `prod_all`.
-    fn prod_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn prod_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         cuda_require_f32(t.buffer.dtype, "prod_dim")?;
         let data = download_f32_host(t)?;
         let mut out_shape = t.shape.to_vec();
@@ -2013,7 +2013,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         upload_f32_from_host(&t.buffer, out_shape, prods)
     }
     /// `cumsum`. Same host round-trip as `prod_all`.
-    fn cumsum<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn cumsum<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         cuda_require_f32(t.buffer.dtype, "cumsum")?;
         let data = download_f32_host(t)?;
         let total = checked_numel(&t.shape)?;
@@ -2041,7 +2041,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
     }
 
-    fn sum_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn sum_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let rank = t.shape.len();
         if rank == 0 {
             return Ok(t.clone());
@@ -2053,7 +2053,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(curr)
     }
 
-    fn mean_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn mean_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let total = checked_numel(&t.shape)? as f64;
         let sum = Self::sum_all::<K>(t)?;
         if total > 0.0 {
@@ -2063,7 +2063,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         }
     }
 
-    fn max_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn max_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let rank = t.shape.len();
         if rank == 0 {
             return Ok(t.clone());
@@ -2075,7 +2075,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(curr)
     }
 
-    fn min_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn min_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let rank = t.shape.len();
         if rank == 0 {
             return Ok(t.clone());
@@ -2087,7 +2087,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(curr)
     }
 
-    fn sum_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn sum_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
         let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -2096,7 +2096,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn sum_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn sum_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)?;
         let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
@@ -2105,7 +2105,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn mean_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn mean_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let axis_len = *t.shape.get(dim).ok_or(ShapeError::InvalidParameter {
             operation: OperationKind::Reduction,
             parameter: "axis",
@@ -2130,7 +2130,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn mean_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn mean_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let axis_len = *t.shape.get(dim).ok_or(ShapeError::InvalidParameter {
             operation: OperationKind::Reduction,
             parameter: "axis",
@@ -2155,19 +2155,19 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn max_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn max_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         crate::cuda::ops::reduce::launch_reduce_op("max", t, dim, false)
     }
 
-    fn max_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn max_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         crate::cuda::ops::reduce::launch_reduce_op("max", t, dim, true)
     }
 
-    fn min_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn min_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         crate::cuda::ops::reduce::launch_reduce_op("min", t, dim, false)
     }
 
-    fn min_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    pub fn min_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         crate::cuda::ops::reduce::launch_reduce_op("min", t, dim, true)
     }
 
@@ -2176,7 +2176,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
     /// the winner" are the same number, so this needs no special-casing
     /// versus the `Some(d)` path, matching CPU's `argmax`/`argmin` semantics
     /// (flat index for `None`, per-axis coordinate for `Some(d)`) exactly.
-    fn argmax<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+    pub fn argmax<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
         let (target, axis) = match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -2200,7 +2200,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
     }
 
-    fn argmin<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+    pub fn argmin<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
         let (target, axis) = match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -2224,7 +2224,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
     }
 
-    fn topk<K: DType, KInt: DType>(
+    pub fn topk<K: DType, KInt: DType>(
         t: &CudaStorage,
         k: usize,
         dim: usize,
@@ -2233,7 +2233,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         cuda_topk_host(t, k, dim, largest)
     }
 
-    fn argsort<K: DType, KInt: DType>(
+    pub fn argsort<K: DType, KInt: DType>(
         t: &CudaStorage,
         dim: usize,
         descending: bool,
@@ -2319,7 +2319,7 @@ impl<D: Device> CudaBackendImpl<D> {
 /// `matmul`/`concat` plus this) with NO hand-written backward closure of
 /// their own — mirroring the free loss helpers' "free via composition"
 /// discovery documented by the backend conformance audit.
-fn im2col_2d_tape(
+pub fn im2col_2d_tape(
     t: &CudaStorage,
     kh: usize,
     kw: usize,
@@ -2357,7 +2357,7 @@ fn im2col_2d_tape(
 /// Symmetric counterpart of `im2col_2d_tape` — `conv_transpose2d`'s forward
 /// calls this directly (its forward IS `conv2d`'s backward-data formula),
 /// so this needs its own tape entry whose backward is `launch_im2col_2d`.
-fn col2im_2d_tape(
+pub fn col2im_2d_tape(
     cols: &CudaStorage,
     target_shape: &[usize],
     h_out: usize,
@@ -2396,7 +2396,7 @@ fn col2im_2d_tape(
 }
 
 /// 1D analogue of `im2col_2d_tape`.
-fn im2col_1d_tape(
+pub fn im2col_1d_tape(
     t: &CudaStorage,
     k: usize,
     stride: usize,
@@ -2431,7 +2431,7 @@ fn im2col_1d_tape(
 /// backward (`scatter_into_zeros` at `region_start = [0,0,0,0]`) reused as a
 /// forward op, so its own backward is the matching two-axis narrow back down
 /// to the original `H`/`W`.
-fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Result<CudaStorage> {
+pub fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Result<CudaStorage> {
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let target_shape = vec![b, c, h + pad_h, w + pad_w];
     let out = crate::cuda::ops::shape::scatter_into_zeros(&target_shape, &[0, 0, 0, 0], t)?;
@@ -2449,7 +2449,7 @@ fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Re
 }
 
 /// Matches `cpu/ops/conv.rs::validate_groups` exactly.
-fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> Result<()> {
+pub fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> Result<()> {
     if groups == 0 || !cin.is_multiple_of(groups) || !cout.is_multiple_of(groups) {
         return Err(Error::ShapeMismatch {
             op,
@@ -2881,8 +2881,8 @@ impl<D: Device> CudaBackendImpl<D> {
         let diff = Self::sub::<K>(pred, target)?;
         let squared = Self::mul::<K>(&diff, &diff)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&squared),
-            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&squared),
+            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&squared),
+            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&squared),
             incin_core::prelude::Reduction::None => Ok(squared),
         }
     }
@@ -2895,8 +2895,8 @@ impl<D: Device> CudaBackendImpl<D> {
         let diff = Self::sub::<K>(pred, target)?;
         let absolute = Self::abs::<K>(&diff)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&absolute),
-            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&absolute),
+            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&absolute),
+            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&absolute),
             incin_core::prelude::Reduction::None => Ok(absolute),
         }
     }
@@ -2916,8 +2916,8 @@ impl<D: Device> CudaBackendImpl<D> {
         let term2 = Self::log::<K>(&one_plus)?;
         let loss = Self::add::<K>(&term1, &term2)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss),
-            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&loss),
+            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&loss),
+            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&loss),
             incin_core::prelude::Reduction::None => Ok(loss),
         }
     }
@@ -3862,7 +3862,7 @@ mod tests {
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's
     // the free loss helpers (`incin-backends/src/legacy.rs`),
-    // which compose entirely from ``/``/`ReductionOps`
+    // which compose entirely from ``/``/``
     // (already wired on CUDA). These tests exist to prove that resolution
     // actually compiles and runs correctly, not to add new functionality.
 
@@ -3972,7 +3972,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn argmax_dim0_returns_row_index_of_column_max() {
         let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(0)).unwrap();
+        let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
         assert_eq!(out.shape, vec![3]);
     }
 
@@ -3980,7 +3980,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn argmax_dim_none_returns_scalar_flat_index() {
         let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, None).unwrap();
+        let out = B::argmax::<f32, i64>(&t, None).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
     }
 
@@ -3988,7 +3988,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn argmin_dim0_returns_row_index_of_column_min() {
         let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let out = <B as ReductionOps<B>>::argmin::<f32, i64>(&t, Some(0)).unwrap();
+        let out = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
         assert_eq!(out.shape, vec![3]);
     }
 
@@ -3996,7 +3996,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn argmax_rejects_out_of_range_axis() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
-        assert!(<B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(5)).is_err());
+        assert!(B::argmax::<f32, i64>(&t, Some(5)).is_err());
     }
 
     #[test]
@@ -4004,7 +4004,7 @@ mod tests {
     fn topk_returns_largest_k_values_and_their_indices() {
         // row0=[1,5,3], row1=[4,2,6]; dim=1, k=2, largest=true.
         let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 2, 1, true).unwrap();
+        let (vals, indices) = B::topk::<f32, u32>(&t, 2, 1, true).unwrap();
         assert_eq!(vals.shape, vec![2, 2]);
         assert_eq!(indices.shape, vec![2, 2]);
         assert_eq!(download_f32_host(&vals).unwrap(), vec![5.0, 3.0, 6.0, 4.0]);
@@ -4022,7 +4022,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn topk_clamps_k_to_axis_length() {
         let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
-        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 10, 1, true).unwrap();
+        let (vals, indices) = B::topk::<f32, u32>(&t, 10, 1, true).unwrap();
         assert_eq!(vals.shape, vec![1, 3]);
         assert_eq!(indices.shape, vec![1, 3]);
     }
@@ -4031,7 +4031,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn topk_rejects_out_of_range_axis() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
-        assert!(<B as ReductionOps<B>>::topk::<f32, u32>(&t, 1, 5, true).is_err());
+        assert!(B::topk::<f32, u32>(&t, 1, 5, true).is_err());
     }
 
     #[test]
@@ -4040,7 +4040,7 @@ mod tests {
         // row0=[1,5,3] -> ascending order is indices [0,2,1]; row1=[4,2,6]
         // -> ascending order is indices [1,0,2].
         let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let out = <B as ReductionOps<B>>::argsort::<f32, u32>(&t, 1, false).unwrap();
+        let out = B::argsort::<f32, u32>(&t, 1, false).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let bytes = out
             .buffer
@@ -4056,7 +4056,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn argsort_rejects_out_of_range_axis() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
-        assert!(<B as ReductionOps<B>>::argsort::<f32, u32>(&t, 5, false).is_err());
+        assert!(B::argsort::<f32, u32>(&t, 5, false).is_err());
     }
 
     #[test]
@@ -4593,7 +4593,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_prod_all() {
         let t = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
-        let out = <B as ReductionOps<B>>::prod_all::<f32>(&t).unwrap();
+        let out = B::prod_all::<f32>(&t).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![24.0]);
     }
 
@@ -4601,7 +4601,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_prod_dim() {
         let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as ReductionOps<B>>::prod_dim::<f32>(&t, 1).unwrap();
+        let out = B::prod_dim::<f32>(&t, 1).unwrap();
         assert_eq!(out.shape, vec![2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![6.0, 120.0]);
     }
@@ -4610,7 +4610,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_cumsum() {
         let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as ReductionOps<B>>::cumsum::<f32>(&t, 1).unwrap();
+        let out = B::cumsum::<f32>(&t, 1).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),

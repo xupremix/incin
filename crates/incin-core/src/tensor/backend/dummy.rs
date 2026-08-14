@@ -475,39 +475,39 @@ use super::*;
     /// reductions either remove `dim` or clamp it to size 1 (`_keepdim`),
     /// exactly like a real reduction's shape effect --- again with no real
     /// values behind either result.
-    impl<D: Device + Clone + 'static> ReductionOps<Self> for DummyBackend<D> {
+    impl<D: Device + Clone + 'static> DummyBackend<D> {
         /// Collapses to an empty (scalar) shape.
-        fn sum_all<K: DType>(
+        pub fn sum_all<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
-        fn mean_all<K: DType>(
+        pub fn mean_all<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
-        fn max_all<K: DType>(
+        pub fn max_all<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
-        fn min_all<K: DType>(
+        pub fn min_all<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Collapses to an empty (scalar) shape.
-        fn prod_all<K: DType>(
+        pub fn prod_all<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(alloc::vec![])
         }
         /// Removes `dim` from the shape.
-        fn prod_dim<K: DType>(
+        pub fn prod_dim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -518,14 +518,14 @@ use super::*;
             Ok(s)
         }
         /// A running sum along `dim` leaves the shape unchanged.
-        fn cumsum<K: DType>(
+        pub fn cumsum<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(t.clone())
         }
         /// Removes `dim` from the shape.
-        fn sum_dim<K: DType>(
+        pub fn sum_dim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -536,7 +536,7 @@ use super::*;
             Ok(s)
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
-        fn sum_keepdim<K: DType>(
+        pub fn sum_keepdim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -547,7 +547,7 @@ use super::*;
             Ok(s)
         }
         /// Removes `dim` from the shape.
-        fn mean_dim<K: DType>(
+        pub fn mean_dim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -558,7 +558,7 @@ use super::*;
             Ok(s)
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
-        fn mean_keepdim<K: DType>(
+        pub fn mean_keepdim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -569,7 +569,7 @@ use super::*;
             Ok(s)
         }
         /// Removes `dim` from the shape.
-        fn max_dim<K: DType>(
+        pub fn max_dim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -580,7 +580,7 @@ use super::*;
             Ok(s)
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
-        fn max_keepdim<K: DType>(
+        pub fn max_keepdim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -591,7 +591,7 @@ use super::*;
             Ok(s)
         }
         /// Removes `dim` from the shape.
-        fn min_dim<K: DType>(
+        pub fn min_dim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -602,7 +602,7 @@ use super::*;
             Ok(s)
         }
         /// Sets `dim`'s size to 1, keeping the dimension in the shape.
-        fn min_keepdim<K: DType>(
+        pub fn min_keepdim<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             dim: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -613,21 +613,21 @@ use super::*;
             Ok(s)
         }
         /// Always an empty shape --- no indices are actually computed.
-        fn argmax<K: DType, KInt: DType>(
+        pub fn argmax<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
         /// Always an empty shape --- no indices are actually computed.
-        fn argmin<K: DType, KInt: DType>(
+        pub fn argmin<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
         /// Always an empty `(values, indices)` pair.
-        fn topk<K: DType, KInt: DType>(
+        pub fn topk<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _k: usize,
             _dim: usize,
@@ -639,7 +639,7 @@ use super::*;
             Ok((alloc::vec![], alloc::vec![]))
         }
         /// Always an empty shape --- no indices are actually computed.
-        fn argsort<K: DType, KInt: DType>(
+        pub fn argsort<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _descending: bool,
@@ -659,14 +659,14 @@ use super::*;
             binary: $($binary:ident),* $(,)?;
         ) => {
             $(
-                fn $unary<K: DType>(
+                pub fn $unary<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
                     Ok(t.clone())
                 }
             )*
             $(
-                fn $scalar<K: DType>(
+                pub fn $scalar<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                     _val: f64,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -674,7 +674,7 @@ use super::*;
                 }
             )*
             $(
-                fn $diagonal<K: DType>(
+                pub fn $diagonal<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                     _k: i64,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -682,7 +682,7 @@ use super::*;
                 }
             )*
             $(
-                fn $binary<K: DType>(
+                pub fn $binary<K: DType>(
                     lhs: &<Self as StorageBackend>::Storage<K>,
                     _rhs: &<Self as StorageBackend>::Storage<K>,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -703,7 +703,7 @@ use super::*;
             binary: $($binary:ident),* $(,)?;
         ) => {
             $(
-                fn $indexed<K: DType, KInt: DType>(
+                pub fn $indexed<K: DType, KInt: DType>(
                     _t: &<Self as StorageBackend>::Storage<K>,
                     _dim: usize,
                     _index: &<Self as StorageBackend>::Storage<KInt>,
@@ -715,7 +715,7 @@ use super::*;
                 }
             )*
             $(
-                fn $dim<K: DType>(
+                pub fn $dim<K: DType>(
                     _t: &<Self as StorageBackend>::Storage<K>,
                     _dim: usize,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -726,7 +726,7 @@ use super::*;
                 }
             )*
             $(
-                fn $binary<K: DType>(
+                pub fn $binary<K: DType>(
                     _lhs: &<Self as StorageBackend>::Storage<K>,
                     _rhs: &<Self as StorageBackend>::Storage<K>,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
