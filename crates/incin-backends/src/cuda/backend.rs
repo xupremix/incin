@@ -5,6 +5,7 @@ use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
 };
+use half::{bf16, f16};
 
 /// CUDA compute backend implementation for Incin.
 #[derive(Clone)]

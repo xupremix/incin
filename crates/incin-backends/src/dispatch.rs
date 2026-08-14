@@ -13,6 +13,8 @@ use incin_core::prelude::Cpu;
 use incin_core::prelude::Cuda;
 #[cfg(feature = "wgpu")]
 use incin_core::prelude::Wgpu;
+#[cfg(feature = "metal")]
+use incin_core::prelude::Metal;
 
 use incin_core::exec::{PrecisionCapabilities, PrecisionRequest, ResolvedPrecision};
 
