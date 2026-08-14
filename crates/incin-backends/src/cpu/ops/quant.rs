@@ -46,6 +46,29 @@ pub(crate) fn quantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
     ))
 }
 
+pub(crate) fn dequantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
+    let q8_data = match &*t.buffer {
+        CpuBuffer::Q8_0(v) => v,
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "dequantize",
+                backend: "Cpu (expected Q8_0 buffer)",
+            });
+        }
+    };
+    let mut f32_data = Vec::with_capacity(q8_data.len() * 32);
+    for block in q8_data {
+        let d = block.d.to_f32();
+        for quantized in block.qs {
+            f32_data.push(quantized as f32 * d);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::F32(f32_data),
+        t.shape.to_vec(),
+    ))
+}
+
 impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
     /// `quantize`.
     fn quantize<K: FloatDType, Q: QuantDType>(
@@ -64,7 +87,7 @@ impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
 
     /// `dequantize`.
     fn dequantize<Q: QuantDType, K: FloatDType>(
-        _t: &<Self as StorageBackend>::Storage<Q>,
+        t: &<Self as StorageBackend>::Storage<Q>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
             || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
@@ -75,29 +98,7 @@ impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
             });
         }
 
-        let q8_data = match &*_t.buffer {
-            CpuBuffer::Q8_0(v) => v,
-            _ => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "dequantize",
-                    backend: "Cpu (expected Q8_0 buffer)",
-                });
-            }
-        };
-
-        let n = q8_data.len() * 32;
-        let mut f32_data = Vec::with_capacity(n);
-        for block in q8_data {
-            let d = block.d.to_f32();
-            for i in 0..32 {
-                f32_data.push(block.qs[i] as f32 * d);
-            }
-        }
-
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::F32(f32_data),
-            _t.shape.to_vec(),
-        ))
+        dequantize_storage(t)
     }
 
     /// `quantized_matmul`.
