@@ -1,4 +1,4 @@
-//! `conv1d`/`conv2d` for `CpuBackendImpl<D>` via im2col (window-unfold into
+//! `conv1d`/`conv2d` for CPU storage via im2col (window-unfold into
 //! a column matrix) + `ops::matmul::batched_matmul_impl` for the actual
 //! multiply-accumulate (D-01).
 //!
@@ -23,7 +23,7 @@
 //! their OWN backward is hand-composed here (reusing `batched_matmul_impl`'s
 //! already-gradcheck-verified backward only for the INTERNAL
 //! multiply-accumulate step, per RESEARCH.md Pattern 3). Bias, when present,
-//! is broadcast-added via the already-tape-tracked `NumericOps::add` AFTER
+//! is broadcast-added via the canonical storage helper AFTER
 //! the hand-composed conv math, so `grad_bias` falls out of that op's own
 //! existing backward + `unbroadcast` for free — it is never hand-derived
 //! inside `conv1d_impl`/`conv2d_impl`'s own closure.
@@ -43,10 +43,10 @@
 use incin_core::prelude::Error;
 use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
 use incin_core::prelude::{DType, Result};
-use incin_core::__backend_compat::legacy::{NumericOps, TensorOps};
 
-use crate::cpu::CpuBackendImpl;
+use crate::cpu::ops::elementwise::add_storage;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
+use crate::cpu::ops::shape_ops::concat_storage;
 use crate::cpu::storage::{CpuBuffer, CpuStorage, increment_index, scatter_into_zeros};
 
 use crate::cpu::tape::{self, TapeEntry};
@@ -407,7 +407,7 @@ fn col2im_2d(
 /// Canonical conv1d implementation: im2col + per-group
 /// `batched_matmul_impl` + concat forward, hand-composed backward for
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
-/// broadcast-added via the already-tape-tracked `NumericOps::add` (so
+/// broadcast-added via the canonical storage helper (so
 /// `grad_bias` is free via composition, per this file's module doc).
 pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
@@ -418,9 +418,6 @@ pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
     let (cout, cin_g, kernel_size) = (weight.shape[0], weight.shape[1], weight.shape[2]);
     validate_groups("conv1d", cin, cout, groups)?;
@@ -453,7 +450,7 @@ pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
     let matmul_out = if groups == 1 {
         group_outputs[0].clone()
     } else {
-        <B<D> as TensorOps<B<D>>>::concat::<K>(&refs, 2)?
+        concat_storage(&refs, 2)?
     };
     // matmul_out: [B, L_out, Cout] -> canonical [B, Cout, L_out]
     let conv_out = matmul_out.transpose(1, 2)?.reshape(&[b, cout, l_out])?;
@@ -527,7 +524,7 @@ pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1])?;
-            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
+            add_storage(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -574,9 +571,6 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
     window: Window2d,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     let (b, cin, h, w) = (
         input.shape[0],
         input.shape[1],
@@ -633,7 +627,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
     let matmul_out = if groups == 1 {
         group_outputs[0].clone()
     } else {
-        <B<D> as TensorOps<B<D>>>::concat::<K>(&refs, 2)?
+        concat_storage(&refs, 2)?
     };
     // matmul_out: [B, H_out*W_out, Cout] -> canonical [B, Cout, H_out, W_out]
     let conv_out = matmul_out
@@ -700,7 +694,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
-            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
+            add_storage(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -747,9 +741,6 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     if groups != 1 {
         return Err(Error::ShapeMismatch {
             op: "conv_transpose2d",
@@ -893,7 +884,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::prelude::Device, K: DType>(
     match bias {
         Some(bias) => {
             let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
-            <B<D> as NumericOps<B<D>>>::add::<K>(&conv_out, &bias_shaped)
+            add_storage(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),
     }
@@ -988,6 +979,7 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
 /// `tests`.
 mod tests {
     use super::*;
+    use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
     use incin_core::prelude::Cpu;
     use incin_core::__backend_compat::legacy::ReductionOps;
