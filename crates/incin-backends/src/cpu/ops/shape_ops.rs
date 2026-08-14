@@ -309,6 +309,70 @@ pub(crate) fn lerp_storage(
     ))
 }
 
+pub(crate) fn where_storage(
+    mask: &CpuStorage,
+    on_true: &CpuStorage,
+    on_false: &CpuStorage,
+) -> Result<CpuStorage> {
+    let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        out.push(if mask.get_bool(&idx) {
+            on_true.get(&idx)
+        } else {
+            on_false.get(&idx)
+        });
+        if !out_shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+    }
+    let out_storage = CpuStorage::from_contiguous(
+        on_true.buffer.from_f64_values(out)?,
+        out_shape,
+    );
+    let (mask_cap, on_true_cap, on_false_cap) =
+        (mask.clone(), on_true.clone(), on_false.clone());
+    let (true_id, false_id, out_id) = (on_true.id, on_false.id, out_storage.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![true_id, false_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut grad_true = Vec::with_capacity(total);
+            let mut grad_false = Vec::with_capacity(total);
+            let mut idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..total {
+                let gradient = grad_out.get(&idx);
+                if mask_cap.get_bool(&idx) {
+                    grad_true.push(gradient);
+                    grad_false.push(0.0);
+                } else {
+                    grad_true.push(0.0);
+                    grad_false.push(gradient);
+                }
+                if !grad_out.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut idx, &grad_out.shape);
+                }
+            }
+            let grad_true = CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grad_true)?,
+                grad_out.shape.to_vec(),
+            );
+            let grad_false = CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grad_false)?,
+                grad_out.shape.to_vec(),
+            );
+            Ok(vec![
+                tape::unbroadcast(&grad_true, &on_true_cap.shape)?,
+                tape::unbroadcast(&grad_false, &on_false_cap.shape)?,
+            ])
+        }),
+    });
+    Ok(out_storage)
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -913,65 +977,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         on_true: &<Self as StorageBackend>::Storage<K>,
         on_false: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let is_true = mask.get_bool(&idx);
-            let val = if is_true {
-                on_true.get(&idx)
-            } else {
-                on_false.get(&idx)
-            };
-            out.push(val);
-            if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
-            }
-        }
-        let buffer = on_true.buffer.from_f64_values(out)?;
-        let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
-
-        let (mask_cap, on_true_cap, on_false_cap) =
-            (mask.clone(), on_true.clone(), on_false.clone());
-        let (true_id, false_id, out_id) = (on_true.id, on_false.id, out_storage.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![true_id, false_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
-                let mut grad_true = Vec::with_capacity(total);
-                let mut grad_false = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let m = mask_cap.get_bool(&idx);
-                    let g = grad_out.get(&idx);
-                    if m {
-                        grad_true.push(g);
-                        grad_false.push(0.0);
-                    } else {
-                        grad_true.push(0.0);
-                        grad_false.push(g);
-                    }
-                    if !grad_out.shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                let g_true = CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_true)?,
-                    grad_out.shape.to_vec(),
-                );
-                let g_false = CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_false)?,
-                    grad_out.shape.to_vec(),
-                );
-                Ok(vec![
-                    tape::unbroadcast(&g_true, &on_true_cap.shape)?,
-                    tape::unbroadcast(&g_false, &on_false_cap.shape)?,
-                ])
-            }),
-        });
-        Ok(out_storage)
+        where_storage(mask, on_true, on_false)
     }
 
     fn gather<K: DType, KInt: DType>(

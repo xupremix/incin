@@ -44,7 +44,7 @@ use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
     int_to_vec1_storage, lerp_storage, masked_fill_storage, narrow_storage, pad_storage,
-    repeat_storage, squeeze_storage, sub_scalar_storage, transpose_storage,
+    repeat_storage, squeeze_storage, sub_scalar_storage, transpose_storage, where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
@@ -1908,27 +1908,7 @@ impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
         for storage in [mask, on_true, on_false] {
             admitted(self, operation, storage, training_mode(request.context))?;
         }
-        match on_true.dtype().builtin_id() {
-            Some(DTypeId::F32) => {
-                <Self as TensorOps<Self>>::where_cond::<f32>(mask, on_true, on_false)
-            }
-            Some(DTypeId::F64) => {
-                <Self as TensorOps<Self>>::where_cond::<f64>(mask, on_true, on_false)
-            }
-            Some(DTypeId::I64) => {
-                <Self as TensorOps<Self>>::where_cond::<i64>(mask, on_true, on_false)
-            }
-            Some(DTypeId::U8) => {
-                <Self as TensorOps<Self>>::where_cond::<u8>(mask, on_true, on_false)
-            }
-            Some(DTypeId::U32) => {
-                <Self as TensorOps<Self>>::where_cond::<u32>(mask, on_true, on_false)
-            }
-            Some(DTypeId::Bool) => {
-                <Self as TensorOps<Self>>::where_cond::<bool>(mask, on_true, on_false)
-            }
-            _ => return Err(invalid(operation, "unsupported value dtype for where_cond")),
-        }
+        where_storage(mask, on_true, on_false)
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
