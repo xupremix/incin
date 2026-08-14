@@ -11,8 +11,8 @@
 //! worse than the panics: a wrong shape propagates silently.
 
 use incin_core::prelude::{
-    Axis, BroadcastShape, DimensionConstraint, Dyn, Error, MatMulShape, OperationKind, Shape,
-    ShapeArgs, ShapeBuf, ShapeError, ShapeSpec,
+    Axis, BroadcastShape, DimensionConstraint, Dyn, MatMulShape, OperationKind, Shape, ShapeBuf,
+    ShapeError, ShapeValue,
 };
 extern crate incin_core as incin;
 use incin_macros::s;
@@ -20,34 +20,6 @@ use incin_macros::s;
 type RuntimeMatrix = s![dyn, dyn];
 type RuntimeStatic = s![dyn, 3];
 type Static23 = s![2, 3];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LyingShape;
-
-impl Shape for LyingShape {
-    type Arg = ();
-
-    fn resolve(_: Self::Arg) -> Result<ShapeBuf, ShapeError> {
-        Ok(ShapeBuf::from_slice(&[2]))
-    }
-
-    fn validate_dims(dims: &[usize]) -> Result<(), ShapeError> {
-        if dims == [3] {
-            Ok(())
-        } else {
-            Err(ShapeError::TargetShapeRejected {
-                operation: OperationKind::Storage,
-                rank: dims.len(),
-            })
-        }
-    }
-}
-
-impl incin_core::prelude::DynShape for LyingShape {
-    fn rank(_: &ShapeBuf) -> usize {
-        1
-    }
-}
 
 #[test]
 fn structural_shape_resolution_rejects_bad_runtime_arguments_without_panicking() {
@@ -62,12 +34,9 @@ fn structural_shape_resolution_rejects_bad_runtime_arguments_without_panicking()
 }
 
 #[test]
-fn shape_args_revalidates_custom_shape_resolution_before_minting_shape_value() {
-    let error = ShapeArgs::<LyingShape>::new(()).resolve().unwrap_err();
-    assert!(matches!(
-        error,
-        Error::Shape(ShapeError::TargetShapeRejected { .. })
-    ));
+fn shape_value_rejects_invalid_static_dimensions_before_minting_proof() {
+    let error = ShapeValue::<Static23>::try_new(ShapeBuf::from_slice(&[2, 4])).unwrap_err();
+    assert!(matches!(error, ShapeError::TargetShapeRejected { .. }));
 }
 
 // --- broadcast ----------------------------------------------------------
