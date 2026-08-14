@@ -16,7 +16,6 @@ pub use variable::VariableBackend;
 mod capability;
 pub use capability::{HostInterop, TransferBackend};
 mod optimizer;
-pub use optimizer::{OptimizerOps, adamw_step_composed};
 pub mod legacy;
 use legacy::TensorOps;
 pub mod dummy {
