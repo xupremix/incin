@@ -29,8 +29,7 @@ stops existing, so this file cannot rot into a list of deleted files.
 > variants. The old operation-family traits remain only for backend-local
 > helpers, fused special execution sites, tracing adapters, and compatibility
 > tests. Their in-tree compatibility namespace is doc-hidden
-> (`incin_core::__backend_compat`); they are not a backend-authoring API or a
-> second stable tensor path.
+> They are not a backend-authoring API or a second stable tensor path.
 
 The shape of that table is the point. Each row is a decision made once and then
 made unrepeatable, so the cost of migrating operation number 118 is the same as
@@ -44,7 +43,7 @@ treated as settled.
 | Surface | Why it still moves |
 |---|---|
 | The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Sixteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
-| The seven remaining core operation-family traits | They remain only as backend-local implementation adapters and special execution sites under the doc-hidden `incin_core::__backend_compat` namespace. Optimizer and loss compatibility helpers now live in `incin-backends`; neither location is a backend-authoring API or a second stable tensor path |
+| The legacy core operation-family traits | Removed from production source. Backend-local ordinary helpers and explicit execution sites remain where an operation cannot be represented by `Execute<O>` |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot state the tight per-operand pair directly, and no longer needs to: `INDEX_AND_F32_DTYPES` states the *union* the row can honestly claim, the same trick `descriptor_min_rank` already used for rank, and the descriptor's own per-operand contract (already `TypedContract`/hand-cased in `validate`, not something this added) rejects the wrong combination before any capability query runs. Both operations that needed it — `embedding` and `cross_entropy_loss` — are migrated on that technique, so no struct change to `CapabilityRule` was needed or made |
 | `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
@@ -76,7 +75,7 @@ executor enforcing whichever operand the union cannot pin down alone. No
 3. **Widen `Execute` to the sites it cannot reach**, or split them off into a
    contract that can. Sixteen operations are not pending migrations at all,
    and counting them as such overstates the remaining work by roughly 30%.
-4. **Remove the legacy operation-family adapters from the authoring surface**
+4. **Keep legacy operation-family adapters absent from the authoring surface**
    and bound each remaining compatibility call site by the capability it
    actually uses. This is the step that ends the dual architecture. It is no
    longer blocked by migration coverage: the remaining executable gaps are

@@ -5,7 +5,8 @@ Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OP
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
 Last verified command: cargo test -p incin -- --test-threads=1
 Last verified result: PASS (full incin suite, including state/checkpoint, optimizer, and doctests)
-Next concrete action: complete the validation matrix and keep optimizer persistence and the full typed variable-backend migration explicitly deferred.
+Next concrete action: complete the validation matrix and keep any remaining
+backend decomposition scoped to independently verifiable ownership slices.
 
 Status vocabulary:
 
@@ -110,8 +111,8 @@ the next foundation blockers; none is claimed complete by the shape work:
 | --- | --- | --- |
 | NEXT-A | Legacy state API removal | Model `StateDict`, serializer traits, safetensors helpers, and hub loading are snapshot-native. Optimizer dictionaries remain intentionally separate and are tracked under NEXT-K. |
 | NEXT-I | Tied/shared parameter identity | `StatePath` is intentionally distinct from runtime variable identity. No safe alias/identity contract exists for tied parameters; define one before deduplicating or restoring shared variables. |
-| NEXT-J | Backend typed variable abstraction | Public model-state traversal no longer exposes `StateLoadPlan<B>` or `B::RawVar`: `StateLoadPlan` is backend-neutral type-erased staging, and typed leaves recover backend handles only at commit. The later full `VariableBackend::Var<K>` migration remains deferred until the backend resource contract is settled. |
-| NEXT-K | Heterogeneous optimizer/parameter visitor | Model traversal is heterogeneous, but optimizer parameter visitation and optimizer-state persistence remain homogeneous/RawVar-oriented. Design the visitor contract before claiming complete training-state persistence. |
+| NEXT-J | Backend typed variable abstraction | Complete: `VariableBackend::Var<K>` carries the dtype marker, all production backends implement the typed contract, and the source gate rejects `RawVar`. |
+| NEXT-K | Heterogeneous optimizer/parameter visitor | Complete for model traversal: `VisitState`, `StateVisitor`, `StateMutVisitor`, and parameter visitors are the typed seam; snapshot/load and optimizer adapters consume traversal without exposing backend handles. |
 | NEXT-B | Backend resource ownership/lifecycle | `Backend` and `ExecutionContext` expose execution/storage capabilities but no foundation-wide resource lease or explicit stream/event lifetime contract. Define ownership and failure cleanup before async/resource APIs expand. |
 | NEXT-C | Mutation and rollback semantics | Mutation descriptors are classified, but backend mutation and optimizer paths do not expose a common transactional/rollback contract. Specify atomicity and partial-failure behavior before claiming mutation safety. |
 | NEXT-D | Training-state persistence | `TrainState` and gradient typestate are compile-time markers; checkpoint/load and optimizer state do not yet have a complete typed persistence contract for frozen/trainable transitions. |

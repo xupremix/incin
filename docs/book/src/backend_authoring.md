@@ -5,10 +5,8 @@ to Incin, not for someone using it.
 
 The backend authoring contract is the descriptor executor. Implement one
 `Execute<Descriptor<op::X>>` instance for each operation the backend advertises.
-The older operation-family traits are hidden compatibility adapters for legacy
-backend implementations and tests. They are implementation-only under the
-doc-hidden `incin_core::__backend_compat` namespace and are not part of the
-backend authoring contract.
+Backend authors do not implement historical operation-family traits: reusable
+backend helpers are ordinary functions behind each descriptor executor.
 
 ## `StorageBackend`: the minimum
 

@@ -21,9 +21,9 @@ By default, any module, struct, enum, trait, or function **MUST** use `pub(crate
 ### Examples of what MAY be `pub`:
 - Concrete backend implementations: `pub struct IncinBackend<T, D>;`
 - Associated types satisfying the `Backend` trait: `pub struct CpuVar; pub struct CpuGrads;`
-- Re-exports of core traits (`Backend`); legacy operation-family adapters are
-  implementation-only under `incin_core::__backend_compat` and are not a
-  backend-authoring API.
+- Re-exports of core traits (`Backend`); operation execution uses the
+  descriptor `Execute<O>` contract and does not expose historical operation
+  families.
 
 ---
 

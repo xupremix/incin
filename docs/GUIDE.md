@@ -206,10 +206,9 @@ rule, output shape) and `docs/capabilities.md` for backend support levels
 (`Native`/`Composed`/`Fallback`/`Unsupported`). Both are generated from source
 and re-checked by tests.
 
-The repository still contains compatibility adapters for in-tree migration, but
-they are implementation-only under `incin_core::__backend_compat`. New backend
-authors must implement the descriptor contract and should not depend on those
-adapters. Application code should use the ordinary tensor methods.
+The repository no longer contains the legacy operation-family compatibility
+layer. New backend authors implement the descriptor contract, and application
+code uses the ordinary tensor methods.
 
 ## 6. The canonical execution architecture
 
@@ -298,9 +297,9 @@ for whichever operand the union cannot pin down alone. That blocker is now
 closed; none of the remaining 5 is waiting on a dtype set.
 
 Backend-executable operations in the stable tensor surface now use this path.
-The remaining family-trait references are backend-local adapters for fused
-kernels, host readback, tracing, and special execution sites. They do not form
-an alternate stable tensor execution path.
+The legacy operation-family architecture has been removed from production
+source; backend-local helpers are ordinary implementation functions and do not
+form an alternate stable tensor execution path.
 
 ## 7. The target API: allocation targets
 
@@ -350,8 +349,7 @@ is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 `incin::backend_authoring` (feature `backend-authoring`) is the contract a new
 backend implements: `StorageBackend` (associated `Storage<K>`, `Device`,
 `metadata()`), `Capabilities`, named optional capability views, and — per
-operation — `Execute<Descriptor<op::X>>`. Legacy family traits are kept only in
-the doc-hidden `incin_core::__backend_compat` namespace for in-tree adapters.
+operation — `Execute<Descriptor<op::X>>`.
 
 **`StorageBackend::Storage<K>`** is a physical allocation plus
 `TensorMeta` (shape, strides, offset, dtype, device, alignment, capacity — a

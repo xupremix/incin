@@ -65,13 +65,13 @@ normal prelude. Backend authors should use the named `backend_authoring` and
 by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
 `backend/variable.rs`, `backend/autograd.rs`, and `backend/capability.rs`.
 Named `HostInterop`, `VariableBackend`, `AutogradBackend`, `StorageTransfer`,
-and `TransferBackend` views are the migration seam. `StorageTransfer` is the
-inference-safe storage movement contract; variable-capable backends add
-`TransferTo` for variable handles. The core `backend.rs` identity
-contract is intentionally small; legacy operation-family declarations live in
-`backend/legacy.rs` and are exposed only through the doc-hidden
-`incin_core::__backend_compat` adapter namespace. The shape-only test backend
-lives in `backend/dummy.rs`.
+and `TransferBackend` views are the capability contract. `StorageTransfer` is
+the inference-safe storage movement contract; variable-capable backends add
+`TransferTo` for typed variable handles. `VariableBackend::Var<K>` carries the
+variable dtype at the Rust type level; there is no erased `RawVar` escape hatch.
+The core `backend.rs` identity contract is intentionally small and the
+operation path is the descriptor `Execute<O>` contract. The shape-only test
+backend lives in `backend/dummy.rs`.
 Host byte serialization and tensor formatting belong to `HostInterop`; neither
 is required by the base `Backend` contract. `AutogradBackend` is likewise an
 independent capability, so an inference-only backend need not implement it.
@@ -82,7 +82,7 @@ The ordinary facade prelude allowlist is intentionally user-shaped: tensor
 and shape construction, dtype/device selection, gradients, module/layer
 building, state visitors/snapshots, optimizers, and the stable macros. It does
 not export graph capture, proof-construction helpers, storage/backend-authoring
-traits, physical storage encodings, or transactional `StateLoadPlan`; those
+traits, physical storage encodings, `StateDict`, or transactional `StateLoadPlan`; those
 names require a named expert surface or are reserved for macro expansion.
 
 ## Adding an operation
@@ -111,16 +111,16 @@ base backend contract.
 ## Handwritten modules
 
 The stable conceptual path is a direct `impl Module<Input>` with explicit
-implementations for the capabilities the module exposes: `Parameters`,
-`StateDict`, `TrainMode`, `NamedLayers`, or transfer. A custom module does not
-need `#[module]` to implement forward. State snapshots are owned and loaded
-through the prepare/commit contract, so a failed load must not partially mutate
-the module.
+`VisitState`/`VisitParameters` implementations for the fields the module
+exposes. A custom module does not need `#[module]` to implement forward. State
+snapshots are owned and loaded through the visitor-backed staging adapter, so a
+failed load must not partially mutate the module. Model authors do not handle
+backend variable types or `StateLoadPlan`.
 
-The macro is convenience syntax for the same explicit traversal. It is not a
-requirement for custom networks and must not hide an unsupported field behind
-compiler method-resolution tricks. Use `#[module(ignore)]` for a field that is
-intentionally outside module traversal.
+The macro is convenience syntax for the same explicit visitor traversal. It is
+not a requirement for custom networks and must not hide an unsupported field
+behind compiler method-resolution tricks. Use `#[module(ignore)]` for a field
+that is intentionally outside module traversal.
 
 Capability generation is explicit. `#[module]` accepts `no_stats`,
 `no_parameters`, `no_state`, `no_named_layers`, `no_shape_info`,
@@ -185,10 +185,10 @@ status paths and must not be presented as current API guidance.
 
 ## Unresolved architecture
 
-The complete removal of the remaining legacy operation-family adapters and the
-final public API allowlist remain active consolidation work. Resolve these against
-`docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before
-expanding the public surface.
+The legacy operation-family adapters have been removed. Remaining backend
+decomposition is a maintainability follow-up: large files are tracked by the
+large-file inventory and must be split by storage, capability, and executor
+responsibility when each extraction can be validated independently.
 
 ## Large-file inventory
 
@@ -204,7 +204,7 @@ of problem:
 | `crates/incin-core/src/tensor/backend/dummy.rs` | shape-only test backend and test operation coverage | keep test-only behavior isolated from production backend identity |
 | `crates/incin-core/src/dist/{plan,context}.rs` | distributed placement/planning prototypes | remain feature-gated and split only with a concrete ownership seam |
 | `crates/incin-core/src/tensor/base.rs` | central Tensor invariant and constructor implementation | keep invariant-preserving constructors together; extract only neutral value helpers |
-| `crates/incin-backends/src/{cuda,wgpu,metal}/backend.rs` | feature-gated backend identity, storage, and compatibility implementations | split storage, capability, and legacy adapters per backend |
+| `crates/incin-backends/src/{cuda,wgpu,metal}/backend.rs` | feature-gated backend identity, storage, capability, and executor implementations | split remaining responsibility clusters when validated independently |
 | `crates/incin-backends/src/{cpu/canonical.rs,dispatch.rs,capability.rs}` | canonical registrations, dispatch routing, and capability declarations | keep generated/completeness coupling intact; extract operation families only with focused tests |
 | `crates/incin-backends/src/cpu/ops/{elementwise_kernel,elementwise,shape_ops,reduce,matmul,conv}.rs` | cohesive CPU operation families and kernel helpers | preserve family-local tests; split only where execution ownership becomes clearer |
 | `crates/incin-backends/src/{dist/nccl.rs,dist/tuning.rs,tuning/identity.rs,tuning/service.rs}` | feature-gated distributed/tuning services | keep experimental ownership local; split resource protocols when they stabilize |
