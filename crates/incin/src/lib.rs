@@ -86,7 +86,8 @@ pub use incin_core::prelude::{
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
     QuantDType, RequiresGrad, Result, Shape, StateDict, StateLoadPlan, StatePath, StateRole,
-    StateSnapshot, StateValue, StorageEncoding, TensorElement, bf16, convert_f64_to_i64, f16,
+    StateSnapshot, StateValue, StorageEncoding, TensorElement, VariableBackend, bf16,
+    convert_f64_to_i64, f16,
 };
 
 #[cfg(feature = "cuda")]
@@ -485,7 +486,7 @@ pub mod prelude {
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
         Slice, StateDict, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue,
-        StorageEncoding, TensorElement, bf16, convert_f64_to_i64, f16,
+        StorageEncoding, TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 
     pub use incin_core::prelude::{
