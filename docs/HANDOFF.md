@@ -51,8 +51,9 @@ Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
 `TransferBackend` views are the migration seam. The core `backend.rs` identity
 contract is intentionally small; legacy operation-family declarations live in
 `backend/legacy.rs`, and the shape-only test backend lives in `backend/dummy.rs`.
-The legacy `Backend` method bundle still remains for compatibility until each
-implementation is migrated.
+Host byte serialization now belongs to `HostInterop`; only the tensor formatting
+compatibility methods remain on `Backend` while the descriptor migration removes
+their operation-family dependencies.
 Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
@@ -149,7 +150,7 @@ status paths and must not be presented as current API guidance.
 
 ## Unresolved architecture
 
-The complete removal of the legacy `Backend` method bundle, the final public
+The complete removal of the remaining legacy formatting methods, the final public
 API allowlist, and the complete manual-first module traversal contract remain
 active consolidation work. Resolve these against
 `docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before

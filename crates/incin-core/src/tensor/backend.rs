@@ -154,54 +154,25 @@ pub trait Backend:
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
 
-    /// Renders a tensor's values for `Display` (concise, human-facing), the
-    /// PyTorch-style bracketed grid `Tensor`'s own `Display` wraps in
-    /// `tensor(...)` (`tensor/base.rs`).
-    ///
-    /// The default reads every element back through [`TensorOps::float_to_vec1`]
-    /// or [`TensorOps::int_to_vec1`] (chosen by [`storage_dtype`](Self::storage_dtype))
-    /// and hands them to the crate's own renderer, which stays private because
-    /// the grid format is not something a backend author gets to depend on. A
-    /// backend only needs to override this if reading every element back to the
-    /// host is not how it wants to support printing.
+    /// Compatibility formatting hook; new capability-aware code should use
+    /// [`HostInterop::host_format_display`] directly.
     fn format_tensor_display<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
+        storage: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
         Self: TensorOps<Self>,
     {
-        use crate::tensor::display::{Values, render};
-        let shape = Self::shape(t);
-        match Self::storage_dtype(t) {
-            None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
-            Some(dtype) if dtype.is_quantized() => alloc::format!(
-                "<{} tensor: shape={shape:?}, not printable without dequantizing>",
-                dtype.name()
-            ),
-            Some(dtype) if dtype.is_integer() => match Self::int_to_vec1(t) {
-                Ok(values) => render(&shape, &Values::Int(values)),
-                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
-            },
-            Some(_) => match Self::float_to_vec1(t) {
-                Ok(values) => render(&shape, &Values::Float(values)),
-                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
-            },
-        }
+        <Self as HostInterop>::host_format_display(storage)
     }
-    /// Renders a tensor's values and metadata for `Debug` (verbose,
-    /// diagnostic-facing --- shape/dtype/device alongside the data).
-    ///
-    /// `Tensor`'s own `Debug` (`tensor/base.rs`) already prints shape,
-    /// placement and rank on its own line before calling this, so the
-    /// default here is exactly [`format_tensor_display`](Self::format_tensor_display) ---
-    /// the same value grid, not a second copy of the metadata.
+
+    /// Compatibility formatting hook for diagnostic output.
     fn format_tensor_debug<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
+        storage: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
         Self: TensorOps<Self>,
     {
-        Self::format_tensor_display::<K>(t)
+        <Self as HostInterop>::host_format_debug(storage)
     }
 
 }

@@ -4,7 +4,7 @@
 //! [`Backend`](super::Backend) contract. They deliberately do not introduce a
 //! runtime/session abstraction: ownership remains with the backend type.
 
-use super::StorageBackend;
+use super::{StorageBackend, TensorOps};
 use crate::err::Result;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
@@ -25,11 +25,35 @@ pub trait HostInterop: StorageBackend {
         <Self as StorageBackend>::storage_device(storage)
     }
     /// Formats a storage value for human-facing display.
-    fn host_format_display<K: DType>(_storage: &Self::Storage<K>) -> alloc::string::String {
-        alloc::format!("<{} tensor>", Self::BACKEND_NAME)
+    fn host_format_display<K: DType>(
+        storage: &Self::Storage<K>,
+    ) -> alloc::string::String
+    where
+        Self: crate::tensor::backend::Backend + TensorOps<Self>,
+    {
+        use crate::tensor::display::{render, Values};
+        let shape = Self::shape(storage);
+        match Self::storage_dtype(storage) {
+            None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
+            Some(dtype) if dtype.is_quantized() => alloc::format!(
+                "<{} tensor: shape={shape:?}, not printable without dequantizing>",
+                dtype.name()
+            ),
+            Some(dtype) if dtype.is_integer() => match Self::int_to_vec1(storage) {
+                Ok(values) => render(&shape, &Values::Int(values)),
+                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
+            },
+            Some(_) => match Self::float_to_vec1(storage) {
+                Ok(values) => render(&shape, &Values::Float(values)),
+                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
+            },
+        }
     }
     /// Formats a storage value for diagnostic output.
-    fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
+    fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String
+    where
+        Self: crate::tensor::backend::Backend + TensorOps<Self>,
+    {
         Self::host_format_display(storage)
     }
 
