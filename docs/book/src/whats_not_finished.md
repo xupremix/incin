@@ -37,12 +37,12 @@ The save helpers remain listed because code following this book needs the
 
 ## Architecture in progress (affects contributors more than users)
 
-- **Two execution paths coexist.** Most operations reach their kernel
-  through nine broad "operation family" traits; a newer, per-operation
-  canonical path (covered in [The target API](./target_api.md)) exists
-  alongside it, with real but narrow adoption today. `docs/GUIDE.md` and
-  `docs/FROZEN_FOUNDATIONS.md` in the repository track this in detail if
-  you're contributing rather than just using the library.
+- **Backend migration is still in progress.** Ordinary tensor operations use
+  the per-operation descriptor execution path. The nine broad operation-family
+  traits remain only as hidden compatibility adapters for backend
+  implementations, tracing, and tests; they are not a second application
+  execution path. The remaining work is extracting their last backend-facing
+  responsibilities from `Backend`.
 - **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
   complete planning layer behind the `distributed` feature but no execution
   path yet — a design surface, not a training feature to reach for.
