@@ -104,8 +104,11 @@ fn parse_shard_attr(a: &syn::Attribute) -> syn::Result<()> {
     Ok(())
 }
 
-fn process_field_attributes(attrs: &mut Vec<syn::Attribute>) -> Result<bool, syn::Error> {
+fn process_field_attributes(
+    attrs: &mut Vec<syn::Attribute>,
+) -> Result<(bool, Option<String>), syn::Error> {
     let mut ignore = false;
+    let mut state_name = None;
     let mut has_parallel = false;
     let mut has_shard = false;
     let mut err = None;
@@ -137,6 +140,26 @@ fn process_field_attributes(attrs: &mut Vec<syn::Attribute>) -> Result<bool, syn
                         ));
                         false
                     }
+                },
+                "state" => {
+                    let nested = a.parse_args_with(Punctuated::<syn::Meta, Token![,]>::parse_terminated);
+                    match nested {
+                        Ok(items) => {
+                            for meta in items {
+                                match meta {
+                                    syn::Meta::NameValue(value) if value.path.is_ident("name") => {
+                                        match value.value {
+                                            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(lit), .. }) => state_name = Some(lit.value()),
+                                            other => err = Some(syn::Error::new_spanned(other, "#[state(name = ...)] requires a string literal")),
+                                        }
+                                    }
+                                    other => err = Some(syn::Error::new_spanned(other, "unknown #[state] argument; expected name = \"...\"")),
+                                }
+                            }
+                        }
+                        Err(e) => err = Some(e),
+                    }
+                    false
                 },
                 "parallel" => {
                     if has_shard {
@@ -176,7 +199,7 @@ fn process_field_attributes(attrs: &mut Vec<syn::Attribute>) -> Result<bool, syn
     if let Some(e) = err {
         Err(e)
     } else {
-        Ok(ignore)
+        Ok((ignore, state_name))
     }
 }
 
@@ -242,6 +265,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut param_calls = Vec::new();
     let mut load_state_calls = Vec::new();
     let mut state_dict_calls = Vec::new();
+    let mut collect_state_calls = Vec::new();
+    let mut prepare_state_calls = Vec::new();
+    let mut commit_state_calls = Vec::new();
     let mut state_dict_field_types = Vec::new();
     let mut to_device_fields = Vec::new();
     let mut named_layer_calls = Vec::new();
@@ -253,7 +279,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         match &mut data.fields {
             syn::Fields::Named(fields) => {
                 for field in &mut fields.named {
-                    let ignore = match process_field_attributes(&mut field.attrs) {
+                    let (ignore, state_name) = match process_field_attributes(&mut field.attrs) {
                         Ok(ig) => ig,
                         Err(e) => return TokenStream::from(e.to_compile_error()),
                     };
@@ -263,6 +289,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         .as_ref()
                         .map(|i| i.to_string())
                         .unwrap_or_else(|| "".to_string());
+                    let state_component = state_name.as_deref().unwrap_or(&fname_str);
 
                     if ignore {
                         let is_phantom = match &field.ty {
@@ -300,6 +327,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         {
                             use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
+                        }
+                    });
+                    collect_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&&self.#fname).maybe_collect_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot)?;
+                        }
+                    });
+                    prepare_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&&self.#fname).maybe_prepare_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot, plan)?;
+                        }
+                    });
+                    commit_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&mut &mut self.#fname).maybe_commit_state(core::marker::PhantomData::<#b_ident>, &child_path, plan)?;
                         }
                     });
                     named_layer_calls.push(quote! {
@@ -344,7 +392,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             syn::Fields::Unnamed(fields) => {
                 for (i, field) in fields.unnamed.iter_mut().enumerate() {
-                    let ignore = match process_field_attributes(&mut field.attrs) {
+                    let (ignore, state_name) = match process_field_attributes(&mut field.attrs) {
                         Ok(ig) => ig,
                         Err(e) => return TokenStream::from(e.to_compile_error()),
                     };
@@ -352,6 +400,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let idx = syn::Index::from(i);
 
                     let idx_str = i.to_string();
+                    let state_component = state_name.as_deref().unwrap_or(&idx_str);
 
                     if ignore {
                         let is_phantom = match &field.ty {
@@ -389,6 +438,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         {
                             use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
+                        }
+                    });
+                    collect_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&&self.#idx).maybe_collect_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot)?;
+                        }
+                    });
+                    prepare_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&&self.#idx).maybe_prepare_state(core::marker::PhantomData::<#b_ident>, &child_path, snapshot, plan)?;
+                        }
+                    });
+                    commit_state_calls.push(quote! {
+                        {
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
+                            let child_path = path.child(#state_component);
+                            (&mut &mut self.#idx).maybe_commit_state(core::marker::PhantomData::<#b_ident>, &child_path, plan)?;
                         }
                     });
                     named_layer_calls.push(quote! {
@@ -598,6 +668,21 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             /// State dict.
             fn state_dict(&self, prefix: &str, tensors: &mut #macro_support::BTreeMap<#macro_support::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
                 #(#state_dict_calls)*
+            }
+
+            fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
+                #(#collect_state_calls)*
+                Ok(())
+            }
+
+            fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #k_crate::prelude::StateLoadPlan<#b_ident>) -> #k_crate::prelude::Result<()> {
+                #(#prepare_state_calls)*
+                Ok(())
+            }
+
+            fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #k_crate::prelude::StateLoadPlan<#b_ident>) -> #k_crate::prelude::Result<()> {
+                #(#commit_state_calls)*
+                Ok(())
             }
         }
 

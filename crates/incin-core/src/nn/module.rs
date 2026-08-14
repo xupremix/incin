@@ -14,6 +14,65 @@ pub trait StateDict<B: Backend> {
     /// Collects the module's state into a dictionary of dynamic tensors.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>);
 
+    /// Collects exact, owned state without retaining a live backend tensor.
+    /// Implementations for state-bearing leaves override this; the default is
+    /// appropriate for stateless modules and legacy hand-written markers.
+    fn collect_state(
+        &self,
+        _prefix: &crate::nn::StatePath,
+        _snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Prepares all replacements. No live module state may be mutated here.
+    fn prepare_state(
+        &self,
+        _prefix: &crate::nn::StatePath,
+        _snapshot: &crate::nn::StateSnapshot,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Commits a previously prepared replacement.
+    fn commit_state(
+        &mut self,
+        _prefix: &crate::nn::StatePath,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Returns an owned heterogeneous snapshot of this module.
+    fn state_snapshot(&self) -> Result<crate::nn::StateSnapshot> {
+        let mut snapshot = crate::nn::StateSnapshot::new();
+        self.collect_state(&crate::nn::StatePath::root(), &mut snapshot)?;
+        Ok(snapshot)
+    }
+
+    /// Strictly stages and commits a complete snapshot.
+    fn load_state_snapshot(&mut self, snapshot: &crate::nn::StateSnapshot) -> Result<()> {
+        let current = self.state_snapshot()?;
+        let expected: alloc::collections::BTreeSet<_> =
+            current.iter().map(|(path, _)| path).collect();
+        let provided: alloc::collections::BTreeSet<_> =
+            snapshot.iter().map(|(path, _)| path).collect();
+        if expected != provided {
+            return Err(Error::InvalidModuleState {
+                operation: "load state",
+                reason: ErrorMessage::new(format!(
+                    "state paths differ: expected {}, provided {}",
+                    expected.len(),
+                    provided.len()
+                )),
+            });
+        }
+        let mut plan = crate::nn::StateLoadPlan::new();
+        self.prepare_state(&crate::nn::StatePath::root(), snapshot, &mut plan)?;
+        self.commit_state(&crate::nn::StatePath::root(), &mut plan)
+    }
+
     /// Number of flat positional slots this module occupies when nested
     /// inside a [`Sequential`] chain — `1` for any ordinary layer (this
     /// default). [`Sequential`]'s own impl overrides this to sum its two
@@ -260,6 +319,31 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
 /// implement it (plain scalars, markers) silently contribute nothing to
 /// save/load instead of failing to compile.
 pub trait AutorefStateDictFallback<B: Backend> {
+    fn maybe_collect_state(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        _path: &crate::nn::StatePath,
+        _snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn maybe_prepare_state(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        _path: &crate::nn::StatePath,
+        _snapshot: &crate::nn::StateSnapshot,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn maybe_commit_state(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        _path: &crate::nn::StatePath,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// No-op: nothing to load.
     fn maybe_load_state_dict(
         &mut self,
@@ -286,6 +370,25 @@ impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
 /// picked over `AutorefStateDictFallback` for any type that actually
 /// implements `StateDict`.
 pub trait AutorefStateDict<B: Backend> {
+    fn maybe_collect_state(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()>;
+    fn maybe_prepare_state(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()>;
+    fn maybe_commit_state(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()>;
     /// Delegates to `StateDict::load_state_dict`.
     fn maybe_load_state_dict(
         &mut self,
@@ -304,6 +407,31 @@ pub trait AutorefStateDict<B: Backend> {
 
 // For mutable operations
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
+    fn maybe_collect_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        (**self).collect_state(path, snapshot)
+    }
+    fn maybe_prepare_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        (**self).prepare_state(path, snapshot, plan)
+    }
+    fn maybe_commit_state(
+        &mut self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        (*self).commit_state(path, plan)
+    }
     #[inline]
     /// Delegates to `StateDict::load_state_dict`.
     fn maybe_load_state_dict(
@@ -328,6 +456,31 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
 
 // For immutable operations (state_dict uses &self)
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
+    fn maybe_collect_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        (**self).collect_state(path, snapshot)
+    }
+    fn maybe_prepare_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        (**self).prepare_state(path, snapshot, plan)
+    }
+    fn maybe_commit_state(
+        &mut self,
+        _: core::marker::PhantomData<B>,
+        _path: &crate::nn::StatePath,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
     #[inline]
     /// Unreachable in practice: loading requires `&mut`, so this
     /// shared-reference impl only exists to satisfy the autoref-resolution
@@ -602,6 +755,36 @@ where
     L1: StateDict<B>,
     L2: StateDict<B>,
 {
+    fn collect_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        self.0.collect_state(&path.index(0), snapshot)?;
+        self.1
+            .collect_state(&path.index(L1::flat_width()), snapshot)
+    }
+
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        self.0.prepare_state(&path.index(0), snapshot, plan)?;
+        self.1
+            .prepare_state(&path.index(L1::flat_width()), snapshot, plan)
+    }
+
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        self.0.commit_state(&path.index(0), plan)?;
+        self.1.commit_state(&path.index(L1::flat_width()), plan)
+    }
+
     /// Entry point: flat-numbers from index `0` — see
     /// `Parameters::flat_width`'s doc (same mechanism, `StateDict` half).
     fn load_state_dict(
@@ -718,6 +901,38 @@ impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
 }
 
 impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
+    fn collect_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.collect_state(path, snapshot)?;
+        }
+        Ok(())
+    }
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.prepare_state(path, snapshot, plan)?;
+        }
+        Ok(())
+    }
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.commit_state(path, plan)?;
+        }
+        Ok(())
+    }
+
     /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,

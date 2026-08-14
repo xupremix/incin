@@ -43,7 +43,8 @@ pub mod __macro_support {
         AutorefComputeStats, AutorefComputeStatsFallback, AutorefNamedLayers,
         AutorefNamedLayersFallback, AutorefParameters, AutorefParametersFallback, AutorefShapeInfo,
         AutorefShapeInfoFallback, AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode,
-        AutorefTrainModeFallback, ComputeStats, LayerStats,
+        AutorefTrainModeFallback, ComputeStats, LayerStats, StateLoadPlan, StatePath,
+        StateSnapshot,
     };
     pub use crate::tensor::backend::{SupportsDType, TransferTo};
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
@@ -180,7 +181,7 @@ pub mod prelude {
         param::{Buffer, Frozen, Param, TrainState, Trainable},
         rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm},
         rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell},
-        state::{StatePath, StateRole, StateSnapshot, StateValue},
+        state::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue},
         stats::{ComputeStats, LayerStats, ModelStats},
     };
     pub use crate::seq;

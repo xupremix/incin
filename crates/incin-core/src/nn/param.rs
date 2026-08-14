@@ -645,13 +645,8 @@ where
                     msg: alloc::format!("Checkpoint parameter shape mismatch for key '{}'", prefix),
                 });
             }
-            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
-                let storage: &B::Storage<K> = unsafe { core::mem::transmute(&t.inner) };
-                self.inner = B::var_from_tensor::<K>(storage)?;
-            } else {
-                let converted = t.to_dtype::<K>()?;
-                self.inner = B::var_from_tensor::<K>(&converted.inner)?;
-            }
+            let converted = t.to_dtype::<K>()?;
+            self.inner = B::var_from_tensor::<K>(&converted.inner)?;
         }
 
         Ok(())
@@ -667,15 +662,63 @@ where
                 PhantomData,
             )
         {
-            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
-                let f32_t: Tensor<Dyn, B, f32> =
-                    unsafe { core::ptr::read(&dyn_t as *const _ as *const Tensor<Dyn, B, f32>) };
-                core::mem::forget(dyn_t);
-                tensors.insert(prefix.to_string(), f32_t);
-            } else if let Ok(converted) = dyn_t.to_dtype::<f32>() {
+            if let Ok(converted) = dyn_t.to_dtype::<f32>() {
                 tensors.insert(prefix.to_string(), converted);
             }
         }
+    }
+
+    fn collect_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        let storage = B::var_as_tensor::<K>(&self.inner)?;
+        let bytes = B::to_bytes::<K>(&storage)?;
+        let dtype = K::descriptor(&self._dtype);
+        snapshot.insert(
+            path.clone(),
+            crate::nn::StateValue::new(
+                self._shape.shape_buf().clone(),
+                dtype,
+                bytes,
+                crate::nn::StateRole::Parameter,
+            )?,
+        )
+    }
+
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        let value = snapshot
+            .get(path)
+            .ok_or_else(|| Error::InvalidModuleState {
+                operation: "prepare parameter",
+                reason: ErrorMessage::new(format!("missing state path {path}")),
+            })?;
+        let expected_dtype = K::descriptor(&self._dtype);
+        if value.shape() != self._shape.shape_buf() || value.dtype() != expected_dtype {
+            return Err(Error::InvalidModuleState {
+                operation: "prepare parameter",
+                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
+            });
+        }
+        let device = <B::Device as Device>::to_incin(&self._device)?;
+        let storage =
+            B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
+        plan.insert(path.clone(), B::var_from_tensor::<K>(&storage)?)
+    }
+
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        self.inner = plan.take(path)?;
+        Ok(())
     }
 }
 
@@ -918,13 +961,8 @@ where
                     msg: alloc::format!("Checkpoint buffer shape mismatch for key '{}'", prefix),
                 });
             }
-            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
-                let storage: &B::Storage<K> = unsafe { core::mem::transmute(&t.inner) };
-                self.inner = B::var_from_tensor::<K>(storage)?;
-            } else {
-                let converted = t.to_dtype::<K>()?;
-                self.inner = B::var_from_tensor::<K>(&converted.inner)?;
-            }
+            let converted = t.to_dtype::<K>()?;
+            self.inner = B::var_from_tensor::<K>(&converted.inner)?;
         }
         Ok(())
     }
@@ -939,14 +977,61 @@ where
                 PhantomData,
             )
         {
-            if K::descriptor(&self._dtype).builtin_id() == Some(DTypeId::F32) {
-                let f32_t: Tensor<Dyn, B, f32> =
-                    unsafe { core::ptr::read(&dyn_t as *const _ as *const Tensor<Dyn, B, f32>) };
-                core::mem::forget(dyn_t);
-                tensors.insert(prefix.to_string(), f32_t);
-            } else if let Ok(converted) = dyn_t.to_dtype::<f32>() {
+            if let Ok(converted) = dyn_t.to_dtype::<f32>() {
                 tensors.insert(prefix.to_string(), converted);
             }
         }
+    }
+
+    fn collect_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        let storage = B::var_as_tensor::<K>(&self.inner)?;
+        let bytes = B::to_bytes::<K>(&storage)?;
+        snapshot.insert(
+            path.clone(),
+            crate::nn::StateValue::new(
+                self._shape.shape_buf().clone(),
+                K::descriptor(&self._dtype),
+                bytes,
+                crate::nn::StateRole::Buffer,
+            )?,
+        )
+    }
+
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        let value = snapshot
+            .get(path)
+            .ok_or_else(|| Error::InvalidModuleState {
+                operation: "prepare buffer",
+                reason: ErrorMessage::new(format!("missing state path {path}")),
+            })?;
+        let expected_dtype = K::descriptor(&self._dtype);
+        if value.shape() != self._shape.shape_buf() || value.dtype() != expected_dtype {
+            return Err(Error::InvalidModuleState {
+                operation: "prepare buffer",
+                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
+            });
+        }
+        let device = <B::Device as Device>::to_incin(&self._device)?;
+        let storage =
+            B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
+        plan.insert(path.clone(), B::var_from_tensor::<K>(&storage)?)
+    }
+
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        self.inner = plan.take(path)?;
+        Ok(())
     }
 }

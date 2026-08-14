@@ -36,6 +36,20 @@ fn test_state_dict_extraction() -> Result<()> {
 }
 
 #[test]
+fn test_owned_heterogeneous_snapshot_extraction() -> Result<()> {
+    let layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let snapshot = layer.state_snapshot()?;
+    assert_eq!(snapshot.len(), 2);
+    assert!(snapshot.iter().all(|(path, value)| {
+        (path.as_str().ends_with("weight") || path.as_str().ends_with("bias"))
+            && !value.bytes().is_empty()
+    }));
+    let mut restored = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    restored.load_state_snapshot(&snapshot)?;
+    Ok(())
+}
+
+#[test]
 /// `state_dict`'s prefix convention differs from `named_parameters`'s (the
 /// caller must already include a trailing `.`, unlike `named_parameters`
 /// where the `#[module]`-generated body appends it), so `Sequential`'s flat

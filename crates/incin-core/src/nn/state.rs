@@ -13,6 +13,40 @@ use crate::{
     tensor::dtype::DTypeDescriptor,
 };
 
+/// Opaque prepared state.  Backend variable handles remain an implementation
+/// detail of the staging phase and are never serialized or exposed as model
+/// identity.
+pub struct StateLoadPlan<B: crate::tensor::backend::Backend> {
+    pub(crate) entries: BTreeMap<StatePath, B::RawVar>,
+}
+
+impl<B: crate::tensor::backend::Backend> StateLoadPlan<B> {
+    /// Creates an empty plan for internal traversal.
+    #[must_use]
+    pub(crate) fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+        }
+    }
+    pub(crate) fn insert(&mut self, path: StatePath, value: B::RawVar) -> Result<()> {
+        if self.entries.insert(path, value).is_some() {
+            return Err(Error::InvalidModuleState {
+                operation: "prepare state",
+                reason: ErrorMessage::new("duplicate prepared state path"),
+            });
+        }
+        Ok(())
+    }
+    pub(crate) fn take(&mut self, path: &StatePath) -> Result<B::RawVar> {
+        self.entries
+            .remove(path)
+            .ok_or_else(|| Error::InvalidModuleState {
+                operation: "commit state",
+                reason: ErrorMessage::new(format!("missing prepared state path {path}")),
+            })
+    }
+}
+
 /// Durable, hierarchical state name.  This is a serialization path, not a
 /// parameter/runtime-variable identity or alias identifier.
 #[derive(
