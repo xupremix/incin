@@ -19,7 +19,7 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::__backend_compat::legacy::{ModuleOps, NumericOps, TensorOps};
+use incin_core::__backend_compat::legacy::{NumericOps, TensorOps};
 use incin_backends::__backend_compat::legacy::LossOps;
 
 type TestBackend = CpuBackendImpl<Cpu>;
@@ -550,12 +550,10 @@ fn an_out_of_range_reduction_axis_fails_before_execution() {
     );
 }
 
-/// The spatial family, executed canonically and compared against the module
-/// methods the catalog names as their source.
+/// The spatial family executes through exact canonical descriptors.
 #[test]
-fn the_spatial_family_matches_its_legacy_counterpart() {
+fn the_spatial_family_executes_with_expected_values() {
     use incin_core::exec::catalog::{AvgPool2dAttributes, Conv2dAttributes, Pool2dAttributes};
-    use incin_core::__backend_compat::legacy::ModuleOps;
 
     let context = context();
     // One 4x4 image, one channel, and a 2x2 kernel: small enough to reason
@@ -578,11 +576,8 @@ fn the_spatial_family_matches_its_legacy_counterpart() {
         &[handle(&image), handle(&weight)],
     )
     .expect("conv2d is a registered CPU capability");
-    let legacy_conv =
-        <TestBackend as ModuleOps<TestBackend>>::conv2d::<f32>(&image, &weight, None, 1, 0, 1, 1)
-            .unwrap();
-    assert_eq!(values(&convolved), values(&legacy_conv));
-    assert_eq!(dims(&convolved), dims(&legacy_conv));
+    assert_eq!(dims(&convolved), vec![1, 1, 3, 3]);
+    assert_eq!(values(&convolved), vec![-5.0; 9]);
 
     let pooled = dispatch::execute::<op::MaxPool2d, _>(
         &context,
@@ -595,15 +590,8 @@ fn the_spatial_family_matches_its_legacy_counterpart() {
         &[handle(&image)],
     )
     .expect("max_pool2d is a registered CPU capability");
-    let legacy_pool = <TestBackend as ModuleOps<TestBackend>>::max_pool2d::<f32>(
-        &image,
-        (2, 2),
-        (2, 2),
-        (0, 0),
-        (1, 1),
-    )
-    .unwrap();
-    assert_eq!(values(&pooled), values(&legacy_pool));
+    assert_eq!(dims(&pooled), vec![1, 1, 2, 2]);
+    assert_eq!(values(&pooled), vec![5.0, 7.0, 13.0, 15.0]);
 
     let averaged = dispatch::execute::<op::AvgPool2d, _>(
         &context,
@@ -615,10 +603,8 @@ fn the_spatial_family_matches_its_legacy_counterpart() {
         &[handle(&image)],
     )
     .expect("avg_pool2d is a registered CPU capability");
-    let legacy_average =
-        <TestBackend as ModuleOps<TestBackend>>::avg_pool2d::<f32>(&image, (2, 2), (2, 2), (0, 0))
-            .unwrap();
-    assert_eq!(values(&averaged), values(&legacy_average));
+    assert_eq!(dims(&averaged), vec![1, 1, 2, 2]);
+    assert_eq!(values(&averaged), vec![2.5, 4.5, 10.5, 12.5]);
 }
 
 /// An anisotropic convolution window computes with both axes' extents.
@@ -2072,7 +2058,7 @@ fn a_left_broadcasting_canonical_invocation_matches_the_legacy_result() {
 /// silently narrowed — this asserts that outcome alongside the ordinary
 /// legacy-parity case every migrated operation gets.
 #[test]
-fn a_canonical_embedding_invocation_matches_the_legacy_result_and_refuses_a_narrowed_weight() {
+fn a_canonical_embedding_invocation_refuses_a_narrowed_weight() {
     let context = context();
     let indices = i64_storage(vec![2, 0, 1], vec![3]);
     let weight = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
@@ -2083,10 +2069,6 @@ fn a_canonical_embedding_invocation_matches_the_legacy_result_and_refuses_a_narr
         &[handle(&indices), handle(&weight)],
     )
     .expect("embedding is a registered CPU capability");
-    let legacy = <TestBackend as ModuleOps<TestBackend>>::embedding::<f32, i64>(&indices, &weight)
-        .expect("the legacy path computes the same operation");
-    assert_eq!(dims(&canonical), dims(&legacy));
-    assert_eq!(values(&canonical), values(&legacy));
     assert_eq!(dims(&canonical), vec![3, 2]);
     assert_eq!(values(&canonical), vec![5.0, 6.0, 1.0, 2.0, 3.0, 4.0]);
 

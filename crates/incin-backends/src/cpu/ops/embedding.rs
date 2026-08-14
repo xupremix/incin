@@ -1,6 +1,6 @@
 //! Free-function `embedding` helper for `CpuBackendImpl<D>`.
 //!
-//! `embedding_impl` is called by `ops/module.rs`'s `ModuleOps::embedding`
+//! `embedding_impl` is called by the canonical `Execute<EmbeddingExact>` path.
 //! trait method, mirroring `ops/norm.rs`'s free-function-called-from-
 //! module.rs pattern.
 //!

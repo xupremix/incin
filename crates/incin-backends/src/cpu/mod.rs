@@ -5,13 +5,9 @@
 //! strided-view tensor storage (`storage`) and shape/stride math (`stride`),
 //! independent of any external tensor compute library (Candle, ndarray, burn).
 //!
-//! This crate is built incrementally across multiple phases. This plan wires
-//! up `CpuBackendImpl<D>`'s `Backend` trait impl (associated types,
-//! `shape`/`backward`/`get_grad`/`format_*`/`var_*`/`assign_var`/`to_bytes`/
-//! `from_bytes`) plus `CreationOps` and a minimal `NumericOps`/`FloatOps`
-//! subset. `CpuBackendImpl` is not yet a fully `Backend`-complete implementor
-//! after this plan — `TensorOps`/`ReductionOps`/`ModuleOps`/`LossOps` land in
-//! later plans.
+//! Canonical CPU execution is implemented through the descriptor/`Execute`
+//! contracts. Backend-local helpers are called directly by exact operation
+//! executors; historical operation-family traits are not part of this backend.
 
 pub use incin_core::backend_authoring::{
     Alignment, AttributeContract, Backend, CanonicalOperation, Capabilities, CapabilityQuery,

@@ -30,10 +30,6 @@
 //!   overlapping windows require — Plan 04-06). `adaptive_avg_pool2d_impl`
 //!   computes per-output-position variable window boundaries rather than a
 //!   fixed kernel_size/stride derivation.
-//! * `module` — `ModuleOps`: ALL NINE methods are real as of Plan 04-07
-//!   (`layer_norm`/`batch_norm`/`embedding`/`conv1d`/`conv2d`/
-//!   `conv_transpose2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`) —
-//!   zero `Error::UnsupportedBackendOperation` stubs remain.
 
 /// `conv`.
 pub mod conv;
@@ -46,7 +42,7 @@ pub mod embedding;
 pub mod loss;
 /// `matmul`.
 pub mod matmul;
-/// `module`.
+/// Temporary dynamic-dispatch compatibility adapters.
 pub mod module;
 /// `norm`.
 pub mod norm;

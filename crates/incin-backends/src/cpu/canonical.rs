@@ -23,11 +23,12 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, ModuleOps, QuantizedOps, TensorOps};
+use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, QuantizedOps, TensorOps};
 use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
+use super::ops::embedding::embedding_impl;
 use super::ops::elementwise::{
     canonical_abs, canonical_acos, canonical_acosh, canonical_add_scalar, canonical_asin,
     canonical_asinh, canonical_atan, canonical_atan2, canonical_atanh, canonical_clamp,
@@ -1041,7 +1042,7 @@ impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
         admitted(self, operation, indices, training_mode(request.context))?;
         admitted(self, operation, weight, training_mode(request.context))?;
         f32_only(operation, &[Some(weight)])?;
-        <Self as ModuleOps<Self>>::embedding::<f32, i64>(indices, weight)
+        embedding_impl::<D, f32, i64>(indices, weight)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
