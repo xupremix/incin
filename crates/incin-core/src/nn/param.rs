@@ -654,7 +654,10 @@ impl<
                 reason: ErrorMessage::new(format!("missing state path {path}")),
             })?;
         let expected_dtype = K::descriptor(&self._dtype);
-        if value.shape() != self._shape.shape_buf() || value.dtype() != expected_dtype {
+        if value.role() != crate::nn::StateRole::Parameter
+            || value.shape() != self._shape.shape_buf()
+            || value.dtype() != expected_dtype
+        {
             return Err(Error::InvalidModuleState {
                 operation: "prepare parameter",
                 reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
@@ -920,7 +923,10 @@ impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DTy
                 reason: ErrorMessage::new(format!("missing state path {path}")),
             })?;
         let expected_dtype = K::descriptor(&self._dtype);
-        if value.shape() != self._shape.shape_buf() || value.dtype() != expected_dtype {
+        if value.role() != crate::nn::StateRole::Buffer
+            || value.shape() != self._shape.shape_buf()
+            || value.dtype() != expected_dtype
+        {
             return Err(Error::InvalidModuleState {
                 operation: "prepare buffer",
                 reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),

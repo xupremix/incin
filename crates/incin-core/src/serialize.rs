@@ -1,6 +1,6 @@
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
 use crate::prelude::*;
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 #[cfg(feature = "std")]
 fn safetensors_dtype(dtype: DTypeDescriptor) -> anyhow::Result<safetensors::tensor::Dtype> {
@@ -45,7 +45,15 @@ pub(crate) fn serialize_snapshot_safetensors(
     use safetensors::tensor::TensorView;
     let mut storage = Vec::new();
     let mut views = BTreeMap::new();
+    let mut metadata = std::collections::HashMap::new();
     for (name, value) in snapshot.iter() {
+        metadata.insert(
+            format!("incin.state.role.{}", name.as_str()),
+            match value.role() {
+                StateRole::Parameter => "parameter".to_string(),
+                StateRole::Buffer => "buffer".to_string(),
+            },
+        );
         storage.push((
             name.as_str().to_owned(),
             value.bytes().to_vec(),
@@ -56,7 +64,7 @@ pub(crate) fn serialize_snapshot_safetensors(
     for (name, bytes, shape, dtype) in &storage {
         views.insert(name.clone(), TensorView::new(*dtype, shape.clone(), bytes)?);
     }
-    safetensors::tensor::serialize_to_file(&views, &None, path)?;
+    safetensors::tensor::serialize_to_file(&views, &Some(metadata), path)?;
     Ok(())
 }
 
@@ -65,16 +73,25 @@ pub(crate) fn deserialize_snapshot_safetensors(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
     let bytes = std::fs::read(path)?;
+    let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
     let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
     let mut snapshot = StateSnapshot::new();
+    let metadata = header.metadata().as_ref();
     for (name, view) in tensors.tensors() {
+        let role = metadata
+            .and_then(|items| items.get(&format!("incin.state.role.{}", name)))
+            .map(|role| match role.as_str() {
+                "buffer" => StateRole::Buffer,
+                _ => StateRole::Parameter,
+            })
+            .unwrap_or(StateRole::Parameter);
         snapshot.insert(
             StatePath::new(name)?,
             StateValue::new(
                 ShapeBuf::from_slice(view.shape()),
                 dtype_from_safetensors(view.dtype())?,
                 view.data().to_vec(),
-                StateRole::Parameter,
+                role,
             )?,
         )?;
     }
@@ -86,7 +103,17 @@ pub(crate) fn serialize_snapshot_postcard(
     snapshot: &StateSnapshot,
     path: &std::path::Path,
 ) -> anyhow::Result<()> {
-    std::fs::write(path, postcard::to_stdvec(snapshot)?)?;
+    let wire = snapshot
+        .iter()
+        .map(|(path, value)| StateWireEntry {
+            path: path.as_str().to_string(),
+            shape: value.shape().dims().to_vec(),
+            dtype: value.dtype(),
+            bytes: value.bytes().to_vec(),
+            role: value.role(),
+        })
+        .collect::<Vec<_>>();
+    std::fs::write(path, postcard::to_stdvec(&wire)?)?;
     Ok(())
 }
 
@@ -94,7 +121,30 @@ pub(crate) fn serialize_snapshot_postcard(
 pub(crate) fn deserialize_snapshot_postcard(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
-    Ok(postcard::from_bytes(&std::fs::read(path)?)?)
+    let wire: Vec<StateWireEntry> = postcard::from_bytes(&std::fs::read(path)?)?;
+    let mut snapshot = StateSnapshot::new();
+    for entry in wire {
+        snapshot.insert(
+            StatePath::new(entry.path)?,
+            StateValue::new(
+                ShapeBuf::from_slice(&entry.shape),
+                entry.dtype,
+                entry.bytes,
+                entry.role,
+            )?,
+        )?;
+    }
+    Ok(snapshot)
+}
+
+#[cfg(feature = "std")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct StateWireEntry {
+    path: String,
+    shape: Vec<usize>,
+    dtype: DTypeDescriptor,
+    bytes: Vec<u8>,
+    role: StateRole,
 }
 
 #[cfg(feature = "std")]

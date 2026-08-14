@@ -7,6 +7,12 @@ extern crate alloc;
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
 
+#[module]
+struct MixedStateModel {
+    fp32: Linear<s![2, 2], CpuBackendImpl>,
+    fp16: incin_core::nn::Linear<s![2, 2], CpuBackendImpl, incin_core::nn::optional::True, f16>,
+}
+
 #[test]
 /// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
@@ -52,6 +58,119 @@ fn test_postcard_snapshot_round_trip() -> Result<()> {
     restored.load(Format::Postcard, &path, &DeviceId::cpu())?;
     std::fs::remove_file(path).ok();
     Ok(())
+}
+
+#[test]
+fn test_mixed_dtype_snapshot_round_trip() -> Result<()> {
+    let model = MixedStateModel {
+        fp32: Linear::build(())?,
+        fp16: incin_core::nn::Linear::<
+            s![2, 2],
+            CpuBackendImpl,
+            incin_core::nn::optional::True,
+            f16,
+        >::build(())?,
+    };
+    let snapshot = model.state_snapshot()?;
+    assert_eq!(snapshot.len(), 4);
+    assert!(
+        snapshot
+            .iter()
+            .any(|(path, value)| path.as_str() == "fp32.weight"
+                && value.dtype() == DTypeId::F32.descriptor())
+    );
+    assert!(
+        snapshot
+            .iter()
+            .any(|(path, value)| path.as_str() == "fp16.weight"
+                && value.dtype() == DTypeId::F16.descriptor())
+    );
+
+    let path = std::env::temp_dir().join(format!("incin-mixed-{}.safetensors", std::process::id()));
+    model.save(Format::Safetensors, &path)?;
+    let loaded = incin_core::prelude::load_safetensors_snapshot(&path)?;
+    assert_eq!(loaded, snapshot);
+    std::fs::remove_file(path).ok();
+    Ok(())
+}
+
+#[test]
+fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
+    let mut model = Linear::<s![2, 2], CpuBackendImpl>::build(())?;
+    let original = model.state_snapshot()?;
+
+    let mut missing = StateSnapshot::new();
+    for (path, value) in original.iter().filter(|(path, _)| path.as_str() != "bias") {
+        missing.insert(path.clone(), value.clone())?;
+    }
+    assert!(model.load_state_snapshot(&missing).is_err());
+    assert_eq!(model.state_snapshot()?, original);
+
+    let mut unexpected = original.clone();
+    unexpected.insert(
+        StatePath::new("unexpected")?,
+        StateValue::new(
+            incin_core::prelude::ShapeBuf::from_slice(&[1]),
+            DTypeId::U8.descriptor(),
+            vec![0],
+            StateRole::Buffer,
+        )?,
+    )?;
+    assert!(model.load_state_snapshot(&unexpected).is_err());
+    assert_eq!(model.state_snapshot()?, original);
+
+    let weight = original.get(&StatePath::new("weight")?).unwrap();
+    let mut wrong_shape = StateSnapshot::new();
+    for (path, value) in original.iter() {
+        wrong_shape.insert(
+            path.clone(),
+            if path.as_str() == "weight" {
+                StateValue::new(
+                    incin_core::prelude::ShapeBuf::from_slice(&[1, 4]),
+                    weight.dtype(),
+                    weight.bytes().to_vec(),
+                    weight.role(),
+                )?
+            } else {
+                value.clone()
+            },
+        )?;
+    }
+    assert!(model.load_state_snapshot(&wrong_shape).is_err());
+    assert_eq!(model.state_snapshot()?, original);
+
+    let mut wrong_dtype = StateSnapshot::new();
+    for (path, value) in original.iter() {
+        wrong_dtype.insert(
+            path.clone(),
+            if path.as_str() == "weight" {
+                StateValue::new(
+                    weight.shape().clone(),
+                    DTypeId::F16.descriptor(),
+                    vec![0; weight.shape().numel().unwrap() * 2],
+                    weight.role(),
+                )?
+            } else {
+                value.clone()
+            },
+        )?;
+    }
+    assert!(model.load_state_snapshot(&wrong_dtype).is_err());
+    assert_eq!(model.state_snapshot()?, original);
+    Ok(())
+}
+
+struct FailingState;
+
+impl<B: Backend> StateDict<B> for FailingState {
+    fn collect_state(&self, _: &StatePath, _: &mut StateSnapshot) -> Result<()> {
+        Err(Error::Msg("intentional state readback failure".into()))
+    }
+}
+
+#[test]
+fn test_state_extraction_failure_propagates() {
+    assert!(StateDict::<CpuBackendImpl>::state_snapshot(&FailingState).is_err());
 }
 
 #[test]

@@ -48,25 +48,10 @@ impl HubRepo {
 
     /// Downloads `model.safetensors` (or specified filename) from HuggingFace Hub
     /// and loads the state tensors directly.
-    pub fn load_safetensors<
-        B: Backend
-            + SupportsDType<f32>
-            + incin_core::backend_authoring::Execute<
-                incin_core::backend_authoring::op::TensorFromBytes,
-            >,
-    >(
-        &self,
-        filename: Option<&str>,
-        device: &DeviceId,
-    ) -> Result<alloc::collections::BTreeMap<String, B::Storage<f32>>>
-    where
-        <B as incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::TensorFromBytes,
-        >>::Output: Into<B::Storage<f32>>,
-    {
+    pub fn load_safetensors(&self, filename: Option<&str>) -> Result<StateSnapshot> {
         let file = filename.unwrap_or("model.safetensors");
         let path = self.get(file)?;
-        incin_core::prelude::load_safetensors_map::<B, _>(&path, device)
+        incin_core::prelude::load_safetensors_snapshot(&path)
     }
 }
 
@@ -76,21 +61,6 @@ pub fn download(repo_id: &str, filename: &str) -> Result<PathBuf> {
 }
 
 /// Downloads a `safetensors` model file from HuggingFace `repo_id` and loads it directly into a state map.
-pub fn from_pretrained<
-    B: Backend
-        + SupportsDType<f32>
-        + incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::TensorFromBytes>,
->(
-    repo_id: &str,
-    filename: Option<&str>,
-    device: &DeviceId,
-) -> Result<alloc::collections::BTreeMap<String, B::Storage<f32>>>
-where
-    <B as incin_core::backend_authoring::Execute<
-        incin_core::backend_authoring::op::TensorFromBytes,
-    >>::Output: Into<B::Storage<f32>>,
-{
-    HubApi::new()?
-        .model(repo_id)
-        .load_safetensors::<B>(filename, device)
+pub fn from_pretrained(repo_id: &str, filename: Option<&str>) -> Result<StateSnapshot> {
+    HubApi::new()?.model(repo_id).load_safetensors(filename)
 }

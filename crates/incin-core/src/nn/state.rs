@@ -268,4 +268,54 @@ mod tests {
         assert!(StatePath::new("q_proj.weight").is_ok());
         assert!(StatePath::new("q_proj..weight").is_err());
     }
+
+    #[test]
+    fn preserves_supported_native_dtype_payloads() {
+        for dtype in [
+            DTypeId::F32,
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::I64,
+            DTypeId::U32,
+            DTypeId::U8,
+            DTypeId::Bool,
+            DTypeId::Q8_0,
+        ] {
+            let descriptor = dtype.descriptor();
+            let bytes = descriptor
+                .size_bytes(32, crate::shapes::error::OperationKind::Storage)
+                .expect("test dtype has a storage size");
+            let value = StateValue::new(
+                ShapeBuf::from_slice(&[32]),
+                descriptor,
+                (0..bytes).map(|index| index as u8).collect(),
+                StateRole::Buffer,
+            )
+            .expect("native payload should validate");
+            assert_eq!(value.dtype(), descriptor);
+            assert_eq!(value.bytes().len(), bytes);
+        }
+    }
+
+    #[test]
+    fn rejects_overflow_and_malformed_payloads() {
+        assert!(
+            StateValue::new(
+                ShapeBuf::from_slice(&[usize::MAX, 2]),
+                DTypeId::F32.descriptor(),
+                Vec::new(),
+                StateRole::Parameter,
+            )
+            .is_err()
+        );
+        assert!(
+            StateValue::new(
+                ShapeBuf::from_slice(&[2]),
+                DTypeId::F32.descriptor(),
+                vec![0; 3],
+                StateRole::Parameter,
+            )
+            .is_err()
+        );
+    }
 }

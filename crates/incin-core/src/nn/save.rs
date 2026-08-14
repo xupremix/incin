@@ -1,13 +1,9 @@
 use crate::backend_authoring::{Execute, op};
-use crate::exec::catalog::{CreationPayload, DataAttributes};
-use crate::exec::context::ExecutionContext;
-use crate::exec::dispatch;
 use crate::nn::StateDict;
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use safetensors::SafeTensors;
 use std::path::Path;
 
 /// Metadata for an individual parameter stored in a global checkpoint.
@@ -212,77 +208,10 @@ pub fn slice_bytes_for_rank(
     Ok((sliced_bytes, local_shape))
 }
 
-/// Loads raw storage tensors from a safetensors file into a dictionary.
-pub fn load_safetensors_map<B, P>(
-    path: P,
-    device: &DeviceId,
-) -> Result<BTreeMap<String, B::Storage<f32>>>
-where
-    B: Backend + Execute<op::TensorFromBytes>,
-    P: AsRef<Path>,
-    B: SupportsDType<f32>,
-    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
-{
-    let path_ref = path.as_ref();
-    let metadata = std::fs::metadata(path_ref)?;
-    let limits = ResourceLimits::model_load_defaults();
-    if metadata.len() > limits.max_file_bytes {
-        return Err(Error::Msg(format!(
-            "Safetensors file size {} exceeds limit {} bytes",
-            metadata.len(),
-            limits.max_file_bytes
-        )));
-    }
-    let buffer = std::fs::read(path_ref)
-        .map_err(|e| Error::Msg(format!("Failed to read safetensors file: {}", e)))?;
-    let tensors = SafeTensors::deserialize(&buffer)
-        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {:?}", e)))?;
-
-    let mut mapped_tensors = BTreeMap::new();
-
-    for (name, view) in tensors.tensors() {
-        let shape = view.shape().to_vec();
-        let bytes = view.data();
-        let st_dtype = view.dtype();
-        let dtype = match st_dtype {
-            safetensors::Dtype::F32 => DTypeId::F32,
-            safetensors::Dtype::F64 => DTypeId::F64,
-            safetensors::Dtype::F16 => DTypeId::F16,
-            safetensors::Dtype::BF16 => DTypeId::BF16,
-            safetensors::Dtype::I64 => DTypeId::I64,
-            safetensors::Dtype::U32 | safetensors::Dtype::I32 => DTypeId::U32,
-            safetensors::Dtype::U8 | safetensors::Dtype::BOOL => DTypeId::U8,
-            other => {
-                return Err(Error::Msg(format!(
-                    "Unsupported safetensors dtype {:?} for tensor {}",
-                    other, name
-                )));
-            }
-        };
-
-        let expected =
-            ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape)).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default())
-            .with_grad_mode(crate::exec::GradMode::Disabled);
-        let inner = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
-            &context,
-            DataAttributes {
-                shape: shape.clone(),
-                dtype: dtype.descriptor(),
-                device: *device,
-                payload: CreationPayload::Bytes {
-                    byte_len: bytes.len(),
-                },
-            },
-            &[],
-            &expected,
-            Some(bytes),
-        )?
-        .into();
-        mapped_tensors.insert(name.to_string(), inner);
-    }
-
-    Ok(mapped_tensors)
+/// Parses a safetensors file into backend-neutral owned state.
+pub fn load_safetensors_snapshot<P: AsRef<Path>>(path: P) -> Result<crate::nn::StateSnapshot> {
+    crate::serialize::deserialize_snapshot_safetensors(path.as_ref())
+        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))
 }
 
 /// Loads weights into a module from a safetensors file.
@@ -292,8 +221,7 @@ where
     M: StateDict<B>,
     P: AsRef<Path>,
 {
-    let snapshot = crate::serialize::deserialize_snapshot_safetensors(path.as_ref())
-        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))?;
+    let snapshot = load_safetensors_snapshot(path)?;
     module.load_state_dict(&snapshot)
 }
 

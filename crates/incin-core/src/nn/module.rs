@@ -51,12 +51,19 @@ pub trait StateDict<B: Backend> {
         let provided: alloc::collections::BTreeSet<_> =
             snapshot.iter().map(|(path, _)| path).collect();
         if expected != provided {
+            let missing = expected
+                .difference(&provided)
+                .map(ToString::to_string)
+                .collect::<alloc::vec::Vec<_>>();
+            let unexpected = provided
+                .difference(&expected)
+                .map(ToString::to_string)
+                .collect::<alloc::vec::Vec<_>>();
             return Err(Error::InvalidModuleState {
                 operation: "load state",
                 reason: ErrorMessage::new(format!(
-                    "state paths differ: expected {}, provided {}",
-                    expected.len(),
-                    provided.len()
+                    "state paths differ: missing {:?}, unexpected {:?}",
+                    missing, unexpected
                 )),
             });
         }

@@ -225,7 +225,7 @@ pub mod prelude {
         GgufExporter, GgufMetadata, MlxExporter, QuantScheme, ResourceLimits, inspect_file,
     };
     #[cfg(feature = "std")]
-    pub use crate::nn::save::{load_safetensors, load_safetensors_map, save_safetensors};
+    pub use crate::nn::save::{load_safetensors, load_safetensors_snapshot, save_safetensors};
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
     pub use crate::optim::{
