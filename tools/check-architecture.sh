@@ -37,6 +37,12 @@ if [[ ! -x tools/check-public-api.sh ]]; then
     echo "architecture check failed: tools/check-public-api.sh is missing or not executable" >&2
     failures=$((failures + 1))
 fi
+if [[ ! -x tools/check-large-files.sh ]]; then
+    echo "architecture check failed: tools/check-large-files.sh is missing or not executable" >&2
+    failures=$((failures + 1))
+elif ! tools/check-large-files.sh; then
+    failures=$((failures + 1))
+fi
 if ! rg -q 'FOUNDATION|OPERATION SEMANTICS|TENSOR RUNTIME|NN and state' docs/HANDOFF.md; then
     echo "architecture check failed: docs/HANDOFF.md has no layer contract" >&2
     failures=$((failures + 1))

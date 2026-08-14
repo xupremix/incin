@@ -158,17 +158,27 @@ expanding the public surface.
 
 ## Large-file inventory
 
-The remaining files above 1,200 lines are not all one kind of problem:
+The remaining files above 1,200 lines are inventoried exactly by
+`tools/check-large-files.sh`; the architecture gate fails when a new file
+crosses the threshold without a named reason here. They are not all one kind
+of problem:
 
 | Area | Current reason for size | Maintainer action |
 | --- | --- | --- |
-| `tensor/backend.rs` | small backend identity/reexport boundary | keep identity and capability ownership here; do not add operation-family methods |
-| `tensor/backend/legacy.rs` | compatibility operation-family adapters | migrate remaining backend implementations to descriptor execution, then remove these adapters |
-| `tensor/backend/dummy.rs` | shape-only test backend | keep test-only behavior isolated from production backend identity |
-| `tensor/tracing.rs` | tracing backend and graph serialization boundary | split after the backend capability migration so storage/autograd seams remain visible |
-| `tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once the catalog ownership is stable |
-| `exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
-| backend implementation files | one feature-gated backend currently owns storage, execution, and compatibility glue | split storage, execution, and capability implementations per backend during the capability migration |
+| `crates/incin-core/src/exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
+| `crates/incin-core/src/tensor/tracing.rs` | tracing backend, graph recording, and legacy adapters | split graph recording from backend adapters after capability migration |
+| `crates/incin-core/src/tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once catalog ownership is stable |
+| `crates/incin-core/src/tensor/backend/dummy.rs` | shape-only test backend and test operation coverage | keep test-only behavior isolated from production backend identity |
+| `crates/incin-core/src/dist/{plan,context}.rs` | distributed placement/planning prototypes | remain feature-gated and split only with a concrete ownership seam |
+| `crates/incin-core/src/tensor/base.rs` | central Tensor invariant and constructor implementation | keep invariant-preserving constructors together; extract only neutral value helpers |
+| `crates/incin-core/src/shapes/shape.rs` | core shape traits and implementations | keep the shape proof vocabulary together while preserving the foundation boundary |
+| `crates/incin-backends/src/{cuda,wgpu,metal}/backend.rs` | feature-gated backend identity, storage, and compatibility implementations | split storage, capability, and legacy adapters per backend |
+| `crates/incin-backends/src/{cpu/canonical.rs,dispatch.rs,capability.rs}` | canonical registrations, dispatch routing, and capability declarations | keep generated/completeness coupling intact; extract operation families only with focused tests |
+| `crates/incin-backends/src/cpu/ops/{elementwise_kernel,elementwise,shape_ops,reduce,matmul,conv}.rs` | cohesive CPU operation families and kernel helpers | preserve family-local tests; split only where execution ownership becomes clearer |
+| `crates/incin-backends/src/{dist/nccl.rs,dist/tuning.rs,tuning/identity.rs,tuning/service.rs}` | feature-gated distributed/tuning services | keep experimental ownership local; split resource protocols when they stabilize |
+| `crates/incin-backends/src/wgpu/tests.rs` | feature-gated backend integration tests | split by operation family when test fixtures stop sharing setup |
+| `crates/incin-backends/src/kernel.rs` | kernel template/rendering and specialization test vocabulary | retain as a mechanical kernel source boundary |
+| `crates/incin-diagnostics/src/lib.rs` | diagnostic command and report surface | split command families when the diagnostic API stabilizes |
 
 These are explicit staged extraction targets, not permission to add more
 responsibilities. The current checkpoint documents the boundary and adds the

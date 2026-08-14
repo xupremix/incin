@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_dir"
+
+# Every source file above the handoff threshold must have a named reason in
+# docs/HANDOFF.md. This is an ownership ledger, not a claim that each file is
+# already ideally split; staged extraction targets are allowed when documented.
+declare -A explained=(
+    [crates/incin-core/src/exec/catalog.rs]=1
+    [crates/incin-backends/src/cuda/backend.rs]=1
+    [crates/incin-backends/src/wgpu/backend.rs]=1
+    [crates/incin-backends/src/cpu/canonical.rs]=1
+    [crates/incin-backends/src/metal/backend.rs]=1
+    [crates/incin-backends/src/dist/nccl.rs]=1
+    [crates/incin-core/src/tensor/tracing.rs]=1
+    [crates/incin-core/src/tensor/ops/manipulation.rs]=1
+    [crates/incin-core/src/dist/plan.rs]=1
+    [crates/incin-backends/src/cpu/ops/elementwise_kernel.rs]=1
+    [crates/incin-backends/src/cpu/ops/shape_ops.rs]=1
+    [crates/incin-backends/src/wgpu/tests.rs]=1
+    [crates/incin-backends/src/dispatch.rs]=1
+    [crates/incin-backends/src/cpu/ops/elementwise.rs]=1
+    [crates/incin-backends/src/kernel.rs]=1
+    [crates/incin-diagnostics/src/lib.rs]=1
+    [crates/incin-backends/src/cpu/ops/reduce.rs]=1
+    [crates/incin-backends/src/cpu/ops/matmul.rs]=1
+    [crates/incin-core/src/tensor/backend/dummy.rs]=1
+    [crates/incin-backends/src/dist/tuning.rs]=1
+    [crates/incin-backends/src/tuning/identity.rs]=1
+    [crates/incin-core/src/dist/context.rs]=1
+    [crates/incin-backends/src/cpu/ops/conv.rs]=1
+    [crates/incin-core/src/tensor/base.rs]=1
+    [crates/incin-backends/src/tuning/service.rs]=1
+    [crates/incin-core/src/shapes/shape.rs]=1
+    [crates/incin-backends/src/capability.rs]=1
+)
+
+mapfile -t actual < <(
+    find crates -path '*/src/*' -name '*.rs' -print0 |
+        xargs -0 wc -l |
+        awk '$2 != "total" && $1 > 1200 { print $2 }' |
+        sort
+)
+
+failures=0
+for path in "${actual[@]}"; do
+    if [[ -z "${explained[$path]+yes}" ]]; then
+        echo "large-file check failed: $path is over 1200 lines but not inventoried" >&2
+        failures=$((failures + 1))
+    fi
+done
+
+for path in "${!explained[@]}"; do
+    if [[ ! -f "$path" ]]; then
+        echo "large-file check failed: inventoried file is missing: $path" >&2
+        failures=$((failures + 1))
+    elif (( $(wc -l < "$path") <= 1200 )); then
+        echo "large-file check failed: $path is inventoried but no longer exceeds 1200 lines" >&2
+        failures=$((failures + 1))
+    fi
+done
+
+if (( failures != 0 )); then
+    exit 1
+fi
+echo "large-file inventory checks passed (${#actual[@]} files)"
