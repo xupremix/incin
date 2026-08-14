@@ -16,7 +16,7 @@ use incin_core::prelude::{
     Backend, BackendError, DType, DTypeDescriptor, DTypeId, Device, Error, OperationKind, Result,
     ShapeBuf, ShapeError, StorageBackend,
 };
-use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, TensorOps};
+use incin_core::__backend_compat::legacy::TensorOps;
 
 use crate::cpu::ops::elementwise::{
     add_storage, canonical_mul_scalar, canonical_softmax, elementwise_unary,
@@ -1623,13 +1623,13 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         let scores = Self::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
+        let scaled_scores = canonical_mul_scalar(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
-            Self::add::<K>(&scaled_scores, m)?
+            add_storage(&scaled_scores, m)?
         } else {
             scaled_scores
         };
-        let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        let attn = canonical_softmax::<D>(&masked_scores, scores.shape.len() - 1)?;
         Self::matmul::<K>(&attn, v)
     }
 
