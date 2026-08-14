@@ -2,7 +2,6 @@
 
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
-use crate::legacy::LossOps;
 use incin_core::prelude::{
     BackendError, DType, DTypeDescriptor, Device, DeviceId, DeviceKind, Dyn, Error, FloatDType,
     OperationKind, QuantDType, Result, ShapeBuf, StorageBackend, SupportsDType, bf16, f16,
@@ -2486,11 +2485,11 @@ type Var<K: DType> = DispatchVar;
 }
 
 
-impl<D: Device> LossOps<Self> for DispatchBackend<D> {
+impl<D: Device> DispatchBackend<D> {
     // `mse_loss`, `l1_loss`, and `bce_with_logits_loss` are composed from the
     // routed backend's numeric and reduction ops. `cross_entropy_loss` is the
     // one method with no composed default, so it has to be routed explicitly.
-    fn cross_entropy_loss<K: DType, KInt: DType>(
+    pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &DispatchStorage,
         target: &DispatchStorage,
         reduction: incin_core::tensor::reduction::Reduction,

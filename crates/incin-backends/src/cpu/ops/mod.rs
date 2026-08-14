@@ -10,7 +10,7 @@
 //!   `float_to_vec1`, typed stubs for the rest.
 //! * `reduce` — concrete reduction kernels
 //!   `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim`, typed stubs for the rest.
-//! * `loss` — full `LossOps` impl: real `mse_loss`/`l1_loss`/
+//! * `loss` — concrete loss helpers: real `mse_loss`/`l1_loss`/
 //!   `bce_with_logits_loss`/`cross_entropy_loss` (all 4 methods real,
 //!   no stubs remain — Plan 04-01/02).
 //! * `norm` — free-function helpers: `layer_norm_impl`/`batch_norm_impl`

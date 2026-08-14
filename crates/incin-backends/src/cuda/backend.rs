@@ -2,7 +2,6 @@ use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
-use crate::legacy::LossOps;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
@@ -2318,7 +2317,7 @@ impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
 /// this is a proper tape op, `conv1d`/`conv2d`'s own forward can be composed
 /// entirely from already-tape-tracked primitives (`narrow`/`reshape`/
 /// `matmul`/`concat` plus this) with NO hand-written backward closure of
-/// their own — mirroring the `LossOps` "free via composition"
+/// their own — mirroring the free loss helpers' "free via composition"
 /// discovery documented by the backend conformance audit.
 fn im2col_2d_tape(
     t: &CudaStorage,
@@ -2873,8 +2872,8 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         }
     }
 }
-impl<D: Device> LossOps<Self> for CudaBackendImpl<D> {
-    fn cross_entropy_loss<K: DType, KInt: DType>(
+impl<D: Device> CudaBackendImpl<D> {
+    pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
         reduction: incin_core::prelude::Reduction,
@@ -3813,8 +3812,7 @@ mod tests {
     }
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's
-    // `impl LossOps<Self> for CudaBackendImpl` — they resolve to
-    // `LossOps`'s own default bodies (`incin-backends/src/legacy.rs`),
+    // the free loss helpers (`incin-backends/src/legacy.rs`),
     // which compose entirely from `NumericOps`/`FloatOps`/`ReductionOps`
     // (already wired on CUDA). These tests exist to prove that resolution
     // actually compiles and runs correctly, not to add new functionality.
@@ -3824,7 +3822,7 @@ mod tests {
     fn mse_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
-        let out = <B as LossOps<B>>::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
+        let out = crate::legacy::mse_loss::<B, f32>(&pred, &target, Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
     }
 
@@ -3833,7 +3831,7 @@ mod tests {
     fn l1_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
-        let out = <B as LossOps<B>>::l1_loss::<f32>(&pred, &target, Reduction::Sum).unwrap();
+        let out = crate::legacy::l1_loss::<B, f32>(&pred, &target, Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
     }
 
@@ -3842,7 +3840,7 @@ mod tests {
     fn bce_with_logits_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 2], vec![0.0, 1.0, -1.0, 2.0]);
         let target = cuda_f32(&[2, 2], vec![0.0, 1.0, 1.0, 0.0]);
-        let out = <B as LossOps<B>>::bce_with_logits_loss::<f32>(&pred, &target, Reduction::None)
+        let out = crate::legacy::bce_with_logits_loss::<B, f32>(&pred, &target, Reduction::None)
             .unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
@@ -3853,7 +3851,7 @@ mod tests {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
         let pred_id = pred.id;
-        let out = <B as LossOps<B>>::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
+        let out = crate::legacy::mse_loss::<B, f32>(&pred, &target, Reduction::Mean).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(pred_id)

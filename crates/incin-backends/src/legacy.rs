@@ -9,12 +9,9 @@ use incin_core::__backend_compat::legacy::{FloatOps, NumericOps};
 use incin_core::__backend_compat::legacy::ReductionOps;
 use incin_core::prelude::{Backend, DType, Reduction, Result};
 
-/// Backend-local composed loss helpers retained for compatibility and parity
-/// tests. Stable loss operations use exact `Execute<O>` descriptors.
-pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
-    NumericOps<B> + FloatOps<B> + ReductionOps<B>
-{
-    fn mse_loss<K: DType>(
+/// Backend-local composed loss helpers retained while optional backends finish
+/// moving their implementations to exact `Execute<O>` descriptors.
+pub(crate) fn mse_loss<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>, K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: Reduction,
@@ -28,7 +25,7 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
         }
     }
 
-    fn l1_loss<K: DType>(
+pub(crate) fn l1_loss<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>, K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: Reduction,
@@ -42,7 +39,7 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
         }
     }
 
-    fn bce_with_logits_loss<K: DType>(
+pub(crate) fn bce_with_logits_loss<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>, K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: Reduction,
@@ -62,10 +59,3 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
             Reduction::None => Ok(loss_elem),
         }
     }
-
-    fn cross_entropy_loss<K: DType, KInt: DType>(
-        pred: &B::Storage<K>,
-        target: &B::Storage<KInt>,
-        reduction: Reduction,
-    ) -> Result<B::Storage<K>>;
-}

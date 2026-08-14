@@ -260,7 +260,7 @@ macro_rules! cpu_descriptor_operations {
             // never consult a stride.
             quantizing = [Quantize],
             quantized = [Dequantize, QuantizedMatMul],
-            // The losses that `LossOps` supplies as real composed defaults
+            // The losses supplied as real composed defaults
             // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
             // an all-reduce. They inherit the reduction group's f32-only claim
             // because their `Mean` and `Sum` forms end in `mean_all`/`sum_all`,

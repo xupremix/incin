@@ -3,7 +3,6 @@
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use crate::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
@@ -786,7 +785,7 @@ fn test_cross_entropy_mean() {
     // 2 classes, batch=2; pred logits
     let pred = storage(vec![2.0, 1.0, 0.5, 3.0], vec![2, 2]);
     let target = storage(vec![0.0, 1.0], vec![2]); // class 0 and class 1
-    let out = <B as LossOps<B>>::cross_entropy_loss::<f32, f32>(
+    let out = B::cross_entropy_loss::<f32, f32>(
         &pred,
         &target,
         incin_core::prelude::Reduction::Mean,
@@ -811,7 +810,7 @@ fn cross_entropy_loss_matches_hand_computed_value_for_nonzero_target() {
     // real contribution, understating the loss).
     let pred = storage(vec![2.0, 1.0, 0.5, 3.0], vec![2, 2]);
     let target = storage(vec![0.0, 1.0], vec![2]); // class 0, class 1
-    let out = <B as LossOps<B>>::cross_entropy_loss::<f32, f32>(
+    let out = B::cross_entropy_loss::<f32, f32>(
         &pred,
         &target,
         incin_core::prelude::Reduction::Mean,
@@ -836,7 +835,7 @@ fn cross_entropy_loss_backward_matches_finite_difference() {
     let pred = storage(vec![2.0, 1.0, -0.5, 0.5, 3.0, 0.2], vec![2, 3]);
     let target = storage(vec![0.0, 2.0], vec![2]); // class 0, class 2
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        <B as LossOps<B>>::cross_entropy_loss::<f32, f32>(
+        B::cross_entropy_loss::<f32, f32>(
             &inputs[0],
             &target,
             incin_core::prelude::Reduction::Mean,

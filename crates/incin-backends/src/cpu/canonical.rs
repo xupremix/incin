@@ -2985,7 +2985,7 @@ impl<D: Device> Execute<op::Norm> for CpuBackendImpl<D> {
 /// the hardest kind of divergence to find.
 const NORM_ORDER_TOLERANCE: f64 = 1e-6;
 
-/// The losses `LossOps` supplies as composed defaults.
+/// The losses supplied as composed defaults.
 ///
 /// Each takes a prediction and a target of the same shape and reduces the
 /// elementwise result according to its attributes. They are grouped here rather
@@ -3038,7 +3038,7 @@ loss_executors![
 /// of the `composed_reduction` capability group either: those take a
 /// prediction and a target of the *same* shape and dtype, and this takes
 /// `[batch, classes]` f32 logits against `[batch]` integer class indices.
-/// `LossOps::cross_entropy_loss` is correspondingly the one loss with two
+/// `cross_entropy_loss` is correspondingly the one loss with two
 /// dtype parameters rather than one, so the shared macro's
 /// `$method::<f32>(prediction, target, reduction)` call could not name it.
 ///

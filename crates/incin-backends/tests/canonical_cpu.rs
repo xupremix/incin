@@ -20,7 +20,6 @@ use incin_core::exec::{
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
 use incin_core::__backend_compat::legacy::{NumericOps, TensorOps};
-use incin_backends::__backend_compat::legacy::LossOps;
 
 type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -2116,7 +2115,7 @@ fn a_canonical_cross_entropy_invocation_matches_the_legacy_result_in_every_reduc
             &[handle(&logits), handle(&targets)],
         )
         .expect("cross entropy is a registered CPU capability");
-        let legacy = <TestBackend as LossOps<TestBackend>>::cross_entropy_loss::<f32, i64>(
+        let legacy = TestBackend::cross_entropy_loss::<f32, i64>(
             &logits,
             &targets,
             legacy_reduction,

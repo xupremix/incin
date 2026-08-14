@@ -21,7 +21,6 @@ use incin_backends::external::candle::CandleBackend;
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::HostInterop;
 use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
-use incin_backends::__backend_compat::legacy::LossOps;
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -1242,7 +1241,7 @@ fn adaptive_avg_pool2d_native_self_consistency() {
     );
 }
 
-// ── LossOps (4 methods, forward+backward, Reduction::Mean primarily) ───────
+// ── Loss helpers (4 methods, forward+backward, Reduction::Mean primarily) ───
 //
 // mse_loss's Reduction::Sum is NOT spot-checked here: CandleBackend::
 // mse_loss's `_reduction` parameter is unused (confirmed by direct source

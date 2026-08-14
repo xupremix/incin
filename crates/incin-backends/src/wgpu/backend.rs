@@ -2,7 +2,6 @@ use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
-use crate::legacy::LossOps;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,
@@ -4268,11 +4267,11 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LossOps (cross_entropy delegated to base trait which composes from float/reduce ops)
+// Loss helper (cross_entropy is composed from float/reduce operations).
 // ─────────────────────────────────────────────────────────────────────────────
-impl<D: Device> LossOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// `cross_entropy_loss`.
-    fn cross_entropy_loss<K: DType, KInt: DType>(
+    pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<KInt>,
         reduction: incin_core::prelude::Reduction,

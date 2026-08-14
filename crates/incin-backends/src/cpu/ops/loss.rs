@@ -134,6 +134,44 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
     reduce_loss(per_nll, reduction)
 }
 
+impl<D: Device> crate::cpu::CpuBackendImpl<D> {
+    pub fn mse_loss<K: DType>(
+        pred: &CpuStorage,
+        target: &CpuStorage,
+        reduction: Reduction,
+    ) -> Result<CpuStorage> {
+        let _ = core::marker::PhantomData::<K>;
+        mse_loss_storage(pred, target, reduction)
+    }
+
+    pub fn l1_loss<K: DType>(
+        pred: &CpuStorage,
+        target: &CpuStorage,
+        reduction: Reduction,
+    ) -> Result<CpuStorage> {
+        let _ = core::marker::PhantomData::<K>;
+        l1_loss_storage(pred, target, reduction)
+    }
+
+    pub fn bce_with_logits_loss<K: DType>(
+        pred: &CpuStorage,
+        target: &CpuStorage,
+        reduction: Reduction,
+    ) -> Result<CpuStorage> {
+        let _ = core::marker::PhantomData::<K>;
+        bce_with_logits_loss_storage(pred, target, reduction)
+    }
+
+    pub fn cross_entropy_loss<K: DType, KInt: DType>(
+        pred: &CpuStorage,
+        target: &CpuStorage,
+        reduction: Reduction,
+    ) -> Result<CpuStorage> {
+        let _ = core::marker::PhantomData::<(K, KInt)>;
+        cross_entropy_loss_storage::<D>(pred, target, reduction)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------

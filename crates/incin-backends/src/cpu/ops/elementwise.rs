@@ -832,7 +832,7 @@ pub(crate) fn div_storage_with_shape(
 /// backward chain automatically (Plan 04-01 D-02 rationale).
 ///
 /// Called by both `FloatOps::softmax` (as `exp(log_softmax(x, dim))`) and
-/// `LossOps::cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
+/// `cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
 /// numerically-stable kernel is shared rather than duplicated.
 pub(crate) fn log_softmax<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,

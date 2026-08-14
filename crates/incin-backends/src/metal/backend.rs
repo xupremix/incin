@@ -4,7 +4,6 @@ use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
-use crate::legacy::LossOps;
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
 use incin_core::prelude::{
@@ -3020,10 +3019,10 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
     }
 }
 
-// ─── LossOps ────────────────────────────────────────────────────────────────
+// ─── Loss helper ────────────────────────────────────────────────────────────
 
-impl<D: Device> LossOps<Self> for MetalBackendImpl<D> {
-    fn cross_entropy_loss<K: DType, KInt: DType>(
+impl<D: Device> MetalBackendImpl<D> {
+    pub fn cross_entropy_loss<K: DType, KInt: DType>(
         _pred: &<Self as StorageBackend>::Storage<K>,
         _target: &<Self as StorageBackend>::Storage<KInt>,
         _reduction: incin_core::tensor::reduction::Reduction,

@@ -4,12 +4,10 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> crate::legacy::LossOps<Self>
-    for CandleBackend<D>
-{
+impl<D: incin_core::prelude::Device> CandleBackend<D> {
     /// Computes L1 (Mean Absolute Error) loss: `|pred - target|` with
     /// the given `reduction` (Mean, Sum, or None).
-    fn l1_loss<K: incin_core::prelude::DType>(
+    pub fn l1_loss<K: incin_core::prelude::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<K>,
         reduction: incin_core::prelude::Reduction,
@@ -36,7 +34,7 @@ impl<D: incin_core::prelude::Device> crate::legacy::LossOps<Self>
     /// Computes Binary Cross-Entropy from logits:
     /// `max(x, 0) - x*y + log(1 + exp(-|x|))`
     /// with the given `reduction` (Mean, Sum, or None).
-    fn bce_with_logits_loss<K: incin_core::prelude::DType>(
+    pub fn bce_with_logits_loss<K: incin_core::prelude::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<K>,
         reduction: incin_core::prelude::Reduction,
@@ -87,7 +85,7 @@ impl<D: incin_core::prelude::Device> crate::legacy::LossOps<Self>
 
     /// Computes mean squared error between `pred` and `target`; the
     /// reduction argument is ignored since candle's `mse` always averages.
-    fn mse_loss<K: incin_core::prelude::DType>(
+    pub fn mse_loss<K: incin_core::prelude::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<K>,
         _reduction: incin_core::prelude::Reduction,
@@ -100,7 +98,7 @@ impl<D: incin_core::prelude::Device> crate::legacy::LossOps<Self>
     /// Computes cross-entropy loss between `pred` logits and `target`
     /// class indices, casting `target` to `U32` as candle requires; the
     /// reduction argument is ignored.
-    fn cross_entropy_loss<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn cross_entropy_loss<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<KInt>,
         _reduction: incin_core::prelude::Reduction,
