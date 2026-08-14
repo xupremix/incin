@@ -1,97 +1,7 @@
-use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, ErrorMessage, Result, Shape, Tensor, ToDevice, VariableBackend};
+use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, Result, Shape, Tensor, ToDevice, VariableBackend};
 use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
-
-/// Typed traversal and portable persistence contract for module state.
-///
-/// The public state representation is [`StateSnapshot`]. Backend storage is
-/// reached only at typed `Param`/`Buffer` leaves during prepare/commit.
-pub trait StateDict<B: crate::tensor::backend::VariableBackend> {
-    /// Collects exact, owned state without retaining a live backend tensor.
-    /// Implementations for state-bearing leaves override this; the default is
-    /// appropriate for stateless modules and legacy hand-written markers.
-    fn collect_state(
-        &self,
-        _prefix: &crate::nn::StatePath,
-        _snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    /// Prepares all replacements. No live module state may be mutated here.
-    fn prepare_state(
-        &self,
-        _prefix: &crate::nn::StatePath,
-        _snapshot: &crate::nn::StateSnapshot,
-        _plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    /// Commits a previously prepared replacement.
-    fn commit_state(
-        &mut self,
-        _prefix: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    /// Returns an owned heterogeneous snapshot of this module.
-    fn state_snapshot(&self) -> Result<crate::nn::StateSnapshot> {
-        let mut snapshot = crate::nn::StateSnapshot::new();
-        self.collect_state(&crate::nn::StatePath::root(), &mut snapshot)?;
-        Ok(snapshot)
-    }
-
-    /// Strictly stages and commits a complete snapshot.
-    fn load_state_snapshot(&mut self, snapshot: &crate::nn::StateSnapshot) -> Result<()> {
-        let current = self.state_snapshot()?;
-        let expected: alloc::collections::BTreeSet<_> =
-            current.iter().map(|(path, _)| path).collect();
-        let provided: alloc::collections::BTreeSet<_> =
-            snapshot.iter().map(|(path, _)| path).collect();
-        if expected != provided {
-            let missing = expected
-                .difference(&provided)
-                .map(ToString::to_string)
-                .collect::<alloc::vec::Vec<_>>();
-            let unexpected = provided
-                .difference(&expected)
-                .map(ToString::to_string)
-                .collect::<alloc::vec::Vec<_>>();
-            return Err(Error::InvalidModuleState {
-                operation: "load state",
-                reason: ErrorMessage::new(format!(
-                    "state paths differ: missing {:?}, unexpected {:?}",
-                    missing, unexpected
-                )),
-            });
-        }
-        let mut plan = crate::nn::StateLoadPlan::new();
-        self.prepare_state(&crate::nn::StatePath::root(), snapshot, &mut plan)?;
-        self.commit_state(&crate::nn::StatePath::root(), &mut plan)
-    }
-
-    /// Number of flat positional slots occupied inside `Sequential`.
-    fn flat_width() -> usize
-    where
-        Self: Sized,
-    {
-        1
-    }
-
-    /// Extracts all state as an owned heterogeneous snapshot.
-    fn state_dict(&self) -> Result<crate::nn::StateSnapshot> {
-        self.state_snapshot()
-    }
-
-    /// Strictly prepares and commits a complete snapshot.
-    fn load_state_dict(&mut self, snapshot: &crate::nn::StateSnapshot) -> Result<()> {
-        self.load_state_snapshot(snapshot)
-    }
-}
 
 /// A trait implemented by all Neural Network modules.
 /// Usually automatically derived via `#[incin::module]`.
@@ -187,6 +97,14 @@ pub trait ParameterVisitor<B: VariableBackend> {
 
 /// Traverses trainable parameter leaves using a typed visitor.
 pub trait VisitParameters<B: VariableBackend> {
+    /// Number of flat module slots occupied by this subtree.
+    fn flat_width() -> usize
+    where
+        Self: Sized,
+    {
+        1
+    }
+
     fn visit_parameters<V: ParameterVisitor<B>>(
         &self,
         path: &crate::nn::StatePath,
@@ -197,7 +115,7 @@ pub trait VisitParameters<B: VariableBackend> {
 /// Recursively switches a module (and every submodule reachable through
 /// `#[module]`-derived fields) between training and evaluation behavior —
 /// `#[module]` auto-implements this exactly like it does `Parameters`/
-/// `StateDict`, walking every field and delegating to its `TrainMode`
+/// typed state visitors, walking every field and delegating to its `TrainMode`
 /// implementation, so calling `.eval()` on a top-level model
 /// propagates all the way down to every nested [`crate::nn::dropout::Dropout`]
 /// without the caller needing to reach into the tree by hand.
@@ -301,7 +219,7 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 /// ## Deriving Modules
 ///
 /// While you can implement `Module` manually, the recommended approach is to use the `#[module]` attribute macro
-/// provided by `incin-macros`. This automatically derives `Parameters`, `StateDict`, and generates structural boilerplate.
+/// provided by `incin-macros`. This automatically derives typed visitors and structural boilerplate.
 ///
 /// ```rust
 /// # extern crate incin_core as incin;
@@ -407,7 +325,7 @@ where
     }
 }
 
-// Explicit bounds + direct calls, matching `Parameters`/`StateDict`'s own
+// Explicit bounds + direct calls, matching `Parameters`'s own
 // impls for `Sequential` immediately below/above. Every leaf layer with no
 // training-dependent behavior
 // (`Linear`, `ReLU`, `Conv2d`, pooling layers, ...) implements `TrainMode`
@@ -421,53 +339,16 @@ impl<L1: TrainMode, L2: TrainMode> TrainMode for Sequential<L1, L2> {
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend, L1, L2> StateDict<B> for Sequential<L1, L2>
-where
-    L1: StateDict<B>,
-    L2: StateDict<B>,
-{
-    fn collect_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        self.0.collect_state(&path.index(0), snapshot)?;
-        self.1
-            .collect_state(&path.index(L1::flat_width()), snapshot)
-    }
-
-    fn prepare_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        self.0.prepare_state(&path.index(0), snapshot, plan)?;
-        self.1
-            .prepare_state(&path.index(L1::flat_width()), snapshot, plan)
-    }
-
-    fn commit_state(
-        &mut self,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        self.0.commit_state(&path.index(0), plan)?;
-        self.1.commit_state(&path.index(L1::flat_width()), plan)
-    }
-
-    /// Sums both children's widths.
-    fn flat_width() -> usize {
-        L1::flat_width() + L2::flat_width()
-    }
-}
-
 impl<B, L1, L2> crate::nn::VisitState<B> for Sequential<L1, L2>
 where
     B: crate::tensor::backend::VariableBackend,
-    L1: crate::nn::VisitState<B> + StateDict<B>,
-    L2: crate::nn::VisitState<B> + StateDict<B>,
+    L1: crate::nn::VisitState<B>,
+    L2: crate::nn::VisitState<B>,
 {
+    fn flat_width() -> usize {
+        L1::flat_width() + L2::flat_width()
+    }
+
     fn visit_state<V: crate::nn::StateVisitor<B>>(
         &self,
         path: &crate::nn::StatePath,
@@ -481,9 +362,13 @@ where
 impl<B, L1, L2> crate::nn::VisitStateMut<B> for Sequential<L1, L2>
 where
     B: crate::tensor::backend::VariableBackend,
-    L1: crate::nn::VisitStateMut<B> + StateDict<B>,
-    L2: crate::nn::VisitStateMut<B> + StateDict<B>,
+    L1: crate::nn::VisitStateMut<B>,
+    L2: crate::nn::VisitStateMut<B>,
 {
+    fn flat_width() -> usize {
+        L1::flat_width() + L2::flat_width()
+    }
+
     fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
         &mut self,
         path: &crate::nn::StatePath,
@@ -498,9 +383,13 @@ where
 impl<B, L1, L2> crate::nn::VisitParameters<B> for Sequential<L1, L2>
 where
     B: crate::tensor::backend::VariableBackend,
-    L1: crate::nn::VisitParameters<B> + StateDict<B>,
-    L2: crate::nn::VisitParameters<B> + StateDict<B>,
+    L1: crate::nn::VisitParameters<B>,
+    L2: crate::nn::VisitParameters<B>,
 {
+    fn flat_width() -> usize {
+        L1::flat_width() + L2::flat_width()
+    }
+
     fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
         &self,
         path: &crate::nn::StatePath,
@@ -521,8 +410,6 @@ macro_rules! impl_dummy_state {
                 fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>) {}
             }
 
-            impl<B: crate::tensor::backend::VariableBackend> StateDict<B> for $t {
-            }
         )+
     };
 }
@@ -541,8 +428,6 @@ where
     ) {
     }
 }
-impl<T, B: crate::tensor::backend::VariableBackend> StateDict<B> for core::marker::PhantomData<T> where T: crate::prelude::DType {}
-
 impl<T, B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B>
     for core::marker::PhantomData<T>
 where
@@ -567,40 +452,6 @@ impl<T: Parameters<B, K>, B: crate::tensor::backend::VariableBackend, K: DType> 
         if let Some(v) = self {
             v.named_parameters(prefix, map);
         }
-    }
-}
-
-impl<L: StateDict<B>, B: crate::tensor::backend::VariableBackend> StateDict<B> for Option<L> {
-    fn collect_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        if let Some(value) = self {
-            value.collect_state(path, snapshot)?;
-        }
-        Ok(())
-    }
-    fn prepare_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        if let Some(value) = self {
-            value.prepare_state(path, snapshot, plan)?;
-        }
-        Ok(())
-    }
-    fn commit_state(
-        &mut self,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        if let Some(value) = self {
-            value.commit_state(path, plan)?;
-        }
-        Ok(())
     }
 }
 

@@ -364,12 +364,6 @@ where
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for ReLU {}
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for GELU {}
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Swish {}
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Softmax {}
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Sigmoid {}
-impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Tanh {}
 
 macro_rules! impl_stateless_state_visitors {
     ($($t:ty),+ $(,)?) => {$ (

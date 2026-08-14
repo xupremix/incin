@@ -263,12 +263,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! { ::incin::__macro_support }
     };
-    let state_load_plan = if is_internal {
-        quote! { crate::nn::StateLoadPlan }
-    } else {
-        quote! { ::incin::__macro_support::StateLoadPlan }
-    };
-
     let format_mac = quote! { #macro_support::format! };
 
     let backend_generic = input.generics.params.iter().find_map(|p| {
@@ -316,9 +310,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
     let mut param_calls = Vec::new();
-    let mut collect_state_calls = Vec::new();
-    let mut prepare_state_calls = Vec::new();
-    let mut commit_state_calls = Vec::new();
     let mut visit_state_calls = Vec::new();
     let mut visit_state_mut_calls = Vec::new();
     let mut visit_parameter_calls = Vec::new();
@@ -369,11 +360,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         #k_crate::prelude::Parameters::named_parameters(
                             &self.#fname, &#format_mac("{}{}", prefix, #fname_str), map);
                     });
-                    collect_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::collect_state(
-                            &self.#fname, &child_path, snapshot)?;
-                    });
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
@@ -388,16 +374,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitParameters::visit_parameters(
                             &self.#fname, &child_path, visitor)?;
-                    });
-                    prepare_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::prepare_state(
-                            &self.#fname, &child_path, snapshot, plan)?;
-                    });
-                    commit_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::commit_state(
-                            &mut self.#fname, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
                         let child_prefix = if prefix.is_empty() {
@@ -464,11 +440,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         #k_crate::prelude::Parameters::named_parameters(
                             &self.#idx, &#format_mac("{}{}", prefix, #idx_str), map);
                     });
-                    collect_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::collect_state(
-                            &self.#idx, &child_path, snapshot)?;
-                    });
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
@@ -483,16 +454,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitParameters::visit_parameters(
                             &self.#idx, &child_path, visitor)?;
-                    });
-                    prepare_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::prepare_state(
-                            &self.#idx, &child_path, snapshot, plan)?;
-                    });
-                    commit_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
-                        #macro_support::StateDict::commit_state(
-                            &mut self.#idx, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
                         let child_prefix = if prefix.is_empty() {
@@ -603,15 +564,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let mut state_dict_where_clause = where_clause
-        .cloned()
-        .unwrap_or_else(|| syn::parse_quote!(where));
-    for fty in &state_dict_field_types {
-        state_dict_where_clause
-            .predicates
-            .push(syn::parse_quote!(#fty: #macro_support::StateDict<#b_ident>));
-    }
-
     let parameters_impl = if no_parameters {
         quote! {}
     } else {
@@ -662,29 +614,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     visitor: &mut V,
                 ) -> #k_crate::prelude::Result<()> {
                     #(#visit_parameter_calls)*
-                    Ok(())
-                }
-            }
-        }
-    };
-
-    let state_impl = if no_state {
-        quote! {}
-    } else {
-        quote! {
-            impl #impl_generics #macro_support::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
-                fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
-                    #(#collect_state_calls)*
-                    Ok(())
-                }
-
-                fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #state_load_plan) -> #k_crate::prelude::Result<()> {
-                    #(#prepare_state_calls)*
-                    Ok(())
-                }
-
-                fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #state_load_plan) -> #k_crate::prelude::Result<()> {
-                    #(#commit_state_calls)*
                     Ok(())
                 }
             }
@@ -847,7 +776,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #parameters_impl
         #visit_parameters_impl
-        #state_impl
         #visit_state_mut_impl
         #visit_state_impl
         #named_layers_impl

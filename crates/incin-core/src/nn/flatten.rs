@@ -32,7 +32,6 @@ impl<Start, End, B: crate::tensor::backend::VariableBackend, K: DType> Parameter
     }
 }
 
-impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::StateDict<B> for Flatten<Start, End> {}
 
 /// Runtime-rank models commonly flatten the image axes after a dynamic batch
 /// axis.  Keep that migration path on the same module type while the exact

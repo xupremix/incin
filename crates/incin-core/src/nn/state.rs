@@ -5,12 +5,10 @@
 //! and stage before touching a module's live state.
 
 use alloc::{
-    boxed::Box,
     collections::BTreeMap,
     string::{String, ToString},
     vec::Vec,
 };
-use core::any::Any;
 use core::fmt;
 
 use crate::{
@@ -18,50 +16,6 @@ use crate::{
     shapes::ShapeBuf,
     tensor::dtype::DTypeDescriptor,
 };
-
-/// Opaque backend-neutral staging state.
-///
-/// Concrete backend handles are type-erased at this boundary and are recovered
-/// only by the typed leaf that created each entry. This keeps the public state
-/// traversal contract independent of backend-native `Var<K>` handles.
-pub struct StateLoadPlan {
-    entries: BTreeMap<StatePath, Box<dyn Any>>,
-}
-
-impl StateLoadPlan {
-    /// Creates an empty plan for internal traversal.
-    #[must_use]
-    pub(crate) fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-        }
-    }
-    pub(crate) fn insert<T: 'static>(&mut self, path: StatePath, value: T) -> Result<()> {
-        if self.entries.insert(path, Box::new(value)).is_some() {
-            return Err(Error::InvalidModuleState {
-                operation: "prepare state",
-                reason: ErrorMessage::new("duplicate prepared state path"),
-            });
-        }
-        Ok(())
-    }
-    pub(crate) fn take<T: 'static>(&mut self, path: &StatePath) -> Result<T> {
-        let value = self
-            .entries
-            .remove(path)
-            .ok_or_else(|| Error::InvalidModuleState {
-                operation: "commit state",
-                reason: ErrorMessage::new(format!("missing prepared state path {path}")),
-            })?;
-        value
-            .downcast::<T>()
-            .map(|value| *value)
-            .map_err(|_| Error::InvalidModuleState {
-                operation: "commit state",
-                reason: ErrorMessage::new(format!("prepared state type mismatch at {path}")),
-            })
-    }
-}
 
 /// Durable, hierarchical state name.  This is a serialization path, not a
 /// parameter/runtime-variable identity or alias identifier.
@@ -162,6 +116,14 @@ pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
 
 /// Structural traversal of typed parameter and buffer leaves.
 pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
+    /// Number of flat module slots occupied by this subtree.
+    fn flat_width() -> usize
+    where
+        Self: Sized,
+    {
+        1
+    }
+
     fn visit_state<V: StateVisitor<B>>(
         &self,
         path: &StatePath,
@@ -199,6 +161,14 @@ pub trait StateMutVisitor<B: crate::tensor::backend::VariableBackend> {
 
 /// Structural mutable traversal used by snapshot restoration.
 pub trait VisitStateMut<B: crate::tensor::backend::VariableBackend> {
+    /// Number of flat module slots occupied by this subtree.
+    fn flat_width() -> usize
+    where
+        Self: Sized,
+    {
+        1
+    }
+
     fn visit_state_mut<V: StateMutVisitor<B>>(
         &mut self,
         path: &StatePath,

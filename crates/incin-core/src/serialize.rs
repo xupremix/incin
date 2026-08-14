@@ -1,6 +1,5 @@
 use crate::err::{Error, Result};
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
-use crate::nn::module::StateDict;
 use crate::shapes::ShapeBuf;
 use crate::tensor::backend::{Backend, StorageBackend};
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
@@ -173,14 +172,17 @@ pub trait ModelExt<B: Backend + crate::tensor::backend::VariableBackend> {
 }
 
 #[cfg(feature = "std")]
-impl<B: Backend + crate::tensor::backend::VariableBackend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
+impl<
+    B: Backend + crate::tensor::backend::VariableBackend,
+    T: crate::nn::VisitState<B> + crate::nn::VisitStateMut<B>,
+> ModelExt<B> for T {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
         match format {
-            Format::Safetensors => serialize_snapshot_safetensors(&self.state_dict()?, path),
-            Format::Postcard => serialize_snapshot_postcard(&self.state_dict()?, path),
+            Format::Safetensors => serialize_snapshot_safetensors(&crate::nn::collect_state::<B, _>(self)?, path),
+            Format::Postcard => serialize_snapshot_postcard(&crate::nn::collect_state::<B, _>(self)?, path),
             Format::ONNX => Err(anyhow::anyhow!("ONNX is not a state format")),
         }
         .map_err(|e| Error::Msg(e.to_string()))
@@ -196,7 +198,7 @@ impl<B: Backend + crate::tensor::backend::VariableBackend, T: crate::nn::module:
             Format::ONNX => return Err(Error::Msg("ONNX is not a state format".into())),
         }
         .map_err(|e| Error::Msg(e.to_string()))?;
-        self.load_state_dict(&snapshot)
+        crate::nn::load_state::<B, _>(self, &snapshot)
     }
 }
 

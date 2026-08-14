@@ -2,7 +2,7 @@
 //! RNNCell, RNN, LSTMCell, LSTM.
 //! Tests builder typestates, target-aware materialization, parameter collection,
 //! precision policy propagation (e.g. bf16), freeze/unfreeze state transitions,
-//! StateDict safety, and engine preservation.
+//! State traversal safety, and engine preservation.
 
 #![cfg(feature = "target-api")]
 

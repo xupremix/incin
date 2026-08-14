@@ -20,17 +20,23 @@ macro_rules! impl_module_for_optional_field {
             }
         }
 
-        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::StateDict<B> for $name<S, B, Bias> {
-            fn collect_state(&self, path: &crate::nn::StatePath, snapshot: &mut crate::nn::StateSnapshot) -> crate::prelude::Result<()> {
-                $( crate::prelude::StateDict::collect_state(&self.$field, &path.child(stringify!($field)), snapshot)?; )*
+        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::VisitState<B> for $name<S, B, Bias> {
+            fn visit_state<V: crate::nn::StateVisitor<B>>(&self, path: &crate::nn::StatePath, visitor: &mut V) -> crate::prelude::Result<()> {
+                $( crate::prelude::VisitState::visit_state(&self.$field, &path.child(stringify!($field)), visitor)?; )*
                 Ok(())
             }
-            fn prepare_state(&self, path: &crate::nn::StatePath, snapshot: &crate::nn::StateSnapshot, plan: &mut crate::nn::StateLoadPlan) -> crate::prelude::Result<()> {
-                $( crate::prelude::StateDict::prepare_state(&self.$field, &path.child(stringify!($field)), snapshot, plan)?; )*
+        }
+
+        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::VisitStateMut<B> for $name<S, B, Bias> {
+            fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(&mut self, path: &crate::nn::StatePath, visitor: &mut V) -> crate::prelude::Result<()> {
+                $( crate::prelude::VisitStateMut::visit_state_mut(&mut self.$field, &path.child(stringify!($field)), visitor)?; )*
                 Ok(())
             }
-            fn commit_state(&mut self, path: &crate::nn::StatePath, plan: &mut crate::nn::StateLoadPlan) -> crate::prelude::Result<()> {
-                $( crate::prelude::StateDict::commit_state(&mut self.$field, &path.child(stringify!($field)), plan)?; )*
+        }
+
+        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::VisitParameters<B> for $name<S, B, Bias> {
+            fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(&self, path: &crate::nn::StatePath, visitor: &mut V) -> crate::prelude::Result<()> {
+                $( crate::prelude::VisitParameters::visit_parameters(&self.$field, &path.child(stringify!($field)), visitor)?; )*
                 Ok(())
             }
         }

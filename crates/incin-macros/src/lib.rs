@@ -354,8 +354,8 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 /// you need a way to collect all trainable weights (for the optimizer) and state buffers
 /// (for saving/loading checkpoints).
 ///
-/// This macro iterates through every field in your `struct`. If a field implements `Parameters`
-/// or `StateDict` (like `Linear`, `Conv2d`, or nested `Sequential` blocks), it recursively
+/// This macro iterates through every field in your `struct`. If a field implements the generated
+/// parameter adapter or typed state visitors (like `Linear`, `Conv2d`, or nested `Sequential` blocks), it recursively
 /// aggregates them. It ignores fields that don't store tensor state.
 ///
 /// Generated capabilities can be disabled explicitly for forward-only or specialized modules:
@@ -372,7 +372,7 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 ///     fc2: Linear<s![64, 10], B>,
 /// }
 ///
-/// // Now `MyModel` automatically implements `.parameters()` and `.state_dict()`!
+/// // Now `MyModel` automatically supports `.parameters()` and state visitors!
 /// ```
 ///
 /// ## Path resolution

@@ -1,6 +1,6 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::nn::StateDict;
+use crate::nn::{StateSnapshot, VisitState};
 use crate::tensor::backend::{Backend, Execute, HostInterop, SupportsDType};
 use crate::exec::{self, ExecutionContext};
 use crate::exec::catalog::{QuantizationAttributes, op};
@@ -140,7 +140,7 @@ impl GgufMetadata {
 }
 
 /// Exporter for saving `incin` modules to GGUF v3 format.
-pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend + HostInterop, M: StateDict<B>> {
+pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend + HostInterop, M: VisitState<B>> {
     module: &'a M,
     metadata: GgufMetadata,
     quant: QuantScheme,
@@ -151,7 +151,7 @@ impl<'a, B, M> GgufExporter<'a, B, M>
 where
     B: Backend + crate::tensor::backend::VariableBackend + Execute<op::Quantize> + HostInterop,
     <B as Execute<op::Quantize>>::Output: Into<B::Storage<Q8_0>>,
-    M: StateDict<B>,
+    M: VisitState<B>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.
     pub fn from_module(module: &'a M) -> Self {
@@ -216,7 +216,7 @@ where
         // Version: 3
         file.write_all(&3u32.to_le_bytes())?;
 
-        let snapshot = self.module.state_dict()?;
+        let snapshot: StateSnapshot = crate::nn::collect_state::<B, _>(self.module)?;
         let tensor_count = u64::try_from(snapshot.len())
             .map_err(|_| Error::Msg("tensor count is too large for the GGUF format".into()))?;
 

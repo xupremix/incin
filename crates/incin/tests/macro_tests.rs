@@ -100,13 +100,13 @@ pub struct MyCustomLayer<B: Backend + VariableBackend> {
 #[test]
 /// Test module macro.
 fn test_module_macro() -> Result<()> {
-    // Verify that #[module] derived Parameters and StateDict automatically
+    // Verify that #[module] derives parameter and state traversal automatically.
     let layer = MyCustomLayer::<CpuBackendImpl> {
         linear: Linear::build(())?,
         ln: LayerNorm::build(1e-5)?,
     };
 
-    // Since #[module] implements Parameters, this should compile:
+    // The generated parameter adapter remains available for optimizer setup:
     let params = layer.parameters();
     assert_eq!(params.len(), 4); // linear.weight, linear.bias, ln.weight, ln.bias
 

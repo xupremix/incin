@@ -118,8 +118,6 @@ pub mod types {
 #[doc(hidden)]
 pub mod __macro_support {
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
-    pub use incin_core::prelude::StateDict;
-    pub use incin_core::nn::StateLoadPlan;
     pub use incin_core::backend_authoring::{SupportsDType, TransferTo};
     pub use incin_core::nn::{ComputeStats, LayerStats};
 }

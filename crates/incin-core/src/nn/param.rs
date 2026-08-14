@@ -721,63 +721,6 @@ impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: 
     }
 }
 
-use crate::nn::module::StateDict;
-use alloc::collections::BTreeMap;
-
-/// `StateDict` for parameters of any `K: DType`.
-impl<
-    S: Shape,
-    B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop,
-    K: DType<Arg = ()>,
-    Train: TrainState,
-> StateDict<B> for Param<S, B, K, Train>
-{
-    fn collect_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        snapshot.insert(path.clone(), self.snapshot_state_value(path)?)
-    }
-
-    fn prepare_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        let value = snapshot
-            .get(path)
-            .ok_or_else(|| Error::InvalidModuleState {
-                operation: "prepare parameter",
-                reason: ErrorMessage::new(format!("missing state path {path}")),
-            })?;
-        let expected_dtype = K::descriptor(&self._dtype);
-        if value.role() != crate::nn::StateRole::Parameter
-            || value.shape() != self._shape.shape_buf()
-            || value.dtype() != expected_dtype
-        {
-            return Err(Error::InvalidModuleState {
-                operation: "prepare parameter",
-                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
-            });
-        }
-        let device = <B::Device as Device>::to_incin(&self._device)?;
-        let storage =
-            B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
-        plan.insert(path.clone(), B::var_from_tensor::<K>(&storage)?)
-    }
-
-    fn commit_state(
-        &mut self,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        self.inner = plan.take::<<B as crate::tensor::backend::VariableBackend>::Var<K>>(path)?;
-        Ok(())
-    }
-}
-
 /// A non-trainable state buffer.
 pub struct Buffer<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32> {
     pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
@@ -1086,56 +1029,6 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType>
         _path: &crate::nn::StatePath,
         _visitor: &mut V,
     ) -> Result<()> {
-        Ok(())
-    }
-}
-
-/// `StateDict` for buffers of any `K: DType`.
-impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>>
-    StateDict<B> for Buffer<S, B, K>
-{
-    fn collect_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        snapshot.insert(path.clone(), self.snapshot_state_value(path)?)
-    }
-
-    fn prepare_state(
-        &self,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        let value = snapshot
-            .get(path)
-            .ok_or_else(|| Error::InvalidModuleState {
-                operation: "prepare buffer",
-                reason: ErrorMessage::new(format!("missing state path {path}")),
-            })?;
-        let expected_dtype = K::descriptor(&self._dtype);
-        if value.role() != crate::nn::StateRole::Buffer
-            || value.shape() != self._shape.shape_buf()
-            || value.dtype() != expected_dtype
-        {
-            return Err(Error::InvalidModuleState {
-                operation: "prepare buffer",
-                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
-            });
-        }
-        let device = <B::Device as Device>::to_incin(&self._device)?;
-        let storage =
-            B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
-        plan.insert(path.clone(), B::var_from_tensor::<K>(&storage)?)
-    }
-
-    fn commit_state(
-        &mut self,
-        path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan,
-    ) -> Result<()> {
-        self.inner = plan.take::<<B as crate::tensor::backend::VariableBackend>::Var<K>>(path)?;
         Ok(())
     }
 }
