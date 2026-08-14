@@ -13,6 +13,12 @@ if rg -n 'pub use incin_core::prelude::[^;]*(FloatOps|NumericOps|TensorOps|Creat
     exit 1
 fi
 
+if rg -n 'pub use crate::tensor::backend::[^;]*(FloatOps|NumericOps|TensorOps|CreationOps|ReductionOps|ModuleOps|LossOps|QuantizedOps|OptimizerOps)' \
+    crates/incin-core/src/lib.rs; then
+    echo "public API check failed: legacy operation family leaked into backend_authoring root" >&2
+    exit 1
+fi
+
 for capability in HostInterop VariableBackend AutogradBackend TransferBackend; do
     if ! rg -q "\\b${capability}\\b" crates/incin-core/src/lib.rs crates/incin/src/lib.rs; then
         echo "public API check failed: missing named capability ${capability}" >&2

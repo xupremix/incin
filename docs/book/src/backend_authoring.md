@@ -5,8 +5,9 @@ to Incin, not for someone using it.
 
 The backend authoring contract is the descriptor executor. Implement one
 `Execute<Descriptor<op::X>>` instance for each operation the backend advertises.
-The older operation-family traits remain internal implementation details while
-the tensor surface finishes moving to descriptors. They are not part of the
+The older operation-family traits are hidden compatibility adapters for legacy
+backend implementations and tests. They are available only through the
+explicit `backend_authoring::legacy` namespace and are not part of the normal
 facade authoring contract.
 
 ## `StorageBackend`: the minimum

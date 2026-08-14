@@ -35,7 +35,7 @@ features is the one configuration that is genuinely `no_std`.
 | Feature | What it enables |
 |---|---|
 | `target-api` | **Experimental.** Device values as allocation targets (`Cpu.zeros(...)`), plus the `_canonical` operation methods. Purely additive. See [The target API](./target_api.md). |
-| `backend-authoring` | Extension contracts for backend authors — `Execute`, `ExecutionRequest`, the operation-family traits, the canonical descriptors. See [Backend authoring](./backend_authoring.md). |
+| `backend-authoring` | Extension contracts for backend authors — `Execute`, `ExecutionRequest`, named capability views, and canonical descriptors. Legacy operation-family adapters are under the hidden `backend_authoring::legacy` namespace. See [Backend authoring](./backend_authoring.md). |
 | `train` | The preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
 | `telemetry` | Backend telemetry hooks; `cargo incin doctor` also reports the run directory under this feature. |
 | `autotune` | CUDA launch autotuning. Implies `cuda`. |

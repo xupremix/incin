@@ -1,13 +1,12 @@
-use crate::dist::placement::{Local, Placement};
 use crate::err::BackendError;
 use crate::exec::capability::Capabilities;
-use crate::exec::context::ExecutionContext;
-use crate::exec::request::TensorHandle;
-use crate::exec::{TensorMeta, Validated};
 use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, ShapeBuf, convert_f64_to_i64};
+use crate::exec::TensorMeta;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 
+mod execute;
+pub use execute::{Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput};
 mod capability;
 pub use capability::{AutogradBackend, HostInterop, TransferBackend, VariableBackend};
 mod optimizer;
@@ -99,120 +98,6 @@ mod scalar_value_tests {
             12
         );
     }
-}
-
-/// Physical storage ownership, independent of operation execution.
-pub trait StorageBackend<P: Placement = Local>: Sized {
-    /// How this backend names itself when it refuses work.
-    ///
-    /// Required rather than defaulted. A capability refusal that cannot say
-    /// who refused is not actionable: "dtype F64 is unsupported for zeros"
-    /// leaves the reader to guess whether their device, their build features
-    /// or their dtype choice is the thing to change. Every refusal routed
-    /// through [`BackendError::Unsupported`] carries this, and there is no
-    /// default to fall back to precisely so that a new backend cannot ship
-    /// anonymous errors by omission.
-    const BACKEND_NAME: &'static str;
-
-    type Storage<K: DType>: Clone;
-    type Device: Device;
-
-    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
-
-    /// Returns `storage` with a fresh autograd identity after it crosses a
-    /// gradient-tracking boundary.
-    ///
-    /// Backends without tape-addressable storage preserve the handle. Tape
-    /// backends override this to retain the allocation while assigning a new
-    /// [`TensorId`](crate::exec::TensorId), so detached and newly trainable
-    /// tensors cannot alias an existing tape node.
-    fn fresh_autograd_identity<K: DType>(storage: Self::Storage<K>) -> Self::Storage<K> {
-        storage
-    }
-
-    #[doc(hidden)]
-    fn execution_storage<K: DType>(
-        storage: &Self::Storage<K>,
-    ) -> (&dyn core::any::Any, Option<usize>)
-    where
-        Self::Storage<K>: core::any::Any,
-    {
-        (storage, None)
-    }
-}
-
-/// One validated descriptor invocation against checked tensor handles.
-pub struct ExecutionRequest<'a, O, B>
-where
-    O: crate::exec::catalog::Operation,
-    B: StorageBackend,
-{
-    pub operation: &'a Validated<crate::exec::catalog::Descriptor<O>>,
-    pub inputs: &'a [TensorHandle<'a>],
-    pub context: &'a ExecutionContext<B>,
-    /// Borrowed execution data kept outside the semantic descriptor.
-    pub payload: Option<crate::exec::request::ExecutionPayload<'a>>,
-}
-
-/// A value returned by a backend executor.
-///
-/// Execution results are deliberately constrained to backend-owned storage or
-/// an explicitly sanctioned transport value. This keeps arbitrary control
-/// values out of the kernel boundary while still allowing byte readback and
-/// structured multi-output operations.
-pub trait ExecuteOutput {}
-
-pub trait StorageOutput {}
-
-impl<T: StorageOutput> ExecuteOutput for T {}
-impl ExecuteOutput for ShapeBuf {}
-impl ExecuteOutput for crate::exec::ProofLevel {}
-impl ExecuteOutput for f64 {}
-impl ExecuteOutput for i64 {}
-impl ExecuteOutput for () {}
-impl ExecuteOutput for f32 {}
-impl ExecuteOutput for i32 {}
-
-impl ExecuteOutput for alloc::vec::Vec<u8> {}
-impl ExecuteOutput for alloc::vec::Vec<usize> {}
-impl<T: ExecuteOutput> ExecuteOutput for alloc::vec::Vec<T> {}
-
-impl<L: ExecuteOutput, R: ExecuteOutput> ExecuteOutput for (L, R) {}
-
-/// Executes one descriptor type. Absence of an implementation is a compile-time fact.
-pub trait Execute<O>: StorageBackend + Sized
-where
-    O: crate::exec::catalog::Operation,
-{
-    type Output: ExecuteOutput;
-
-    /// Reports support for an external operation without requiring a second
-    /// capability trait. Built-in dispatch continues to use the catalog.
-    fn supports_custom(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
-        crate::exec::SupportLevel::Native
-    }
-
-    /// Reports support for a custom operation when no operand or output
-    /// metadata exists from which to build a complete capability query.
-    fn supports_custom_operation(
-        &self,
-        _operation: &crate::exec::OperationIdentity,
-        _training: bool,
-        _math_mode: crate::exec::MathMode,
-    ) -> crate::exec::SupportLevel {
-        crate::exec::SupportLevel::Native
-    }
-
-    /// Run a validated invocation using lowered runtime semantic evidence.
-    ///
-    /// The frontend may preserve static proof, rank, and element-count facts
-    /// in `request.operation.shape_evidence()`. The concrete frontend `Shape`
-    /// type never crosses this boundary, so executor code is not monomorphized
-    /// once per caller shape.
-    fn execute(
-        &self,
-        request: ExecutionRequest<'_, O, Self>,
-    ) -> core::result::Result<Self::Output, BackendError>;
 }
 
 /// Resolves the dtype represented by `K` for a concrete runtime device.

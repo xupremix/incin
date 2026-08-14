@@ -73,16 +73,12 @@ picks `B` at compile time from enabled features, `detect_device()` probes
 hardware at runtime and returns a value, and the two answer different
 questions.
 
-**Two execution paths coexist, on purpose, mid-migration.** Most tensor
-methods today reach a kernel through nine "operation-family" supertraits
-(`NumericOps`, `FloatOps`, `TensorOps`, `ReductionOps`, `ModuleOps`,
-`LossOps`, `QuantizedOps`, `CreationOps`, `OptimizerOps` — all required by
-`Backend`). A newer, narrower path — the *canonical* path, `op::X` /
-`Descriptor<O>` / `Execute<Descriptor<O>>` — carries one exact operation
-identity per type, validates it before it reaches a backend, and derives
-output metadata instead of trusting a caller's claim. §6 covers why this
-duality exists and how far each path currently reaches; §5 covers the legacy
-family surface you will actually be writing against today.
+**Ordinary tensor methods use one canonical execution architecture.** Their
+backend bounds name an exact operation descriptor (`op::X`) and execution is
+validated before it reaches a backend. The former operation-family traits are
+hidden compatibility adapters for backend implementations and tests; they are
+not required by `Backend`, are not part of the normal facade prelude, and are
+not a second application-facing execution model.
 
 ## 3. The type-level shape system
 
@@ -198,43 +194,36 @@ error three layers down.
 
 ## 5. Operations: the stable surface today
 
-The nine operation-family traits `Backend` requires — `NumericOps` (`add`,
-`sub`, `mul`, `div`), `FloatOps` (the whole unary float family: `relu`,
-`gelu`, `sigmoid`, `exp`, trig, …), `TensorOps` (`reshape`, `matmul`,
-`concat`, comparisons, indexing, …), `ReductionOps` (`sum_dim`, `argmax`,
-`topk`, …), `ModuleOps` (`conv2d`, `layer_norm`, `batch_norm`, …), `LossOps`,
-`QuantizedOps`, `CreationOps` (`zeros`/`ones`/`rand`/…), `OptimizerOps` — are
-what every `Tensor` method you call ultimately reaches, today, regardless of
-whether a canonical executor also exists for the same operation. Read
-`docs/OPERATION_SEMANTICS.md` for the exact contract of every one of the 174
-catalog operations (broadcasting rule, dtype rule, gradient rule, output
-shape) and `docs/capabilities.md` for which backend implements which at what
-support level (`Native`/`Composed`/`Fallback`/`Unsupported`) — both are
-generated from source and re-checked on every test run, so they cannot drift
-from what actually executes.
+`Tensor` methods such as `add`, `matmul`, `reshape`, reductions, losses, and
+creation all bind an exact catalog descriptor and execute through the
+validated dispatch contract. Read `docs/OPERATION_SEMANTICS.md` for the exact
+contract of every catalog operation (broadcasting rule, dtype rule, gradient
+rule, output shape) and `docs/capabilities.md` for backend support levels
+(`Native`/`Composed`/`Fallback`/`Unsupported`). Both are generated from source
+and re-checked by tests.
 
-This is genuinely the surface to write application code against; nothing in
-§6 changes what you call, only what runs underneath a handful of allocation
-methods reached through a target.
+Backend authors may encounter the compatibility adapters under the explicitly
+named legacy authoring tier while migrating an implementation. Application
+code should use the ordinary tensor methods and does not need those traits.
 
 ## 6. The canonical execution architecture
 
-This section explains a piece of internal architecture you are unlikely to
-call directly from application code — skip to §7 if you just want to allocate
-tensors on a specific device.
+This section explains the internal architecture behind the ordinary tensor
+methods. Application code normally does not call the dispatcher directly —
+skip to §7 if you just want to allocate tensors on a specific device.
 
 ### Why it exists
 
-The family traits in §5 let *any* implementation answer for an operation:
+The old family adapters let *any* implementation answer for an operation:
 `Backend: TensorOps<Self>` says "this backend has some `matmul`", not "this
 backend has *this exact, validated* `matmul`, refusing anything it cannot
 prove". Two consequences: a backend cannot be asked "do you support `matmul`
 on `f16` at rank 3?" without running it and seeing what happens, and there is
 no single point where "here is the operation" and "here is the metadata
 proving it is well-formed" travel together, sealed, into the kernel. The
-canonical path is the fix for both, built as a second, additive contract
-rather than a rewrite of the first — see `docs/FROZEN_FOUNDATIONS.md` for the
-completion record.
+canonical path is now the ordinary tensor execution architecture. The family
+traits remain only as hidden compatibility adapters for backend
+implementations and tests while their remaining methods are extracted.
 
 ### The pieces, in the order data flows through them
 
@@ -332,15 +321,11 @@ runtime axes it needs), and `[usize; N]` (fully dynamic, `Shape = Dyn`) all
 implement it, each producing the `Shape::PROOF` its own staticness earns —
 never more.
 
-`.zeros(...)`/`.ones(...)`/`.rand(...)`/`.randn(...)` are the direct path
-(same kernel the family traits use). `.zeros_canonical(...)` and its three
-siblings (plus `full_canonical`/`arange_canonical`/`linspace_canonical`) are
-the **canonical** path from §6 — same result, routed through
-`dispatch::execute_shaped` instead, and available only where a
-`CanonicalOperation` bound is satisfied (today: CPU). Prefer the plain form
-unless you specifically want the descriptor-validated path; there is no
-behavioral difference a caller can observe today, since both call the same
-underlying kernel.
+`.zeros(...)`/`.ones(...)`/`.rand(...)`/`.randn(...)` are the ordinary public
+path and use exact descriptor execution bounds. The `_canonical` constructors
+are experimental lower-level entry points for descriptor-oriented work and
+are available only where a `CanonicalOperation` bound is satisfied (today:
+CPU). Prefer the ordinary forms for application code.
 
 `TensorTarget`/`DtypeTarget` extend the same idea to data-carrying and
 dtype-rebinding constructors — `gpu.tensor([[1.0, 2.0]])`,
@@ -352,8 +337,9 @@ is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 
 `incin::backend_authoring` (feature `backend-authoring`) is the contract a new
 backend implements: `StorageBackend` (associated `Storage<K>`, `Device`,
-`metadata()`), the nine family traits from §5, `Capabilities`, and — per
-operation you choose to migrate — `Execute<Descriptor<op::X>>`.
+`metadata()`), `Capabilities`, named optional capability views, and — per
+operation — `Execute<Descriptor<op::X>>`. The old family traits are available
+only under the hidden `backend_authoring::legacy` compatibility namespace.
 
 **`StorageBackend::Storage<K>`** is a physical allocation plus
 `TensorMeta` (shape, strides, offset, dtype, device, alignment, capacity — a
@@ -536,14 +522,10 @@ queued.
    sampler — unblocks `sample`.
 3. Widen `Execute` to reach the sixteen non-backend-sited operations, or
    split them into a contract that can carry them.
-4. **Remove the nine operation-family supertraits from `Backend`**, bounding
-   each stable tensor method by only the capability it uses. This is the step
-   that ends the dual architecture from §6 — and it is source-breaking for
-   every backend implementation and the public `incin` facade. It is not
-   blocked by migration coverage any more (everything the stable surface
-   reaches is migrated except the operations steps 1 and 2 unblock), so it is
-   next in dependency order but not something to start without deciding, with
-   whoever owns the public API surface, when a breaking release is acceptable.
+4. Finish extracting the remaining optional methods and associated types from
+   `Backend`, bounding each stable tensor method by only the capability it
+   uses. This is source-breaking for backend implementations and remains the
+   principal handoff item.
 5. Delete the broad family capability rows, the grouped
    `Execute<MatMulSpec>` adapters, the `cpu::canonical` compatibility adapter,
    and the `the_migration_is_recorded_as_incomplete` test — each exists only
