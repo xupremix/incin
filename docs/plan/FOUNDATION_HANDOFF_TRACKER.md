@@ -2,10 +2,10 @@
 
 Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
 
-Current phase: STABLE RANK-INDEPENDENT SHAPE / AXIS MIGRATION
-Last verified command: cargo test -p incin-core --test compile_tests
-Last verified result: PASS (baseline; does not cover the open execution/shape contracts)
-Next concrete action: remove Shape from the backend-author execution contract.
+Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
+Last verified command: cargo test -p incin-core --no-default-features --lib data_dependent_output_shapes_are_not_inferred_from_metadata
+Last verified result: PASS
+Next concrete action: replace the homogeneous f32 StateDict boundary with dtype-preserving state storage.
 
 Status vocabulary:
 
@@ -27,7 +27,7 @@ Status vocabulary:
 | SHP-001 | Shapes | One shared protected `Dyn`; static/mixed/dynamic shapes preserve knowledge | Implemented | PASS | P0 | frozen shape tests |
 | SHP-002 | Shapes | `shape!`: literal static, `const PATH` static, expression runtime | Implemented | PASS | P0 | macro/trybuild tests |
 | SHP-003 | Shapes | arrays fixed-rank runtime extents; Vec/slice dynamic rank | Implemented via `ShapeSpec` | PASS | P0 | shape contract tests |
-| SHP-004 | Proofs | backend receives sealed `Validated<O>` + typed `execute_shaped<S>` | Implemented | PASS | P0 | frozen-foundation tests |
+| SHP-004 | Proofs | backend receives sealed `Validated<O>` plus non-Shape-generic execution | `Validated<O>` carries `ShapeEvidence`; backend `Execute::execute` is non-generic | CONFIRMED FIXED | P0 | checkpoint 1 tests |
 | SHP-005 | Safety | checked byte sizing consumes `DTypeDescriptor`/`StorageEncoding`, not `DTypeId` | Implemented via `StorageEncoding` & `DTypeDescriptor` | PASS | P1 | descriptor byte-size tests |
 | DTP-001 | DType | framework runtime dtype identity is `DTypeDescriptor` | Implemented | PASS | P0 | runtime dtype contract |
 | DTP-002 | DType | custom descriptor can reach backend support boundary without new `DTypeId` | Implemented | PASS | P0 | custom dtype tests |
@@ -60,9 +60,9 @@ Status vocabulary:
 | NN-001 | NN UX | builder-first `nn::layer(...).init(&target)` | Implemented | PASS | P0 | final architecture contract |
 | NN-002 | NN recurrence | RNN/LSTM compose migrated foundation | Implemented | PASS | P0 | recurrent tests |
 | NN-003 | Legacy NN | raw `build/new_init_raw` remain compatibility-only and disappear from normal docs | Implemented | PASS | P1 | documentation search |
-| STATE-001 | State | no unsafe K→f32 reinterpretation | Implemented | PASS | P0 | unsafe-cast search |
-| STATE-002 | State | model state representation supports heterogeneous built-in dtypes safely | Implemented | PASS | P1 | bf16 state roundtrip |
-| STATE-003 | Serialization | safetensors/postcard load/save preserve supported state dtype | Implemented | PASS | P1 | f16/bf16/f32 roundtrip tests |
+| STATE-001 | State | no unsafe K→f32 reinterpretation | `nn/param.rs` still contains unsafe K→f32 reinterpretation/read paths | CONFIRMED OPEN | P0 | next blocker NEXT-A |
+| STATE-002 | State | model state representation supports heterogeneous built-in dtypes safely | StateDict is still `BTreeMap<String, Tensor<..., f32>>` | CONFIRMED OPEN | P1 | next blocker NEXT-A |
+| STATE-003 | Serialization | safetensors/postcard load/save preserve supported state dtype | Serialization boundary is coupled to f32 StateDict values | CONFIRMED OPEN | P1 | next blocker NEXT-A |
 | API-001 | User API | bare device/target is normal allocation surface | Implemented | PASS | P0 | facade contract |
 | API-002 | User API | normal docs/examples do not require backend aliases/raw Tensor constructors | Implemented | PASS | P1 | docs search/build |
 | API-003 | User API | final end-to-end handoff example compiles | Implemented via `foundation_handoff_contract.rs` | PASS | P0 | `foundation_handoff_contract.rs` |
@@ -86,17 +86,34 @@ on an older PASS claim.
 | Observation | Status | Current evidence |
 | --- | --- | --- |
 | ShapeValue validates dimensions and hides its unchecked constructor | CONFIRMED FIXED | `shapes/shape.rs`: `try_new` validates; `from_validated` is `pub(crate)`; compile-fail fixture `shape_value_constructor_is_private.rs` |
-| Static named extents project through `ConcreteStaticExtent` | PARTIAL | Projection exists in `shapes/dim.rs`, but consumers such as `nn/embedding.rs` still require the named dimension itself to implement `typenum::Unsigned` |
-| Backend execution is non-Shape-generic | CONFIRMED OPEN | `tensor/backend.rs` requires `Execute::execute_shaped<S: Shape>` and backend implementations contain that method throughout `incin-backends` |
-| Shape/Dim are independent of compiler IR | CONFIRMED OPEN | `Shape::symbolic_expr -> exec::ShapeExpr` and `Dim::symbolic_expr -> exec::DimExpr` remain in `shapes/shape.rs` and `shapes/dim.rs` |
-| Shape/Dim proof contracts are sealed | CONFIRMED OPEN | `Shape`, `Dim`, and `ConcreteStaticExtent` have no private sealing supertrait |
-| Rust-local axis identity is separated from durable identity | CONFIRMED OPEN | `dim!` expands `AxisTag::KEY` from `module_path!()`; no separate durable `AxisKey` seam is present |
+| Static named extents project through `ConcreteStaticExtent` | CONFIRMED FIXED | `NamedDim<Tag, Extent>` projects `Extent::Nat`; named static broadcast tests pass; embedding reads the validated weight extent |
+| Backend execution is non-Shape-generic | CONFIRMED FIXED | `Execute::execute` accepts only `ExecutionRequest`; `ShapeEvidence` preserves typed proof metadata; CPU/backend tests pass |
+| Shape/Dim are independent of compiler IR | CONFIRMED FIXED | public traits no longer expose `symbolic_expr`; `shapes/projection.rs` is the internal adapter used by graph capture |
+| Shape/Dim proof contracts are sealed | CONFIRMED FIXED | private sealing traits and compile-fail fixtures cover `Shape`, `Dim`, and `ConcreteStaticExtent` |
+| Rust-local axis identity is separated from durable identity | CONFIRMED FIXED | `AxisKey` is schema-qualified and `dim!` no longer uses `module_path!()`; named-axis test covers the boundary |
 | State has no unsafe generic-dtype bridge | CONFIRMED OPEN | `nn/param.rs` still contains the homogeneous f32 state surface and unsafe reinterpretation/read paths |
 | Distributed module archive integrity | CONFIRMED FIXED | `crates/incin-core/src/dist/mod.rs` and `crates/incin-backends/src/dist/mod.rs` exist with child modules |
 
 The baseline commands `cargo check -p incin-core --no-default-features` and
 `cargo test -p incin-core --test compile_tests` passed on this checkout. Those
 checks do not prove the open remediation items above.
+
+## 2026-08-14 foundation checkpoint status and next blockers
+
+Checkpoints 0–6 are complete in commits `ba85ff0`, `4ca1343`, `c528be4`,
+`b9d57d9`, `330bb5f`, `fb320cb`, `f2e33a3`, and `30fde1b`. The following are
+the next foundation blockers; none is claimed complete by the shape work:
+
+| ID | Blocker | Evidence and required next seam |
+| --- | --- | --- |
+| NEXT-A | Heterogeneous state/checkpoint dtype | `nn/param.rs` exposes `StateDict<B>` as f32 tensors and uses unsafe casts at lines 649, 671, 922, and 944. Introduce an owned dtype-erased state value carrying `DTypeDescriptor` and typed checked conversion; remove reinterpretation. |
+| NEXT-B | Backend resource ownership/lifecycle | `Backend` and `ExecutionContext` expose execution/storage capabilities but no foundation-wide resource lease or explicit stream/event lifetime contract. Define ownership and failure cleanup before async/resource APIs expand. |
+| NEXT-C | Mutation and rollback semantics | Mutation descriptors are classified, but backend mutation and optimizer paths do not expose a common transactional/rollback contract. Specify atomicity and partial-failure behavior before claiming mutation safety. |
+| NEXT-D | Training-state persistence | `TrainState` and gradient typestate are compile-time markers; checkpoint/load and optimizer state do not yet have a complete typed persistence contract for frozen/trainable transitions. |
+| NEXT-E | Dtype capability completeness | `DTypeDescriptor` reaches dispatch, but backend capability matrices and conversion/storage paths still need an exhaustive custom/builtin dtype audit, especially non-f32 state and unsupported bool paths. |
+| NEXT-F | Gradient graph semantics | `GradJoin` and graph-state descriptors exist, but higher-order gradients, mutation interaction, and backward failure/rollback semantics remain outside the frozen foundation evidence. |
+| NEXT-G | Ragged/variable-length representation | `Shape`/`ShapeBuf` represent rectangular extents; no first-class offsets/segments representation or operation contracts for ragged batches is present. Keep ragged operations out of the static shape contract until that type is designed. |
+| NEXT-H | Placement/distributed execution completeness | Typed placement and mesh contracts compile, but backend collective resource setup, failure recovery, and cross-rank placement execution are not proven by local CPU validation. |
 
 ## Foundation decisions
 
