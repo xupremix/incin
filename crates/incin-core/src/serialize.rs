@@ -163,10 +163,7 @@ pub trait ModelExt<B: Backend> {
 
     fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
     where
-        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-        B: crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>,
-        <B as crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>>::Output:
-            Into<B::Storage<f32>>;
+        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
 }
 
 #[cfg(feature = "std")]
@@ -186,9 +183,6 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     fn load(&mut self, format: Format, path: &std::path::Path, _device: &DeviceId) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-        B: crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>,
-        <B as crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>>::Output:
-            Into<B::Storage<f32>>,
     {
         let snapshot = match format {
             Format::Safetensors => deserialize_snapshot_safetensors(path),
