@@ -160,7 +160,7 @@ writes the first two.
 
 The stable construction story is the classic typed constructor (plus the
 `tensor!` literal convenience). The opt-in `target-api` spelling is an
-additive allocation-target experiment; it lowers to the same descriptor
+additive allocation-target surface; it lowers to the same descriptor
 execution architecture and does not introduce a second tensor runtime:
 
 ```rust
@@ -301,6 +301,11 @@ kernels, host readback, tracing, and special execution sites. They do not form
 an alternate stable tensor execution path.
 
 ## 7. The target API: allocation targets
+
+The target API is Incin's preferred allocation UX: choose the device at the
+call site (`Cpu.zeros(...)`, `Wgpu::new(0).zeros(...)`) and let the target
+select the backend. `Tensor::<S, B>::zeros(...)` remains the explicit
+constructor form for backend authors and code that intentionally fixes `B`.
 
 Feature `target-api`. A **target** is a value that knows where and how to
 allocate — a device (`Cpu`, `Wgpu::new(0)`, ...) or a backend value rebound to

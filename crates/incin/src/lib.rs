@@ -526,7 +526,7 @@ pub mod prelude {
     pub use super::DefaultDevice;
     pub use incin_backends::IncinBackend;
 
-    // **Experimental** (`target-api`): device values as allocation targets.
+    // (`target-api`): device values as the preferred allocation targets.
     // These are extension traits, so they only resolve when in scope — which
     // is the whole reason they are in the prelude rather than left to a
     // module path. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.

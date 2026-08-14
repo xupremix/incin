@@ -5,7 +5,8 @@ real and tested, but not yet the stable default the rest of this book uses.
 
 ## Allocation targets
 
-A **target** is a value that knows where and how to allocate: a device
+A **target** is the preferred user-facing allocation entry point: a value that
+knows where and how to allocate: a device
 (`Cpu`, `Wgpu::new(0)`) or a backend rebound to a specific dtype. It has no
 construction step and owns no resources.
 
@@ -24,7 +25,7 @@ let w = Cpu.zeros([batch, 3])?;                   // fully dynamic
 each producing exactly the amount of compile-time proof its own staticness
 earns — never more than what's actually known.
 
-## Why this exists: an allocation-target experiment
+## Why this exists: the allocation-target UX
 
 The target methods are an opt-in ergonomic experiment around the validated
 descriptor execution architecture. Stable tensor operations already use the
