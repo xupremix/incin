@@ -266,7 +266,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let state_load_plan = if is_internal {
         quote! { crate::nn::StateLoadPlan }
     } else {
-        quote! { ::incin::state::StateLoadPlan }
+        quote! { ::incin::__macro_support::StateLoadPlan }
     };
 
     let format_mac = quote! { #macro_support::format! };

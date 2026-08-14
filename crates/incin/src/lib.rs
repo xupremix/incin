@@ -118,6 +118,7 @@ pub mod types {
 #[doc(hidden)]
 pub mod __macro_support {
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
+    pub use incin_core::prelude::StateLoadPlan;
     pub use incin_core::backend_authoring::{SupportsDType, TransferTo};
     pub use incin_core::nn::{ComputeStats, LayerStats};
 }
@@ -344,7 +345,7 @@ pub mod doctor;
 
 /// Model checkpoint artifacts and transactional state loading.
 pub mod state {
-    pub use incin_core::prelude::{collect_state, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState};
+    pub use incin_core::prelude::{collect_state, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState};
 }
 
 // Enabling an accelerator must never silently change application behavior.

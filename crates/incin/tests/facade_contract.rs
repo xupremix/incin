@@ -72,8 +72,3 @@ fn stable_facade_consumer_contracts() {
 fn expert_storage_encoding_has_a_named_path() {
     let _ = incin::types::dtype::StorageEncoding::scalar(4, 4);
 }
-
-#[test]
-fn state_staging_has_a_named_path() {
-    let _: Option<incin::state::StateLoadPlan> = None;
-}
