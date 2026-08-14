@@ -25,7 +25,6 @@ const OPERATION_TRAITS: &[&str] = &[
     "TensorOps",
     "ReductionOps",
     "ModuleOps",
-    "QuantizedOps",
 ];
 
 fn repo_root() -> PathBuf {

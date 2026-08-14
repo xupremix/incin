@@ -4317,7 +4317,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QuantizedOps  (Q8_0: CPU-side encode/decode, GPU matmul via dequant)
+// Quantization helpers (Q8_0: CPU-side encode/decode, GPU matmul via dequant)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // WgpuStorage stores raw bytes in a WgpuBuffer. For Q8_0 quantized tensors,
@@ -4328,12 +4328,12 @@ impl<D: Device> WgpuBackendImpl<D> {
 // This mirrors the NativeBackend's `BlockQ8_0` layout, allowing byte-level
 // interoperability.  The encode/decode runs on the CPU (WgpuBuffer::to_vec /
 // from_slice); a GPU-native WGSL kernel is deferred post-0.1.0.
-impl<D: Device> QuantizedOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// Quantize a contiguous f32 tensor to Q8_0 format.
     ///
     /// Only `K = f32` and `Q = Q8_0` are supported; any other combination
     /// returns `UnsupportedBackendOperation`.
-    fn quantize<K: FloatDType, Q: QuantDType>(
+    pub fn quantize<K: FloatDType, Q: QuantDType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<Q>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
@@ -4382,7 +4382,7 @@ impl<D: Device> QuantizedOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// Dequantize a Q8_0 tensor back to f32.
-    fn dequantize<Q: QuantDType, K: FloatDType>(
+    pub fn dequantize<Q: QuantDType, K: FloatDType>(
         t: &<Self as StorageBackend>::Storage<Q>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
@@ -4421,7 +4421,7 @@ impl<D: Device> QuantizedOps<Self> for WgpuBackendImpl<D> {
 
     /// Quantized matmul: dequantize both operands to f32 then dispatch to
     /// the GPU matmul shader.  A native WGSL Q8_0 matmul kernel is deferred.
-    fn quantized_matmul<Q: QuantDType>(
+    pub fn quantized_matmul<Q: QuantDType>(
         lhs: &<Self as StorageBackend>::Storage<Q>,
         rhs: &<Self as StorageBackend>::Storage<Q>,
     ) -> Result<<Self as StorageBackend>::Storage<f32>> {

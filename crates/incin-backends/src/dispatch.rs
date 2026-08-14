@@ -2159,7 +2159,7 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
         dispatch_reduction_unary!(t, cumsum, dim)
     }
 }
-impl<D: Device> QuantizedOps<Self> for DispatchBackend<D> {
+impl<D: Device> DispatchBackend<D> {
     fn quantize<K: FloatDType, Q: QuantDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         match t {
             #[cfg(feature = "cpu")]

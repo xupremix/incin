@@ -6,7 +6,7 @@ Each row is one exact executable identity. Families classify rows and never impl
 
 Total exact operations: 174
 
-Legacy operation-family trait methods with a reviewed descriptor mapping: 126
+Legacy operation-family trait methods with a reviewed descriptor mapping: 123
 
 | Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
 |---|---|---|---|---|---|---|---|
@@ -178,9 +178,9 @@ Legacy operation-family trait methods with a reviewed descriptor mapping: 126
 | `l1_loss` | `Reduction` | `Loss` | `Descriptor<op::L1Loss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::l1_loss` |
 | `bce_with_logits_loss` | `Reduction` | `Loss` | `Descriptor<op::BceWithLogitsLoss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::bce_with_logits_loss` |
 | `cross_entropy_loss` | `Reduction` | `Loss` | `Descriptor<op::CrossEntropyLoss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::cross_entropy_loss` |
-| `quantize` | `Pointwise` | `Quantized` | `Descriptor<op::Quantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `QuantizedOps::quantize` |
-| `dequantize` | `Pointwise` | `Quantized` | `Descriptor<op::Dequantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `QuantizedOps::dequantize` |
-| `quantized_matmul` | `Reduction` | `Quantized` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | 2-2 | 1-1 | `QuantizedOps::quantized_matmul` |
+| `quantize` | `Pointwise` | `Quantized` | `Descriptor<op::Quantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `Descriptor<op::Quantize>` |
+| `dequantize` | `Pointwise` | `Quantized` | `Descriptor<op::Dequantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `Descriptor<op::Dequantize>` |
+| `quantized_matmul` | `Reduction` | `Quantized` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | 2-2 | 1-1 | `Descriptor<op::QuantizedMatMul>` |
 | `sgd_step` | `Pointwise` | `Optimizer` | `Descriptor<op::SgdStep>` | `SgdAttributes` | 2-2 | 1-1 | `SGD::step` |
 | `adam_step` | `Pointwise` | `Optimizer` | `Descriptor<op::AdamStep>` | `AdamAttributes` | 4-4 | 3-3 | `Adam::step` |
 | `adamw_step` | `Pointwise` | `Optimizer` | `Descriptor<op::AdamWStep>` | `AdamWAttributes` | 4-4 | 3-3 | `AdamW::step` |

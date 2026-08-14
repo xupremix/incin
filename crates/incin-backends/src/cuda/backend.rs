@@ -2241,12 +2241,12 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
         cuda_argsort_host(t, dim, descending)
     }
 }
-impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
-    fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
+impl<D: Device> CudaBackendImpl<D> {
+    pub fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
         crate::cuda::ops::quant::launch_quantize(t)
     }
 
-    fn dequantize<Q: QuantDType, K: FloatDType>(t: &CudaStorage) -> Result<CudaStorage> {
+    pub fn dequantize<Q: QuantDType, K: FloatDType>(t: &CudaStorage) -> Result<CudaStorage> {
         crate::cuda::ops::quant::launch_dequantize(t)
     }
 
@@ -2254,7 +2254,7 @@ impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
     /// operands to `f32` then calls the already-wired `matmul`, unlike
     /// CPU's `quantized_matmul` (`cpu/ops/quant.rs`), which fuses the Q8_0
     /// block-dequant directly into an AVX2 dot product without ever
-    /// materializing full-precision copies — the `QuantizedOps` trait doc
+    /// materializing full-precision copies while keeping the helper local.
     /// explicitly frames avoiding that materialization as the point of this
     /// method. Porting CPU's fused block-dot-product math to a new CUDA
     /// kernel blind (no hardware here to verify Q8_0 block-scale handling
@@ -2264,7 +2264,7 @@ impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
     /// bandwidth), and is the safer choice until real hardware is
     /// available to validate a fused kernel against. Only `Q8_0` is
     /// supported, matching CPU's own restriction exactly.
-    fn quantized_matmul<Q: QuantDType>(
+    pub fn quantized_matmul<Q: QuantDType>(
         lhs: &CudaStorage,
         rhs: &CudaStorage,
     ) -> Result<CudaStorage> {
@@ -4066,11 +4066,11 @@ mod tests {
         let lhs_f32 = cuda_f32(&[2, 32], (0..64).map(|i| i as f32 * 0.01).collect());
         let rhs_f32 = cuda_f32(&[4, 32], (0..128).map(|i| i as f32 * 0.01).collect());
         let lhs_q =
-            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+            B::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
         let rhs_q =
-            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+            B::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
         let out =
-            <B as QuantizedOps<B>>::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+            B::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
                 .unwrap();
         assert_eq!(out.shape, vec![2, 4]);
     }
@@ -4081,11 +4081,11 @@ mod tests {
         let lhs_f32 = cuda_f32(&[2, 16], vec![0.0; 32]);
         let rhs_f32 = cuda_f32(&[4, 16], vec![0.0; 64]);
         let lhs_q =
-            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+            B::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
         let rhs_q =
-            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+            B::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
         assert!(
-            <B as QuantizedOps<B>>::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+            B::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
                 .is_err()
         );
     }

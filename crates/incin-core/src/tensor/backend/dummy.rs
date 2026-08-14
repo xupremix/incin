@@ -1289,27 +1289,3 @@ use super::*;
             Ok(shape)
         }
     }
-
-    /// All quantization ops are no-ops returning an empty shape --- there is
-    /// no real data to (de)quantize.
-    impl<D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<D> {
-        /// Always an empty shape.
-        fn quantize<K: FloatDType, Q: QuantDType>(
-            _t: &<Self as StorageBackend>::Storage<K>,
-        ) -> Result<<Self as StorageBackend>::Storage<Q>> {
-            Ok(alloc::vec![])
-        }
-        /// Always an empty shape.
-        fn dequantize<Q: QuantDType, K: FloatDType>(
-            _t: &<Self as StorageBackend>::Storage<Q>,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
-            Ok(alloc::vec![])
-        }
-        /// Always an empty shape.
-        fn quantized_matmul<Q: QuantDType>(
-            _lhs: &<Self as StorageBackend>::Storage<Q>,
-            _rhs: &<Self as StorageBackend>::Storage<Q>,
-        ) -> Result<<Self as StorageBackend>::Storage<f32>> {
-            Ok(alloc::vec![])
-        }
-    }

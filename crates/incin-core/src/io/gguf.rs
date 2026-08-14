@@ -1,8 +1,10 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::nn::StateDict;
-use crate::tensor::backend::{Backend, HostInterop, SupportsDType};
-use crate::tensor::backend::legacy::QuantizedOps;
+use crate::tensor::backend::{Backend, Execute, HostInterop, SupportsDType};
+use crate::exec::{self, ExecutionContext};
+use crate::exec::catalog::{QuantizationAttributes, op};
+use crate::exec::request::TensorHandle;
 use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -147,7 +149,8 @@ pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend
 
 impl<'a, B, M> GgufExporter<'a, B, M>
 where
-    B: Backend + crate::tensor::backend::VariableBackend + QuantizedOps<B> + HostInterop,
+    B: Backend + crate::tensor::backend::VariableBackend + Execute<op::Quantize> + HostInterop,
+    <B as Execute<op::Quantize>>::Output: Into<B::Storage<Q8_0>>,
     M: StateDict<B>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.
@@ -270,7 +273,14 @@ where
                     DTypeId::F32.descriptor(),
                     &crate::prelude::DeviceId::cpu(),
                 )?;
-                let quantized = B::quantize::<f32, Q8_0>(&storage)?;
+                let input = TensorHandle::from_storage::<B, f32, Local>(&storage);
+                let context = ExecutionContext::from_scope(B::default());
+                let quantized = exec::dispatch::execute::<op::Quantize, B>(
+                    &context,
+                    QuantizationAttributes { dtype: DTypeId::Q8_0.descriptor() },
+                    &[input],
+                )?
+                .into();
                 (
                     B::to_bytes::<Q8_0>(&quantized)?,
                     QuantScheme::Q8_0.ggml_type_id(),

@@ -3031,22 +3031,22 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ─── QuantizedOps ───────────────────────────────────────────────────────────
+// ─── Quantization helpers ───────────────────────────────────────────────────
 
-impl<D: Device> QuantizedOps<Self> for MetalBackendImpl<D> {
-    fn quantize<K: FloatDType, Q: QuantDType>(
+impl<D: Device> MetalBackendImpl<D> {
+    pub fn quantize<K: FloatDType, Q: QuantDType>(
         _t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<Q>> {
         Err(unsupported("quantize"))
     }
 
-    fn dequantize<Q: QuantDType, K: FloatDType>(
+    pub fn dequantize<Q: QuantDType, K: FloatDType>(
         _t: &<Self as StorageBackend>::Storage<Q>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Err(unsupported("dequantize"))
     }
 
-    fn quantized_matmul<Q: QuantDType>(
+    pub fn quantized_matmul<Q: QuantDType>(
         _lhs: &<Self as StorageBackend>::Storage<Q>,
         _rhs: &<Self as StorageBackend>::Storage<Q>,
     ) -> Result<<Self as StorageBackend>::Storage<f32>> {

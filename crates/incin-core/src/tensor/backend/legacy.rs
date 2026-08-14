@@ -451,22 +451,6 @@ pub trait ModuleOps<B: Backend> {
     ) -> Result<B::Storage<K>>;
 }
 
-/// Block quantization: compresses `FloatDType` storage into a `QuantDType`
-/// representation for reduced memory footprint, and the reverse.
-pub trait QuantizedOps<B: Backend> {
-    /// Compresses `t` from a float dtype into quantized storage `Q`.
-    fn quantize<K: FloatDType, Q: QuantDType>(_t: &B::Storage<K>) -> Result<B::Storage<Q>>;
-    /// Expands quantized storage `Q` back into a float dtype `K`
-    /// (lossy --- the inverse of `quantize` only up to quantization error).
-    fn dequantize<Q: QuantDType, K: FloatDType>(_t: &B::Storage<Q>) -> Result<B::Storage<K>>;
-    /// Matrix multiplication of two quantized-storage operands, producing
-    /// `f32` output without needing to fully dequantize both operands first.
-    fn quantized_matmul<Q: QuantDType>(
-        lhs: &B::Storage<Q>,
-        rhs: &B::Storage<Q>,
-    ) -> Result<B::Storage<f32>>;
-}
-
 #[path = "dummy.rs"]
 mod dummy;
 pub use dummy::DummyBackend;
