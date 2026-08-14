@@ -81,6 +81,17 @@ pub(crate) fn narrow_storage(
     Ok(out)
 }
 
+pub(crate) fn slice_storage(
+    t: &CpuStorage,
+    ranges: &[(usize, usize)],
+) -> Result<CpuStorage> {
+    let mut out = t.clone();
+    for (dim, &(start, end)) in ranges.iter().enumerate() {
+        out = narrow_storage(&out, dim, start, end - start)?;
+    }
+    Ok(out)
+}
+
 pub(crate) fn squeeze_storage(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
     if dim >= t.shape.len() || t.shape[dim] != 1 {
         return Err(Error::ShapeMismatch {
@@ -933,11 +944,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut out = t.clone();
-        for (dim, &(start, end)) in ranges.iter().enumerate() {
-            out = Self::narrow::<K>(&out, dim, start, end - start)?;
-        }
-        Ok(out)
+        slice_storage(t, ranges)
     }
 
     /// `flatten`.
