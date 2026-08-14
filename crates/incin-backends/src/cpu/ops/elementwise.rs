@@ -1200,7 +1200,6 @@ mod tests {
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
     use crate::cpu::tape;
-    use incin_core::__backend_compat::legacy::ReductionOps;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1235,7 +1234,7 @@ mod tests {
     fn add_preserves_f64_dtype_and_precision() {
         let lhs = f64_storage(vec![1.000000123456789], vec![1]);
         let rhs = f64_storage(vec![2.000000987654321], vec![1]);
-        let out = TestBackend::add::<f64>(&lhs, &rhs).unwrap();
+        let out = add_storage(&lhs, &rhs).unwrap();
 
         match &*out.buffer {
             CpuBuffer::F64(v) => {
@@ -1260,7 +1259,7 @@ mod tests {
             CpuBuffer::F16(vec![half::f16::from_f32(2.0), half::f16::from_f32(4.0)]),
             vec![2],
         );
-        let f16_out = TestBackend::mul::<half::f16>(&f16_lhs, &f16_rhs).unwrap();
+        let f16_out = mul_storage(&f16_lhs, &f16_rhs).unwrap();
         assert_eq!(
             &*f16_out.buffer,
             &CpuBuffer::F16(vec![half::f16::from_f32(3.0), half::f16::from_f32(8.0)])
@@ -1274,7 +1273,7 @@ mod tests {
             CpuBuffer::BF16(vec![half::bf16::from_f32(2.0), half::bf16::from_f32(4.0)]),
             vec![2],
         );
-        let bf16_out = TestBackend::mul::<half::bf16>(&bf16_lhs, &bf16_rhs).unwrap();
+        let bf16_out = mul_storage(&bf16_lhs, &bf16_rhs).unwrap();
         assert_eq!(
             &*bf16_out.buffer,
             &CpuBuffer::BF16(vec![half::bf16::from_f32(3.0), half::bf16::from_f32(8.0)])
@@ -1289,7 +1288,7 @@ mod tests {
         let rhs = matrix(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], 2, 3)
             .transpose(0, 1)
             .unwrap();
-        let output = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+        let output = add_storage(&lhs, &rhs).unwrap();
 
         assert_eq!(output.shape, vec![3, 2]);
         assert_eq!(f32_vec(&output), vec![11.0, 44.0, 22.0, 55.0, 33.0, 66.0]);
@@ -1298,7 +1297,7 @@ mod tests {
     #[test]
     fn relu_preserves_f64_dtype() {
         let t = f64_storage(vec![-1.000000123456789, 3.000000987654321], vec![2]);
-        let out = TestBackend::relu::<f64>(&t).unwrap();
+        let out = canonical_relu(&t).unwrap();
 
         match &*out.buffer {
             CpuBuffer::F64(v) => {
@@ -1308,15 +1307,13 @@ mod tests {
         }
     }
 
-    /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     #[test]
     /// `add_broadcasts_forward_correctly`.
     fn add_broadcasts_forward_correctly() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![10.0, 20.0, 30.0]);
-        let out = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+        let out = add_storage(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(f32_vec(&out), vec![11.0, 22.0, 33.0, 14.0, 25.0, 36.0]);
     }
@@ -1326,7 +1323,7 @@ mod tests {
     fn add_backward_unbroadcasts_correctly_for_bias_vector_case() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![10.0, 20.0, 30.0]);
-        let out = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+        let out = add_storage(&lhs, &rhs).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
@@ -1346,7 +1343,7 @@ mod tests {
     fn sub_forward_computes_elementwise_difference_with_broadcast() {
         let lhs = matrix(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], 2, 3);
         let rhs = vector(vec![1.0, 2.0, 3.0]);
-        let out = TestBackend::sub::<f32>(&lhs, &rhs).unwrap();
+        let out = sub_storage(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(f32_vec(&out), vec![9.0, 18.0, 27.0, 39.0, 48.0, 57.0]);
     }
@@ -1356,7 +1353,7 @@ mod tests {
     fn sub_backward_negates_rhs_contribution() {
         let lhs = vector(vec![10.0, 20.0, 30.0]);
         let rhs = vector(vec![1.0, 2.0, 3.0]);
-        let out = TestBackend::sub::<f32>(&lhs, &rhs).unwrap();
+        let out = sub_storage(&lhs, &rhs).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let lhs_grad = grads.get(lhs.id).unwrap();
@@ -1371,7 +1368,7 @@ mod tests {
     fn mul_forward_computes_elementwise_product_with_broadcast() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![2.0, 3.0, 4.0]);
-        let out = TestBackend::mul::<f32>(&lhs, &rhs).unwrap();
+        let out = mul_storage(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(f32_vec(&out), vec![2.0, 6.0, 12.0, 8.0, 15.0, 24.0]);
     }
@@ -1384,7 +1381,7 @@ mod tests {
         // gradient exists").
         let a = vector(vec![2.0, 3.0, 4.0]);
         let b = vector(vec![5.0, 6.0, 7.0]);
-        let out = TestBackend::mul::<f32>(&a, &b).unwrap();
+        let out = mul_storage(&a, &b).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let a_grad = grads.get(a.id).unwrap();
@@ -1402,7 +1399,7 @@ mod tests {
     fn mul_backward_with_broadcast_bias_vector_case() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![2.0, 3.0, 4.0]);
-        let out = TestBackend::mul::<f32>(&lhs, &rhs).unwrap();
+        let out = mul_storage(&lhs, &rhs).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let lhs_grad = grads.get(lhs.id).unwrap();
@@ -1424,7 +1421,7 @@ mod tests {
     /// `add_scalar_float_forward_and_backward`.
     fn add_scalar_float_forward_and_backward() {
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let out = TestBackend::add_scalar_float::<f32>(&t, 1.0).unwrap();
+        let out = canonical_add_scalar(&t, 1.0).unwrap();
         assert_eq!(f32_vec(&out), vec![2.0, 3.0, 4.0]);
 
         let grads = tape::backward(&out).unwrap();
@@ -1437,7 +1434,7 @@ mod tests {
     /// `mul_scalar_float_forward_and_backward`.
     fn mul_scalar_float_forward_and_backward() {
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let out = TestBackend::mul_scalar_float::<f32>(&t, 2.5).unwrap();
+        let out = canonical_mul_scalar(&t, 2.5).unwrap();
         assert_eq!(f32_vec(&out), vec![2.5, 5.0, 7.5]);
 
         let grads = tape::backward(&out).unwrap();
@@ -1452,7 +1449,7 @@ mod tests {
     /// `relu_forward_and_backward_zero_at_boundary`.
     fn relu_forward_and_backward_zero_at_boundary() {
         let t = vector(vec![-2.0, 0.0, 3.0]);
-        let out = TestBackend::relu::<f32>(&t).unwrap();
+        let out = canonical_relu(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![0.0, 0.0, 3.0]);
 
         let grads = tape::backward(&out).unwrap();
@@ -1466,8 +1463,8 @@ mod tests {
     fn relu_gradcheck_on_nonzero_input() {
         let x = vector(vec![2.0, -1.5, 0.7]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let r = TestBackend::relu::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&r).unwrap()
+            let r = canonical_relu(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&r).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1480,13 +1477,13 @@ mod tests {
     /// `abs_forward_and_gradcheck`.
     fn abs_forward_and_gradcheck() {
         let t = vector(vec![-2.5, 0.0, 3.5]);
-        let out = TestBackend::abs::<f32>(&t).unwrap();
+        let out = canonical_abs(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![2.5, 0.0, 3.5]);
 
         let x = vector(vec![-2.0, 1.5, -0.3]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let a = TestBackend::abs::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&a).unwrap()
+            let a = canonical_abs(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&a).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1499,13 +1496,13 @@ mod tests {
     /// `neg_forward_and_gradcheck`.
     fn neg_forward_and_gradcheck() {
         let t = vector(vec![1.0, -2.0, 3.0]);
-        let out = TestBackend::neg::<f32>(&t).unwrap();
+        let out = canonical_neg(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![-1.0, 2.0, -3.0]);
 
         let x = vector(vec![1.0, -2.0, 3.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let n = TestBackend::neg::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&n).unwrap()
+            let n = canonical_neg(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&n).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1520,7 +1517,7 @@ mod tests {
     /// `exp_forward_and_gradcheck`.
     fn exp_forward_and_gradcheck() {
         let t = vector(vec![0.0, 1.0]);
-        let out = TestBackend::exp::<f32>(&t).unwrap();
+        let out = canonical_exp(&t).unwrap();
         let expect = [1.0f32, core::f64::consts::E as f32];
         for (a, b) in f32_vec(&out).iter().zip(expect.iter()) {
             assert!((a - b).abs() < 1e-5, "exp forward mismatch: {a} vs {b}");
@@ -1528,8 +1525,8 @@ mod tests {
 
         let x = vector(vec![0.5, -0.3, 1.2]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let e = TestBackend::exp::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&e).unwrap()
+            let e = canonical_exp(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&e).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1542,13 +1539,13 @@ mod tests {
     /// `sqrt_forward_gradcheck_and_nan_propagation`.
     fn sqrt_forward_gradcheck_and_nan_propagation() {
         let t = vector(vec![4.0, 9.0]);
-        let out = TestBackend::sqrt::<f32>(&t).unwrap();
+        let out = canonical_sqrt(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![2.0, 3.0]);
 
         let x = vector(vec![4.0, 1.0, 9.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let s = TestBackend::sqrt::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&s).unwrap()
+            let s = canonical_sqrt(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&s).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1559,7 +1556,7 @@ mod tests {
         // Negative input propagates NaN cpuly (RESEARCH.md Pitfall 2),
         // not a panic and not an Err.
         let neg_input = vector(vec![-1.0]);
-        let neg_out = TestBackend::sqrt::<f32>(&neg_input).unwrap();
+        let neg_out = canonical_sqrt(&neg_input).unwrap();
         assert!(f32_vec(&neg_out)[0].is_nan(), "sqrt(-1.0) should be NaN");
     }
 
@@ -1567,7 +1564,7 @@ mod tests {
     /// `log_forward_gradcheck_and_domain_propagation`.
     fn log_forward_gradcheck_and_domain_propagation() {
         let t = vector(vec![1.0, core::f64::consts::E as f32]);
-        let out = TestBackend::log::<f32>(&t).unwrap();
+        let out = canonical_log(&t).unwrap();
         let expect = [0.0f32, 1.0f32];
         for (a, b) in f32_vec(&out).iter().zip(expect.iter()) {
             assert!((a - b).abs() < 1e-5, "log forward mismatch: {a} vs {b}");
@@ -1575,8 +1572,8 @@ mod tests {
 
         let x = vector(vec![1.0, 2.0, 5.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let l = TestBackend::log::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&l).unwrap()
+            let l = canonical_log(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&l).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1587,14 +1584,14 @@ mod tests {
         // Zero/negative input propagates NaN/-inf cpuly, not a panic and
         // not an Err.
         let zero_input = vector(vec![0.0]);
-        let zero_out = TestBackend::log::<f32>(&zero_input).unwrap();
+        let zero_out = canonical_log(&zero_input).unwrap();
         assert!(
             f32_vec(&zero_out)[0].is_infinite() && f32_vec(&zero_out)[0] < 0.0,
             "log(0.0) should be -inf"
         );
 
         let neg_input = vector(vec![-1.0]);
-        let neg_out = TestBackend::log::<f32>(&neg_input).unwrap();
+        let neg_out = canonical_log(&neg_input).unwrap();
         assert!(f32_vec(&neg_out)[0].is_nan(), "log(-1.0) should be NaN");
     }
 
@@ -1603,8 +1600,8 @@ mod tests {
     fn tanh_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let th = TestBackend::tanh::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&th).unwrap()
+            let th = canonical_tanh(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&th).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1617,13 +1614,13 @@ mod tests {
     /// `sigmoid_forward_and_gradcheck`.
     fn sigmoid_forward_and_gradcheck() {
         let t = vector(vec![0.0]);
-        let out = TestBackend::sigmoid::<f32>(&t).unwrap();
+        let out = canonical_sigmoid(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![0.5]);
 
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let s = TestBackend::sigmoid::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&s).unwrap()
+            let s = canonical_sigmoid(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&s).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1636,13 +1633,13 @@ mod tests {
     /// `swish_forward_and_gradcheck`.
     fn swish_forward_and_gradcheck() {
         let t = vector(vec![0.0]);
-        let out = TestBackend::swish::<f32>(&t).unwrap();
+        let out = canonical_swish(&t).unwrap();
         assert_eq!(f32_vec(&out), vec![0.0]);
 
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let s = TestBackend::swish::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&s).unwrap()
+            let s = canonical_swish(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&s).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1657,11 +1654,11 @@ mod tests {
     /// `gelu_forward_zero_and_one`.
     fn gelu_forward_zero_and_one() {
         let zero = vector(vec![0.0]);
-        let out_zero = TestBackend::gelu::<f32>(&zero).unwrap();
+        let out_zero = canonical_gelu(&zero).unwrap();
         assert_eq!(f32_vec(&out_zero), vec![0.0]);
 
         let one = vector(vec![1.0]);
-        let out_one = TestBackend::gelu::<f32>(&one).unwrap();
+        let out_one = canonical_gelu(&one).unwrap();
         // Known reference value for erf-based GELU at x=1 (~0.8413).
         // Looser 1e-3 tolerance than other ops' 1e-5 since this uses a
         // polynomial erf approximation, not an exact closed form
@@ -1678,8 +1675,8 @@ mod tests {
     fn gelu_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let g = TestBackend::gelu::<f32>(&inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&g).unwrap()
+            let g = canonical_gelu(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&g).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1694,7 +1691,7 @@ mod tests {
     /// `softmax_forward_sums_to_one_on_vector`.
     fn softmax_forward_sums_to_one_on_vector() {
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         let sum: f32 = vals.iter().sum();
@@ -1709,7 +1706,7 @@ mod tests {
     /// `softmax_forward_sums_to_one_per_row_on_matrix`.
     fn softmax_forward_sums_to_one_per_row_on_matrix() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = TestBackend::softmax::<f32>(&t, 1).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 1).unwrap();
         let vals = f32_vec(&out);
 
         let row0_sum: f32 = vals[0..3].iter().sum();
@@ -1730,7 +1727,7 @@ mod tests {
         // Without max-subtraction, exp(1000.0) overflows to inf, producing
         // NaN (inf/inf) instead of a finite uniform distribution.
         let t = vector(vec![1000.0, 1000.0, 1000.0]);
-        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         for v in &vals {
@@ -1746,7 +1743,7 @@ mod tests {
     /// `softmax_forward_uniform_on_all_zero_logits`.
     fn softmax_forward_uniform_on_all_zero_logits() {
         let t = vector(vec![0.0, 0.0, 0.0]);
-        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         for v in &vals {
@@ -1763,8 +1760,8 @@ mod tests {
     fn softmax_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let s = TestBackend::softmax::<f32>(&inputs[0], 0).unwrap();
-            TestBackend::sum_all::<f32>(&s).unwrap()
+            let s = canonical_softmax::<incin_core::prelude::Cpu>(&inputs[0], 0).unwrap();
+            crate::cpu::ops::reduce::sum_all(&s).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1779,7 +1776,7 @@ mod tests {
         // Proves both forward AND backward are numerically stable under the
         // composition, not just forward (Test 3's finite-forward twin).
         let t = vector(vec![1000.0, 1000.0, 1000.0]);
-        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let t_grad = grads.get(t.id).unwrap();
@@ -1800,7 +1797,7 @@ mod tests {
         use crate::cpu::ops::elementwise::log_softmax;
         let t = vector(vec![1.0, 2.0, 3.0]);
         let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
-        let exp_ls = TestBackend::exp::<f32>(&ls).unwrap();
+        let exp_ls = canonical_exp(&ls).unwrap();
         let vals = f32_vec(&exp_ls);
         let sum: f32 = vals.iter().sum();
         assert!(
@@ -1839,7 +1836,7 @@ mod tests {
         //
         // Spot-check: vector [0.5, -1.0, 2.0] forward correctness.
         let t = vector(vec![0.5f32, -1.0, 2.0]);
-        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
         let sum: f32 = vals.iter().sum();
         assert!((sum - 1.0).abs() < 1e-5, "softmax sum should be 1: {sum}");
@@ -1857,7 +1854,7 @@ mod tests {
         let x = vector(vec![0.5f32, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
-            TestBackend::sum_all::<f32>(&ls).unwrap()
+            crate::cpu::ops::reduce::sum_all(&ls).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
