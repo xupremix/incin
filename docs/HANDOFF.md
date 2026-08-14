@@ -78,6 +78,13 @@ independent capability, so an inference-only backend need not implement it.
 Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
+The ordinary facade prelude allowlist is intentionally user-shaped: tensor
+and shape construction, dtype/device selection, gradients, module/layer
+building, state visitors/snapshots, optimizers, and the stable macros. It does
+not export graph capture, proof-construction helpers, storage/backend-authoring
+traits, physical storage encodings, or transactional `StateLoadPlan`; those
+names require a named expert surface or are reserved for macro expansion.
+
 ## Adding an operation
 
 Add the descriptor and typed attributes to the operation catalog, define its

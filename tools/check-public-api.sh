@@ -41,6 +41,20 @@ if rg -n 'incin_core::tensor::backend' crates/incin-backends crates/incin --glob
     exit 1
 fi
 
+# Keep implementation-level shape, storage, graph, and state-staging names out
+# of the ordinary facade prelude.  They remain available through named expert
+# modules or macro support where appropriate.
+prelude=$(sed -n '/^pub mod prelude {/,/^#\[cfg(test)\]/p' crates/incin/src/lib.rs)
+for symbol in \
+    Graph ConcreteStaticExtent DimCons Nil ProductDims ReplaceAt \
+    StructuralConcatShape StorageBackend SupportsDType StorageEncoding \
+    StateLoadPlan tracing_mark_input extract_graph; do
+    if printf '%s\n' "$prelude" | rg -q "\\b${symbol}\\b"; then
+        echo "public API check failed: ${symbol} leaked into the ordinary facade prelude" >&2
+        exit 1
+    fi
+done
+
 for capability in HostInterop VariableBackend AutogradBackend TransferBackend; do
     if ! rg -q "\\b${capability}\\b" crates/incin-core/src/lib.rs crates/incin/src/lib.rs; then
         echo "public API check failed: missing named capability ${capability}" >&2
