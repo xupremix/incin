@@ -1,10 +1,7 @@
-use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use incin_core::prelude::{
-        DType, DTypeId, Device, Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeBuf,
-    StorageBackend,
-};
-use incin_core::__backend_compat::legacy::QuantizedOps;
+        DTypeId, Error, OperationKind, Result, ShapeBuf,
+    };
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -166,158 +163,6 @@ pub(crate) fn quantized_matmul_storage(
     ))
 }
 
-impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
-    /// `quantize`.
-    fn quantize<K: FloatDType, Q: QuantDType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<Q>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
-            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
-        {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "quantize",
-                backend: "Cpu (only F32 to Q8_0 supported)",
-            });
-        }
-        quantize_storage(t)
-    }
-
-    /// `dequantize`.
-    fn dequantize<Q: QuantDType, K: FloatDType>(
-        t: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
-            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
-        {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "dequantize",
-                backend: "Cpu (only Q8_0 to F32 supported)",
-            });
-        }
-
-        dequantize_storage(t)
-    }
-
-    /// `quantized_matmul`.
-    fn quantized_matmul<Q: QuantDType>(
-        _lhs: &<Self as StorageBackend>::Storage<Q>,
-        _rhs: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<f32>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>() {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "quantized_matmul",
-                backend: "Cpu (only Q8_0 supported)",
-            });
-        }
-
-        let lhs_data = match &*_lhs.buffer {
-            CpuBuffer::Q8_0(v) => v,
-            _ => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "quantized_matmul",
-                    backend: "Cpu (lhs expected Q8_0 buffer)",
-                });
-            }
-        };
-
-        let rhs_data = match &*_rhs.buffer {
-            CpuBuffer::Q8_0(v) => v,
-            _ => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "quantized_matmul",
-                    backend: "Cpu (rhs expected Q8_0 buffer)",
-                });
-            }
-        };
-
-        let lhs_shape = &_lhs.shape;
-        let rhs_shape = &_rhs.shape;
-        if lhs_shape.len() < 2 {
-            return Err(Error::Msg(
-                "quantized_matmul lhs requires at least 2D shapes".into(),
-            ));
-        }
-        if rhs_shape.len() != 2 {
-            return Err(Error::Msg("quantized_matmul rhs must be 2D [N, K]".into()));
-        }
-
-        let n = rhs_shape[0];
-        let k2 = rhs_shape[1];
-        let k = lhs_shape[lhs_shape.len() - 1];
-        let m: usize = crate::cpu::stride::checked_numel(&(lhs_shape[..lhs_shape.len() - 1]))?;
-
-        if k != k2 {
-            return Err(Error::Msg(alloc::format!(
-                "quantized_matmul K mismatch: {} != {}",
-                k,
-                k2
-            )));
-        }
-
-        if !k.is_multiple_of(32) {
-            return Err(Error::Msg(alloc::format!(
-                "quantized_matmul K must be multiple of 32, got {}",
-                k
-            )));
-        }
-
-        let mut out_shape = lhs_shape.to_vec();
-        let out_len = out_shape.len();
-        out_shape[out_len - 1] = n;
-
-        let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
-        let mut out_data = alloc::vec![0.0f32; out_total];
-        let blocks_per_row = k / 32;
-
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        let use_avx2 = is_x86_feature_detected!("avx2");
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-        let use_avx2 = false;
-
-        for i in 0..m {
-            for j in 0..n {
-                let lhs_row_start = i * blocks_per_row;
-                let rhs_row_start = j * blocks_per_row;
-
-                let sum = if use_avx2 {
-                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                    {
-                        // SAFETY: we just checked if the CPU supports AVX2.
-                        unsafe {
-                            vec_dot_q8_0_avx2(
-                                blocks_per_row,
-                                lhs_data,
-                                lhs_row_start,
-                                rhs_data,
-                                rhs_row_start,
-                            )
-                        }
-                    }
-                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-                    {
-                        0.0
-                    }
-                } else {
-                    vec_dot_q8_0_scalar(
-                        blocks_per_row,
-                        lhs_data,
-                        lhs_row_start,
-                        rhs_data,
-                        rhs_row_start,
-                    )
-                };
-
-                out_data[i * n + j] = sum;
-            }
-        }
-
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::F32(out_data),
-            out_shape.to_vec(),
-        ))
-    }
-}
-
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 #[inline]
@@ -402,10 +247,7 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::__backend_compat::legacy::NumericOps;
-
-    /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
+    use incin_core::prelude::Q8_0;
 
     #[test]
     /// `test_quantize_dequantize_fidelity`.
@@ -417,8 +259,8 @@ mod tests {
 
         let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![2, 32]);
 
-        let q_storage = TestBackend::quantize::<f32, Q8_0>(&storage).unwrap();
-        let deq_storage = TestBackend::dequantize::<Q8_0, f32>(&q_storage).unwrap();
+        let q_storage = quantize_storage(&storage).unwrap();
+        let deq_storage = dequantize_storage(&q_storage).unwrap();
 
         let deq_data = match &*deq_storage.buffer {
             CpuBuffer::F32(v) => v,
@@ -440,7 +282,7 @@ mod tests {
             *d = (i as f32 % 5.0) - 2.0;
         }
         let lhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(lhs_data.clone()), vec![2, 32]);
-        let lhs_q8 = TestBackend::quantize::<f32, Q8_0>(&lhs_f32).unwrap();
+        let lhs_q8 = quantize_storage(&lhs_f32).unwrap();
 
         // RHS: 3x32
         let mut rhs_data = vec![0.0f32; 96];
@@ -448,9 +290,9 @@ mod tests {
             *d = (i as f32 % 4.0) - 1.5;
         }
         let rhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data.clone()), vec![3, 32]);
-        let rhs_q8 = TestBackend::quantize::<f32, Q8_0>(&rhs_f32).unwrap();
+        let rhs_q8 = quantize_storage(&rhs_f32).unwrap();
 
-        let out_storage = TestBackend::quantized_matmul::<Q8_0>(&lhs_q8, &rhs_q8).unwrap();
+        let out_storage = quantized_matmul_storage(&lhs_q8, &rhs_q8).unwrap();
 
         assert_eq!(out_storage.shape, vec![2, 3]);
 
@@ -470,9 +312,9 @@ mod tests {
     #[test]
     fn unsupported_quantized_elementwise_arithmetic_is_typed() {
         let source = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 32]), vec![32]);
-        let quantized = TestBackend::quantize::<f32, Q8_0>(&source).unwrap();
+        let quantized = quantize_storage(&source).unwrap();
 
-        let error = TestBackend::add::<Q8_0>(&quantized, &quantized).unwrap_err();
+        let error = crate::cpu::ops::elementwise::add_storage(&quantized, &quantized).unwrap_err();
         if let Error::UnsupportedDType { dtype, backend, op } = error {
             assert_eq!(dtype, DTypeId::Q8_0.descriptor());
             assert_eq!(backend, "cpu");

@@ -2005,16 +2005,69 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
 }
 impl<D: Device> QuantizedOps<Self> for DispatchBackend<D> {
     fn quantize<K: FloatDType, Q: QuantDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_same_device!(t, quantize::<K, Q>, req = [], opt = [], args = [])
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::ops::quant::quantize_storage(value)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::quantize::<K, Q>(value)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::quantize::<K, Q>(value)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::quantize::<K, Q>(value)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
     }
     fn dequantize<Q: QuantDType, K: FloatDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_same_device!(t, dequantize::<Q, K>, req = [], opt = [], args = [])
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::ops::quant::dequantize_storage(value)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::dequantize::<Q, K>(value)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::dequantize::<Q, K>(value)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::dequantize::<Q, K>(value)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
     }
     fn quantized_matmul<Q: QuantDType>(
         lhs: &DispatchStorage,
         rhs: &DispatchStorage,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(lhs, quantized_matmul::<Q>, req = [rhs], opt = [], args = [])
+        match (lhs, rhs) {
+            #[cfg(feature = "cpu")]
+            (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
+                crate::cpu::ops::quant::quantized_matmul_storage(lhs, rhs)
+                    .map(DispatchStorage::Cpu)
+            }
+            #[cfg(feature = "wgpu")]
+            (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
+                crate::wgpu::WgpuBackendImpl::<Wgpu>::quantized_matmul::<Q>(lhs, rhs)
+                    .map(DispatchStorage::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            (DispatchStorage::Cuda(lhs), DispatchStorage::Cuda(rhs)) => {
+                crate::cuda::CudaBackendImpl::<Cuda>::quantized_matmul::<Q>(lhs, rhs)
+                    .map(DispatchStorage::Cuda)
+            }
+            #[cfg(feature = "metal")]
+            (DispatchStorage::Metal(lhs), DispatchStorage::Metal(rhs)) => {
+                crate::metal::MetalBackendImpl::<Metal>::quantized_matmul::<Q>(lhs, rhs)
+                    .map(DispatchStorage::Metal)
+            }
+            (lhs, rhs) => Err(Error::DeviceMismatch {
+                left: storage_device(lhs),
+                right: storage_device(rhs),
+            }),
+        }
     }
 }
 
