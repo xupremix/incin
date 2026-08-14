@@ -12,24 +12,48 @@ use syn::{DeriveInput, Ident, Token, parse_macro_input};
 /// `#[module]`. Substring matching also accepted `#[module(not_internal)]` as
 /// `internal`, which is the failure mode that makes a typo change behaviour
 /// rather than fail.
-const STRUCT_ARGUMENTS: &[&str] = &["internal", "no_stats"];
+const STRUCT_ARGUMENTS: &[&str] = &[
+    "internal",
+    "no_stats",
+    "no_parameters",
+    "no_state",
+    "no_named_layers",
+    "no_shape_info",
+    "no_train_mode",
+    "no_to_device",
+];
 
 /// Parse the struct-level argument list, rejecting anything not in the
 /// vocabulary.
-fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool)> {
+fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool, bool, bool, bool, bool, bool, bool)> {
     let attr: proc_macro2::TokenStream = attr.into();
     if attr.is_empty() {
-        return Ok((false, false));
+        return Ok((false, false, false, false, false, false, false, false));
     }
 
     let parser = Punctuated::<Ident, Token![,]>::parse_terminated;
     let arguments = syn::parse::Parser::parse2(parser, attr)?;
 
-    let (mut internal, mut no_stats) = (false, false);
+    let (
+        mut internal,
+        mut no_stats,
+        mut no_parameters,
+        mut no_state,
+        mut no_named_layers,
+        mut no_shape_info,
+        mut no_train_mode,
+        mut no_to_device,
+    ) = (false, false, false, false, false, false, false, false);
     for argument in arguments {
         match () {
             () if argument == "internal" => internal = true,
             () if argument == "no_stats" => no_stats = true,
+            () if argument == "no_parameters" => no_parameters = true,
+            () if argument == "no_state" => no_state = true,
+            () if argument == "no_named_layers" => no_named_layers = true,
+            () if argument == "no_shape_info" => no_shape_info = true,
+            () if argument == "no_train_mode" => no_train_mode = true,
+            () if argument == "no_to_device" => no_to_device = true,
             () => {
                 return Err(syn::Error::new_spanned(
                     &argument,
@@ -41,7 +65,16 @@ fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool)> {
             }
         }
     }
-    Ok((internal, no_stats))
+    Ok((
+        internal,
+        no_stats,
+        no_parameters,
+        no_state,
+        no_named_layers,
+        no_shape_info,
+        no_train_mode,
+        no_to_device,
+    ))
 }
 
 fn parse_parallel_attr(a: &syn::Attribute) -> syn::Result<()> {
@@ -204,7 +237,16 @@ fn process_field_attributes(
 }
 
 pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let (is_internal, no_stats) = match parse_arguments(attr) {
+    let (
+        is_internal,
+        no_stats,
+        no_parameters,
+        no_state,
+        no_named_layers,
+        no_shape_info,
+        no_train_mode,
+        no_to_device,
+    ) = match parse_arguments(attr) {
         Ok(parsed) => parsed,
         Err(error) => return error.to_compile_error().into(),
     };
@@ -267,7 +309,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
-    let (orig_impl_generics, orig_ty_generics, orig_where_clause) = input.generics.split_for_impl();
 
     let mut param_calls = Vec::new();
     let mut collect_state_calls = Vec::new();
@@ -344,17 +385,21 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         children.extend(#k_crate::prelude::NamedLayers::layer_structure(
                             &self.#fname, &child_prefix));
                     });
-                    shape_info_calls.push(quote! {
-                        if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#fname) {
-                            shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
-                        }
-                    });
+                    if !no_shape_info {
+                        shape_info_calls.push(quote! {
+                            if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#fname) {
+                                shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
+                            }
+                        });
+                    }
                     stats_calls.push(quote! {
                         total += #k_crate::prelude::ComputeStats::compute_stats(&self.#fname, batch);
                     });
-                    train_mode_calls.push(quote! {
-                        #k_crate::prelude::TrainMode::set_training(&mut self.#fname, training);
-                    });
+                    if !no_train_mode {
+                        train_mode_calls.push(quote! {
+                            #k_crate::prelude::TrainMode::set_training(&mut self.#fname, training);
+                        });
+                    }
                     to_device_fields.push(quote! {
                         #fname: #k_crate::prelude::ToDevice::to_device(self.#fname, arg)?
                     });
@@ -420,17 +465,21 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         children.extend(#k_crate::prelude::NamedLayers::layer_structure(
                             &self.#idx, &child_prefix));
                     });
-                    shape_info_calls.push(quote! {
-                        if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#idx) {
-                            shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
-                        }
-                    });
+                    if !no_shape_info {
+                        shape_info_calls.push(quote! {
+                            if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#idx) {
+                                shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
+                            }
+                        });
+                    }
                     stats_calls.push(quote! {
                         total += #k_crate::prelude::ComputeStats::compute_stats(&self.#idx, batch);
                     });
-                    train_mode_calls.push(quote! {
-                        #k_crate::prelude::TrainMode::set_training(&mut self.#idx, training);
-                    });
+                    if !no_train_mode {
+                        train_mode_calls.push(quote! {
+                            #k_crate::prelude::TrainMode::set_training(&mut self.#idx, training);
+                        });
+                    }
 
                     to_device_fields.push(quote! {
                         #k_crate::prelude::ToDevice::to_device(self.#idx, arg)?
@@ -502,7 +551,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl #orig_impl_generics #macro_support::ComputeStats for #name #orig_ty_generics #orig_where_clause {
+            impl #impl_generics #macro_support::ComputeStats for #name #ty_generics #where_clause {
                 /// Sums every field's parameter/MAC contribution for one
                 /// forward pass at `batch`. See `#[module(no_stats)]` for
                 /// how a leaf layer with its own known formula opts out of
@@ -516,7 +565,97 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let to_device_impl = if backend_generic.is_some() || is_internal {
+    let mut state_dict_where_clause = where_clause
+        .cloned()
+        .unwrap_or_else(|| syn::parse_quote!(where));
+    for fty in &state_dict_field_types {
+        state_dict_where_clause
+            .predicates
+            .push(syn::parse_quote!(#fty: #k_crate::prelude::StateDict<#b_ident>));
+    }
+
+    let parameters_impl = if no_parameters {
+        quote! {}
+    } else {
+        quote! {
+            impl #impl_generics #k_crate::prelude::Parameters<#b_ident> for #name #ty_generics #where_clause {
+                /// Named parameters.
+                fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::VariableBackend>::RawVar>) {
+                    let prefix = if prefix.is_empty() { #macro_support::String::new() } else { #macro_support::format!("{}.", prefix) };
+                    #(#param_calls)*
+                }
+            }
+        }
+    };
+
+    let state_impl = if no_state {
+        quote! {}
+    } else {
+        quote! {
+            impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
+                fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
+                    #(#collect_state_calls)*
+                    Ok(())
+                }
+
+                fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
+                    #(#prepare_state_calls)*
+                    Ok(())
+                }
+
+                fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
+                    #(#commit_state_calls)*
+                    Ok(())
+                }
+            }
+        }
+    };
+
+    let named_layers_impl = if no_named_layers {
+        quote! {}
+    } else {
+        quote! {
+            impl #impl_generics #k_crate::prelude::NamedLayers for #name #ty_generics #where_clause {
+                /// Layer structure.
+                fn layer_structure(&self, prefix: &str) -> #macro_support::Vec<#k_crate::prelude::LayerNode> {
+                    let node_name = if prefix.is_empty() {
+                        #macro_support::String::from(stringify!(#name))
+                    } else {
+                        #macro_support::String::from(prefix)
+                    };
+
+                    let mut children: #macro_support::Vec<#k_crate::prelude::LayerNode> = #macro_support::Vec::new();
+                    #(#named_layer_calls)*
+
+                    let mut shape_parts: #macro_support::Vec<#macro_support::String> = #macro_support::Vec::new();
+                    #(#shape_info_calls)*
+                    let shape_info = shape_parts.join(", ");
+
+                    #macro_support::Vec::from([#k_crate::prelude::LayerNode {
+                        name: node_name,
+                        type_name: #macro_support::String::from(stringify!(#name)),
+                        shape_info,
+                        children,
+                    }])
+                }
+            }
+        }
+    };
+
+    let train_mode_impl = if no_train_mode {
+        quote! {}
+    } else {
+        quote! {
+            impl #impl_generics #k_crate::prelude::TrainMode for #name #ty_generics #where_clause {
+                /// Set training.
+                fn set_training(&mut self, training: bool) {
+                    #(#train_mode_calls)*
+                }
+            }
+        }
+    };
+
+    let to_device_impl = if !no_to_device && (backend_generic.is_some() || is_internal) {
         let mut impl_generics_with_newd = generics.clone();
         impl_generics_with_newd
             .params
@@ -569,75 +708,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let mut state_dict_where_clause = where_clause
-        .cloned()
-        .unwrap_or_else(|| syn::parse_quote!(where));
-    for fty in &state_dict_field_types {
-        state_dict_where_clause
-            .predicates
-            .push(syn::parse_quote!(#fty: #k_crate::prelude::StateDict<#b_ident>));
-    }
-
     let expanded = quote! {
         #input
 
-        impl #impl_generics #k_crate::prelude::Parameters<#b_ident> for #name #ty_generics #where_clause {
-            /// Named parameters.
-            fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::VariableBackend>::RawVar>) {
-                let prefix = if prefix.is_empty() { #macro_support::String::new() } else { #macro_support::format!("{}.", prefix) };
-                #(#param_calls)*
-            }
-        }
-
-        impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
-            fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
-                #(#collect_state_calls)*
-                Ok(())
-            }
-
-            fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
-                #(#prepare_state_calls)*
-                Ok(())
-            }
-
-            fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
-                #(#commit_state_calls)*
-                Ok(())
-            }
-        }
-
-        impl #orig_impl_generics #k_crate::prelude::NamedLayers for #name #orig_ty_generics #orig_where_clause {
-            /// Layer structure.
-            fn layer_structure(&self, prefix: &str) -> #macro_support::Vec<#k_crate::prelude::LayerNode> {
-                let node_name = if prefix.is_empty() {
-                    #macro_support::String::from(stringify!(#name))
-                } else {
-                    #macro_support::String::from(prefix)
-                };
-
-                let mut children: #macro_support::Vec<#k_crate::prelude::LayerNode> = #macro_support::Vec::new();
-                #(#named_layer_calls)*
-
-                let mut shape_parts: #macro_support::Vec<#macro_support::String> = #macro_support::Vec::new();
-                #(#shape_info_calls)*
-                let shape_info = shape_parts.join(", ");
-
-                #macro_support::Vec::from([#k_crate::prelude::LayerNode {
-                    name: node_name,
-                    type_name: #macro_support::String::from(stringify!(#name)),
-                    shape_info,
-                    children,
-                }])
-            }
-        }
-
-        impl #orig_impl_generics #k_crate::prelude::TrainMode for #name #orig_ty_generics #orig_where_clause {
-            /// Set training.
-            fn set_training(&mut self, training: bool) {
-                #(#train_mode_calls)*
-            }
-        }
-
+        #parameters_impl
+        #state_impl
+        #named_layers_impl
+        #train_mode_impl
         #stats_impl
 
         #to_device_impl

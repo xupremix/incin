@@ -86,7 +86,7 @@ pub use incin_core::prelude::{
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
     QuantDType, RequiresGrad, Result, Shape, StateDict, StateLoadPlan, StatePath, StateRole,
-    StateSnapshot, StateValue, StorageEncoding, TensorElement, VariableBackend, bf16,
+    StateSnapshot, StateValue, TensorElement, VariableBackend, bf16,
     convert_f64_to_i64, f16,
 };
 
@@ -99,6 +99,15 @@ pub use incin_core::prelude::{Wgpu, WgpuN};
 
 pub use incin_core::dim;
 pub use incin_macros::module;
+
+/// Expert type-level and physical-layout contracts that are not part of the
+/// ordinary user prelude.
+pub mod types {
+    /// Physical storage encoding used by dtype descriptors and serializers.
+    pub mod dtype {
+        pub use incin_core::prelude::StorageEncoding;
+    }
+}
 
 /// Implementation details used by exported procedural macros.
 ///
@@ -476,6 +485,7 @@ pub mod macros {
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
     pub use super::Tensor;
+    pub use incin_core::tensor::transfer::ToDevice;
     pub use incin_core::prelude::{
         AxisIdentity, AxisSchema, Backend, BackendError, BackwardError, BoolDType, BuiltinDType,
         ConstDType, ConstDevice, ConstDim, ConversionFailure, Cpu, DType, DTypeDescriptor, DTypeId,
@@ -486,7 +496,7 @@ pub mod prelude {
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
         Slice, StateDict, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue,
-        StorageEncoding, TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
+        TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 
     pub use incin_core::prelude::{

@@ -1,4 +1,4 @@
-error: unknown attribute argument for #[module], expected one of internal, no_stats
+error: unknown attribute argument for #[module], expected one of internal, no_stats, no_parameters, no_state, no_named_layers, no_shape_info, no_train_mode, no_to_device
  --> tests/compile_fail/module_rejects_an_unknown_argument.rs:5:10
   |
 5 | #[module(no_such_argument)]

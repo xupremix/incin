@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use incin::prelude::*;
 use incin::{Adam, AdamW, SGD};
+use incin::backend_authoring::HostInterop;
+use incin::backend_authoring::AutogradBackend;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
@@ -38,7 +40,7 @@ fn state_bytes(
 /// Get linear and grads.
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackendImpl>,
-    incin::Gradients<<CpuBackendImpl as Backend>::Grads>,
+    incin::Gradients<<CpuBackendImpl as AutogradBackend>::Grads>,
 )> {
     let linear = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
     let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;

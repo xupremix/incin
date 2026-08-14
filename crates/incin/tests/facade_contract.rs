@@ -67,3 +67,8 @@ fn stable_facade_consumer_contracts() {
         &["no `DefaultBackend` in the root"],
     );
 }
+
+#[test]
+fn expert_storage_encoding_has_a_named_path() {
+    let _ = incin::types::dtype::StorageEncoding::scalar(4, 4);
+}

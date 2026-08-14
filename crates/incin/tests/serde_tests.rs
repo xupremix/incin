@@ -227,7 +227,7 @@ fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
 
 struct FailingState;
 
-impl<B: Backend> StateDict<B> for FailingState {
+impl<B: VariableBackend> StateDict<B> for FailingState {
     fn collect_state(&self, _: &StatePath, _: &mut StateSnapshot) -> Result<()> {
         Err(Error::Msg("intentional state readback failure".into()))
     }

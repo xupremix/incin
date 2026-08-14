@@ -1,4 +1,4 @@
-//! The rustfmt fixture: one file invoking all three macros, kept in the exact
+//! The rustfmt fixture: one file invoking the public macros, kept in the exact
 //! form `rustfmt` produces.
 //!
 //! `invoking_the_macros_leaves_a_file_formattable` formats this and asserts the
@@ -8,7 +8,7 @@ use ::incin::experimental::mesh;
 use ::incin::prelude::*;
 
 #[module]
-pub struct Formatted<B: Backend> {
+pub struct Formatted<B: Backend + VariableBackend> {
     fc: Linear<s![8, 4], B>,
     head: Linear<s![4, 2], B>,
 }

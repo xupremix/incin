@@ -74,6 +74,39 @@ impl Module<Input> for MacroLinear {
     }
 }
 
+struct ForwardOnlyField;
+
+impl Module<Input> for ForwardOnlyField {
+    type Output = Input;
+    type Error = Error;
+
+    fn forward(&self, input: Input) -> Result<Self::Output> {
+        Ok(input)
+    }
+}
+
+#[module(
+    no_stats,
+    no_parameters,
+    no_state,
+    no_named_layers,
+    no_shape_info,
+    no_train_mode,
+    no_to_device,
+)]
+struct ForwardOnlyMacro {
+    field: ForwardOnlyField,
+}
+
+impl Module<Input> for ForwardOnlyMacro {
+    type Output = Input;
+    type Error = Error;
+
+    fn forward(&self, input: Input) -> Result<Self::Output> {
+        self.field.forward(input)
+    }
+}
+
 #[test]
 fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Result<()> {
     let target = Cpu;
@@ -109,5 +142,16 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 
+    Ok(())
+}
+
+#[test]
+fn macro_can_opt_into_forward_only_capabilities() -> Result<()> {
+    let input = Cpu.zeros(shape![1, 4])?.into_dyn().require_grad();
+    let output = ForwardOnlyMacro {
+        field: ForwardOnlyField,
+    }
+    .forward(input)?;
+    assert_eq!(output.dims(), [1, 4]);
     Ok(())
 }

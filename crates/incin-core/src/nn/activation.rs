@@ -1,4 +1,4 @@
-use crate::nn::module::{Module, Parameters, TrainMode};
+use crate::nn::module::{Module, Parameters, ShapeInfo, TrainMode};
 use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
@@ -13,6 +13,18 @@ use alloc::{string::{String, ToString}, vec::Vec};
 /// This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
 pub struct ReLU;
+
+macro_rules! impl_stateless_shape_info {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl ShapeInfo for $ty {
+            fn shape_info(&self) -> Option<String> {
+                None
+            }
+        })+
+    };
+}
+
+impl_stateless_shape_info!(ReLU);
 
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ReLU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
@@ -59,6 +71,8 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct GELU;
 
+impl_stateless_shape_info!(GELU);
+
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for GELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
@@ -97,6 +111,8 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Swish;
 
+impl_stateless_shape_info!(Swish);
+
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Swish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
@@ -134,6 +150,8 @@ where
 /// This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
 pub struct Mish;
+
+impl_stateless_shape_info!(Mish);
 
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Mish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
@@ -174,6 +192,8 @@ where
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct ELU;
+
+impl_stateless_shape_info!(ELU);
 
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
@@ -216,6 +236,12 @@ where
 pub struct Softmax {
     /// The axis along which softmax is applied.
     pub dim: usize,
+}
+
+impl ShapeInfo for Softmax {
+    fn shape_info(&self) -> Option<String> {
+        None
+    }
 }
 
 impl Softmax {
@@ -266,6 +292,8 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Sigmoid;
 
+impl_stateless_shape_info!(Sigmoid);
+
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Sigmoid {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
@@ -302,6 +330,8 @@ where
 /// Squashes each element into the range `(-1, 1)`. This is a stateless module.
 #[derive(Debug, Clone, Default)]
 pub struct Tanh;
+
+impl_stateless_shape_info!(Tanh);
 
 impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Tanh {
     /// Collects named trainable parameters into `map` under the given `prefix`.

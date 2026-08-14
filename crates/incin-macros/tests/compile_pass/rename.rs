@@ -5,12 +5,12 @@
 //! alias, and everything the expansion needs it must reach on its own.
 use ::incin as renamed;
 use renamed::prelude::Backend;
-use renamed::prelude::{idx, module, s};
+use renamed::prelude::{idx, module, s, VariableBackend};
 
 type Shape = s![2, 3];
 
 #[module]
-pub struct Renamed<B: Backend> {
+pub struct Renamed<B: Backend + VariableBackend> {
     fc: renamed::prelude::Linear<s![8, 4], B>,
 }
 

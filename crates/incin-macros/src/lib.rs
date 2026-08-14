@@ -347,8 +347,8 @@ pub fn mesh(input: TokenStream) -> TokenStream {
     mesh::mesh(input)
 }
 
-/// The `#[module]` attribute automatically derives `StateDict` and `Parameters`
-/// traits for custom neural network structs.
+/// The `#[module]` attribute automatically derives composable module capabilities
+/// for custom neural network structs.
 ///
 /// When creating custom network architectures (like a Residual Block or an entire ResNet),
 /// you need a way to collect all trainable weights (for the optimizer) and state buffers
@@ -357,6 +357,10 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 /// This macro iterates through every field in your `struct`. If a field implements `Parameters`
 /// or `StateDict` (like `Linear`, `Conv2d`, or nested `Sequential` blocks), it recursively
 /// aggregates them. It ignores fields that don't store tensor state.
+///
+/// Generated capabilities can be disabled explicitly for forward-only or specialized modules:
+/// `no_stats`, `no_parameters`, `no_state`, `no_named_layers`, `no_shape_info`,
+/// `no_train_mode`, and `no_to_device`. Unknown arguments are rejected.
 ///
 /// ## Examples
 /// ```rust

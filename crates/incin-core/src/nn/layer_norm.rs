@@ -4,6 +4,7 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
+use crate::nn::module::ShapeInfo;
 use crate::prelude::{Backend, Device, DType, Dim, Dyn, DynShape, Error, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
 use alloc::string::String;
 use crate::tensor::backend::Execute;
@@ -58,6 +59,18 @@ pub struct LayerNorm<S: LayerNormShape, B: crate::tensor::backend::VariableBacke
     pub eps: f32,
     #[module(ignore)]
     _phantom: PhantomData<(S, B, K, Train)>,
+}
+
+impl<S, B, K, Train> ShapeInfo for LayerNorm<S, B, K, Train>
+where
+    S: LayerNormShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: TrainState,
+{
+    fn shape_info(&self) -> Option<String> {
+        None
+    }
 }
 
 impl<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> LayerNorm<S, B, K, Train> {

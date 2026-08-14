@@ -4,14 +4,14 @@ use incin::prelude::*;
 /// B.
 type B = incin::DefaultBackend;
 
-#[module]
+#[module(no_stats, no_parameters, no_state, no_train_mode, no_to_device)]
 /// Sub module.
 struct SubModule {
     fc: Linear<s![100, 50], B>,
     act: ReLU,
 }
 
-#[module]
+#[module(no_stats, no_parameters, no_state, no_shape_info, no_train_mode, no_to_device)]
 /// Test mlp.
 struct TestMLP {
     sub: SubModule,

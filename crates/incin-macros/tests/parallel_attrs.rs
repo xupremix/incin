@@ -5,7 +5,7 @@ use incin_macros::mesh;
 type MyMesh = mesh![dp = 2, tp = 4];
 
 #[module]
-pub struct ParallelModel<B: Backend> {
+pub struct ParallelModel<B: Backend + VariableBackend> {
     #[parallel(mesh = MyMesh, stage = 0)]
     layer1: Linear<s![768, 256], B>,
 

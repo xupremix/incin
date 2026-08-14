@@ -90,7 +90,7 @@ fn test_idx_macro() {
 
 #[module]
 /// My custom layer.
-pub struct MyCustomLayer<B: Backend> {
+pub struct MyCustomLayer<B: Backend + VariableBackend> {
     /// Linear.
     pub linear: Linear<s![10, 5], B>,
     /// Ln.

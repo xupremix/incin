@@ -94,6 +94,13 @@ requirement for custom networks and must not hide an unsupported field behind
 compiler method-resolution tricks. Use `#[module(ignore)]` for a field that is
 intentionally outside module traversal.
 
+Capability generation is explicit. `#[module]` accepts `no_stats`,
+`no_parameters`, `no_state`, `no_named_layers`, `no_shape_info`,
+`no_train_mode`, and `no_to_device`; a forward-only or specialized module can
+opt out of unrelated contracts while retaining an ordinary `Module` impl.
+Unknown arguments are rejected. The handoff fixture includes both the
+manual/macro equivalence path and a forward-only macro path.
+
 ## Macro difference
 
 Use the macro when a struct is a conventional field-wise module and its fields

@@ -1,14 +1,14 @@
-//! `#[module]` accepts its three argument forms, and the struct stays usable
+//! `#[module]` accepts its supported argument forms, and the struct stays usable
 //! as an ordinary type after each.
 use ::incin::prelude::*;
 
 #[module]
-pub struct Plain<B: Backend> {
+pub struct Plain<B: Backend + VariableBackend> {
     fc: Linear<s![8, 4], B>,
 }
 
 #[module(no_stats)]
-pub struct Quiet<B: Backend> {
+pub struct Quiet<B: Backend + VariableBackend> {
     fc: Linear<s![8, 4], B>,
 }
 
