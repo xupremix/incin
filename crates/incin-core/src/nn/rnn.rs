@@ -595,26 +595,30 @@ where
     Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::module::StateDict<B>,
     Linear<S::HhShape, B, BiasHh, K, Train>: crate::nn::module::StateDict<B>,
 {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        self.wi
-            .load_state_dict(&format!("{}wi.", prefix), tensors)?;
-        self.wh
-            .load_state_dict(&format!("{}wh.", prefix), tensors)?;
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(
+    fn collect_state(
         &self,
-        prefix: &str,
-        tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-        self.wi.state_dict(&format!("{}wi.", prefix), tensors);
-        self.wh.state_dict(&format!("{}wh.", prefix), tensors);
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> crate::prelude::Result<()> {
+        self.wi.collect_state(&path.child("wi"), snapshot)?;
+        self.wh.collect_state(&path.child("wh"), snapshot)
+    }
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> crate::prelude::Result<()> {
+        self.wi.prepare_state(&path.child("wi"), snapshot, plan)?;
+        self.wh.prepare_state(&path.child("wh"), snapshot, plan)
+    }
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> crate::prelude::Result<()> {
+        self.wi.commit_state(&path.child("wi"), plan)?;
+        self.wh.commit_state(&path.child("wh"), plan)
     }
 }
 
@@ -629,22 +633,27 @@ impl<
 where
     RNNCell<S, B, BiasIh, BiasHh, K, Train>: crate::nn::module::StateDict<B>,
 {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        self.cell
-            .load_state_dict(&format!("{}cell.", prefix), tensors)
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(
+    fn collect_state(
         &self,
-        prefix: &str,
-        tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-        self.cell.state_dict(&format!("{}cell.", prefix), tensors)
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> crate::prelude::Result<()> {
+        self.cell.collect_state(&path.child("cell"), snapshot)
+    }
+    fn prepare_state(
+        &self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> crate::prelude::Result<()> {
+        self.cell.prepare_state(&path.child("cell"), snapshot, plan)
+    }
+    fn commit_state(
+        &mut self,
+        path: &crate::nn::StatePath,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> crate::prelude::Result<()> {
+        self.cell.commit_state(&path.child("cell"), plan)
     }
 }
 

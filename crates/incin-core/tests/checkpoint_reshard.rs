@@ -116,8 +116,8 @@ fn test_save_and_load_resharded_checkpoint() -> Result<()> {
     // Verify manifest exists and has expected fields
     let manifest = load_checkpoint_manifest(dir.path().join("manifest.json"))?;
     assert_eq!(manifest.world_size, 2);
-    assert!(manifest.tensors.contains_key("weight."));
-    assert!(manifest.tensors.contains_key("bias."));
+    assert!(manifest.tensors.contains_key("weight"));
+    assert!(manifest.tensors.contains_key("bias"));
 
     // Create target local module representing rank 0 of a TP=2 mesh (8 output features instead of 16)
     let mut rank0_linear: Linear<Dyn, TestBackend> = Linear::build((8, 8))?;

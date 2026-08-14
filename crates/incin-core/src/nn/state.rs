@@ -4,7 +4,11 @@
 //! variable handles.  It is therefore safe to serialize, inspect, validate,
 //! and stage before touching a module's live state.
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    collections::BTreeMap,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::fmt;
 
 use crate::{

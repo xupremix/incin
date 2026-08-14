@@ -617,57 +617,11 @@ use alloc::collections::BTreeMap;
 /// `StateDict` for parameters of any `K: DType`.
 impl<
     S: Shape,
-    B: Backend
-        + SupportsDType<K>
-        + SupportsDType<f32>
-        + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>
-        + crate::exec::Capabilities,
+    B: Backend + SupportsDType<K> + crate::exec::Capabilities,
     K: DType<Arg = ()>,
     Train: TrainState,
 > StateDict<B> for Param<S, B, K, Train>
-where
-    <B as crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>>::Output:
-        Into<B::Storage<K>> + Into<B::Storage<f32>>,
 {
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B, f32>>,
-    ) -> Result<()> {
-        if let Some(t) = tensors.get(prefix) {
-            let loaded_dims = t.dims();
-            let expected_dims = self._shape.shape_buf();
-            if loaded_dims.as_ref() != expected_dims.as_ref() {
-                return Err(Error::ShapeMismatch {
-                    op: "Param::load_state_dict",
-                    expected: expected_dims.as_ref().to_vec(),
-                    got: loaded_dims.as_ref().to_vec(),
-                    msg: alloc::format!("Checkpoint parameter shape mismatch for key '{}'", prefix),
-                });
-            }
-            let converted = t.to_dtype::<K>()?;
-            self.inner = B::var_from_tensor::<K>(&converted.inner)?;
-        }
-
-        Ok(())
-    }
-
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B, f32>>) {
-        if let Ok(inner) = B::var_as_tensor::<K>(&self.inner)
-            && let Ok(dyn_t) = Tensor::<Dyn, B, K>::from_parts(
-                inner,
-                self._shape.shape_buf().clone(),
-                self._dtype.clone(),
-                self._device.clone(),
-                PhantomData,
-            )
-        {
-            if let Ok(converted) = dyn_t.to_dtype::<f32>() {
-                tensors.insert(prefix.to_string(), converted);
-            }
-        }
-    }
-
     fn collect_state(
         &self,
         path: &crate::nn::StatePath,
@@ -932,57 +886,9 @@ impl<S: Shape + DynShape, B: Backend, K: DType> Parameters<B> for Buffer<S, B, K
 }
 
 /// `StateDict` for buffers of any `K: DType`.
-impl<
-    S: Shape,
-    B: Backend
-        + SupportsDType<K>
-        + SupportsDType<f32>
-        + crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>
-        + crate::exec::Capabilities,
-    K: DType<Arg = ()>,
-> StateDict<B> for Buffer<S, B, K>
-where
-    <B as crate::backend_authoring::Execute<crate::exec::catalog::op::ToDType>>::Output:
-        Into<B::Storage<K>> + Into<B::Storage<f32>>,
+impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DType<Arg = ()>>
+    StateDict<B> for Buffer<S, B, K>
 {
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B, f32>>,
-    ) -> Result<()> {
-        if let Some(t) = tensors.get(prefix) {
-            let loaded_dims = t.dims();
-            let expected_dims = self._shape.shape_buf();
-            if loaded_dims.as_ref() != expected_dims.as_ref() {
-                return Err(Error::ShapeMismatch {
-                    op: "Buffer::load_state_dict",
-                    expected: expected_dims.as_ref().to_vec(),
-                    got: loaded_dims.as_ref().to_vec(),
-                    msg: alloc::format!("Checkpoint buffer shape mismatch for key '{}'", prefix),
-                });
-            }
-            let converted = t.to_dtype::<K>()?;
-            self.inner = B::var_from_tensor::<K>(&converted.inner)?;
-        }
-        Ok(())
-    }
-
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B, f32>>) {
-        if let Ok(inner) = B::var_as_tensor::<K>(&self.inner)
-            && let Ok(dyn_t) = Tensor::<Dyn, B, K>::from_parts(
-                inner,
-                self._shape.shape_buf().clone(),
-                self._dtype.clone(),
-                self._device.clone(),
-                PhantomData,
-            )
-        {
-            if let Ok(converted) = dyn_t.to_dtype::<f32>() {
-                tensors.insert(prefix.to_string(), converted);
-            }
-        }
-    }
-
     fn collect_state(
         &self,
         path: &crate::nn::StatePath,

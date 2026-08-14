@@ -327,78 +327,12 @@ where
     }
 }
 
-impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
-impl<B: Backend> crate::nn::module::StateDict<B> for GELU {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
-impl<B: Backend> crate::nn::module::StateDict<B> for Swish {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
-impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
-impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
-impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _: &str,
-        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> crate::prelude::Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
-}
+impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {}
+impl<B: Backend> crate::nn::module::StateDict<B> for GELU {}
+impl<B: Backend> crate::nn::module::StateDict<B> for Swish {}
+impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {}
+impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {}
+impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {}
 
 impl crate::nn::module::NamedLayers for ReLU {
     /// Returns the layer hierarchy rooted at this module for visualization.

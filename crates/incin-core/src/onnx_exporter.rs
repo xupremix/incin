@@ -234,24 +234,6 @@ mod tests {
     }
 }
 
-impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
-    /// The error type returned if the forward pass fails.
-    type Error = anyhow::Error;
-
-    /// `serialize`.
-    fn serialize<B: Backend>(
-        &mut self,
-        _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> core::result::Result<(), Self::Error>
-    where
-        <B::Device as Device>::Field: Default,
-    {
-        // Try to run export_to_onnx with thread local graph
-        let g = crate::tensor::tracing::TRACING_GRAPH.lock();
-        export_to_onnx(&g, self._path)
-    }
-}
-
 /// `OnnxImporter`.
 pub struct OnnxImporter<'a> {
     _path: &'a Path,
@@ -261,23 +243,5 @@ impl<'a> OnnxImporter<'a> {
     /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
-    }
-}
-
-impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
-    /// The error type returned if the forward pass fails.
-    type Error = anyhow::Error;
-
-    /// `deserialize`.
-    fn deserialize<B: Backend>(
-        &mut self,
-        _device: &DeviceId,
-    ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
-    where
-        <B::Device as Device>::Field: Default,
-    {
-        Err(anyhow::anyhow!(
-            "ONNX loading is currently unsupported. Please use Format::Safetensors instead."
-        ))
     }
 }

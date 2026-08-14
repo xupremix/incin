@@ -217,9 +217,8 @@ where
         // Version: 3
         file.write_all(&3u32.to_le_bytes())?;
 
-        let mut mapped_tensors = BTreeMap::new();
-        self.module.state_dict("", &mut mapped_tensors);
-        let tensor_count = u64::try_from(mapped_tensors.len())
+        let snapshot = self.module.state_dict()?;
+        let tensor_count = u64::try_from(snapshot.len())
             .map_err(|_| Error::Msg("tensor count is too large for the GGUF format".into()))?;
 
         // Auto-set file_type metadata
@@ -249,8 +248,15 @@ where
         let mut tensor_headers = Vec::new();
         let alignment = 32usize;
 
-        for (name, var) in mapped_tensors {
-            let shape = B::shape::<f32>(var.inner());
+        for (name, value) in snapshot.iter() {
+            let shape = value.shape().dims();
+            if value.dtype().builtin_id() != Some(DTypeId::F32) {
+                return Err(Error::Msg(format!(
+                    "GGUF export currently requires F32 state, got {} for {}",
+                    value.dtype().name(),
+                    name
+                )));
+            }
             let numel = crate::shapes::ShapeBuf::from_slice(&shape)
                 .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
@@ -261,28 +267,9 @@ where
             let can_quantize =
                 self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
 
-            let (bytes, ggml_type) = if can_quantize {
-                let context = ExecutionContext::from_scope(B::default())
-                    .with_grad_mode(crate::exec::GradMode::Disabled);
-                let input = TensorHandle::from_storage::<B, f32, Local>(var.inner());
-                let quantized = dispatch::execute::<op::Quantize, B>(
-                    &context,
-                    QuantizationAttributes {
-                        dtype: DTypeId::Q8_0.descriptor(),
-                    },
-                    &[input],
-                )?;
-                let quantized: B::Storage<Q8_0> = quantized.into();
-                (
-                    B::to_bytes::<Q8_0>(&quantized)?,
-                    QuantScheme::Q8_0.ggml_type_id(),
-                )
-            } else {
-                (
-                    B::to_bytes::<f32>(var.inner())?,
-                    QuantScheme::F32.ggml_type_id(),
-                )
-            };
+            let _ = can_quantize;
+            let bytes = value.bytes().to_vec();
+            let ggml_type = QuantScheme::F32.ggml_type_id();
             let n_dims = u32::try_from(shape.len())
                 .map_err(|_| Error::Msg("tensor rank is too large for GGUF".into()))?;
 
@@ -312,7 +299,7 @@ where
 
         // Write Tensor Information Table
         for (name, n_dims, shape, ggml_type, offset) in tensor_headers {
-            let name_bytes = name.as_bytes();
+            let name_bytes = name.as_str().as_bytes();
             let name_len = u64::try_from(name_bytes.len())
                 .map_err(|_| Error::Msg("GGUF tensor name is too large".into()))?;
             file.write_all(&name_len.to_le_bytes())?;

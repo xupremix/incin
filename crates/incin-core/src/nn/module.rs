@@ -1,19 +1,11 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 
-/// A trait implemented by all Neural Network modules to manage their state (weights).
-/// Usually automatically derived via `#[incin::module]`.
+/// Typed traversal and portable persistence contract for module state.
+///
+/// The public state representation is [`StateSnapshot`]. Backend storage is
+/// reached only at typed `Param`/`Buffer` leaves during prepare/commit.
 pub trait StateDict<B: Backend> {
-    /// Loads the module's state from a dictionary of dynamic tensors.
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()>;
-
-    /// Collects the module's state into a dictionary of dynamic tensors.
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>);
-
     /// Collects exact, owned state without retaining a live backend tensor.
     /// Implementations for state-bearing leaves override this; the default is
     /// appropriate for stateless modules and legacy hand-written markers.
@@ -73,19 +65,7 @@ pub trait StateDict<B: Backend> {
         self.commit_state(&crate::nn::StatePath::root(), &mut plan)
     }
 
-    /// Number of flat positional slots this module occupies when nested
-    /// inside a [`Sequential`] chain — `1` for any ordinary layer (this
-    /// default). [`Sequential`]'s own impl overrides this to sum its two
-    /// children's widths, which is what lets `state_dict`/`load_state_dict`
-    /// number a many-layer chain flatly (`0.weight, 1.weight, 2.weight, ...`,
-    /// matching PyTorch's `nn.Sequential`) instead of literally encoding
-    /// `Sequential<L1, Sequential<L2, L3>>`'s right-nested tree structure
-    /// into the keys (`0.weight, 1.0.weight, 1.1.weight`). See
-    /// `Parameters::flat_width`'s doc for the full design note — this is
-    /// the `StateDict` half of the same mechanism, duplicated rather than
-    /// inherited via a supertrait bound so existing hand-written
-    /// `StateDict`-only implementors don't need an unrelated `Parameters`
-    /// impl just to keep compiling.
+    /// Number of flat positional slots occupied inside `Sequential`.
     fn flat_width() -> usize
     where
         Self: Sized,
@@ -93,71 +73,14 @@ pub trait StateDict<B: Backend> {
         1
     }
 
-    /// Collects state using FLAT positional numbering relative to
-    /// `base_index` (PyTorch `nn.Sequential` semantics), unlike
-    /// `state_dict`'s own literal prefix-string recursion. Default:
-    /// treat `self` as one flat slot at `base_index`, delegating to
-    /// `state_dict`. [`Sequential`] overrides this to recurse with the
-    /// correct running offset instead — see `flat_width`'s doc.
-    fn state_dict_flat(
-        &self,
-        outer_prefix: &str,
-        base_index: usize,
-        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    ) where
-        Self: Sized,
-    {
-        self.state_dict(&format!("{outer_prefix}{base_index}."), tensors);
+    /// Extracts all state as an owned heterogeneous snapshot.
+    fn state_dict(&self) -> Result<crate::nn::StateSnapshot> {
+        self.state_snapshot()
     }
 
-    /// `load_state_dict`'s counterpart to `state_dict_flat` — see its doc.
-    fn load_state_dict_flat(
-        &mut self,
-        outer_prefix: &str,
-        base_index: usize,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()>
-    where
-        Self: Sized,
-    {
-        self.load_state_dict(&format!("{outer_prefix}{base_index}."), tensors)
-    }
-
-    /// Helper: Serializes this module's state to a given serializer.
-    fn save_to<S: crate::serialize::Serializer>(
-        &self,
-        serializer: &mut S,
-    ) -> core::result::Result<(), S::Error>
-    where
-        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-    {
-        let mut map = BTreeMap::new();
-        self.state_dict("", &mut map);
-        serializer.serialize(&map)
-    }
-
-    /// Helper: Deserializes this module's state from a given deserializer.
-    fn load_from<D: crate::serialize::Deserializer>(
-        &mut self,
-        deserializer: &mut D,
-        device: &DeviceId,
-    ) -> Result<()>
-    where
-        <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-        B: crate::backend_authoring::Execute<crate::backend_authoring::op::TensorFromBytes>,
-        <B as crate::backend_authoring::Execute<
-            crate::backend_authoring::op::TensorFromBytes,
-        >>::Output: Into<B::Storage<f32>>,
-    {
-        let map = deserializer
-            .deserialize(device)
-            .map_err(|e| Error::ShapeMismatch {
-                op: "Deserialization",
-                expected: vec![],
-                got: vec![],
-                msg: format!("{:?}", e),
-            })?;
-        self.load_state_dict("", &map)
+    /// Strictly prepares and commits a complete snapshot.
+    fn load_state_dict(&mut self, snapshot: &crate::nn::StateSnapshot) -> Result<()> {
+        self.load_state_snapshot(snapshot)
     }
 }
 
@@ -315,94 +238,60 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
 }
 
 #[doc(hidden)]
-/// Autoref-specialization fallback for `StateDict`: fields that don't
-/// implement it (plain scalars, markers) silently contribute nothing to
-/// save/load instead of failing to compile.
+/// Autoref-specialization fallback for fields without state.
 pub trait AutorefStateDictFallback<B: Backend> {
-    fn maybe_collect_state(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()> {
-        Ok(())
-    }
-    fn maybe_prepare_state(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _snapshot: &crate::nn::StateSnapshot,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    fn maybe_commit_state(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        _path: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    /// No-op: nothing to load.
-    fn maybe_load_state_dict(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        _prefix: &str,
-        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    /// No-op: nothing to save.
-    fn maybe_state_dict(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        _prefix: &str,
-        _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-    }
-}
-impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
-impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
-
-#[doc(hidden)]
-/// The preferred (non-fallback) half of the autoref-specialization pair:
-/// picked over `AutorefStateDictFallback` for any type that actually
-/// implements `StateDict`.
-pub trait AutorefStateDict<B: Backend> {
     fn maybe_collect_state(
         &self,
         _phantom: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         snapshot: &mut crate::nn::StateSnapshot,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        Ok(())
+    }
     fn maybe_prepare_state(
         &self,
         _phantom: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
         plan: &mut crate::nn::StateLoadPlan<B>,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        Ok(())
+    }
     fn maybe_commit_state(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
+        _path: &crate::nn::StatePath,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
+impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
+
+#[doc(hidden)]
+/// Preferred autoref delegation for fields implementing `StateDict`.
+pub trait AutorefStateDict<B: Backend> {
+    fn maybe_collect_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &mut crate::nn::StateSnapshot,
+    ) -> Result<()>;
+    fn maybe_prepare_state(
+        &self,
+        _: core::marker::PhantomData<B>,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+        plan: &mut crate::nn::StateLoadPlan<B>,
+    ) -> Result<()>;
+    fn maybe_commit_state(
+        &mut self,
+        _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         plan: &mut crate::nn::StateLoadPlan<B>,
     ) -> Result<()>;
-    /// Delegates to `StateDict::load_state_dict`.
-    fn maybe_load_state_dict(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()>;
-    /// Delegates to `StateDict::state_dict`.
-    fn maybe_state_dict(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    );
 }
 
 // For mutable operations
@@ -432,26 +321,6 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
     ) -> Result<()> {
         (*self).commit_state(path, plan)
     }
-    #[inline]
-    /// Delegates to `StateDict::load_state_dict`.
-    fn maybe_load_state_dict(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        (*self).load_state_dict(prefix, tensors)
-    }
-    #[inline]
-    /// Delegates to `StateDict::state_dict`.
-    fn maybe_state_dict(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-        (**self).state_dict(prefix, tensors)
-    }
 }
 
 // For immutable operations (state_dict uses &self)
@@ -480,28 +349,6 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         _plan: &mut crate::nn::StateLoadPlan<B>,
     ) -> Result<()> {
         Ok(())
-    }
-    #[inline]
-    /// Unreachable in practice: loading requires `&mut`, so this
-    /// shared-reference impl only exists to satisfy the autoref-resolution
-    /// pair's shape; it never actually gets called for loading.
-    fn maybe_load_state_dict(
-        &mut self,
-        _phantom: core::marker::PhantomData<B>,
-        _prefix: &str,
-        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        Ok(()) // Should not be called
-    }
-    #[inline]
-    /// Delegates to `StateDict::state_dict`.
-    fn maybe_state_dict(
-        &self,
-        _phantom: core::marker::PhantomData<B>,
-        prefix: &str,
-        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-        (*self).state_dict(prefix, tensors)
     }
 }
 
@@ -785,52 +632,9 @@ where
         self.1.commit_state(&path.index(L1::flat_width()), plan)
     }
 
-    /// Entry point: flat-numbers from index `0` — see
-    /// `Parameters::flat_width`'s doc (same mechanism, `StateDict` half).
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        self.load_state_dict_flat(prefix, 0, tensors)
-    }
-
-    /// Entry point: flat-numbers from index `0` — see
-    /// `Parameters::flat_width`'s doc.
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-        self.state_dict_flat(prefix, 0, tensors);
-    }
-
     /// Sums both children's widths.
     fn flat_width() -> usize {
         L1::flat_width() + L2::flat_width()
-    }
-
-    /// Recurses with a running index offset — see `Parameters`'s identical
-    /// `named_parameters_flat` for the full explanation.
-    fn state_dict_flat(
-        &self,
-        outer_prefix: &str,
-        base_index: usize,
-        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-        self.0.state_dict_flat(outer_prefix, base_index, tensors);
-        self.1
-            .state_dict_flat(outer_prefix, base_index + L1::flat_width(), tensors);
-    }
-
-    /// `load_state_dict`'s counterpart to `state_dict_flat`.
-    fn load_state_dict_flat(
-        &mut self,
-        outer_prefix: &str,
-        base_index: usize,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        self.0
-            .load_state_dict_flat(outer_prefix, base_index, tensors)?;
-        self.1
-            .load_state_dict_flat(outer_prefix, base_index + L1::flat_width(), tensors)?;
-        Ok(())
     }
 }
 
@@ -844,14 +648,6 @@ macro_rules! impl_dummy_state {
             }
 
             impl<B: Backend> StateDict<B> for $t {
-                /// Loads parameters from a flat name→tensor map, in-place.
-                fn load_state_dict(&mut self, _prefix: &str, _tensors: &BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
-                    Ok(())
-                }
-
-                /// Returns a flat map from parameter name to its raw tensor value.
-                fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-                }
             }
         )+
     };
@@ -871,21 +667,7 @@ where
     ) {
     }
 }
-impl<T, B: Backend> StateDict<B> for core::marker::PhantomData<T>
-where
-    T: crate::prelude::DType,
-{
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        _prefix: &str,
-        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {}
-}
+impl<T, B: Backend> StateDict<B> for core::marker::PhantomData<T> where T: crate::prelude::DType {}
 
 impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
     /// Collects named trainable parameters into `map` under the given `prefix`.
@@ -931,25 +713,6 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
             value.commit_state(path, plan)?;
         }
         Ok(())
-    }
-
-    /// Loads parameters from a flat name→tensor map, in-place.
-    fn load_state_dict(
-        &mut self,
-        prefix: &str,
-        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        if let Some(v) = self {
-            v.load_state_dict(prefix, tensors)?;
-        }
-        Ok(())
-    }
-
-    /// Returns a flat map from parameter name to its raw tensor value.
-    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-        if let Some(v) = self {
-            v.state_dict(prefix, tensors);
-        }
     }
 }
 

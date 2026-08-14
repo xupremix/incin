@@ -204,11 +204,18 @@ fn test_statedict_f32_safety_and_roundtrip() {
         .init(&target)
         .unwrap();
 
-    let mut state = BTreeMap::new();
-    rnn1.state_dict("", &mut state);
+    let state = rnn1.state_dict().unwrap();
 
-    assert!(state.contains_key("cell.wi.weight."));
-    assert!(state.contains_key("cell.wh.weight."));
+    assert!(
+        state
+            .iter()
+            .any(|(path, _)| path.as_str() == "cell.wi.weight")
+    );
+    assert!(
+        state
+            .iter()
+            .any(|(path, _)| path.as_str() == "cell.wh.weight")
+    );
 
-    assert!(rnn2.load_state_dict("", &state).is_ok());
+    assert!(rnn2.load_state_dict(&state).is_ok());
 }

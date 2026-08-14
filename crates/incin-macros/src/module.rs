@@ -263,8 +263,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let (orig_impl_generics, orig_ty_generics, orig_where_clause) = input.generics.split_for_impl();
 
     let mut param_calls = Vec::new();
-    let mut load_state_calls = Vec::new();
-    let mut state_dict_calls = Vec::new();
     let mut collect_state_calls = Vec::new();
     let mut prepare_state_calls = Vec::new();
     let mut commit_state_calls = Vec::new();
@@ -315,18 +313,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         {
                             use #macro_support::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #fname_str), map);
-                        }
-                    });
-                    load_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            (&mut &mut self.#fname).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
-                        }
-                    });
-                    state_dict_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
                         }
                     });
                     collect_state_calls.push(quote! {
@@ -426,18 +412,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         {
                             use #macro_support::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #idx_str), map);
-                        }
-                    });
-                    load_state_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            (&mut &mut self.#idx).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
-                        }
-                    });
-                    state_dict_calls.push(quote! {
-                        {
-                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
-                            (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
                         }
                     });
                     collect_state_calls.push(quote! {
@@ -655,21 +629,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
-            /// Load state dict.
-            fn load_state_dict(
-                &mut self,
-                prefix: &str,
-                tensors: &#macro_support::BTreeMap<#macro_support::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
-            ) -> #k_crate::prelude::Result<()> {
-                #(#load_state_calls)*
-                Ok(())
-            }
-
-            /// State dict.
-            fn state_dict(&self, prefix: &str, tensors: &mut #macro_support::BTreeMap<#macro_support::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
-                #(#state_dict_calls)*
-            }
-
             fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
                 #(#collect_state_calls)*
                 Ok(())

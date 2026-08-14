@@ -25,22 +25,7 @@ impl<Start, End, B: Backend> Parameters<B> for Flatten<Start, End> {
     }
 }
 
-impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {
-    fn load_state_dict(
-        &mut self,
-        _prefix: &str,
-        _tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn state_dict(
-        &self,
-        _prefix: &str,
-        _tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
-    ) {
-    }
-}
+impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {}
 
 /// Runtime-rank models commonly flatten the image axes after a dynamic batch
 /// axis.  Keep that migration path on the same module type while the exact

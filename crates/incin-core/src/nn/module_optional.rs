@@ -21,22 +21,20 @@ macro_rules! impl_module_for_optional_field {
         }
 
         impl<S: $shape_trait, B: crate::prelude::Backend, Bias: crate::nn::optional::OptionalField> crate::nn::StateDict<B> for $name<S, B, Bias> {
-            /// Loads parameters from a flat name→tensor map, in-place.
-            fn load_state_dict(&mut self, prefix: &str, tensors: &alloc::collections::BTreeMap<String, crate::prelude::Tensor<crate::prelude::Dyn, B>>) -> crate::prelude::Result<()> {
+            fn collect_state(&self, path: &crate::nn::StatePath, snapshot: &mut crate::nn::StateSnapshot) -> crate::prelude::Result<()> {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
-                let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
-                $(
-                    (&mut &mut self.$field).maybe_load_state_dict(core::marker::PhantomData::<B>, &alloc::format!("{}{}", prefix, stringify!($field)), tensors)?;
-                )*
+                $( (&&self.$field).maybe_collect_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), snapshot)?; )*
                 Ok(())
             }
-            /// Returns a flat map from parameter name to its raw tensor value.
-            fn state_dict(&self, prefix: &str, tensors: &mut alloc::collections::BTreeMap<String, crate::prelude::Tensor<crate::prelude::Dyn, B>>) {
+            fn prepare_state(&self, path: &crate::nn::StatePath, snapshot: &crate::nn::StateSnapshot, plan: &mut crate::nn::StateLoadPlan<B>) -> crate::prelude::Result<()> {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
-                let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
-                $(
-                    (&&self.$field).maybe_state_dict(core::marker::PhantomData::<B>, &alloc::format!("{}{}", prefix, stringify!($field)), tensors);
-                )*
+                $( (&&self.$field).maybe_prepare_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), snapshot, plan)?; )*
+                Ok(())
+            }
+            fn commit_state(&mut self, path: &crate::nn::StatePath, plan: &mut crate::nn::StateLoadPlan<B>) -> crate::prelude::Result<()> {
+                use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                $( (&mut &mut self.$field).maybe_commit_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), plan)?; )*
+                Ok(())
             }
         }
     };

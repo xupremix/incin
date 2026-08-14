@@ -233,7 +233,6 @@ pub mod prelude {
     };
     #[cfg(feature = "std")]
     pub use crate::optim::{CosineAnnealingLR, StepLR};
-    pub use crate::serialize::{Deserializer, Serializer};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
     pub use alloc::boxed::Box;

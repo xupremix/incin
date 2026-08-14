@@ -288,31 +288,13 @@ where
 /// Loads weights into a module from a safetensors file.
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where
-    B: Backend + Execute<op::TensorFromBytes>,
+    B: Backend,
     M: StateDict<B>,
     P: AsRef<Path>,
-    B: SupportsDType<f32>,
-    <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-    <f32 as DType>::Field: Default,
-    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
 {
-    let map = load_safetensors_map::<B, _>(path, &DeviceId::cpu())?;
-    let mut mapped_tensors = BTreeMap::new();
-
-    for (name, storage) in map {
-        let shape = B::shape(&storage);
-        let tensor = Tensor::<Dyn, B>::from_parts(
-            storage,
-            shape,
-            Default::default(),
-            Default::default(),
-            core::marker::PhantomData,
-        )?;
-        mapped_tensors.insert(name, tensor);
-    }
-
-    module.load_state_dict("", &mapped_tensors)?;
-    Ok(())
+    let snapshot = crate::serialize::deserialize_snapshot_safetensors(path.as_ref())
+        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))?;
+    module.load_state_dict(&snapshot)
 }
 
 /// Saves the module's weights to a safetensors file.
@@ -322,62 +304,9 @@ where
     M: StateDict<B>,
     P: AsRef<Path>,
 {
-    let mut mapped_tensors = BTreeMap::new();
-    module.state_dict("", &mut mapped_tensors);
-
-    let mut raw_data: Vec<(String, Vec<usize>, safetensors::Dtype, Vec<u8>)> = Vec::new();
-
-    for (name, tensor) in mapped_tensors {
-        let bytes = B::to_bytes::<f32>(tensor.inner())?;
-        let shape = B::shape::<f32>(tensor.inner());
-        let dtype_desc =
-            B::storage_dtype::<f32>(tensor.inner()).unwrap_or(<f32 as ConstDType>::DESCRIPTOR);
-
-        let st_dtype = match dtype_desc.builtin_id() {
-            Some(DTypeId::F32) => safetensors::Dtype::F32,
-            Some(DTypeId::F64) => safetensors::Dtype::F64,
-            Some(DTypeId::F16) => safetensors::Dtype::F16,
-            Some(DTypeId::BF16) => safetensors::Dtype::BF16,
-            Some(DTypeId::I64) => safetensors::Dtype::I64,
-            Some(DTypeId::U32) => safetensors::Dtype::U32,
-            Some(DTypeId::U8) => safetensors::Dtype::U8,
-            _ => {
-                return Err(Error::Msg(format!(
-                    "Unsupported dtype {} for safetensors export",
-                    dtype_desc.name()
-                )));
-            }
-        };
-
-        raw_data.push((name, shape.as_ref().to_vec(), st_dtype, bytes));
-    }
-
-    let mut data_map: BTreeMap<String, safetensors::tensor::TensorView> = BTreeMap::new();
-    for (name, shape, st_dtype, bytes) in &raw_data {
-        let view = safetensors::tensor::TensorView::new(*st_dtype, shape.clone(), bytes)
-            .map_err(|e| Error::Msg(format!("TensorView creation failed: {:?}", e)))?;
-        data_map.insert(name.clone(), view);
-    }
-
-    let serialized = safetensors::serialize(&data_map, &None)
-        .map_err(|e| Error::Msg(format!("Safetensors serialization failed: {:?}", e)))?;
-
-    let path_ref = path.as_ref();
-    let tmp_path = path_ref.with_extension(format!(
-        "{}.tmp",
-        path_ref
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("safetensors")
-    ));
-
-    std::fs::write(&tmp_path, serialized)
-        .map_err(|e| Error::Msg(format!("Failed to write safetensors tmp file: {}", e)))?;
-
-    std::fs::rename(&tmp_path, path_ref)
-        .map_err(|e| Error::Msg(format!("Failed to finalize safetensors rename: {}", e)))?;
-
-    Ok(())
+    let snapshot = module.state_dict()?;
+    crate::serialize::serialize_snapshot_safetensors(&snapshot, path.as_ref())
+        .map_err(|e| Error::Msg(format!("Safetensors serialization failed: {}", e)))
 }
 
 /// Saves a full model checkpoint including global manifest and weights file.
@@ -391,16 +320,16 @@ where
     let dir = dir_path.as_ref();
     std::fs::create_dir_all(dir)?;
 
-    let mut mapped_tensors = BTreeMap::new();
-    module.state_dict("", &mut mapped_tensors);
+    let snapshot = module.state_dict()?;
 
     let mut manifest = GlobalCheckpointManifest::new(world_size);
-    for (name, tensor) in &mapped_tensors {
-        let shape = B::shape::<f32>(tensor.inner());
-        let dtype_desc =
-            B::storage_dtype::<f32>(tensor.inner()).unwrap_or(<f32 as ConstDType>::DESCRIPTOR);
-        let dtype_id = dtype_desc.builtin_id().unwrap_or(DTypeId::F32);
-        manifest.add_tensor(name.clone(), shape.as_ref().to_vec(), dtype_id, "Local");
+    for (name, value) in snapshot.iter() {
+        manifest.add_tensor(
+            name.to_string(),
+            value.shape().dims().to_vec(),
+            value.dtype(),
+            "Local",
+        );
     }
 
     let manifest_path = dir.join("manifest.json");
@@ -424,10 +353,6 @@ where
     B: Backend + Execute<op::TensorFromBytes>,
     M: StateDict<B>,
     P: AsRef<Path>,
-    B: SupportsDType<f32>,
-    <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
-    <f32 as DType>::Field: Default,
-    <B as Execute<op::TensorFromBytes>>::Output: Into<B::Storage<f32>>,
 {
     let dir = dir_path.as_ref();
     let manifest_path = dir.join("manifest.json");
@@ -441,33 +366,27 @@ where
     }
 
     let weights_path = dir.join("model.safetensors");
-    let raw_bytes = std::fs::read(&weights_path)
-        .map_err(|e| Error::Msg(format!("Failed to read safetensors weights: {}", e)))?;
-    let st = safetensors::SafeTensors::deserialize(&raw_bytes)
-        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {:?}", e)))?;
+    let checkpoint = crate::serialize::deserialize_snapshot_safetensors(&weights_path)
+        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))?;
+    let current = module.state_dict()?;
+    let mut resharded = crate::nn::StateSnapshot::new();
 
-    let mut current_dict = BTreeMap::new();
-    module.state_dict("", &mut current_dict);
-
-    let mut resharded_tensors = BTreeMap::new();
-
-    for (name, current_param) in current_dict {
-        let st_view = st.tensor(&name).map_err(|e| {
+    for (name, current_value) in current.iter() {
+        let st_value = checkpoint.get(name).ok_or_else(|| {
             Error::Msg(format!(
                 "Parameter {} missing from checkpoint safetensors: {:?}",
-                name, e
+                name, "missing"
             ))
         })?;
 
         let meta = manifest
             .tensors
-            .get(&name)
+            .get(name.as_str())
             .ok_or_else(|| Error::Msg(format!("Parameter {} missing from manifest", name)))?;
 
-        let global_shape = st_view.shape().to_vec();
-        let target_shape = B::shape::<f32>(current_param.inner());
-        let target_shape = target_shape.as_ref();
-        let bytes = st_view.data();
+        let global_shape = st_value.shape().dims().to_vec();
+        let target_shape = current_value.shape().dims();
+        let bytes = st_value.bytes();
         let dtype_desc = meta.dtype;
 
         let (final_bytes, final_shape) = if global_shape == target_shape {
@@ -514,36 +433,18 @@ where
             )));
         }
 
-        let expected =
-            ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&final_shape)).map_err(Error::Shape)?;
-        let context = ExecutionContext::from_scope(B::default())
-            .with_grad_mode(crate::exec::GradMode::Disabled);
-        let storage = dispatch::execute_shaped_with_payload::<op::TensorFromBytes, B, Dyn>(
-            &context,
-            DataAttributes {
-                shape: final_shape.clone(),
-                dtype: dtype_desc,
-                device: DeviceId::cpu(),
-                payload: CreationPayload::Bytes {
-                    byte_len: final_bytes.len(),
-                },
-            },
-            &[],
-            &expected,
-            Some(&final_bytes),
-        )?
-        .into();
-        let tensor = Tensor::<Dyn, B>::from_parts(
-            storage,
+        let path = crate::nn::StatePath::new(name.as_str())
+            .map_err(|e| Error::Msg(format!("Invalid checkpoint path {}: {}", name, e)))?;
+        let value = crate::nn::StateValue::new(
             ShapeBuf::from_slice(&final_shape),
-            Default::default(),
-            Default::default(),
-            core::marker::PhantomData,
+            dtype_desc,
+            final_bytes,
+            st_value.role(),
         )?;
-        resharded_tensors.insert(name, tensor);
+        resharded.insert(path, value)?;
     }
 
-    module.load_state_dict("", &resharded_tensors)?;
+    module.load_state_dict(&resharded)?;
     Ok(())
 }
 
