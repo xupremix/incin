@@ -331,14 +331,14 @@ never more.
 
 `.zeros(...)`/`.ones(...)`/`.rand(...)`/`.randn(...)` are the ordinary public
 path and use exact descriptor execution bounds. The `_canonical` constructors
-are experimental lower-level entry points for descriptor-oriented work and
+are lower-level entry points for descriptor-oriented work and
 are available only where a `CanonicalOperation` bound is satisfied (today:
 CPU). Prefer the ordinary forms for application code.
 
 `TensorTarget`/`DtypeTarget` extend the same idea to data-carrying and
 dtype-rebinding constructors — `gpu.tensor([[1.0, 2.0]])`,
 `gpu.with_float::<f64>().zeros(...)`. This whole surface is marked
-**experimental** in the prelude comment (`crates/incin/src/lib.rs:496`) — it
+feature-gated in the prelude comment (`crates/incin/src/lib.rs:496`) — it
 is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 
 ## 8. Backends and how to author one

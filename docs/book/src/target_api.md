@@ -1,7 +1,8 @@
 # The target API and canonical dispatch
 
-Feature `target-api`. This chapter covers an experimental, opt-in surface —
-real and tested, but not yet the stable default the rest of this book uses.
+Feature `target-api`. This is the preferred application-facing allocation
+surface when the feature is enabled. Explicit `Tensor::<S, B>::...` constructors
+remain the backend-authoring form for code that intentionally fixes `B`.
 
 ## Allocation targets
 
@@ -27,13 +28,12 @@ earns — never more than what's actually known.
 
 ## Why this exists: the allocation-target UX
 
-The target methods are an opt-in ergonomic experiment around the validated
+The target methods are an opt-in ergonomic surface around the validated
 descriptor execution architecture. Stable tensor operations already use the
-single descriptor path; the old operation-family traits remain only as
-backend-local compatibility adapters and are not a second user-facing model.
+single descriptor path.
 The allocation methods above (`zeros`, `ones`, `rand`, `randn`, and their
 `_canonical`-suffixed siblings) expose the target-shaped spelling while that
-surface remains experimental.
+surface is feature-gated and available where the target backend is enabled.
 
 The type-level shape (`s![2, 3]` vs `Dyn`) isn't just documentation on this
 path — a backend can specialize on it. The CPU creation family reads
@@ -68,10 +68,6 @@ inventing a new cross-backend conversion this method didn't need.
 
 ## Should you reach for this?
 
-Not by default. Everything in this chapter is marked experimental for a
-reason — the ordinary `Tensor` methods used throughout the rest of this book
-are the stable, documented surface. Reach for the target API when you
-specifically want an allocation-target-style call site (`Cpu.zeros(...)`
-instead of `Tensor::<S, B>::zeros(...)`), or when you're working on the
-framework itself and want to route through the validated, capability-checked
-path on purpose.
+For application code, prefer the allocation-target spelling (`Cpu.zeros(...)`)
+when `target-api` is enabled. Use `Tensor::<S, B>::zeros(...)` when writing
+backend-generic or backend-authoring code that intentionally fixes `B`.
