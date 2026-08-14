@@ -215,6 +215,29 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
 
 }
 
+impl<D: Device> incin_core::backend_authoring::HostReadback for WgpuBackendImpl<D> {
+    fn float_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<f64>> {
+        let t: &WgpuStorage = t;
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
+        Ok(data.iter().map(|&x| x as f64).collect())
+    }
+
+    fn int_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<i64>> {
+        let t: &WgpuStorage = t;
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
+        data.into_iter()
+            .map(|value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.dtype,
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
+    }
+}
+
 impl<D: Device> incin_core::backend_authoring::HostInterop for WgpuBackendImpl<D> {
     /// `to_bytes`.
         fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {

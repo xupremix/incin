@@ -1297,7 +1297,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "metal")]
             DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::float_to_vec1::<K>(value)
+                <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
             }
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
@@ -1339,7 +1339,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "metal")]
             DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::int_to_vec1::<K>(value)
+                <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
             }
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }

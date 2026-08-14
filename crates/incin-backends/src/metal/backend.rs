@@ -165,6 +165,27 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
 
 }
 
+impl<D: Device> incin_core::backend_authoring::HostReadback for MetalBackendImpl<D> {
+    fn float_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<f64>> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        Ok(data.iter().map(|&x| x as f64).collect())
+    }
+
+    fn int_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<i64>> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        data.iter()
+            .map(|&value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.metadata().dtype(),
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
+    }
+}
+
 impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<D> {
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
             t.as_bytes().map(<[u8]>::to_vec)
