@@ -287,6 +287,28 @@ pub(crate) fn pad_storage(
     Ok(CpuStorage::from_contiguous(buffer, out_shape))
 }
 
+pub(crate) fn lerp_storage(
+    start: &CpuStorage,
+    end: &CpuStorage,
+    weight: f64,
+) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&start.shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; start.shape.len()];
+    for _ in 0..total {
+        let start_value = start.get(&idx);
+        let end_value = end.get(&idx);
+        out.push(start_value + weight * (end_value - start_value));
+        if !start.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &start.shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        start.buffer.from_f64_values(out)?,
+        start.shape.to_vec(),
+    ))
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -1275,21 +1297,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         end: &<Self as StorageBackend>::Storage<K>,
         weight: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(start.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; start.shape.len()];
-        for _ in 0..total {
-            let s = start.get(&idx);
-            let e = end.get(&idx);
-            out.push(s + weight * (e - s));
-            if !start.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &start.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            start.buffer.from_f64_values(out)?,
-            start.shape.to_vec(),
-        ))
+        lerp_storage(start, end, weight)
     }
 
     fn addmm<K: DType>(

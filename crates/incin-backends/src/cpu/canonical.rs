@@ -43,8 +43,8 @@ use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_imp
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
-    int_to_vec1_storage, masked_fill_storage, narrow_storage, pad_storage, repeat_storage,
-    squeeze_storage, sub_scalar_storage, transpose_storage,
+    int_to_vec1_storage, lerp_storage, masked_fill_storage, narrow_storage, pad_storage,
+    repeat_storage, squeeze_storage, sub_scalar_storage, transpose_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
@@ -1970,7 +1970,7 @@ impl<D: Device> Execute<op::Lerp> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let weight = request.operation.descriptor().attributes().weight;
-        <Self as TensorOps<Self>>::lerp::<f32>(start, end, weight)
+        lerp_storage(start, end, weight)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
