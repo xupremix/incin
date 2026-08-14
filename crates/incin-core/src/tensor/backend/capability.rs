@@ -69,14 +69,15 @@ pub trait HostInterop: StorageBackend {
     ) -> Result<Self::Storage<K>>;
 }
 
-/// Explicit capability marker for backends that can move storage or
-/// variables to `NewD`. `TransferTo` remains the method-bearing compatibility
-/// contract used by existing implementations.
-pub trait TransferBackend<NewD: crate::tensor::device::Device>: super::TransferTo<NewD> {}
+/// Explicit capability marker for backends that can move tensor storage to
+/// `NewD`. This marker deliberately does not require variable ownership or
+/// training capabilities; inference-only backends can implement it through
+/// [`super::StorageTransfer`].
+pub trait TransferBackend<NewD: crate::tensor::device::Device>: super::StorageTransfer<NewD> {}
 
 impl<B, NewD> TransferBackend<NewD> for B
 where
-    B: super::TransferTo<NewD>,
+    B: super::StorageTransfer<NewD>,
     NewD: crate::tensor::device::Device,
 {
 }
