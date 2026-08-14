@@ -22,6 +22,9 @@ check_absent "internal wildcard preludes" \
 check_absent "tensor depends upward on nn" \
     'crate::nn::|incin_core::nn::' \
     crates/incin-core/src/tensor
+check_absent "shape proof depends upward on execution" \
+    'crate::exec::ProofLevel' \
+    crates/incin-core/src/shapes
 check_absent "autoref module traversal" \
     'Autoref|&&self\.|&mut &mut' \
     crates/incin-core/src/nn/module.rs crates/incin-core/src/nn/module_optional.rs \

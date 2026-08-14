@@ -380,9 +380,9 @@ until a value exists. A `Var`/`RawVar` (backend-associated) is the tape-linked
 form a `Param` in a module holds. `GradMode::Disabled.scope(|| { ... })`
 scopes gradient recording off for a closure; `ExecutionContext::with_grad_mode` is the
 descriptor-path equivalent §6's `dispatch::execute` reads to build a
-`CapabilityQuery`'s `training` flag — the same policy, read from the same
-place, whichever path a given operation takes, so the two paths cannot
-disagree about whether a call is a training call.
+`CapabilityQuery`'s `training` flag. Tensor methods and descriptor lowering
+therefore consult the same execution policy; they are API spellings over the
+same canonical operation contract, not competing kernel paths.
 
 `Tensor::backward()` walks the tape and returns `Gradients`;
 `Backend::get_grad::<K>(&tensor, &grads)` reads one tensor's gradient back
@@ -527,10 +527,11 @@ queued.
    `Backend`, bounding each stable tensor method by only the capability it
    uses. This is source-breaking for backend implementations and remains the
    principal handoff item.
-5. Delete the broad family capability rows, the grouped
-   `Execute<MatMulSpec>` adapters, the `cpu::canonical` compatibility adapter,
-   and the `the_migration_is_recorded_as_incomplete` test — each exists only
-   to keep the dual architecture honest while it is dual.
+5. Retire the remaining broad family capability rows and compatibility
+   adapters once their backend-local replacements are complete, including the
+   grouped `Execute<MatMulSpec>` adapters and the
+   `the_migration_is_recorded_as_incomplete` test. These are tracked migration
+   seams, not a second execution model.
 
 **Smaller, additive threads also open**, none of them source-breaking:
 

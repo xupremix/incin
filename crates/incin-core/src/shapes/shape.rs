@@ -53,16 +53,16 @@ pub trait Shape:
     ///
     /// This is the shape-level lift of `Dim::STATIC_SIZE`: rank and every
     /// axis size known from the type gives
-    /// [`ProofLevel::Static`](crate::exec::ProofLevel::Static); a known rank
+    /// [`ProofLevel::Static`](crate::shapes::ProofLevel::Static); a known rank
     /// with at least one runtime or named axis gives
-    /// [`Mixed`](crate::exec::ProofLevel::Mixed); a runtime rank gives
-    /// [`Dynamic`](crate::exec::ProofLevel::Dynamic).
+    /// [`Mixed`](crate::shapes::ProofLevel::Mixed); a runtime rank gives
+    /// [`Dynamic`](crate::shapes::ProofLevel::Dynamic).
     ///
     /// A lowering rule reads this to stamp the `Validated<O>` it produces
     /// without knowing which concrete shape it was handed. It defaults to
     /// `Dynamic` so a `Shape` implemented outside this crate is credited with
     /// no proof it has not shown.
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Dynamic;
+    const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Dynamic;
 
     /// This shape's element count, when the type alone settles it.
     ///
@@ -111,7 +111,7 @@ pub struct Nil;
 
 impl Shape for Nil {
     const RANK: Option<usize> = Some(0);
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Static;
+    const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Static;
     const STATIC_NUMEL: Option<usize> = Some(1);
     type Arg = ();
     #[inline(always)]
@@ -147,9 +147,9 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
         Some(rank) => Some(rank + 1),
         None => None,
     };
-    const PROOF: crate::exec::ProofLevel = match (H::STATIC_SIZE, T::PROOF) {
-        (true, crate::exec::ProofLevel::Static) => crate::exec::ProofLevel::Static,
-        _ => crate::exec::ProofLevel::Mixed,
+    const PROOF: crate::shapes::ProofLevel = match (H::STATIC_SIZE, T::PROOF) {
+        (true, crate::shapes::ProofLevel::Static) => crate::shapes::ProofLevel::Static,
+        _ => crate::shapes::ProofLevel::Mixed,
     };
 
     const STATIC_NUMEL: Option<usize> = match (H::STATIC, T::STATIC_NUMEL) {
@@ -642,7 +642,7 @@ where
 
 impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Ranked<R> {
     const RANK: Option<usize> = Some(R::USIZE);
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
+    const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Mixed;
     const STATIC_NUMEL: Option<usize> = if R::USIZE == 0 { Some(1) } else { None };
     type Arg = crate::shapes::ShapeBuf;
     fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
@@ -870,7 +870,7 @@ impl<S: Shape> ShapeValue<S> {
     }
 
     #[inline]
-    pub fn proof_level(&self) -> crate::exec::ProofLevel {
+    pub fn proof_level(&self) -> crate::shapes::ProofLevel {
         S::PROOF
     }
 
@@ -1055,7 +1055,7 @@ impl Shape for Dyn {
     /// Not even the rank is known until the shape exists, which is the whole
     /// point of `Dyn`. Stated rather than inherited from the default so that
     /// changing the default cannot silently upgrade it.
-    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Dynamic;
+    const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Dynamic;
 
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = Vec<usize>;

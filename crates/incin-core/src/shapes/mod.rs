@@ -29,6 +29,8 @@ pub mod error;
 pub mod idx;
 /// `named`.
 pub mod named;
+/// Shape proof strength.
+pub mod proof;
 /// `reshape`.
 pub mod reshape;
 /// `shape`.
@@ -47,6 +49,7 @@ pub use dim::*;
 pub use error::*;
 pub use idx::*;
 pub use named::*;
+pub use proof::*;
 pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
@@ -68,8 +71,6 @@ pub mod prelude {
     pub use super::shape_ops::*;
     pub use super::spatial::*;
     pub use super::stack::*;
-    pub use crate::exec::{AxisSet, RankSupport};
-    pub use crate::tensor::matmul::{StaticDim, StaticOrNamedDim};
 }
 
 pub(crate) mod projection;

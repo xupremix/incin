@@ -627,8 +627,6 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
     }
 }
 
-use crate::exec::ProofLevel::Static;
-
 impl Dim for UTerm {
     type KeepDim = typenum::U1;
     /// Zero, which is a real extent and not a missing one.

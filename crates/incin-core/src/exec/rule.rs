@@ -6,7 +6,8 @@
 use super::catalog::{
     AxisAttributes, Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op,
 };
-use super::proof::{ProofLevel, Validated};
+use super::proof::Validated;
+use crate::shapes::ProofLevel;
 use super::spec::ExecutionDescriptor;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};

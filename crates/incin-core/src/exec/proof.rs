@@ -26,42 +26,11 @@
 //! in by a caller. This matters: a caller who could assert `Static` for a
 //! runtime shape would be handing kernels a constant that does not exist.
 
-use crate::shapes::shape::Shape;
+use crate::shapes::{ProofLevel, Shape};
 use core::fmt;
 
 #[cfg(feature = "paranoid-validation")]
 use crate::shapes::error::ShapeError;
-
-/// How much of an operation's legality the compiler settled.
-///
-/// The variants are ordered from strongest to weakest, and [`meet`] combines
-/// two operands by taking the weaker — an operation is only as proved as its
-/// least-proved input.
-///
-/// [`meet`]: ProofLevel::meet
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum ProofLevel {
-    /// Rank and every semantic dimension constraint came from type-level data.
-    ///
-    /// Nothing about the geometry was read from a runtime value, so a backend
-    /// may specialize on it: bake extents into a kernel, unroll a loop, pick a
-    /// tile size at compile time.
-    Static,
-
-    /// Structure is typed, but named or dynamic dimensions were checked once.
-    ///
-    /// The rank and the *relationships* between axes are compile-time facts;
-    /// the sizes are not. A backend can trust the geometry without re-deriving
-    /// it, but must read the extents from the descriptor rather than assuming
-    /// them.
-    Mixed,
-
-    /// Rank and all semantic dimensions were checked at runtime.
-    ///
-    /// The check still happened — a `Dynamic` descriptor is validated, not
-    /// unvalidated — but nothing about it was known before the data existed.
-    Dynamic,
-}
 
 /// Runtime evidence lowered from a typed frontend proof.
 ///
@@ -105,91 +74,6 @@ impl ShapeEvidence {
     #[must_use]
     pub const fn static_numel(self) -> Option<usize> {
         self.static_numel
-    }
-}
-
-impl ProofLevel {
-    /// The proof carried by shape `S`.
-    ///
-    /// Reads `Shape::PROOF`, which is folded from each axis's
-    /// `Dim::STATIC_SIZE`.
-    ///
-    /// `PROPOSALS.md` §1.2.1 sketches this as `ProofLevel::of::<L, R>()`, for
-    /// two operands. It is one operand here, combined with [`meet`], because
-    /// convolution lowers three (input, weight, bias) and a binary-only form
-    /// has nowhere to put the third. The two-operand call in the RFC is
-    /// `ProofLevel::of::<L>().meet(ProofLevel::of::<R>())`.
-    ///
-    /// [`meet`]: ProofLevel::meet
-    #[must_use]
-    pub const fn of<S: Shape>() -> Self {
-        S::PROOF
-    }
-
-    /// The weaker of two proofs.
-    ///
-    /// An operation combining a `Static` operand with a `Mixed` one is
-    /// `Mixed`: the runtime extent is present in the result regardless of how
-    /// well the other side is known. This makes [`ProofLevel`] a meet
-    /// semilattice with `Static` as its top, so folding over any number of
-    /// operands is order-independent.
-    #[must_use]
-    pub const fn meet(self, other: Self) -> Self {
-        // `Ord` derives from declaration order, strongest first, so the weaker
-        // proof is the numerically greater one.
-        if (self as u8) >= (other as u8) {
-            self
-        } else {
-            other
-        }
-    }
-
-    /// The level for a shape of known rank, given whether every axis is
-    /// statically sized.
-    ///
-    /// Exists because one `Shape` impl covers every tuple of a given arity —
-    /// `(U2, U3)` and `(U2, usize)` share it — so the tuple's `PROOF` has to
-    /// be a fold over its axes rather than a literal. Called from the shape
-    /// macros; not useful directly.
-    #[doc(hidden)]
-    #[must_use]
-    pub const fn of_ranked(all_axes_static: bool) -> Self {
-        if all_axes_static {
-            Self::Static
-        } else {
-            Self::Mixed
-        }
-    }
-
-    /// Whether the geometry is entirely a compile-time constant.
-    ///
-    /// The question a specializing backend asks before baking extents into a
-    /// kernel.
-    #[must_use]
-    pub const fn is_static(self) -> bool {
-        matches!(self, Self::Static)
-    }
-
-    /// Whether the rank was known before the data existed.
-    ///
-    /// True for both [`Static`](Self::Static) and [`Mixed`](Self::Mixed). A
-    /// backend that can pick an iteration strategy from rank alone — most
-    /// pointwise kernels — needs this rather than [`is_static`].
-    ///
-    /// [`is_static`]: Self::is_static
-    #[must_use]
-    pub const fn has_static_rank(self) -> bool {
-        !matches!(self, Self::Dynamic)
-    }
-}
-
-impl fmt::Display for ProofLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Static => "static",
-            Self::Mixed => "mixed",
-            Self::Dynamic => "dynamic",
-        })
     }
 }
 
