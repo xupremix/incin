@@ -3,8 +3,8 @@
 Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
 
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
-Last verified command: cargo test -p incin-core --test checkpoint_reshard --no-default-features --features std -- --test-threads=1
-Last verified result: PASS (5 tests)
+Last verified command: cargo test -p incin -- --test-threads=1
+Last verified result: PASS (full incin suite, including state/checkpoint, optimizer, and doctests)
 Next concrete action: complete the validation matrix and keep optimizer persistence and the full typed variable-backend migration explicitly deferred.
 
 Status vocabulary:
