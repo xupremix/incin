@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(reduced.to_scalar::<f32>().unwrap(), 4.0);
 
         let transferred =
-            <Tensor<Dyn, B, Dyn> as incin_core::nn::module::ToDevice<B, Dyn>>::to_device(
+            <Tensor<Dyn, B, Dyn> as incin_core::tensor::transfer::ToDevice<B, Dyn>>::to_device(
                 tensor,
                 &DeviceId::cpu(),
             )
@@ -238,7 +238,7 @@ mod tests {
             Tensor::<Dyn, B, Dyn, Grad>::ones(([1], DTypeId::F32.descriptor(), DeviceId::cpu()))
                 .unwrap();
         let transferred =
-            <Tensor<Dyn, B, Dyn, Grad> as incin_core::nn::module::ToDevice<B, Dyn>>::to_device(
+            <Tensor<Dyn, B, Dyn, Grad> as incin_core::tensor::transfer::ToDevice<B, Dyn>>::to_device(
                 tensor,
                 &DeviceId::cpu(),
             )
@@ -270,7 +270,7 @@ mod tests {
         type Target = crate::IncinBackend<Dyn>;
         let tensor = Tensor::<Dyn, Source>::from_slice(&[1.0f32, 2.0, 3.0], [3]).unwrap();
         let transferred =
-            <Tensor<Dyn, Source> as incin_core::nn::module::ToDevice<Source, Dyn>>::to_device(
+            <Tensor<Dyn, Source> as incin_core::tensor::transfer::ToDevice<Source, Dyn>>::to_device(
                 tensor,
                 &DeviceId::cpu(),
             )
