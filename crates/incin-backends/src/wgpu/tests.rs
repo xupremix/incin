@@ -2,6 +2,7 @@
 
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use crate::wgpu::{WgpuBackendImpl, WgpuVar};
+use crate::legacy::OptimizerOps;
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::*;

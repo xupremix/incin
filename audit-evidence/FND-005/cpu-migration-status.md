@@ -197,4 +197,4 @@ These are not pending migrations. Each one needs a change to `Execute`/`Executio
 | `lstm` | `Composed` | the frontend composition owns the execution semantics | `LSTM::forward` |
 | `sgd_step` | `Mutation` | writes through an operand; execution borrows operands shared | `SGD::step` |
 | `adam_step` | `Mutation` | writes through an operand; execution borrows operands shared | `Adam::step` |
-| `adamw_step` | `Mutation` | writes through an operand; execution borrows operands shared | `OptimizerOps::adamw_step` |
+| `adamw_step` | `Mutation` | writes through an operand; execution borrows operands shared | `AdamW::step` |

@@ -28,7 +28,6 @@ const OPERATION_TRAITS: &[&str] = &[
     "ModuleOps",
     "LossOps",
     "QuantizedOps",
-    "OptimizerOps",
 ];
 
 fn repo_root() -> PathBuf {
@@ -47,7 +46,7 @@ fn declared_trait_methods(source: &str) -> BTreeMap<String, Vec<String>> {
         let needle = format!("pub trait {name}");
         let start = source
             .find(&needle)
-            .unwrap_or_else(|| panic!("{name} is no longer declared in tensor/backend.rs"));
+            .unwrap_or_else(|| panic!("{name} is no longer declared in tensor/backend/legacy.rs"));
         let open = start + source[start..].find('{').expect("trait body");
         let mut depth = 0usize;
         let mut end = open;
@@ -108,9 +107,10 @@ fn catalog_trait_sources() -> BTreeMap<String, &'static str> {
 
 #[test]
 fn every_legacy_operation_method_has_exactly_one_catalog_row() {
-    let source =
-        std::fs::read_to_string(repo_root().join("crates/incin-core/src/tensor/backend.rs"))
-            .expect("tensor/backend.rs is readable");
+    let source = std::fs::read_to_string(
+        repo_root().join("crates/incin-core/src/tensor/backend/legacy.rs"),
+    )
+    .expect("tensor/backend/legacy.rs is readable");
     let declared = declared_trait_methods(&source);
     let mapped = catalog_trait_sources();
 

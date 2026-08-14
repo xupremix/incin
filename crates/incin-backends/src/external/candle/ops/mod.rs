@@ -8,7 +8,6 @@ mod float;
 mod loss;
 mod module;
 mod numeric;
-mod optimizer;
 mod quant;
 mod reduce;
 mod tensor;

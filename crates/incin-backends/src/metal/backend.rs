@@ -13,6 +13,7 @@ use incin_core::prelude::{
 
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
+use crate::legacy::OptimizerOps;
 
 /// Metal compute backend implementation for Incin.
 #[derive(Clone)]

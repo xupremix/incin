@@ -1,17 +1,17 @@
-//! Legacy optimizer adapter kept behind `__backend_compat::legacy`.
+//! Backend-local compatibility helpers that have not yet moved to descriptors.
+//!
+//! This module is deliberately crate-private. It is not part of the backend
+//! authoring contract; new implementations should use exact `Execute<O>`
+//! descriptors. AdamW remains here because its mutation execution site is not
+//! representable by the current `Execute` output contract.
 
-use super::{Backend, VariableBackend, legacy::{FloatOps, NumericOps}};
-use crate::err::Result;
-use crate::tensor::dtype::DType;
+use incin_core::__backend_compat::legacy::{FloatOps, NumericOps};
+use incin_core::backend_authoring::VariableBackend;
+use incin_core::prelude::{DType, Result};
 
-/// In-place AdamW update rules for backend-local optimizer adapters.
-///
-/// Stable tensor execution does not depend on this family trait. New backend
-/// work should implement the exact optimizer descriptor instead.
-pub trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
-    /// Applies one AdamW step, using the composed fallback when not fused.
+pub(crate) trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
     fn adamw_step<K: DType>(
-        var: &mut <B as crate::tensor::backend::VariableBackend>::RawVar,
+        var: &mut B::RawVar,
         grad: &B::Storage<K>,
         m: &mut B::Storage<K>,
         v: &mut B::Storage<K>,
@@ -22,14 +22,15 @@ pub trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
         weight_decay: f64,
         step: usize,
     ) -> Result<()> {
-        adamw_step_composed::<B, K>(var, grad, m, v, lr, beta1, beta2, eps, weight_decay, step)
+        adamw_step_composed::<B, K>(
+            var, grad, m, v, lr, beta1, beta2, eps, weight_decay, step,
+        )
     }
 }
 
-/// Composed AdamW fallback for backend-local adapters.
 #[allow(clippy::too_many_arguments)]
-pub fn adamw_step_composed<B: VariableBackend + NumericOps<B> + FloatOps<B>, K: DType>(
-    var: &mut <B as crate::tensor::backend::VariableBackend>::RawVar,
+pub(crate) fn adamw_step_composed<B: VariableBackend + NumericOps<B> + FloatOps<B>, K: DType>(
+    var: &mut B::RawVar,
     grad: &B::Storage<K>,
     m: &mut B::Storage<K>,
     v: &mut B::Storage<K>,

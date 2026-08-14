@@ -188,7 +188,7 @@ macro_rules! incin_operation_catalog {
             (QuantizedMatMul, "quantized_matmul", Reduction, Quantized, NoAttributes, 2, 2, "QuantizedOps::quantized_matmul"),
             (SgdStep, "sgd_step", Pointwise, Optimizer, SgdAttributes, 2, 2, "SGD::step"),
             (AdamStep, "adam_step", Pointwise, Optimizer, AdamAttributes, 4, 4, "Adam::step"),
-            (AdamWStep, "adamw_step", Pointwise, Optimizer, AdamWAttributes, 4, 4, "OptimizerOps::adamw_step"),
+            (AdamWStep, "adamw_step", Pointwise, Optimizer, AdamWAttributes, 4, 4, "AdamW::step"),
         }
     };
 }

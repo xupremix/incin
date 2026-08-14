@@ -15,7 +15,6 @@ mod variable;
 pub use variable::VariableBackend;
 mod capability;
 pub use capability::{HostInterop, TransferBackend};
-mod optimizer;
 pub mod legacy;
 use legacy::TensorOps;
 pub mod dummy {

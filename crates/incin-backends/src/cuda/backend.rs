@@ -7,6 +7,7 @@ use incin_core::prelude::{
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
 };
 use half::{bf16, f16};
+use crate::legacy::OptimizerOps;
 
 /// CUDA compute backend implementation for Incin.
 #[derive(Clone)]

@@ -138,8 +138,8 @@ pub mod backend_authoring {
 pub mod __backend_compat {
     pub mod legacy {
         pub use crate::tensor::backend::legacy::{
-            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
-            ReductionOps, TensorOps, adamw_step_composed,
+            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps,
+            TensorOps,
         };
     }
 }

@@ -38,8 +38,8 @@ The save helpers remain listed because code following this book needs the
 ## Architecture in progress (affects contributors more than users)
 
 - **Backend migration is still in progress.** Ordinary tensor operations use
-  the per-operation descriptor execution path. The nine broad operation-family
-  traits remain only as hidden compatibility adapters for backend
+  the per-operation descriptor execution path. The eight remaining broad
+  operation-family traits remain only as hidden compatibility adapters for backend
   implementations, tracing, and tests; they are not a second application
   execution path. The remaining work is extracting their last backend-facing
   responsibilities from `Backend`.

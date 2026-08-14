@@ -1427,4 +1427,3 @@ use super::*;
             Ok(alloc::vec![])
         }
     }
-    impl<D: Device + Clone + 'static> OptimizerOps<Self> for DummyBackend<D> {}

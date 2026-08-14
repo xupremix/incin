@@ -7,6 +7,7 @@ use incin_core::prelude::{
     OperationKind, QuantDType, Result, ShapeBuf, StorageBackend, SupportsDType, bf16, f16,
 };
 use alloc::{string::String, vec::Vec};
+use crate::legacy::OptimizerOps;
 
 #[cfg(feature = "cpu")]
 use incin_core::prelude::Cpu;

@@ -6,7 +6,7 @@ Each row is one exact executable identity. Families classify rows and never impl
 
 Total exact operations: 174
 
-Legacy operation-family trait methods with a reviewed descriptor mapping: 142
+Legacy operation-family trait methods with a reviewed descriptor mapping: 141
 
 | Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
 |---|---|---|---|---|---|---|---|
@@ -183,4 +183,4 @@ Legacy operation-family trait methods with a reviewed descriptor mapping: 142
 | `quantized_matmul` | `Reduction` | `Quantized` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | 2-2 | 1-1 | `QuantizedOps::quantized_matmul` |
 | `sgd_step` | `Pointwise` | `Optimizer` | `Descriptor<op::SgdStep>` | `SgdAttributes` | 2-2 | 1-1 | `SGD::step` |
 | `adam_step` | `Pointwise` | `Optimizer` | `Descriptor<op::AdamStep>` | `AdamAttributes` | 4-4 | 3-3 | `Adam::step` |
-| `adamw_step` | `Pointwise` | `Optimizer` | `Descriptor<op::AdamWStep>` | `AdamWAttributes` | 4-4 | 3-3 | `OptimizerOps::adamw_step` |
+| `adamw_step` | `Pointwise` | `Optimizer` | `Descriptor<op::AdamWStep>` | `AdamWAttributes` | 4-4 | 3-3 | `AdamW::step` |
