@@ -4,7 +4,8 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Parameters, TrainMode};
-use crate::prelude::*;
+use crate::prelude::{Backend, Device, DType, DynShape, Error, Result, Shape, Tensor};
+use alloc::string::String;
 use crate::tensor::backend::Execute;
 
 use typenum::Unsigned;

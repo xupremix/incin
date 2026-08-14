@@ -1,6 +1,7 @@
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::{Module, Param};
-use crate::prelude::*;
+use crate::prelude::{Backend, Device, DType, Dim, DynShape, Error, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor, Dyn};
+use alloc::string::String;
 use crate::shapes::idx::{FromEnd, Here};
 use crate::shapes::shape_ops::ReduceKeepAt;
 use crate::tensor::backend::Execute;

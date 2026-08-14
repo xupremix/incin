@@ -4,7 +4,8 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Buffer, Module, Param};
-use crate::prelude::*;
+use crate::prelude::{Backend, Device, DType, Dim, Dyn, DynShape, Error, HasChannels2D, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use alloc::string::String;
 use crate::tensor::backend::Execute;
 
 use core::marker::PhantomData;

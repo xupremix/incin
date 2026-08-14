@@ -1,7 +1,8 @@
 use crate::backend_authoring::TensorBackend;
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
-use crate::prelude::*;
+use crate::prelude::{Backend, ComputeStats, Device, DType, Dim, DimCons, Dyn, DynShape, Error, Frozen, GradJoin, JoinedGrad, LayerStats, Nil, Param, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor, TrainState, Trainable};
+use alloc::string::String;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;

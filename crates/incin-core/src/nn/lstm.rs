@@ -3,9 +3,10 @@ use crate::nn::init::Init;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, Parameters};
-use crate::prelude::*;
+use crate::prelude::{AppendDim, Backend, ConstDType, Device, DType, Dim, Dyn, DynShape, Error, Grad, GradJoin, JoinedGrad, LinearShape, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
 use crate::shapes::shape::{DimCons, Nil};
 use crate::tensor::backend::Execute;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 type D2<A, B> = DimCons<A, DimCons<B, Nil>>;
