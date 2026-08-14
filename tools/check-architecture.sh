@@ -29,6 +29,9 @@ check_absent "autoref module traversal" \
     'Autoref|&&self\.|&mut &mut' \
     crates/incin-core/src/nn/module.rs crates/incin-core/src/nn/module_optional.rs \
     crates/incin-macros/src/module.rs
+check_absent "legacy erased variable contract" \
+    '\bRawVar\b' crates/incin-core/src crates/incin-backends/src crates/incin-macros/src \
+    --glob '*.rs'
 check_absent "crate-wide core warning suppressions" \
     '^#!\[allow\((dead_code|unused_imports)\)\]' crates/incin-core/src/lib.rs
 if sed -n '/^pub trait Backend:/,/^}/p' crates/incin-core/src/tensor/backend.rs | rg -n 'HostInterop|AutogradBackend'; then
