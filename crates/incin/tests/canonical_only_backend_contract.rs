@@ -24,7 +24,7 @@ pub struct CanonicalStorage<K: DType> {
     _phantom: core::marker::PhantomData<K>,
 }
 
-impl<K: DType> incin_core::tensor::backend::StorageOutput for CanonicalStorage<K> {}
+impl<K: DType> incin_core::backend_authoring::StorageOutput for CanonicalStorage<K> {}
 
 impl StorageBackend for CanonicalOnlyBackend {
     const BACKEND_NAME: &'static str = "CanonicalOnlyBackend";

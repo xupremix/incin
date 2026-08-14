@@ -19,6 +19,16 @@ if rg -n 'pub use crate::tensor::backend::[^;]*(FloatOps|NumericOps|TensorOps|Cr
     exit 1
 fi
 
+if ! rg -q '^pub\(crate\) mod backend;' crates/incin-core/src/tensor/mod.rs; then
+    echo "public API check failed: tensor backend module is public" >&2
+    exit 1
+fi
+
+if rg -n 'incin_core::tensor::backend' crates/incin-backends crates/incin --glob '*.rs'; then
+    echo "public API check failed: external crate uses private tensor backend path" >&2
+    exit 1
+fi
+
 for capability in HostInterop VariableBackend AutogradBackend TransferBackend; do
     if ! rg -q "\\b${capability}\\b" crates/incin-core/src/lib.rs crates/incin/src/lib.rs; then
         echo "public API check failed: missing named capability ${capability}" >&2

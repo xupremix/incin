@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::tensor::backend::ModuleOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::ModuleOps<Self>
     for CandleBackend<D>
 {
     /// Candle has no native adaptive pooling; returns an error

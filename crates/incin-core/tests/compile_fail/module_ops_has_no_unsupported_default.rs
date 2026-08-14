@@ -9,7 +9,7 @@
 //! a missing operation belongs.
 
 use incin_core::backend_authoring::Backend;
-use incin_core::tensor::backend::ModuleOps;
+use incin_core::backend_authoring::legacy::ModuleOps;
 
 struct Incomplete<B>(core::marker::PhantomData<B>);
 

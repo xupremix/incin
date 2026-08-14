@@ -13,7 +13,7 @@ use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::exec::catalog::op;
 use incin_core::nn::param::ParameterInit;
-use incin_core::tensor::backend::Execute;
+use incin_core::backend_authoring::Execute;
 
 /// The CPU backend type alias.
 type NB = CpuBackendImpl;
@@ -58,7 +58,7 @@ impl<
     B: Backend
         + Execute<op::TransposeExact>
         + Execute<op::ReshapeExact>
-        + incin_core::tensor::backend::Execute<op::MatMulExact>
+        + incin_core::backend_authoring::Execute<op::MatMulExact>
         + Execute<op::Add>
         + Execute<op::Relu>
         + Execute<op::Conv2dExact>

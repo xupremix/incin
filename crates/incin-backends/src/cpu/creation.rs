@@ -11,7 +11,7 @@ use incin_core::prelude::{
     Error, FloatToIntPolicy, OperationKind, Result, StorageBackend, TransferTo,
     convert_f64_to_i64,
 };
-use incin_core::tensor::backend::CreationOps;
+use incin_core::backend_authoring::legacy::CreationOps;
 #[allow(unused_imports)]
 use rand::Rng;
 #[allow(unused_imports)]

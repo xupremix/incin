@@ -32,7 +32,7 @@ use incin_core::exec::ReduceOp;
 use incin_core::prelude::{
     DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor,
 };
-use incin_core::tensor::backend::TensorOps;
+use incin_core::backend_authoring::legacy::TensorOps;
 
 use crate::cuda::backend::CudaBackendImpl;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};

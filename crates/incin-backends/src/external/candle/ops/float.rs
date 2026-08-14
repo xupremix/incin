@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::tensor::backend::FloatOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::FloatOps<Self>
     for CandleBackend<D>
 {
     // Candle has native equivalents for several of these, but this adapter

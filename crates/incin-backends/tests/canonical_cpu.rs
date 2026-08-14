@@ -19,7 +19,7 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::tensor::backend::{LossOps, ModuleOps, NumericOps, TensorOps};
+use incin_core::backend_authoring::legacy::{LossOps, ModuleOps, NumericOps, TensorOps};
 
 type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -377,7 +377,7 @@ fn support_for_reports_the_same_level_the_executor_enforces() {
 #[test]
 fn every_advertised_reduction_matches_its_legacy_counterpart() {
     use incin_core::exec::catalog::AxisAttributes;
-    use incin_core::tensor::backend::ReductionOps;
+    use incin_core::backend_authoring::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0], vec![2, 3]);
@@ -554,7 +554,7 @@ fn an_out_of_range_reduction_axis_fails_before_execution() {
 #[test]
 fn the_spatial_family_matches_its_legacy_counterpart() {
     use incin_core::exec::catalog::{AvgPool2dAttributes, Conv2dAttributes, Pool2dAttributes};
-    use incin_core::tensor::backend::ModuleOps;
+    use incin_core::backend_authoring::legacy::ModuleOps;
 
     let context = context();
     // One 4x4 image, one channel, and a 2x2 kernel: small enough to reason
@@ -728,7 +728,7 @@ fn a_declared_bias_must_be_supplied() {
 /// than silently proving nothing.
 #[test]
 fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
-    use incin_core::tensor::backend::FloatOps;
+    use incin_core::backend_authoring::legacy::FloatOps;
 
     let context = context();
     let input = f32_storage(vec![0.5, 0.5, 0.5, 0.5], vec![2, 2]);
@@ -950,7 +950,7 @@ fn every_advertised_unary_float_operation_matches_its_legacy_counterpart() {
 /// `acosh` is undefined below one, so it gets its own operand.
 #[test]
 fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
-    use incin_core::tensor::backend::FloatOps;
+    use incin_core::backend_authoring::legacy::FloatOps;
 
     let context = context();
     let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
@@ -966,7 +966,7 @@ fn acosh_matches_the_legacy_path_on_an_operand_inside_its_domain() {
 #[test]
 fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::{AxisAttributes, ClampAttributes, ScalarAttributes};
-    use incin_core::tensor::backend::FloatOps;
+    use incin_core::backend_authoring::legacy::FloatOps;
 
     let context = context();
     let input = f32_storage(vec![-1.5, 0.5, 2.5, 3.5], vec![2, 2]);
@@ -1047,7 +1047,7 @@ fn the_attribute_bearing_float_operations_match_their_legacy_counterparts() {
 /// The binary float operations, over two broadcast operands.
 #[test]
 fn the_binary_float_operations_match_their_legacy_counterparts() {
-    use incin_core::tensor::backend::FloatOps;
+    use incin_core::backend_authoring::legacy::FloatOps;
 
     let context = context();
     let lhs = f32_storage(vec![1.0, -2.0, 3.5, -4.5], vec![4]);
@@ -1088,7 +1088,7 @@ fn the_binary_float_operations_match_their_legacy_counterparts() {
 fn softmax_refuses_a_dtype_it_does_not_advertise() {
     use incin_core::exec::catalog::AxisAttributes;
     use incin_core::prelude::{DeviceId, Dyn};
-    use incin_core::tensor::backend::CreationOps;
+    use incin_core::backend_authoring::legacy::CreationOps;
 
     let context = context();
     let input = <TestBackend as CreationOps<TestBackend>>::ones::<Dyn>(
@@ -1828,7 +1828,7 @@ fn an_attention_mask_declaration_must_match_the_operand_count() {
 #[test]
 fn the_index_returning_reductions_match_their_legacy_counterparts() {
     use incin_core::exec::catalog::{ArgsortAttributes, AxisAttributes, IndexReductionAttributes};
-    use incin_core::tensor::backend::ReductionOps;
+    use incin_core::backend_authoring::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
@@ -1894,7 +1894,7 @@ fn the_index_returning_reductions_match_their_legacy_counterparts() {
 #[test]
 fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
     use incin_core::exec::catalog::TopKAttributes;
-    use incin_core::tensor::backend::ReductionOps;
+    use incin_core::backend_authoring::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
@@ -1936,7 +1936,7 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
 #[test]
 fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
     use incin_core::exec::catalog::IndexReductionAttributes;
-    use incin_core::tensor::backend::ReductionOps;
+    use incin_core::backend_authoring::legacy::ReductionOps;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);

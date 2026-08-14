@@ -16,7 +16,7 @@ use incin_core::prelude::{
     Backend, BackendError, DType, DTypeDescriptor, DTypeId, Device, Error, OperationKind, Result,
     ShapeBuf, ShapeError, StorageBackend,
 };
-use incin_core::tensor::backend::{FloatOps, NumericOps, TensorOps};
+use incin_core::backend_authoring::legacy::{FloatOps, NumericOps, TensorOps};
 
 use crate::cpu::ops::elementwise::elementwise_unary;
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};

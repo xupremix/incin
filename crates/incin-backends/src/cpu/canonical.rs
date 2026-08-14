@@ -23,9 +23,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::tensor::backend::{
-    CreationOps, FloatOps, LossOps, ModuleOps, QuantizedOps, TensorOps,
-};
+use incin_core::backend_authoring::legacy::{CreationOps, FloatOps, LossOps, ModuleOps, QuantizedOps, TensorOps};
 
 use super::CpuBackendImpl;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
@@ -3340,7 +3338,7 @@ mod tests {
     #[test]
     fn canonical_and_legacy_gradients_are_identical() {
         use crate::cpu::tape;
-        use incin_core::tensor::backend::{NumericOps, ReductionOps};
+        use incin_core::backend_authoring::legacy::{NumericOps, ReductionOps};
 
         let context = context();
         let lhs = storage(&[0.5, 1.5, -2.0, 3.0], &[4]);

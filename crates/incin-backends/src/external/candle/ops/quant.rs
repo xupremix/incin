@@ -3,7 +3,7 @@
 use crate::external::candle::CandleBackend;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::tensor::backend::QuantizedOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::QuantizedOps<Self>
     for CandleBackend<D>
 {
     /// Not supported by candle; always returns `UnsupportedBackendOperation`.

@@ -92,8 +92,8 @@ pub mod backend_authoring {
     #[doc(hidden)]
     pub mod legacy {
         pub use crate::tensor::backend::{
-            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
-            ReductionOps, TensorOps,
+            adamw_step_composed, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps,
+            OptimizerOps, QuantizedOps, ReductionOps, TensorOps,
         };
     }
     /// Read the tracing graph mid-flight, without draining it.

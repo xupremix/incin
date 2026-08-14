@@ -248,7 +248,7 @@ macro_rules! impl_candle_creation_executors {
                 &self,
                 request: ExecutionRequest<'_, incin_core::backend_authoring::op::$op, Self>,
             ) -> core::result::Result<CandleStorage, BackendError> {
-                use incin_core::tensor::backend::CreationOps;
+                use incin_core::backend_authoring::legacy::CreationOps;
                 if !request.inputs.is_empty() {
                     return Err(invalid(OperationKind::$op, "an allocation takes no operand"));
                 }

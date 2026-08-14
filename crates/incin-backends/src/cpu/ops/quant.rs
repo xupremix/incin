@@ -4,7 +4,7 @@ use incin_core::prelude::{
     DType, Device, Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeBuf,
     StorageBackend,
 };
-use incin_core::tensor::backend::QuantizedOps;
+use incin_core::backend_authoring::legacy::QuantizedOps;
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -313,7 +313,7 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::tensor::backend::NumericOps;
+    use incin_core::backend_authoring::legacy::NumericOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;

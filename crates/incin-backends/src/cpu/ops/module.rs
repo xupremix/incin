@@ -18,7 +18,7 @@
 
 use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::{DType, Device, Result, StorageBackend};
-use incin_core::tensor::backend::ModuleOps;
+use incin_core::backend_authoring::legacy::ModuleOps;
 
 impl<D: Device> ModuleOps<Self> for CpuBackendImpl<D> {
     /// `layer_norm`.

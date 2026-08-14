@@ -48,7 +48,7 @@ use incin_core::prelude::Error;
 use incin_core::prelude::{
     DType, DTypeId, Device, DTypeDescriptor, OperationKind, Result, ShapeError, StorageBackend,
 };
-use incin_core::tensor::backend::ReductionOps;
+use incin_core::backend_authoring::legacy::ReductionOps;
 
 use crate::cpu::ops::elementwise::increment_index;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
