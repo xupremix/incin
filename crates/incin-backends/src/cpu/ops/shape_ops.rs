@@ -18,7 +18,9 @@ use incin_core::prelude::{
 };
 use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, TensorOps};
 
-use crate::cpu::ops::elementwise::{add_storage, canonical_mul_scalar, elementwise_unary};
+use crate::cpu::ops::elementwise::{
+    add_storage, canonical_mul_scalar, canonical_softmax, elementwise_unary,
+};
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
@@ -792,6 +794,29 @@ pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuSt
     } else {
         batched_matmul_impl(lhs, rhs)
     }
+}
+
+pub(crate) fn scaled_dot_product_attention_storage<D: Device>(
+    q: &CpuStorage,
+    k: &CpuStorage,
+    v: &CpuStorage,
+    mask: Option<&CpuStorage>,
+    scale: Option<f64>,
+) -> Result<CpuStorage> {
+    let k_t = if k.shape.len() >= 2 {
+        transpose_storage(k, k.shape.len() - 2, k.shape.len() - 1)?
+    } else {
+        k.clone()
+    };
+    let scores = matmul_storage(q, &k_t)?;
+    let d_k = *q.shape.last().unwrap_or(&1) as f64;
+    let scaled_scores = canonical_mul_scalar(&scores, scale.unwrap_or_else(|| 1.0 / d_k.sqrt()))?;
+    let masked_scores = match mask {
+        Some(mask) => add_storage(&scaled_scores, mask)?,
+        None => scaled_scores,
+    };
+    let attention = canonical_softmax::<D>(&masked_scores, scores.shape.len() - 1)?;
+    matmul_storage(&attention, v)
 }
 
 pub(crate) fn elementwise_cmp(

@@ -23,7 +23,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::{QuantizedOps, TensorOps};
+use incin_core::__backend_compat::legacy::QuantizedOps;
 use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
@@ -49,6 +49,7 @@ use super::ops::shape_ops::{
     slice_storage,
     squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
     pixel_shuffle_storage, stack_storage, unfold_storage,
+    scaled_dot_product_attention_storage,
     where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
@@ -2472,12 +2473,8 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
         if let Some(mask) = mask {
             admitted(self, operation, mask, training_mode(request.context))?;
         }
-        <Self as TensorOps<Self>>::scaled_dot_product_attention::<f32>(
-            bound[0],
-            bound[1],
-            bound[2],
-            mask,
-            attributes.scale,
+        scaled_dot_product_attention_storage::<D>(
+            bound[0], bound[1], bound[2], mask, attributes.scale,
         )
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
