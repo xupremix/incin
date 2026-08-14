@@ -457,6 +457,85 @@ pub(crate) fn tensor_to_dtype_storage(
     Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
 }
 
+pub(crate) fn gather_storage(
+    t: &CpuStorage,
+    dim: usize,
+    index: &CpuStorage,
+) -> Result<CpuStorage> {
+    let out_shape = index.shape.to_vec();
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        let target_i = index.get(&idx) as usize;
+        let mut src_idx = idx.clone();
+        src_idx[dim] = target_i;
+        out.push(t.get(&src_idx));
+        if !out_shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+    }
+    let out_storage = CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape);
+    let (t_cap, index_cap) = (t.clone(), index.clone());
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let t_total = crate::cpu::stride::checked_numel(&t_cap.shape)?;
+            let mut grad_t_data = vec![0.0; t_total];
+            let index_total = crate::cpu::stride::checked_numel(&index_cap.shape)?;
+            let mut idx = vec![0usize; index_cap.shape.len()];
+            for _ in 0..index_total {
+                let target_i = index_cap.get(&idx) as usize;
+                let mut src_idx = idx.clone();
+                src_idx[dim] = target_i;
+                let strides = crate::cpu::stride::contiguous_strides(&t_cap.shape);
+                let flat_dst: usize = src_idx
+                    .iter()
+                    .zip(strides.iter())
+                    .map(|(&i, &stride)| i * stride)
+                    .sum();
+                grad_t_data[flat_dst] += grad_out.get(&idx);
+                if !index_cap.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut idx, &index_cap.shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grad_t_data)?,
+                t_cap.shape.to_vec(),
+            )])
+        }),
+    });
+    Ok(out_storage)
+}
+
+pub(crate) fn index_select_storage(
+    t: &CpuStorage,
+    dim: usize,
+    index: &CpuStorage,
+) -> Result<CpuStorage> {
+    let index_total = crate::cpu::stride::checked_numel(&index.shape)?;
+    let index_values: Vec<f64> = (0..index_total)
+        .map(|i| index.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &index.shape)))
+        .collect();
+    let mut out_shape = t.shape.to_vec();
+    out_shape[dim] = index_values.len();
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut out_idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        let selected_pos = index_values[out_idx[dim]] as usize;
+        let mut src_idx = out_idx.clone();
+        src_idx[dim] = selected_pos;
+        out.push(t.get(&src_idx));
+        if !out_shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape))
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -1009,53 +1088,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out_shape = index.shape.to_vec();
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let target_i = index.get(&idx) as usize;
-            let mut src_idx = idx.clone();
-            src_idx[dim] = target_i;
-            out.push(t.get(&src_idx));
-            if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
-            }
-        }
-        let buffer = t.buffer.from_f64_values(out)?;
-        let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
-
-        let (t_cap, index_cap) = (t.clone(), index.clone());
-        let (t_id, out_id) = (t.id, out_storage.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let t_total: usize = crate::cpu::stride::checked_numel(&(t_cap.shape))?;
-                let mut grad_t_data = vec![0.0; t_total];
-                let index_total: usize = crate::cpu::stride::checked_numel(&(index_cap.shape))?;
-                let mut idx = vec![0usize; index_cap.shape.len()];
-                for _ in 0..index_total {
-                    let target_i = index_cap.get(&idx) as usize;
-                    let mut src_idx = idx.clone();
-                    src_idx[dim] = target_i;
-                    let out_strides = crate::cpu::stride::contiguous_strides(&t_cap.shape);
-                    let mut flat_dst = 0;
-                    for (i, s) in src_idx.iter().zip(out_strides.iter()) {
-                        flat_dst += i * s;
-                    }
-                    grad_t_data[flat_dst] += grad_out.get(&idx);
-                    if !index_cap.shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut idx, &index_cap.shape);
-                    }
-                }
-                Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_t_data)?,
-                    t_cap.shape.to_vec(),
-                )])
-            }),
-        });
-        Ok(out_storage)
+        gather_storage(t, dim, index)
     }
 
     fn scatter<K: DType, KInt: DType>(
@@ -1100,26 +1133,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let idx_total: usize = crate::cpu::stride::checked_numel(&(index.shape))?;
-        let idx_vec: Vec<f64> = (0..idx_total)
-            .map(|i| index.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &index.shape)))
-            .collect();
-        let mut out_shape = t.shape.to_vec();
-        out_shape[dim] = idx_vec.len();
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut out_idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let selected_pos = idx_vec[out_idx[dim]] as usize;
-            let mut src_idx = out_idx.clone();
-            src_idx[dim] = selected_pos;
-            out.push(t.get(&src_idx));
-            if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
-            }
-        }
-        let buffer = t.buffer.from_f64_values(out)?;
-        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+        index_select_storage(t, dim, index)
     }
 
     fn masked_fill<K: DType>(

@@ -43,9 +43,10 @@ use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_imp
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
-    addmm_storage, int_to_vec1_storage, lerp_storage, masked_fill_storage, narrow_storage,
-    pad_storage, repeat_storage, slice_storage, squeeze_storage, sub_scalar_storage,
-    tensor_to_dtype_storage, transpose_storage, where_storage,
+    addmm_storage, gather_storage, index_select_storage, int_to_vec1_storage, lerp_storage,
+    masked_fill_storage, narrow_storage, pad_storage, repeat_storage, slice_storage,
+    squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
+    where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
@@ -2079,14 +2080,14 @@ macro_rules! indexing_executors {
                 let operation = OperationKind::$operation;
                 let (input, index) = binary_operands(self, request.inputs, operation, training_mode(request.context))?;
                 let axis = request.operation.descriptor().attributes().axis;
-                <Self as TensorOps<Self>>::$method::<f32, i64>(input, axis, index)
+                $method(input, axis, index)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
     )*};
 }
 
-indexing_executors![(Gather, gather), (IndexSelect, index_select)];
+indexing_executors![(Gather, gather_storage), (IndexSelect, index_select_storage)];
 
 /// Write `src` into the operand at the indexed positions.
 ///
