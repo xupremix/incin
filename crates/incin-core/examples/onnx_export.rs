@@ -1,8 +1,9 @@
 use incin_core::prelude::*;
-use incin_core::prelude::{TracingBackend, tracing_mark_input, tracing_mark_output};
+use incin_core::prelude::{
+    TracingBackend, export_to_onnx, extract_graph, tracing_mark_input, tracing_mark_output,
+};
 use incin_core::test_utils::DummyBackend;
 extern crate alloc;
-use alloc::collections::BTreeMap;
 use std::path::Path;
 
 /// B.
@@ -27,10 +28,9 @@ fn main() -> anyhow::Result<()> {
 
     // Export to ONNX
     let path = Path::new("model.onnx");
-    let mut exporter = OnnxExporter::new(path);
-
     // State dict is irrelevant here since the tracing graph already captured everything
-    exporter.serialize::<B>(&BTreeMap::new())?;
+    let graph = extract_graph();
+    export_to_onnx(&graph, path)?;
 
     println!("ONNX export successful: {:?}", path);
 

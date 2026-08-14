@@ -1,11 +1,7 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{QuantizationAttributes, op};
-use crate::exec::context::ExecutionContext;
-use crate::exec::dispatch;
-use crate::exec::request::TensorHandle;
 use crate::nn::StateDict;
-use crate::tensor::backend::{Backend, Execute, SupportsDType};
+use crate::tensor::backend::{Backend, QuantizedOps, SupportsDType};
 use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -150,9 +146,8 @@ pub struct GgufExporter<'a, B: Backend, M: StateDict<B>> {
 
 impl<'a, B, M> GgufExporter<'a, B, M>
 where
-    B: Backend + Execute<op::Quantize>,
+    B: Backend + QuantizedOps<B>,
     M: StateDict<B>,
-    <B as Execute<op::Quantize>>::Output: Into<B::Storage<Q8_0>>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.
     pub fn from_module(module: &'a M) -> Self {
@@ -267,9 +262,21 @@ where
             let can_quantize =
                 self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
 
-            let _ = can_quantize;
-            let bytes = value.bytes().to_vec();
-            let ggml_type = QuantScheme::F32.ggml_type_id();
+            let (bytes, ggml_type) = if can_quantize {
+                let storage = B::from_bytes::<f32>(
+                    value.bytes(),
+                    shape,
+                    DTypeId::F32.descriptor(),
+                    &crate::prelude::DeviceId::cpu(),
+                )?;
+                let quantized = B::quantize::<f32, Q8_0>(&storage)?;
+                (
+                    B::to_bytes::<Q8_0>(&quantized)?,
+                    QuantScheme::Q8_0.ggml_type_id(),
+                )
+            } else {
+                (value.bytes().to_vec(), QuantScheme::F32.ggml_type_id())
+            };
             let n_dims = u32::try_from(shape.len())
                 .map_err(|_| Error::Msg("tensor rank is too large for GGUF".into()))?;
 

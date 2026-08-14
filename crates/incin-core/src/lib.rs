@@ -227,7 +227,7 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::nn::save::{load_safetensors, load_safetensors_snapshot, save_safetensors};
     #[cfg(feature = "std")]
-    pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
+    pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
     };
