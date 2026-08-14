@@ -23,7 +23,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, QuantizedOps, TensorOps};
+use incin_core::__backend_compat::legacy::{FloatOps, QuantizedOps, TensorOps};
 use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
@@ -2297,7 +2297,9 @@ impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
         }
 
         let metadata = input.metadata();
-        let draw = <Self as CreationOps<Self>>::rand::<f32>(
+        let total = crate::cpu::stride::checked_numel(input.shape.as_ref()).map_err(wrap)?;
+        let draw = super::creation::rand_with_total(
+            total,
             input.shape.as_ref(),
             metadata.dtype(),
             &metadata.device(),
