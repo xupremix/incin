@@ -84,7 +84,7 @@ pub mod backend_authoring {
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop,
+        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop, HostReadback,
         StorageBackend, StorageOutput, SupportsDType, TensorBackend, TransferBackend, TransferTo,
         VariableBackend,
     };

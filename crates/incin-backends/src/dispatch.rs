@@ -1185,7 +1185,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::float_to_vec1::<K>(value)
+                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1227,7 +1227,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::int_to_vec1::<K>(value)
+                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {

@@ -10,8 +10,32 @@ use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::shapes::ShapeBuf;
 
+/// Reads tensor values into host-owned vectors for inspection and formatting.
+///
+/// This is kept separate from the metadata/serialization capability so host
+/// formatting does not expose the historical all-in-one operation family.
+pub trait HostReadback: StorageBackend {
+    /// Reads floating-point values in logical row-major order.
+    fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>>;
+    /// Reads integer values in logical row-major order.
+    fn int_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>>;
+}
+
+impl<B> HostReadback for B
+where
+    B: crate::tensor::backend::Backend + TensorOps<B>,
+{
+    fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+        <Self as TensorOps<Self>>::float_to_vec1(storage)
+    }
+
+    fn int_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+        <Self as TensorOps<Self>>::int_to_vec1(storage)
+    }
+}
+
 /// Host-visible tensor metadata and formatting capabilities.
-pub trait HostInterop: StorageBackend {
+pub trait HostInterop: StorageBackend + HostReadback {
     /// Returns the logical shape of a storage handle.
     fn host_shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
         <Self as StorageBackend>::shape(storage)
@@ -28,8 +52,6 @@ pub trait HostInterop: StorageBackend {
     fn host_format_display<K: DType>(
         storage: &Self::Storage<K>,
     ) -> alloc::string::String
-    where
-        Self: crate::tensor::backend::Backend + TensorOps<Self>,
     {
         use crate::tensor::display::{render, Values};
         let shape = Self::shape(storage);
@@ -51,8 +73,6 @@ pub trait HostInterop: StorageBackend {
     }
     /// Formats a storage value for diagnostic output.
     fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String
-    where
-        Self: crate::tensor::backend::Backend + TensorOps<Self>,
     {
         Self::host_format_display(storage)
     }

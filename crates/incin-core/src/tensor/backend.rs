@@ -13,7 +13,7 @@ pub use autograd::AutogradBackend;
 mod variable;
 pub use variable::VariableBackend;
 mod capability;
-pub use capability::{HostInterop, TransferBackend};
+pub use capability::{HostInterop, HostReadback, TransferBackend};
 pub mod legacy;
 pub mod dummy {
     pub use super::legacy::DummyBackend;

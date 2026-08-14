@@ -794,44 +794,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
     type InnerBackend = B::InnerBackend;
 }
 
-impl<B: Backend + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
-    /// Tracing storage uses the normal host renderer; formatting does not add
-    /// graph nodes or otherwise alter the trace.
-    fn host_format_display<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> alloc::string::String
-    where
-        Self: crate::tensor::backend::legacy::TensorOps<Self>,
-    {
-        use crate::tensor::backend::legacy::TensorOps;
-        use crate::tensor::display::{Values, render};
-        let shape = <Self as crate::tensor::backend::StorageBackend>::shape(t);
-        match <Self as crate::tensor::backend::StorageBackend>::storage_dtype(t) {
-            None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
-            Some(dtype) if dtype.is_quantized() => alloc::format!(
-                "<{} tensor: shape={shape:?}, not printable without dequantizing>",
-                dtype.name()
-            ),
-            Some(dtype) if dtype.is_integer() => match Self::int_to_vec1(t) {
-                Ok(values) => render(&shape, &Values::Int(values)),
-                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
-            },
-            Some(_) => match Self::float_to_vec1(t) {
-                Ok(values) => render(&shape, &Values::Float(values)),
-                Err(err) => alloc::format!("<tensor: shape={shape:?}, values unavailable: {err}>"),
-            },
-        }
-    }
-
-    fn host_format_debug<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> alloc::string::String
-    where
-        Self: crate::tensor::backend::legacy::TensorOps<Self>,
-    {
-        Self::host_format_display(t)
-    }
-
+impl<B: Backend + TensorOps<B> + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
     /// Delegates to `B::from_bytes`, additionally recording the result
         /// as a graph initializer (constant input) node.
         fn from_bytes<K: super::dtype::DType>(
