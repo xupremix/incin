@@ -666,6 +666,90 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+> crate::nn::VisitState<B> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
+where
+    Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::VisitState<B>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: crate::nn::VisitState<B>,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.wi.visit_state(&path.child("wi"), visitor)?;
+        self.wh.visit_state(&path.child("wh"), visitor)
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitStateMut<B> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
+where
+    Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::VisitStateMut<B>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: crate::nn::VisitStateMut<B>,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.wi.visit_state_mut(&path.child("wi"), visitor)?;
+        self.wh.visit_state_mut(&path.child("wh"), visitor)
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitState<B> for RNN<S, B, BiasIh, BiasHh, K, Train>
+where
+    RNNCell<S, B, BiasIh, BiasHh, K, Train>: crate::nn::VisitState<B>,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.cell.visit_state(&path.child("cell"), visitor)
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitStateMut<B> for RNN<S, B, BiasIh, BiasHh, K, Train>
+where
+    RNNCell<S, B, BiasIh, BiasHh, K, Train>: crate::nn::VisitStateMut<B>,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.cell.visit_state_mut(&path.child("cell"), visitor)
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
 > crate::nn::module::NamedLayers for RNNCell<S, B, BiasIh, BiasHh, K, Train>
 where
     Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::module::NamedLayers,
