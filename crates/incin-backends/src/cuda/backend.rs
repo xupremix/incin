@@ -888,13 +888,6 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         })?;
         Ok(f64::from(value))
     }
-    /// `float_to_vec1`.
-    fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
-        let t: &CudaStorage = t;
-        cuda_require_f32(t.buffer.dtype, "float_to_vec1")?;
-        let data = download_f32_host(t)?;
-        Ok(data.iter().map(|&x| x as f64).collect())
-    }
     /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
         let t: &CudaStorage = t;
@@ -911,21 +904,13 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             incin_core::prelude::FloatToIntPolicy::Exact,
         )
     }
-    /// `int_to_vec1`.
+    /// Compatibility forwarding method; host readback ownership lives in `HostReadback` below.
+    fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
+        <Self as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(t)
+    }
+    /// Compatibility forwarding method; host readback ownership lives in `HostReadback` below.
     fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
-        let t: &CudaStorage = t;
-        cuda_require_f32(t.buffer.dtype, "int_to_vec1")?;
-        let data = download_f32_host(t)?;
-        data.into_iter()
-            .map(|value| {
-                incin_core::prelude::convert_f64_to_i64(
-                    "int_to_vec1",
-                    t.buffer.dtype,
-                    f64::from(value),
-                    incin_core::prelude::FloatToIntPolicy::Exact,
-                )
-            })
-            .collect()
+        <Self as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(t)
     }
     /// `tensor_to_dtype`. Matches WGPU's own passthrough: both backends'
     /// physical storage does not vary with the requested logical dtype in a
@@ -2938,6 +2923,31 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
 
+}
+
+impl<D: Device> incin_core::backend_authoring::HostReadback for CudaBackendImpl<D> {
+    fn float_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<f64>> {
+        let t: &CudaStorage = t;
+        cuda_require_f32(t.buffer.dtype, "float_to_vec1")?;
+        let data = download_f32_host(t)?;
+        Ok(data.iter().map(|&x| x as f64).collect())
+    }
+
+    fn int_to_vec1<K: DType>(t: &Self::Storage<K>) -> Result<Vec<i64>> {
+        let t: &CudaStorage = t;
+        cuda_require_f32(t.buffer.dtype, "int_to_vec1")?;
+        let data = download_f32_host(t)?;
+        data.into_iter()
+            .map(|value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.buffer.dtype,
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
+    }
 }
 
 impl<D: Device> incin_core::backend_authoring::HostInterop for CudaBackendImpl<D> {

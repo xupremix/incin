@@ -1293,7 +1293,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "cuda")]
             DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::float_to_vec1::<K>(value)
+                <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
             }
             #[cfg(feature = "metal")]
             DispatchStorage::Metal(value) => {
@@ -1335,7 +1335,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "cuda")]
             DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::int_to_vec1::<K>(value)
+                <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
             }
             #[cfg(feature = "metal")]
             DispatchStorage::Metal(value) => {
