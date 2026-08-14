@@ -1,5 +1,5 @@
 use hf_hub::api::sync::Api;
-use incin_core::prelude::*;
+use incin_core::prelude::{load_safetensors_snapshot, Result, StateSnapshot};
 use std::path::PathBuf;
 
 /// Helper to ergonomically download and manage weights from the HuggingFace Hub.
@@ -51,7 +51,7 @@ impl HubRepo {
     pub fn load_safetensors(&self, filename: Option<&str>) -> Result<StateSnapshot> {
         let file = filename.unwrap_or("model.safetensors");
         let path = self.get(file)?;
-        incin_core::prelude::load_safetensors_snapshot(&path)
+        load_safetensors_snapshot(&path)
     }
 }
 

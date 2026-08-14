@@ -82,9 +82,10 @@ pub mod backend_authoring {
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        Backend, CreationOps, Execute, ExecuteOutput, ExecutionRequest, FloatOps, LossOps,
-        ModuleOps, NumericOps, OptimizerOps, QuantizedOps, ReductionOps, StorageBackend,
-        StorageOutput, SupportsDType, TensorBackend, TensorOps, TransferTo,
+        AutogradBackend, Backend, CreationOps, Execute, ExecuteOutput, ExecutionRequest, FloatOps,
+        HostInterop, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps, ReductionOps,
+        StorageBackend, StorageOutput, SupportsDType, TensorBackend, TensorOps, TransferBackend,
+        TransferTo, VariableBackend,
     };
     /// Read the tracing graph mid-flight, without draining it.
     ///
@@ -198,12 +199,14 @@ pub mod prelude {
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
-        ArgInto, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, ConstDType,
+        ArgInto, AutogradBackend, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, ConstDType,
         ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
         DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
         IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
-        StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs, TensorArgsData,
-        TensorElement, ToDevice, TracingBackend, TransferTo, extract_graph, tracing_mark_input,
+        HostInterop, StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs,
+        TensorArgsData, TensorElement, ToDevice, TracingBackend, TransferBackend, TransferTo,
+        VariableBackend,
+        extract_graph, tracing_mark_input,
         tracing_mark_input_typed, tracing_mark_output,
     };
     #[cfg(feature = "cuda")]

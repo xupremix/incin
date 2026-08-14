@@ -44,7 +44,11 @@ parameters, buffers, state, and layers. Higher-level features must not become
 required dependencies of the lower tiers.
 
 The normal public tier is the facade prelude. Backend authors should use the
-named `backend_authoring` and `types` surfaces. Experimental graph, compiled,
+named `backend_authoring` and `types` surfaces. Tensor runtime now exposes
+named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
+`TransferBackend` capability views as the migration seam for backend authors;
+the legacy `Backend` method bundle remains for compatibility until each
+implementation is migrated. Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
 ## Adding an operation
@@ -140,10 +144,11 @@ status paths and must not be presented as current API guidance.
 
 ## Unresolved architecture
 
-The backend capability split, the final public API allowlist, and the complete
-manual-first module traversal contract are active consolidation work. Resolve
-these against `docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source
-tests before expanding the public surface.
+The complete removal of the legacy `Backend` method bundle, the final public
+API allowlist, and the complete manual-first module traversal contract remain
+active consolidation work. Resolve these against
+`docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before
+expanding the public surface.
 
 ## What not to change casually
 

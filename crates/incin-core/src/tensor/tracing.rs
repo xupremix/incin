@@ -820,8 +820,8 @@ impl<B: Backend> Backend for TracingBackend<B> {
     {
         use crate::tensor::backend::TensorOps;
         use crate::tensor::display::{Values, render};
-        let shape = Self::shape(t);
-        match Self::storage_dtype(t) {
+        let shape = <Self as Backend>::shape(t);
+        match <Self as Backend>::storage_dtype(t) {
             None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
             Some(dtype) if dtype.is_quantized() => alloc::format!(
                 "<{} tensor: shape={shape:?}, not printable without dequantizing>",
@@ -844,7 +844,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
     where
         Self: crate::tensor::backend::TensorOps<Self>,
     {
-        Self::format_tensor_display::<K>(t)
+        <Self as Backend>::format_tensor_display::<K>(t)
     }
 
     /// Delegates to `B::var_as_tensor`, carrying the variable's tracing-graph node id over to the resulting storage.

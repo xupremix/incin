@@ -35,7 +35,10 @@ pub mod prelude {
     pub use super::arg::TensorArgs;
     pub use super::arg_into::{ArgInto, TensorArgsData};
     pub use super::auto_device::{BestDevice, BestDeviceAt};
-    pub use super::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
+    pub use super::backend::{
+        AutogradBackend, Backend, HostInterop, StorageBackend, SupportsDType, TransferBackend,
+        TransferTo, VariableBackend,
+    };
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;
     pub use super::base::{Dyn, Tensor};
