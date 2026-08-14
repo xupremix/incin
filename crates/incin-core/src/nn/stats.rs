@@ -16,7 +16,9 @@
 //! forward pass or v2's type-level shape propagation. Both are out of scope
 //! here; this is an honest gap, not a bug.
 
-use crate::prelude::*;
+use crate::prelude::{Backend, DType, DynShape, OperationKind, Shape, ShapeBuf};
+use crate::nn::{AdaptiveAvgPool2d, GELU, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
+use crate::nn::param::{Buffer, Param, TrainState};
 use alloc::vec::Vec;
 
 /// One layer's (or one subtree's, once summed) contribution to a model's

@@ -1,5 +1,7 @@
-use crate::prelude::*;
+use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, ErrorMessage, Result, Shape, Tensor, ToDevice};
 use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 /// Typed traversal and portable persistence contract for module state.
 ///

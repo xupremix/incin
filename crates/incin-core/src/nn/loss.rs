@@ -3,10 +3,11 @@ use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::*;
+use crate::prelude::{Backend, DType, Dim, DimCons, Dyn, DynShape, Error, Nil, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
+use alloc::vec::Vec;
 pub use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     NoneReduction, Reduction, ReductionMode, Sum,
