@@ -42,8 +42,6 @@ pub mod embedding;
 pub mod loss;
 /// `matmul`.
 pub mod matmul;
-/// Temporary dynamic-dispatch compatibility adapters.
-pub mod module;
 /// `norm`.
 pub mod norm;
 /// `optimizer`.

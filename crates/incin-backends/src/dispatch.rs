@@ -344,6 +344,49 @@ macro_rules! dispatch_same_device {
     }};
 }
 
+/// Routes a module operation while keeping the CPU path on its canonical
+/// helper. Non-CPU backends remain on their temporary adapters until their
+/// backend migrations land.
+macro_rules! dispatch_module_same_device {
+    (
+        $primary:expr, $cpu_method:expr, $method:ident::<$($generic:ty),*>,
+        req = [$($req:expr),*], opt = [$($opt:expr),*], args = [$($arg:expr),*]
+    ) => {{
+        let routed = $primary;
+        match routed {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => ($cpu_method)(
+                value,
+                $(cpu_operand(routed, $req)?,)*
+                $(cpu_optional(routed, $opt)?,)*
+                $($arg),*
+            ).map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<$($generic),*>(
+                value,
+                $(wgpu_operand(routed, $req)?,)*
+                $(wgpu_optional(routed, $opt)?,)*
+                $($arg),*
+            ).map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::$method::<$($generic),*>(
+                value,
+                $(cuda_operand(routed, $req)?,)*
+                $(cuda_optional(routed, $opt)?,)*
+                $($arg),*
+            ).map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::$method::<$($generic),*>(
+                value,
+                $(metal_operand(routed, $req)?,)*
+                $(metal_optional(routed, $opt)?,)*
+                $($arg),*
+            ).map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }};
+}
+
 macro_rules! dispatch_unary {
     ($storage:expr, $method:ident $(, $arg:expr)*) => {
         match $storage {
@@ -1765,8 +1808,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         bias: Option<&DispatchStorage>,
         eps: f32,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::norm::layer_norm_impl::<Cpu, K>,
             layer_norm::<K>,
             req = [weight],
             opt = [bias],
@@ -1782,8 +1825,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         e: f32,
         momentum: f64,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::norm::batch_norm_impl::<Cpu, K>,
             batch_norm::<K>,
             req = [],
             opt = [w, b, rm, rv],
@@ -1794,7 +1837,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         t: &DispatchStorage,
         w: &DispatchStorage,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(t, embedding::<K, KInt>, req = [w], opt = [], args = [])
+        dispatch_module_same_device!(t, crate::cpu::ops::embedding::embedding_impl::<Cpu, K, KInt>, embedding::<K, KInt>, req = [w], opt = [], args = [])
     }
     fn conv1d<K: DType>(
         t: &DispatchStorage,
@@ -1805,8 +1848,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         dilation: usize,
         groups: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::conv::conv1d_impl::<Cpu, K>,
             conv1d::<K>,
             req = [w],
             opt = [b],
@@ -1822,8 +1865,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         dilation: usize,
         groups: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::conv::conv2d_impl::<Cpu, K>,
             conv2d::<K>,
             req = [w],
             opt = [b],
@@ -1840,8 +1883,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         dilation: usize,
         groups: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::conv::conv_transpose2d_impl::<Cpu, K>,
             conv_transpose2d::<K>,
             req = [w],
             opt = [b],
@@ -1855,8 +1898,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         padding: (usize, usize),
         dilation: (usize, usize),
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::pool::max_pool2d_impl::<Cpu, K>,
             max_pool2d::<K>,
             req = [],
             opt = [],
@@ -1869,8 +1912,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         stride: (usize, usize),
         padding: (usize, usize),
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::pool::avg_pool2d_impl::<Cpu, K>,
             avg_pool2d::<K>,
             req = [],
             opt = [],
@@ -1881,8 +1924,8 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         t: &DispatchStorage,
         output_size: (usize, usize),
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
+        dispatch_module_same_device!(
+            t, crate::cpu::ops::pool::adaptive_avg_pool2d_impl::<Cpu, K>,
             adaptive_avg_pool2d::<K>,
             req = [],
             opt = [],

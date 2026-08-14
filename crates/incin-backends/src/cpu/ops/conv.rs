@@ -235,7 +235,7 @@ fn col2im_1d(
 
 /// A convolution window, stated once per spatial axis.
 ///
-/// `ModuleOps::conv2d` takes one extent for both axes, while the descriptor
+/// The historical module-family contract takes one extent for both axes, while the descriptor
 /// that routes to it carries one per axis. An anisotropic window was therefore
 /// refused outright rather than applying the first axis' extent to both, which
 /// was honest but left a real request unanswerable. Carrying the pair this far
@@ -404,7 +404,7 @@ fn col2im_2d(
 // conv1d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv1d`'s CpuBackendImpl implementation: im2col + per-group
+/// Canonical conv1d implementation: im2col + per-group
 /// `batched_matmul_impl` + concat forward, hand-composed backward for
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
 /// broadcast-added via the already-tape-tracked `NumericOps::add` (so
@@ -537,7 +537,7 @@ pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
 // conv2d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv2d`'s CpuBackendImpl implementation, mirroring
+/// Canonical conv2d implementation, mirroring
 /// `conv1d_impl`'s exact structure generalized to two spatial axes.
 ///
 /// The legacy signature states one extent for both axes, so this is the
@@ -710,7 +710,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
 // conv_transpose2d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv_transpose2d`'s `CpuBackendImpl` implementation (RESEARCH.md
+/// Canonical conv-transpose2d implementation (RESEARCH.md
 /// Pattern 4): transposed convolution's forward pass is exactly `conv2d`'s
 /// own backward-data (grad-w.r.t.-input) formula applied directly to
 /// `input` (renamed "output" in transposed-conv terminology) instead of to a

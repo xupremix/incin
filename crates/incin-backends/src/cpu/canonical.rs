@@ -711,7 +711,7 @@ impl<D: Device> Execute<op::TopK> for CpuBackendImpl<D> {
 /// Collapse a per-axis window to the single extent the routed CPU kernel takes.
 ///
 /// The descriptor is more expressive than the kernel behind it: it carries one
-/// extent per spatial axis, while `ModuleOps::conv2d` takes one for both. An
+/// extent per spatial axis, while the historical module-family contract takes one for both. An
 /// anisotropic window is therefore a real gap, and it is reported as one rather
 /// than silently using the first axis for both.
 fn isotropic(
@@ -759,7 +759,7 @@ fn f32_only(
 /// Narrow a descriptor epsilon to the width the routed kernel accepts.
 ///
 /// `LayerNormAttributes` and `BatchNormAttributes` carry an `f64`, while
-/// `ModuleOps::layer_norm` and `ModuleOps::batch_norm` take an `f32`. Almost
+/// The historical module-family normalization methods take an `f32`. Almost
 /// every epsilon survives that, but one below `f32::MIN_POSITIVE` flushes to
 /// zero and turns a guarded division into an unguarded one, which shows up as a
 /// non-finite activation far from here. Refused rather than rounded.
@@ -807,7 +807,7 @@ impl<D: Device> Execute<op::Conv2dExact> for CpuBackendImpl<D> {
 
         // The descriptor's per-axis window is forwarded whole. It used to be
         // collapsed to a single extent, and an anisotropic one refused,
-        // because `ModuleOps::conv2d` states one extent for both axes. The
+        // because the historical module-family contract states one extent for both axes. The
         // kernel behind that signature never needed them equal, so the pair
         // goes straight to it rather than through the narrower spelling.
         crate::cpu::ops::conv::conv2d_windowed_impl::<D, f32>(

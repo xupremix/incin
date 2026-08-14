@@ -131,7 +131,7 @@ fn scatter_pool_grad_2d(
     CpuStorage::from_contiguous(CpuBuffer::F32(vals), input_shape.to_vec())
 }
 
-/// `ModuleOps::max_pool2d`'s `CpuBackendImpl` implementation.
+/// Canonical max-pool implementation shared by the CPU executor.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn max_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
@@ -163,7 +163,7 @@ pub(crate) fn max_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
 // avg_pool2d
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::avg_pool2d`'s `CpuBackendImpl` implementation: for each output
+/// Canonical avg-pool implementation: for each output
 /// position, sums the window's values (padded-region positions contribute
 /// `0.0` to both the sum and the fixed `kernel_size.0 * kernel_size.1`
 /// divisor — PyTorch's `count_include_pad=True` default) divided by the
@@ -313,7 +313,7 @@ fn adaptive_window_bounds(
     Ok((start, end))
 }
 
-/// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackendImpl` implementation.
+/// Canonical adaptive-average-pool implementation.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn adaptive_avg_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
