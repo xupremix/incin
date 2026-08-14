@@ -28,14 +28,14 @@ pub struct TensorMetaInfo {
 pub fn inspect_file<P: AsRef<Path>>(path: P) -> Result<ModelInfo> {
     inspect_file_with_limits(
         path,
-        &crate::io::limits::ResourceLimits::inspection_defaults(),
+        &crate::resource::ResourceLimits::inspection_defaults(),
     )
 }
 
 /// Inspects a model file enforcing explicit resource limits.
 pub fn inspect_file_with_limits<P: AsRef<Path>>(
     path: P,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<ModelInfo> {
     let path_ref = path.as_ref();
     let file = File::open(path_ref)?;
@@ -73,7 +73,7 @@ fn inspect_safetensors(
     mut file: File,
     path: &str,
     file_size_bytes: u64,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<ModelInfo> {
     let mut header_size_bytes = [0u8; 8];
     file.read_exact(&mut header_size_bytes)?;
@@ -190,7 +190,7 @@ fn read_u64<R: Read>(r: &mut R) -> Result<u64> {
 
 fn read_gguf_string<R: Read>(
     r: &mut R,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<String> {
     let len = usize::try_from(read_u64(r)?)
         .map_err(|_| Error::Msg("GGUF string length does not fit this platform".into()))?;
@@ -210,7 +210,7 @@ fn read_gguf_string<R: Read>(
 fn skip_gguf_value<R: Read + Seek>(
     r: &mut R,
     type_id: u32,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<()> {
     match type_id {
         0 | 1 | 7 => {
@@ -259,7 +259,7 @@ fn inspect_gguf(
     mut file: File,
     path: &str,
     file_size_bytes: u64,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<ModelInfo> {
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)?;

@@ -23,6 +23,7 @@ pub mod graph;
 pub mod io;
 pub mod metrics;
 pub mod nn;
+pub mod resource;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_exporter;
 #[cfg(feature = "std")]

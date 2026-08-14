@@ -706,7 +706,7 @@ impl CheckedNumel {
     pub fn from_dims(
         operation: crate::shapes::error::OperationKind,
         dims: &[usize],
-        limits: &crate::io::limits::ResourceLimits,
+        limits: &crate::resource::ResourceLimits,
     ) -> Result<Self, crate::shapes::error::ShapeError> {
         if dims.len() > limits.max_rank {
             return Err(crate::shapes::error::ShapeError::RankMismatch {
@@ -745,7 +745,7 @@ impl CheckedByteLen {
         operation: crate::shapes::error::OperationKind,
         dims: &[usize],
         dtype: crate::tensor::dtype::DTypeDescriptor,
-        limits: &crate::io::limits::ResourceLimits,
+        limits: &crate::resource::ResourceLimits,
     ) -> Result<Self, crate::shapes::error::ShapeError> {
         let numel = CheckedNumel::from_dims(operation, dims, limits)?;
         let bytes = dtype.size_bytes(numel.get(), operation)?;
@@ -767,7 +767,7 @@ impl CheckedByteLen {
 /// Safely computes shape element count using checked multiplication and limits (`SEC-011`).
 pub fn checked_numel_from_dims(
     dims: &[usize],
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
     CheckedNumel::from_dims(crate::shapes::error::OperationKind::Reshape, dims, limits)
 }
@@ -776,7 +776,7 @@ pub fn checked_numel_from_dims(
 pub fn checked_byte_len_from_dims(
     dims: &[usize],
     dtype: crate::tensor::dtype::DTypeDescriptor,
-    limits: &crate::io::limits::ResourceLimits,
+    limits: &crate::resource::ResourceLimits,
 ) -> Result<CheckedByteLen, crate::shapes::error::ShapeError> {
     CheckedByteLen::from_dims(
         crate::shapes::error::OperationKind::Reshape,
@@ -878,7 +878,7 @@ impl<S: Shape> ShapeValue<S> {
     pub fn checked_numel(
         &self,
         op: crate::shapes::error::OperationKind,
-        limits: &crate::io::limits::ResourceLimits,
+        limits: &crate::resource::ResourceLimits,
     ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
         CheckedNumel::from_dims(op, &self.dims(), limits)
     }
@@ -1116,7 +1116,7 @@ pub type Scalar = Nil;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::limits::ResourceLimits;
+    use crate::resource::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
     use crate::tensor::dtype::{
         ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,

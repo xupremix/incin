@@ -178,7 +178,7 @@ impl CompiledArtifact {
         Self::load_with_limits(
             bytes,
             required_version,
-            &crate::io::limits::ResourceLimits::compile_time_defaults(),
+            &crate::resource::ResourceLimits::compile_time_defaults(),
         )
     }
 
@@ -187,7 +187,7 @@ impl CompiledArtifact {
     pub fn load_with_limits(
         bytes: &[u8],
         required_version: &ArtifactVersion,
-        limits: &crate::io::limits::ResourceLimits,
+        limits: &crate::resource::ResourceLimits,
     ) -> Result<Self> {
         if (bytes.len() as u64) > limits.max_file_bytes {
             return Err(Error::Msg(alloc::format!(
