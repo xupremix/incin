@@ -44,8 +44,8 @@ use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
     addmm_storage, int_to_vec1_storage, lerp_storage, masked_fill_storage, narrow_storage,
-    pad_storage, repeat_storage, squeeze_storage, sub_scalar_storage, transpose_storage,
-    where_storage,
+    pad_storage, repeat_storage, squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage,
+    transpose_storage, where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
@@ -2513,7 +2513,7 @@ impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
         }
         // Both type parameters are phantom here: CPU storage carries its dtype
         // in the buffer variant, and the kernel switches on the runtime value.
-        <Self as TensorOps<Self>>::tensor_to_dtype::<f32, i64>(input, dtype)
+        tensor_to_dtype_storage(input, dtype)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

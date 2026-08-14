@@ -386,6 +386,66 @@ pub(crate) fn addmm_storage(
     add_storage(&scaled_mat, &scaled_product)
 }
 
+pub(crate) fn tensor_to_dtype_storage(
+    t: &CpuStorage,
+    dtype: DTypeDescriptor,
+) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut multi_idx = vec![0usize; t.shape.len()];
+    macro_rules! convert_variant {
+        ($variant:ident, $ty:ty) => {{
+            let mut out: Vec<$ty> = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(t.get(&multi_idx) as $ty);
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::$variant(out)
+        }};
+    }
+    let new_buffer = match dtype.builtin_id() {
+        Some(DTypeId::F32) => convert_variant!(F32, f32),
+        Some(DTypeId::F64) => convert_variant!(F64, f64),
+        Some(DTypeId::U8) => convert_variant!(U8, u8),
+        Some(DTypeId::U32) => convert_variant!(U32, u32),
+        Some(DTypeId::I64) => convert_variant!(I64, i64),
+        Some(DTypeId::F16) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(half::f16::from_f64(t.get(&multi_idx)));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::F16(out)
+        }
+        Some(DTypeId::BF16) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(half::bf16::from_f64(t.get(&multi_idx)));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::BF16(out)
+        }
+        Some(DTypeId::Q8_0) => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(Q8_0)",
+                backend: "Cpu",
+            });
+        }
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(unknown)",
+                backend: "Cpu",
+            });
+        }
+    };
+    Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -926,63 +986,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut multi_idx = vec![0usize; t.shape.len()];
-
-        macro_rules! convert_variant {
-            ($variant:ident, $ty:ty) => {{
-                let mut out: alloc::vec::Vec<$ty> = alloc::vec::Vec::with_capacity(total);
-                for _ in 0..total {
-                    out.push(t.get(&multi_idx) as $ty);
-                    if !t.shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::$variant(out)
-            }};
-        }
-
-        let new_buffer = match dtype.builtin_id() {
-            Some(DTypeId::F32) => convert_variant!(F32, f32),
-            Some(DTypeId::F64) => convert_variant!(F64, f64),
-            Some(DTypeId::U8) => convert_variant!(U8, u8),
-            Some(DTypeId::U32) => convert_variant!(U32, u32),
-            Some(DTypeId::I64) => convert_variant!(I64, i64),
-            Some(DTypeId::F16) => {
-                let mut out: alloc::vec::Vec<half::f16> = alloc::vec::Vec::with_capacity(total);
-                for _ in 0..total {
-                    out.push(half::f16::from_f64(t.get(&multi_idx)));
-                    if !t.shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::F16(out)
-            }
-            Some(DTypeId::BF16) => {
-                let mut out: alloc::vec::Vec<half::bf16> = alloc::vec::Vec::with_capacity(total);
-                for _ in 0..total {
-                    out.push(half::bf16::from_f64(t.get(&multi_idx)));
-                    if !t.shape.is_empty() {
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::BF16(out)
-            }
-            Some(DTypeId::Q8_0) => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "tensor_to_dtype(Q8_0)",
-                    backend: "Cpu",
-                });
-            }
-            _ => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "tensor_to_dtype(unknown)",
-                    backend: "Cpu",
-                });
-            }
-        };
-
-        Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
+        tensor_to_dtype_storage(t, dtype)
     }
 
     fn where_cond<K: DType>(
