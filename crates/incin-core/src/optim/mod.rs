@@ -1,4 +1,13 @@
-use crate::prelude::*;
+use crate::err::{Error, ErrorMessage, Result};
+use crate::shapes::{Shape, ShapeBuf, ShapeValue};
+use crate::tensor::base::{Dyn, Tensor};
+use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
+use crate::dist::Local;
+use crate::nn::param::{Param, TrainState};
+use alloc::string::{String, ToString};
 use crate::{
     backend_authoring::{Capabilities, Execute},
     exec::request::TensorHandle,

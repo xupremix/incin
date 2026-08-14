@@ -1,9 +1,21 @@
-use crate::backend_authoring::{Capabilities, Execute, Operation, StorageBackend};
+use crate::backend_authoring::{Capabilities, Execute, Operation};
 use crate::exec::catalog::{CreationAttributes, FullAttributes, ScalarAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, InitPlan, ParameterRole};
-use crate::prelude::*;
+use crate::err::{Error, ErrorMessage, Result};
+use crate::dist::Local;
+use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue};
+use crate::tensor::arg::TensorArgs;
+use crate::tensor::arg_into::{ArgInto, LayerArgInto};
+use crate::tensor::base::{Dyn, Tensor};
+use crate::tensor::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
+use crate::tensor::device::{Device, DeviceId};
+use crate::tensor::dtype::{DType, DTypeDescriptor};
+use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
+use crate::nn::module::Parameters;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 /// Marker struct for trainable parameters.
