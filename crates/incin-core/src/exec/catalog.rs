@@ -81,7 +81,15 @@ pub enum OutputRule {
     Indexing,
     ExplicitDType,
     TypedInference,
+    /// The output extent depends on tensor values, not only metadata.
+    DataDependent,
     HostValue,
+}
+
+impl OutputRule {
+    pub const fn is_data_dependent(self) -> bool {
+        matches!(self, Self::DataDependent)
+    }
 }
 
 /// Empty tensor behavior. Empty dimensions are never silently rewritten.
@@ -3474,7 +3482,7 @@ fn inferred_shape<A: AttributeContract>(
                 None
             }
         }
-        OutputRule::HostValue => Some(None),
+        OutputRule::DataDependent | OutputRule::HostValue => Some(None),
         OutputRule::Indexing | OutputRule::TypedInference => match operation {
             OperationKind::Gather => Some(
                 inputs
@@ -5989,5 +5997,11 @@ mod tests {
                 actual: DTypeId::I64.descriptor(),
             }
         );
+    }
+
+    #[test]
+    fn data_dependent_output_shapes_are_not_inferred_from_metadata() {
+        assert!(OutputRule::DataDependent.is_data_dependent());
+        assert!(!OutputRule::Preserve.is_data_dependent());
     }
 }
