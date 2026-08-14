@@ -217,22 +217,22 @@ Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
 ## Validation checkpoint
 
-The current consolidation checkpoint has passed:
+The latest reproducible artifact validation was run from commit `289dfbd`:
 
 ```text
-./tools/check-package.sh                                      # passed
-./tools/check-public-api.sh                                   # passed
-./tools/check-architecture.sh                                 # passed
-cargo check -p incin-core --no-default-features                # passed
-cargo check -p incin-backends --no-default-features --features std,cuda,target-api   # passed
-cargo check -p incin-backends --no-default-features --features std,metal,target-api  # passed
-cargo check -p incin-backends --no-default-features --features std,wgpu,target-api   # passed
-cargo test -p incin --features cpu,target-api --test handoff_manual_module --no-default-features # passed
+tools/export-snapshot.sh /tmp/incin-hnd002-current.zip            # passed
 ```
 
-These are checkpoint results, not the final HND-001 gate: the legacy backend
-operation-family removal, full capability extraction, and final public API
-allowlist remain open in the unresolved architecture section.
+That command validated the generated ZIP itself: it matched the tracked file
+set, contained both distributed source trees, unpacked successfully, ran the
+architecture, large-file, and public-API gates inside the unpacked copy, and
+ran `cargo check -p incin-core --no-default-features` there. The ZIP is the
+artifact result; `tools/check-package.sh` remains an internal component check,
+not an alternate snapshot workflow.
+
+This is not the final HND-002 gate: the legacy backend operation-family
+removal, full capability extraction, and final public API allowlist remain
+open in the unresolved architecture section.
 
 ## First 30 minutes
 
