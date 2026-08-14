@@ -1,4 +1,14 @@
-# User-facing architecture: findings, what landed, and exactly what to do next
+# Historical audit: user-facing architecture findings
+
+> **Non-normative snapshot.** This document records an earlier UX/dispatch
+> audit and its proposed sequencing. It is retained for migration history, not
+> as current architecture guidance. For current truth, use
+> [`docs/GUIDE.md`](../GUIDE.md), [`docs/FROZEN_FOUNDATIONS.md`](../FROZEN_FOUNDATIONS.md),
+> and [`docs/HANDOFF.md`](../HANDOFF.md).
+
+The dispatch and production-caller counts below describe the checkout audited
+when this file was written; they must not override current source or generated
+evidence.
 
 **Status:** landed and uncommitted. Nothing here is on the critical path of an
 existing ledger task; none of it is a `PROPOSALS.md` row.

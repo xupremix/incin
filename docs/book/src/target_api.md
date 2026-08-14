@@ -24,14 +24,15 @@ let w = Cpu.zeros([batch, 3])?;                   // fully dynamic
 each producing exactly the amount of compile-time proof its own staticness
 earns — never more than what's actually known.
 
-## Why this exists: the canonical execution path
+## Why this exists: an allocation-target experiment
 
-Most of this book's `Tensor` methods reach their kernel through one of nine
-broad "operation family" traits `Backend` requires. A newer, narrower path —
-one exact identity per operation, validated before it reaches a backend,
-output metadata derived rather than trusted — exists alongside it. The
-allocation methods above (`zeros`, `ones`, `rand`, `randn`, and their
-`_canonical`-suffixed siblings) are where it's wired in today.
+The target methods are an opt-in ergonomic experiment around the validated
+descriptor execution architecture. Stable tensor operations already use the
+single descriptor path; the old operation-family traits remain only as
+backend-local compatibility adapters and are not a second user-facing model.
+The allocation methods above (`zeros`, `ones`, `rand`, `randn`, and their
+`_canonical`-suffixed siblings) expose the target-shaped spelling while that
+surface remains experimental.
 
 The type-level shape (`s![2, 3]` vs `Dyn`) isn't just documentation on this
 path — a backend can specialize on it. The CPU creation family reads

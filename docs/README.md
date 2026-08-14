@@ -42,7 +42,7 @@ run. If one of these is wrong, the source is wrong. Never edit them by hand.
 |---|---|
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | what is implemented, what is verified, and what is only structural |
 | [plan/roadmap.md](plan/roadmap.md) | the task ledger's shape |
-| [plan/UX-ARCHITECTURE-HANDOFF.md](plan/UX-ARCHITECTURE-HANDOFF.md) | the user-facing allocation and initialization architecture: what the audit found — including that `exec::dispatch` had no production callers at all — the `target-api` prototype that gave it one, and the remaining steps in dependency order |
+| [plan/UX-ARCHITECTURE-HANDOFF.md](plan/UX-ARCHITECTURE-HANDOFF.md) | **Historical/non-normative** UX and dispatch audit; current allocation and execution guidance lives in `GUIDE.md`, `FROZEN_FOUNDATIONS.md`, and `HANDOFF.md` |
 | [plan/remediation/](plan/remediation/README.md) | the long-form audits and the active FND-000..005 brief |
 | [growth/](growth/README.md) | subsystem plans deferred until the foundation sequence completes |
 
