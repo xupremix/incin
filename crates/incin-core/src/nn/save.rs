@@ -16,7 +16,8 @@ use std::path::Path;
 pub struct TensorCheckpointMeta {
     pub name: String,
     pub global_shape: Vec<usize>,
-    pub dtype: DTypeId,
+    /// Semantic logical/physical dtype record; schema version is independent.
+    pub dtype: DTypeDescriptor,
     pub placement_kind: String,
 }
 
@@ -45,7 +46,7 @@ impl GlobalCheckpointManifest {
         &mut self,
         name: impl Into<String>,
         global_shape: Vec<usize>,
-        dtype: DTypeId,
+        dtype: impl Into<DTypeDescriptor>,
         placement_kind: impl Into<String>,
     ) {
         let key = name.into();
@@ -54,7 +55,7 @@ impl GlobalCheckpointManifest {
             TensorCheckpointMeta {
                 name: key,
                 global_shape,
-                dtype,
+                dtype: dtype.into(),
                 placement_kind: placement_kind.into(),
             },
         );
@@ -467,7 +468,7 @@ where
         let target_shape = B::shape::<f32>(current_param.inner());
         let target_shape = target_shape.as_ref();
         let bytes = st_view.data();
-        let dtype_id = meta.dtype;
+        let dtype_desc = meta.dtype;
 
         let (final_bytes, final_shape) = if global_shape == target_shape {
             (bytes.to_vec(), global_shape)
@@ -499,7 +500,7 @@ where
             slice_bytes_for_rank(
                 bytes,
                 &global_shape,
-                dtype_id.descriptor(),
+                dtype_desc,
                 shard_axis,
                 rank,
                 target_world_size,
@@ -521,7 +522,7 @@ where
             &context,
             DataAttributes {
                 shape: final_shape.clone(),
-                dtype: dtype_id.descriptor(),
+                dtype: dtype_desc,
                 device: DeviceId::cpu(),
                 payload: CreationPayload::Bytes {
                     byte_len: final_bytes.len(),

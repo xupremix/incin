@@ -3,9 +3,9 @@
 Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
 
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
-Last verified command: cargo test -p incin-core --all-targets --no-default-features
+Last verified command: cargo test -p incin --test serde_tests test_postcard_snapshot_round_trip -- --exact
 Last verified result: PASS
-Next concrete action: replace the homogeneous f32 StateDict boundary with dtype-preserving state storage.
+Next concrete action: retire the legacy homogeneous tensor-map StateDict and migrate global checkpoint resharding to StateSnapshot.
 
 Status vocabulary:
 
@@ -60,9 +60,9 @@ Status vocabulary:
 | NN-001 | NN UX | builder-first `nn::layer(...).init(&target)` | Implemented | PASS | P0 | final architecture contract |
 | NN-002 | NN recurrence | RNN/LSTM compose migrated foundation | Implemented | PASS | P0 | recurrent tests |
 | NN-003 | Legacy NN | raw `build/new_init_raw` remain compatibility-only and disappear from normal docs | Implemented | PASS | P1 | documentation search |
-| STATE-001 | State | no unsafe K→f32 reinterpretation | `nn/param.rs` still contains unsafe K→f32 reinterpretation/read paths | CONFIRMED OPEN | P0 | next blocker NEXT-A |
-| STATE-002 | State | model state representation supports heterogeneous built-in dtypes safely | StateDict is still `BTreeMap<String, Tensor<..., f32>>` | CONFIRMED OPEN | P1 | next blocker NEXT-A |
-| STATE-003 | Serialization | safetensors/postcard load/save preserve supported state dtype | Serialization boundary is coupled to f32 StateDict values | CONFIRMED OPEN | P1 | next blocker NEXT-A |
+| STATE-001 | State | no unsafe K→f32 reinterpretation | Param/Buffer legacy map methods no longer contain unsafe casts; typed snapshot extraction uses `B::to_bytes::<K>` | CONFIRMED FIXED | P0 | source gate + CPU snapshot round-trip |
+| STATE-002 | State | model state representation supports heterogeneous built-in dtypes safely | Owned `StatePath`/`StateValue`/`StateSnapshot` preserve exact descriptor, shape, role, and native bytes; typed leaves stage before commit | PARTIAL | P0 | heterogeneous leaf coverage and legacy API removal |
+| STATE-003 | Serialization | safetensors/postcard load/save preserve supported state dtype | ModelExt safetensors/postcard paths now serialize owned snapshots; exact postcard and CPU round-trip pass | PARTIAL | P1 | buffer-role wire metadata and global checkpoint migration |
 | API-001 | User API | bare device/target is normal allocation surface | Implemented | PASS | P0 | facade contract |
 | API-002 | User API | normal docs/examples do not require backend aliases/raw Tensor constructors | Implemented | PASS | P1 | docs search/build |
 | API-003 | User API | final end-to-end handoff example compiles | Implemented via `foundation_handoff_contract.rs` | PASS | P0 | `foundation_handoff_contract.rs` |
@@ -91,7 +91,9 @@ on an older PASS claim.
 | Shape/Dim are independent of compiler IR | CONFIRMED FIXED | public traits no longer expose `symbolic_expr`; `shapes/projection.rs` is the internal adapter used by graph capture |
 | Shape/Dim proof contracts are sealed | CONFIRMED FIXED | private sealing traits and compile-fail fixtures cover `Shape`, `Dim`, and `ConcreteStaticExtent` |
 | Rust-local axis identity is separated from durable identity | CONFIRMED FIXED | `AxisKey` is schema-qualified and `dim!` no longer uses `module_path!()`; named-axis test covers the boundary |
-| State has no unsafe generic-dtype bridge | CONFIRMED OPEN | `nn/param.rs` still contains the homogeneous f32 state surface and unsafe reinterpretation/read paths |
+| State has no unsafe generic-dtype bridge | CONFIRMED FIXED | `nn/param.rs` has no `unsafe`, `transmute`, `ptr::read`, or `mem::forget`; typed snapshot paths use backend byte APIs |
+| Owned heterogeneous state artifact exists | PARTIAL | `nn/state.rs` validates exact `DTypeDescriptor`/`StorageEncoding` byte lengths; macro and sequential traversal collect/stage it; legacy map APIs remain |
+| Backend-neutral model persistence exists | PARTIAL | ModelExt safetensors/postcard use `StateSnapshot`; safetensors role metadata and global resharding still need migration |
 | Distributed module archive integrity | CONFIRMED FIXED | `crates/incin-core/src/dist/mod.rs` and `crates/incin-backends/src/dist/mod.rs` exist with child modules |
 
 The baseline commands `cargo check -p incin-core --no-default-features` and
@@ -106,7 +108,10 @@ the next foundation blockers; none is claimed complete by the shape work:
 
 | ID | Blocker | Evidence and required next seam |
 | --- | --- | --- |
-| NEXT-A | Heterogeneous state/checkpoint dtype | `nn/param.rs` exposes `StateDict<B>` as f32 tensors and uses unsafe casts at lines 649, 671, 922, and 944. Introduce an owned dtype-erased state value carrying `DTypeDescriptor` and typed checked conversion; remove reinterpretation. |
+| NEXT-A | Legacy state API removal | `StateDict<B>` still exposes f32 tensor maps for compatibility and `nn/save.rs` global resharding still consumes them. Remove those methods after migrating all callers to `StateSnapshot`. |
+| NEXT-I | Tied/shared parameter identity | `StatePath` is intentionally distinct from runtime variable identity. No safe alias/identity contract exists for tied parameters; define one before deduplicating or restoring shared variables. |
+| NEXT-J | Backend typed variable abstraction | `StateLoadPlan<B>` is opaque but internally stages `B::RawVar`. Replace this internal seam with a typed `VariableBackend::Var<K>` architecture only after the backend resource contract is settled. |
+| NEXT-K | Heterogeneous optimizer/parameter visitor | Model traversal is heterogeneous, but optimizer parameter visitation and optimizer-state persistence remain homogeneous/RawVar-oriented. Design the visitor contract before claiming complete training-state persistence. |
 | NEXT-B | Backend resource ownership/lifecycle | `Backend` and `ExecutionContext` expose execution/storage capabilities but no foundation-wide resource lease or explicit stream/event lifetime contract. Define ownership and failure cleanup before async/resource APIs expand. |
 | NEXT-C | Mutation and rollback semantics | Mutation descriptors are classified, but backend mutation and optimizer paths do not expose a common transactional/rollback contract. Specify atomicity and partial-failure behavior before claiming mutation safety. |
 | NEXT-D | Training-state persistence | `TrainState` and gradient typestate are compile-time markers; checkpoint/load and optimizer state do not yet have a complete typed persistence contract for frozen/trainable transitions. |

@@ -5,6 +5,102 @@ use crate::exec::dispatch;
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 
+#[cfg(feature = "std")]
+fn safetensors_dtype(dtype: DTypeDescriptor) -> anyhow::Result<safetensors::tensor::Dtype> {
+    use safetensors::tensor::Dtype;
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok(Dtype::F32),
+        Some(DTypeId::F64) => Ok(Dtype::F64),
+        Some(DTypeId::F16) => Ok(Dtype::F16),
+        Some(DTypeId::BF16) => Ok(Dtype::BF16),
+        Some(DTypeId::U32) => Ok(Dtype::U32),
+        Some(DTypeId::I64) => Ok(Dtype::I64),
+        Some(DTypeId::U8) => Ok(Dtype::U8),
+        Some(DTypeId::Bool) => Ok(Dtype::BOOL),
+        Some(DTypeId::Q8_0) | None => Err(anyhow::anyhow!(
+            "unsupported safetensors dtype {}",
+            dtype.name()
+        )),
+    }
+}
+
+#[cfg(feature = "std")]
+fn safetensors_dtype_from_wire(
+    dtype: safetensors::tensor::Dtype,
+) -> anyhow::Result<DTypeDescriptor> {
+    Ok(match dtype {
+        safetensors::tensor::Dtype::F32 => DTypeId::F32,
+        safetensors::tensor::Dtype::F64 => DTypeId::F64,
+        safetensors::tensor::Dtype::F16 => DTypeId::F16,
+        safetensors::tensor::Dtype::BF16 => DTypeId::BF16,
+        safetensors::tensor::Dtype::U32 => DTypeId::U32,
+        safetensors::tensor::Dtype::I64 => DTypeId::I64,
+        safetensors::tensor::Dtype::U8 => DTypeId::U8,
+        safetensors::tensor::Dtype::BOOL => DTypeId::Bool,
+        _ => return Err(anyhow::anyhow!("unsupported dtype in safetensors")),
+    }
+    .descriptor())
+}
+
+#[cfg(feature = "std")]
+fn serialize_snapshot_safetensors(
+    snapshot: &StateSnapshot,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    use safetensors::tensor::TensorView;
+    let mut storage = Vec::new();
+    let mut views = BTreeMap::new();
+    for (name, value) in snapshot.iter() {
+        let bytes = value.bytes().to_vec();
+        let dtype = safetensors_dtype(value.dtype())?;
+        storage.push((
+            name.as_str().to_owned(),
+            bytes,
+            value.shape().dims().to_vec(),
+            dtype,
+        ));
+    }
+    for (name, bytes, shape, dtype) in &storage {
+        views.insert(name.clone(), TensorView::new(*dtype, shape.clone(), bytes)?);
+    }
+    safetensors::tensor::serialize_to_file(&views, &None, path)?;
+    Ok(())
+}
+
+#[cfg(feature = "std")]
+fn deserialize_snapshot_safetensors(path: &std::path::Path) -> anyhow::Result<StateSnapshot> {
+    let bytes = std::fs::read(path)?;
+    let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
+    let mut snapshot = StateSnapshot::new();
+    for (name, view) in tensors.tensors() {
+        let path = StatePath::new(name)?;
+        let dtype = safetensors_dtype_from_wire(view.dtype())?;
+        let value = StateValue::new(
+            ShapeBuf::from_slice(view.shape()),
+            dtype,
+            view.data().to_vec(),
+            StateRole::Parameter,
+        )?;
+        snapshot.insert(path, value)?;
+    }
+    Ok(snapshot)
+}
+
+#[cfg(feature = "std")]
+fn serialize_snapshot_postcard(
+    snapshot: &StateSnapshot,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    std::fs::write(path, postcard::to_stdvec(snapshot)?)?;
+    Ok(())
+}
+
+#[cfg(feature = "std")]
+fn deserialize_snapshot_postcard(path: &std::path::Path) -> anyhow::Result<StateSnapshot> {
+    let bytes = std::fs::read(path)?;
+    Ok(postcard::from_bytes(&bytes)?)
+}
+
 fn decode_bytes<B>(
     bytes: &[u8],
     shape: &[usize],
@@ -373,6 +469,8 @@ impl<'a> Deserializer for PostcardDeserializer<'a> {
 pub enum Format {
     /// `Safetensors`.
     Safetensors,
+    /// Exact portable postcard state.
+    Postcard,
     /// `ONNX`.
     ONNX,
 }
@@ -401,11 +499,10 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
         match format {
-            Format::Safetensors => {
-                let mut serializer = SafetensorsSerializer::new(path);
-                self.save_to(&mut serializer)
-                    .map_err(|e| anyhow::anyhow!(e))?
-            }
+            Format::Safetensors => serialize_snapshot_safetensors(&self.state_snapshot()?, path)
+                .map_err(|e| anyhow::anyhow!(e))?,
+            Format::Postcard => serialize_snapshot_postcard(&self.state_snapshot()?, path)
+                .map_err(|e| anyhow::anyhow!(e))?,
             Format::ONNX => {
                 let mut serializer = crate::onnx_exporter::OnnxExporter::new(path);
                 self.save_to(&mut serializer)
@@ -424,8 +521,14 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     {
         match format {
             Format::Safetensors => {
-                let mut deserializer = SafetensorsDeserializer::new(path);
-                self.load_from(&mut deserializer, device)?;
+                let snapshot =
+                    deserialize_snapshot_safetensors(path).map_err(|e| anyhow::anyhow!(e))?;
+                self.load_state_snapshot(&snapshot)?;
+            }
+            Format::Postcard => {
+                let snapshot =
+                    deserialize_snapshot_postcard(path).map_err(|e| anyhow::anyhow!(e))?;
+                self.load_state_snapshot(&snapshot)?;
             }
             Format::ONNX => {
                 let mut deserializer = crate::onnx_exporter::OnnxImporter::new(path);

@@ -50,6 +50,17 @@ fn test_owned_heterogeneous_snapshot_extraction() -> Result<()> {
 }
 
 #[test]
+fn test_postcard_snapshot_round_trip() -> Result<()> {
+    let layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let path = std::env::temp_dir().join(format!("incin-state-{}.postcard", std::process::id()));
+    layer.save(Format::Postcard, &path)?;
+    let mut restored = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    restored.load(Format::Postcard, &path, &DeviceId::cpu())?;
+    std::fs::remove_file(path).ok();
+    Ok(())
+}
+
+#[test]
 /// `state_dict`'s prefix convention differs from `named_parameters`'s (the
 /// caller must already include a trailing `.`, unlike `named_parameters`
 /// where the `#[module]`-generated body appends it), so `Sequential`'s flat
