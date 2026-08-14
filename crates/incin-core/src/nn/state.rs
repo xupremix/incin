@@ -5,10 +5,12 @@
 //! and stage before touching a module's live state.
 
 use alloc::{
+    boxed::Box,
     collections::BTreeMap,
     string::{String, ToString},
     vec::Vec,
 };
+use core::any::Any;
 use core::fmt;
 
 use crate::{
@@ -17,14 +19,17 @@ use crate::{
     tensor::dtype::DTypeDescriptor,
 };
 
-/// Opaque prepared state.  Backend variable handles remain an implementation
-/// detail of the staging phase and are never serialized or exposed as model
-/// identity.
-pub struct StateLoadPlan<B: crate::tensor::backend::Backend> {
-    pub(crate) entries: BTreeMap<StatePath, B::RawVar>,
+/// Opaque backend-neutral staging state.
+///
+/// Concrete backend handles are type-erased at this boundary and are recovered
+/// only by the typed leaf that created each entry. This keeps the public state
+/// traversal contract independent of `Backend::RawVar` while preserving the
+/// current backend implementation until the typed variable backend migration.
+pub struct StateLoadPlan {
+    entries: BTreeMap<StatePath, Box<dyn Any>>,
 }
 
-impl<B: crate::tensor::backend::Backend> StateLoadPlan<B> {
+impl StateLoadPlan {
     /// Creates an empty plan for internal traversal.
     #[must_use]
     pub(crate) fn new() -> Self {
@@ -32,8 +37,8 @@ impl<B: crate::tensor::backend::Backend> StateLoadPlan<B> {
             entries: BTreeMap::new(),
         }
     }
-    pub(crate) fn insert(&mut self, path: StatePath, value: B::RawVar) -> Result<()> {
-        if self.entries.insert(path, value).is_some() {
+    pub(crate) fn insert<T: 'static>(&mut self, path: StatePath, value: T) -> Result<()> {
+        if self.entries.insert(path, Box::new(value)).is_some() {
             return Err(Error::InvalidModuleState {
                 operation: "prepare state",
                 reason: ErrorMessage::new("duplicate prepared state path"),
@@ -41,12 +46,20 @@ impl<B: crate::tensor::backend::Backend> StateLoadPlan<B> {
         }
         Ok(())
     }
-    pub(crate) fn take(&mut self, path: &StatePath) -> Result<B::RawVar> {
-        self.entries
+    pub(crate) fn take<T: 'static>(&mut self, path: &StatePath) -> Result<T> {
+        let value = self
+            .entries
             .remove(path)
             .ok_or_else(|| Error::InvalidModuleState {
                 operation: "commit state",
                 reason: ErrorMessage::new(format!("missing prepared state path {path}")),
+            })?;
+        value
+            .downcast::<T>()
+            .map(|value| *value)
+            .map_err(|_| Error::InvalidModuleState {
+                operation: "commit state",
+                reason: ErrorMessage::new(format!("prepared state type mismatch at {path}")),
             })
     }
 }

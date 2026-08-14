@@ -26,12 +26,12 @@ macro_rules! impl_module_for_optional_field {
                 $( (&&self.$field).maybe_collect_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), snapshot)?; )*
                 Ok(())
             }
-            fn prepare_state(&self, path: &crate::nn::StatePath, snapshot: &crate::nn::StateSnapshot, plan: &mut crate::nn::StateLoadPlan<B>) -> crate::prelude::Result<()> {
+            fn prepare_state(&self, path: &crate::nn::StatePath, snapshot: &crate::nn::StateSnapshot, plan: &mut crate::nn::StateLoadPlan) -> crate::prelude::Result<()> {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                 $( (&&self.$field).maybe_prepare_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), snapshot, plan)?; )*
                 Ok(())
             }
-            fn commit_state(&mut self, path: &crate::nn::StatePath, plan: &mut crate::nn::StateLoadPlan<B>) -> crate::prelude::Result<()> {
+            fn commit_state(&mut self, path: &crate::nn::StatePath, plan: &mut crate::nn::StateLoadPlan) -> crate::prelude::Result<()> {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                 $( (&mut &mut self.$field).maybe_commit_state(core::marker::PhantomData::<B>, &path.child(stringify!($field)), plan)?; )*
                 Ok(())

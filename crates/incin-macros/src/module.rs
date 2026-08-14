@@ -634,12 +634,12 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Ok(())
             }
 
-            fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #k_crate::prelude::StateLoadPlan<#b_ident>) -> #k_crate::prelude::Result<()> {
+            fn prepare_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &#k_crate::prelude::StateSnapshot, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
                 #(#prepare_state_calls)*
                 Ok(())
             }
 
-            fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #k_crate::prelude::StateLoadPlan<#b_ident>) -> #k_crate::prelude::Result<()> {
+            fn commit_state(&mut self, path: &#k_crate::prelude::StatePath, plan: &mut #k_crate::prelude::StateLoadPlan) -> #k_crate::prelude::Result<()> {
                 #(#commit_state_calls)*
                 Ok(())
             }

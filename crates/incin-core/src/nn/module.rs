@@ -22,7 +22,7 @@ pub trait StateDict<B: Backend> {
         &self,
         _prefix: &crate::nn::StatePath,
         _snapshot: &crate::nn::StateSnapshot,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
+        _plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         Ok(())
     }
@@ -31,7 +31,7 @@ pub trait StateDict<B: Backend> {
     fn commit_state(
         &mut self,
         _prefix: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
+        _plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         Ok(())
     }
@@ -260,7 +260,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
         _phantom: core::marker::PhantomData<B>,
         _path: &crate::nn::StatePath,
         _snapshot: &crate::nn::StateSnapshot,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
+        _plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         Ok(())
     }
@@ -268,7 +268,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         _path: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
+        _plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         Ok(())
     }
@@ -291,13 +291,13 @@ pub trait AutorefStateDict<B: Backend> {
         _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()>;
     fn maybe_commit_state(
         &mut self,
         _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()>;
 }
 
@@ -316,7 +316,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         (**self).prepare_state(path, snapshot, plan)
     }
@@ -324,7 +324,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         &mut self,
         _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         (*self).commit_state(path, plan)
     }
@@ -345,7 +345,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         _: core::marker::PhantomData<B>,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         (**self).prepare_state(path, snapshot, plan)
     }
@@ -353,7 +353,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         &mut self,
         _: core::marker::PhantomData<B>,
         _path: &crate::nn::StatePath,
-        _plan: &mut crate::nn::StateLoadPlan<B>,
+        _plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         Ok(())
     }
@@ -623,7 +623,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         self.0.prepare_state(&path.index(0), snapshot, plan)?;
         self.1
@@ -633,7 +633,7 @@ where
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         self.0.commit_state(&path.index(0), plan)?;
         self.1.commit_state(&path.index(L1::flat_width()), plan)
@@ -704,7 +704,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         if let Some(value) = self {
             value.prepare_state(path, snapshot, plan)?;
@@ -714,7 +714,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         if let Some(value) = self {
             value.commit_state(path, plan)?;

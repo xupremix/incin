@@ -645,7 +645,7 @@ impl<
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         let value = snapshot
             .get(path)
@@ -672,9 +672,9 @@ impl<
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
-        self.inner = plan.take(path)?;
+        self.inner = plan.take::<B::RawVar>(path)?;
         Ok(())
     }
 }
@@ -914,7 +914,7 @@ impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DTy
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
         let value = snapshot
             .get(path)
@@ -941,9 +941,9 @@ impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DTy
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
-        self.inner = plan.take(path)?;
+        self.inner = plan.take::<B::RawVar>(path)?;
         Ok(())
     }
 }

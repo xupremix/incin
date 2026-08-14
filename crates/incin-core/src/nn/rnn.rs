@@ -607,7 +607,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> crate::prelude::Result<()> {
         self.wi.prepare_state(&path.child("wi"), snapshot, plan)?;
         self.wh.prepare_state(&path.child("wh"), snapshot, plan)
@@ -615,7 +615,7 @@ where
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> crate::prelude::Result<()> {
         self.wi.commit_state(&path.child("wi"), plan)?;
         self.wh.commit_state(&path.child("wh"), plan)
@@ -644,14 +644,14 @@ where
         &self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> crate::prelude::Result<()> {
         self.cell.prepare_state(&path.child("cell"), snapshot, plan)
     }
     fn commit_state(
         &mut self,
         path: &crate::nn::StatePath,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        plan: &mut crate::nn::StateLoadPlan,
     ) -> crate::prelude::Result<()> {
         self.cell.commit_state(&path.child("cell"), plan)
     }

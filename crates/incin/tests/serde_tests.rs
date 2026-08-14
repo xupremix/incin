@@ -101,6 +101,46 @@ fn test_mixed_dtype_snapshot_round_trip() -> Result<()> {
 }
 
 #[test]
+fn test_mixed_dtype_checkpoint_round_trip() -> Result<()> {
+    let model = MixedStateModel {
+        fp32: Linear::build(())?,
+        fp16: incin_core::nn::Linear::<
+            s![2, 2],
+            CpuBackendImpl,
+            incin_core::nn::optional::True,
+            f16,
+        >::build(())?,
+    };
+    let expected = model.state_snapshot()?;
+    let dir = std::env::temp_dir().join(format!("incin-mixed-checkpoint-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    incin_core::nn::save::save_checkpoint::<CpuBackendImpl, _, _>(&model, &dir, 1)?;
+
+    let manifest = incin_core::nn::save::load_checkpoint_manifest(dir.join("manifest.json"))?;
+    assert_eq!(manifest.tensors["fp16.weight"].dtype.key.name(), "f16");
+    assert_eq!(manifest.tensors["fp32.weight"].dtype.key.name(), "f32");
+
+    let mut restored = MixedStateModel {
+        fp32: Linear::build(())?,
+        fp16: incin_core::nn::Linear::<
+            s![2, 2],
+            CpuBackendImpl,
+            incin_core::nn::optional::True,
+            f16,
+        >::build(())?,
+    };
+    incin_core::nn::save::load_resharded_checkpoint::<CpuBackendImpl, _, _>(
+        &mut restored,
+        &dir,
+        0,
+        1,
+    )?;
+    assert_eq!(restored.state_snapshot()?, expected);
+    std::fs::remove_dir_all(dir).ok();
+    Ok(())
+}
+
+#[test]
 fn test_explicit_state_name_is_schema_stable() -> Result<()> {
     let model = ExplicitStateNames {
         internal_query_projection: Linear::build(())?,
