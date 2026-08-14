@@ -1,11 +1,11 @@
 # Foundation Handoff Tracker
 
-Foundation status: FOUNDATION CONSOLIDATED — CONTINUE WITH POST-MIGRATION WORK
+Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
 
 Current phase: STABLE RANK-INDEPENDENT SHAPE / AXIS MIGRATION
-Last verified command: cargo test -p incin-core --all-targets --no-default-features
-Last verified result: PASS
-Next concrete action: maintain canonical ShapeBuf/descriptor invariants and expand backend coverage.
+Last verified command: cargo test -p incin-core --test compile_tests
+Last verified result: PASS (baseline; does not cover the open execution/shape contracts)
+Next concrete action: remove Shape from the backend-author execution contract.
 
 Status vocabulary:
 
@@ -15,6 +15,10 @@ Status vocabulary:
 - UNKNOWN — not yet verified
 - BLOCKED — external blocker with exact reason/evidence
 - DEFERRED — explicitly post-foundation by the master prompt
+- CONFIRMED FIXED — current source and executable evidence agree
+- CONFIRMED OPEN — current source contains the forbidden or incomplete contract
+- PARTIAL — a bounded part is fixed but the required migration is incomplete
+- UNVERIFIED — source or executable evidence has not yet been checked
 
 ## Tracker Table
 
@@ -72,6 +76,27 @@ Status vocabulary:
 | DOC-001 | Docs | docs describe current API and current dtype/bool semantics | Implemented | PASS | P1 | docs build/search |
 | PERF-001 | Regression | foundation migration must not cause obvious baseline performance regressions | Verified | PASS | P1 | touched-op benchmark/budget checks |
 | REL-001 | Freeze | frozen-foundations document truthfully describes the final foundation | Audited & verified | PASS | P0 | final freeze audit |
+
+## 2026-08-14 remediation audit
+
+This audit supersedes optimistic snapshot statuses where they contradict the
+current source. A status below is based on source and executable evidence, not
+on an older PASS claim.
+
+| Observation | Status | Current evidence |
+| --- | --- | --- |
+| ShapeValue validates dimensions and hides its unchecked constructor | CONFIRMED FIXED | `shapes/shape.rs`: `try_new` validates; `from_validated` is `pub(crate)`; compile-fail fixture `shape_value_constructor_is_private.rs` |
+| Static named extents project through `ConcreteStaticExtent` | PARTIAL | Projection exists in `shapes/dim.rs`, but consumers such as `nn/embedding.rs` still require the named dimension itself to implement `typenum::Unsigned` |
+| Backend execution is non-Shape-generic | CONFIRMED OPEN | `tensor/backend.rs` requires `Execute::execute_shaped<S: Shape>` and backend implementations contain that method throughout `incin-backends` |
+| Shape/Dim are independent of compiler IR | CONFIRMED OPEN | `Shape::symbolic_expr -> exec::ShapeExpr` and `Dim::symbolic_expr -> exec::DimExpr` remain in `shapes/shape.rs` and `shapes/dim.rs` |
+| Shape/Dim proof contracts are sealed | CONFIRMED OPEN | `Shape`, `Dim`, and `ConcreteStaticExtent` have no private sealing supertrait |
+| Rust-local axis identity is separated from durable identity | CONFIRMED OPEN | `dim!` expands `AxisTag::KEY` from `module_path!()`; no separate durable `AxisKey` seam is present |
+| State has no unsafe generic-dtype bridge | CONFIRMED OPEN | `nn/param.rs` still contains the homogeneous f32 state surface and unsafe reinterpretation/read paths |
+| Distributed module archive integrity | CONFIRMED FIXED | `crates/incin-core/src/dist/mod.rs` and `crates/incin-backends/src/dist/mod.rs` exist with child modules |
+
+The baseline commands `cargo check -p incin-core --no-default-features` and
+`cargo test -p incin-core --test compile_tests` passed on this checkout. Those
+checks do not prove the open remediation items above.
 
 ## Foundation decisions
 
