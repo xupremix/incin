@@ -1189,7 +1189,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::float_to_vec1::<K>(value)
+                <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
             }
             #[cfg(feature = "cuda")]
             DispatchStorage::Cuda(value) => {
@@ -1231,7 +1231,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::int_to_vec1::<K>(value)
+                <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
             }
             #[cfg(feature = "cuda")]
             DispatchStorage::Cuda(value) => {
