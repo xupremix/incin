@@ -2873,6 +2873,55 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     }
 }
 impl<D: Device> CudaBackendImpl<D> {
+    pub fn mse_loss<K: DType>(
+        pred: &CudaStorage,
+        target: &CudaStorage,
+        reduction: incin_core::prelude::Reduction,
+    ) -> Result<CudaStorage> {
+        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
+        let squared = <Self as NumericOps<Self>>::mul::<K>(&diff, &diff)?;
+        match reduction {
+            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&squared),
+            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&squared),
+            incin_core::prelude::Reduction::None => Ok(squared),
+        }
+    }
+
+    pub fn l1_loss<K: DType>(
+        pred: &CudaStorage,
+        target: &CudaStorage,
+        reduction: incin_core::prelude::Reduction,
+    ) -> Result<CudaStorage> {
+        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
+        let absolute = <Self as FloatOps<Self>>::abs::<K>(&diff)?;
+        match reduction {
+            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&absolute),
+            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&absolute),
+            incin_core::prelude::Reduction::None => Ok(absolute),
+        }
+    }
+
+    pub fn bce_with_logits_loss<K: DType>(
+        pred: &CudaStorage,
+        target: &CudaStorage,
+        reduction: incin_core::prelude::Reduction,
+    ) -> Result<CudaStorage> {
+        let max_x_0 = <Self as FloatOps<Self>>::relu::<K>(pred)?;
+        let x_times_target = <Self as NumericOps<Self>>::mul::<K>(pred, target)?;
+        let term1 = <Self as NumericOps<Self>>::sub::<K>(&max_x_0, &x_times_target)?;
+        let abs_x = <Self as FloatOps<Self>>::abs::<K>(pred)?;
+        let neg_abs_x = <Self as FloatOps<Self>>::neg::<K>(&abs_x)?;
+        let exp_neg_abs_x = <Self as FloatOps<Self>>::exp::<K>(&neg_abs_x)?;
+        let one_plus = <Self as FloatOps<Self>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
+        let term2 = <Self as FloatOps<Self>>::log::<K>(&one_plus)?;
+        let loss = <Self as NumericOps<Self>>::add::<K>(&term1, &term2)?;
+        match reduction {
+            incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss),
+            incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&loss),
+            incin_core::prelude::Reduction::None => Ok(loss),
+        }
+    }
+
     pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
@@ -3822,7 +3871,7 @@ mod tests {
     fn mse_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
-        let out = crate::legacy::mse_loss::<B, f32>(&pred, &target, Reduction::Mean).unwrap();
+        let out = B::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
     }
 
@@ -3831,7 +3880,7 @@ mod tests {
     fn l1_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
-        let out = crate::legacy::l1_loss::<B, f32>(&pred, &target, Reduction::Sum).unwrap();
+        let out = B::l1_loss::<f32>(&pred, &target, Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
     }
 
@@ -3840,7 +3889,7 @@ mod tests {
     fn bce_with_logits_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 2], vec![0.0, 1.0, -1.0, 2.0]);
         let target = cuda_f32(&[2, 2], vec![0.0, 1.0, 1.0, 0.0]);
-        let out = crate::legacy::bce_with_logits_loss::<B, f32>(&pred, &target, Reduction::None)
+        let out = B::bce_with_logits_loss::<f32>(&pred, &target, Reduction::None)
             .unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
@@ -3851,7 +3900,7 @@ mod tests {
         let pred = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let target = cuda_f32(&[2, 3], vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]);
         let pred_id = pred.id;
-        let out = crate::legacy::mse_loss::<B, f32>(&pred, &target, Reduction::Mean).unwrap();
+        let out = B::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(pred_id)

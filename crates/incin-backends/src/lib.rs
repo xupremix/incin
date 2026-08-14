@@ -21,7 +21,6 @@ pub mod codegen;
 ))]
 pub(crate) mod descriptor_bind;
 pub mod dispatch;
-pub(crate) mod legacy;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
 mod dispatch_executor;
 pub use dispatch::DispatchBackend;
