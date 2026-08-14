@@ -27,11 +27,11 @@ impl Module<Input> for ManualLinear {
     }
 }
 
-impl Parameters<CpuBackend> for ManualLinear {
+impl<K: DType> Parameters<CpuBackend, K> for ManualLinear {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut BTreeMap<String, <CpuBackend as VariableBackend>::RawVar>,
+        map: &mut BTreeMap<String, <CpuBackend as VariableBackend>::Var<K>>,
     ) {
         let child_prefix = if prefix.is_empty() {
             "layer".to_owned()
@@ -118,7 +118,14 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
         layer: Linear::build(())?,
     };
 
-    assert_eq!(manual.parameters().keys().collect::<Vec<_>>(), macro_layer.parameters().keys().collect::<Vec<_>>());
+    assert_eq!(
+        <ManualLinear as Parameters<CpuBackend, f32>>::parameters(&manual)
+            .keys()
+            .collect::<Vec<_>>(),
+        <MacroLinear as Parameters<CpuBackend, f32>>::parameters(&macro_layer)
+            .keys()
+            .collect::<Vec<_>>(),
+    );
     assert_eq!(
         manual.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),

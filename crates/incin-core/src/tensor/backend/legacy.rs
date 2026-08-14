@@ -324,30 +324,30 @@ pub trait CreationOps<B: VariableBackend> {
         device: &DeviceId,
     ) -> Result<B::Storage<K>>;
 
-    /// Same as `zeros`, but returns a trainable `RawVar` directly.
+    /// Same as `zeros`, but returns a trainable `Var<K>` directly.
     fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
-    /// Same as `ones`, but returns a trainable `RawVar` directly.
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
+    /// Same as `ones`, but returns a trainable `Var<K>` directly.
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
-    /// Same as `rand`, but returns a trainable `RawVar` directly.
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
+    /// Same as `rand`, but returns a trainable `Var<K>` directly.
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
-    /// Same as `randn`, but returns a trainable `RawVar` directly.
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
+    /// Same as `randn`, but returns a trainable `Var<K>` directly.
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
     /// Allocates a `shape`-sized tensor filled with `val`.
     fn full<K: DType>(
         val: f64,

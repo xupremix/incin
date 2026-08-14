@@ -23,8 +23,7 @@ use crate::{
 ///
 /// Concrete backend handles are type-erased at this boundary and are recovered
 /// only by the typed leaf that created each entry. This keeps the public state
-/// traversal contract independent of `Backend::RawVar` while preserving the
-/// current backend implementation until the typed variable backend migration.
+/// traversal contract independent of backend-native `Var<K>` handles.
 pub struct StateLoadPlan {
     entries: BTreeMap<StatePath, Box<dyn Any>>,
 }

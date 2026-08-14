@@ -179,22 +179,22 @@ impl Backend for CompanyBackend {
 }
 
 impl incin_core::prelude::VariableBackend for CompanyBackend {
-    type RawVar = ();
+    type Var<K: DType> = ();
 
     fn var_as_tensor<K: incin_core::prelude::DType>(
-        _var: &Self::RawVar,
+        _var: &Self::Var<K>,
     ) -> incin_core::prelude::Result<Self::Storage<K>> {
         Ok(())
     }
 
     fn var_from_tensor<K: incin_core::prelude::DType>(
         _storage: &Self::Storage<K>,
-    ) -> incin_core::prelude::Result<Self::RawVar> {
+    ) -> incin_core::prelude::Result<Self::Var<K>> {
         Ok(())
     }
 
     fn assign_var<K: incin_core::prelude::DType>(
-        _var: &mut Self::RawVar,
+        _var: &mut Self::Var<K>,
         _storage: &Self::Storage<K>,
     ) -> incin_core::prelude::Result<()> {
         Ok(())

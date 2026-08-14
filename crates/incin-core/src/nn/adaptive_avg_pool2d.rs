@@ -31,12 +31,12 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
     }
 }
 
-impl<HOut: Unsigned, WOut: Unsigned, B: crate::tensor::backend::VariableBackend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
+impl<HOut: Unsigned, WOut: Unsigned, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for AdaptiveAvgPool2d<HOut, WOut> {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }

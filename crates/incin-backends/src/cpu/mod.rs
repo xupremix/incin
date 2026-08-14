@@ -49,7 +49,7 @@ pub(crate) mod var;
 // Only the three types a downstream crate legitimately needs to name:
 //   - CpuBackendImpl<D>  to parameterise Tensor
 //   - CpuStorage        as Backend::Storage<K>
-//   - CpuVar            as Backend::RawVar
+//   - CpuVar            as Backend::Var<K>
 //   - CpuGrads          as Backend::Grads
 //   - CpuBuffer         for pattern-matching in to_bytes / from_bytes
 pub use storage::{CpuBuffer, CpuStorage};
@@ -350,18 +350,18 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImp
 
 
 impl<D: Device> incin_core::backend_authoring::VariableBackend for CpuBackendImpl<D> {
-    type RawVar = var::CpuVar;
+    type Var<K: DType> = var::CpuVar;
 
     /// `var_as_tensor`.
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         var::var_as_tensor(var)
     }
     /// `var_from_tensor`.
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
         var::var_from_tensor(t)
     }
     /// `assign_var`.
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
         var::assign_var(var, tensor)
     }
 }

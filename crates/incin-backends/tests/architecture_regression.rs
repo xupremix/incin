@@ -178,7 +178,7 @@ fn test_8e_minimal_backend_extension() {
     }
 
     impl Backend for MinimalBackend {
-        type RawVar = ();
+        type Var<K: DType> = ();
         type Grads = ();
         type InnerBackend = Self;
 

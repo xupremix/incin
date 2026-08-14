@@ -4616,18 +4616,18 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendIm
         }
 }
 impl<D: Device> VariableBackend for CudaBackendImpl<D> {
-    type RawVar = CudaVar;
+    type Var<K: DType> = CudaVar;
 
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
     }
 
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
         let t: &CudaStorage = t;
         Ok(CudaVar { storage: t.clone() })
     }
 
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
         let tensor: &CudaStorage = tensor;
         var.storage = tensor.clone();
         Ok(())

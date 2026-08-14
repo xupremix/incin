@@ -23,11 +23,11 @@ impl<Start, End> Flatten<Start, End> {
     }
 }
 
-impl<Start, End, B: crate::tensor::backend::VariableBackend> Parameters<B> for Flatten<Start, End> {
+impl<Start, End, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Flatten<Start, End> {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }

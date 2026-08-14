@@ -26,12 +26,12 @@ macro_rules! impl_stateless_shape_info {
 
 impl_stateless_shape_info!(ReLU);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ReLU {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for ReLU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -73,12 +73,12 @@ pub struct GELU;
 
 impl_stateless_shape_info!(GELU);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for GELU {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for GELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -113,12 +113,12 @@ pub struct Swish;
 
 impl_stateless_shape_info!(Swish);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Swish {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Swish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -153,12 +153,12 @@ pub struct Mish;
 
 impl_stateless_shape_info!(Mish);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Mish {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Mish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -195,12 +195,12 @@ pub struct ELU;
 
 impl_stateless_shape_info!(ELU);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ELU {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for ELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -251,12 +251,12 @@ impl Softmax {
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Softmax {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Softmax {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -294,12 +294,12 @@ pub struct Sigmoid;
 
 impl_stateless_shape_info!(Sigmoid);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Sigmoid {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Sigmoid {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }
@@ -333,12 +333,12 @@ pub struct Tanh;
 
 impl_stateless_shape_info!(Tanh);
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Tanh {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Tanh {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
     }
 }

@@ -94,7 +94,7 @@ impl<T: crate::tensor::backend::ExecuteOutput> crate::tensor::backend::ExecuteOu
 }
 
 #[derive(Clone)]
-/// A `TracingBackend` variable handle: the real backend's `RawVar` plus
+/// A `TracingBackend` variable handle: the real backend's `Var<K>` plus
 /// the `ValueId` identifying this variable's node in the tracing graph.
 pub struct TracingVar<V> {
     /// The wrapped real backend variable.
@@ -884,10 +884,10 @@ impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backen
 }
 
 impl<B: VariableBackend> VariableBackend for TracingBackend<B> {
-    type RawVar = TracingVar<<B as crate::tensor::backend::VariableBackend>::RawVar>;
+    type Var<K: DType> = TracingVar<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
 
     fn var_as_tensor<K: DType>(
-        var: &Self::RawVar,
+        var: &Self::Var<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::var_as_tensor(&var.inner)?;
         Ok(TracingTensor { inner, value_id: var.value_id })
@@ -895,13 +895,13 @@ impl<B: VariableBackend> VariableBackend for TracingBackend<B> {
 
     fn var_from_tensor<K: DType>(
         tensor: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<Self::RawVar> {
+    ) -> Result<Self::Var<K>> {
         let inner = B::var_from_tensor(&tensor.inner)?;
         Ok(TracingVar { inner, value_id: tensor.value_id })
     }
 
     fn assign_var<K: DType>(
-        var: &mut Self::RawVar,
+        var: &mut Self::Var<K>,
         tensor: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<()> {
         B::assign_var(&mut var.inner, &tensor.inner)
@@ -1010,7 +1010,7 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
         let inner = B::var_zeros::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1023,7 +1023,7 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
         let inner = B::var_ones::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1036,7 +1036,7 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
         let inner = B::var_rand::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1049,7 +1049,7 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
         let inner = B::var_randn::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1087,10 +1087,10 @@ where
     }
 
     fn transfer_var<K: DType>(
-        variable: &Self::RawVar,
+        variable: &Self::Var<K>,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
+    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::Var<K>>
     where
         Self::Output: SupportsDType<K>,
     {

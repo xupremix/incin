@@ -73,7 +73,7 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
 
 pub(crate) trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
     fn adamw_step<K: DType>(
-        var: &mut B::RawVar,
+        var: &mut B::Var<K>,
         grad: &B::Storage<K>,
         m: &mut B::Storage<K>,
         v: &mut B::Storage<K>,
@@ -92,7 +92,7 @@ pub(crate) trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> 
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn adamw_step_composed<B: VariableBackend + NumericOps<B> + FloatOps<B>, K: DType>(
-    var: &mut B::RawVar,
+    var: &mut B::Var<K>,
     grad: &B::Storage<K>,
     m: &mut B::Storage<K>,
     v: &mut B::Storage<K>,

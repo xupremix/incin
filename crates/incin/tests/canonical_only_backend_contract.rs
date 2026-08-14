@@ -69,9 +69,9 @@ impl incin_core::backend_authoring::HostInterop for CanonicalOnlyBackend {
 }
 
 impl VariableBackend for CanonicalOnlyBackend {
-    type RawVar = ();
+    type Var<K: DType> = ();
 
-    fn var_as_tensor<K: DType>(_var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(_var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Err(Error::Backend(BackendError::Unsupported {
             backend: Self::BACKEND_NAME,
             reason: UnsupportedReason::MissingDeviceFeature {
@@ -80,11 +80,11 @@ impl VariableBackend for CanonicalOnlyBackend {
         }))
     }
 
-    fn var_from_tensor<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Var<K>> {
         Ok(())
     }
 
-    fn assign_var<K: DType>(_var: &mut Self::RawVar, _tensor: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(_var: &mut Self::Var<K>, _tensor: &Self::Storage<K>) -> Result<()> {
         Ok(())
     }
 }

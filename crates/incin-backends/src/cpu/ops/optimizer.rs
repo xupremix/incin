@@ -18,7 +18,7 @@ impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
     /// an optimizer that works refuse an `f64` or `f16` parameter for no
     /// reason other than that the fast path had not been written for it.
     fn adamw_step<K: DType>(
-        _var: &mut <Self as VariableBackend>::RawVar,
+        _var: &mut <Self as VariableBackend>::Var<K>,
         _grad: &<Self as StorageBackend>::Storage<K>,
         _m: &mut <Self as StorageBackend>::Storage<K>,
         _v: &mut <Self as StorageBackend>::Storage<K>,

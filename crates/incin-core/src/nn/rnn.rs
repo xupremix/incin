@@ -339,16 +339,16 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
+> Parameters<B, K> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<S::IhShape, B, BiasIh, K, Train>: Parameters<B>,
-    Linear<S::HhShape, B, BiasHh, K, Train>: Parameters<B>,
+    Linear<S::IhShape, B, BiasIh, K, Train>: Parameters<B, K>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: Parameters<B, K>,
 {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
         self.wi.named_parameters(&format!("{}wi.", prefix), map);
         self.wh.named_parameters(&format!("{}wh.", prefix), map);
@@ -499,15 +499,15 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Parameters<B> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
+> Parameters<B, K> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
 where
-    RNNCell<S, B, BiasIh, BiasHh, K, Train>: Parameters<B>,
+    RNNCell<S, B, BiasIh, BiasHh, K, Train>: Parameters<B, K>,
 {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }

@@ -462,16 +462,16 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+> Parameters<B, K> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<D2<In, Out>, B, BiasIh, K, Train>: Parameters<B>,
-    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Parameters<B>,
+    Linear<D2<In, Out>, B, BiasIh, K, Train>: Parameters<B, K>,
+    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Parameters<B, K>,
 {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
         self.wi_i.named_parameters(&format!("{}wi_i.", prefix), map);
         self.wi_f.named_parameters(&format!("{}wi_f.", prefix), map);
@@ -636,15 +636,15 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+> Parameters<B, K> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Parameters<B>,
+    LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Parameters<B, K>,
 {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }

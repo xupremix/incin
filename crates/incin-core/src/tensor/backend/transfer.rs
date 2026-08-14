@@ -23,10 +23,10 @@ pub trait TransferTo<NewD: Device>: VariableBackend {
     /// Transfers a variable into destination-native variable storage.
     /// Generic over K so that non-f32 parameter dtypes are preserved.
     fn transfer_var<K: DType>(
-        variable: &Self::RawVar,
+        variable: &Self::Var<K>,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
+    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::Var<K>>
     where
         Self::Output: SupportsDType<K>;
 }

@@ -210,10 +210,10 @@ where
     }
 
     fn transfer_var<K: incin_core::prelude::DType>(
-        variable: &Self::RawVar,
+        variable: &Self::Var<K>,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as VariableBackend>::RawVar>
+    ) -> Result<<Self::Output as VariableBackend>::Var<K>>
     where
         Self::Output: SupportsDType<K>,
     {
@@ -248,23 +248,23 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::AutogradBack
 }
 
 impl<D: incin_core::prelude::Device> incin_core::backend_authoring::VariableBackend for CandleBackend<D> {
-    type RawVar = candle_core::Var;
+    type Var<K: DType> = candle_core::Var;
 
     fn var_as_tensor<K: incin_core::prelude::DType>(
-        var: &Self::RawVar,
+        var: &Self::Var<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         CandleStorage::try_new(var.as_tensor().clone())
     }
 
     fn var_from_tensor<K: incin_core::prelude::DType>(
         t: &Self::Storage<K>,
-    ) -> Result<Self::RawVar> {
+    ) -> Result<Self::Var<K>> {
         Ok(candle::Var::from_tensor(t.tensor())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
     }
 
     fn assign_var<K: incin_core::prelude::DType>(
-        var: &mut Self::RawVar,
+        var: &mut Self::Var<K>,
         tensor: &Self::Storage<K>,
     ) -> Result<()> {
         var.set(tensor.tensor())

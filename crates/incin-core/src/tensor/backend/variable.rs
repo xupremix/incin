@@ -5,9 +5,9 @@ use crate::tensor::dtype::DType;
 /// Trainable-variable storage capabilities.
 pub trait VariableBackend: Backend {
     /// Backend-native variable handle.
-    type RawVar: Clone;
+    type Var<K: DType>: Clone;
     /// Views a variable as ordinary tensor storage.
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Err(crate::err::Error::Backend(BackendError::unsupported(
             Self::BACKEND_NAME,
             crate::exec::UnsupportedReason::MissingDeviceFeature {
@@ -16,7 +16,7 @@ pub trait VariableBackend: Backend {
         )))
     }
     /// Promotes tensor storage to a trainable variable.
-    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Var<K>> {
         let _ = storage;
         Err(crate::err::Error::Backend(BackendError::unsupported(
             Self::BACKEND_NAME,
@@ -26,7 +26,7 @@ pub trait VariableBackend: Backend {
         )))
     }
     /// Failure-atomic variable assignment.
-    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, storage: &Self::Storage<K>) -> Result<()> {
         let _ = (var, storage);
         Err(crate::err::Error::Backend(BackendError::unsupported(
             Self::BACKEND_NAME,

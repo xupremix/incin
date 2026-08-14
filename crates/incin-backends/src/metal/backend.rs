@@ -309,7 +309,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::Var<K>> {
         let s = Self::zeros::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -318,7 +318,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::Var<K>> {
         let s = Self::ones::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -327,7 +327,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::Var<K>> {
         let s = Self::rand::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -336,7 +336,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::Var<K>> {
         let s = Self::randn::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -3063,17 +3063,17 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for MetalBackendI
         }
 }
 impl<D: Device> VariableBackend for MetalBackendImpl<D> {
-    type RawVar = MetalVar;
+    type Var<K: DType> = MetalVar;
 
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
     }
 
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
         Ok(MetalVar { storage: t.clone() })
     }
 
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
         var.storage = tensor.clone();
         Ok(())
     }

@@ -121,17 +121,17 @@ impl incin::backend_authoring::HostInterop for CompanyBackend {
 }
 
 impl VariableBackend for CompanyBackend {
-    type RawVar = ShapeBuf;
+    type Var<K: DType> = ShapeBuf;
 
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> incin::prelude::Result<<Self as StorageBackend>::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> incin::prelude::Result<<Self as StorageBackend>::Storage<K>> {
         Ok(var.clone())
     }
 
-    fn var_from_tensor<K: DType>(storage: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(storage: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Self::Var<K>> {
         Ok(storage.clone())
     }
 
-    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, storage: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<()> {
         *var = storage.clone();
         Ok(())
     }

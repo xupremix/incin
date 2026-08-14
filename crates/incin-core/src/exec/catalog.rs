@@ -321,7 +321,7 @@ pub struct OperationCatalogEntry {
 const fn execution_site(operation: OperationKind) -> ExecutionSite {
     match operation {
         // Every one of these calls its backend method with `&mut`, either on a
-        // storage handle or on a `RawVar`, and returns nothing.
+        // storage handle or on a `Var<K>`, and returns nothing.
         OperationKind::AddInPlace
         | OperationKind::SubInPlace
         | OperationKind::MulInPlace

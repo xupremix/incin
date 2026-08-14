@@ -1940,9 +1940,9 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for DispatchBacke
 }
 
 impl<D: Device> VariableBackend for DispatchBackend<D> {
-type RawVar = DispatchVar;
+type Var<K: DType> = DispatchVar;
 
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         match var {
             #[cfg(feature = "cpu")]
             DispatchVar::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::var_as_tensor::<K>(value)
@@ -1965,7 +1965,7 @@ type RawVar = DispatchVar;
             DispatchVar::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar> {
+    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Var<K>> {
         match storage {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1989,7 +1989,7 @@ type RawVar = DispatchVar;
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, storage: &Self::Storage<K>) -> Result<()> {
         match (var, storage) {
             #[cfg(feature = "cpu")]
             (DispatchVar::Cpu(var), DispatchStorage::Cpu(value)) => {

@@ -43,11 +43,11 @@ impl Dropout {
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Dropout {
+impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Dropout {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
         // No learnable parameters.
     }

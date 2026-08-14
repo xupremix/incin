@@ -32,7 +32,7 @@ fn materialize_storage_plan<T, S>(
     shape_val: ShapeValue<S>,
     init: Init,
     context: InitContext,
-) -> Result<<TargetBackend<T> as VariableBackend>::RawVar>
+) -> Result<<TargetBackend<T> as VariableBackend>::Var<T::ParameterDtype>>
 where
     T: TensorTarget + TargetExt + Clone,
     S: Shape + DynShape,

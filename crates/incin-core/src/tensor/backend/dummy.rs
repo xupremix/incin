@@ -152,17 +152,17 @@ use super::*;
     }
 
     impl<D: Device + Clone + 'static> VariableBackend for DummyBackend<D> {
-        type RawVar = alloc::vec::Vec<usize>;
+        type Var<K: DType> = alloc::vec::Vec<usize>;
 
-        fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
             Ok(var.clone())
         }
 
-        fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
             Ok(t.clone())
         }
 
-        fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
             *var = tensor.clone();
             Ok(())
         }
@@ -235,10 +235,10 @@ use super::*;
         }
 
         fn transfer_var<K: DType>(
-            variable: &Self::RawVar,
+            variable: &Self::Var<K>,
             _dtype: &K::Field,
             _device: &NewD::Field,
-        ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
+        ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::Var<K>>
         where
             Self::Output: SupportsDType<K>,
         {
@@ -247,7 +247,7 @@ use super::*;
     }
 
     /// Shape is preserved by every allocation, since it's the only thing
-    /// `Storage`/`RawVar` track --- no real fill value is ever written.
+    /// `Storage`/`Var<K>` track --- no real fill value is ever written.
     impl<D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<D> {
         /// Returns `shape` verbatim as the storage handle.
         fn zeros<K: DType>(
@@ -315,7 +315,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -323,7 +323,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -331,7 +331,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -339,7 +339,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::Var<K>> {
             Ok(shape.to_vec())
         }
     }

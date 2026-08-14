@@ -56,10 +56,10 @@ macro_rules! impl_transfer {
             }
 
             fn transfer_var<K: DType>(
-                variable: &Self::RawVar,
+                variable: &Self::Var<K>,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> incin_core::prelude::Result<<Self::Output as VariableBackend>::RawVar>
+            ) -> incin_core::prelude::Result<<Self::Output as VariableBackend>::Var<K>>
             where
                 Self::Output: incin_core::prelude::SupportsDType<K>,
             {
