@@ -173,6 +173,25 @@ handles, compatibility adapters for superseded operation families, backend
 requirements that force autograd or state, or hand-edits to generated docs.
 Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
+## Validation checkpoint
+
+The current consolidation checkpoint has passed:
+
+```text
+./tools/check-package.sh                                      # passed
+./tools/check-public-api.sh                                   # passed
+./tools/check-architecture.sh                                 # passed
+cargo check -p incin-core --no-default-features                # passed
+cargo check -p incin-backends --no-default-features --features std,cuda,target-api   # passed
+cargo check -p incin-backends --no-default-features --features std,metal,target-api  # passed
+cargo check -p incin-backends --no-default-features --features std,wgpu,target-api   # passed
+cargo test -p incin --features cpu,target-api --test handoff_manual_module --no-default-features # passed
+```
+
+These are checkpoint results, not the final HND-001 gate: the legacy backend
+operation-family removal, full capability extraction, and final public API
+allowlist remain open in the unresolved architecture section.
+
 ## First 30 minutes
 
 1. Read this file and `docs/README.md`.
