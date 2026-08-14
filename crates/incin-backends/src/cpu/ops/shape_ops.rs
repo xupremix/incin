@@ -148,6 +148,62 @@ pub(crate) fn broadcast_as_storage(t: &CpuStorage, shape: &[usize]) -> Result<Cp
     Ok(out)
 }
 
+pub(crate) fn broadcast_left_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStorage> {
+    let mut target_shape = shape.to_vec();
+    target_shape.extend_from_slice(&t.shape);
+    broadcast_as_storage(t, &target_shape)
+}
+
+pub(crate) fn float_to_scalar_storage(t: &CpuStorage) -> Result<f64> {
+    if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
+        return Err(Error::ShapeMismatch {
+            op: "float_to_scalar",
+            expected: vec![1],
+            got: t.shape.to_vec(),
+            msg: alloc::string::String::from("float_to_scalar requires a single-element tensor"),
+        });
+    }
+    Ok(t.get(&vec![0usize; t.shape.len()]))
+}
+
+pub(crate) fn float_to_vec1_storage(t: &CpuStorage) -> Result<alloc::vec::Vec<f64>> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out = alloc::vec::Vec::with_capacity(total);
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        out.push(t.get(&idx));
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) fn int_to_scalar_storage(t: &CpuStorage) -> Result<i64> {
+    if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
+        return Err(Error::ShapeMismatch {
+            op: "int_to_scalar",
+            expected: vec![1],
+            got: t.shape.to_vec(),
+            msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
+        });
+    }
+    t.get_i64_checked(&vec![0usize; t.shape.len()], "int_to_scalar")
+}
+
+pub(crate) fn int_to_vec1_storage(t: &CpuStorage) -> Result<alloc::vec::Vec<i64>> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out = alloc::vec::Vec::with_capacity(total);
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        out.push(t.get_i64_checked(&idx, "int_to_vec1")?);
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    Ok(out)
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -656,69 +712,31 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut target_shape = shape.to_vec();
-        target_shape.extend_from_slice(&t.shape);
-        Self::broadcast_as::<K>(t, &target_shape)
+        broadcast_left_storage(t, shape)
     }
 
     /// `float_to_scalar`.
     fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
-        if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
-            return Err(Error::ShapeMismatch {
-                op: "float_to_scalar",
-                expected: vec![1],
-                got: t.shape.to_vec(),
-                msg: alloc::string::String::from(
-                    "float_to_scalar requires a single-element tensor",
-                ),
-            });
-        }
-        Ok(t.get(&vec![0usize; t.shape.len()]))
+        float_to_scalar_storage(t)
     }
 
     /// `float_to_vec1`.
     fn float_to_vec1<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<f64>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = alloc::vec::Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx));
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        Ok(out)
+        float_to_vec1_storage(t)
     }
 
     /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
-        if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
-            return Err(Error::ShapeMismatch {
-                op: "int_to_scalar",
-                expected: vec![1],
-                got: t.shape.to_vec(),
-                msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
-            });
-        }
-        t.get_i64_checked(&vec![0usize; t.shape.len()], "int_to_scalar")
+        int_to_scalar_storage(t)
     }
 
     /// `int_to_vec1`.
     fn int_to_vec1<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<i64>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = alloc::vec::Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get_i64_checked(&idx, "int_to_vec1")?);
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        Ok(out)
+        int_to_vec1_storage(t)
     }
 
     /// `tensor_to_dtype`.

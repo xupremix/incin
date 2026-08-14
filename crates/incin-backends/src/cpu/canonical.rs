@@ -41,9 +41,10 @@ use super::ops::elementwise::{
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
 use super::ops::shape_ops::{
-    diag_storage, div_scalar_storage, flatten_storage, group_norm_storage, instance_norm_storage,
-    narrow_storage, squeeze_storage, sub_scalar_storage, transpose_storage, tril_storage,
-    triu_storage, unsqueeze_storage,
+    broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
+    float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
+    int_to_vec1_storage, narrow_storage, squeeze_storage, sub_scalar_storage, transpose_storage,
+    tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -369,7 +370,7 @@ macro_rules! readback_executors {
                 let operation = OperationKind::$operation;
                 let training = training_mode(request.context);
                 let input = reduction_operand(self, request.inputs, operation, training)?;
-                <Self as TensorOps<Self>>::$method::<f32>(input)
+                $method(input)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -377,10 +378,10 @@ macro_rules! readback_executors {
 }
 
 readback_executors![
-    (ToHostFloatScalar, float_to_scalar, f64),
-    (ToHostFloatVec, float_to_vec1, Vec<f64>),
-    (ToHostIntScalar, int_to_scalar, i64),
-    (ToHostIntVec, int_to_vec1, Vec<i64>),
+    (ToHostFloatScalar, float_to_scalar_storage, f64),
+    (ToHostFloatVec, float_to_vec1_storage, Vec<f64>),
+    (ToHostIntScalar, int_to_scalar_storage, i64),
+    (ToHostIntVec, int_to_vec1_storage, Vec<i64>),
 ];
 
 /// The raw bytes behind an allocation.
@@ -2348,7 +2349,7 @@ impl<D: Device> Execute<op::Linear> for CpuBackendImpl<D> {
         admitted(self, operation, weight, training)?;
         let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
-        let transposed = <Self as TensorOps<Self>>::transpose::<f32>(weight, 0, 1).map_err(wrap)?;
+        let transposed = transpose_storage(weight, 0, 1).map_err(wrap)?;
         let product =
             crate::cpu::ops::shape_ops::matmul_storage(input, &transposed).map_err(wrap)?;
         match bias {
@@ -2443,7 +2444,7 @@ impl<D: Device> Execute<op::BroadcastLeft> for CpuBackendImpl<D> {
                 "the declared target shape has fewer axes than the operand",
             ));
         };
-        <Self as TensorOps<Self>>::broadcast_left::<f32>(input, &target[..prefix])
+        broadcast_left_storage(input, &target[..prefix])
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -2687,8 +2688,8 @@ impl<D: Device> Execute<op::Outer> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let wrap = |error| kernel_error(CPU_NAME, operation, error);
-        let column = <Self as TensorOps<Self>>::unsqueeze::<f32>(lhs, 1).map_err(wrap)?;
-        let row = <Self as TensorOps<Self>>::unsqueeze::<f32>(rhs, 0).map_err(wrap)?;
+        let column = unsqueeze_storage(lhs, 1).map_err(wrap)?;
+        let row = unsqueeze_storage(rhs, 0).map_err(wrap)?;
         crate::cpu::ops::elementwise::mul_storage(&column, &row).map_err(wrap)
     }
 }
@@ -2728,10 +2729,8 @@ fn consecutive_pieces<D: Device>(
     while start < extent {
         let length = (extent - start).min(piece);
         pieces.push(
-            <CpuBackendImpl<D> as TensorOps<CpuBackendImpl<D>>>::narrow::<f32>(
-                input, axis, start, length,
-            )
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))?,
+            narrow_storage(input, axis, start, length)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?,
         );
         start += length;
     }
