@@ -5,7 +5,7 @@
 
 #![cfg(all(feature = "cpu", feature = "target-api"))]
 
-use incin::nn::{Module, ParameterVisitor, StateDict, TrainState, VisitParameters};
+use incin::nn::{Module, ParameterVisitor, TrainState, VisitParameters};
 use incin::prelude::*;
 
 type CpuBackend = incin_backends::cpu::CpuBackendImpl;
@@ -166,11 +166,11 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     let manual_snapshot = incin::state::collect_state::<CpuBackend, _>(&manual)?;
     assert_eq!(
         manual_snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
-        macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
     assert_eq!(
         incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
-        macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 
     let input = target.zeros(shape![2, 4])?.into_dyn().require_grad();
@@ -184,11 +184,11 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     let loss = manual_output.mse_loss(&target_output)?;
     let _grads = loss.backward()?;
 
-    let snapshot = macro_layer.state_dict()?;
+    let snapshot = incin::state::collect_state::<CpuBackend, _>(&macro_layer)?;
     let mut restored = macro_layer;
     restored.load_state_dict(&snapshot)?;
     assert_eq!(
-        restored.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&restored)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 
