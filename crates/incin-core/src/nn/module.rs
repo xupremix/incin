@@ -440,6 +440,22 @@ where
     }
 }
 
+impl<B, L1, L2> crate::nn::VisitState<B> for Sequential<L1, L2>
+where
+    B: crate::tensor::backend::VariableBackend,
+    L1: crate::nn::VisitState<B> + StateDict<B>,
+    L2: crate::nn::VisitState<B> + StateDict<B>,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_state(&path.index(0), visitor)?;
+        self.1.visit_state(&path.index(L1::flat_width()), visitor)
+    }
+}
+
 // Dummy implementations for primitive/marker types that are often fields in modules.
 macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
@@ -513,6 +529,23 @@ impl<L: StateDict<B>, B: crate::tensor::backend::VariableBackend> StateDict<B> f
     ) -> Result<()> {
         if let Some(value) = self {
             value.commit_state(path, plan)?;
+        }
+        Ok(())
+    }
+}
+
+impl<L, B> crate::nn::VisitState<B> for Option<L>
+where
+    L: crate::nn::VisitState<B>,
+    B: crate::tensor::backend::VariableBackend,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.visit_state(path, visitor)?;
         }
         Ok(())
     }

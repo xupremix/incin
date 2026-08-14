@@ -5,7 +5,7 @@
 
 #![cfg(all(feature = "cpu", feature = "target-api"))]
 
-use incin::nn::{Module, Parameters, StateDict};
+use incin::nn::{Module, Parameters, StateDict, TrainState};
 use incin::prelude::*;
 use incin::state::StateLoadPlan;
 use std::collections::BTreeMap;
@@ -39,6 +39,16 @@ impl<K: DType> Parameters<CpuBackend, K> for ManualLinear {
             format!("{prefix}.layer")
         };
         self.layer.named_parameters(&child_prefix, map);
+    }
+}
+
+impl VisitState<CpuBackend> for ManualLinear {
+    fn visit_state<V: StateVisitor<CpuBackend>>(
+        &self,
+        path: &StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.layer.visit_state(&path.child("layer"), visitor)
     }
 }
 
@@ -76,6 +86,37 @@ impl Module<Input> for MacroLinear {
 }
 
 struct ForwardOnlyField;
+
+struct VisitedPaths(Vec<String>);
+
+impl StateVisitor<CpuBackend> for VisitedPaths {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        _param: &incin::nn::param::Param<S, CpuBackend, K, Train>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        K: DType,
+        Train: TrainState,
+    {
+        self.0.push(path.to_string());
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        _buffer: &incin::nn::param::Buffer<S, CpuBackend, K>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        K: DType,
+    {
+        self.0.push(path.to_string());
+        Ok(())
+    }
+}
 
 impl Module<Input> for ForwardOnlyField {
     type Output = Input;
@@ -149,6 +190,12 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
         restored.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
+
+    let mut manual_paths = VisitedPaths(Vec::new());
+    restored.visit_state(&StatePath::root(), &mut manual_paths)?;
+    let mut macro_paths = VisitedPaths(Vec::new());
+    macro_layer.visit_state(&StatePath::root(), &mut macro_paths)?;
+    assert_eq!(manual_paths.0, macro_paths.0);
 
     Ok(())
 }

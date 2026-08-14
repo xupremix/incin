@@ -82,11 +82,11 @@ pub use incin_core::optim::{
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_core::prelude::{
     Backend, BackendError, BackwardError, BoolDType, BuiltinDType, ConstDType, ConversionFailure,
-    Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
+    Buffer, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
     QuantDType, RequiresGrad, Result, Shape, StateDict, StatePath, StateRole,
-    StateSnapshot, StateValue, TensorElement, VariableBackend, bf16,
+    StateSnapshot, StateValue, StateVisitor, TrainState, VisitState, TensorElement, VariableBackend, bf16,
     convert_f64_to_i64, f16,
 };
 
@@ -277,6 +277,7 @@ pub mod test_utils {
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
+    pub use incin_core::nn::param;
     pub use incin_core::nn::{
         AdaptiveAvgPool2d, AvgPool2d, BCEWithLogitsLoss, BCEWithLogitsShape, BatchNorm2d,
         BatchNormShape, Buffer, ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape,
@@ -286,7 +287,7 @@ pub mod nn {
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
         OptionalField, Param, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
         ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
-        TrainMode, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        TrainMode, TrainState, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
         format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
     pub use incin_core::tensor::transfer::ToDevice;
@@ -341,7 +342,7 @@ pub mod doctor;
 
 /// Model checkpoint artifacts and transactional state loading.
 pub mod state {
-    pub use incin_core::prelude::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue};
+    pub use incin_core::prelude::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState};
 }
 
 // Enabling an accelerator must never silently change application behavior.
@@ -500,7 +501,7 @@ pub mod prelude {
         NamedAxisSelector, NamedDim, Next, Nil, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
-        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue,
+        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 
@@ -544,7 +545,7 @@ pub mod prelude {
     pub use incin_macros::{axis, idx, module, s, shape, tensor};
 
     pub use super::{
-        BatchNorm2d, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
+        BatchNorm2d, Buffer, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
     };
 
     pub use incin_core::nn::{
