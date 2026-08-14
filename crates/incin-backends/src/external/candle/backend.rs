@@ -1,7 +1,7 @@
 //! Core `Backend`, `SupportsDType`, and `TransferTo` implementations.
 
 use crate::external::candle::CandleBackend;
-use crate::external::candle::convert::{to_candle_device, to_candle_dtype};
+use crate::external::candle::convert::{from_candle_dtype, to_candle_device, to_candle_dtype};
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 use candle_core as candle;
@@ -9,6 +9,84 @@ use candle_core as candle;
 impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBackend<D> {
 
     type InnerBackend = Self;
+}
+
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostReadback
+    for CandleBackend<D>
+{
+    fn float_to_vec1<K: incin_core::prelude::DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Vec<f64>> {
+        let values: Vec<f32> = t
+            .tensor()
+            .to_dtype(candle_core::DType::F32)
+            .map_err(|e| anyhow::anyhow!(e))?
+            .to_vec1()
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(values.into_iter().map(f64::from).collect())
+    }
+
+    fn int_to_vec1<K: incin_core::prelude::DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Vec<i64>> {
+        let tensor = t.tensor();
+        match tensor.dtype() {
+            candle_core::DType::U8 => Ok(tensor
+                .to_vec1::<u8>()
+                .map_err(|e| anyhow::anyhow!(e))?
+                .into_iter()
+                .map(i64::from)
+                .collect()),
+            candle_core::DType::U32 => Ok(tensor
+                .to_vec1::<u32>()
+                .map_err(|e| anyhow::anyhow!(e))?
+                .into_iter()
+                .map(i64::from)
+                .collect()),
+            candle_core::DType::I64 => Ok(tensor
+                .to_vec1::<i64>()
+                .map_err(|e| anyhow::anyhow!(e))?),
+            dtype => {
+                let values: Vec<f64> = match dtype {
+                    candle_core::DType::F16 => tensor
+                        .to_vec1::<half::f16>()
+                        .map_err(|e| anyhow::anyhow!(e))?
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect(),
+                    candle_core::DType::BF16 => tensor
+                        .to_vec1::<half::bf16>()
+                        .map_err(|e| anyhow::anyhow!(e))?
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect(),
+                    candle_core::DType::F32 => tensor
+                        .to_vec1::<f32>()
+                        .map_err(|e| anyhow::anyhow!(e))?
+                        .into_iter()
+                        .map(f64::from)
+                        .collect(),
+                    candle_core::DType::F64 => tensor
+                        .to_vec1::<f64>()
+                        .map_err(|e| anyhow::anyhow!(e))?,
+                    candle_core::DType::U8
+                    | candle_core::DType::U32
+                    | candle_core::DType::I64 => unreachable!(),
+                };
+                values
+                    .into_iter()
+                    .map(|value| {
+                        incin_core::prelude::convert_f64_to_i64(
+                            "candle_int_to_vec1",
+                            from_candle_dtype(dtype),
+                            value,
+                            incin_core::prelude::FloatToIntPolicy::Exact,
+                        )
+                    })
+                    .collect()
+            }
+        }
+    }
 }
 
 impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
