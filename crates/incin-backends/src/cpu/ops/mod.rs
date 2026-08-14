@@ -44,8 +44,6 @@ pub mod loss;
 pub mod matmul;
 /// `norm`.
 pub mod norm;
-/// `optimizer`.
-pub mod optimizer;
 /// `pool`.
 pub mod pool;
 /// `quant`.

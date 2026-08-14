@@ -1,8 +1,7 @@
 #![cfg(test)]
 
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
-use crate::wgpu::{WgpuBackendImpl, WgpuVar};
-use crate::legacy::OptimizerOps;
+use crate::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::*;
@@ -848,94 +847,6 @@ fn cross_entropy_loss_backward_matches_finite_difference() {
     assert!(
         max_abs_diff < 2e-3,
         "cross_entropy_loss gradcheck max abs diff too high: {max_abs_diff:.6}"
-    );
-}
-
-// ── Optimizer ─────────────────────────────────────────────────────────────
-
-#[test]
-/// `test_adamw_step`.
-fn test_adamw_step() {
-    let param = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let grad = storage(vec![0.1, 0.2, 0.3], vec![3]);
-    let mut m = storage(vec![0.0, 0.0, 0.0], vec![3]);
-    let mut v = storage(vec![0.0, 0.0, 0.0], vec![3]);
-
-    let old_param = readback(&param);
-    let mut var = WgpuVar::new(param.clone());
-
-    <B as OptimizerOps<B>>::adamw_step::<f32>(
-        &mut var, &grad, &mut m, &mut v, 1e-3, 0.9, 0.999, 1e-8, 0.01, 1,
-    )
-    .unwrap();
-
-    let new_param = readback(&var.value());
-    // Parameters should have moved
-    assert!(
-        new_param
-            .iter()
-            .zip(old_param.iter())
-            .any(|(n, o)| (n - o).abs() > 1e-6)
-    );
-}
-
-// ── GPU AdamW parity ─────────────────────────────────────────────────────
-
-#[test]
-/// `test_adamw_gpu_matches_reference`.
-fn test_adamw_gpu_matches_reference() {
-    // Reference CPU calculation for a single AdamW step
-    let lr = 0.001f32;
-    let beta1 = 0.9f32;
-    let beta2 = 0.999f32;
-    let eps = 1e-8f32;
-    let wd = 0.01f32;
-    let step = 1;
-
-    let p_init = vec![1.0f32, -0.5, 2.0];
-    let g_init = vec![0.1f32, 0.2, -0.3];
-
-    // Reference calculation
-    let mut ref_p = p_init.clone();
-    let mut ref_m = [0.0f32; 3];
-    let mut ref_v = [0.0f32; 3];
-    for i in 0..3 {
-        let p_val = p_init[i] - lr * wd * p_init[i];
-        let g = g_init[i];
-
-        ref_m[i] = beta1 * ref_m[i] + (1.0 - beta1) * g;
-        ref_v[i] = beta2 * ref_v[i] + (1.0 - beta2) * g * g;
-
-        ref_p[i] = p_val - lr * ref_m[i] / (ref_v[i].sqrt() + eps);
-    }
-
-    // GPU calculation
-    let param = storage(p_init.clone(), vec![3]);
-    let grad = storage(g_init.clone(), vec![3]);
-    let mut m = storage(vec![0.0, 0.0, 0.0], vec![3]);
-    let mut v = storage(vec![0.0, 0.0, 0.0], vec![3]);
-    let mut var = WgpuVar::new(param.clone());
-
-    <B as OptimizerOps<B>>::adamw_step::<f32>(
-        &mut var,
-        &grad,
-        &mut m,
-        &mut v,
-        lr as f64,
-        beta1 as f64,
-        beta2 as f64,
-        eps as f64,
-        wd as f64,
-        step as usize,
-    )
-    .unwrap();
-
-    let gpu_p = readback(&var.value());
-    assert!(
-        vec_approx_eq(&gpu_p, &ref_p, 1e-5),
-        "GPU AdamW mismatch: got {:?}, expected {:?}",
-        gpu_p,
-        ref_p
     );
 }
 

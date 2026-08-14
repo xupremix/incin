@@ -14,7 +14,6 @@ use incin_core::prelude::{
 
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
-use crate::legacy::OptimizerOps;
 
 /// Metal compute backend implementation for Incin.
 #[derive(Clone)]
@@ -3055,10 +3054,6 @@ impl<D: Device> QuantizedOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("quantized_matmul"))
     }
 }
-
-// ─── OptimizerOps ───────────────────────────────────────────────────────────
-// Uses default adamw_step composed from NumericOps/FloatOps (via trait default).
-impl<D: Device> OptimizerOps<Self> for MetalBackendImpl<D> {}
 
 
 

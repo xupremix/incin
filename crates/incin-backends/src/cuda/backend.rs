@@ -8,7 +8,6 @@ use incin_core::prelude::{
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
 };
 use half::{bf16, f16};
-use crate::legacy::OptimizerOps;
 
 /// CUDA compute backend implementation for Incin.
 #[derive(Clone)]
@@ -2314,14 +2313,12 @@ impl<D: Device> QuantizedOps<Self> for CudaBackendImpl<D> {
         <Self as TensorOps<Self>>::reshape::<f32>(&out_2d, &out_shape)
     }
 }
-impl<D: Device> OptimizerOps<Self> for CudaBackendImpl<D> {}
-
 /// Tape-tracked wrapper pairing `launch_im2col_2d`/`launch_col2im_2d` as each
 /// other's forward/backward (they are exact inverses of one another). Once
 /// this is a proper tape op, `conv1d`/`conv2d`'s own forward can be composed
 /// entirely from already-tape-tracked primitives (`narrow`/`reshape`/
 /// `matmul`/`concat` plus this) with NO hand-written backward closure of
-/// their own — mirroring the `LossOps`/`OptimizerOps` "free via composition"
+/// their own — mirroring the `LossOps` "free via composition"
 /// discovery documented by the backend conformance audit.
 fn im2col_2d_tape(
     t: &CudaStorage,
@@ -4046,29 +4043,6 @@ mod tests {
         );
     }
 
-    // `OptimizerOps::adamw_step` has no override in this file's
-    // `impl OptimizerOps<Self> for CudaBackendImpl {}` (empty) - it resolves
-    // to `OptimizerOps`'s own default body (`incin-core/src/tensor/backend.rs:1000-1041`),
-    // composed entirely from `NumericOps`/`FloatOps`/`assign_var` (already
-    // wired on CUDA). This test exists to prove that resolution actually
-    // compiles, not to add new functionality. The dedicated
-    // `kernels/fused_adamw.cu` kernel remains genuinely unused - wiring it
-    // would be a performance optimization over this composed default, not a
-    // correctness fix, and is deliberately deferred (tracked as a performance opportunity in `PROPOSALS.md`).
-    #[test]
-    #[ignore = "requires CUDA hardware"]
-    fn adamw_step_default_impl_resolves_and_runs_on_cuda() {
-        let param = cuda_f32(&[2], vec![1.0, 2.0]);
-        let mut var = CudaVar { storage: param };
-        let grad = cuda_f32(&[2], vec![0.1, 0.2]);
-        let mut m = cuda_f32(&[2], vec![0.0, 0.0]);
-        let mut v = cuda_f32(&[2], vec![0.0, 0.0]);
-        <B as OptimizerOps<B>>::adamw_step::<f32>(
-            &mut var, &grad, &mut m, &mut v, 1e-3, 0.9, 0.999, 1e-8, 0.01, 1,
-        )
-        .unwrap();
-        assert_eq!(var.storage.shape, vec![2]);
-    }
 
     // The tests below cover the methods added in this pass: `unsqueeze`,
     // the host-readback conversions, `addmm`/`bmm`/

@@ -8,7 +8,6 @@ use incin_core::prelude::{
     OperationKind, QuantDType, Result, ShapeBuf, StorageBackend, SupportsDType, bf16, f16,
 };
 use alloc::{string::String, vec::Vec};
-use crate::legacy::OptimizerOps;
 
 #[cfg(feature = "cpu")]
 use incin_core::prelude::Cpu;
@@ -2107,11 +2106,6 @@ impl<D: Device> QuantizedOps<Self> for DispatchBackend<D> {
         }
     }
 }
-
-// `OptimizerOps`'s methods are composed from `NumericOps`/`FloatOps` rather
-// than defaulted to an unsupported error, so the routed backend supplies a
-// working update rule and this impl has nothing to override.
-impl<D: Device> OptimizerOps<Self> for DispatchBackend<D> {}
 
 impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
     fn layer_norm<K: DType>(

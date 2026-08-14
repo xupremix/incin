@@ -7,7 +7,6 @@ use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,
 };
-use crate::legacy::OptimizerOps;
 
 /// WebGPU compute backend implementation for Incin.
 #[derive(Clone)]
@@ -4439,54 +4438,6 @@ impl<D: Device> QuantizedOps<Self> for WgpuBackendImpl<D> {
         Self::matmul::<f32>(&lhs_f32, &rhs_f32)
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OptimizerOps (AdamW)
-// ─────────────────────────────────────────────────────────────────────────────
-impl<D: Device> OptimizerOps<Self> for WgpuBackendImpl<D> {
-    /// `adamw_step`.
-    fn adamw_step<K: DType>(
-        var: &mut <Self as VariableBackend>::Var<K>,
-        grad: &<Self as StorageBackend>::Storage<K>,
-        m: &mut <Self as StorageBackend>::Storage<K>,
-        v: &mut <Self as StorageBackend>::Storage<K>,
-        lr: f64,
-        beta1: f64,
-        beta2: f64,
-        eps: f64,
-        weight_decay: f64,
-        step: usize,
-    ) -> Result<()> {
-        // The kernel writes the parameter in place. `value()` clones the
-        // storage struct, but its `buffer` is an `Arc` over the same GPU
-        // allocation, so the fused update still lands on the buffer this
-        // parameter slot holds rather than on a detached copy.
-        let parameter = var.value();
-        let n = checked_u32(
-            num_elements(&parameter.shape)?,
-            "WGPU AdamW parameter element count",
-        )?;
-        let bc1 = (1.0 - beta1.powi(step as i32)) as f32;
-        let bc2 = (1.0 - beta2.powi(step as i32)) as f32;
-
-        // Pack all hyperparams as f32 bits in a u32 metadata buffer
-        let meta: [u32; 8] = [
-            n,
-            (lr as f32).to_bits(),
-            (beta1 as f32).to_bits(),
-            (beta2 as f32).to_bits(),
-            (eps as f32).to_bits(),
-            (weight_decay as f32).to_bits(),
-            bc1.to_bits(),
-            bc2.to_bits(),
-        ];
-
-        dispatch::dispatch_adamw(&parameter.buffer, &grad.buffer, &m.buffer, &v.buffer, &meta);
-        Ok(())
-    }
-}
-
-
 
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for WgpuBackendImpl<D> {
     type Grads = WgpuGrads;
