@@ -3,10 +3,8 @@
 //!
 //! The reviewed prose in `audit-evidence/FND-004/` records *why* each mapping is
 //! correct. This file records *that* the mapping is still complete, by reading
-//! the legacy operation-family traits out of the source that defines them and
-//! comparing them against `OPERATION_CATALOG`. Adding a trait method without a
-//! catalog row, or renaming one out from under a row, fails here rather than in
-//! a later review.
+//! the production source tree contains none of the retired operation-family
+//! compatibility names.
 
 #![cfg(feature = "std")]
 
@@ -15,17 +13,6 @@ use std::path::{Path, PathBuf};
 
 use incin_core::exec::OPERATION_CATALOG;
 
-/// The operation-family traits FND-005 migrates onto the descriptor contract.
-///
-/// `Backend` and `StorageBackend` are deliberately absent: they carry identity
-/// and lifecycle, not semantic operations, and FND-005 keeps them that way.
-const OPERATION_TRAITS: &[&str] = &[
-    "",
-    "",
-    "",
-    "",
-    "",
-];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -35,125 +22,34 @@ fn repo_root() -> PathBuf {
         .expect("workspace root")
 }
 
-/// Extract `Trait::method` for every method declared in the operation-family
-/// traits, by brace-matching each trait body.
-fn declared_trait_methods(source: &str) -> BTreeMap<String, Vec<String>> {
-    let mut declared = BTreeMap::new();
-    for name in OPERATION_TRAITS {
-        let needle = format!("pub trait {name}");
-        let start = source
-            .find(&needle)
-            .unwrap_or_else(|| panic!("{name} is no longer declared in tensor/backend/legacy.rs"));
-        let open = start + source[start..].find('{').expect("trait body");
-        let mut depth = 0usize;
-        let mut end = open;
-        for (offset, byte) in source[open..].bytes().enumerate() {
-            match byte {
-                b'{' => depth += 1,
-                b'}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end = open + offset;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Methods are declared at one level of indentation inside the trait;
-        // anything deeper belongs to a default body, not the contract.
-        let methods: Vec<String> = source[open..end]
-            .lines()
-            .filter_map(|line| line.strip_prefix("    fn "))
-            .filter_map(|rest| {
-                rest.split(|c: char| !(c.is_alphanumeric() || c == '_'))
-                    .next()
-                    .filter(|token| !token.is_empty())
-                    .map(str::to_owned)
-            })
-            .collect();
-        assert!(!methods.is_empty(), "{name} declares no methods");
-        declared.insert((*name).to_owned(), methods);
-    }
-    declared
-}
-
-/// Catalog rows whose `legacy_source` names one of the operation-family traits.
-fn catalog_trait_sources() -> BTreeMap<String, &'static str> {
-    let mut sources = BTreeMap::new();
-    for row in OPERATION_CATALOG {
-        let Some((trait_name, _)) = row.legacy_source.split_once("::") else {
-            continue;
-        };
-        if !OPERATION_TRAITS.contains(&trait_name) {
-            continue;
-        }
-        let previous = sources.insert(row.legacy_source.to_owned(), row.name);
-        assert!(
-            previous.is_none(),
-            "{} is claimed by both `{}` and `{}`; an alias must reuse an existing identity rather \
-             than duplicate its legacy mapping",
-            row.legacy_source,
-            previous.unwrap_or_default(),
-            row.name,
-        );
-    }
-    sources
-}
 
 #[test]
-fn every_legacy_operation_method_has_exactly_one_catalog_row() {
-    let source = std::fs::read_to_string(
-        repo_root().join("crates/incin-core/src/tensor/backend/legacy.rs"),
-    )
-    .expect("tensor/backend/legacy.rs is readable");
-    let declared = declared_trait_methods(&source);
-    let mapped = catalog_trait_sources();
-
-    let mut missing = Vec::new();
-    let mut total = 0usize;
-    for (trait_name, methods) in &declared {
-        for method in methods {
-            total += 1;
-            let key = format!("{trait_name}::{method}");
-            if !mapped.contains_key(&key) {
-                missing.push(key);
+fn legacy_operation_families_are_absent_from_production_source() {
+    fn visit(path: &Path, forbidden: &[&str]) {
+        if path.is_dir() {
+            for entry in std::fs::read_dir(path).expect("read source directory") {
+                visit(&entry.expect("source entry").path(), forbidden);
+            }
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            let source = std::fs::read_to_string(path).expect("read Rust source");
+            for name in forbidden {
+                assert!(!source.contains(name), "forbidden legacy name `{name}` in {}", path.display());
             }
         }
     }
-    assert!(
-        missing.is_empty(),
-        "{} operation-family methods have no canonical catalog row: {missing:#?}\n\
-         Add the exact identity to `operation_catalog.rs` rather than letting the method execute \
-         under a broad family.",
-        missing.len(),
-    );
 
-    // The reverse direction: a row must not claim a method that no longer
-    // exists, which is how a rename silently orphans a descriptor.
-    let declared_keys: BTreeSet<String> = declared
-        .iter()
-        .flat_map(|(trait_name, methods)| {
-            methods
-                .iter()
-                .map(move |method| format!("{trait_name}::{method}"))
-        })
-        .collect();
-    let orphaned: Vec<&String> = mapped
-        .keys()
-        .filter(|key| !declared_keys.contains(*key))
-        .collect();
-    assert!(
-        orphaned.is_empty(),
-        "catalog rows name operation-family methods that no longer exist: {orphaned:#?}",
-    );
-
-    assert_eq!(
-        total,
-        mapped.len(),
-        "the legacy operation surface and its catalog mapping have diverged",
-    );
+    let root = repo_root();
+    let forbidden = [
+        "NumericOps", "FloatOps", "TensorOps", "ReductionOps", "ModuleOps",
+        "QuantizedOps", "CreationOps", "LossOps", "__backend_compat",
+    ];
+    for source_root in [
+        root.join("crates/incin-core/src"),
+        root.join("crates/incin-backends/src"),
+        root.join("crates/incin/src"),
+    ] {
+        visit(&source_root, &forbidden);
+    }
 }
 
 /// Every stable operation family the run promised to cover is represented.
@@ -256,18 +152,6 @@ fn render_inventory() -> String {
             .or_default()
             .push(row.name);
     }
-    let trait_rows = OPERATION_CATALOG
-        .iter()
-        .filter(|row| {
-            row.legacy_source
-                .split_once("::")
-                .is_some_and(|(name, _)| OPERATION_TRAITS.contains(&name))
-        })
-        .count();
-    let _ = writeln!(
-        out,
-        "Legacy operation-family trait methods with a reviewed descriptor mapping: {trait_rows}\n",
-    );
 
     let _ = writeln!(
         out,
