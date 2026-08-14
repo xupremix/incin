@@ -14,7 +14,7 @@ use super::dim::{
 };
 use super::shape::{DimCons, Nil, Ranked, Shape};
 use crate::exec::{DimExpr, RankExpr, ShapeExpr, SymbolId};
-use crate::tensor::base::Dyn;
+use crate::shapes::Dyn;
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 pub trait DimProjection {

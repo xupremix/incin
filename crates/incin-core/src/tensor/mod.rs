@@ -41,7 +41,8 @@ pub mod prelude {
     };
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;
-    pub use super::base::{Dyn, Tensor};
+    pub use crate::shapes::Dyn;
+    pub use super::base::Tensor;
     pub use super::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
     };

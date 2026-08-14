@@ -1,6 +1,7 @@
 use crate::err::{Error, ErrorMessage, Result};
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
-use crate::tensor::base::{Dyn, Tensor};
+use crate::shapes::Dyn;
+use crate::tensor::base::Tensor;
 use crate::tensor::backend::{AutogradBackend, Backend, StorageBackend, VariableBackend};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;

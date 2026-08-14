@@ -15,7 +15,7 @@ use core::marker::PhantomData;
 #[cfg(feature = "distributed")]
 use typenum::Unsigned;
 
-use crate::tensor::base::Dyn;
+use crate::shapes::Dyn;
 
 /// Runtime projection of a compile-time placement.
 ///

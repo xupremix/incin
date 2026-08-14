@@ -3,7 +3,7 @@ use crate::shapes::dim::Dim;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, ShapeError};
 use crate::shapes::shape::{DimCons, DynShape, Nil, Shape};
 use crate::shapes::ShapeBuf;
-use crate::tensor::base::Dyn;
+use crate::shapes::Dyn;
 use alloc::vec::Vec;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible

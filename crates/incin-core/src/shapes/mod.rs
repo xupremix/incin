@@ -19,6 +19,8 @@ pub mod broadcast;
 
 /// `buf`.
 pub mod buf;
+/// Runtime-selected marker types shared by shape-bearing APIs.
+pub mod dynamic;
 /// `concat`.
 pub mod concat;
 /// The dimension along which this operation is applied.
@@ -46,6 +48,7 @@ pub use arithmetic::*;
 pub use broadcast::BroadcastShape;
 pub use buf::*;
 pub use dim::*;
+pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
 pub use named::*;
@@ -63,6 +66,7 @@ pub mod prelude {
     pub use super::concat::*;
 
     pub use super::dim::*;
+    pub use super::dynamic::*;
     pub use super::error::*;
     pub use super::idx::*;
     pub use super::named::*;

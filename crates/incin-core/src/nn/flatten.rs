@@ -1,7 +1,7 @@
 use crate::nn::{Module, Parameters};
 use crate::err::Result;
 use crate::shapes::{DynShape, Shape};
-use crate::tensor::base::Dyn;
+use crate::shapes::Dyn;
 use crate::tensor::base::Tensor;
 use crate::tensor::backend::{Backend, StorageBackend};
 use crate::tensor::dtype::DType;

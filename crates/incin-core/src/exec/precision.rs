@@ -5,7 +5,7 @@ use crate::prelude::{
     BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Error, FloatDType, OperationKind,
     Result,
 };
-use crate::tensor::base::Dyn;
+use crate::shapes::Dyn;
 use crate::tensor::dtype::{bf16, f16};
 
 /// Role of precision choice being queried (compute or accumulator).

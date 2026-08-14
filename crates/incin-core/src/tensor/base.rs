@@ -17,20 +17,6 @@ use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
 use core::marker::PhantomData;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-/// A marker used as `Shape`, `DType`, `Device`, or their runtime-chosen
-/// variant across `Tensor`'s type parameters, deferring that choice from
-/// compile time to runtime (e.g. `Tensor<Dyn, B>` has a shape resolved at
-/// construction rather than baked into the type).
-pub struct Dyn(());
-
-impl Dyn {
-    #[inline]
-    pub(crate) const fn marker() -> Self {
-        Self(())
-    }
-}
-
 /// The core `Tensor` type representing an n-dimensional array.
 ///
 /// It holds a reference to a backend-specific tensor representation, while statically tracking

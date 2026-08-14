@@ -18,7 +18,8 @@ use crate::shapes::prelude::{
     ShapeValue, SplitLast2, StructuralConcatShape,
 };
 use crate::shapes::error::OperationKind;
-use crate::tensor::base::{Dyn, Tensor};
+use crate::shapes::Dyn;
+use crate::tensor::base::Tensor;
 use crate::tensor::backend::Backend;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
