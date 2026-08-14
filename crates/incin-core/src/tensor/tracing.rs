@@ -789,8 +789,12 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
 impl<B: Backend> Backend for TracingBackend<B> {
     /// Delegates to `B`'s own inner backend (tracing is not itself a dispatch layer).
     type InnerBackend = B::InnerBackend;
+}
 
-    fn format_tensor_display<K: super::dtype::DType>(
+impl<B: Backend> crate::tensor::backend::HostInterop for TracingBackend<B> {
+    /// Tracing storage uses the normal host renderer; formatting does not add
+    /// graph nodes or otherwise alter the trace.
+    fn host_format_display<K: super::dtype::DType>(
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
@@ -815,20 +819,16 @@ impl<B: Backend> Backend for TracingBackend<B> {
             },
         }
     }
-    /// Renders a tensor's values and metadata for `Debug`.
-    fn format_tensor_debug<K: super::dtype::DType>(
+
+    fn host_format_debug<K: super::dtype::DType>(
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
         Self: crate::tensor::backend::legacy::TensorOps<Self>,
     {
-        <Self as Backend>::format_tensor_display::<K>(t)
+        Self::host_format_display(t)
     }
 
-
-}
-
-impl<B: Backend> crate::tensor::backend::HostInterop for TracingBackend<B> {
     /// Delegates to `B::from_bytes`, additionally recording the result
         /// as a graph initializer (constant input) node.
         fn from_bytes<K: super::dtype::DType>(

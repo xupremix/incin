@@ -1,8 +1,7 @@
 use crate::err::BackendError;
 use crate::exec::capability::Capabilities;
-use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, ShapeBuf, convert_f64_to_i64};
+use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, convert_f64_to_i64};
 use crate::exec::TensorMeta;
-use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 
 mod execute;
@@ -16,7 +15,6 @@ pub use variable::VariableBackend;
 mod capability;
 pub use capability::{HostInterop, TransferBackend};
 pub mod legacy;
-use legacy::TensorOps;
 pub mod dummy {
     pub use super::legacy::DummyBackend;
 }
@@ -151,26 +149,5 @@ pub trait Backend:
     /// wrapper (see `Dyn`'s `DispatchBackend`) has been resolved. Equal to
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
-
-    /// Compatibility formatting hook; new capability-aware code should use
-    /// [`HostInterop::host_format_display`] directly.
-    fn format_tensor_display<K: DType>(
-        storage: &<Self as StorageBackend>::Storage<K>,
-    ) -> alloc::string::String
-    where
-        Self: TensorOps<Self>,
-    {
-        <Self as HostInterop>::host_format_display(storage)
-    }
-
-    /// Compatibility formatting hook for diagnostic output.
-    fn format_tensor_debug<K: DType>(
-        storage: &<Self as StorageBackend>::Storage<K>,
-    ) -> alloc::string::String
-    where
-        Self: TensorOps<Self>,
-    {
-        <Self as HostInterop>::host_format_debug(storage)
-    }
 
 }

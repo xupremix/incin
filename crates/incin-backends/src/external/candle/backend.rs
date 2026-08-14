@@ -9,16 +9,18 @@ use candle_core as candle;
 impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBackend<D> {
 
     type InnerBackend = Self;
+}
 
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
     /// Formats the tensor using candle's own `Display` implementation.
-    fn format_tensor_display<K: incin_core::prelude::DType>(
+    fn host_format_display<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String {
         std::format!("{}", t.tensor())
     }
     /// Formats the tensor's raw contents together with its strides, for
     /// debugging.
-    fn format_tensor_debug<K: incin_core::prelude::DType>(
+    fn host_format_debug<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String {
         std::format!(
@@ -28,10 +30,6 @@ impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBack
         )
     }
 
-
-}
-
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
     /// Flattens the tensor and returns its raw byte representation according to its actual dtype.
         fn to_bytes<K: incin_core::prelude::DType>(
             t: &<Self as StorageBackend>::Storage<K>,

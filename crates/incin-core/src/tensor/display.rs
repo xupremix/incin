@@ -1,5 +1,5 @@
 //! PyTorch-style rendering of a tensor's values, shared by every backend's
-//! `Backend::format_tensor_display`/`format_tensor_debug` default bodies
+//! `HostInterop::host_format_display`/`host_format_debug` default bodies
 //! (`tensor/backend.rs`).
 //!
 //! This module knows nothing about `Backend`, `Storage`, or dtype markers —

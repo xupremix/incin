@@ -161,7 +161,7 @@ status paths and must not be presented as current API guidance.
 
 ## Unresolved architecture
 
-The complete removal of the remaining legacy formatting methods, the final public
+The complete removal of the remaining legacy operation-family adapters, the final public
 API allowlist, and the complete manual-first module traversal contract remain
 active consolidation work. Resolve these against
 `docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before

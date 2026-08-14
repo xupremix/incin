@@ -159,7 +159,7 @@ impl incin_core::backend_authoring::StorageOutput for MetalStorage {}
 impl<D: Device> Backend for MetalBackendImpl<D> {
     type InnerBackend = Self;
 
-    // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
+    // `host_format_display`/`host_format_debug` use `HostInterop`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
 

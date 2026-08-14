@@ -10,7 +10,7 @@ use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
     DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
-    SupportsDType, TensorArgs, TransferTo,
+    SupportsDType, TensorArgs, TransferTo, HostInterop,
 };
 use crate::shapes::Nil;
 use crate::tensor::dtype::PlainDType;
@@ -1208,14 +1208,14 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
 
 impl<
     S: crate::prelude::Shape,
-    B: crate::prelude::Backend + crate::tensor::backend::legacy::TensorOps<B>,
+    B: crate::prelude::Backend + HostInterop + crate::tensor::backend::legacy::TensorOps<B>,
     K: DType,
     G: RequiresGrad,
     P: Placement,
 > core::fmt::Display for Tensor<S, B, K, G, P>
 {
     /// Renders values the way PyTorch's `print(tensor)` does: the backend's
-    /// bracketed, right-aligned value grid (`Backend::format_tensor_display`)
+    /// bracketed, right-aligned value grid (`HostInterop::host_format_display`)
     /// wrapped in `tensor(...)`, with nested-bracket rows indented to stay
     /// aligned under the first `[` the way PyTorch's own wrapped output is.
     ///
@@ -1229,7 +1229,7 @@ impl<
     /// "printed exactly when true", while the default tensor remains inert.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let prefix = "tensor(";
-        let body = B::format_tensor_display(&self.inner);
+        let body = B::host_format_display(&self.inner);
         f.write_str(prefix)?;
         for (i, line) in body.lines().enumerate() {
             if i > 0 {
@@ -1257,7 +1257,7 @@ impl<
 
 impl<
     S: crate::prelude::Shape,
-    B: crate::prelude::Backend + crate::tensor::backend::legacy::TensorOps<B>,
+    B: crate::prelude::Backend + HostInterop + crate::tensor::backend::legacy::TensorOps<B>,
     K: DType,
     G: RequiresGrad,
     P: Placement,
@@ -1274,7 +1274,7 @@ impl<
             B::shape(&self.inner).as_ref(),
             self.placement(),
             self.rank_index(),
-            B::format_tensor_debug(&self.inner)
+            B::host_format_debug(&self.inner)
         )
     }
 }

@@ -13,7 +13,7 @@ pub mod conv2d;
 /// The `Device` trait family (`Cpu`, `Cuda<N>`, `Wgpu<N>`, `Dyn`) and `DeviceId`.
 pub mod device;
 /// PyTorch-style rendering of a tensor's values, shared by every backend's
-/// `Backend::format_tensor_display`/`format_tensor_debug` default bodies.
+/// `HostInterop::host_format_display`/`host_format_debug` default bodies.
 pub(crate) mod display;
 /// The `DType` trait family (`f32`/`f16`/`bf16`/.../`Dyn`) and `DTypeId`.
 pub mod dtype;

@@ -94,23 +94,23 @@ use super::*;
         /// No dispatch wrapper --- this stand-in is always its own inner backend.
         type InnerBackend = Self;
 
-        /// Always `"dummy"` --- there are no real values to render.
-        fn format_tensor_display<K: DType>(
-            _t: &<Self as StorageBackend>::Storage<K>,
-        ) -> alloc::string::String {
-            alloc::string::String::from("dummy")
-        }
-        /// Always `"dummy"` --- there are no real values to render.
-        fn format_tensor_debug<K: DType>(
-            _t: &<Self as StorageBackend>::Storage<K>,
-        ) -> alloc::string::String {
-            alloc::string::String::from("dummy")
-        }
     }
 
     impl<D: Device + Clone + 'static> crate::tensor::backend::HostInterop
         for DummyBackend<D>
     {
+        fn host_format_display<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> alloc::string::String {
+            alloc::string::String::from("dummy")
+        }
+
+        fn host_format_debug<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> alloc::string::String {
+            alloc::string::String::from("dummy")
+        }
+
         /// Always empty: there are no element values to serialize.
         fn to_bytes<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,

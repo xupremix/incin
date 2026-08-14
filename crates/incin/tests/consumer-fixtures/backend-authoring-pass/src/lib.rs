@@ -96,20 +96,17 @@ impl Execute<op::Zeros> for CompanyBackend {
 
 impl Backend for CompanyBackend {
     type InnerBackend = Self;
-
-    fn format_tensor_display<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
-        String::from("company")
-    }
-
-    fn format_tensor_debug<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
-        String::from("company")
-    }
-
-
-
 }
 
 impl incin::backend_authoring::HostInterop for CompanyBackend {
+    fn host_format_display<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
+        String::from("company")
+    }
+
+    fn host_format_debug<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
+        String::from("company")
+    }
+
     fn to_bytes<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<u8>> {
             Ok(Vec::new())
         }
