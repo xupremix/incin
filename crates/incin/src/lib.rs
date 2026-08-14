@@ -103,6 +103,8 @@ pub use incin_macros::module;
 /// Expert type-level and physical-layout contracts that are not part of the
 /// ordinary user prelude.
 pub mod types {
+    pub use incin_core::prelude::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
+
     /// Physical storage encoding used by dtype descriptors and serializers.
     pub mod dtype {
         pub use incin_core::prelude::StorageEncoding;
@@ -496,9 +498,9 @@ pub mod prelude {
         AxisIdentity, AxisSchema, Backend, BackendError, BackwardError, BoolDType, BuiltinDType,
         ConstDType, ConstDevice, ConstDim, ConversionFailure, Cpu, DType, DTypeDescriptor, DTypeId,
         DTypeKey, DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet,
-        DeviceSetError, Dim, DimCons, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
+        DeviceSetError, Dim, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
         FloatToIntPolicy, Grad, Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup,
-        NamedAxisSelector, NamedDim, Next, Nil, NoGrad, NonFiniteSite, PlainDType, Q8_0,
+        NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
         Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
@@ -507,8 +509,8 @@ pub mod prelude {
 
     pub use incin_core::prelude::{
         AppendDim, At, Axis, AxisSelector, AxisSet, BroadcastDim, BroadcastExtent, BroadcastShape,
-        ConcatShape, ConcreteStaticExtent, FromEnd, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt,
-        ReshapeShape, SameCount, Scalar, StackShape, StructuralConcatShape, SwapAt, TryReshape,
+        ConcatShape, FromEnd, ReduceAt, ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar,
+        StackShape, SwapAt, TryReshape,
     };
 
     #[cfg(feature = "cuda")]

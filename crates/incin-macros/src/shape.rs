@@ -201,11 +201,16 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
     } else {
         quote! { ::incin::prelude:: }
     };
+    let types_path = if internal {
+        quote! { crate::types:: }
+    } else {
+        quote! { ::incin::types:: }
+    };
 
     let build_cons_chain = |dims: &[proc_macro2::TokenStream]| -> proc_macro2::TokenStream {
-        let mut chain = quote! { #path Nil };
+        let mut chain = quote! { #types_path Nil };
         for d in dims.iter().rev() {
-            chain = quote! { #path DimCons<#d, #chain> };
+            chain = quote! { #types_path DimCons<#d, #chain> };
         }
         chain
     };

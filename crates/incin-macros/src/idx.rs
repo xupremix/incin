@@ -201,9 +201,9 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
     // Keep indexing and reshape targets on the same canonical structural
     // engine as tensor shapes.  The macro deliberately hides the cons list;
     // callers still write the compact `idx![...]` syntax.
-    let mut target = quote! { ::incin::prelude::Nil };
+    let mut target = quote! { ::incin::types::Nil };
     for item in output.into_iter().rev() {
-        target = quote! { ::incin::prelude::DimCons<#item, #target> };
+        target = quote! { ::incin::types::DimCons<#item, #target> };
     }
     target.into()
 }

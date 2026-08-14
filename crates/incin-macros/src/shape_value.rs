@@ -125,6 +125,7 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
     let is_fully_static = parsed.axes.iter().all(is_static);
 
     let path = quote! { ::incin::prelude:: };
+    let types_path = quote! { ::incin::types:: };
 
     let type_axes: Vec<_> = parsed
         .axes
@@ -175,9 +176,9 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let mut shape_ty = quote! { #path Nil };
+    let mut shape_ty = quote! { #types_path Nil };
     for d in type_axes.iter().rev() {
-        shape_ty = quote! { #path DimCons<#d, #shape_ty> };
+        shape_ty = quote! { #types_path DimCons<#d, #shape_ty> };
     }
 
     let mut tuple_arg = quote! { () };

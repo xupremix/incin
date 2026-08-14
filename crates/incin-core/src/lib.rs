@@ -145,6 +145,11 @@ pub mod __backend_compat {
     }
 }
 
+/// Expert type-level shape vocabulary kept outside the normal prelude.
+pub mod types {
+    pub use crate::prelude::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
+}
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     pub use crate::tensor::backend::dummy::DummyBackend;

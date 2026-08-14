@@ -9,7 +9,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
-    DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
+    Dyn, DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
     SupportsDType, TensorArgs, StorageTransfer, HostInterop, AutogradBackend,
 };
 use crate::shapes::Nil;
