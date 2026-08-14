@@ -10,7 +10,7 @@ use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::{ArgInto, LayerArgInto};
 use crate::shapes::Dyn;
 use crate::tensor::base::Tensor;
-use crate::tensor::backend::{Backend, HostInterop, StorageBackend, SupportsDType, TransferTo, VariableBackend};
+use crate::tensor::backend::{Backend, HostInterop, StorageBackend, SupportsDType, VariableTransfer, VariableBackend};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
@@ -386,10 +386,10 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, 
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
-    B: TransferTo<NewD>,
-    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
+    B: VariableTransfer<NewD>,
+    <B as VariableTransfer<NewD>>::VariableOutput: SupportsDType<K>,
 {
-    type Output = Param<S, <B as TransferTo<NewD>>::Output, K, Train>;
+    type Output = Param<S, <B as VariableTransfer<NewD>>::VariableOutput, K, Train>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
@@ -575,10 +575,10 @@ where
     pub fn to_device<D2: Device>(
         self,
         _device: &D2::Field,
-    ) -> Result<Param<S, <B as TransferTo<D2>>::Output, K, Train>>
+    ) -> Result<Param<S, <B as VariableTransfer<D2>>::VariableOutput, K, Train>>
     where
-        B: TransferTo<D2>,
-        <B as TransferTo<D2>>::Output: SupportsDType<K>,
+        B: VariableTransfer<D2>,
+        <B as VariableTransfer<D2>>::VariableOutput: SupportsDType<K>,
     {
         let new_inner = B::transfer_var::<K>(&self.inner, &self._dtype, _device)?;
         Ok(Param {
@@ -815,10 +815,10 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Buffer<S, B, K>
 where
-    B: TransferTo<NewD>,
-    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
+    B: VariableTransfer<NewD>,
+    <B as VariableTransfer<NewD>>::VariableOutput: SupportsDType<K>,
 {
-    type Output = Buffer<S, <B as TransferTo<NewD>>::Output, K>;
+    type Output = Buffer<S, <B as VariableTransfer<NewD>>::VariableOutput, K>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
