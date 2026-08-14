@@ -4,7 +4,7 @@ use incin::backend_authoring::operations::{
 use incin::backend_authoring::{
     Alignment, AutogradBackend, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
     ExecutionRequest, Operation, OperationKey, ShapeBuf, StorageBackend,
-    StorageTransfer, SupportLevel, TensorBackend, TensorMeta, VariableBackend,
+    StorageTransfer, SupportLevel, SupportsDType, TensorBackend, TensorMeta, VariableBackend,
 };
 use incin::prelude::{
     BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, Shape,
@@ -180,6 +180,12 @@ impl Capabilities for InferenceBackend {
     }
 }
 
+impl<K: DType> SupportsDType<K> for InferenceBackend {
+    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> incin::prelude::Result<DTypeDescriptor> {
+        Ok(K::descriptor(field))
+    }
+}
+
 impl Execute<op::Zeros> for InferenceBackend {
     type Output = ShapeBuf;
 
@@ -261,6 +267,11 @@ pub fn inference_only_backend_runs_builtin_operation() -> ShapeBuf {
     };
     incin::backend_authoring::execute::<op::Zeros, _>(&context, attributes, &[])
         .expect("inference-only backend operation")
+}
+
+pub fn inference_only_backend_can_transfer_tensor() -> incin::prelude::Result<incin::Tensor<incin::prelude::Dyn, InferenceBackend, f32>> {
+    let tensor = incin::Tensor::<incin::prelude::Dyn, InferenceBackend, f32>::zeros(vec![2, 3])?;
+    tensor.to_device(&())
 }
 
 pub fn built_in_operation_contract<B>()
