@@ -3,7 +3,7 @@
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::dispatch::DispatchBackend;
 use incin_backends::target::{EngineOn, Native, TargetBackendFor, TensorTarget};
-use incin_core::prelude::{Cpu, Dyn, ShapeBuf, StorageBackend};
+use incin_core::prelude::{Cpu, Dyn, StorageBackend};
 
 trait Same<T> {}
 impl<T> Same<T> for T {}
@@ -138,7 +138,7 @@ fn test_8d_parameter_dtype_is_independent() {
 fn test_8e_minimal_backend_extension() {
     use incin_core::backend_authoring::{Backend, StorageBackend};
     use incin_core::exec::TensorMeta;
-    use incin_core::prelude::{DType, DTypeDescriptor, DeviceId, Result};
+    use incin_core::prelude::DType;
 
     #[derive(Clone, Default)]
     struct MinimalBackend;
@@ -178,39 +178,7 @@ fn test_8e_minimal_backend_extension() {
     }
 
     impl Backend for MinimalBackend {
-        type Var<K: DType> = ();
-        type Grads = ();
         type InnerBackend = Self;
-
-        fn shape<K: DType>(_t: &()) -> ShapeBuf {
-            ShapeBuf::scalar()
-        }
-        fn backward<K: DType>(_t: &()) -> Result<()> {
-            Ok(())
-        }
-        fn get_grad<K: DType>(_t: &(), _grads: &()) -> Result<Option<()>> {
-            Ok(None)
-        }
-        fn to_bytes<K: DType>(_t: &()) -> Result<std::vec::Vec<u8>> {
-            Ok(vec![])
-        }
-        fn from_bytes<K: DType>(
-            _bytes: &[u8],
-            _shape: &[usize],
-            _dtype: DTypeDescriptor,
-            _device: &DeviceId,
-        ) -> Result<()> {
-            Ok(())
-        }
-        fn var_as_tensor<K: DType>(_var: &()) -> Result<()> {
-            Ok(())
-        }
-        fn var_from_tensor<K: DType>(_t: &()) -> Result<()> {
-            Ok(())
-        }
-        fn assign_var<K: DType>(_var: &mut (), _tensor: &()) -> Result<()> {
-            Ok(())
-        }
     }
 
     assert_eq!(<MinimalBackend as StorageBackend>::BACKEND_NAME, "Minimal");
