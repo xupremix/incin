@@ -48,8 +48,11 @@ named `backend_authoring` and `types` surfaces. The backend contract is split
 by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
 `backend/variable.rs`, `backend/autograd.rs`, and `backend/capability.rs`.
 Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
-`TransferBackend` views are the migration seam; the legacy `Backend` method
-bundle still remains for compatibility until each implementation is migrated.
+`TransferBackend` views are the migration seam. The core `backend.rs` identity
+contract is intentionally small; legacy operation-family declarations live in
+`backend/legacy.rs`, and the shape-only test backend lives in `backend/dummy.rs`.
+The legacy `Backend` method bundle still remains for compatibility until each
+implementation is migrated.
 Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
@@ -158,7 +161,9 @@ The remaining files above 1,200 lines are not all one kind of problem:
 
 | Area | Current reason for size | Maintainer action |
 | --- | --- | --- |
-| `tensor/backend.rs` | compatibility trait bundle plus backend capability adapters | extract capability traits first, then remove the legacy family declarations in staged API changes |
+| `tensor/backend.rs` | small backend identity/reexport boundary | keep identity and capability ownership here; do not add operation-family methods |
+| `tensor/backend/legacy.rs` | compatibility operation-family adapters | migrate remaining backend implementations to descriptor execution, then remove these adapters |
+| `tensor/backend/dummy.rs` | shape-only test backend | keep test-only behavior isolated from production backend identity |
 | `tensor/tracing.rs` | tracing backend and graph serialization boundary | split after the backend capability migration so storage/autograd seams remain visible |
 | `tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once the catalog ownership is stable |
 | `exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |

@@ -74,11 +74,11 @@ executor enforcing whichever operand the union cannot pin down alone. No
 3. **Widen `Execute` to the sites it cannot reach**, or split them off into a
    contract that can. Sixteen operations are not pending migrations at all,
    and counting them as such overstates the remaining work by roughly 30%.
-4. **Remove the nine supertraits from `Backend`** and bound each stable tensor
-   method by the capability it actually uses. This is the step that ends the
-   dual architecture. It is no longer blocked by migration coverage: the
-   remaining executable gaps are explicit and the stable data constructors use
-   canonical dispatch.
+4. **Remove the legacy operation-family adapters from the authoring surface**
+   and bound each remaining compatibility call site by the capability it
+   actually uses. This is the step that ends the dual architecture. It is no
+   longer blocked by migration coverage: the remaining executable gaps are
+   explicit and the stable data constructors use canonical dispatch.
 5. **Delete the broad family rows and the grouped `Execute<MatMulSpec>`
    adapters**, then delete the compatibility adapter in `cpu::canonical` and the
    `the_migration_is_recorded_as_incomplete` test, which is written to fail once
