@@ -20,7 +20,7 @@ use crate::{
 
 pub mod scheduler;
 pub use scheduler::*;
-pub use crate::tensor::gradients::Gradients;
+pub use crate::autograd::Gradients;
 
 /// Trait defining a generic optimization algorithm.
 ///

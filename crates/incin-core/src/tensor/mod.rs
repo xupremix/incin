@@ -22,7 +22,6 @@ pub mod dtype;
 /// The `RequiresGrad` marker trait (`Grad`/`NoGrad`) controlling autodiff tracking.
 pub mod grad;
 /// Backend-owned gradient handles produced by backward passes.
-pub mod gradients;
 /// Matrix multiplication shape validation shared across backends.
 pub mod matmul;
 /// Operator-trait implementations (`Add`, `Index`, etc.) for `Tensor`.
@@ -63,7 +62,7 @@ pub mod prelude {
         FloatDType, IntDType, PlainDType, Q8_0, QuantDType, StorageEncoding, TensorElement,
     };
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
-    pub use super::gradients::Gradients;
+    pub use crate::autograd::Gradients;
     pub use super::matmul::MatMulShape;
     pub use super::reduction::Reduction;
     pub use super::transfer::ToDevice;

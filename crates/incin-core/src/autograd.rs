@@ -1,9 +1,9 @@
-//! Backend-owned gradient handles produced by tensor backward passes.
+//! Backend-owned gradient handles produced by autograd passes.
 
 /// Encapsulates the backend-specific gradients obtained from a backward pass.
 ///
-/// This wrapper belongs to the tensor/autograd layer. Optimizers consume it,
-/// but do not own the result of graph differentiation.
+/// Autograd owns this wrapper. Optimizers consume it, but do not own the
+/// result of graph differentiation.
 pub struct Gradients<G>(G);
 
 impl<G> Gradients<G> {

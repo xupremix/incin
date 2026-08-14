@@ -34,6 +34,7 @@ pub(crate) mod serialize;
 pub mod shapes;
 
 pub mod tensor;
+pub mod autograd;
 pub use typenum;
 
 /// Implementation details used by procedural macros expanded inside this crate.
