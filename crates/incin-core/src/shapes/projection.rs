@@ -89,7 +89,7 @@ impl<Tag: super::dim::AxisTag, Extent: DimProjection> DimProjection for NamedDim
             expr: Box::new(Extent::project(axis, base)),
             id: SymbolId(base.saturating_add(axis as u32)),
             name: String::from(Tag::NAME),
-            identity: String::from(Tag::KEY),
+            identity: Tag::key().qualified(),
         }
     }
 }

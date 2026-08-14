@@ -187,18 +187,18 @@ pub mod prelude {
     pub use incin_macros::{axis, idx, mesh, module, s, shape};
 
     pub use super::shapes::prelude::{
-        AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisSchema, AxisSelector,
-        AxisSet, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedByteLen,
-        CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons,
-        DimIdx, DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, FromEnd,
-        HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup,
-        NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape, ProductDims,
-        RankExpectation, RankSupport, Ranked, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt,
-        ReplaceLastDim, ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeArgs, ShapeBuf,
-        ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget, SpatialConv1d,
-        SpatialConv2d, SpatialOut, StackShape, StaticAxis, StaticDim, StaticOrNamedDim, StrideBuf,
-        StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape, TryReshape,
-        broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims,
+        AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisKey, AxisSchema,
+        AxisSelector, AxisSet, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape,
+        CheckedByteLen, CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim,
+        DimCons, DimIdx, DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim,
+        FromEnd, HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap,
+        NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape,
+        ProductDims, RankExpectation, RankSupport, Ranked, ReduceAt, ReduceKeepAt, RemoveAt,
+        ReplaceAt, ReplaceLastDim, ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape,
+        ShapeArgs, ShapeBuf, ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget,
+        SpatialConv1d, SpatialConv2d, SpatialOut, StackShape, StaticAxis, StaticDim,
+        StaticOrNamedDim, StrideBuf, StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape,
+        TryReshape, broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims,
         shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]

@@ -240,7 +240,10 @@ pub trait AxisTag:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
     const NAME: &'static str;
-    const KEY: &'static str;
+
+    /// Returns the durable semantic key for this axis. The key is supplied by
+    /// the declaration schema, never derived from a Rust module path.
+    fn key() -> AxisKey;
 
     /// Creates the canonical semantic selector for this axis tag.
     ///
@@ -253,6 +256,30 @@ pub trait AxisTag:
         Self: Sized,
     {
         crate::shapes::idx::NamedAxisSelector::default()
+    }
+}
+
+/// Durable semantic identity for a named axis.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct AxisKey {
+    schema: &'static str,
+    name: &'static str,
+}
+
+impl AxisKey {
+    pub const fn new(schema: &'static str, name: &'static str) -> Self {
+        Self { schema, name }
+    }
+
+    pub const fn schema(self) -> &'static str {
+        self.schema
+    }
+    pub const fn name(self) -> &'static str {
+        self.name
+    }
+
+    pub fn qualified(self) -> alloc::string::String {
+        alloc::format!("{}::{}", self.schema, self.name)
     }
 }
 
@@ -385,31 +412,35 @@ macro_rules! __incin_dim_declare {
 
         impl $crate::shapes::AxisTag for $first {
             const NAME: &'static str = stringify!($first);
-            const KEY: &'static str = concat!(module_path!(), "::", stringify!($first));
+            fn key() -> $crate::shapes::AxisKey {
+                $crate::shapes::AxisKey::new(stringify!($first), stringify!($first))
+            }
         }
         impl $crate::shapes::AxisIdentity for $first {
             type Schema = $crate::shapes::AxisSchema<$first>;
             type Id = $crate::typenum::U0;
         }
 
-        $crate::__incin_dim_declare!(@rest $crate::shapes::AxisSchema<$first>; $crate::typenum::U1; $( $(#[$rest_meta])* $rest ),* );
+        $crate::__incin_dim_declare!(@rest $crate::shapes::AxisSchema<$first>; stringify!($first); $crate::typenum::U1; $( $(#[$rest_meta])* $rest ),* );
     };
-    (@rest $schema:ty; $id:ty; ) => {};
-    (@rest $schema:ty; $id:ty; $(#[$meta:meta])* $name:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
+    (@rest $schema:ty; $schema_name:expr; $id:ty; ) => {};
+    (@rest $schema:ty; $schema_name:expr; $id:ty; $(#[$meta:meta])* $name:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
         $(#[$meta])*
         #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $name;
 
         impl $crate::shapes::AxisTag for $name {
             const NAME: &'static str = stringify!($name);
-            const KEY: &'static str = concat!(module_path!(), "::", stringify!($first), "::", stringify!($name));
+            fn key() -> $crate::shapes::AxisKey {
+                $crate::shapes::AxisKey::new($schema_name, stringify!($name))
+            }
         }
         impl $crate::shapes::AxisIdentity for $name {
             type Schema = $schema;
             type Id = $id;
         }
 
-        $crate::__incin_dim_declare!(@rest $schema; $crate::typenum::Sum<$id, $crate::typenum::U1>; $( $(#[$rest_meta])* $rest ),* );
+        $crate::__incin_dim_declare!(@rest $schema; $schema_name; $crate::typenum::Sum<$id, $crate::typenum::U1>; $( $(#[$rest_meta])* $rest ),* );
     };
 }
 

@@ -115,6 +115,15 @@ fn named_tags_have_schema_local_identity_ids() {
 }
 
 #[test]
+fn axis_keys_are_schema_qualified_without_module_paths() {
+    assert_eq!(Batch::key().schema(), "Batch");
+    assert_eq!(Batch::key().name(), "Batch");
+    assert_eq!(Channels::key().schema(), "Batch");
+    assert_eq!(Channels::key().name(), "Channels");
+    assert!(!Batch::key().qualified().contains("::tests::"));
+}
+
+#[test]
 fn named_lookup_resolves_current_position_without_storing_one() {
     type S = s![Batch, Channels, Height, Width];
     assert_eq!(Channels::selector().resolve::<S>().unwrap(), 1);
