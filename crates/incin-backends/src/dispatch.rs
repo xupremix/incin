@@ -461,6 +461,51 @@ macro_rules! dispatch_unary {
     };
 }
 
+/// Routes reductions through the CPU operation bodies that own their
+/// semantics. Keeping this separate from `dispatch_unary!` makes it explicit
+/// that reduction dispatch does not need to re-enter the legacy trait family
+/// on the CPU path.
+macro_rules! cpu_reduction_call {
+    (sum_all, $value:expr) => { crate::cpu::ops::reduce::sum_all($value) };
+    (mean_all, $value:expr) => { crate::cpu::ops::reduce::mean_all($value) };
+    (max_all, $value:expr) => { crate::cpu::ops::reduce::max_all($value) };
+    (min_all, $value:expr) => { crate::cpu::ops::reduce::min_all($value) };
+    (sum_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::sum_dim($value, $dim) };
+    (sum_keepdim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::sum_keepdim($value, $dim) };
+    (mean_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::mean_dim($value, $dim) };
+    (mean_keepdim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::mean_keepdim($value, $dim) };
+    (max_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::max_dim($value, $dim) };
+    (max_keepdim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::max_keepdim($value, $dim) };
+    (min_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::min_dim($value, $dim) };
+    (min_keepdim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::min_keepdim($value, $dim) };
+    (prod_all, $value:expr) => { crate::cpu::ops::reduce::prod_all($value) };
+    (prod_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::prod_dim($value, $dim) };
+    (cumsum, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::cumsum($value, $dim) };
+    ($method:ident, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
+    };
+}
+
+macro_rules! dispatch_reduction_unary {
+    ($storage:expr, $method:ident $(, $arg:expr)*) => {
+        match $storage {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => cpu_reduction_call!($method, value $(, $arg)*)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    };
+}
+
 /// Routes an operation taking a slice of operands to the backend holding the
 /// first one, checking every remaining operand against that route.
 ///
@@ -1874,49 +1919,49 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
         }
     }
     fn sum_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_unary!(t, sum_all)
+        dispatch_reduction_unary!(t, sum_all)
     }
     fn mean_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_unary!(t, mean_all)
+        dispatch_reduction_unary!(t, mean_all)
     }
     fn max_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_unary!(t, max_all)
+        dispatch_reduction_unary!(t, max_all)
     }
     fn min_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_unary!(t, min_all)
+        dispatch_reduction_unary!(t, min_all)
     }
     fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, sum_dim, dim)
+        dispatch_reduction_unary!(t, sum_dim, dim)
     }
     fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, sum_keepdim, dim)
+        dispatch_reduction_unary!(t, sum_keepdim, dim)
     }
     fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, mean_dim, dim)
+        dispatch_reduction_unary!(t, mean_dim, dim)
     }
     fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, mean_keepdim, dim)
+        dispatch_reduction_unary!(t, mean_keepdim, dim)
     }
     fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, max_dim, dim)
+        dispatch_reduction_unary!(t, max_dim, dim)
     }
     fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, max_keepdim, dim)
+        dispatch_reduction_unary!(t, max_keepdim, dim)
     }
     fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, min_dim, dim)
+        dispatch_reduction_unary!(t, min_dim, dim)
     }
     fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, min_keepdim, dim)
+        dispatch_reduction_unary!(t, min_keepdim, dim)
     }
     fn prod_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
-        dispatch_unary!(t, prod_all)
+        dispatch_reduction_unary!(t, prod_all)
     }
     fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, prod_dim, dim)
+        dispatch_reduction_unary!(t, prod_dim, dim)
     }
     fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, cumsum, dim)
+        dispatch_reduction_unary!(t, cumsum, dim)
     }
 }
 impl<D: Device> QuantizedOps<Self> for DispatchBackend<D> {
