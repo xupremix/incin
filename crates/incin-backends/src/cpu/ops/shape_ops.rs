@@ -222,6 +222,37 @@ pub(crate) fn masked_fill_storage(
     Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
 }
 
+pub(crate) fn repeat_storage(t: &CpuStorage, repeats: &[usize]) -> Result<CpuStorage> {
+    if repeats.len() != t.shape.len() {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Repeat,
+            reason: "repeat factors must match tensor rank",
+        }));
+    }
+    let out_shape: Vec<usize> = t
+        .shape
+        .iter()
+        .zip(repeats.iter())
+        .map(|(size, repeat)| size * repeat)
+        .collect();
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        let src_idx: Vec<usize> = idx
+            .iter()
+            .enumerate()
+            .map(|(axis, &value)| value % t.shape[axis])
+            .collect();
+        out.push(t.get(&src_idx));
+        if !out_shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+    }
+    let buffer = t.buffer.from_f64_values(out)?;
+    Ok(CpuStorage::from_contiguous(buffer, out_shape))
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -1024,31 +1055,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         repeats: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if repeats.len() != t.shape.len() {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Repeat,
-                reason: "repeat factors must match tensor rank",
-            }));
-        }
-        let mut out_shape = vec![];
-        for (a, b) in t.shape.iter().zip(repeats.iter()) {
-            out_shape.push(a * b);
-        }
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let mut src_idx = vec![];
-            for (i, &s) in idx.iter().enumerate() {
-                src_idx.push(s % t.shape[i]);
-            }
-            out.push(t.get(&src_idx));
-            if !out_shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &out_shape);
-            }
-        }
-        let buffer = t.buffer.from_f64_values(out)?;
-        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+        repeat_storage(t, repeats)
     }
 
     fn pad<K: DType>(
