@@ -143,7 +143,7 @@ pub(crate) use unsupported_reduction_ops;
 /// for, one operation name per entry.
 ///
 /// The three macros above group by signature because their traits have only a
-/// handful of shapes. `TensorOps` has nearly as many distinct signatures as it
+/// handful of shapes. `` has nearly as many distinct signatures as it
 /// has methods, so grouping would mean twenty groups, most with one member, and
 /// every call site spelling out the empty ones. Matching on the operation name
 /// instead keeps the declaration a flat list of exactly the gap:
@@ -158,7 +158,7 @@ pub(crate) use unsupported_reduction_ops;
 /// trait without someone noticing.
 ///
 /// CUDA and Metal both still invoke this; WGPU no longer does, now that
-/// every `TensorOps` method has a real implementation. That makes the macro
+/// every `` method has a real implementation. That makes the macro
 /// provably unused only under feature combinations that build WGPU without
 /// CUDA or Metal (e.g. CI's WGPU-only clippy job), a feature-gating artifact
 /// rather than dead code — see `unsupported_creation_ops`'s identical note

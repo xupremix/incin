@@ -1895,7 +1895,7 @@ impl<D: Device> Execute<op::FlattenExact> for CpuBackendImpl<D> {
 /// Elementwise selection between two operands under a mask.
 ///
 /// The operand order is the one the catalog's legacy source names -
-/// `TensorOps::where_cond(mask, on_true, on_false)` - so a caller that reads
+/// `::where_cond(mask, on_true, on_false)` - so a caller that reads
 /// the catalog row gets the same meaning from either path.
 impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
     type Output = CpuStorage;
@@ -2388,7 +2388,7 @@ impl<D: Device> Execute<op::InstanceNorm> for CpuBackendImpl<D> {
 ///
 /// The descriptor and the legacy method disagree about what the shape argument
 /// means: the descriptor's `ShapeAttributes` is the whole target shape, and
-/// validates the operand against it, while `TensorOps::broadcast_left` takes
+/// validates the operand against it, while `::broadcast_left` takes
 /// only the extents to prepend. Passing the descriptor's shape straight
 /// through would prepend the target to the operand and produce a tensor of
 /// twice the intended rank, so the prefix is derived here.

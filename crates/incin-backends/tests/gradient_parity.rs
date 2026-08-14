@@ -22,7 +22,7 @@ use incin_core::exec::{TapeStorage, check_gradients};
 use incin_core::prelude::*;
 use incin_core::__backend_compat::legacy::{ModuleOps};
 #[cfg(any(feature = "wgpu", feature = "cuda"))]
-use incin_core::__backend_compat::legacy::{ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ReductionOps};
 
 type CpuB = CpuBackendImpl;
 #[cfg(feature = "wgpu")]

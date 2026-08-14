@@ -1,6 +1,6 @@
 //! Wires `kernels/matmul.cu`'s tiled shared-memory GEMM (`BM=128, BN=128,
 //! BK=8, TM=8, TN=8`, 16x16 thread blocks) into the CUDA backend. Unbatched
-//! 2D operands only, matching `TensorOps::matmul`'s currently-wired scope on
+//! 2D operands only, matching `::matmul`'s currently-wired scope on
 //! this backend — batched matmul is not
 //! implemented here.
 
@@ -26,7 +26,7 @@ fn ensure_matmul_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
-/// `lhs`: `[M, K]`, `rhs`: `[K, N]` -> `[M, N]`. Caller (the `TensorOps`
+/// `lhs`: `[M, K]`, `rhs`: `[K, N]` -> `[M, N]`. Caller (the ``
 /// trait method) is responsible for the `lhs.shape[1] == rhs.shape[0]`
 /// shape check — this function assumes it already holds.
 #[cfg(feature = "cuda")]

@@ -458,7 +458,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 // ─────────────────────────────────────────────────────────────────────────────
 /// Materialize `t` at `shape`, recording the broadcast on the tape.
 ///
-/// The body of [`TensorOps::broadcast_as`], lifted to a free function so the
+/// The body of [`::broadcast_as`], lifted to a free function so the
 /// elementwise path below can reach it too. It has to be free rather than a
 /// method: `binary_op` takes bare storage and has no `Self` to call through,
 /// and duplicating the dispatch here would mean two broadcasts that could
@@ -913,9 +913,9 @@ pub(crate) fn log_softmax<K: DType>(t: &WgpuStorage, dim: usize) -> Result<WgpuS
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TensorOps  (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
+//   (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
-impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
     /// shape via the already tape-wired `broadcast_as` (reusing
     /// `crate::layout::broadcast_shape` to compute it, the same
@@ -927,15 +927,15 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// walk continues into `broadcast_as`'s own backward for whichever of
     /// `on_true`/`on_false` was not already at the common shape. `mask`
     /// itself gets no gradient, matching CPU.
-    fn where_cond<K: DType>(
+    pub fn where_cond<K: DType>(
         mask: &<Self as StorageBackend>::Storage<bool>,
         on_true: &<Self as StorageBackend>::Storage<K>,
         on_false: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out_shape = crate::layout::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<bool>(mask, &out_shape)?;
-        let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
-        let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
+        let mask_b = Self::broadcast_as::<bool>(mask, &out_shape)?;
+        let true_b = Self::broadcast_as::<K>(on_true, &out_shape)?;
+        let false_b = Self::broadcast_as::<K>(on_false, &out_shape)?;
 
         let mask_data = mask_b.buffer.to_vec::<f32>()?;
         let true_data = true_b.buffer.to_vec::<f32>()?;
@@ -990,7 +990,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// `+=` rather than `=` when two output positions share a source
     /// (unlike plain `scatter` above, which only ever writes, never
     /// accumulates). `index` itself gets no gradient, matching CPU.
-    fn gather<K: DType, KInt: DType>(
+    pub fn gather<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -1045,7 +1045,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// CPU's own semantics exactly, including silently ignoring an
     /// out-of-bounds destination position rather than erroring. Not
     /// autograd-wired, matching CPU.
-    fn scatter<K: DType, KInt: DType>(
+    pub fn scatter<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -1078,7 +1078,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// comment for why dividing the whole tensor by `groups` is wrong above
     /// batch size 1) is a plain contiguous slice of the host readback,
     /// needing no strided indexing at all. Not autograd-wired, matching CPU.
-    fn group_norm<K: DType>(
+    pub fn group_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         groups: usize,
         eps: f64,
@@ -1123,17 +1123,17 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `instance_norm`. `group_norm` with one group per channel, matching
     /// CPU's own composition exactly.
-    fn instance_norm<K: DType>(
+    pub fn instance_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
+        Self::group_norm::<K>(t, channels, eps)
     }
 
     /// `unfold`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn unfold<K: DType>(
+    pub fn unfold<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         size: usize,
@@ -1168,7 +1168,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `pixel_shuffle`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn pixel_shuffle<K: DType>(
+    pub fn pixel_shuffle<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         upscale_factor: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1214,7 +1214,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// CPU's own composition exactly (down to the `1/sqrt(d_k)` default
     /// scale), so gradients flow through `q`/`k`/`v`/`mask` the same way they
     /// do on CPU rather than dead-ending on the tape.
-    fn scaled_dot_product_attention<K: DType>(
+    pub fn scaled_dot_product_attention<K: DType>(
         q: &<Self as StorageBackend>::Storage<K>,
         k: &<Self as StorageBackend>::Storage<K>,
         v: &<Self as StorageBackend>::Storage<K>,
@@ -1223,11 +1223,11 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let k_rank = k.shape.len();
         let k_t = if k_rank >= 2 {
-            <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
         } else {
             k.clone()
         };
-        let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let scores = Self::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
@@ -1237,7 +1237,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             scaled_scores
         };
         let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
-        <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
+        Self::matmul::<K>(&attn, v)
     }
 
     /// `index_select`. Same host-readback/upload pattern as `repeat`; `index`
@@ -1245,7 +1245,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// representation for every dtype), so its values are read back as f32
     /// and truncated to a position like CPU's `index.get(&idx) as usize`
     /// does. Not autograd-wired, matching CPU.
-    fn index_select<K: DType, KInt: DType>(
+    pub fn index_select<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -1272,7 +1272,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `masked_fill`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn masked_fill<K: DType>(
+    pub fn masked_fill<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         mask: &<Self as StorageBackend>::Storage<bool>,
         value: f64,
@@ -1301,7 +1301,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// CPU's own `repeat` uses, and re-uploads — the same host-compute
     /// pattern `full`/`arange`/`linspace` above already use. Not
     /// autograd-wired, matching CPU.
-    fn repeat<K: DType>(
+    pub fn repeat<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         repeats: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1333,7 +1333,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `pad`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn pad<K: DType>(
+    pub fn pad<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         padding: &[(usize, usize)],
         val: f64,
@@ -1374,7 +1374,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `triu`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn triu<K: DType>(
+    pub fn triu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1400,7 +1400,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `tril`. Same host-readback/upload pattern as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn tril<K: DType>(
+    pub fn tril<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1428,7 +1428,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// two cases: a 1D operand builds a 2D matrix with that operand on its
     /// `k`-th diagonal, an operand of rank 2+ extracts its `k`-th diagonal
     /// into a 1D result. Not autograd-wired, matching CPU.
-    fn diag<K: DType>(
+    pub fn diag<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1472,29 +1472,29 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching CPU's
     /// own composition — and so, like CPU, differentiable through all three
     /// operands rather than a dead end on the tape.
-    fn addmm<K: DType>(
+    pub fn addmm<K: DType>(
         mat: &<Self as StorageBackend>::Storage<K>,
         mat1: &<Self as StorageBackend>::Storage<K>,
         mat2: &<Self as StorageBackend>::Storage<K>,
         beta: f64,
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
+        let mm = Self::matmul::<K>(mat1, mat2)?;
         let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
         Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU.
-    fn bmm<K: DType>(
+    pub fn bmm<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
+        Self::matmul::<K>(lhs, rhs)
     }
 
     /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
     /// so inherits gradient wiring from): inserts a size-1 axis.
-    fn unsqueeze<K: DType>(
+    pub fn unsqueeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1510,7 +1510,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     /// `cmp_eq`. Matches the CPU backend: same-dtype output encoding
     /// true/false as 1.0/0.0, and (like CPU) not autograd-wired since the
     /// output is not a differentiable function of the operands.
-    fn cmp_eq<K: DType>(
+    pub fn cmp_eq<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1520,7 +1520,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "cmp_eq",
         })
     }
-    fn cmp_ne<K: DType>(
+    pub fn cmp_ne<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1530,7 +1530,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "cmp_ne",
         })
     }
-    fn cmp_lt<K: DType>(
+    pub fn cmp_lt<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1540,7 +1540,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "cmp_lt",
         })
     }
-    fn cmp_le<K: DType>(
+    pub fn cmp_le<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1550,7 +1550,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "cmp_le",
         })
     }
-    fn cmp_gt<K: DType>(
+    pub fn cmp_gt<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1560,7 +1560,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "cmp_gt",
         })
     }
-    fn cmp_ge<K: DType>(
+    pub fn cmp_ge<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1571,7 +1571,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         })
     }
 
-    fn logical_and(
+    pub fn logical_and(
         _lhs: &<Self as StorageBackend>::Storage<bool>,
         _rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1581,7 +1581,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "logical_and",
         })
     }
-    fn logical_or(
+    pub fn logical_or(
         _lhs: &<Self as StorageBackend>::Storage<bool>,
         _rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -1591,7 +1591,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
             op: "logical_or",
         })
     }
-    fn logical_not(
+    pub fn logical_not(
         _t: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         Err(Error::UnsupportedDType {
@@ -1601,17 +1601,17 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         })
     }
 
-    /// `sub_scalar`. Not autograd-wired: matches CPU, whose `TensorOps`
+    /// `sub_scalar`. Not autograd-wired: matches CPU, whose ``
     /// scalar/comparison methods (as opposed to ``'s
     /// `add_scalar_float`/`mul_scalar_float`) carry no backward closure.
-    fn sub_scalar<K: DType>(
+    pub fn sub_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         scalar_op::<K>(t, val, 2)
     }
     /// `div_scalar`.
-    fn div_scalar<K: DType>(
+    pub fn div_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1619,21 +1619,21 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `maximum`. Not autograd-wired, matching CPU.
-    fn maximum<K: DType>(
+    pub fn maximum<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         binary_op::<K>(lhs, rhs, 15, "maximum")
     }
     /// `minimum`.
-    fn minimum<K: DType>(
+    pub fn minimum<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         binary_op::<K>(lhs, rhs, 16, "minimum")
     }
     /// `abs_diff`.
-    fn abs_diff<K: DType>(
+    pub fn abs_diff<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1642,7 +1642,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 
     /// `lerp`. `start + weight * (end - start)`, composed from existing
     /// primitives; not autograd-wired, matching CPU.
-    fn lerp<K: DType>(
+    pub fn lerp<K: DType>(
         start: &<Self as StorageBackend>::Storage<K>,
         end: &<Self as StorageBackend>::Storage<K>,
         weight: f64,
@@ -1653,7 +1653,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `matmul`.
-    fn matmul<K: DType>(
+    pub fn matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1830,7 +1830,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `reshape`.
-    fn reshape<K: DType>(
+    pub fn reshape<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1856,7 +1856,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `transpose`.
-    fn transpose<K: DType>(
+    pub fn transpose<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
@@ -1894,7 +1894,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `flatten`.
-    fn flatten<K: DType>(
+    pub fn flatten<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         start_dim: usize,
         end_dim: usize,
@@ -1910,7 +1910,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `squeeze`.
-    fn squeeze<K: DType>(
+    pub fn squeeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1921,7 +1921,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         Self::reshape::<K>(t, &new_shape)
     }
 
-    fn narrow<K: DType>(
+    pub fn narrow<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         start: usize,
@@ -1966,7 +1966,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
 
-    fn broadcast_as<K: DType>(
+    pub fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1974,7 +1974,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `broadcast_left`.
-    fn broadcast_left<K: DType>(
+    pub fn broadcast_left<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1984,7 +1984,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `slice`.
-    fn slice<K: DType>(
+    pub fn slice<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1996,7 +1996,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `stack`.
-    fn stack<K: DType>(
+    pub fn stack<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2015,7 +2015,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `concat`.
-    fn concat<K: DType>(
+    pub fn concat<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2088,7 +2088,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `float_to_scalar`.
-    fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
+    pub fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
         let numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Storage)?;
         if numel != 1 {
             return Err(Error::Shape(ShapeError::InvalidParameter {
@@ -2106,13 +2106,13 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `float_to_vec1`.
-    fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
+    pub fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         Ok(data.iter().map(|&x| x as f64).collect())
     }
 
     /// `int_to_scalar`.
-    fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
+    pub fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         let value = data.first().copied().ok_or(Error::InvalidByteLength {
             expected: core::mem::size_of::<f32>(),
@@ -2127,7 +2127,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `int_to_vec1`.
-    fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
+    pub fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         data.into_iter()
             .map(|value| {
@@ -2142,7 +2142,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `tensor_to_dtype`.
-    fn tensor_to_dtype<K: DType, K2: DType>(
+    pub fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         _dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {
@@ -2155,14 +2155,14 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
 // ReductionOps
 // ─────────────────────────────────────────────────────────────────────────────
 /// `reduce_all_to_storage`.
-fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
+pub fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
     let n = checked_u32(num_elements(&t.shape)?, "WGPU reduction element count")?;
     let out = dispatch::dispatch_reduce_all(&t.buffer, n, mode)?;
     Ok(WgpuStorage::new(out, vec![]))
 }
 
 /// `reduce_dim_to_storage`.
-fn reduce_dim_to_storage(
+pub fn reduce_dim_to_storage(
     t: &WgpuStorage,
     dim: usize,
     mode: u32,
@@ -2226,7 +2226,7 @@ fn reduce_dim_to_storage(
 /// any element directly (`outer_idx*(axis*inner) + axis_idx*inner + inner_idx`)
 /// without a general N-dimensional odometer — WGPU storage has no
 /// non-contiguous view support, so this always applies.
-fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
+pub fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
     let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape[..dim]))
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let axis = shape[dim];
@@ -2235,7 +2235,7 @@ fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)
     Ok((outer, axis, inner))
 }
 
-fn checked_flat_index(
+pub fn checked_flat_index(
     coords: &[usize],
     shape: &[usize],
     operation: OperationKind,
@@ -2264,7 +2264,7 @@ fn checked_flat_index(
 /// least-significant axis first. Mirrors the CPU backend's
 /// `cpu::storage::increment_index`; WGPU storage is always contiguous so the
 /// same row-major walk applies directly to a flat host-side readback.
-fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
+pub fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
     for axis in (0..shape.len()).rev() {
         idx[axis] += 1;
         if idx[axis] < shape[axis] {
@@ -2282,7 +2282,7 @@ fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
 /// backend's `max_axis_with_indices`/`min_axis_with_indices` +
 /// `scatter_axis_grad` (`cpu/ops/reduce.rs`) exactly. Not used for
 /// `max_keepdim`/`min_keepdim` — see their doc comments.
-fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, is_max: bool) {
+pub fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, is_max: bool) {
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
@@ -2326,7 +2326,7 @@ fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, 
 
 /// Backward for `max_all`/`min_all`: the whole-tensor special case of
 /// `push_extremum_dim_tape_entry` (`outer = inner = 1`, `axis = numel`).
-fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool) {
+pub fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool) {
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);

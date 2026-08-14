@@ -1147,7 +1147,7 @@ mod tests {
     /// `unsupported_methods_return_typed_error_not_silent_placeholder`.
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        // All other TensorOps methods are now fully implemented. We prove that
+        // All other  methods are now fully implemented. We prove that
         // unsupported operations return typed errors by attempting to convert
         // to Q8_0, which is intentionally left unsupported in the Cpu backend.
         let result = tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
@@ -1160,7 +1160,7 @@ mod tests {
         ));
     }
 
-    /// Task 1 Test 1: `TensorOps::narrow` called through the trait matches
+    /// Task 1 Test 1: `::narrow` called through the trait matches
     /// calling `CpuStorage::narrow` directly (thin-wrapper equivalence).
     #[test]
     fn narrow_through_trait_matches_direct_storage_call() {
@@ -1351,7 +1351,7 @@ mod tests {
         assert_eq!(f32_vec(g), vec![1.0; 24]);
     }
 
-    /// Test 6: `TensorOps::matmul` called through the trait on two rank-2
+    /// Test 6: `::matmul` called through the trait on two rank-2
     /// operands still produces identical values to a direct `matmul_impl`
     /// call (dispatch does not change the unbatched path's behavior).
     #[test]
@@ -1370,7 +1370,7 @@ mod tests {
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
 
-    /// Test 7: `TensorOps::matmul` called through the trait on two rank-3
+    /// Test 7: `::matmul` called through the trait on two rank-3
     /// (or higher) operands correctly dispatches to `batched_matmul_impl`
     /// and produces the same values a direct `batched_matmul_impl` call
     /// would.

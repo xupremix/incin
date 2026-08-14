@@ -2,7 +2,7 @@
 //! `module_ops_has_no_unsupported_default`, held against the largest
 //! operation family.
 //!
-//! `TensorOps` carried forty-nine unsupported default bodies — more than the
+//! `` carried forty-nine unsupported default bodies — more than the
 //! other families combined. Every backend but the CPU one inherited the same
 //! thirty-three-operation hole, and two of those backends only refused because
 //! of the default: `TracingBackend` and `DispatchBackend` both delegate to a
@@ -11,10 +11,10 @@
 //! neither gap was visible until the defaults came off.
 
 use incin_core::backend_authoring::Backend;
-use incin_core::__backend_compat::legacy::TensorOps;
+use incin_core::__backend_compat::legacy::;
 
 struct Incomplete<B>(core::marker::PhantomData<B>);
 
-impl<B: Backend> TensorOps<B> for Incomplete<B> {}
+impl<B: Backend> <B> for Incomplete<B> {}
 
 fn main() {}

@@ -23,9 +23,9 @@
 //! path below stays complete and is what a default build runs.
 //!
 //! This file only contributes plain functions rather than its own `impl
-//! TensorOps` block: Rust does not allow two separate `impl TensorOps<..> for
+//! ` block: Rust does not allow two separate `impl <..> for
 //! CpuBackendImpl<..>` blocks for the same trait+type across two files, so
-//! `ops/shape_ops.rs`'s single `TensorOps` impl block calls into
+//! `ops/shape_ops.rs`'s single `` impl block calls into
 //! `matmul_impl`/`batched_matmul_impl` for its `matmul` method.
 
 use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};

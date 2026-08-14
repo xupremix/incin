@@ -125,7 +125,7 @@ fn test_div() {
 fn test_matmul_2x3_3x2() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let b = storage(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], vec![3, 2]);
-    let out = <B as TensorOps<B>>::matmul::<f32>(&a, &b).unwrap();
+    let out = B::matmul::<f32>(&a, &b).unwrap();
     assert_eq!(out.shape, vec![2, 2]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -139,7 +139,7 @@ fn test_matmul_2x3_3x2() {
 fn test_matmul_square() {
     let a = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
     let b = storage(vec![3.0, 4.0, 5.0, 6.0], vec![2, 2]);
-    let out = <B as TensorOps<B>>::matmul::<f32>(&a, &b).unwrap();
+    let out = B::matmul::<f32>(&a, &b).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[3.0, 4.0, 5.0, 6.0], 1e-4));
 }
 
@@ -349,7 +349,7 @@ fn test_argmin_flat() {
 /// `test_reshape`.
 fn test_reshape() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as TensorOps<B>>::reshape::<f32>(&a, &[3, 2]).unwrap();
+    let out = B::reshape::<f32>(&a, &[3, 2]).unwrap();
     assert_eq!(out.shape, vec![3, 2]);
     assert_eq!(readback(&out), readback(&a)); // same buffer, same data
 }
@@ -359,7 +359,7 @@ fn test_reshape() {
 fn test_transpose_2d() {
     // [[1,2,3],[4,5,6]] -> [[1,4],[2,5],[3,6]]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as TensorOps<B>>::transpose::<f32>(&a, 0, 1).unwrap();
+    let out = B::transpose::<f32>(&a, 0, 1).unwrap();
     assert_eq!(out.shape, vec![3, 2]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -372,7 +372,7 @@ fn test_transpose_2d() {
 /// `test_flatten`.
 fn test_flatten() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as TensorOps<B>>::flatten::<f32>(&a, 0, 1).unwrap();
+    let out = B::flatten::<f32>(&a, 0, 1).unwrap();
     assert_eq!(out.shape, vec![6]);
 }
 
@@ -380,7 +380,7 @@ fn test_flatten() {
 /// `test_squeeze`.
 fn test_squeeze() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
-    let out = <B as TensorOps<B>>::squeeze::<f32>(&a, 0).unwrap();
+    let out = B::squeeze::<f32>(&a, 0).unwrap();
     assert_eq!(out.shape, vec![3]);
 }
 
@@ -393,7 +393,7 @@ fn test_scaled_dot_product_attention_uniform_when_query_is_zero() {
     let k = storage(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![3, 2]);
     let v = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let out =
-        <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
+        B::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
     assert_eq!(out.shape, vec![1, 2]);
     assert!(vec_approx_eq(&readback(&out), &[3.0, 4.0], 1e-4));
 }
@@ -404,7 +404,7 @@ fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
     let k = storage(vec![0.5, 0.6, 0.7, 0.8], vec![2, 2]);
     let v = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let out =
-        <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
+        B::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     assert!(grads.get(q.id).is_some(), "q should have a gradient");
     assert!(grads.get(k.id).is_some(), "k should have a gradient");
@@ -416,7 +416,7 @@ fn test_where_cond_same_shape() {
     let mask = storage_bool(vec![true, false, true, false], vec![4]);
     let on_true = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
     let on_false = storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
-    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+    let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(readback(&out), vec![10.0, -2.0, 30.0, -4.0]);
 }
 
@@ -426,7 +426,7 @@ fn test_where_cond_broadcasts_on_false_against_on_true() {
     let mask = storage_bool(vec![true, false, true, false, true, false], vec![2, 3]);
     let on_true = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let on_false = storage(vec![-1.0, -2.0], vec![2, 1]);
-    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+    let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, -1.0, 3.0, -2.0, 5.0, -2.0]);
 }
@@ -438,7 +438,7 @@ fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
     // on_false is a single value broadcast across all 4 positions, so its
     // gradient must sum every position the mask routed to it.
     let on_false = storage(vec![9.0], vec![1]);
-    let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+    let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g_true = grads
         .get(on_true.id)
@@ -456,7 +456,7 @@ fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
 fn test_gather() {
     let t = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2, 1]);
-    let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+    let out = B::gather::<f32, f32>(&t, 0, &index).unwrap();
     assert_eq!(out.shape, vec![2, 1]);
     // Row 0's column 0 gathers t[2,0]=5 (index[0,0]=2), row 1's column 0
     // gathers t[0,0]=1 (index[1,0]=0).
@@ -469,7 +469,7 @@ fn gather_backward_scatter_adds_to_every_position_that_was_read() {
     // both contributions into grad_t[0] rather than overwrite.
     let t = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let index = storage(vec![0.0, 0.0, 1.0], vec![3]);
-    let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+    let out = B::gather::<f32, f32>(&t, 0, &index).unwrap();
     assert_eq!(readback(&out), vec![1.0, 1.0, 2.0]);
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g = grads.get(t.id).expect("t should have a gradient");
@@ -483,7 +483,7 @@ fn test_scatter() {
     let t = storage(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2, 1]);
     let src = storage(vec![9.0, 8.0], vec![2, 1]);
-    let out = <B as TensorOps<B>>::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
+    let out = B::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
     assert_eq!(out.shape, vec![3, 2]);
     // Row 0's column 0 gets src[1]=8 (index[1]=0), row 2's column 0 gets
     // src[0]=9 (index[0]=2); every other position is untouched.
@@ -494,7 +494,7 @@ fn test_scatter() {
 fn test_index_select() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2]);
-    let out = <B as TensorOps<B>>::index_select::<f32, f32>(&a, 0, &index).unwrap();
+    let out = B::index_select::<f32, f32>(&a, 0, &index).unwrap();
     assert_eq!(out.shape, vec![2, 2]);
     assert_eq!(readback(&out), vec![5.0, 6.0, 1.0, 2.0]);
 }
@@ -503,7 +503,7 @@ fn test_index_select() {
 fn test_masked_fill() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let mask = storage_bool(vec![true, false, true, false], vec![4]);
-    let out = <B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
+    let out = B::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
     assert_eq!(readback(&out), vec![-1.0, 2.0, -1.0, 4.0]);
 }
 
@@ -511,7 +511,7 @@ fn test_masked_fill() {
 fn masked_fill_rejects_a_mismatched_mask_shape() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let mask = storage_bool(vec![true, false], vec![2]);
-    assert!(<B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).is_err());
+    assert!(B::masked_fill::<f32>(&a, &mask, -1.0).is_err());
 }
 
 #[test]
@@ -523,7 +523,7 @@ fn group_norm_statistics_are_per_sample_not_across_the_batch() {
     let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
     let t = storage(data, vec![2, 4, 1, 2]);
 
-    let out = readback(&<B as TensorOps<B>>::group_norm::<f32>(&t, 2, 1e-5).unwrap());
+    let out = readback(&B::group_norm::<f32>(&t, 2, 1e-5).unwrap());
 
     assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
     // Group 0 of sample 0 is [0,1,2,3]: mean 1.5, population variance 1.25.
@@ -550,7 +550,7 @@ fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
         vec![2, 2, 2],
     );
 
-    let out = readback(&<B as TensorOps<B>>::instance_norm::<f32>(&t, 1e-5).unwrap());
+    let out = readback(&B::instance_norm::<f32>(&t, 1e-5).unwrap());
 
     for flat in [0, 1, 4, 5] {
         assert!(
@@ -568,13 +568,13 @@ fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
 #[test]
 fn group_norm_rejects_zero_groups() {
     let t = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 2, 2]);
-    assert!(<B as TensorOps<B>>::group_norm::<f32>(&t, 0, 1e-5).is_err());
+    assert!(B::group_norm::<f32>(&t, 0, 1e-5).is_err());
 }
 
 #[test]
 fn test_unfold() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0], vec![5]);
-    let out = <B as TensorOps<B>>::unfold::<f32>(&a, 0, 3, 1).unwrap();
+    let out = B::unfold::<f32>(&a, 0, 3, 1).unwrap();
     assert_eq!(out.shape, vec![3, 3]);
     assert_eq!(
         readback(&out),
@@ -585,7 +585,7 @@ fn test_unfold() {
 #[test]
 fn unfold_rejects_a_window_larger_than_the_dimension() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    assert!(<B as TensorOps<B>>::unfold::<f32>(&a, 0, 4, 1).is_err());
+    assert!(B::unfold::<f32>(&a, 0, 4, 1).is_err());
 }
 
 #[test]
@@ -593,7 +593,7 @@ fn test_pixel_shuffle() {
     // N=1, C=4, H=1, W=1, upscale_factor=2 -> N=1, C=1, H=2, W=2.
     // Channel c_in maps to output position (r_h, r_w) = (c_in / 2, c_in % 2).
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 4, 1, 1]);
-    let out = <B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).unwrap();
+    let out = B::pixel_shuffle::<f32>(&a, 2).unwrap();
     assert_eq!(out.shape, vec![1, 1, 2, 2]);
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0]);
 }
@@ -601,13 +601,13 @@ fn test_pixel_shuffle() {
 #[test]
 fn pixel_shuffle_rejects_channels_not_divisible_by_upscale_squared() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3, 1, 1]);
-    assert!(<B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).is_err());
+    assert!(B::pixel_shuffle::<f32>(&a, 2).is_err());
 }
 
 #[test]
 fn test_repeat() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
-    let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();
+    let out = B::repeat::<f32>(&a, &[2, 1]).unwrap();
     assert_eq!(out.shape, vec![4, 2]);
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
 }
@@ -615,7 +615,7 @@ fn test_repeat() {
 #[test]
 fn test_pad() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
-    let out = <B as TensorOps<B>>::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
+    let out = B::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
     assert_eq!(out.shape, vec![3, 3]);
     assert_eq!(
         readback(&out),
@@ -629,7 +629,7 @@ fn test_triu() {
         vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
         vec![3, 3],
     );
-    let out = <B as TensorOps<B>>::triu::<f32>(&a, 0).unwrap();
+    let out = B::triu::<f32>(&a, 0).unwrap();
     assert_eq!(
         readback(&out),
         vec![1.0, 2.0, 3.0, 0.0, 5.0, 6.0, 0.0, 0.0, 9.0]
@@ -642,7 +642,7 @@ fn test_tril() {
         vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
         vec![3, 3],
     );
-    let out = <B as TensorOps<B>>::tril::<f32>(&a, 0).unwrap();
+    let out = B::tril::<f32>(&a, 0).unwrap();
     assert_eq!(
         readback(&out),
         vec![1.0, 0.0, 0.0, 4.0, 5.0, 0.0, 7.0, 8.0, 9.0]
@@ -652,7 +652,7 @@ fn test_tril() {
 #[test]
 fn test_diag_builds_matrix_from_vector() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+    let out = B::diag::<f32>(&a, 0).unwrap();
     assert_eq!(out.shape, vec![3, 3]);
     assert_eq!(
         readback(&out),
@@ -666,7 +666,7 @@ fn test_diag_extracts_from_matrix() {
         vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
         vec![3, 3],
     );
-    let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+    let out = B::diag::<f32>(&a, 0).unwrap();
     assert_eq!(out.shape, vec![3]);
     assert_eq!(readback(&out), vec![1.0, 5.0, 9.0]);
 }
@@ -676,7 +676,7 @@ fn test_diag_extracts_from_matrix() {
 fn test_narrow() {
     // [[1,2,3],[4,5,6]] narrow dim=0, start=1, len=1 -> [[4,5,6]]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as TensorOps<B>>::narrow::<f32>(&a, 0, 1, 1).unwrap();
+    let out = B::narrow::<f32>(&a, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 3]);
     assert!(vec_approx_eq(&readback(&out), &[4.0, 5.0, 6.0], 1e-5));
 }
@@ -686,7 +686,7 @@ fn test_narrow() {
 fn test_concat_dim0() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let b = storage(vec![4.0, 5.0, 6.0], vec![1, 3]);
-    let out = <B as TensorOps<B>>::concat::<f32>(&[&a, &b], 0).unwrap();
+    let out = B::concat::<f32>(&[&a, &b], 0).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 }
@@ -696,7 +696,7 @@ fn test_concat_dim0() {
 fn test_stack() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![4.0, 5.0, 6.0], vec![3]);
-    let out = <B as TensorOps<B>>::stack::<f32>(&[&a, &b], 0).unwrap();
+    let out = B::stack::<f32>(&[&a, &b], 0).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 }
@@ -705,7 +705,7 @@ fn test_stack() {
 /// `test_float_to_scalar`.
 fn test_float_to_scalar() {
     let a = storage(vec![42.0], vec![1]);
-    let val = <B as TensorOps<B>>::float_to_scalar::<f32>(&a).unwrap();
+    let val = B::float_to_scalar::<f32>(&a).unwrap();
     assert!(approx_eq(val as f32, 42.0, 1e-5));
 }
 
@@ -1134,7 +1134,7 @@ fn matmul_backward_matches_hand_computed_gradients() {
         ],
         vec![3, 4],
     );
-    let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+    let out = B::matmul::<f32>(&lhs, &rhs).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
     let rhs_grad = grads.get(rhs.id).expect("rhs should have a gradient");
@@ -1161,7 +1161,7 @@ fn matmul_backward_unbroadcasts_batch1_operand_to_its_own_shape() {
     // a [2,2,2]-shaped gradient for a [2,2]-shaped parameter.
     let lhs = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
     let rhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![2, 2, 2]);
-    let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+    let out = B::matmul::<f32>(&lhs, &rhs).unwrap();
     assert_eq!(out.shape, vec![2, 2, 2]);
 
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
@@ -1636,7 +1636,7 @@ fn min_keepdim_backward_matches_finite_difference() {
 fn test_cmp_eq() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 3.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::cmp_eq::<f32>(&a, &b);
+    let out = B::cmp_eq::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1644,7 +1644,7 @@ fn test_cmp_eq() {
 fn test_cmp_ne() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![1.0, 0.0, 5.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_ne::<f32>(&a, &b);
+    let out = B::cmp_ne::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1652,7 +1652,7 @@ fn test_cmp_ne() {
 fn test_cmp_lt() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b);
+    let out = B::cmp_lt::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1660,7 +1660,7 @@ fn test_cmp_lt() {
 fn test_cmp_le() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_le::<f32>(&a, &b);
+    let out = B::cmp_le::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1668,7 +1668,7 @@ fn test_cmp_le() {
 fn test_cmp_gt() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_gt::<f32>(&a, &b);
+    let out = B::cmp_gt::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1676,7 +1676,7 @@ fn test_cmp_gt() {
 fn test_cmp_ge() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
-    let out = <B as TensorOps<B>>::cmp_ge::<f32>(&a, &b);
+    let out = B::cmp_ge::<f32>(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1684,7 +1684,7 @@ fn test_cmp_ge() {
 fn test_logical_and() {
     let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_and(&a, &b);
+    let out = B::logical_and(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
@@ -1692,28 +1692,28 @@ fn test_logical_and() {
 fn test_logical_or() {
     let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
     let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_or(&a, &b);
+    let out = B::logical_or(&a, &b);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_logical_not() {
     let a = storage(vec![1.0, 0.0, 2.0, 0.0], vec![4]);
-    let out = <B as TensorOps<B>>::logical_not(&a);
+    let out = B::logical_not(&a);
     assert!(matches!(out, Err(Error::UnsupportedDType { .. })));
 }
 
 #[test]
 fn test_sub_scalar() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
-    let out = <B as TensorOps<B>>::sub_scalar::<f32>(&a, 5.0).unwrap();
+    let out = B::sub_scalar::<f32>(&a, 5.0).unwrap();
     assert_eq!(readback(&out), vec![5.0, 15.0, 25.0]);
 }
 
 #[test]
 fn test_div_scalar() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
-    let out = <B as TensorOps<B>>::div_scalar::<f32>(&a, 5.0).unwrap();
+    let out = B::div_scalar::<f32>(&a, 5.0).unwrap();
     assert_eq!(readback(&out), vec![2.0, 4.0, 6.0]);
 }
 
@@ -1721,7 +1721,7 @@ fn test_div_scalar() {
 fn test_maximum() {
     let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
     let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
-    let out = <B as TensorOps<B>>::maximum::<f32>(&a, &b).unwrap();
+    let out = B::maximum::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![4.0, 5.0, 3.0]);
 }
 
@@ -1729,7 +1729,7 @@ fn test_maximum() {
 fn test_minimum() {
     let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
     let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
-    let out = <B as TensorOps<B>>::minimum::<f32>(&a, &b).unwrap();
+    let out = B::minimum::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0]);
 }
 
@@ -1737,7 +1737,7 @@ fn test_minimum() {
 fn test_abs_diff() {
     let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
     let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
-    let out = <B as TensorOps<B>>::abs_diff::<f32>(&a, &b).unwrap();
+    let out = B::abs_diff::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![3.0, 3.0, 0.0]);
 }
 
@@ -1745,7 +1745,7 @@ fn test_abs_diff() {
 fn test_lerp() {
     let start = storage(vec![0.0, 10.0, 100.0], vec![3]);
     let end = storage(vec![10.0, 20.0, 200.0], vec![3]);
-    let out = <B as TensorOps<B>>::lerp::<f32>(&start, &end, 0.25).unwrap();
+    let out = B::lerp::<f32>(&start, &end, 0.25).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[2.5, 12.5, 125.0], 1e-4));
 }
 
@@ -1753,7 +1753,7 @@ fn test_lerp() {
 fn test_bmm() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let b = storage(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], vec![3, 2]);
-    let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+    let out = B::bmm::<f32>(&a, &b).unwrap();
     assert_eq!(out.shape, vec![2, 2]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -1767,7 +1767,7 @@ fn test_bmm_batched() {
     // Two independent 2x2 @ 2x2 matmuls stacked on a batch axis.
     let a = storage(vec![1.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0, 2.0], vec![2, 2, 2]);
     let b = storage(vec![3.0, 4.0, 5.0, 6.0, 1.0, 1.0, 1.0, 1.0], vec![2, 2, 2]);
-    let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+    let out = B::bmm::<f32>(&a, &b).unwrap();
     assert_eq!(out.shape, vec![2, 2, 2]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -1782,7 +1782,7 @@ fn test_addmm() {
     let mat1 = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
     let mat2 = storage(vec![3.0, 4.0, 5.0, 6.0], vec![2, 2]);
     // beta * mat + alpha * (mat1 @ mat2) = 2*[[1,1],[1,1]] + 3*[[3,4],[5,6]]
-    let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
+    let out = B::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
     assert!(vec_approx_eq(
         &readback(&out),
         &[11.0, 14.0, 17.0, 20.0],
@@ -1808,7 +1808,7 @@ fn addmm_backward_matches_hand_computed_gradients() {
     // d(sum(out))/d(mat) = beta * ones = [0.5, 0.5, 0.5, 0.5].
     // d(sum(out))/d(mat1) = alpha * (ones @ mat2^T) = 2 * [11,15,11,15].
     // d(sum(out))/d(mat2) = alpha * (mat1^T @ ones) = 2 * [4,4,6,6].
-    let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 0.5, 2.0).unwrap();
+    let out = B::addmm::<f32>(&mat, &mat1, &mat2, 0.5, 2.0).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g_mat = grads.get(mat.id).expect("mat should have a gradient");
     let g_mat1 = grads.get(mat1.id).expect("mat1 should have a gradient");
@@ -1859,7 +1859,7 @@ fn test_prod_dim() {
 #[test]
 fn test_unsqueeze() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
-    let out = <B as TensorOps<B>>::unsqueeze::<f32>(&a, 1).unwrap();
+    let out = B::unsqueeze::<f32>(&a, 1).unwrap();
     assert_eq!(out.shape, vec![2, 1, 3]);
     assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 }
@@ -1868,7 +1868,7 @@ fn test_unsqueeze() {
 fn unsqueeze_is_tape_tracked_through_reshapes_backward() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as TensorOps<B>>::unsqueeze::<f32>(&inputs[0], 0).unwrap();
+        let out = B::unsqueeze::<f32>(&inputs[0], 0).unwrap();
         <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[a], 1e-3);

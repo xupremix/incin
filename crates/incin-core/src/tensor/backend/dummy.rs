@@ -648,7 +648,7 @@ use super::*;
         }
     }
 
-    /// The `TensorOps` members whose output shape equals an input's, split by
+    /// The `` members whose output shape equals an input's, split by
     /// which operand supplies it. These mirror ``' convention above,
     /// where a binary op reports `lhs`'s shape.
     macro_rules! shape_preserving_tensor_ops {
@@ -692,7 +692,7 @@ use super::*;
         };
     }
 
-    /// The `TensorOps` members whose output shape this stand-in does not
+    /// The `` members whose output shape this stand-in does not
     /// model. Returning a plausible-looking wrong shape would be worse than
     /// refusing: shape is the only thing `DummyBackend` asserts, and a test
     /// reading a fabricated one would pass for the wrong reason.
@@ -743,7 +743,7 @@ use super::*;
     /// dim, transpose's swap, flatten's dimension collapse, etc.) since
     /// shape *is* everything this stand-in's storage represents --- but
     /// still no element values exist behind any of it.
-    impl<D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<D> {
+    impl<D: Device + Clone + 'static> DummyBackend<D> {
         shape_preserving_tensor_ops! {
             unary: ;
             scalar: sub_scalar, div_scalar, instance_norm;
@@ -751,55 +751,55 @@ use super::*;
             binary: maximum, minimum, abs_diff;
         }
 
-        fn cmp_eq<K: DType>(
+        pub fn cmp_eq<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn cmp_ne<K: DType>(
+        pub fn cmp_ne<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn cmp_lt<K: DType>(
+        pub fn cmp_lt<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn cmp_le<K: DType>(
+        pub fn cmp_le<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn cmp_gt<K: DType>(
+        pub fn cmp_gt<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn cmp_ge<K: DType>(
+        pub fn cmp_ge<K: DType>(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn logical_and(
+        pub fn logical_and(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn logical_or(
+        pub fn logical_or(
             lhs: &alloc::vec::Vec<usize>,
             _rhs: &alloc::vec::Vec<usize>,
         ) -> Result<alloc::vec::Vec<usize>> {
             Ok(lhs.clone())
         }
-        fn logical_not(t: &alloc::vec::Vec<usize>) -> Result<alloc::vec::Vec<usize>> {
+        pub fn logical_not(t: &alloc::vec::Vec<usize>) -> Result<alloc::vec::Vec<usize>> {
             Ok(t.clone())
         }
 
@@ -810,7 +810,7 @@ use super::*;
         }
 
         /// Returns `on_true`'s shape, which is the branch the output takes.
-        fn where_cond<K: DType>(
+        pub fn where_cond<K: DType>(
             _mask: &<Self as StorageBackend>::Storage<bool>,
             on_true: &<Self as StorageBackend>::Storage<K>,
             _on_false: &<Self as StorageBackend>::Storage<K>,
@@ -819,7 +819,7 @@ use super::*;
         }
 
         /// Filling masked positions leaves the shape untouched.
-        fn masked_fill<K: DType>(
+        pub fn masked_fill<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _mask: &<Self as StorageBackend>::Storage<bool>,
             _value: f64,
@@ -828,7 +828,7 @@ use super::*;
         }
 
         /// Interpolating between two tensors keeps `start`'s shape.
-        fn lerp<K: DType>(
+        pub fn lerp<K: DType>(
             start: &<Self as StorageBackend>::Storage<K>,
             _end: &<Self as StorageBackend>::Storage<K>,
             _weight: f64,
@@ -837,7 +837,7 @@ use super::*;
         }
 
         /// Normalizing over groups leaves the shape untouched.
-        fn group_norm<K: DType>(
+        pub fn group_norm<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _groups: usize,
             _eps: f64,
@@ -846,7 +846,7 @@ use super::*;
         }
 
         /// Not modeled: the output tiles each axis by its own factor.
-        fn repeat<K: DType>(
+        pub fn repeat<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _repeats: &[usize],
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -857,7 +857,7 @@ use super::*;
         }
 
         /// Not modeled: the output grows by the padding on each axis.
-        fn pad<K: DType>(
+        pub fn pad<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _padding: &[(usize, usize)],
             _val: f64,
@@ -870,7 +870,7 @@ use super::*;
 
         /// Not modeled: `diag` both extracts and constructs, changing rank
         /// in opposite directions depending on the input.
-        fn diag<K: DType>(
+        pub fn diag<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _k: i64,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -882,7 +882,7 @@ use super::*;
 
         /// Not modeled: writes into a copy of the target, whose shape this
         /// stand-in would have to reconcile against the index and source.
-        fn scatter<K: DType, KInt: DType>(
+        pub fn scatter<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _index: &<Self as StorageBackend>::Storage<KInt>,
@@ -896,7 +896,7 @@ use super::*;
 
         /// Not modeled: the fused product's shape follows `mat1 @ mat2`
         /// broadcast against `mat`.
-        fn addmm<K: DType>(
+        pub fn addmm<K: DType>(
             _mat: &<Self as StorageBackend>::Storage<K>,
             _mat1: &<Self as StorageBackend>::Storage<K>,
             _mat2: &<Self as StorageBackend>::Storage<K>,
@@ -910,7 +910,7 @@ use super::*;
         }
 
         /// Not modeled: the output takes its trailing axis from `v`, not `q`.
-        fn scaled_dot_product_attention<K: DType>(
+        pub fn scaled_dot_product_attention<K: DType>(
             _q: &<Self as StorageBackend>::Storage<K>,
             _k: &<Self as StorageBackend>::Storage<K>,
             _v: &<Self as StorageBackend>::Storage<K>,
@@ -924,7 +924,7 @@ use super::*;
         }
 
         /// Not modeled: sliding windows replace one axis with two.
-        fn unfold<K: DType>(
+        pub fn unfold<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             _dim: usize,
             _size: usize,
@@ -938,7 +938,7 @@ use super::*;
 
         /// Broadcasts leading batch axes and applies the trailing matrix
         /// contraction, mirroring real matmul's output shape.
-        fn matmul<K: DType>(
+        pub fn matmul<K: DType>(
             lhs: &<Self as StorageBackend>::Storage<K>,
             rhs: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -979,21 +979,21 @@ use super::*;
             Ok(out)
         }
         /// Always `0.0` --- there is no real element value to read.
-        fn float_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
+        pub fn float_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
             Ok(0.0)
         }
         /// Always a single `0.0` --- there are no real element values to read.
-        fn float_to_vec1<K: DType>(
+        pub fn float_to_vec1<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<f64>> {
             Ok(alloc::vec![0.0])
         }
         /// Always `0` --- there is no real element value to read.
-        fn int_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
+        pub fn int_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
             Ok(0)
         }
         /// Always a single `0` --- there are no real element values to read.
-        fn int_to_vec1<K: DType>(
+        pub fn int_to_vec1<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<i64>> {
             Ok(alloc::vec![0])
@@ -1001,14 +1001,14 @@ use super::*;
 
         /// Returns the target `shape` verbatim (broadcast compatibility is
         /// not validated).
-        fn broadcast_as<K: DType>(
+        pub fn broadcast_as<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(s.to_vec())
         }
         /// Prepends the target `shape`'s dimensions ahead of `t`'s own.
-        fn broadcast_left<K: DType>(
+        pub fn broadcast_left<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1018,14 +1018,14 @@ use super::*;
         }
         /// Returns the target `shape` verbatim (numel compatibility is not
         /// validated).
-        fn reshape<K: DType>(
+        pub fn reshape<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(s.to_vec())
         }
         /// Swaps dimensions `d1`/`d2` in the shape.
-        fn transpose<K: DType>(
+        pub fn transpose<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             d1: usize,
             d2: usize,
@@ -1037,7 +1037,7 @@ use super::*;
             Ok(out)
         }
         /// Collapses dimensions `[s, e]` into their product.
-        fn flatten<K: DType>(
+        pub fn flatten<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             s: usize,
             e: usize,
@@ -1054,7 +1054,7 @@ use super::*;
             Ok(out)
         }
         /// Sets each dimension's size to its `(start, end)` window length.
-        fn slice<K: DType>(
+        pub fn slice<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             ranges: &[(usize, usize)],
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1067,7 +1067,7 @@ use super::*;
             Ok(out)
         }
         /// Sets dimension `d`'s size to the requested window length `l`.
-        fn narrow<K: DType>(
+        pub fn narrow<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             d: usize,
             _s: usize,
@@ -1080,7 +1080,7 @@ use super::*;
             Ok(out)
         }
         /// Removes dimension `d` from the shape.
-        fn squeeze<K: DType>(
+        pub fn squeeze<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             d: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1092,7 +1092,7 @@ use super::*;
         }
         /// Inserts a new dimension at `d`, sized to the number of stacked
         /// tensors.
-        fn stack<K: DType>(
+        pub fn stack<K: DType>(
             t: &[&<Self as StorageBackend>::Storage<K>],
             d: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1107,7 +1107,7 @@ use super::*;
         }
         /// Sets dimension `d`'s size to the sum of every input's size
         /// along `d`.
-        fn concat<K: DType>(
+        pub fn concat<K: DType>(
             t: &[&<Self as StorageBackend>::Storage<K>],
             d: usize,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1121,7 +1121,7 @@ use super::*;
             Ok(out)
         }
         /// Returns `t`'s shape unchanged --- no element values exist to cast.
-        fn tensor_to_dtype<K: DType, K2: DType>(
+        pub fn tensor_to_dtype<K: DType, K2: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _dtype: DTypeDescriptor,
         ) -> Result<<Self as StorageBackend>::Storage<K2>> {

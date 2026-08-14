@@ -637,7 +637,7 @@ macro_rules! dispatch_shape_unary {
 /// Routes an operation taking a slice of operands to the backend holding the
 /// first one, checking every remaining operand against that route.
 ///
-/// `stack` and `concat` are the only `TensorOps` members with this shape. An
+/// `stack` and `concat` are the only `` members with this shape. An
 /// empty slice names no device to route on, so it is reported here with the
 /// same message the concrete backends use rather than reaching a kernel.
 macro_rules! dispatch_slice {
@@ -1347,24 +1347,24 @@ impl<D: Device> DispatchBackend<D> {
     }
 }
 
-impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
-    fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+impl<D: Device> DispatchBackend<D> {
+    pub fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, reshape, shape)
     }
-    fn transpose<K: DType>(
+    pub fn transpose<K: DType>(
         t: &DispatchStorage,
         dim1: usize,
         dim2: usize,
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, transpose, dim1, dim2)
     }
-    fn matmul<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn matmul<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, matmul)
     }
-    fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+    pub fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, broadcast_as, shape)
     }
-    fn narrow<K: DType>(
+    pub fn narrow<K: DType>(
         t: &DispatchStorage,
         dim: usize,
         start: usize,
@@ -1372,22 +1372,22 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, narrow, dim, start, len)
     }
-    fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, squeeze, dim)
     }
-    fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+    pub fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
         dispatch_slice!(t, stack, dim)
     }
-    fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+    pub fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
         dispatch_slice!(t, concat, dim)
     }
-    fn slice<K: DType>(t: &DispatchStorage, ranges: &[(usize, usize)]) -> Result<DispatchStorage> {
+    pub fn slice<K: DType>(t: &DispatchStorage, ranges: &[(usize, usize)]) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, slice, ranges)
     }
-    fn flatten<K: DType>(t: &DispatchStorage, start: usize, end: usize) -> Result<DispatchStorage> {
+    pub fn flatten<K: DType>(t: &DispatchStorage, start: usize, end: usize) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, flatten, start, end)
     }
-    fn where_cond<K: DType>(
+    pub fn where_cond<K: DType>(
         mask: &DispatchStorage,
         on_true: &DispatchStorage,
         on_false: &DispatchStorage,
@@ -1414,7 +1414,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }),
         }
     }
-    fn gather<K: DType, KInt: DType>(
+    pub fn gather<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: usize,
         index: &DispatchStorage,
@@ -1441,7 +1441,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }),
         }
     }
-    fn scatter<K: DType, KInt: DType>(
+    pub fn scatter<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: usize,
         index: &DispatchStorage,
@@ -1469,7 +1469,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }),
         }
     }
-    fn index_select<K: DType, KInt: DType>(
+    pub fn index_select<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: usize,
         index: &DispatchStorage,
@@ -1496,7 +1496,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }),
         }
     }
-    fn masked_fill<K: DType>(
+    pub fn masked_fill<K: DType>(
         t: &DispatchStorage,
         mask: &DispatchStorage,
         value: f64,
@@ -1523,32 +1523,32 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             }),
         }
     }
-    fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+    pub fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, unsqueeze, dim)
     }
-    fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
+    pub fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, repeat, repeats)
     }
-    fn pad<K: DType>(
+    pub fn pad<K: DType>(
         t: &DispatchStorage,
         padding: &[(usize, usize)],
         val: f64,
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, pad, padding, val)
     }
-    fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+    pub fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, triu, k)
     }
-    fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+    pub fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, tril, k)
     }
-    fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+    pub fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, diag, k)
     }
-    fn broadcast_left<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+    pub fn broadcast_left<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, broadcast_left, shape)
     }
-    fn float_to_scalar<K: DType>(t: &DispatchStorage) -> Result<f64> {
+    pub fn float_to_scalar<K: DType>(t: &DispatchStorage) -> Result<f64> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1569,7 +1569,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn float_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<f64>> {
+    pub fn float_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<f64>> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1590,7 +1590,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn int_to_scalar<K: DType>(t: &DispatchStorage) -> Result<i64> {
+    pub fn int_to_scalar<K: DType>(t: &DispatchStorage) -> Result<i64> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1611,7 +1611,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn int_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<i64>> {
+    pub fn int_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<i64>> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1632,7 +1632,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     }
-    fn tensor_to_dtype<K: DType, K2: DType>(
+    pub fn tensor_to_dtype<K: DType, K2: DType>(
         t: &DispatchStorage,
         dtype: DTypeDescriptor,
     ) -> Result<DispatchStorage> {
@@ -1661,26 +1661,26 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         }
     }
 
-    fn cmp_eq<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_eq<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_eq)
     }
-    fn cmp_ne<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_ne<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_ne)
     }
-    fn cmp_lt<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_lt<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_lt)
     }
-    fn cmp_le<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_le<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_le)
     }
-    fn cmp_gt<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_gt<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_gt)
     }
-    fn cmp_ge<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn cmp_ge<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, cmp_ge)
     }
 
-    fn logical_and(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn logical_and(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         match (lhs, rhs) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
@@ -1705,7 +1705,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             _ => Err(Error::Msg("mismatched backends in logical_and".into())),
         }
     }
-    fn logical_or(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn logical_or(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         match (lhs, rhs) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
@@ -1730,7 +1730,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             _ => Err(Error::Msg("mismatched backends in logical_or".into())),
         }
     }
-    fn logical_not(t: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn logical_not(t: &DispatchStorage) -> Result<DispatchStorage> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
@@ -1753,23 +1753,23 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         }
     }
 
-    fn sub_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+    pub fn sub_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, sub_scalar, val)
     }
-    fn div_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+    pub fn div_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
         dispatch_unary!(t, div_scalar, val)
     }
 
-    fn maximum<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn maximum<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, maximum)
     }
-    fn minimum<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn minimum<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, minimum)
     }
-    fn abs_diff<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn abs_diff<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, abs_diff)
     }
-    fn lerp<K: DType>(
+    pub fn lerp<K: DType>(
         start: &DispatchStorage,
         end: &DispatchStorage,
         _weight: f64,
@@ -1784,7 +1784,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         }
     }
 
-    fn addmm<K: DType>(
+    pub fn addmm<K: DType>(
         mat: &DispatchStorage,
         mat1: &DispatchStorage,
         mat2: &DispatchStorage,
@@ -1800,10 +1800,10 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
             _ => Err(Error::Msg("mismatched backends in addmm".into())),
         }
     }
-    fn bmm<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn bmm<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, bmm)
     }
-    fn scaled_dot_product_attention<K: DType>(
+    pub fn scaled_dot_product_attention<K: DType>(
         q: &DispatchStorage,
         k: &DispatchStorage,
         v: &DispatchStorage,
@@ -1834,7 +1834,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         }
     }
 
-    fn unfold<K: DType>(
+    pub fn unfold<K: DType>(
         t: &DispatchStorage,
         dim: usize,
         size: usize,
@@ -1842,20 +1842,20 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, unfold, dim, size, step)
     }
-    fn pixel_shuffle<K: DType>(
+    pub fn pixel_shuffle<K: DType>(
         t: &DispatchStorage,
         upscale_factor: usize,
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, pixel_shuffle, upscale_factor)
     }
-    fn group_norm<K: DType>(
+    pub fn group_norm<K: DType>(
         t: &DispatchStorage,
         groups: usize,
         eps: f64,
     ) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, group_norm, groups, eps)
     }
-    fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
+    pub fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
         dispatch_shape_unary!(t, instance_norm, eps)
     }
 }

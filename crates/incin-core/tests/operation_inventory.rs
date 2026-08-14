@@ -22,7 +22,7 @@ use incin_core::exec::OPERATION_CATALOG;
 const OPERATION_TRAITS: &[&str] = &[
     "",
     "",
-    "TensorOps",
+    "",
     "ReductionOps",
     "ModuleOps",
 ];

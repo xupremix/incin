@@ -8,7 +8,7 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
-use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps};
 
 use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
@@ -73,7 +73,7 @@ impl<D: Device> Execute<op::ReshapeExact> for CudaBackendImpl<D> {
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::ReshapeExact, "input is not CUDA storage"))?;
         let shape = &request.operation.descriptor().attributes().shape;
-        <Self as TensorOps<Self>>::reshape::<f32>(storage, shape)
+        Self::reshape::<f32>(storage, shape)
             .map_err(|e| kernel_error("Cuda", OperationKind::ReshapeExact, e))
     }
 }
@@ -94,7 +94,7 @@ impl<D: Device> Execute<op::BroadcastAs> for CudaBackendImpl<D> {
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::BroadcastAs, "input is not CUDA storage"))?;
         let shape = &request.operation.descriptor().attributes().shape;
-        <Self as TensorOps<Self>>::broadcast_as::<f32>(storage, shape)
+        Self::broadcast_as::<f32>(storage, shape)
             .map_err(|e| kernel_error("Cuda", OperationKind::BroadcastAs, e))
     }
 }
@@ -117,7 +117,7 @@ impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
         let rhs = rhs
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::MatMulExact, "rhs is not CUDA storage"))?;
-        <Self as TensorOps<Self>>::matmul::<f32>(lhs, rhs)
+        Self::matmul::<f32>(lhs, rhs)
             .map_err(|e| kernel_error("Cuda", OperationKind::MatMulExact, e))
     }
 }

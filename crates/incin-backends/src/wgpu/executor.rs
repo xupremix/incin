@@ -8,7 +8,7 @@
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
-use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
@@ -93,7 +93,7 @@ impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
             "reshape input metadata does not match the validated descriptor",
         )?;
         let shape = &request.operation.descriptor().attributes().shape;
-        <Self as TensorOps<Self>>::reshape::<f32>(storage, shape)
+        Self::reshape::<f32>(storage, shape)
             .map_err(|e| kernel_error("Wgpu", OperationKind::ReshapeExact, e))
     }
 }
@@ -114,7 +114,7 @@ impl<D: Device> Execute<op::BroadcastAs> for WgpuBackendImpl<D> {
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(OperationKind::BroadcastAs, "input is not WGPU storage"))?;
         let shape = &request.operation.descriptor().attributes().shape;
-        <Self as TensorOps<Self>>::broadcast_as::<f32>(storage, shape)
+        Self::broadcast_as::<f32>(storage, shape)
             .map_err(|e| kernel_error("Wgpu", OperationKind::BroadcastAs, e))
     }
 }
@@ -151,7 +151,7 @@ impl<D: Device> Execute<op::MatMulExact> for WgpuBackendImpl<D> {
             OperationKind::MatMulExact,
             "matmul rhs metadata does not match the validated descriptor",
         )?;
-        <Self as TensorOps<Self>>::matmul::<f32>(lhs, rhs)
+        Self::matmul::<f32>(lhs, rhs)
             .map_err(|e| kernel_error("Wgpu", OperationKind::MatMulExact, e))
     }
 }

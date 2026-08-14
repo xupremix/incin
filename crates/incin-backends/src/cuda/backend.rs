@@ -134,7 +134,7 @@ pub struct CudaVar {
 
 pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
-impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
+impl<D: Device> CudaBackendImpl<D> {
     // No CUDA kernels exist for these yet.
     /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
     /// shape via the already tape-wired `broadcast_as` (a real CUDA kernel,
@@ -150,15 +150,15 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// `mask` itself gets no gradient, matching CPU. All three operands
     /// required to be F32-physical, for the same reason `index_select`'s
     /// index is.
-    fn where_cond<K: DType>(
+    pub fn where_cond<K: DType>(
         mask: &<Self as StorageBackend>::Storage<bool>,
         on_true: &<Self as StorageBackend>::Storage<K>,
         on_false: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out_shape = crate::layout::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<bool>(mask, &out_shape)?;
-        let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
-        let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
+        let mask_b = Self::broadcast_as::<bool>(mask, &out_shape)?;
+        let true_b = Self::broadcast_as::<K>(on_true, &out_shape)?;
+        let false_b = Self::broadcast_as::<K>(on_false, &out_shape)?;
 
         cuda_require_f32(true_b.buffer.dtype, "where_cond")?;
         cuda_require_f32(false_b.buffer.dtype, "where_cond")?;
@@ -210,7 +210,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// than overwriting when two output positions share a source. `index`
     /// itself gets no gradient, matching CPU. `index` is also required to
     /// be F32-physical, for the same reason `index_select`'s is.
-    fn gather<K: DType, KInt: DType>(
+    pub fn gather<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -277,7 +277,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// destination position rather than erroring. `index`/`src` are also
     /// required to be F32-physical, for the same reason `index_select`'s do.
     /// Not autograd-wired, matching CPU.
-    fn scatter<K: DType, KInt: DType>(
+    pub fn scatter<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -317,7 +317,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// the host readback, needing no strided indexing at all — the same
     /// simplification WGPU's own port of this method has. Not
     /// autograd-wired, matching CPU.
-    fn group_norm<K: DType>(
+    pub fn group_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         groups: usize,
         eps: f64,
@@ -359,18 +359,18 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `instance_norm`. `group_norm` with one group per channel, matching
     /// CPU's and WGPU's own composition exactly.
-    fn instance_norm<K: DType>(
+    pub fn instance_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         eps: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let t: &CudaStorage = t;
         let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
+        Self::group_norm::<K>(t, channels, eps)
     }
 
     /// `unfold`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
-    fn unfold<K: DType>(
+    pub fn unfold<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         size: usize,
@@ -413,7 +413,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `pixel_shuffle`. Same host round-trip as `repeat`. Not
     /// autograd-wired, matching CPU.
-    fn pixel_shuffle<K: DType>(
+    pub fn pixel_shuffle<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         upscale_factor: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -464,7 +464,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// throughout, exactly representable for any index small enough to
     /// matter). A dtype-generic version that accepts a real integer index
     /// tensor is future work. Not autograd-wired, matching CPU.
-    fn index_select<K: DType, KInt: DType>(
+    pub fn index_select<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         index: &<Self as StorageBackend>::Storage<KInt>,
@@ -501,7 +501,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// shapes match exactly rather than silently assuming it — CPU walks
     /// `t`'s shape and indexes `mask` with it regardless, which produces
     /// nonsense on a mismatch instead of an error.
-    fn masked_fill<K: DType>(
+    pub fn masked_fill<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         mask: &<Self as StorageBackend>::Storage<bool>,
         value: f64,
@@ -532,7 +532,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// `crate::layout::contiguous_strides` and
     /// `crate::layout::increment_index`, both `pub(crate)` already),
     /// re-uploads. Not autograd-wired, matching CPU.
-    fn repeat<K: DType>(
+    pub fn repeat<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         repeats: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -567,7 +567,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `pad`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
-    fn pad<K: DType>(
+    pub fn pad<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         padding: &[(usize, usize)],
         val: f64,
@@ -607,7 +607,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `triu`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
-    fn triu<K: DType>(
+    pub fn triu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -634,7 +634,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `tril`. Same host round-trip as `repeat`. Not autograd-wired,
     /// matching CPU.
-    fn tril<K: DType>(
+    pub fn tril<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -663,7 +663,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// 1D operand builds a 2D matrix with that operand on its `k`-th
     /// diagonal, an operand of rank 2+ extracts its `k`-th diagonal into a
     /// 1D result. Not autograd-wired, matching CPU.
-    fn diag<K: DType>(
+    pub fn diag<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -706,7 +706,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// `cmp_eq`. No CUDA kernel: downloads both F32 operands, compares
     /// elementwise, re-uploads. Matches CPU's own encoding (1.0/0.0 in the
     /// same dtype) and CPU's lack of a gradient for comparisons.
-    fn cmp_eq<K: DType>(
+    pub fn cmp_eq<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -716,7 +716,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "cmp_eq",
         })
     }
-    fn cmp_ne<K: DType>(
+    pub fn cmp_ne<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -726,7 +726,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "cmp_ne",
         })
     }
-    fn cmp_lt<K: DType>(
+    pub fn cmp_lt<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -736,7 +736,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "cmp_lt",
         })
     }
-    fn cmp_le<K: DType>(
+    pub fn cmp_le<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -746,7 +746,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "cmp_le",
         })
     }
-    fn cmp_gt<K: DType>(
+    pub fn cmp_gt<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -756,7 +756,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "cmp_gt",
         })
     }
-    fn cmp_ge<K: DType>(
+    pub fn cmp_ge<K: DType>(
         _lhs: &<Self as StorageBackend>::Storage<K>,
         _rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -767,7 +767,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         })
     }
 
-    fn logical_and(
+    pub fn logical_and(
         _lhs: &<Self as StorageBackend>::Storage<bool>,
         _rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -777,7 +777,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "logical_and",
         })
     }
-    fn logical_or(
+    pub fn logical_or(
         _lhs: &<Self as StorageBackend>::Storage<bool>,
         _rhs: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
@@ -787,7 +787,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             op: "logical_or",
         })
     }
-    fn logical_not(
+    pub fn logical_not(
         _t: &<Self as StorageBackend>::Storage<bool>,
     ) -> Result<<Self as StorageBackend>::Storage<bool>> {
         Err(Error::UnsupportedDType {
@@ -798,16 +798,16 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// `sub_scalar`. Same host round-trip; not autograd-wired, matching
-    /// CPU's `TensorOps` scalar methods (as opposed to ``'s
+    /// CPU's `` scalar methods (as opposed to ``'s
     /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
-    fn sub_scalar<K: DType>(
+    pub fn sub_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_scalar_f32_elementwise("sub_scalar", t, val, |v, s| v - s)
     }
     /// `div_scalar`.
-    fn div_scalar<K: DType>(
+    pub fn div_scalar<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -815,21 +815,21 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// `maximum`. Same host round-trip; not autograd-wired, matching CPU.
-    fn maximum<K: DType>(
+    pub fn maximum<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_binary_f32_elementwise("maximum", lhs, rhs, f32::max)
     }
     /// `minimum`.
-    fn minimum<K: DType>(
+    pub fn minimum<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_binary_f32_elementwise("minimum", lhs, rhs, f32::min)
     }
     /// `abs_diff`.
-    fn abs_diff<K: DType>(
+    pub fn abs_diff<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -838,7 +838,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// `lerp`. `start + weight * (end - start)`; not autograd-wired,
     /// matching CPU.
-    fn lerp<K: DType>(
+    pub fn lerp<K: DType>(
         start: &<Self as StorageBackend>::Storage<K>,
         end: &<Self as StorageBackend>::Storage<K>,
         weight: f64,
@@ -850,7 +850,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
     /// so inherits gradient wiring from), matching CPU's/WGPU's own
     /// `unsqueeze`.
-    fn unsqueeze<K: DType>(
+    pub fn unsqueeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -861,14 +861,14 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         } else {
             target_shape.push(1);
         }
-        <Self as TensorOps<Self>>::reshape::<K>(t, &target_shape)
+        Self::reshape::<K>(t, &target_shape)
     }
 
     /// `float_to_scalar`. Same host-readback CUDA's own `to_bytes`/
     /// `topk`/`argsort` already use, restricted to F32 like those (a
     /// dtype-generic version is a separate, larger piece of work tracked
     /// apart from this pass — see `docs/PROJECT_STATUS.md`).
-    fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
+    pub fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
         let t: &CudaStorage = t;
         let numel = checked_numel(&t.shape)?;
         if numel != 1 {
@@ -887,7 +887,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         Ok(f64::from(value))
     }
     /// `int_to_scalar`.
-    fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
+    pub fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
         let t: &CudaStorage = t;
         cuda_require_f32(t.buffer.dtype, "int_to_scalar")?;
         let data = download_f32_host(t)?;
@@ -903,17 +903,17 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         )
     }
     /// Compatibility forwarding method; host readback ownership lives in `HostReadback` below.
-    fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
+    pub fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
         <Self as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(t)
     }
     /// Compatibility forwarding method; host readback ownership lives in `HostReadback` below.
-    fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
+    pub fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
         <Self as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(t)
     }
     /// `tensor_to_dtype`. Matches WGPU's own passthrough: both backends'
     /// physical storage does not vary with the requested logical dtype in a
     /// way this call needs to touch.
-    fn tensor_to_dtype<K: DType, K2: DType>(
+    pub fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         _dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {
@@ -925,31 +925,31 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching CPU's
     /// and WGPU's own composition exactly — no new kernel, just reuse of
     /// already-implemented ones.
-    fn addmm<K: DType>(
+    pub fn addmm<K: DType>(
         mat: &<Self as StorageBackend>::Storage<K>,
         mat1: &<Self as StorageBackend>::Storage<K>,
         mat2: &<Self as StorageBackend>::Storage<K>,
         beta: f64,
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
+        let mm = Self::matmul::<K>(mat1, mat2)?;
         let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
         Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU
     /// and WGPU.
-    fn bmm<K: DType>(
+    pub fn bmm<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
+        Self::matmul::<K>(lhs, rhs)
     }
 
     /// `scaled_dot_product_attention`. Composed from the already tape-wired
     /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
     /// CPU's and WGPU's own composition exactly, no new kernel.
-    fn scaled_dot_product_attention<K: DType>(
+    pub fn scaled_dot_product_attention<K: DType>(
         q: &<Self as StorageBackend>::Storage<K>,
         k: &<Self as StorageBackend>::Storage<K>,
         v: &<Self as StorageBackend>::Storage<K>,
@@ -959,11 +959,11 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         let (q, k, v): (&CudaStorage, &CudaStorage, &CudaStorage) = (q, k, v);
         let k_rank = k.shape.len();
         let k_t = if k_rank >= 2 {
-            <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
         } else {
             k.clone()
         };
-        let scores: CudaStorage = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let scores: CudaStorage = Self::matmul::<K>(q, &k_t)?;
         let d_k = *q.shape.last().unwrap_or(&1) as f64;
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
@@ -973,10 +973,10 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
             scaled_scores
         };
         let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
-        <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
+        Self::matmul::<K>(&attn, v)
     }
 
-    fn concat<K: DType>(
+    pub fn concat<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -990,7 +990,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     /// strided view — CUDA's elementwise/matmul/reduce kernels assume flat
     /// contiguous memory), so reshaping never needs to touch the data or
     /// check contiguity first, unlike CPU's `reshape`.
-    fn reshape<K: DType>(
+    pub fn reshape<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1023,7 +1023,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// Materializes (see `reshape`'s doc for why CUDA can't use CPU's
     /// metadata-only strided-view approach here).
-    fn transpose<K: DType>(
+    pub fn transpose<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
@@ -1057,7 +1057,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
 
     /// Matmul is only wired for unbatched 2D operands so far — falls through to the `Backend`
     /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
-    fn matmul<K: DType>(
+    pub fn matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1092,7 +1092,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Materializes (see `reshape`'s doc for why).
-    fn broadcast_as<K: DType>(
+    pub fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1118,7 +1118,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Materializes (see `reshape`'s doc for why).
-    fn narrow<K: DType>(
+    pub fn narrow<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         start: usize,
@@ -1156,7 +1156,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
-    fn squeeze<K: DType>(
+    pub fn squeeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1179,9 +1179,9 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Composed from `reshape` + `concat` (zero new tape entries — matches
-    /// CPU/WGPU: `TensorOps` has no dedicated `unsqueeze`, so each input is
+    /// CPU/WGPU: `` has no dedicated `unsqueeze`, so each input is
     /// reshaped to insert a size-1 axis at `dim`, then concatenated there).
-    fn stack<K: DType>(
+    pub fn stack<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1230,7 +1230,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Composed from `narrow` (zero new tape entries — matches CPU/WGPU).
-    fn slice<K: DType>(
+    pub fn slice<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1243,7 +1243,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
-    fn flatten<K: DType>(
+    pub fn flatten<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         start_dim: usize,
         end_dim: usize,
@@ -1270,7 +1270,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
     }
 
     /// Composed from `broadcast_as` (zero new tape entries — matches CPU/WGPU).
-    fn broadcast_left<K: DType>(
+    pub fn broadcast_left<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2192,7 +2192,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
             None => {
                 let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
                     .checked_numel(incin_core::prelude::OperationKind::Storage)?;
-                (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
+                (Self::reshape::<K>(t, &[numel])?, 0)
             }
         };
         let (_, idx_u32) =
@@ -2216,7 +2216,7 @@ impl<D: Device> ReductionOps<Self> for CudaBackendImpl<D> {
             None => {
                 let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
                     .checked_numel(incin_core::prelude::OperationKind::Storage)?;
-                (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
+                (Self::reshape::<K>(t, &[numel])?, 0)
             }
         };
         let (_, idx_u32) =
@@ -2301,7 +2301,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
         let lhs_f32 = Self::dequantize::<Q, f32>(lhs)?;
         let rhs_f32 = Self::dequantize::<Q, f32>(rhs)?;
-        let lhs_2d = <Self as TensorOps<Self>>::reshape::<f32>(&lhs_f32, &[m, k])?;
+        let lhs_2d = Self::reshape::<f32>(&lhs_f32, &[m, k])?;
         // rhs is stored [N, K]; matmul needs [K, N].
         let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_f32, 0, 1)?;
         let out_2d = crate::cuda::ops::matmul::launch_matmul(&lhs_2d, &rhs_t)?;
@@ -2309,7 +2309,7 @@ impl<D: Device> CudaBackendImpl<D> {
         let mut out_shape = lhs.shape.to_vec();
         let last = out_shape.len() - 1;
         out_shape[last] = n;
-        <Self as TensorOps<Self>>::reshape::<f32>(&out_2d, &out_shape)
+        Self::reshape::<f32>(&out_2d, &out_shape)
     }
 }
 /// Tape-tracked wrapper pairing `launch_im2col_2d`/`launch_col2im_2d` as each
@@ -2650,25 +2650,25 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
 
         let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
         for g in 0..groups {
-            let input_g = <Self as TensorOps<Self>>::narrow::<K>(t, 1, g * cin_g, cin_g)?;
-            let weight_g = <Self as TensorOps<Self>>::narrow::<K>(w, 0, g * cout_g, cout_g)?;
+            let input_g = Self::narrow::<K>(t, 1, g * cin_g, cin_g)?;
+            let weight_g = Self::narrow::<K>(w, 0, g * cout_g, cout_g)?;
             let cols = im2col_1d_tape(&input_g, k, stride, padding, dilation)?;
             let weight_mat =
-                <Self as TensorOps<Self>>::reshape::<K>(&weight_g, &[cout_g, cin_g * k])?;
+                Self::reshape::<K>(&weight_g, &[cout_g, cin_g * k])?;
 
             let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
             for bi in 0..batch {
-                let cols_b = <Self as TensorOps<Self>>::narrow::<K>(&cols, 0, bi, 1)?;
-                let cols_b = <Self as TensorOps<Self>>::squeeze::<K>(&cols_b, 0)?;
-                let out_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat, &cols_b)?;
-                let out_b = <Self as TensorOps<Self>>::reshape::<K>(&out_b, &[1, cout_g, l_out])?;
+                let cols_b = Self::narrow::<K>(&cols, 0, bi, 1)?;
+                let cols_b = Self::squeeze::<K>(&cols_b, 0)?;
+                let out_b = Self::matmul::<K>(&weight_mat, &cols_b)?;
+                let out_b = Self::reshape::<K>(&out_b, &[1, cout_g, l_out])?;
                 batch_outs.push(out_b);
             }
             let group_out = if batch == 1 {
                 batch_outs.into_iter().next().unwrap()
             } else {
                 let refs: Vec<&CudaStorage> = batch_outs.iter().collect();
-                <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+                Self::concat::<K>(&refs, 0)?
             };
             group_outputs.push(group_out);
         }
@@ -2676,12 +2676,12 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
             group_outputs.into_iter().next().unwrap()
         } else {
             let refs: Vec<&CudaStorage> = group_outputs.iter().collect();
-            <Self as TensorOps<Self>>::concat::<K>(&refs, 1)?
+            Self::concat::<K>(&refs, 1)?
         };
 
         match bias {
             Some(bv) => {
-                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1])?;
+                let bias_shaped = Self::reshape::<K>(bv, &[1, cout, 1])?;
                 Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
@@ -2725,26 +2725,26 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
 
         let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
         for g in 0..groups {
-            let input_g = <Self as TensorOps<Self>>::narrow::<K>(t, 1, g * cin_g, cin_g)?;
-            let weight_g = <Self as TensorOps<Self>>::narrow::<K>(w, 0, g * cout_g, cout_g)?;
+            let input_g = Self::narrow::<K>(t, 1, g * cin_g, cin_g)?;
+            let weight_g = Self::narrow::<K>(w, 0, g * cout_g, cout_g)?;
             let cols = im2col_2d_tape(&input_g, kh, kw, stride, padding, dilation)?;
             let weight_mat =
-                <Self as TensorOps<Self>>::reshape::<K>(&weight_g, &[cout_g, cin_g * kh * kw])?;
+                Self::reshape::<K>(&weight_g, &[cout_g, cin_g * kh * kw])?;
 
             let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
             for bi in 0..batch {
-                let cols_b = <Self as TensorOps<Self>>::narrow::<K>(&cols, 0, bi, 1)?;
-                let cols_b = <Self as TensorOps<Self>>::squeeze::<K>(&cols_b, 0)?;
-                let out_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat, &cols_b)?;
+                let cols_b = Self::narrow::<K>(&cols, 0, bi, 1)?;
+                let cols_b = Self::squeeze::<K>(&cols_b, 0)?;
+                let out_b = Self::matmul::<K>(&weight_mat, &cols_b)?;
                 let out_b =
-                    <Self as TensorOps<Self>>::reshape::<K>(&out_b, &[1, cout_g, h_out * w_out])?;
+                    Self::reshape::<K>(&out_b, &[1, cout_g, h_out * w_out])?;
                 batch_outs.push(out_b);
             }
             let group_out = if batch == 1 {
                 batch_outs.into_iter().next().unwrap()
             } else {
                 let refs: Vec<&CudaStorage> = batch_outs.iter().collect();
-                <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+                Self::concat::<K>(&refs, 0)?
             };
             group_outputs.push(group_out);
         }
@@ -2752,14 +2752,14 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
             group_outputs.into_iter().next().unwrap()
         } else {
             let refs: Vec<&CudaStorage> = group_outputs.iter().collect();
-            <Self as TensorOps<Self>>::concat::<K>(&refs, 1)?
+            Self::concat::<K>(&refs, 1)?
         };
         let conv_out =
-            <Self as TensorOps<Self>>::reshape::<K>(&conv_out, &[batch, cout, h_out, w_out])?;
+            Self::reshape::<K>(&conv_out, &[batch, cout, h_out, w_out])?;
 
         match bias {
             Some(bv) => {
-                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
+                let bias_shaped = Self::reshape::<K>(bv, &[1, cout, 1, 1])?;
                 Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
@@ -2825,24 +2825,24 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         // matching CPU/WGPU).
         let flattened_weight =
             ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
-        let weight_mat = <Self as TensorOps<Self>>::reshape::<K>(w, &[cin, flattened_weight])?;
-        let weight_mat_t = <Self as TensorOps<Self>>::transpose::<K>(&weight_mat, 0, 1)?;
-        let input_flat = <Self as TensorOps<Self>>::reshape::<K>(t, &[batch, cin, h * wid])?;
+        let weight_mat = Self::reshape::<K>(w, &[cin, flattened_weight])?;
+        let weight_mat_t = Self::transpose::<K>(&weight_mat, 0, 1)?;
+        let input_flat = Self::reshape::<K>(t, &[batch, cin, h * wid])?;
 
         let mut batch_cols: Vec<CudaStorage> = Vec::with_capacity(batch);
         for bi in 0..batch {
-            let input_b = <Self as TensorOps<Self>>::narrow::<K>(&input_flat, 0, bi, 1)?;
-            let input_b = <Self as TensorOps<Self>>::squeeze::<K>(&input_b, 0)?;
-            let cols_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat_t, &input_b)?;
+            let input_b = Self::narrow::<K>(&input_flat, 0, bi, 1)?;
+            let input_b = Self::squeeze::<K>(&input_b, 0)?;
+            let cols_b = Self::matmul::<K>(&weight_mat_t, &input_b)?;
             let cols_b =
-                <Self as TensorOps<Self>>::reshape::<K>(&cols_b, &[1, cout * kh * kw, h * wid])?;
+                Self::reshape::<K>(&cols_b, &[1, cout * kh * kw, h * wid])?;
             batch_cols.push(cols_b);
         }
         let cols = if batch == 1 {
             batch_cols.into_iter().next().unwrap()
         } else {
             let refs: Vec<&CudaStorage> = batch_cols.iter().collect();
-            <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+            Self::concat::<K>(&refs, 0)?
         };
 
         let natural_out = col2im_2d_tape(
@@ -2865,7 +2865,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
 
         match bias {
             Some(bv) => {
-                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
+                let bias_shaped = Self::reshape::<K>(bv, &[1, cout, 1, 1])?;
                 Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
@@ -3471,7 +3471,7 @@ mod tests {
         assert!(checked_numel(&[usize::MAX, 2]).is_err());
     }
 
-    // The tests below exercise real GPU dispatch (`TensorOps::{reshape,
+    // The tests below exercise real GPU dispatch (`::{reshape,
     // transpose, narrow, broadcast_as, squeeze, stack, slice, flatten,
     // broadcast_left, matmul}`) and therefore need a real CUDA device to
     // run — none is available in this environment, so this path is compile-verified
@@ -3506,7 +3506,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn reshape_preserves_element_order() {
         let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as TensorOps<B>>::reshape::<f32>(&t, &[3, 2]).unwrap();
+        let out = B::reshape::<f32>(&t, &[3, 2]).unwrap();
         assert_eq!(out.shape, vec![3, 2]);
     }
 
@@ -3514,14 +3514,14 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn reshape_rejects_mismatched_element_count() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
-        assert!(<B as TensorOps<B>>::reshape::<f32>(&t, &[4, 2]).is_err());
+        assert!(B::reshape::<f32>(&t, &[4, 2]).is_err());
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn transpose_2d_swaps_shape() {
         let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as TensorOps<B>>::transpose::<f32>(&t, 0, 1).unwrap();
+        let out = B::transpose::<f32>(&t, 0, 1).unwrap();
         assert_eq!(out.shape, vec![3, 2]);
     }
 
@@ -3529,7 +3529,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn narrow_reduces_target_dim() {
         let t = cuda_f32(&[4, 3], vec![0.0; 12]);
-        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+        let out = B::narrow::<f32>(&t, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
     }
 
@@ -3537,7 +3537,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn broadcast_as_expands_size_one_dim() {
         let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+        let out = B::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
         assert_eq!(out.shape, vec![4, 3]);
     }
 
@@ -3545,14 +3545,14 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn broadcast_as_rejects_incompatible_shape() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
-        assert!(<B as TensorOps<B>>::broadcast_as::<f32>(&t, &[2, 5]).is_err());
+        assert!(B::broadcast_as::<f32>(&t, &[2, 5]).is_err());
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn squeeze_removes_size_one_axis() {
         let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::squeeze::<f32>(&t, 0).unwrap();
+        let out = B::squeeze::<f32>(&t, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
     }
 
@@ -3561,7 +3561,7 @@ mod tests {
     fn stack_inserts_new_axis() {
         let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
         let b = cuda_f32(&[3], vec![4.0, 5.0, 6.0]);
-        let out = <B as TensorOps<B>>::stack::<f32>(&[&a, &b], 0).unwrap();
+        let out = B::stack::<f32>(&[&a, &b], 0).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
     }
 
@@ -3569,7 +3569,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn slice_narrows_every_listed_dim() {
         let t = cuda_f32(&[4, 4], vec![0.0; 16]);
-        let out = <B as TensorOps<B>>::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        let out = B::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
 
@@ -3577,7 +3577,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn flatten_merges_middle_dims() {
         let t = cuda_f32(&[2, 3, 4], vec![0.0; 24]);
-        let out = <B as TensorOps<B>>::flatten::<f32>(&t, 1, 2).unwrap();
+        let out = B::flatten::<f32>(&t, 1, 2).unwrap();
         assert_eq!(out.shape, vec![2, 12]);
     }
 
@@ -3585,7 +3585,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn broadcast_left_prepends_leading_dims() {
         let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+        let out = B::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
         assert_eq!(out.shape, vec![2, 4, 3]);
     }
 
@@ -3595,7 +3595,7 @@ mod tests {
         // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]
         let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
-        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        let out = B::matmul::<f32>(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
 
@@ -3604,7 +3604,7 @@ mod tests {
     fn matmul_rejects_incompatible_inner_dims() {
         let lhs = cuda_f32(&[2, 3], vec![0.0; 6]);
         let rhs = cuda_f32(&[4, 2], vec![0.0; 8]);
-        assert!(<B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).is_err());
+        assert!(B::matmul::<f32>(&lhs, &rhs).is_err());
     }
 
     #[test]
@@ -3613,7 +3613,7 @@ mod tests {
         let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
         let (lhs_id, rhs_id) = (lhs.id, rhs.id);
-        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        let out = B::matmul::<f32>(&lhs, &rhs).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         assert!(grads.get(lhs_id).is_some());
         assert!(grads.get(rhs_id).is_some());
@@ -3624,7 +3624,7 @@ mod tests {
     fn narrow_backward_zero_pads_grad_to_original_shape() {
         let t = cuda_f32(&[4, 3], vec![0.0; 12]);
         let t_id = t.id;
-        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+        let out = B::narrow::<f32>(&t, 0, 1, 2).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(t_id)
@@ -4103,7 +4103,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_unsqueeze() {
         let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as TensorOps<B>>::unsqueeze::<f32>(&t, 1).unwrap();
+        let out = B::unsqueeze::<f32>(&t, 1).unwrap();
         assert_eq!(out.shape, vec![2, 1, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4116,7 +4116,7 @@ mod tests {
     fn test_float_to_scalar() {
         let t = cuda_f32(&[1], vec![3.5]);
         assert_eq!(
-            <B as TensorOps<B>>::float_to_scalar::<f32>(&t).unwrap(),
+            B::float_to_scalar::<f32>(&t).unwrap(),
             3.5
         );
     }
@@ -4133,7 +4133,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(
-            <B as TensorOps<B>>::float_to_scalar::<f32>(&t),
+            B::float_to_scalar::<f32>(&t),
             Err(Error::UnsupportedDType { .. })
         ));
     }
@@ -4143,7 +4143,7 @@ mod tests {
     fn test_float_to_vec1() {
         let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
         assert_eq!(
-            <B as TensorOps<B>>::float_to_vec1::<f32>(&t).unwrap(),
+            B::float_to_vec1::<f32>(&t).unwrap(),
             vec![1.0, 2.0, 3.0]
         );
     }
@@ -4155,7 +4155,7 @@ mod tests {
         let mat1 = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]); // identity
         let mat2 = cuda_f32(&[2, 2], vec![3.0, 4.0, 5.0, 6.0]);
         // beta * mat + alpha * (mat1 @ mat2) = 2*[[1,1],[1,1]] + 3*[[3,4],[5,6]]
-        let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
+        let out = B::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![11.0, 14.0, 17.0, 20.0]
@@ -4167,7 +4167,7 @@ mod tests {
     fn test_bmm() {
         let a = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let b = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
-        let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+        let out = B::bmm::<f32>(&a, &b).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4184,7 +4184,7 @@ mod tests {
         let q = cuda_f32(&[1, 2], vec![0.0, 0.0]);
         let k = cuda_f32(&[3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
         let v = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
+        let out = B::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
             .unwrap();
         assert_eq!(out.shape, vec![1, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 4.0]);
@@ -4195,7 +4195,7 @@ mod tests {
     fn test_cmp_lt() {
         let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
         let b = cuda_f32(&[3], vec![2.0, 2.0, 2.0]);
-        let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b).unwrap();
+        let out = B::cmp_lt::<f32>(&a, &b).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 0.0, 0.0]);
     }
 
@@ -4204,7 +4204,7 @@ mod tests {
     fn test_logical_and() {
         let a = cuda_f32(&[4], vec![1.0, 1.0, 0.0, 0.0]);
         let b = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
-        let out = <B as TensorOps<B>>::logical_and(&a, &b).unwrap();
+        let out = B::logical_and(&a, &b).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
     }
 
@@ -4212,7 +4212,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_logical_not() {
         let a = cuda_f32(&[4], vec![1.0, 0.0, 2.0, 0.0]);
-        let out = <B as TensorOps<B>>::logical_not(&a).unwrap();
+        let out = B::logical_not(&a).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![0.0, 1.0, 0.0, 1.0]);
     }
 
@@ -4220,7 +4220,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_sub_scalar() {
         let a = cuda_f32(&[3], vec![10.0, 20.0, 30.0]);
-        let out = <B as TensorOps<B>>::sub_scalar::<f32>(&a, 5.0).unwrap();
+        let out = B::sub_scalar::<f32>(&a, 5.0).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 15.0, 25.0]);
     }
 
@@ -4228,7 +4228,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_div_scalar() {
         let a = cuda_f32(&[3], vec![10.0, 20.0, 30.0]);
-        let out = <B as TensorOps<B>>::div_scalar::<f32>(&a, 5.0).unwrap();
+        let out = B::div_scalar::<f32>(&a, 5.0).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![2.0, 4.0, 6.0]);
     }
 
@@ -4237,7 +4237,7 @@ mod tests {
     fn test_maximum() {
         let a = cuda_f32(&[3], vec![1.0, 5.0, 3.0]);
         let b = cuda_f32(&[3], vec![4.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::maximum::<f32>(&a, &b).unwrap();
+        let out = B::maximum::<f32>(&a, &b).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![4.0, 5.0, 3.0]);
     }
 
@@ -4246,7 +4246,7 @@ mod tests {
     fn test_abs_diff() {
         let a = cuda_f32(&[3], vec![1.0, 5.0, 3.0]);
         let b = cuda_f32(&[3], vec![4.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::abs_diff::<f32>(&a, &b).unwrap();
+        let out = B::abs_diff::<f32>(&a, &b).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 3.0, 0.0]);
     }
 
@@ -4255,7 +4255,7 @@ mod tests {
     fn test_lerp() {
         let start = cuda_f32(&[3], vec![0.0, 10.0, 100.0]);
         let end = cuda_f32(&[3], vec![10.0, 20.0, 200.0]);
-        let out = <B as TensorOps<B>>::lerp::<f32>(&start, &end, 0.25).unwrap();
+        let out = B::lerp::<f32>(&start, &end, 0.25).unwrap();
         let vals = download_f32_host(&out).unwrap();
         for (got, want) in vals.iter().zip([2.5, 12.5, 125.0]) {
             assert!((got - want).abs() < 1e-4, "got {got}, want {want}");
@@ -4272,7 +4272,7 @@ mod tests {
         let a = cuda_f64(&[2], vec![1.0, 2.0]);
         let b = cuda_f64(&[2], vec![1.0, 2.0]);
         assert!(matches!(
-            <B as TensorOps<B>>::maximum::<f32>(&a, &b),
+            B::maximum::<f32>(&a, &b),
             Err(Error::UnsupportedDType { .. })
         ));
     }
@@ -4281,7 +4281,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_repeat() {
         let a = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
-        let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();
+        let out = B::repeat::<f32>(&a, &[2, 1]).unwrap();
         assert_eq!(out.shape, vec![4, 2]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4293,7 +4293,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_pad() {
         let a = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
-        let out = <B as TensorOps<B>>::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
+        let out = B::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
         assert_eq!(out.shape, vec![3, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4305,7 +4305,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_triu() {
         let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
-        let out = <B as TensorOps<B>>::triu::<f32>(&a, 0).unwrap();
+        let out = B::triu::<f32>(&a, 0).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![1.0, 2.0, 3.0, 0.0, 5.0, 6.0, 0.0, 0.0, 9.0]
@@ -4316,7 +4316,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_tril() {
         let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
-        let out = <B as TensorOps<B>>::tril::<f32>(&a, 0).unwrap();
+        let out = B::tril::<f32>(&a, 0).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![1.0, 0.0, 0.0, 4.0, 5.0, 0.0, 7.0, 8.0, 9.0]
@@ -4327,7 +4327,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_diag_builds_matrix_from_vector() {
         let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
-        let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+        let out = B::diag::<f32>(&a, 0).unwrap();
         assert_eq!(out.shape, vec![3, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4339,7 +4339,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_diag_extracts_from_matrix() {
         let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
-        let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+        let out = B::diag::<f32>(&a, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 5.0, 9.0]);
     }
@@ -4349,7 +4349,7 @@ mod tests {
     fn test_index_select() {
         let a = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let index = cuda_f32(&[2], vec![2.0, 0.0]);
-        let out = <B as TensorOps<B>>::index_select::<f32, f32>(&a, 0, &index).unwrap();
+        let out = B::index_select::<f32, f32>(&a, 0, &index).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 6.0, 1.0, 2.0]);
     }
@@ -4359,7 +4359,7 @@ mod tests {
     fn test_masked_fill() {
         let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
-        let out = <B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
+        let out = B::masked_fill::<f32>(&a, &mask, -1.0).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![-1.0, 2.0, -1.0, 4.0]);
     }
 
@@ -4368,14 +4368,14 @@ mod tests {
     fn masked_fill_rejects_a_mismatched_mask_shape() {
         let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let mask = cuda_f32(&[2], vec![1.0, 0.0]);
-        assert!(<B as TensorOps<B>>::masked_fill::<f32>(&a, &mask, -1.0).is_err());
+        assert!(B::masked_fill::<f32>(&a, &mask, -1.0).is_err());
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_unfold() {
         let a = cuda_f32(&[5], vec![1.0, 2.0, 3.0, 4.0, 5.0]);
-        let out = <B as TensorOps<B>>::unfold::<f32>(&a, 0, 3, 1).unwrap();
+        let out = B::unfold::<f32>(&a, 0, 3, 1).unwrap();
         assert_eq!(out.shape, vec![3, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4387,7 +4387,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn unfold_rejects_a_window_larger_than_the_dimension() {
         let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
-        assert!(<B as TensorOps<B>>::unfold::<f32>(&a, 0, 4, 1).is_err());
+        assert!(B::unfold::<f32>(&a, 0, 4, 1).is_err());
     }
 
     #[test]
@@ -4395,7 +4395,7 @@ mod tests {
     fn test_pixel_shuffle() {
         // N=1, C=4, H=1, W=1, upscale_factor=2 -> N=1, C=1, H=2, W=2.
         let a = cuda_f32(&[1, 4, 1, 1], vec![1.0, 2.0, 3.0, 4.0]);
-        let out = <B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).unwrap();
+        let out = B::pixel_shuffle::<f32>(&a, 2).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
     }
@@ -4404,7 +4404,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn pixel_shuffle_rejects_channels_not_divisible_by_upscale_squared() {
         let a = cuda_f32(&[1, 3, 1, 1], vec![1.0, 2.0, 3.0]);
-        assert!(<B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).is_err());
+        assert!(B::pixel_shuffle::<f32>(&a, 2).is_err());
     }
 
     #[test]
@@ -4417,7 +4417,7 @@ mod tests {
         let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
         let t = cuda_f32(&[2, 4, 1, 2], data);
 
-        let out = download_f32_host(&<B as TensorOps<B>>::group_norm::<f32>(&t, 2, 1e-5).unwrap())
+        let out = download_f32_host(&B::group_norm::<f32>(&t, 2, 1e-5).unwrap())
             .unwrap();
 
         assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
@@ -4436,7 +4436,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn group_norm_rejects_zero_groups() {
         let t = cuda_f32(&[1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
-        assert!(<B as TensorOps<B>>::group_norm::<f32>(&t, 0, 1e-5).is_err());
+        assert!(B::group_norm::<f32>(&t, 0, 1e-5).is_err());
     }
 
     #[test]
@@ -4446,7 +4446,7 @@ mod tests {
     fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
         let t = cuda_f32(&[2, 2, 2], vec![1.0, 1.0, 5.0, 7.0, 2.0, 2.0, 9.0, 3.0]);
 
-        let out = download_f32_host(&<B as TensorOps<B>>::instance_norm::<f32>(&t, 1e-5).unwrap())
+        let out = download_f32_host(&B::instance_norm::<f32>(&t, 1e-5).unwrap())
             .unwrap();
 
         for flat in [0, 1, 4, 5] {
@@ -4468,7 +4468,7 @@ mod tests {
         let t = cuda_f32(&[3, 2], vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
         let index = cuda_f32(&[2, 1], vec![2.0, 0.0]);
         let src = cuda_f32(&[2, 1], vec![9.0, 8.0]);
-        let out = <B as TensorOps<B>>::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
+        let out = B::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
         assert_eq!(out.shape, vec![3, 2]);
         // Row 0's column 0 gets src[1]=8 (index[1]=0), row 2's column 0
         // gets src[0]=9 (index[0]=2); every other position is untouched.
@@ -4483,7 +4483,7 @@ mod tests {
     fn test_gather() {
         let t = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let index = cuda_f32(&[2, 1], vec![2.0, 0.0]);
-        let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+        let out = B::gather::<f32, f32>(&t, 0, &index).unwrap();
         assert_eq!(out.shape, vec![2, 1]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 1.0]);
     }
@@ -4493,7 +4493,7 @@ mod tests {
     fn gather_backward_scatter_adds_to_every_position_that_was_read() {
         let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
         let index = cuda_f32(&[3], vec![0.0, 0.0, 1.0]);
-        let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+        let out = B::gather::<f32, f32>(&t, 0, &index).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 1.0, 2.0]);
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
@@ -4506,7 +4506,7 @@ mod tests {
         let mask = cuda_bool(&[4], vec![true, false, true, false]);
         let on_true = cuda_f32(&[4], vec![10.0, 20.0, 30.0, 40.0]);
         let on_false = cuda_f32(&[4], vec![-1.0, -2.0, -3.0, -4.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+        let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![10.0, -2.0, 30.0, -4.0]
@@ -4519,7 +4519,7 @@ mod tests {
         let mask = cuda_bool(&[2, 3], vec![true, false, true, false, true, false]);
         let on_true = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let on_false = cuda_f32(&[2, 1], vec![-1.0, -2.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+        let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         assert_eq!(
             download_f32_host(&out).unwrap(),
@@ -4533,7 +4533,7 @@ mod tests {
         let mask = cuda_bool(&[4], vec![true, false, true, false]);
         let on_true = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let on_false = cuda_f32(&[1], vec![9.0]);
-        let out = <B as TensorOps<B>>::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
+        let out = B::where_cond::<f32>(&mask, &on_true, &on_false).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g_true = grads
             .get(on_true.id)

@@ -5,7 +5,7 @@ use crate::external::candle::convert::{from_candle_dtype, to_candle_dtype};
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-fn candle_readback_error(error: candle_core::Error) -> Error {
+pub fn candle_readback_error(error: candle_core::Error) -> Error {
     BackendError::Execution {
         operation: OperationKind::Storage,
         message: alloc::format!("{error}").into(),
@@ -13,9 +13,7 @@ fn candle_readback_error(error: candle_core::Error) -> Error {
     .into()
 }
 
-impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::TensorOps<Self>
-    for CandleBackend<D>
-{
+impl<D: incin_core::prelude::Device> CandleBackend<D> {
     // Candle has native equivalents for most of these, but this adapter does
     // not route them yet. Declaring the gap here keeps it visible instead of
     // leaving it to a trait default that reads as full coverage.
@@ -33,7 +31,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     /// dimensions (which candle's `broadcast_matmul` can't handle directly),
     /// manually broadcasts the leading batch dimensions, flattens them into
     /// a single batch axis, multiplies, and reshapes back.
-    fn matmul<K: incin_core::prelude::DType>(
+    pub fn matmul<K: incin_core::prelude::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -117,7 +115,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Stacks `tensors` along a new dimension `dim`.
-    fn stack<K: incin_core::prelude::DType>(
+    pub fn stack<K: incin_core::prelude::DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -128,7 +126,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Concatenates `tensors` along an existing dimension `dim`.
-    fn concat<K: incin_core::prelude::DType>(
+    pub fn concat<K: incin_core::prelude::DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -139,7 +137,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Broadcasts `t` to `shape`.
-    fn broadcast_as<K: incin_core::prelude::DType>(
+    pub fn broadcast_as<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -150,7 +148,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
         CandleStorage::try_new(raw)
     }
     /// Broadcasts `t` by prepending dimensions from `shape` on the left.
-    fn broadcast_left<K: incin_core::prelude::DType>(
+    pub fn broadcast_left<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -162,7 +160,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Reshapes `t` to `shape` without changing its underlying data.
-    fn reshape<K: incin_core::prelude::DType>(
+    pub fn reshape<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -173,7 +171,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
         CandleStorage::try_new(raw)
     }
     /// Swaps dimensions `dim1` and `dim2`.
-    fn transpose<K: incin_core::prelude::DType>(
+    pub fn transpose<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
@@ -186,7 +184,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
     /// Applies a per-dimension `[start, end)` narrow for each entry in
     /// `ranges`, sequentially, one dimension at a time.
-    fn slice<K: incin_core::prelude::DType>(
+    pub fn slice<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -200,7 +198,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Flattens dimensions `start_dim..=end_dim` into a single dimension.
-    fn flatten<K: incin_core::prelude::DType>(
+    pub fn flatten<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         start_dim: usize,
         end_dim: usize,
@@ -214,7 +212,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
 
     /// Takes a contiguous sub-range of length `len` starting at `start`
     /// along `dim`.
-    fn narrow<K: incin_core::prelude::DType>(
+    pub fn narrow<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
         start: usize,
@@ -228,7 +226,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
     }
 
     /// Removes dimension `dim` if it has size 1.
-    fn squeeze<K: incin_core::prelude::DType>(
+    pub fn squeeze<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -241,7 +239,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
 
     /// Casts `t` to `f32` and extracts its single element as an `f64`
     /// scalar.
-    fn float_to_scalar<K: incin_core::prelude::DType>(
+    pub fn float_to_scalar<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<f64> {
         let v = t
@@ -254,7 +252,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
         Ok(s as f64)
     }
     /// Casts `t` to `f32` and collects it into a flat `Vec<f64>`.
-    fn float_to_vec1<K: incin_core::prelude::DType>(
+    pub fn float_to_vec1<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<f64>> {
         let v = t
@@ -267,7 +265,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
         Ok(vec.into_iter().map(|x| x as f64).collect())
     }
     /// Extracts one integer without implicit float truncation or saturation.
-    fn int_to_scalar<K: incin_core::prelude::DType>(
+    pub fn int_to_scalar<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<i64> {
         let operation = "candle_int_to_scalar";
@@ -309,7 +307,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
         )
     }
     /// Collects integers without implicit float truncation or saturation.
-    fn int_to_vec1<K: incin_core::prelude::DType>(
+    pub fn int_to_vec1<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<i64>> {
         let operation = "candle_int_to_vec1";
@@ -368,7 +366,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Tenso
             .collect()
     }
     /// Casts `t` to the candle dtype corresponding to `dtype`.
-    fn tensor_to_dtype<K: incin_core::prelude::DType, K2: incin_core::prelude::DType>(
+    pub fn tensor_to_dtype<K: incin_core::prelude::DType, K2: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {

@@ -19,7 +19,7 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::__backend_compat::legacy::{TensorOps};
+use incin_core::__backend_compat::legacy::{};
 
 type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -169,7 +169,7 @@ fn matmul_and_the_shape_operations_match_the_legacy_path() {
         &[handle(&lhs), handle(&rhs)],
     )
     .expect("matmul is a registered CPU capability");
-    let legacy = <TestBackend as TensorOps<TestBackend>>::matmul::<f32>(&lhs, &rhs).unwrap();
+    let legacy = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
     assert_eq!(values(&canonical), values(&legacy));
     assert_eq!(dims(&canonical), vec![2, 2]);
 
@@ -180,7 +180,7 @@ fn matmul_and_the_shape_operations_match_the_legacy_path() {
     )
     .expect("reshape is a registered CPU capability");
     let legacy_reshape =
-        <TestBackend as TensorOps<TestBackend>>::reshape::<f32>(&lhs, &[3, 2]).unwrap();
+        TestBackend::reshape::<f32>(&lhs, &[3, 2]).unwrap();
     assert_eq!(values(&reshaped), values(&legacy_reshape));
     assert_eq!(dims(&reshaped), vec![3, 2]);
 
@@ -192,7 +192,7 @@ fn matmul_and_the_shape_operations_match_the_legacy_path() {
     )
     .expect("broadcast_as is a registered CPU capability");
     let legacy_broadcast =
-        <TestBackend as TensorOps<TestBackend>>::broadcast_as::<f32>(&row, &[2, 3]).unwrap();
+        TestBackend::broadcast_as::<f32>(&row, &[2, 3]).unwrap();
     assert_eq!(values(&broadcast), values(&legacy_broadcast));
 }
 
@@ -1103,7 +1103,7 @@ fn softmax_refuses_a_dtype_it_does_not_advertise() {
 }
 
 /// Parity for the binary tensor family, which the catalog routes through
-/// `TensorOps` rather than `` because these operations preserve the
+/// `` rather than `` because these operations preserve the
 /// operand dtype and carry no gradient.
 #[test]
 fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
@@ -1120,7 +1120,7 @@ fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
             )
             .expect(concat!(stringify!($operation), " is a registered CPU capability"));
             let legacy =
-                <TestBackend as TensorOps<TestBackend>>::$method::<f32>(&lhs, &rhs).unwrap();
+                TestBackend::$method::<f32>(&lhs, &rhs).unwrap();
             assert_eq!(
                 values(&canonical),
                 values(&legacy),
@@ -1152,7 +1152,7 @@ fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
         &[handle(&lhs), handle(&rhs)],
     )
     .expect("LogicalAnd is a registered CPU capability");
-    let legacy_and = <TestBackend as TensorOps<TestBackend>>::logical_and(&lhs, &rhs).unwrap();
+    let legacy_and = TestBackend::logical_and(&lhs, &rhs).unwrap();
     assert_eq!(values(&canonical_and), values(&legacy_and));
 
     let canonical_or = dispatch::execute::<op::LogicalOr, _>(
@@ -1161,7 +1161,7 @@ fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
         &[handle(&lhs), handle(&rhs)],
     )
     .expect("LogicalOr is a registered CPU capability");
-    let legacy_or = <TestBackend as TensorOps<TestBackend>>::logical_or(&lhs, &rhs).unwrap();
+    let legacy_or = TestBackend::logical_or(&lhs, &rhs).unwrap();
     assert_eq!(values(&canonical_or), values(&legacy_or));
 }
 
@@ -1185,7 +1185,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&subtracted),
-        values(&<TestBackend as TensorOps<TestBackend>>::sub_scalar::<f32>(&matrix, 1.5).unwrap())
+        values(&TestBackend::sub_scalar::<f32>(&matrix, 1.5).unwrap())
     );
 
     let divided = dispatch::execute::<op::DivScalar, _>(
@@ -1196,7 +1196,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&divided),
-        values(&<TestBackend as TensorOps<TestBackend>>::div_scalar::<f32>(&matrix, 2.0).unwrap())
+        values(&TestBackend::div_scalar::<f32>(&matrix, 2.0).unwrap())
     );
 
     let transposed = dispatch::execute::<op::TransposeExact, _>(
@@ -1210,7 +1210,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&transposed),
-        values(&<TestBackend as TensorOps<TestBackend>>::transpose::<f32>(&matrix, 0, 1).unwrap())
+        values(&TestBackend::transpose::<f32>(&matrix, 0, 1).unwrap())
     );
     assert_eq!(dims(&transposed), vec![3, 2]);
 
@@ -1226,7 +1226,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&narrowed),
-        values(&<TestBackend as TensorOps<TestBackend>>::narrow::<f32>(&matrix, 1, 1, 2).unwrap())
+        values(&TestBackend::narrow::<f32>(&matrix, 1, 1, 2).unwrap())
     );
     assert_eq!(dims(&narrowed), vec![2, 2]);
 
@@ -1241,7 +1241,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&flattened),
-        values(&<TestBackend as TensorOps<TestBackend>>::flatten::<f32>(&matrix, 0, 1).unwrap())
+        values(&TestBackend::flatten::<f32>(&matrix, 0, 1).unwrap())
     );
     assert_eq!(dims(&flattened), vec![6]);
 
@@ -1253,7 +1253,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&unsqueezed),
-        values(&<TestBackend as TensorOps<TestBackend>>::unsqueeze::<f32>(&matrix, 0).unwrap())
+        values(&TestBackend::unsqueeze::<f32>(&matrix, 0).unwrap())
     );
     assert_eq!(dims(&unsqueezed), vec![1, 2, 3]);
 
@@ -1266,7 +1266,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&squeezed),
-        values(&<TestBackend as TensorOps<TestBackend>>::squeeze::<f32>(&column, 0).unwrap())
+        values(&TestBackend::squeeze::<f32>(&column, 0).unwrap())
     );
     assert_eq!(dims(&squeezed), vec![3]);
 
@@ -1280,7 +1280,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
         .unwrap();
         assert_eq!(
             values(&upper),
-            values(&<TestBackend as TensorOps<TestBackend>>::triu::<f32>(&square, offset).unwrap()),
+            values(&TestBackend::triu::<f32>(&square, offset).unwrap()),
             "triu diverged on the {label} diagonal"
         );
 
@@ -1292,7 +1292,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
         .unwrap();
         assert_eq!(
             values(&lower),
-            values(&<TestBackend as TensorOps<TestBackend>>::tril::<f32>(&square, offset).unwrap()),
+            values(&TestBackend::tril::<f32>(&square, offset).unwrap()),
             "tril diverged on the {label} diagonal"
         );
     }
@@ -1305,7 +1305,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&diagonal),
-        values(&<TestBackend as TensorOps<TestBackend>>::diag::<f32>(&square, 0).unwrap())
+        values(&TestBackend::diag::<f32>(&square, 0).unwrap())
     );
     assert_eq!(dims(&diagonal), vec![2]);
 
@@ -1319,7 +1319,7 @@ fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&interpolated),
-        values(&<TestBackend as TensorOps<TestBackend>>::lerp::<f32>(&start, &end, 0.25).unwrap())
+        values(&TestBackend::lerp::<f32>(&start, &end, 0.25).unwrap())
     );
 }
 
@@ -1341,7 +1341,7 @@ fn the_selection_operations_match_their_legacy_counterparts() {
     )
     .expect("where_cond is a registered CPU capability");
     let legacy =
-        <TestBackend as TensorOps<TestBackend>>::where_cond::<f32>(&mask, &on_true, &on_false)
+        TestBackend::where_cond::<f32>(&mask, &on_true, &on_false)
             .unwrap();
     assert_eq!(values(&selected), values(&legacy));
     // Stated separately from the parity assertion: if the executor had bound
@@ -1358,7 +1358,7 @@ fn the_selection_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&filled),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::masked_fill::<f32>(&on_true, &mask, 99.0)
+            &TestBackend::masked_fill::<f32>(&on_true, &mask, 99.0)
                 .unwrap()
         )
     );
@@ -1370,7 +1370,7 @@ fn the_selection_operations_match_their_legacy_counterparts() {
             .unwrap();
     assert_eq!(
         values(&negated),
-        values(&<TestBackend as TensorOps<TestBackend>>::logical_not(&bool_mask).unwrap())
+        values(&TestBackend::logical_not(&bool_mask).unwrap())
     );
 }
 
@@ -1388,7 +1388,7 @@ fn batched_matmul_matches_its_legacy_counterpart() {
         &[handle(&lhs), handle(&rhs)],
     )
     .expect("bmm is a registered CPU capability");
-    let legacy = <TestBackend as TensorOps<TestBackend>>::bmm::<f32>(&lhs, &rhs).unwrap();
+    let legacy = TestBackend::bmm::<f32>(&lhs, &rhs).unwrap();
     assert_eq!(values(&canonical), values(&legacy));
     assert_eq!(dims(&canonical), vec![2, 2, 2]);
 }
@@ -1471,7 +1471,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&joined),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::concat::<f32>(&[&left, &right], 0).unwrap()
+            &TestBackend::concat::<f32>(&[&left, &right], 0).unwrap()
         )
     );
     assert_eq!(dims(&joined), vec![4, 2]);
@@ -1485,7 +1485,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&stacked),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::stack::<f32>(&[&left, &right], 0).unwrap()
+            &TestBackend::stack::<f32>(&[&left, &right], 0).unwrap()
         )
     );
     assert_eq!(dims(&stacked), vec![2, 2, 2]);
@@ -1501,7 +1501,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&sliced),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::slice::<f32>(&left, &[(0, 1), (0, 2)])
+            &TestBackend::slice::<f32>(&left, &[(0, 1), (0, 2)])
                 .unwrap()
         )
     );
@@ -1517,7 +1517,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&gathered),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::gather::<f32, f32>(&left, 1, &index).unwrap()
+            &TestBackend::gather::<f32, f32>(&left, 1, &index).unwrap()
         )
     );
     // Pinned independently of the legacy path: gather reads column `index[i]`
@@ -1537,7 +1537,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&scattered),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::scatter::<f32, i64>(&left, 1, &index, &right)
+            &TestBackend::scatter::<f32, i64>(&left, 1, &index, &right)
                 .unwrap()
         )
     );
@@ -1552,7 +1552,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&selected),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::index_select::<f32, i64>(
+            &TestBackend::index_select::<f32, i64>(
                 &left, 0, &selection
             )
             .unwrap()
@@ -1570,7 +1570,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&repeated),
-        values(&<TestBackend as TensorOps<TestBackend>>::repeat::<f32>(&left, &[2, 1]).unwrap())
+        values(&TestBackend::repeat::<f32>(&left, &[2, 1]).unwrap())
     );
     assert_eq!(dims(&repeated), vec![4, 2]);
 
@@ -1586,7 +1586,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&padded),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::pad::<f32>(&left, &[(1, 1), (0, 0)], -1.0)
+            &TestBackend::pad::<f32>(&left, &[(1, 1), (0, 0)], -1.0)
                 .unwrap()
         )
     );
@@ -1605,7 +1605,7 @@ fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
     .unwrap();
     assert_eq!(
         values(&unfolded),
-        values(&<TestBackend as TensorOps<TestBackend>>::unfold::<f32>(&window, 1, 2, 1).unwrap())
+        values(&TestBackend::unfold::<f32>(&window, 1, 2, 1).unwrap())
     );
     assert_eq!(dims(&unfolded), vec![2, 3, 2]);
 }
@@ -1634,7 +1634,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&fused),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::addmm::<f32>(
+            &TestBackend::addmm::<f32>(
                 &matrix, &matrix, &matrix, 0.5, 2.0
             )
             .unwrap()
@@ -1653,7 +1653,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&attended),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::scaled_dot_product_attention::<f32>(
+            &TestBackend::scaled_dot_product_attention::<f32>(
                 &matrix,
                 &matrix,
                 &matrix,
@@ -1677,7 +1677,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&grouped),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::group_norm::<f32>(&channels, 2, 1e-5)
+            &TestBackend::group_norm::<f32>(&channels, 2, 1e-5)
                 .unwrap()
         )
     );
@@ -1695,7 +1695,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&instance),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::instance_norm::<f32>(&volume, 1e-5).unwrap()
+            &TestBackend::instance_norm::<f32>(&volume, 1e-5).unwrap()
         )
     );
 
@@ -1712,7 +1712,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&broadened),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::broadcast_left::<f32>(&matrix, &[3]).unwrap()
+            &TestBackend::broadcast_left::<f32>(&matrix, &[3]).unwrap()
         )
     );
     assert_eq!(dims(&broadened), vec![3, 2, 2]);
@@ -1730,7 +1730,7 @@ fn the_composed_tensor_operations_match_their_legacy_counterparts() {
     assert_eq!(
         values(&shuffled),
         values(
-            &<TestBackend as TensorOps<TestBackend>>::pixel_shuffle::<f32>(&picture, 2).unwrap()
+            &TestBackend::pixel_shuffle::<f32>(&picture, 2).unwrap()
         )
     );
     assert_eq!(dims(&shuffled), vec![1, 1, 4, 4]);

@@ -22,7 +22,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
-use incin_core::__backend_compat::legacy::{ModuleOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps};
 use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;
@@ -90,7 +90,7 @@ fn rank2_descriptor_execution_matches_the_legacy_path() {
     let rhs = storage(&[3, 2], &[7., 8., 9., 10., 11., 12.]);
     let validated = lower(&[2, 3], &[3, 2]);
 
-    let legacy = <TestBackend as TensorOps<TestBackend>>::matmul::<f32>(&lhs, &rhs).unwrap();
+    let legacy = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
     let descriptor = execute(&validated, &lhs, &rhs).unwrap();
 
     assert_eq!(descriptor.shape(), legacy.shape());
@@ -220,7 +220,7 @@ fn reshape_descriptor_execution_matches_the_legacy_path() {
     );
     let validated = lower_reshape_2x6_to_3x4();
 
-    let legacy = <TestBackend as TensorOps<TestBackend>>::reshape::<f32>(&input, &[3, 4]).unwrap();
+    let legacy = TestBackend::reshape::<f32>(&input, &[3, 4]).unwrap();
     let descriptor = execute_reshape(&validated, &input).unwrap();
 
     assert_eq!(descriptor.shape(), legacy.shape());

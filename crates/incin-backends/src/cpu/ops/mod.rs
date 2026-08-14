@@ -4,8 +4,8 @@
 //!   `::{add_scalar_float,mul_scalar_float,relu,gelu,…}` (all
 //!   unary-kernel stubs included).
 //! * `matmul` — naive stride-aware 2D `matmul_impl` (plain function, called
-//!   by `shape_ops`'s `TensorOps::matmul` method).
-//! * `shape_ops` — full `TensorOps` impl: real
+//!   by `shape_ops`'s `::matmul` method).
+//! * `shape_ops` — full `` impl: real
 //!   `reshape`/`transpose`/`broadcast_as`/`matmul`/`float_to_scalar`/
 //!   `float_to_vec1`, typed stubs for the rest.
 //! * `reduce` — concrete reduction kernels
