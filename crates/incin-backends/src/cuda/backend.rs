@@ -3807,7 +3807,7 @@ mod tests {
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's
     // `impl LossOps<Self> for CudaBackendImpl` — they resolve to
-    // `LossOps`'s own default bodies (`incin-core/src/tensor/backend.rs`),
+    // `LossOps`'s own default bodies (`incin-backends/src/legacy.rs`),
     // which compose entirely from `NumericOps`/`FloatOps`/`ReductionOps`
     // (already wired on CUDA). These tests exist to prove that resolution
     // actually compiles and runs correctly, not to add new functionality.
