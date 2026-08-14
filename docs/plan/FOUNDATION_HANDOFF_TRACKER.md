@@ -109,7 +109,7 @@ the next foundation blockers; none is claimed complete by the shape work:
 
 | ID | Blocker | Evidence and required next seam |
 | --- | --- | --- |
-| NEXT-A | Legacy state API removal | Model `StateDict`, serializer traits, safetensors helpers, and hub loading are snapshot-native. Optimizer dictionaries remain intentionally separate and are tracked under NEXT-K. |
+| NEXT-A | Legacy state API removal | Complete for production Rust: model state uses typed visitors and snapshot consumers; no `StateDict` or `StateLoadPlan` remains in the implementation. Historical planning references remain archived. |
 | NEXT-I | Tied/shared parameter identity | `StatePath` is intentionally distinct from runtime variable identity. No safe alias/identity contract exists for tied parameters; define one before deduplicating or restoring shared variables. |
 | NEXT-J | Backend typed variable abstraction | Complete: `VariableBackend::Var<K>` carries the dtype marker, all production backends implement the typed contract, and the source gate rejects `RawVar`. |
 | NEXT-K | Heterogeneous optimizer/parameter visitor | Complete for model traversal: `VisitState`, `StateVisitor`, `StateMutVisitor`, and parameter visitors are the typed seam; snapshot/load and optimizer adapters consume traversal without exposing backend handles. |

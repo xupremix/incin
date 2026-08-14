@@ -428,9 +428,10 @@ impl MLP {
 }
 ```
 
-`#[module]` derives `StateDict` and `Parameters` by walking every field: one
-implementing either trait (a layer, or a nested `Sequential`) is aggregated
-recursively; a plain field is skipped. `SeqTy!` names the same nested
+`#[module]` derives typed state and parameter visitors by walking every field:
+a layer or nested `Sequential` is delegated to recursively; a plain field is
+skipped. `parameters()` remains a consumer adapter for optimizer setup. `SeqTy!`
+names the same nested
 `Sequential<...>` type `seq!` builds a value of, so a layer list is written
 once instead of the field type and the constructor drifting independently.
 

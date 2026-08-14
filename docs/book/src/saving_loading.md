@@ -1,7 +1,7 @@
 # Saving and loading
 
-Checkpointing is safetensors-based and works for any type deriving
-`StateDict` (which `#[module]` gives you automatically).
+Checkpointing is safetensors-based and works for any type implementing the
+typed state visitor contract (which `#[module]` generates automatically).
 
 > `save_safetensors`/`load_safetensors` are not currently re-exported
 > through the `incin` facade — only through `incin_core::nn::save` directly.
@@ -29,9 +29,8 @@ fn main() -> Result<()> {
 }
 ```
 
-`save_safetensors`/`load_safetensors` work on anything implementing
-`StateDict` — a single layer, a hand-composed `#[module]` struct, or a
-`Sequential` chain, since `#[module]` and the built-in layers all derive it.
+`save_safetensors`/`load_safetensors` work on a single layer, a hand-composed
+`#[module]` struct, or a `Sequential` chain through typed state visitors.
 
 ## ONNX
 

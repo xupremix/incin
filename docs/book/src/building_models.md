@@ -118,9 +118,10 @@ assert_eq!(out.dims().as_ref(), &[2, 5, 6]);
 
 ## Custom modules with `#[module]`
 
-`#[module]` derives `StateDict` and `Parameters` for a struct by walking its
-fields: anything implementing those traits (a built-in layer, or a nested
-`Sequential`) is aggregated recursively; anything else is skipped.
+`#[module]` derives typed state and parameter visitors for a struct by walking
+its fields: built-in layers and nested `Sequential` values are delegated to
+recursively; anything else is skipped. State consumers and optimizer adapters
+are built on those visitors.
 
 ```rust,no_run
 use incin::prelude::*;

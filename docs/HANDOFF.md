@@ -82,7 +82,7 @@ The ordinary facade prelude allowlist is intentionally user-shaped: tensor
 and shape construction, dtype/device selection, gradients, module/layer
 building, state visitors/snapshots, optimizers, and the stable macros. It does
 not export graph capture, proof-construction helpers, storage/backend-authoring
-traits, physical storage encodings, `StateDict`, or transactional `StateLoadPlan`; those
+traits, physical storage encodings, legacy state staging traits, or backend variable handles; those
 names require a named expert surface or are reserved for macro expansion.
 
 ## Adding an operation
@@ -250,6 +250,6 @@ open in the unresolved architecture section.
 4. Read the relevant frozen/API/error/invariant contract.
 5. Run the smallest focused test before editing.
 6. Trace the descriptor → dispatch → backend path for operation work.
-7. Trace `Module` → `Parameters`/`StateDict` → `Param`/`Buffer` for NN work.
+7. Trace `Module` → typed visitors → `Param`/`Buffer` for NN work.
 8. Make one coherent checkpoint, run its focused validation, update the graph,
    and commit it.

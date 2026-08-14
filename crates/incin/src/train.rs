@@ -44,6 +44,7 @@
 //! explicit [`TrainError::CollectivesUnavailable`], not a silent single-GPU run.
 
 use incin_core::optim::Optimizer;
+use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
 use incin_core::prelude::{Backend, DeviceId, DeviceKind, DevicePreference, DeviceSet, Tensor};
 
 /// The devices a [`DevicePreference::Fastest`] resolution tries, most capable
@@ -581,7 +582,7 @@ impl Trainer {
         mut loss: F,
     ) -> Result<FitOutcome, TrainError>
     where
-        B: Backend,
+        B: Backend + VariableBackend + AutogradBackend + HostInterop,
         O: Optimizer<B>,
         D: IntoIterator<Item = Batch> + Clone,
         F: FnMut(
