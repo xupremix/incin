@@ -1,7 +1,7 @@
 use crate::cpu::{CpuBackendImpl, CpuBuffer};
 use incin_core::backend_authoring::StorageBackend;
 use incin_core::prelude::{DType, Device, Result};
-use incin_core::backend_authoring::legacy::{OptimizerOps};
+use incin_core::__backend_compat::legacy::{OptimizerOps};
 use incin_core::backend_authoring::{Backend, VariableBackend};
 
 impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
@@ -78,7 +78,7 @@ impl<D: Device> OptimizerOps<Self> for CpuBackendImpl<D> {
             return Ok(());
         }
 
-        incin_core::backend_authoring::legacy::adamw_step_composed::<Self, K>(
+        incin_core::__backend_compat::legacy::adamw_step_composed::<Self, K>(
             _var,
             _grad,
             _m,

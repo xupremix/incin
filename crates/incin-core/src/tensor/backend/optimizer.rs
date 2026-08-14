@@ -1,4 +1,4 @@
-//! Legacy optimizer adapter kept behind `backend_authoring::legacy`.
+//! Legacy optimizer adapter kept behind `__backend_compat::legacy`.
 
 use super::{Backend, VariableBackend, legacy::{FloatOps, NumericOps}};
 use crate::err::Result;

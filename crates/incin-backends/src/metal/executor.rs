@@ -3,7 +3,7 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
-use incin_core::backend_authoring::legacy::{ModuleOps, NumericOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, NumericOps, ReductionOps, TensorOps};
 
 use super::backend::MetalBackendImpl;
 use super::storage::MetalStorage;

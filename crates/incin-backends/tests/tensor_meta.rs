@@ -9,7 +9,7 @@ use incin_core::backend_authoring::Backend;
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId};
 #[cfg(feature = "wgpu")]
-use incin_core::backend_authoring::legacy::TensorOps;
+use incin_core::__backend_compat::legacy::TensorOps;
 
 fn assert_metadata_storage<T>()
 where

@@ -202,9 +202,10 @@ rule, output shape) and `docs/capabilities.md` for backend support levels
 (`Native`/`Composed`/`Fallback`/`Unsupported`). Both are generated from source
 and re-checked by tests.
 
-Backend authors may encounter the compatibility adapters under the explicitly
-named legacy authoring tier while migrating an implementation. Application
-code should use the ordinary tensor methods and does not need those traits.
+The repository still contains compatibility adapters for in-tree migration, but
+they are implementation-only under `incin_core::__backend_compat`. New backend
+authors must implement the descriptor contract and should not depend on those
+adapters. Application code should use the ordinary tensor methods.
 
 ## 6. The canonical execution architecture
 
@@ -338,8 +339,8 @@ is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 `incin::backend_authoring` (feature `backend-authoring`) is the contract a new
 backend implements: `StorageBackend` (associated `Storage<K>`, `Device`,
 `metadata()`), `Capabilities`, named optional capability views, and — per
-operation — `Execute<Descriptor<op::X>>`. The old family traits are available
-only under the hidden `backend_authoring::legacy` compatibility namespace.
+operation — `Execute<Descriptor<op::X>>`. Legacy family traits are kept only in
+the doc-hidden `incin_core::__backend_compat` namespace for in-tree adapters.
 
 **`StorageBackend::Storage<K>`** is a physical allocation plus
 `TensorMeta` (shape, strides, offset, dtype, device, alignment, capacity — a

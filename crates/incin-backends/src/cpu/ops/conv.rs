@@ -43,7 +43,7 @@
 use incin_core::prelude::Error;
 use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
 use incin_core::prelude::{DType, Result};
-use incin_core::backend_authoring::legacy::{NumericOps, TensorOps};
+use incin_core::__backend_compat::legacy::{NumericOps, TensorOps};
 
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
@@ -990,7 +990,7 @@ mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use incin_core::prelude::Cpu;
-    use incin_core::backend_authoring::legacy::ReductionOps;
+    use incin_core::__backend_compat::legacy::ReductionOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

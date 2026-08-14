@@ -22,7 +22,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
-use incin_core::backend_authoring::legacy::{ModuleOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, TensorOps};
 use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;

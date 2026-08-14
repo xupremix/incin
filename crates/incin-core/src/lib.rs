@@ -86,16 +86,6 @@ pub mod backend_authoring {
         StorageBackend, StorageOutput, SupportsDType, TensorBackend, TransferBackend, TransferTo,
         VariableBackend,
     };
-    /// Compatibility adapters for backend implementations that still use the
-    /// pre-descriptor operation-family traits. New tensor code must use
-    /// [`Execute`] and exact operation descriptors instead.
-    #[doc(hidden)]
-    pub mod legacy {
-        pub use crate::tensor::backend::legacy::{
-            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
-            ReductionOps, TensorOps, adamw_step_composed,
-        };
-    }
     /// Read the tracing graph mid-flight, without draining it.
     ///
     /// Here rather than in the prelude because the caller is a backend's tape
@@ -135,6 +125,22 @@ pub mod backend_authoring {
         };
         #[cfg(feature = "std")]
         pub use crate::exec::catalog::{CapturedDescriptor, DescriptorCaptureError};
+    }
+}
+
+/// Implementation-only compatibility hooks for the in-tree backend adapters.
+///
+/// This is intentionally outside [`backend_authoring`]: legacy operation-family
+/// traits are not a supported backend-authoring model and must not be copied by
+/// new backends. Migrate an adapter to exact [`backend_authoring::Execute`]
+/// implementations instead.
+#[doc(hidden)]
+pub mod __backend_compat {
+    pub mod legacy {
+        pub use crate::tensor::backend::legacy::{
+            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
+            ReductionOps, TensorOps, adamw_step_composed,
+        };
     }
 }
 

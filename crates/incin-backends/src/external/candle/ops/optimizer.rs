@@ -2,7 +2,7 @@
 
 use crate::external::candle::CandleBackend;
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::OptimizerOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::OptimizerOps<Self>
     for CandleBackend<D>
 {
 }

@@ -13,7 +13,7 @@ fn candle_readback_error(error: candle_core::Error) -> Error {
     .into()
 }
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::TensorOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::TensorOps<Self>
     for CandleBackend<D>
 {
     // Candle has native equivalents for most of these, but this adapter does

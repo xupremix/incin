@@ -52,7 +52,9 @@ by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
 Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
 `TransferBackend` views are the migration seam. The core `backend.rs` identity
 contract is intentionally small; legacy operation-family declarations live in
-`backend/legacy.rs`, and the shape-only test backend lives in `backend/dummy.rs`.
+`backend/legacy.rs` and are exposed only through the doc-hidden
+`incin_core::__backend_compat` adapter namespace. The shape-only test backend
+lives in `backend/dummy.rs`.
 Host byte serialization now belongs to `HostInterop`; only the tensor formatting
 compatibility methods remain on `Backend` while the descriptor migration removes
 their operation-family dependencies.

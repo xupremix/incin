@@ -20,9 +20,9 @@ use incin_backends::cuda::CudaBackendImpl;
 use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::exec::{TapeStorage, check_gradients};
 use incin_core::prelude::*;
-use incin_core::backend_authoring::legacy::{FloatOps, ModuleOps, NumericOps};
+use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps};
 #[cfg(any(feature = "wgpu", feature = "cuda"))]
-use incin_core::backend_authoring::legacy::{LossOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{LossOps, ReductionOps, TensorOps};
 
 type CpuB = CpuBackendImpl;
 #[cfg(feature = "wgpu")]

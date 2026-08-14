@@ -126,7 +126,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::zeros::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::zeros::<f32>(
                     &attr.shape,
                     attr.dtype,
                     &attr.device,
@@ -161,7 +161,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::ones::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::ones::<f32>(
                     &attr.shape,
                     attr.dtype,
                     &attr.device,
@@ -196,7 +196,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::rand::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::rand::<f32>(
                     &attr.shape,
                     attr.dtype,
                     &attr.device,
@@ -231,7 +231,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::randn::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::randn::<f32>(
                     &attr.shape,
                     attr.dtype,
                     &attr.device,
@@ -266,7 +266,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::full::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::full::<f32>(
                     attr.value,
                     &attr.shape,
                     attr.dtype,
@@ -302,7 +302,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::arange::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::arange::<f32>(
                     attr.start,
                     attr.step,
                     &attr.shape,
@@ -339,7 +339,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                <Self as incin_core::backend_authoring::legacy::CreationOps<Self>>::linspace::<f32>(
+                <Self as incin_core::__backend_compat::legacy::CreationOps<Self>>::linspace::<f32>(
                     attr.start,
                     attr.end,
                     &attr.shape,

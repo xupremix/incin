@@ -10,7 +10,7 @@
 //! closures already handle the unbroadcast math correctly for any shape.
 
 use incin_core::prelude::{DType, Result};
-use incin_core::backend_authoring::legacy::{FloatOps, NumericOps, ReductionOps};
+use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, ReductionOps};
 
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::LossOps<Self>
+impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::LossOps<Self>
     for CandleBackend<D>
 {
     /// Computes L1 (Mean Absolute Error) loss: `|pred - target|` with

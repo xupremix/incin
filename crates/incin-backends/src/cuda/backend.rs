@@ -1,7 +1,7 @@
 use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
-use incin_core::backend_authoring::legacy::*;
+use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,

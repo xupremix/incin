@@ -158,7 +158,7 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use incin_core::prelude::Cpu;
-    use incin_core::backend_authoring::legacy::{NumericOps, ReductionOps};
+    use incin_core::__backend_compat::legacy::{NumericOps, ReductionOps};
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;
