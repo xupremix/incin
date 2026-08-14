@@ -69,6 +69,103 @@ pub(crate) fn dequantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
     ))
 }
 
+pub(crate) fn quantized_matmul_storage(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+) -> Result<CpuStorage> {
+    let lhs_data = match &*lhs.buffer {
+        CpuBuffer::Q8_0(v) => v,
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantized_matmul",
+                backend: "Cpu (lhs expected Q8_0 buffer)",
+            });
+        }
+    };
+    let rhs_data = match &*rhs.buffer {
+        CpuBuffer::Q8_0(v) => v,
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantized_matmul",
+                backend: "Cpu (rhs expected Q8_0 buffer)",
+            });
+        }
+    };
+    let lhs_shape = &lhs.shape;
+    let rhs_shape = &rhs.shape;
+    if lhs_shape.len() < 2 {
+        return Err(Error::Msg(
+            "quantized_matmul lhs requires at least 2D shapes".into(),
+        ));
+    }
+    if rhs_shape.len() != 2 {
+        return Err(Error::Msg("quantized_matmul rhs must be 2D [N, K]".into()));
+    }
+    let n = rhs_shape[0];
+    let k2 = rhs_shape[1];
+    let k = lhs_shape[lhs_shape.len() - 1];
+    let m: usize = crate::cpu::stride::checked_numel(&lhs_shape[..lhs_shape.len() - 1])?;
+    if k != k2 {
+        return Err(Error::Msg(alloc::format!(
+            "quantized_matmul K mismatch: {} != {}",
+            k, k2
+        )));
+    }
+    if !k.is_multiple_of(32) {
+        return Err(Error::Msg(alloc::format!(
+            "quantized_matmul K must be multiple of 32, got {}",
+            k
+        )));
+    }
+    let mut out_shape = lhs_shape.to_vec();
+    let out_len = out_shape.len();
+    out_shape[out_len - 1] = n;
+    let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+    let mut out_data = alloc::vec![0.0f32; out_total];
+    let blocks_per_row = k / 32;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    let use_avx2 = is_x86_feature_detected!("avx2");
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    let use_avx2 = false;
+    for i in 0..m {
+        for j in 0..n {
+            let lhs_row_start = i * blocks_per_row;
+            let rhs_row_start = j * blocks_per_row;
+            let sum = if use_avx2 {
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                {
+                    unsafe {
+                        vec_dot_q8_0_avx2(
+                            blocks_per_row,
+                            lhs_data,
+                            lhs_row_start,
+                            rhs_data,
+                            rhs_row_start,
+                        )
+                    }
+                }
+                #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                {
+                    0.0
+                }
+            } else {
+                vec_dot_q8_0_scalar(
+                    blocks_per_row,
+                    lhs_data,
+                    lhs_row_start,
+                    rhs_data,
+                    rhs_row_start,
+                )
+            };
+            out_data[i * n + j] = sum;
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::F32(out_data),
+        out_shape,
+    ))
+}
+
 impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
     /// `quantize`.
     fn quantize<K: FloatDType, Q: QuantDType>(

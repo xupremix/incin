@@ -23,7 +23,6 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::QuantizedOps;
 use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
@@ -40,7 +39,7 @@ use super::ops::elementwise::{
 };
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
-use super::ops::quant::{dequantize_storage, quantize_storage};
+use super::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
@@ -2601,7 +2600,7 @@ impl<D: Device> Execute<op::QuantizedMatMul> for CpuBackendImpl<D> {
             operation,
             training_mode(request.context),
         )?;
-        <Self as QuantizedOps<Self>>::quantized_matmul::<Q8_0>(lhs, rhs)
+        quantized_matmul_storage(lhs, rhs)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
