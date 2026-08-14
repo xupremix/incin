@@ -1,17 +1,14 @@
-//! `CreationOps` for `CpuBackendImpl<D>`: `zeros`/`ones`/`rand`/`randn` and
-//! their `var_*` counterparts.
+//! CPU-local allocation kernels: `zeros`/`ones`/`rand`/`randn` and their
+//! `var_*` counterparts.
 //!
 //! `rand` uses `rand::distributions::Uniform` (uniform `[0.0, 1.0)`);
 //! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
-use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::{
-    Backend, ConversionFailure, Device, DeviceId, DeviceKind, DType, DTypeDescriptor, DTypeId,
-    Error, FloatToIntPolicy, OperationKind, Result, StorageBackend, StorageTransfer,
+    ConversionFailure, DeviceId, DTypeDescriptor, DTypeId, Error, FloatToIntPolicy, Result,
     convert_f64_to_i64,
 };
-use incin_core::__backend_compat::legacy::CreationOps;
 #[allow(unused_imports)]
 use rand::Rng;
 #[allow(unused_imports)]
@@ -373,123 +370,6 @@ pub(crate) fn linspace_with_total(
     Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
 }
 
-impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
-    /// `zeros`.
-    fn zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        zeros_with_total(total, shape, dtype, device)
-    }
-
-    /// `ones`.
-    fn ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        ones_with_total(total, shape, dtype, device)
-    }
-
-    /// `rand`.
-    fn rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        rand_with_total(total, shape, dtype, device)
-    }
-
-    /// `randn`.
-    fn randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        randn_with_total(total, shape, dtype, device)
-    }
-
-    /// `full`.
-    fn full<K: DType>(
-        val: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        full_with_total(total, val, shape, dtype, device)
-    }
-
-    /// `arange`.
-    fn arange<K: DType>(
-        start: f64,
-        step: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        arange_with_total(total, start, step, shape, dtype, device)
-    }
-
-    /// `linspace`.
-    fn linspace<K: DType>(
-        start: f64,
-        end: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        linspace_with_total(total, start, end, shape, dtype, device)
-    }
-
-    /// `var_zeros`.
-    fn var_zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_zeros_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_ones`.
-    fn var_ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_ones_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_rand`.
-    fn var_rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_rand_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_randn`.
-    fn var_randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_randn_with_total(total, shape, dtype, device)
-    }
-}
-
 /// `var_zeros`, given an already-known element count. See [`zeros_with_total`].
 pub(crate) fn var_zeros_with_total(
     total: usize,
@@ -534,7 +414,12 @@ pub(crate) fn var_randn_with_total(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::prelude::{Backend, Cpu};
+    use crate::cpu::CpuBackendImpl;
+    use incin_core::backend_authoring::VariableBackend;
+    use incin_core::__backend_compat::legacy::CreationOps;
+    use incin_core::prelude::{
+        Backend, ConversionFailure, Cpu, Dyn, Error, StorageTransfer,
+    };
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

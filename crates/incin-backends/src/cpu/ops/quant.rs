@@ -1,7 +1,7 @@
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use incin_core::prelude::{
-    DType, Device, Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeBuf,
+        DType, DTypeId, Device, Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeBuf,
     StorageBackend,
 };
 use incin_core::__backend_compat::legacy::QuantizedOps;
