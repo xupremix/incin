@@ -758,6 +758,52 @@ impl<D: Device> Backend for DispatchBackend<D> {
 
 }
 
+impl<D: Device> incin_core::backend_authoring::HostReadback for DispatchBackend<D> {
+    fn float_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<f64>> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => {
+                <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+
+    fn int_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<i64>> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => {
+                <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+}
+
 impl<D: Device> incin_core::backend_authoring::HostInterop for DispatchBackend<D> {
     fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<Vec<u8>> {
             match storage {

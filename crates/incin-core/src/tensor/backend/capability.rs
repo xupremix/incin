@@ -4,7 +4,7 @@
 //! [`Backend`](super::Backend) contract. They deliberately do not introduce a
 //! runtime/session abstraction: ownership remains with the backend type.
 
-use super::{StorageBackend, legacy::TensorOps};
+use super::StorageBackend;
 use crate::err::Result;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
@@ -19,19 +19,6 @@ pub trait HostReadback: StorageBackend {
     fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>>;
     /// Reads integer values in logical row-major order.
     fn int_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>>;
-}
-
-impl<B> HostReadback for B
-where
-    B: crate::tensor::backend::Backend + TensorOps<B>,
-{
-    fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
-        <Self as TensorOps<Self>>::float_to_vec1(storage)
-    }
-
-    fn int_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
-        <Self as TensorOps<Self>>::int_to_vec1(storage)
-    }
 }
 
 /// Host-visible tensor metadata and formatting capabilities.

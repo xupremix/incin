@@ -96,6 +96,22 @@ use super::*;
 
     }
 
+    impl<D: Device + Clone + 'static> crate::tensor::backend::HostReadback
+        for DummyBackend<D>
+    {
+        fn float_to_vec1<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<alloc::vec::Vec<f64>> {
+            Ok(alloc::vec![0.0])
+        }
+
+        fn int_to_vec1<K: DType>(
+            _t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<alloc::vec::Vec<i64>> {
+            Ok(alloc::vec![0])
+        }
+    }
+
     impl<D: Device + Clone + 'static> crate::tensor::backend::HostInterop
         for DummyBackend<D>
     {

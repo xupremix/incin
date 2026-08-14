@@ -791,7 +791,23 @@ impl<B: Backend> Backend for TracingBackend<B> {
     type InnerBackend = B::InnerBackend;
 }
 
-impl<B: Backend + TensorOps<B> + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::HostReadback> crate::tensor::backend::HostReadback
+    for TracingBackend<B>
+{
+    fn float_to_vec1<K: super::dtype::DType>(
+        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<f64>> {
+        B::float_to_vec1(&t.inner)
+    }
+
+    fn int_to_vec1<K: super::dtype::DType>(
+        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<i64>> {
+        B::int_to_vec1(&t.inner)
+    }
+}
+
+impl<B: Backend + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
     /// Delegates to `B::from_bytes`, additionally recording the result
         /// as a graph initializer (constant input) node.
         fn from_bytes<K: super::dtype::DType>(

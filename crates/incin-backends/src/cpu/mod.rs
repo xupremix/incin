@@ -170,6 +170,20 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CpuBackendImpl
 
 impl incin_core::backend_authoring::StorageOutput for storage::CpuStorage {}
 
+impl<D: Device> incin_core::backend_authoring::HostReadback for CpuBackendImpl<D> {
+    fn float_to_vec1<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<f64>> {
+        ops::shape_ops::float_to_vec1_storage(t)
+    }
+
+    fn int_to_vec1<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<i64>> {
+        ops::shape_ops::int_to_vec1_storage(t)
+    }
+}
+
 impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
 
     /// `InnerBackend`.
