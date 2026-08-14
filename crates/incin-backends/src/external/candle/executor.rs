@@ -248,17 +248,11 @@ macro_rules! impl_candle_creation_executors {
                 &self,
                 request: ExecutionRequest<'_, incin_core::backend_authoring::op::$op, Self>,
             ) -> core::result::Result<CandleStorage, BackendError> {
-                use incin_core::__backend_compat::legacy::CreationOps;
                 if !request.inputs.is_empty() {
                     return Err(invalid(OperationKind::$op, "an allocation takes no operand"));
                 }
                 let attr = request.operation.descriptor().attributes();
-                let raw = <Self as CreationOps<Self>>::$func::<f32>(
-                    $(attr.$arg,)*
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
+                let raw = super::ops::creation::$func(&attr.shape, attr.dtype, &attr.device)
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
@@ -273,11 +267,8 @@ macro_rules! impl_candle_creation_executors {
 }
 
 impl_candle_creation_executors![
-    (Zeros, zeros),
-    (Ones, ones),
-    (UniformRandom, rand),
-    (NormalRandom, randn),
-    (Full, full, value),
-    (Arange, arange, start, step),
-    (Linspace, linspace, start, end),
+    (Zeros, zeros_storage),
+    (Ones, ones_storage),
+    (UniformRandom, uniform_random_storage),
+    (NormalRandom, normal_random_storage),
 ];

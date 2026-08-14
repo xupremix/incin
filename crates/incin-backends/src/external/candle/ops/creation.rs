@@ -6,6 +6,50 @@ use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 use candle_core as candle;
 
+pub(crate) fn zeros_storage(
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+) -> Result<CandleStorage> {
+    let t = candle::Tensor::zeros(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn ones_storage(
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+) -> Result<CandleStorage> {
+    let t = candle::Tensor::ones(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn uniform_random_storage(
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+) -> Result<CandleStorage> {
+    let t = candle::Tensor::rand(0f32, 1f32, shape, &to_candle_device(device)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+        .to_dtype(to_candle_dtype(dtype)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn normal_random_storage(
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    device: &DeviceId,
+) -> Result<CandleStorage> {
+    let t = candle::Tensor::randn(0f32, 1f32, shape, &to_candle_device(device)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+        .to_dtype(to_candle_dtype(dtype)?)
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
 impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::CreationOps<Self>
     for CandleBackend<D>
 {
@@ -22,9 +66,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = candle::Tensor::zeros(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        zeros_storage(shape, dtype, device)
     }
 
     /// Allocates a tensor of `shape` filled with ones on `device` with the
@@ -34,9 +76,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = candle::Tensor::ones(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        ones_storage(shape, dtype, device)
     }
 
     /// Samples a uniform `[0, 1)` tensor of `shape` on `device`, then casts
@@ -46,11 +86,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = candle::Tensor::rand(0f32, 1f32, shape, &to_candle_device(device)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            .to_dtype(to_candle_dtype(dtype)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        uniform_random_storage(shape, dtype, device)
     }
 
     /// Samples a standard-normal tensor of `shape` on `device`, then casts
@@ -60,11 +96,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = candle::Tensor::randn(0f32, 1f32, shape, &to_candle_device(device)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            .to_dtype(to_candle_dtype(dtype)?)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        normal_random_storage(shape, dtype, device)
     }
 
     /// Allocates a zero-initialized trainable `Var` of `shape` on `device`.

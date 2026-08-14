@@ -3,7 +3,7 @@
 //! One module per `Backend` operation family, mirroring the layout of
 //! `cpu/ops/` and `cuda/ops/`.
 
-mod creation;
+pub(crate) mod creation;
 mod float;
 mod loss;
 mod module;
