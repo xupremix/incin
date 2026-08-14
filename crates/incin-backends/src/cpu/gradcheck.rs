@@ -158,7 +158,7 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use incin_core::prelude::Cpu;
-    use incin_core::__backend_compat::legacy::{NumericOps, ReductionOps};
+    use incin_core::__backend_compat::legacy::ReductionOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;
@@ -171,13 +171,14 @@ mod tests {
 
     /// Test 1: `gradcheck` applied to `sum(x^2)` on a 1-D input matches the
     /// known-analytic derivative `2x` within tolerance. Built entirely from
-    /// Phase 1's already-implemented `NumericOps::mul`/`ReductionOps::sum_all`
-    /// — no new op is implemented in this file.
+    /// The concrete multiplication helper and reduction kernel are used
+    /// directly so this fixture exercises the canonical CPU ownership path.
     #[test]
     fn gradcheck_matches_analytic_gradient_of_sum_of_squares() {
         let x = vector(vec![2.0, 3.0, -1.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let squared = TestBackend::mul::<f32>(&inputs[0], &inputs[0]).unwrap();
+            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])
+                .unwrap();
             crate::cpu::ops::reduce::sum_all(&squared).unwrap()
         };
 
@@ -197,8 +198,8 @@ mod tests {
         let x = vector(vec![2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let x = &inputs[0];
-            let x2 = TestBackend::mul::<f32>(x, x).unwrap();
-            let x3 = TestBackend::mul::<f32>(&x2, x).unwrap();
+            let x2 = crate::cpu::ops::elementwise::mul_storage(x, x).unwrap();
+            let x3 = crate::cpu::ops::elementwise::mul_storage(&x2, x).unwrap();
             crate::cpu::ops::reduce::sum_all(&x3).unwrap()
         };
 
