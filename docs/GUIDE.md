@@ -49,7 +49,7 @@ re-exports the rest.
 
 You will almost always write `use incin::prelude::*;` and nothing else. The
 `prelude` module (`crates/incin/src/lib.rs:471`) is the curated, high-frequency
-surface; `incin::backend_authoring` and `incin::experimental` are opt-in and
+surface; `incin::state`, `incin::backend_authoring` and `incin::experimental` are opt-in and
 named that way on purpose — reaching for them is a signal, not an accident.
 
 ## 2. The mental model

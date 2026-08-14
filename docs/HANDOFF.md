@@ -43,8 +43,10 @@ capabilities, transfers, dispatch, gradients, and tracing. NN owns module trees,
 parameters, buffers, state, and layers. Higher-level features must not become
 required dependencies of the lower tiers.
 
-The normal public tier is the facade prelude. Backend authors should use the
-named `backend_authoring` and `types` surfaces. The backend contract is split
+The normal public tier is the facade prelude. Checkpoint and transactional
+state staging types are under the named `incin::state` surface rather than the
+normal prelude. Backend authors should use the named `backend_authoring` and
+`types` surfaces. The backend contract is split
 by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
 `backend/variable.rs`, `backend/autograd.rs`, and `backend/capability.rs`.
 Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
