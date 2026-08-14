@@ -250,17 +250,17 @@ pub trait AutorefStateDictFallback<B: Backend> {
     fn maybe_collect_state(
         &self,
         _phantom: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &mut crate::nn::StateSnapshot,
+        _path: &crate::nn::StatePath,
+        _snapshot: &mut crate::nn::StateSnapshot,
     ) -> Result<()> {
         Ok(())
     }
     fn maybe_prepare_state(
         &self,
         _phantom: core::marker::PhantomData<B>,
-        path: &crate::nn::StatePath,
-        snapshot: &crate::nn::StateSnapshot,
-        plan: &mut crate::nn::StateLoadPlan<B>,
+        _path: &crate::nn::StatePath,
+        _snapshot: &crate::nn::StateSnapshot,
+        _plan: &mut crate::nn::StateLoadPlan<B>,
     ) -> Result<()> {
         Ok(())
     }

@@ -9,11 +9,67 @@ use std::path::Path;
 /// Metadata for an individual parameter stored in a global checkpoint.
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct CheckpointDType {
+    /// Stable logical identity of the dtype.
+    pub key: DTypeKey,
+    /// Semantic category, retained independently from the logical name.
+    pub kind: DTypeKind,
+    /// Physical storage/block encoding used by the checkpoint bytes.
+    pub encoding: StorageEncoding,
+}
+
+#[cfg(feature = "std")]
+impl CheckpointDType {
+    pub fn from_descriptor(dtype: DTypeDescriptor) -> Self {
+        Self {
+            key: dtype.key(),
+            kind: dtype.kind(),
+            encoding: dtype.encoding(),
+        }
+    }
+
+    /// Resolve a manifest dtype into the runtime descriptor after validating
+    /// all semantic and physical fields against the built-in registry.
+    pub fn descriptor(&self) -> Result<DTypeDescriptor> {
+        let descriptor = match self.key.name() {
+            "u8" => DTypeId::U8.descriptor(),
+            "u32" => DTypeId::U32.descriptor(),
+            "i64" => DTypeId::I64.descriptor(),
+            "bf16" => DTypeId::BF16.descriptor(),
+            "f16" => DTypeId::F16.descriptor(),
+            "f32" => DTypeId::F32.descriptor(),
+            "f64" => DTypeId::F64.descriptor(),
+            "q8_0" => DTypeId::Q8_0.descriptor(),
+            "bool" => DTypeId::Bool.descriptor(),
+            _ => {
+                return Err(Error::Msg(format!(
+                    "Unsupported checkpoint dtype key {}:{}:{}",
+                    self.key.namespace(),
+                    self.key.name(),
+                    self.key.version()
+                )));
+            }
+        };
+        if descriptor.key() != self.key
+            || descriptor.kind() != self.kind
+            || descriptor.encoding() != self.encoding
+        {
+            return Err(Error::Msg(format!(
+                "Checkpoint dtype metadata does not match registered dtype {}",
+                self.key.name()
+            )));
+        }
+        Ok(descriptor)
+    }
+}
+
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct TensorCheckpointMeta {
     pub name: String,
     pub global_shape: Vec<usize>,
-    /// Semantic logical/physical dtype record; schema version is independent.
-    pub dtype: DTypeDescriptor,
+    /// Explicit semantic and physical dtype record; schema version is independent.
+    pub dtype: CheckpointDType,
     pub placement_kind: String,
 }
 
@@ -51,7 +107,7 @@ impl GlobalCheckpointManifest {
             TensorCheckpointMeta {
                 name: key,
                 global_shape,
-                dtype: dtype.into(),
+                dtype: CheckpointDType::from_descriptor(dtype.into()),
                 placement_kind: placement_kind.into(),
             },
         );
@@ -315,7 +371,7 @@ where
         let global_shape = st_value.shape().dims().to_vec();
         let target_shape = current_value.shape().dims();
         let bytes = st_value.bytes();
-        let dtype_desc = meta.dtype;
+        let dtype_desc = meta.dtype.descriptor()?;
 
         let (final_bytes, final_shape) = if global_shape == target_shape {
             (bytes.to_vec(), global_shape)

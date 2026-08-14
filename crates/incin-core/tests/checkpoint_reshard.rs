@@ -22,6 +22,11 @@ fn test_global_checkpoint_manifest_serialization() -> Result<()> {
 
     save_checkpoint_manifest(&manifest, &manifest_path)?;
 
+    let wire = std::fs::read_to_string(&manifest_path)?;
+    assert!(wire.contains("\"key\""));
+    assert!(wire.contains("\"kind\""));
+    assert!(wire.contains("\"encoding\""));
+
     let loaded = load_checkpoint_manifest(&manifest_path)?;
     assert_eq!(manifest, loaded);
     Ok(())
