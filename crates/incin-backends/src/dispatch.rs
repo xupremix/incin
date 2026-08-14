@@ -506,6 +506,45 @@ macro_rules! dispatch_reduction_unary {
     };
 }
 
+macro_rules! cpu_shape_call {
+    (reshape, $value:expr, $shape:expr) => { crate::cpu::ops::shape_ops::reshape_storage($value, $shape) };
+    (transpose, $value:expr, $dim1:expr, $dim2:expr) => { crate::cpu::ops::shape_ops::transpose_storage($value, $dim1, $dim2) };
+    (broadcast_as, $value:expr, $shape:expr) => { crate::cpu::ops::shape_ops::broadcast_as_storage($value, $shape) };
+    (narrow, $value:expr, $dim:expr, $start:expr, $len:expr) => { crate::cpu::ops::shape_ops::narrow_storage($value, $dim, $start, $len) };
+    (slice, $value:expr, $ranges:expr) => { crate::cpu::ops::shape_ops::slice_storage($value, $ranges) };
+    (flatten, $value:expr, $start:expr, $end:expr) => { crate::cpu::ops::shape_ops::flatten_storage($value, $start, $end) };
+    (broadcast_left, $value:expr, $shape:expr) => { crate::cpu::ops::shape_ops::broadcast_left_storage($value, $shape) };
+    (unsqueeze, $value:expr, $dim:expr) => { crate::cpu::ops::shape_ops::unsqueeze_storage($value, $dim) };
+    (repeat, $value:expr, $repeats:expr) => { crate::cpu::ops::shape_ops::repeat_storage($value, $repeats) };
+    (pad, $value:expr, $padding:expr, $val:expr) => { crate::cpu::ops::shape_ops::pad_storage($value, $padding, $val) };
+    (triu, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::triu_storage($value, $k) };
+    (tril, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::tril_storage($value, $k) };
+    (diag, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::diag_storage($value, $k) };
+    ($method:ident, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
+    };
+}
+
+macro_rules! dispatch_shape_unary {
+    ($storage:expr, $method:ident $(, $arg:expr)*) => {
+        match $storage {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => cpu_shape_call!($method, value $(, $arg)*)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::$method::<K>(value $(, $arg)*)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    };
+}
+
 /// Routes an operation taking a slice of operands to the backend holding the
 /// first one, checking every remaining operand against that route.
 ///
@@ -1187,20 +1226,20 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
 
 impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
     fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
-        dispatch_unary!(t, reshape, shape)
+        dispatch_shape_unary!(t, reshape, shape)
     }
     fn transpose<K: DType>(
         t: &DispatchStorage,
         dim1: usize,
         dim2: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, transpose, dim1, dim2)
+        dispatch_shape_unary!(t, transpose, dim1, dim2)
     }
     fn matmul<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, matmul)
     }
     fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
-        dispatch_unary!(t, broadcast_as, shape)
+        dispatch_shape_unary!(t, broadcast_as, shape)
     }
     fn narrow<K: DType>(
         t: &DispatchStorage,
@@ -1208,7 +1247,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         start: usize,
         len: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, narrow, dim, start, len)
+        dispatch_shape_unary!(t, narrow, dim, start, len)
     }
     fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_unary!(t, squeeze, dim)
@@ -1220,10 +1259,10 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         dispatch_slice!(t, concat, dim)
     }
     fn slice<K: DType>(t: &DispatchStorage, ranges: &[(usize, usize)]) -> Result<DispatchStorage> {
-        dispatch_unary!(t, slice, ranges)
+        dispatch_shape_unary!(t, slice, ranges)
     }
     fn flatten<K: DType>(t: &DispatchStorage, start: usize, end: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, flatten, start, end)
+        dispatch_shape_unary!(t, flatten, start, end)
     }
     fn where_cond<K: DType>(
         mask: &DispatchStorage,
@@ -1362,29 +1401,29 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         }
     }
     fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, unsqueeze, dim)
+        dispatch_shape_unary!(t, unsqueeze, dim)
     }
     fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
-        dispatch_unary!(t, repeat, repeats)
+        dispatch_shape_unary!(t, repeat, repeats)
     }
     fn pad<K: DType>(
         t: &DispatchStorage,
         padding: &[(usize, usize)],
         val: f64,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, pad, padding, val)
+        dispatch_shape_unary!(t, pad, padding, val)
     }
     fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
-        dispatch_unary!(t, triu, k)
+        dispatch_shape_unary!(t, triu, k)
     }
     fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
-        dispatch_unary!(t, tril, k)
+        dispatch_shape_unary!(t, tril, k)
     }
     fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
-        dispatch_unary!(t, diag, k)
+        dispatch_shape_unary!(t, diag, k)
     }
     fn broadcast_left<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
-        dispatch_unary!(t, broadcast_left, shape)
+        dispatch_shape_unary!(t, broadcast_left, shape)
     }
     fn float_to_scalar<K: DType>(t: &DispatchStorage) -> Result<f64> {
         match t {
