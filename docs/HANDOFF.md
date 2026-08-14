@@ -150,6 +150,22 @@ active consolidation work. Resolve these against
 `docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before
 expanding the public surface.
 
+## Large-file inventory
+
+The remaining files above 1,200 lines are not all one kind of problem:
+
+| Area | Current reason for size | Maintainer action |
+| --- | --- | --- |
+| `tensor/backend.rs` | compatibility trait bundle plus backend capability adapters | extract capability traits first, then remove the legacy family declarations in staged API changes |
+| `tensor/tracing.rs` | tracing backend and graph serialization boundary | split after the backend capability migration so storage/autograd seams remain visible |
+| `tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once the catalog ownership is stable |
+| `exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
+| backend implementation files | one feature-gated backend currently owns storage, execution, and compatibility glue | split storage, execution, and capability implementations per backend during the capability migration |
+
+These are explicit staged extraction targets, not permission to add more
+responsibilities. The current checkpoint documents the boundary and adds the
+first capability seam; it does not claim the final split is complete.
+
 ## What not to change casually
 
 Do not add a second public execution architecture, speculative runtime/session
