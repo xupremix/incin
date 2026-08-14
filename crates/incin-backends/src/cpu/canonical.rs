@@ -43,11 +43,12 @@ use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_imp
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
-    addmm_storage, gather_storage, index_select_storage, int_to_vec1_storage, lerp_storage,
+    addmm_storage, concat_storage, gather_storage, index_select_storage, int_to_vec1_storage,
+    lerp_storage,
     masked_fill_storage, narrow_storage, pad_storage, repeat_storage, scatter_storage,
     slice_storage,
     squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
-    pixel_shuffle_storage, unfold_storage,
+    pixel_shuffle_storage, stack_storage, unfold_storage,
     where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
@@ -2022,7 +2023,7 @@ impl<D: Device> Execute<op::ConcatExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as TensorOps<Self>>::concat::<f32>(&operands, axis)
+        concat_storage(&operands, axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
@@ -2043,7 +2044,7 @@ impl<D: Device> Execute<op::StackExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        <Self as TensorOps<Self>>::stack::<f32>(&operands, axis)
+        stack_storage(&operands, axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

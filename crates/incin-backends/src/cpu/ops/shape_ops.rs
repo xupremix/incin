@@ -120,6 +120,147 @@ pub(crate) fn unsqueeze_storage(t: &CpuStorage, dim: usize) -> Result<CpuStorage
     reshape_storage(t, &target_shape)
 }
 
+pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuStorage> {
+    if tensors.is_empty() {
+        return Err(Error::ShapeMismatch {
+            op: "concat",
+            expected: vec![],
+            got: vec![],
+            msg: "concat requires at least one input tensor".into(),
+        });
+    }
+    let rank = tensors[0].shape.len();
+    if dim >= rank {
+        return Err(Error::ShapeMismatch {
+            op: "concat",
+            expected: tensors[0].shape.to_vec(),
+            got: vec![dim],
+            msg: format!("concat dim {dim} out of range for rank-{rank} shape {:?}", tensors[0].shape),
+        });
+    }
+    for tensor in tensors.iter().skip(1) {
+        if tensor.shape.len() != rank {
+            return Err(Error::ShapeMismatch {
+                op: "concat",
+                expected: tensors[0].shape.to_vec(),
+                got: tensor.shape.to_vec(),
+                msg: format!(
+                    "concat requires every input to have the same rank; expected rank {rank}, got shape {:?}",
+                    tensor.shape
+                ),
+            });
+        }
+        for (axis, (&expected, &actual)) in tensors[0]
+            .shape
+            .iter()
+            .zip(tensor.shape.iter())
+            .enumerate()
+        {
+            if axis != dim && expected != actual {
+                return Err(Error::ShapeMismatch {
+                    op: "concat",
+                    expected: tensors[0].shape.to_vec(),
+                    got: tensor.shape.to_vec(),
+                    msg: format!(
+                        "concat requires exact equality on every non-concat axis; axis {axis} has size {expected} vs {actual}"
+                    ),
+                });
+            }
+        }
+    }
+
+    let mut out_shape = tensors[0].shape.to_vec();
+    out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
+        total.checked_add(tensor.shape[dim]).ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Concat,
+            expression: "sum of concatenated axis dimensions",
+        })
+    })?;
+    let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = vec![0.0f64; total];
+    let mut offsets = Vec::with_capacity(tensors.len());
+    let mut running = 0usize;
+    for tensor in tensors {
+        offsets.push(running);
+        running = running.checked_add(tensor.shape[dim]).ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Concat,
+            expression: "cumulative concatenation offset",
+        })?;
+        let value_count = crate::cpu::stride::checked_numel(&tensor.shape)?;
+        let mut index = vec![0usize; rank];
+        for _ in 0..value_count {
+            let mut flat_dest = 0usize;
+            for (axis, &coordinate) in index.iter().enumerate() {
+                let destination = if axis == dim { coordinate + offsets.last().copied().unwrap_or(0) } else { coordinate };
+                flat_dest += destination * out_strides[axis];
+            }
+            out[flat_dest] = tensor.get(&index);
+            crate::cpu::storage::increment_index(&mut index, &tensor.shape);
+        }
+    }
+    let output = CpuStorage::from_contiguous(tensors[0].buffer.from_f64_values(out)?, out_shape);
+    let output_id = output.id;
+    let input_ids = tensors.iter().map(|tensor| tensor.id).collect();
+    let input_dim_sizes = tensors.iter().map(|tensor| tensor.shape[dim]).collect::<Vec<_>>();
+    tape::push(TapeEntry {
+        output_id,
+        input_ids,
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            offsets
+                .iter()
+                .zip(input_dim_sizes.iter())
+                .map(|(&offset, &len)| grad_out.narrow(dim, offset, len))
+                .collect()
+        }),
+    });
+    Ok(output)
+}
+
+pub(crate) fn stack_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuStorage> {
+    if tensors.is_empty() {
+        return Err(Error::ShapeMismatch {
+            op: "stack",
+            expected: vec![],
+            got: vec![],
+            msg: "stack requires at least one input tensor".into(),
+        });
+    }
+    let rank = tensors[0].shape.len();
+    if dim > rank {
+        return Err(Error::ShapeMismatch {
+            op: "stack",
+            expected: tensors[0].shape.to_vec(),
+            got: vec![dim],
+            msg: format!(
+                "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
+                tensors[0].shape
+            ),
+        });
+    }
+    for tensor in tensors.iter().skip(1) {
+        if tensor.shape != tensors[0].shape {
+            return Err(Error::ShapeMismatch {
+                op: "stack",
+                expected: tensors[0].shape.to_vec(),
+                got: tensor.shape.to_vec(),
+                msg: format!(
+                    "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
+                    tensors[0].shape, tensor.shape
+                ),
+            });
+        }
+    }
+    let mut unsqueezed = Vec::with_capacity(tensors.len());
+    for tensor in tensors {
+        let mut target_shape = tensor.shape.to_vec();
+        target_shape.insert(dim, 1);
+        unsqueezed.push(reshape_storage(tensor, &target_shape)?);
+    }
+    let refs = unsqueezed.iter().collect::<Vec<_>>();
+    concat_storage(&refs, dim)
+}
+
 pub(crate) fn unfold_storage(
     t: &CpuStorage,
     dim: usize,
