@@ -699,48 +699,6 @@ impl<D: Device> Backend for DispatchBackend<D> {
     type RawVar = DispatchVar;
     type Grads = DispatchGrads;
     type InnerBackend = Self;
-    fn shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::shape::<K>(value),
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::shape::<K>(value),
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::shape::<K>(value),
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::shape::<K>(value)
-            }
-            DispatchStorage::Unavailable => ShapeBuf::scalar(),
-        }
-    }
-
-    fn storage_dtype<K: DType>(storage: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::storage_dtype::<K>(value)
-            }
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::storage_dtype::<K>(value)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::storage_dtype::<K>(value)
-            }
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::storage_dtype::<K>(value)
-            }
-            DispatchStorage::Unavailable => None,
-        }
-    }
-
-    fn storage_device<K: DType>(storage: &Self::Storage<K>) -> Option<DeviceId> {
-        Some(storage_device(storage))
-    }
-
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 

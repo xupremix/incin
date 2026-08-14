@@ -3,8 +3,9 @@ use crate::err::BackendError;
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{TensorMeta, Validated};
-use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
+use crate::tensor::device::{Device, DeviceId};
+use crate::tensor::dtype::{DType, DTypeDescriptor};
+use crate::shapes::ShapeBuf;
 
 /// Physical storage ownership, independent of operation execution.
 pub trait StorageBackend<P: Placement = Local>: Sized {
@@ -15,6 +16,21 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
     type Device: Device;
 
     fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
+
+    /// Returns the authoritative logical shape of a storage handle.
+    fn shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
+        Self::metadata(storage).shape().clone()
+    }
+
+    /// Returns the physical storage dtype when the backend can inspect it.
+    fn storage_dtype<K: DType>(storage: &Self::Storage<K>) -> Option<DTypeDescriptor> {
+        Some(Self::metadata(storage).dtype())
+    }
+
+    /// Returns the physical storage device when the backend can inspect it.
+    fn storage_device<K: DType>(storage: &Self::Storage<K>) -> Option<DeviceId> {
+        Some(Self::metadata(storage).device)
+    }
 
     /// Returns `storage` with a fresh autograd identity after it crosses a
     /// gradient-tracking boundary.

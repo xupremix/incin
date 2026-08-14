@@ -209,22 +209,6 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
     /// `InnerBackend`.
     type InnerBackend = Self;
 
-    /// `shape`.
-    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
-        let t: &WgpuStorage = t;
-        ShapeBuf::from_slice(t.shape.as_ref())
-    }
-
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        let t: &WgpuStorage = t;
-        Some(t.dtype())
-    }
-
-    fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
-        let t: &WgpuStorage = t;
-        Some(t.device)
-    }
-
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 

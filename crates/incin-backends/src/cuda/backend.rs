@@ -2934,18 +2934,6 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
 
     type InnerBackend = Self;
 
-    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
-        let t: &CudaStorage = t;
-        ShapeBuf::from_slice(t.shape.as_ref())
-    }
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        let t: &CudaStorage = t;
-        Some(t.buffer.dtype)
-    }
-    fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
-        let t: &CudaStorage = t;
-        Some(DeviceId::cuda(t.buffer.device_id))
-    }
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {

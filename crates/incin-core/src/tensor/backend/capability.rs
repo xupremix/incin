@@ -57,13 +57,13 @@ pub trait AutogradBackend: StorageBackend {
 /// Blanket host capability view for the compatibility `Backend` contract.
 impl<B: Backend + TensorOps<B>> HostInterop for B {
     fn host_shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
-        <B as Backend>::shape(storage)
+        <B as StorageBackend>::shape(storage)
     }
     fn host_storage_dtype<K: DType>(storage: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        <B as Backend>::storage_dtype(storage)
+        <B as StorageBackend>::storage_dtype(storage)
     }
     fn host_storage_device<K: DType>(storage: &Self::Storage<K>) -> Option<DeviceId> {
-        <B as Backend>::storage_device(storage)
+        <B as StorageBackend>::storage_device(storage)
     }
     fn host_format_display<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
         <B as Backend>::format_tensor_display(storage)

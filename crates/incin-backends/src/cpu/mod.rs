@@ -180,21 +180,6 @@ impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
     type Grads = tape::CpuGrads;
     /// `InnerBackend`.
     type InnerBackend = Self;
-    /// `shape`.
-    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
-        let t: &storage::CpuStorage = t;
-        ShapeBuf::from_slice(t.shape.as_ref())
-    }
-
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        let t: &storage::CpuStorage = t;
-        Some(t.buffer.dtype_id().descriptor())
-    }
-
-    fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
-        Some(DeviceId::cpu())
-    }
-
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 

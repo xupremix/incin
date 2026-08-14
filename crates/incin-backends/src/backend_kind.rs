@@ -1,6 +1,6 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
-use incin_core::prelude::{Backend, DType, Device};
+use incin_core::prelude::{Backend, DType, Device, StorageBackend};
 #[cfg(test)]
 use incin_core::prelude::{Cpu, Dyn, ShapeBuf};
 

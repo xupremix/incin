@@ -159,18 +159,6 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
     type Grads = MetalGrads;
     type InnerBackend = Self;
 
-    fn shape<K: DType>(t: &Self::Storage<K>) -> ShapeBuf {
-        ShapeBuf::from_slice(t.metadata().shape().dims())
-    }
-
-    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        Some(t.metadata().dtype())
-    }
-
-    fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
-        Some(t.device())
-    }
-
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 

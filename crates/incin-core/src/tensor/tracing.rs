@@ -793,25 +793,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
     /// Delegates to `B`'s own inner backend (tracing is not itself a dispatch layer).
     type InnerBackend = B::InnerBackend;
 
-    /// Delegates to the wrapped backend's canonical `ShapeBuf`.
-    fn shape<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> crate::shapes::ShapeBuf {
-        B::shape(&t.inner)
-    }
-
-    fn storage_dtype<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Option<DTypeDescriptor> {
-        B::storage_dtype(&t.inner)
-    }
-
-    fn storage_device<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Option<DeviceId> {
-        B::storage_device(&t.inner)
-    }
-
     fn format_tensor_display<K: super::dtype::DType>(
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> alloc::string::String
@@ -820,8 +801,8 @@ impl<B: Backend> Backend for TracingBackend<B> {
     {
         use crate::tensor::backend::TensorOps;
         use crate::tensor::display::{Values, render};
-        let shape = <Self as Backend>::shape(t);
-        match <Self as Backend>::storage_dtype(t) {
+        let shape = <Self as crate::tensor::backend::StorageBackend>::shape(t);
+        match <Self as crate::tensor::backend::StorageBackend>::storage_dtype(t) {
             None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
             Some(dtype) if dtype.is_quantized() => alloc::format!(
                 "<{} tensor: shape={shape:?}, not printable without dequantizing>",

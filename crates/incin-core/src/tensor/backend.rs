@@ -143,22 +143,6 @@ pub trait Backend:
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
 
-    /// Returns the authoritative logical shape of a storage handle.
-    ///
-    /// Runtime dimensions cross the backend boundary as `ShapeBuf`, keeping
-    /// the framework's inline/heap representation and zero/overflow semantics
-    /// canonical. Backends may use any native representation internally.
-    fn shape<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> ShapeBuf;
-    /// Returns the physical storage dtype when the backend can inspect it.
-    fn storage_dtype<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Option<DTypeDescriptor> {
-        None
-    }
-    /// Returns the physical storage device when the backend can inspect it.
-    fn storage_device<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Option<DeviceId> {
-        None
-    }
     /// Renders a tensor's values for `Display` (concise, human-facing), the
     /// PyTorch-style bracketed grid `Tensor`'s own `Display` wraps in
     /// `tensor(...)` (`tensor/base.rs`).
@@ -1045,10 +1029,6 @@ pub mod dummy {
         /// No dispatch wrapper --- this stand-in is always its own inner backend.
         type InnerBackend = Self;
 
-        /// Returns the shape, which is exactly what `Storage<K>` already is.
-        fn shape<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> ShapeBuf {
-            ShapeBuf::from_slice(t)
-        }
         /// Always `"dummy"` --- there are no real values to render.
         fn format_tensor_display<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,

@@ -11,13 +11,6 @@ impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBack
     type Grads = candle_core::backprop::GradStore;
     type InnerBackend = Self;
 
-    /// Returns the tensor's dimensions in the canonical `ShapeBuf`.
-    fn shape<K: incin_core::prelude::DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> incin_core::prelude::ShapeBuf {
-        incin_core::prelude::ShapeBuf::from_slice(t.metadata().shape().dims())
-    }
-
     /// Formats the tensor using candle's own `Display` implementation.
     fn format_tensor_display<K: incin_core::prelude::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
