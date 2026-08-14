@@ -222,7 +222,7 @@ mod tests {
         let x = vector(vec![1.0, 2.0, 3.0]);
         // op returns x*x elementwise — shape [3], not scalar.
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            TestBackend::mul::<f32>(&inputs[0], &inputs[0]).unwrap()
+            crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0]).unwrap()
         };
 
         gradcheck(op, &[x], 1e-4);
