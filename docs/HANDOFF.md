@@ -64,8 +64,10 @@ normal prelude. Backend authors should use the named `backend_authoring` and
 `types` surfaces. The backend contract is split
 by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
 `backend/variable.rs`, `backend/autograd.rs`, and `backend/capability.rs`.
-Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
-`TransferBackend` views are the migration seam. The core `backend.rs` identity
+Named `HostInterop`, `VariableBackend`, `AutogradBackend`, `StorageTransfer`,
+and `TransferBackend` views are the migration seam. `StorageTransfer` is the
+inference-safe storage movement contract; variable-capable backends add
+`TransferTo` for variable handles. The core `backend.rs` identity
 contract is intentionally small; legacy operation-family declarations live in
 `backend/legacy.rs` and are exposed only through the doc-hidden
 `incin_core::__backend_compat` adapter namespace. The shape-only test backend

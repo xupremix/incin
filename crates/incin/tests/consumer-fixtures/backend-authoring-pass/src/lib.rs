@@ -224,7 +224,7 @@ impl StorageTransfer<Cpu> for InferenceBackend {
         _device: &<Cpu as incin::prelude::Device>::Field,
     ) -> incin::prelude::Result<<Self::Output as StorageBackend>::Storage<K>>
     where
-        Self::Output: incin::prelude::SupportsDType<K>,
+        Self::Output: incin::backend_authoring::SupportsDType<K>,
     {
         Ok(storage.clone())
     }

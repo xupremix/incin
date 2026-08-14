@@ -503,7 +503,7 @@ pub mod prelude {
         FloatToIntPolicy, Grad, Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup,
         NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
-        ShapeValue, ComputeStats, SupportsDType,
+        ShapeValue, ComputeStats,
         Slice, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
