@@ -9,10 +9,47 @@ use incin_core::__backend_compat::legacy::QuantizedOps;
 extern crate alloc;
 use alloc::vec::Vec;
 
+pub(crate) fn quantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
+    let f32_data = match &*t.buffer {
+        CpuBuffer::F32(v) => v,
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantize",
+                backend: "Cpu (expected F32 buffer)",
+            });
+        }
+    };
+    let n = f32_data.len();
+    if n % 32 != 0 {
+        return Err(Error::Msg(alloc::format!(
+            "quantize Q8_0 requires buffer length multiple of 32, got {}",
+            n
+        )));
+    }
+    let mut blocks = Vec::with_capacity(n / 32);
+    for chunk in f32_data.chunks_exact(32) {
+        let max_abs = chunk.iter().map(|value| value.abs()).fold(0.0f32, f32::max);
+        let d = max_abs / 127.0;
+        let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
+        let mut qs = [0i8; 32];
+        for (index, value) in chunk.iter().enumerate() {
+            qs[index] = (*value * inv_d).round() as i8;
+        }
+        blocks.push(BlockQ8_0 {
+            d: half::f16::from_f32(d),
+            qs,
+        });
+    }
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::Q8_0(blocks),
+        t.shape.to_vec(),
+    ))
+}
+
 impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
     /// `quantize`.
     fn quantize<K: FloatDType, Q: QuantDType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
+        t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<Q>> {
         if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
             || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
@@ -22,53 +59,7 @@ impl<D: Device> QuantizedOps<Self> for CpuBackendImpl<D> {
                 backend: "Cpu (only F32 to Q8_0 supported)",
             });
         }
-
-        let f32_data = match &*_t.buffer {
-            CpuBuffer::F32(v) => v,
-            _ => {
-                return Err(Error::UnsupportedBackendOperation {
-                    op: "quantize",
-                    backend: "Cpu (expected F32 buffer)",
-                });
-            }
-        };
-
-        let n = f32_data.len();
-        if n % 32 != 0 {
-            return Err(Error::Msg(alloc::format!(
-                "quantize Q8_0 requires buffer length multiple of 32, got {}",
-                n
-            )));
-        }
-
-        let blocks_count = n / 32;
-        let mut blocks = Vec::with_capacity(blocks_count);
-        for chunk in f32_data.chunks_exact(32) {
-            let mut max_abs = 0.0f32;
-            for &val in chunk {
-                let abs = val.abs();
-                if abs > max_abs {
-                    max_abs = abs;
-                }
-            }
-            let d = max_abs / 127.0;
-            let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
-
-            let mut qs = [0i8; 32];
-            for i in 0..32 {
-                let q = (chunk[i] * inv_d).round() as i8;
-                qs[i] = q;
-            }
-            blocks.push(BlockQ8_0 {
-                d: half::f16::from_f32(d),
-                qs,
-            });
-        }
-
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Q8_0(blocks),
-            _t.shape.to_vec(),
-        ))
+        quantize_storage(t)
     }
 
     /// `dequantize`.

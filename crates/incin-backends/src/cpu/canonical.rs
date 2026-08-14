@@ -40,6 +40,7 @@ use super::ops::elementwise::{
 };
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
+use super::ops::quant::quantize_storage;
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
@@ -2544,7 +2545,7 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        <Self as QuantizedOps<Self>>::quantize::<f32, Q8_0>(input)
+        quantize_storage(input)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
