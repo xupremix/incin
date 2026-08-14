@@ -44,11 +44,13 @@ parameters, buffers, state, and layers. Higher-level features must not become
 required dependencies of the lower tiers.
 
 The normal public tier is the facade prelude. Backend authors should use the
-named `backend_authoring` and `types` surfaces. Tensor runtime now exposes
-named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
-`TransferBackend` capability views as the migration seam for backend authors;
-the legacy `Backend` method bundle remains for compatibility until each
-implementation is migrated. Experimental graph, compiled,
+named `backend_authoring` and `types` surfaces. The backend contract is split
+by responsibility across `backend/execute.rs`, `backend/transfer.rs`,
+`backend/variable.rs`, `backend/autograd.rs`, and `backend/capability.rs`.
+Named `HostInterop`, `VariableBackend`, `AutogradBackend`, and
+`TransferBackend` views are the migration seam; the legacy `Backend` method
+bundle still remains for compatibility until each implementation is migrated.
+Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
 ## Adding an operation
