@@ -1,6 +1,6 @@
 use crate::exec::catalog::TraceDescriptor;
 use crate::exec::spec::ExecutionDescriptor;
-use crate::graph_recording::{Graph, ValueId};
+use crate::graph_recording::{Graph, TRACING_GRAPH, ValueId};
 use crate::err::{BackendError, Error, Result};
 use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
@@ -11,7 +11,6 @@ use alloc::vec::Vec;
 use crate::tensor::backend::*;
 use crate::tensor::backend::legacy::{CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 // removed RefCell
-use spin::{Lazy, Mutex};
 
 // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): this used
 // to be `pub`, letting any downstream crate `.lock()` the raw `Mutex<Graph>`
@@ -19,8 +18,6 @@ use spin::{Lazy, Mutex};
 // `pub(crate)`. The three functions below are the only operations downstream
 // crates actually need (draining/snapshotting the graph, marking an input/
 // output value) — everything else about `Graph`'s shape stays encapsulated.
-pub(crate) static TRACING_GRAPH: Lazy<Mutex<Graph>> = Lazy::new(|| Mutex::new(Graph::new()));
-
 /// Drain the process-wide tracing graph, returning everything recorded since
 /// the last call (or since startup).
 pub fn extract_graph() -> Graph {
