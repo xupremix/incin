@@ -2125,8 +2125,9 @@ impl<D: Device> LossOps<Self> for DispatchBackend<D> {
         target: &DispatchStorage,
         reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
+        dispatch_module_same_device!(
             pred,
+            crate::cpu::ops::loss::cross_entropy_loss_storage::<Cpu>,
             cross_entropy_loss::<K, KInt>,
             req = [target],
             opt = [],

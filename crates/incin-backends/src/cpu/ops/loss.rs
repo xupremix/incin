@@ -1,8 +1,8 @@
-//! `LossOps` for `CpuBackendImpl<D>`.
+//! Canonical CPU loss helpers for `CpuBackendImpl<D>`.
 //!
 //! `mse_loss` is composed strictly from already-tape-tracked primitives
-//! (`NumericOps::sub`, `NumericOps::mul`, `ReductionOps::mean_all` /
-//! `ReductionOps::sum_all`) — it does NOT implement a hand-derived fused
+//! (elementwise subtraction/multiplication and reduction helpers) — it does
+//! NOT implement a hand-derived fused
 //! backward kernel. Because each primitive already pushes its own
 //! `TapeEntry`, the backward gradient through MSE is automatically correct
 //! by composition without any additional code here (T-01-17 mitigation).
@@ -30,9 +30,6 @@ use incin_core::prelude::{
     Axis, BackendError, ConversionFailure, DType, DTypeId, Device, DimensionConstraint, Error,
     OperationKind, RankExpectation, Result, ShapeBuf, ShapeError, StorageBackend,
 };
-use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, ReductionOps};
-use crate::legacy::LossOps;
-
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 fn reduce_loss(t: CpuStorage, reduction: Reduction) -> Result<CpuStorage> {
@@ -137,94 +134,6 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
     reduce_loss(per_nll, reduction)
 }
 
-impl<D: Device> LossOps<Self> for CpuBackendImpl<D> {
-    /// Numerically-stable cross-entropy loss via the shared `log_softmax`
-    /// kernel (D-02, Plan 04-01).
-    ///
-    /// `pred`   — logit matrix, shape `[Batch, Classes]`
-    /// `target` — exact integer class indices, shape `[Batch]`. Float-backed
-    ///            storage is accepted only when each value is finite,
-    ///            integral, and in range.
-    ///
-    /// Algorithm:
-    /// 1. `log_probs = log_softmax(pred, class_dim=1)` — tape-tracked via the
-    ///    shared kernel (max_keepdim/sub/exp/sum_keepdim/log/sub composition).
-    /// 2. Build a `one_hot` constant buffer (same shape as `pred`) with `1.0`
-    ///    at `[b, target[b]]`, `0.0` elsewhere.  Not tape-tracked (it is a
-    ///    constant w.r.t. the gradient, derived from integer labels).
-    /// 3. `picked  = log_probs * one_hot` — tape-tracked `mul`.
-    /// 4. `per_nll = -sum_dim(picked, 1)` — shape `[Batch]`.
-    /// 5. Dispatch on `reduction`: mean / sum / none.
-    fn cross_entropy_loss<K: DType, KInt: DType>(
-        pred: &<Self as StorageBackend>::Storage<K>,
-        target: &<Self as StorageBackend>::Storage<KInt>,
-        reduction: Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if pred.shape.len() != 2 {
-            return Err(ShapeError::RankMismatch {
-                operation: OperationKind::Reduction,
-                expected: RankExpectation::Exactly(2),
-                actual: pred.shape.len(),
-            }
-            .into());
-        }
-        let batch = pred.shape[0];
-        let classes = pred.shape[1];
-        if target.shape.as_ref() != [batch] {
-            return Err(ShapeError::DimensionMismatch {
-                operation: OperationKind::Reduction,
-                axis: Axis::Index(0),
-                lhs: batch,
-                rhs: target.shape.first().copied().unwrap_or(0),
-                constraint: DimensionConstraint::Equal,
-            }
-            .into());
-        }
-
-        // Step 1: log_softmax over the class dimension (axis 1).
-        let log_probs = crate::cpu::ops::elementwise::log_softmax::<D, K>(pred, 1)?;
-
-        // CPU FALLBACK
-        let one_hot_total =
-            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
-        let mut one_hot_buf = vec![0.0f32; one_hot_total];
-        for b_idx in 0..batch {
-            let class_idx = target.get_i64_checked(&[b_idx], "cross_entropy_target")?;
-            let class_idx = usize::try_from(class_idx).map_err(|_| Error::InvalidConversion {
-                operation: "cross_entropy_target",
-                from: DTypeId::I64.descriptor(),
-                to: DTypeId::U32.descriptor(),
-                reason: ConversionFailure::OutOfRange,
-            })?;
-            if class_idx >= classes {
-                return Err(ShapeError::InvalidParameter {
-                    operation: OperationKind::Reduction,
-                    parameter: "target class index",
-                    value: class_idx,
-                }
-                .into());
-            }
-            one_hot_buf[b_idx * classes + class_idx] = 1.0;
-        }
-        let one_hot =
-            CpuStorage::from_contiguous(CpuBuffer::F32(one_hot_buf), vec![batch, classes]);
-
-        // Step 3: picked = log_probs * one_hot
-        let picked = <Self as NumericOps<Self>>::mul::<K>(&log_probs, &one_hot)?;
-
-        // Step 4: per_nll = -sum_dim(picked, 1)
-        let sum_picked = <Self as ReductionOps<Self>>::sum_dim::<K>(&picked, 1)?;
-        let per_nll = <Self as FloatOps<Self>>::neg::<K>(&sum_picked)?;
-
-        // Step 5: Dispatch on `reduction`: mean / sum / none.
-        match reduction {
-            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&per_nll),
-            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&per_nll),
-            Reduction::None => Ok(per_nll),
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
@@ -257,7 +166,7 @@ mod tests {
         let pred = matrix(vec![1.0, 2.0, 3.0], 1, 3);
         let fractional = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.5]), vec![1]);
         assert!(matches!(
-            B::cross_entropy_loss::<f32, f64>(&pred, &fractional, Reduction::Mean),
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&pred, &fractional, Reduction::Mean),
             Err(Error::InvalidConversion {
                 operation: "cross_entropy_target",
                 ..
@@ -266,7 +175,7 @@ mod tests {
 
         let out_of_range = vector_i64(vec![3]);
         assert!(matches!(
-            B::cross_entropy_loss::<f32, i64>(&pred, &out_of_range, Reduction::Mean),
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&pred, &out_of_range, Reduction::Mean),
             Err(Error::Shape(ShapeError::InvalidParameter { .. }))
         ));
     }
@@ -292,7 +201,7 @@ mod tests {
     #[test]
     /// `mse_loss_mean_produces_correct_scalar`.
     fn mse_loss_mean_produces_correct_scalar() {
-        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
+        let out = mse_loss_storage(&pred(), &target(), Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new()); // scalar
         let v = out.get(&[]);
         assert!((v - 34.0 / 6.0).abs() < 1e-4, "mse mean: got {v}");
@@ -301,7 +210,7 @@ mod tests {
     #[test]
     /// `mse_loss_sum_produces_correct_scalar`.
     fn mse_loss_sum_produces_correct_scalar() {
-        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
+        let out = mse_loss_storage(&pred(), &target(), Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         let v = out.get(&[]);
         assert!((v - 34.0).abs() < 1e-4, "mse sum: got {v}");
@@ -310,7 +219,7 @@ mod tests {
     #[test]
     /// `mse_loss_none_produces_elementwise_squared_diff`.
     fn mse_loss_none_produces_elementwise_squared_diff() {
-        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
+        let out = mse_loss_storage(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let got = f32_vec(&out);
         let expected = [0.0f32, 1.0, 4.0, 4.0, 9.0, 16.0];
@@ -325,7 +234,7 @@ mod tests {
         let p = pred();
         let t = target();
         let pred_id = p.id;
-        let out = B::mse_loss::<f32>(&p, &t, Reduction::Mean).unwrap();
+        let out = mse_loss_storage(&p, &t, Reduction::Mean).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(pred_id).expect("pred should have a gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -350,7 +259,7 @@ mod tests {
     #[test]
     /// `l1_loss_mean_produces_correct_scalar`.
     fn l1_loss_mean_produces_correct_scalar() {
-        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
+        let out = l1_loss_storage(&pred(), &target(), Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         let v = out.get(&[]) as f32;
         assert!((v - 2.0).abs() < 1e-4, "l1 mean: got {v:.6}");
@@ -359,7 +268,7 @@ mod tests {
     #[test]
     /// `l1_loss_sum_produces_correct_scalar`.
     fn l1_loss_sum_produces_correct_scalar() {
-        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
+        let out = l1_loss_storage(&pred(), &target(), Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         let v = out.get(&[]) as f32;
         assert!((v - 12.0).abs() < 1e-4, "l1 sum: got {v:.6}");
@@ -368,7 +277,7 @@ mod tests {
     #[test]
     /// `l1_loss_none_produces_elementwise_absolute_diff`.
     fn l1_loss_none_produces_elementwise_absolute_diff() {
-        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
+        let out = l1_loss_storage(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let got = f32_vec(&out);
         let expected = [0.0f32, 1.0, 2.0, 2.0, 3.0, 4.0];
@@ -383,7 +292,7 @@ mod tests {
         let p = matrix(vec![1.0f32, 2.0, 3.0], 1, 3);
         let t = matrix(vec![0.5f32, 0.5, 0.5], 1, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            B::l1_loss::<f32>(&inputs[0], &t, Reduction::Mean).unwrap()
+            l1_loss_storage(&inputs[0], &t, Reduction::Mean).unwrap()
         };
         let max_rel_err = gradcheck(op, &[p], 1e-4);
         assert!(
@@ -408,7 +317,7 @@ mod tests {
         // x=0, z=1 → max(0,0) - 0*1 + log(1+exp(0)) = 0 + log(2) ≈ 0.6931
         let pred_zero = matrix(vec![0.0f32], 1, 1);
         let tgt_one = matrix(vec![1.0f32], 1, 1);
-        let out = B::bce_with_logits_loss::<f32>(&pred_zero, &tgt_one, Reduction::Mean).unwrap();
+        let out = bce_with_logits_loss_storage(&pred_zero, &tgt_one, Reduction::Mean).unwrap();
         let v = out.get(&[]) as f32;
         let expected = bce_scalar(0.0, 1.0);
         assert!(
@@ -423,9 +332,9 @@ mod tests {
         // Two-element test to verify Sum == 2*element and None preserves shape.
         let p = matrix(vec![0.0f32, 1.0], 1, 2);
         let z = matrix(vec![1.0f32, 0.0], 1, 2);
-        let mean_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
-        let sum_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Sum).unwrap();
-        let none_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::None).unwrap();
+        let mean_out = bce_with_logits_loss_storage(&p, &z, Reduction::Mean).unwrap();
+        let sum_out = bce_with_logits_loss_storage(&p, &z, Reduction::Sum).unwrap();
+        let none_out = bce_with_logits_loss_storage(&p, &z, Reduction::None).unwrap();
 
         assert_eq!(
             none_out.shape,
@@ -448,7 +357,7 @@ mod tests {
         // Stable formula: max(50,0) - 50*0 + log(1+exp(-50)) ≈ 50 + ~0 (finite).
         let p = matrix(vec![50.0f32], 1, 1);
         let z = matrix(vec![0.0f32], 1, 1);
-        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let out = bce_with_logits_loss_storage(&p, &z, Reduction::Mean).unwrap();
         let v = out.get(&[]) as f32;
         assert!(v.is_finite(), "bce on x=50,z=0 should be finite: {v}");
         let expected = bce_scalar(50.0, 0.0);
@@ -465,7 +374,7 @@ mod tests {
         // Stable formula: max(-50,0) - (-50)*1 + log(1+exp(-50)) ≈ 0 + 50 + ~0.
         let p = matrix(vec![-50.0f32], 1, 1);
         let z = matrix(vec![1.0f32], 1, 1);
-        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let out = bce_with_logits_loss_storage(&p, &z, Reduction::Mean).unwrap();
         let v = out.get(&[]) as f32;
         assert!(v.is_finite(), "bce on x=-50,z=1 should be finite: {v}");
         let expected = bce_scalar(-50.0, 1.0);
@@ -481,7 +390,7 @@ mod tests {
         let p = matrix(vec![0.5f32, -0.3, 1.2], 1, 3);
         let z = matrix(vec![1.0f32, 0.0, 1.0], 1, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            B::bce_with_logits_loss::<f32>(&inputs[0], &z, Reduction::Mean).unwrap()
+            bce_with_logits_loss_storage(&inputs[0], &z, Reduction::Mean).unwrap()
         };
         let max_rel_err = gradcheck(op, &[p], 1e-4);
         assert!(
@@ -496,7 +405,7 @@ mod tests {
         // Both forward and backward should be finite on large-magnitude logits.
         let p = matrix(vec![50.0f32, -50.0], 1, 2);
         let z = matrix(vec![0.0f32, 1.0], 1, 2);
-        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let out = bce_with_logits_loss_storage(&p, &z, Reduction::Mean).unwrap();
         assert!(
             out.get(&[]).is_finite(),
             "bce extreme logits: forward should be finite"
@@ -556,7 +465,7 @@ mod tests {
         let expected = expected_ce_mean(&[&pred_row0, &pred_row1], &[0, 2]);
 
         let out =
-            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
                 .unwrap();
         assert_eq!(
             out.shape,
@@ -574,10 +483,10 @@ mod tests {
     /// `cross_entropy_loss_sum_equals_batch_times_mean`.
     fn cross_entropy_loss_sum_equals_batch_times_mean() {
         let mean_out =
-            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
                 .unwrap();
         let sum_out =
-            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Sum)
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Sum)
                 .unwrap();
 
         let mean_val = mean_out.get(&[]) as f32;
@@ -593,7 +502,7 @@ mod tests {
     /// `cross_entropy_loss_none_produces_per_sample_nll_vector`.
     fn cross_entropy_loss_none_produces_per_sample_nll_vector() {
         let out =
-            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::None)
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::None)
                 .unwrap();
         assert_eq!(out.shape, vec![2], "None output should be [Batch]");
         let vals = f32_vec(&out);
@@ -620,7 +529,7 @@ mod tests {
     fn cross_entropy_loss_gradcheck() {
         let tgt = cross_target_0_2();
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            B::cross_entropy_loss::<f32, i64>(&inputs[0], &tgt, Reduction::Mean).unwrap()
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&inputs[0], &tgt, Reduction::Mean).unwrap()
         };
         let max_rel_err = gradcheck(op, &[cross_pred()], 1e-4);
         assert!(
@@ -635,7 +544,7 @@ mod tests {
         let pred_extreme = matrix(vec![1000.0f32, -1000.0, 0.0, -1000.0, 1000.0, 0.0], 2, 3);
         let target = vector_i64(vec![0, 1]);
         let out =
-            B::cross_entropy_loss::<f32, i64>(&pred_extreme, &target, Reduction::Mean).unwrap();
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&pred_extreme, &target, Reduction::Mean).unwrap();
         let loss_val = out.get(&[]) as f32;
         assert!(
             loss_val.is_finite(),
@@ -660,7 +569,7 @@ mod tests {
         let pred_uniform = matrix(vec![5.0f32, 5.0, 5.0, 5.0, 5.0, 5.0], 2, 3);
         let target = vector_i64(vec![0, 1]);
         let out =
-            B::cross_entropy_loss::<f32, i64>(&pred_uniform, &target, Reduction::Mean).unwrap();
+            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&pred_uniform, &target, Reduction::Mean).unwrap();
         let loss_val = out.get(&[]) as f32;
         let expected = 3.0f32.ln();
         assert!(
