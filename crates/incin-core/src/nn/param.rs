@@ -383,6 +383,64 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, 
     }
 }
 
+impl<S, B, K, Train> Param<S, B, K, Train>
+where
+    S: Shape,
+    B: crate::tensor::backend::VariableBackend
+        + SupportsDType<K>
+        + crate::exec::Capabilities
+        + HostInterop,
+    K: DType<Arg = ()>,
+    Train: TrainState,
+{
+    pub(crate) fn snapshot_state_value(
+        &self,
+        path: &crate::nn::StatePath,
+    ) -> Result<crate::nn::StateValue> {
+        let storage = B::var_as_tensor::<K>(&self.inner)?;
+        let bytes = B::to_bytes::<K>(&storage)?;
+        crate::nn::StateValue::new(
+            self._shape.shape_buf().clone(),
+            K::descriptor(&self._dtype),
+            bytes,
+            crate::nn::StateRole::Parameter,
+        )
+        .map_err(|error| Error::InvalidModuleState {
+            operation: "snapshot parameter",
+            reason: ErrorMessage::new(format!("{path}: {error}")),
+        })
+    }
+
+    pub(crate) fn restore_state_value(
+        &mut self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        let value = snapshot.get(path).ok_or_else(|| Error::InvalidModuleState {
+            operation: "restore parameter",
+            reason: ErrorMessage::new(format!("missing state path {path}")),
+        })?;
+        let expected_dtype = K::descriptor(&self._dtype);
+        if value.role() != crate::nn::StateRole::Parameter
+            || value.shape() != self._shape.shape_buf()
+            || value.dtype() != expected_dtype
+        {
+            return Err(Error::InvalidModuleState {
+                operation: "restore parameter",
+                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
+            });
+        }
+        let device = <B::Device as Device>::to_incin(&self._device)?;
+        let storage = B::from_bytes::<K>(
+            value.bytes(),
+            value.shape().dims(),
+            expected_dtype,
+            &device,
+        )?;
+        B::assign_var(&mut self.inner, &storage)
+    }
+}
+
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
@@ -603,6 +661,18 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + c
     }
 }
 
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>, Train: TrainState> crate::nn::VisitStateMut<B>
+    for Param<S, B, K, Train>
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit_param(path, self)
+    }
+}
+
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Parameters<B, K> for Param<S, B, K, Train> {
     fn named_parameters(
         &self,
@@ -667,18 +737,7 @@ impl<
         path: &crate::nn::StatePath,
         snapshot: &mut crate::nn::StateSnapshot,
     ) -> Result<()> {
-        let storage = B::var_as_tensor::<K>(&self.inner)?;
-        let bytes = B::to_bytes::<K>(&storage)?;
-        let dtype = K::descriptor(&self._dtype);
-        snapshot.insert(
-            path.clone(),
-            crate::nn::StateValue::new(
-                self._shape.shape_buf().clone(),
-                dtype,
-                bytes,
-                crate::nn::StateRole::Parameter,
-            )?,
-        )
+        snapshot.insert(path.clone(), self.snapshot_state_value(path)?)
     }
 
     fn prepare_state(
@@ -812,6 +871,45 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
     }
 }
 
+impl<S, B, K> Buffer<S, B, K>
+where
+    S: Shape,
+    B: crate::tensor::backend::VariableBackend
+        + SupportsDType<K>
+        + crate::exec::Capabilities
+        + HostInterop,
+    K: DType<Arg = ()>,
+{
+    pub(crate) fn restore_state_value(
+        &mut self,
+        path: &crate::nn::StatePath,
+        snapshot: &crate::nn::StateSnapshot,
+    ) -> Result<()> {
+        let value = snapshot.get(path).ok_or_else(|| Error::InvalidModuleState {
+            operation: "restore buffer",
+            reason: ErrorMessage::new(format!("missing state path {path}")),
+        })?;
+        let expected_dtype = K::descriptor(&self._dtype);
+        if value.role() != crate::nn::StateRole::Buffer
+            || value.shape() != self._shape.shape_buf()
+            || value.dtype() != expected_dtype
+        {
+            return Err(Error::InvalidModuleState {
+                operation: "restore buffer",
+                reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
+            });
+        }
+        let device = <B::Device as Device>::to_incin(&self._device)?;
+        let storage = B::from_bytes::<K>(
+            value.bytes(),
+            value.shape().dims(),
+            expected_dtype,
+            &device,
+        )?;
+        B::assign_var(&mut self.inner, &storage)
+    }
+}
+
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Buffer<S, B, K>
 where
@@ -931,6 +1029,46 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + c
     }
 }
 
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>> crate::nn::VisitStateMut<B>
+    for Buffer<S, B, K>
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit_buffer(path, self)
+    }
+}
+
+impl<S, B, K> Buffer<S, B, K>
+where
+    S: Shape,
+    B: crate::tensor::backend::VariableBackend
+        + SupportsDType<K>
+        + crate::exec::Capabilities
+        + HostInterop,
+    K: DType<Arg = ()>,
+{
+    pub(crate) fn snapshot_state_value(
+        &self,
+        path: &crate::nn::StatePath,
+    ) -> Result<crate::nn::StateValue> {
+        let storage = B::var_as_tensor::<K>(&self.inner)?;
+        let bytes = B::to_bytes::<K>(&storage)?;
+        crate::nn::StateValue::new(
+            self._shape.shape_buf().clone(),
+            K::descriptor(&self._dtype),
+            bytes,
+            crate::nn::StateRole::Buffer,
+        )
+        .map_err(|error| Error::InvalidModuleState {
+            operation: "snapshot buffer",
+            reason: ErrorMessage::new(format!("{path}: {error}")),
+        })
+    }
+}
+
 impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Buffer<S, B, K> {
     fn named_parameters(
         &self,
@@ -961,17 +1099,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + c
         path: &crate::nn::StatePath,
         snapshot: &mut crate::nn::StateSnapshot,
     ) -> Result<()> {
-        let storage = B::var_as_tensor::<K>(&self.inner)?;
-        let bytes = B::to_bytes::<K>(&storage)?;
-        snapshot.insert(
-            path.clone(),
-            crate::nn::StateValue::new(
-                self._shape.shape_buf().clone(),
-                K::descriptor(&self._dtype),
-                bytes,
-                crate::nn::StateRole::Buffer,
-            )?,
-        )
+        snapshot.insert(path.clone(), self.snapshot_state_value(path)?)
     }
 
     fn prepare_state(

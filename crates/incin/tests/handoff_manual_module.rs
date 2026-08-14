@@ -46,6 +46,17 @@ impl VisitParameters<CpuBackend> for ManualLinear {
     }
 }
 
+impl VisitStateMut<CpuBackend> for ManualLinear {
+    fn visit_state_mut<V: StateMutVisitor<CpuBackend>>(
+        &mut self,
+        path: &StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.layer
+            .visit_state_mut(&path.child("layer"), visitor)
+    }
+}
+
 #[module(no_stats)]
 struct MacroLinear {
     layer: Layer,
@@ -186,11 +197,14 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
 
     let snapshot = incin::state::collect_state::<CpuBackend, _>(&macro_layer)?;
     let mut restored = macro_layer;
-    restored.load_state_dict(&snapshot)?;
+    incin::state::load_state::<CpuBackend, _>(&mut restored, &snapshot)?;
     assert_eq!(
         incin::state::collect_state::<CpuBackend, _>(&restored)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
+
+    let mut restored_manual = manual;
+    incin::state::load_state::<CpuBackend, _>(&mut restored_manual, &manual_snapshot)?;
 
     let mut restored_paths = VisitedPaths(Vec::new());
     restored.visit_state(&StatePath::root(), &mut restored_paths)?;

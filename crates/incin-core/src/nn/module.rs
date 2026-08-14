@@ -478,6 +478,23 @@ where
     }
 }
 
+impl<B, L1, L2> crate::nn::VisitStateMut<B> for Sequential<L1, L2>
+where
+    B: crate::tensor::backend::VariableBackend,
+    L1: crate::nn::VisitStateMut<B> + StateDict<B>,
+    L2: crate::nn::VisitStateMut<B> + StateDict<B>,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_state_mut(&path.index(0), visitor)?;
+        self.1
+            .visit_state_mut(&path.index(L1::flat_width()), visitor)
+    }
+}
+
 impl<B, L1, L2> crate::nn::VisitParameters<B> for Sequential<L1, L2>
 where
     B: crate::tensor::backend::VariableBackend,
@@ -525,6 +542,20 @@ where
     }
 }
 impl<T, B: crate::tensor::backend::VariableBackend> StateDict<B> for core::marker::PhantomData<T> where T: crate::prelude::DType {}
+
+impl<T, B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B>
+    for core::marker::PhantomData<T>
+where
+    T: crate::prelude::DType,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        _path: &crate::nn::StatePath,
+        _visitor: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
 
 impl<T: Parameters<B, K>, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Option<T> {
     /// Collects named trainable parameters into `map` under the given `prefix`.
@@ -585,6 +616,23 @@ where
     ) -> Result<()> {
         if let Some(value) = self {
             value.visit_state(path, visitor)?;
+        }
+        Ok(())
+    }
+}
+
+impl<L, B> crate::nn::VisitStateMut<B> for Option<L>
+where
+    L: crate::nn::VisitStateMut<B>,
+    B: crate::tensor::backend::VariableBackend,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.visit_state_mut(path, visitor)?;
         }
         Ok(())
     }

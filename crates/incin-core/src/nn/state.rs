@@ -169,6 +169,43 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
     ) -> Result<()>;
 }
 
+/// Receives mutable typed state leaves while restoring a snapshot.
+pub trait StateMutVisitor<B: crate::tensor::backend::VariableBackend> {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState;
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop;
+}
+
+/// Structural mutable traversal used by snapshot restoration.
+pub trait VisitStateMut<B: crate::tensor::backend::VariableBackend> {
+    fn visit_state_mut<V: StateMutVisitor<B>>(
+        &mut self,
+        path: &StatePath,
+        visitor: &mut V,
+    ) -> Result<()>;
+}
+
 /// Collects typed leaves into the durable, backend-neutral snapshot format.
 #[derive(Debug, Default)]
 pub struct StateSnapshotVisitor {
@@ -201,7 +238,7 @@ impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateSnapsh
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        crate::nn::module::StateDict::collect_state(param, path, &mut self.snapshot)
+        self.snapshot.insert(path.clone(), param.snapshot_state_value(path)?)
     }
 
     fn visit_buffer<S, K>(
@@ -216,7 +253,7 @@ impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateSnapsh
             + crate::exec::Capabilities
             + crate::tensor::backend::HostInterop,
     {
-        crate::nn::module::StateDict::collect_state(buffer, path, &mut self.snapshot)
+        self.snapshot.insert(path.clone(), buffer.snapshot_state_value(path)?)
     }
 }
 
@@ -229,6 +266,75 @@ where
     let mut visitor = StateSnapshotVisitor::new();
     module.visit_state(&StatePath::root(), &mut visitor)?;
     Ok(visitor.into_snapshot())
+}
+
+struct StateLoader<'a> {
+    snapshot: &'a StateSnapshot,
+}
+
+impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateLoader<'a> {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        param.restore_state_value(path, self.snapshot)
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        buffer.restore_state_value(path, self.snapshot)
+    }
+}
+
+/// Restores a complete snapshot through typed mutable leaf visits.
+pub fn load_state<B, M>(module: &mut M, snapshot: &StateSnapshot) -> Result<()>
+where
+    B: crate::tensor::backend::VariableBackend,
+    M: VisitState<B> + VisitStateMut<B>,
+{
+    let current = collect_state::<B, _>(&*module)?;
+    let expected: alloc::collections::BTreeSet<_> =
+        current.iter().map(|(path, _)| path).collect();
+    let provided: alloc::collections::BTreeSet<_> =
+        snapshot.iter().map(|(path, _)| path).collect();
+    if expected != provided {
+        let missing = expected
+            .difference(&provided)
+            .map(ToString::to_string)
+            .collect::<alloc::vec::Vec<_>>();
+        let unexpected = provided
+            .difference(&expected)
+            .map(ToString::to_string)
+            .collect::<alloc::vec::Vec<_>>();
+        return Err(Error::InvalidModuleState {
+            operation: "load state",
+            reason: ErrorMessage::new(format!(
+                "state paths differ: missing {:?}, unexpected {:?}",
+                missing, unexpected
+            )),
+        });
+    }
+    let mut visitor = StateLoader { snapshot };
+    module.visit_state_mut(&StatePath::root(), &mut visitor)
 }
 
 /// One owned, exact-dtype state value.

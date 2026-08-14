@@ -86,7 +86,7 @@ pub use incin_core::prelude::{
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
     QuantDType, RequiresGrad, Result, Shape, StateDict, StatePath, StateRole,
-    StateSnapshot, StateValue, StateVisitor, TrainState, VisitState, TensorElement, VariableBackend, bf16,
+    StateSnapshot, StateValue, StateMutVisitor, StateVisitor, TrainState, VisitState, VisitStateMut, TensorElement, VariableBackend, bf16,
     convert_f64_to_i64, f16,
 };
 
@@ -345,7 +345,7 @@ pub mod doctor;
 
 /// Model checkpoint artifacts and transactional state loading.
 pub mod state {
-    pub use incin_core::prelude::{collect_state, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState};
+    pub use incin_core::prelude::{collect_state, load_state, StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState, VisitStateMut};
 }
 
 // Enabling an accelerator must never silently change application behavior.
@@ -504,7 +504,7 @@ pub mod prelude {
         NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
-        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
+        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 

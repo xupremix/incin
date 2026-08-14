@@ -115,5 +115,5 @@ pub use rms_norm::*;
 pub use rnn::*;
 #[cfg(feature = "std")]
 pub use save::*;
-pub use state::{collect_state, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState};
+pub use state::{collect_state, load_state, StateLoadPlan, StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState, VisitStateMut};
 pub use stats::*;
