@@ -174,8 +174,7 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CpuBackendImpl
 impl incin_core::backend_authoring::StorageOutput for storage::CpuStorage {}
 
 impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
-    /// `RawVar`.
-    type RawVar = var::CpuVar;
+
     /// `Grads`.
     type Grads = tape::CpuGrads;
     /// `InnerBackend`.
@@ -348,16 +347,20 @@ impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
         Ok(storage::CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
+}
+
+
+impl<D: Device> incin_core::backend_authoring::VariableBackend for CpuBackendImpl<D> {
+    type RawVar = var::CpuVar;
+
     /// `var_as_tensor`.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         var::var_as_tensor(var)
     }
-
     /// `var_from_tensor`.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         var::var_from_tensor(t)
     }
-
     /// `assign_var`.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
         var::assign_var(var, tensor)

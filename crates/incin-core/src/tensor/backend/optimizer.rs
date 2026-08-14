@@ -1,6 +1,6 @@
 //! Legacy optimizer adapter kept behind `backend_authoring::legacy`.
 
-use super::{Backend, FloatOps, NumericOps};
+use super::{Backend, FloatOps, NumericOps, VariableBackend};
 use crate::err::Result;
 use crate::tensor::dtype::DType;
 
@@ -8,10 +8,10 @@ use crate::tensor::dtype::DType;
 ///
 /// Stable tensor execution does not depend on this family trait. New backend
 /// work should implement the exact optimizer descriptor instead.
-pub trait OptimizerOps<B: Backend + NumericOps<B> + FloatOps<B>> {
+pub trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
     /// Applies one AdamW step, using the composed fallback when not fused.
     fn adamw_step<K: DType>(
-        var: &mut B::RawVar,
+        var: &mut <B as crate::tensor::backend::VariableBackend>::RawVar,
         grad: &B::Storage<K>,
         m: &mut B::Storage<K>,
         v: &mut B::Storage<K>,
@@ -28,8 +28,8 @@ pub trait OptimizerOps<B: Backend + NumericOps<B> + FloatOps<B>> {
 
 /// Composed AdamW fallback for backend-local adapters.
 #[allow(clippy::too_many_arguments)]
-pub fn adamw_step_composed<B: Backend + NumericOps<B> + FloatOps<B>, K: DType>(
-    var: &mut B::RawVar,
+pub fn adamw_step_composed<B: VariableBackend + NumericOps<B> + FloatOps<B>, K: DType>(
+    var: &mut <B as crate::tensor::backend::VariableBackend>::RawVar,
     grad: &B::Storage<K>,
     m: &mut B::Storage<K>,
     v: &mut B::Storage<K>,

@@ -117,8 +117,8 @@ fn generate_structs(
                     quote! { ::incin::prelude::Param<#shape_ty, B> }
                 };
 
-                let _common_bound = quote! { RawVar = <B as ::incin::prelude::Backend>::RawVar, RawTensor = <B as ::incin::prelude::Backend>::RawTensor };
-                bounds.push(quote! { B: ::incin::prelude::Backend });
+                let _common_bound = quote! { RawVar = <B as ::incin::prelude::VariableBackend>::RawVar };
+                bounds.push(quote! { B: ::incin::prelude::Backend + ::incin::prelude::VariableBackend });
                 fields.push(quote! { pub #field_name_ident: #ty });
             }
             Node::Dir(_) => {

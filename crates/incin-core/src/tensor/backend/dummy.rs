@@ -91,8 +91,6 @@ use super::*;
     }
 
     impl<D: Device + Clone + 'static> Backend for DummyBackend<D> {
-        /// A trainable variable is just its shape, like `Storage`.
-        type RawVar = alloc::vec::Vec<usize>;
         /// No real gradients are tracked, so this carries no data.
         type Grads = ();
         /// No dispatch wrapper --- this stand-in is always its own inner backend.
@@ -137,25 +135,20 @@ use super::*;
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// `RawVar` and `Storage<K>` are the same representation, so this
-        /// is a plain clone.
-        fn var_as_tensor<K: DType>(
-            var: &Self::RawVar,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
+    }
+
+    impl<D: Device + Clone + 'static> VariableBackend for DummyBackend<D> {
+        type RawVar = alloc::vec::Vec<usize>;
+
+        fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
             Ok(var.clone())
         }
-        /// `RawVar` and `Storage<K>` are the same representation, so this
-        /// is a plain clone.
-        fn var_from_tensor<K: DType>(
-            t: &<Self as StorageBackend>::Storage<K>,
-        ) -> Result<Self::RawVar> {
+
+        fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
             Ok(t.clone())
         }
-        /// Overwrites `var`'s shape with `tensor`'s.
-        fn assign_var<K: DType>(
-            var: &mut Self::RawVar,
-            tensor: &<Self as StorageBackend>::Storage<K>,
-        ) -> Result<()> {
+
+        fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
             *var = tensor.clone();
             Ok(())
         }
@@ -231,7 +224,7 @@ use super::*;
             variable: &Self::RawVar,
             _dtype: &K::Field,
             _device: &NewD::Field,
-        ) -> Result<<Self::Output as Backend>::RawVar>
+        ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
         where
             Self::Output: SupportsDType<K>,
         {
@@ -308,7 +301,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -316,7 +309,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -324,7 +317,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Returns `shape` verbatim as the variable handle.
@@ -332,7 +325,7 @@ use super::*;
             shape: &[usize],
             _dtype: DTypeDescriptor,
             _device: &DeviceId,
-        ) -> Result<<Self as Backend>::RawVar> {
+        ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
             Ok(shape.to_vec())
         }
     }
@@ -1421,4 +1414,3 @@ use super::*;
         }
     }
     impl<D: Device + Clone + 'static> OptimizerOps<Self> for DummyBackend<D> {}
-

@@ -74,12 +74,12 @@ use core::marker::PhantomData;
 #[incin_macros::module(internal)]
 /// An embedding table: maps integer token ids to dense vectors via row
 /// lookup in a learnable `[vocab_size, embed_dim]` weight matrix.
-pub struct Embedding<S: EmbeddingShape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct Embedding<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
     /// The learnable weight matrix parameter.
     pub weight: Param<S::WeightShape, B, K, Train>,
 }
 
-impl<S: EmbeddingShape, B: Backend, K: DType, Train: TrainState> Embedding<S, B, K, Train> {
+impl<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Embedding<S, B, K, Train> {
     /// Constructs an Embedding from a raw weight parameter.
     pub fn from_raw_parts(weight: Param<S::WeightShape, B, K, Train>) -> Self {
         Self { weight }
@@ -136,7 +136,7 @@ impl<S: EmbeddingShape, Train: TrainState> EmbeddingBuilder<S, Train> {
 
 impl<
     S: EmbeddingShape,
-    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > Embedding<S, B, K, Trainable>
 where
@@ -176,7 +176,7 @@ impl<
     Train: TrainState,
 > Module<Tensor<InS, B, InK>> for Embedding<S, B, K, Train>
 where
-    B: Backend + crate::exec::Capabilities + Execute<op::EmbeddingExact>,
+    B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::EmbeddingExact>,
     <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.

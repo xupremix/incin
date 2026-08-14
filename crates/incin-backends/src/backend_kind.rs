@@ -1,6 +1,6 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
-use incin_core::prelude::{Backend, DType, Device, StorageBackend};
+use incin_core::prelude::{Backend, DType, Device, StorageBackend, VariableBackend};
 #[cfg(test)]
 use incin_core::prelude::{Cpu, Dyn, ShapeBuf};
 
@@ -57,12 +57,12 @@ macro_rules! impl_transfer {
                 variable: &Self::RawVar,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> incin_core::prelude::Result<<Self::Output as Backend>::RawVar>
+            ) -> incin_core::prelude::Result<<Self::Output as VariableBackend>::RawVar>
             where
                 Self::Output: incin_core::prelude::SupportsDType<K>,
             {
                 use incin_core::prelude::SupportsDType;
-                let source = Self::var_as_tensor::<K>(variable)?;
+                let source = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
                 let expected_descriptor = K::descriptor(dtype);
                 if let Some(got) = Self::storage_dtype::<K>(&source)
                     && got != expected_descriptor
@@ -83,7 +83,7 @@ macro_rules! impl_transfer {
                     dtype_descriptor,
                     &destination,
                 )?;
-                <Self::Output as Backend>::var_from_tensor(&storage)
+                <Self::Output as VariableBackend>::var_from_tensor(&storage)
             }
         }
     };

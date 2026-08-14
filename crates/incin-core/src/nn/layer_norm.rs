@@ -48,7 +48,7 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 #[incin_macros::module(internal)]
 /// Layer normalization: normalizes the last dimension to zero mean and
 /// unit variance, then applies a learnable affine `weight`/`bias`.
-pub struct LayerNorm<S: LayerNormShape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct LayerNorm<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
     /// The learnable weight matrix parameter.
     pub weight: Param<S::ParamShape, B, K, Train>,
     /// The optional learnable bias vector parameter.
@@ -60,7 +60,7 @@ pub struct LayerNorm<S: LayerNormShape, B: Backend, K: DType = f32, Train: Train
     _phantom: PhantomData<(S, B, K, Train)>,
 }
 
-impl<S: LayerNormShape, B: Backend, K: DType, Train: TrainState> LayerNorm<S, B, K, Train> {
+impl<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> LayerNorm<S, B, K, Train> {
     /// Constructs a LayerNorm from raw weight/bias parameters and epsilon.
     pub fn from_raw_parts(
         weight: Param<S::ParamShape, B, K, Train>,
@@ -144,7 +144,7 @@ impl<S: LayerNormShape, Train: TrainState> LayerNormBuilder<S, Train> {
 
 impl<
     S: LayerNormShape,
-    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > LayerNorm<S, B, K, Trainable>
 where
@@ -192,7 +192,7 @@ where
 impl<
     S: LayerNormShape,
     InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>,
-    B: Backend + crate::exec::Capabilities + Execute<op::LayerNorm>,
+    B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
 > Module<Tensor<InS, B, K>> for LayerNorm<S, B, K, Train>

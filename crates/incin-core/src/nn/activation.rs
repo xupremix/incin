@@ -14,12 +14,12 @@ use alloc::{string::{String, ToString}, vec::Vec};
 #[derive(Debug, Clone, Default)]
 pub struct ReLU;
 
-impl<B: Backend> Parameters<B> for ReLU {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ReLU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -32,7 +32,7 @@ impl TrainMode for ReLU {}
 use crate::exec::catalog::{Descriptor, op};
 use crate::tensor::backend::Execute;
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Relu>, G: RequiresGrad>
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Relu>, G: RequiresGrad>
     Module<Tensor<S, B, f32, G>> for ReLU
 where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
@@ -59,12 +59,12 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct GELU;
 
-impl<B: Backend> Parameters<B> for GELU {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for GELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -74,7 +74,7 @@ impl<B: Backend> Parameters<B> for GELU {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for GELU {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Gelu>> Module<Tensor<S, B>> for GELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>> Module<Tensor<S, B>> for GELU
 where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
@@ -97,12 +97,12 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Swish;
 
-impl<B: Backend> Parameters<B> for Swish {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Swish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -112,7 +112,7 @@ impl<B: Backend> Parameters<B> for Swish {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Swish {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Swish>> Module<Tensor<S, B>> for Swish
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Swish>> Module<Tensor<S, B>> for Swish
 where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
@@ -135,12 +135,12 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Mish;
 
-impl<B: Backend> Parameters<B> for Mish {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Mish {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -150,7 +150,7 @@ impl<B: Backend> Parameters<B> for Mish {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Mish {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Mish>> Module<Tensor<S, B>> for Mish
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Mish>> Module<Tensor<S, B>> for Mish
 where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
@@ -175,12 +175,12 @@ where
 #[allow(clippy::upper_case_acronyms)]
 pub struct ELU;
 
-impl<B: Backend> Parameters<B> for ELU {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for ELU {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -190,7 +190,7 @@ impl<B: Backend> Parameters<B> for ELU {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ELU {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Elu>> Module<Tensor<S, B>> for ELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Elu>> Module<Tensor<S, B>> for ELU
 where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
@@ -225,12 +225,12 @@ impl Softmax {
     }
 }
 
-impl<B: Backend> Parameters<B> for Softmax {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Softmax {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -242,7 +242,7 @@ impl TrainMode for Softmax {}
 
 impl<
     S: Shape + DynShape,
-    B: Backend + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
+    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
 > Module<Tensor<S, B>> for Softmax
 where
     <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
@@ -266,12 +266,12 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Sigmoid;
 
-impl<B: Backend> Parameters<B> for Sigmoid {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Sigmoid {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -281,7 +281,7 @@ impl<B: Backend> Parameters<B> for Sigmoid {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Sigmoid {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Sigmoid>> Module<Tensor<S, B>> for Sigmoid
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Sigmoid>> Module<Tensor<S, B>> for Sigmoid
 where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
@@ -303,12 +303,12 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct Tanh;
 
-impl<B: Backend> Parameters<B> for Tanh {
+impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for Tanh {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -318,7 +318,7 @@ impl<B: Backend> Parameters<B> for Tanh {
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Tanh {}
 
-impl<S: Shape + DynShape, B: Backend + Execute<op::Tanh>> Module<Tensor<S, B>> for Tanh
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>> Module<Tensor<S, B>> for Tanh
 where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
@@ -334,12 +334,12 @@ where
     }
 }
 
-impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {}
-impl<B: Backend> crate::nn::module::StateDict<B> for GELU {}
-impl<B: Backend> crate::nn::module::StateDict<B> for Swish {}
-impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {}
-impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {}
-impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for ReLU {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for GELU {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Swish {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Softmax {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Sigmoid {}
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Tanh {}
 
 impl crate::nn::module::NamedLayers for ReLU {
     /// Returns the layer hierarchy rooted at this module for visualization.
@@ -416,7 +416,7 @@ impl crate::nn::module::NamedLayers for Softmax {
 macro_rules! impl_unit_to_device {
     ($($t:ty),+) => {
         $(
-            impl<B: Backend, NewD: Device> crate::tensor::transfer::ToDevice<B, NewD> for $t {
+            impl<B: crate::tensor::backend::VariableBackend, NewD: Device> crate::tensor::transfer::ToDevice<B, NewD> for $t {
                 type Output = $t;
                 fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
                     Ok(self)

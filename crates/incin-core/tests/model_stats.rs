@@ -10,7 +10,7 @@ use incin_core::test_utils::DummyBackend;
 type TestBackend = DummyBackend<Cpu>;
 
 #[module]
-struct Mlp<B: Backend> {
+struct Mlp<B: Backend + VariableBackend> {
     fc1: Linear<s![784, 128], B>,
     fc2: Linear<s![128, 10], B>,
 }

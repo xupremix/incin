@@ -278,7 +278,7 @@ pub fn load_safetensors_snapshot<P: AsRef<Path>>(path: P) -> Result<crate::nn::S
 /// Loads weights into a module from a safetensors file.
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     M: StateDict<B>,
     P: AsRef<Path>,
 {
@@ -289,7 +289,7 @@ where
 /// Saves the module's weights to a safetensors file.
 pub fn save_safetensors<B, M, P>(module: &M, path: P) -> Result<()>
 where
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     M: StateDict<B>,
     P: AsRef<Path>,
 {
@@ -302,7 +302,7 @@ where
 #[cfg(feature = "std")]
 pub fn save_checkpoint<B, M, P>(module: &M, dir_path: P, world_size: usize) -> Result<()>
 where
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     M: StateDict<B>,
     P: AsRef<Path>,
 {
@@ -339,7 +339,7 @@ pub fn load_resharded_checkpoint<B, M, P>(
     target_world_size: usize,
 ) -> Result<()>
 where
-    B: Backend + Execute<op::TensorFromBytes>,
+    B: crate::tensor::backend::VariableBackend + Execute<op::TensorFromBytes>,
     M: StateDict<B>,
     P: AsRef<Path>,
 {

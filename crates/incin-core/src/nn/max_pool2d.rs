@@ -22,14 +22,14 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> MaxPool2d<K, S, P, D> {
     }
 }
 
-impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<B>
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: crate::tensor::backend::VariableBackend> Parameters<B>
     for MaxPool2d<K, S, P, D>
 {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
@@ -45,7 +45,7 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend + Execute<crate::exec::catalog::op::MaxPool2d>,
+    B: crate::tensor::backend::VariableBackend + Execute<crate::exec::catalog::op::MaxPool2d>,
 > Module<Tensor<I, B>> for MaxPool2d<K, S, P, D>
 where
     B: Capabilities,

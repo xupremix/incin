@@ -1,4 +1,4 @@
-use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, ErrorMessage, Result, Shape, Tensor, ToDevice};
+use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, ErrorMessage, Result, Shape, Tensor, ToDevice, VariableBackend};
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 ///
 /// The public state representation is [`StateSnapshot`]. Backend storage is
 /// reached only at typed `Param`/`Buffer` leaves during prepare/commit.
-pub trait StateDict<B: Backend> {
+pub trait StateDict<B: crate::tensor::backend::VariableBackend> {
     /// Collects exact, owned state without retaining a live backend tensor.
     /// Implementations for state-bearing leaves override this; the default is
     /// appropriate for stateless modules and legacy hand-written markers.
@@ -95,16 +95,16 @@ pub trait StateDict<B: Backend> {
 
 /// A trait implemented by all Neural Network modules.
 /// Usually automatically derived via `#[incin::module]`.
-pub trait Parameters<B: Backend> {
+pub trait Parameters<B: VariableBackend> {
     /// Recursively extract all trainable parameters from this module into a named map.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     );
 
     /// Helper to retrieve all parameters as a new map.
-    fn parameters(&self) -> alloc::collections::BTreeMap<String, B::RawVar> {
+    fn parameters(&self) -> alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar> {
         let mut map = alloc::collections::BTreeMap::new();
         self.named_parameters("", &mut map);
         map
@@ -152,7 +152,7 @@ pub trait Parameters<B: Backend> {
         &self,
         outer_prefix: &str,
         base_index: usize,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) where
         Self: Sized,
     {
@@ -249,7 +249,7 @@ pub trait ShapeInfo {
     fn shape_info(&self) -> Option<String>;
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState>
     ShapeInfo for crate::nn::param::Param<S, B, K, Train>
 {
     fn shape_info(&self) -> Option<String> {
@@ -257,7 +257,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainSt
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> ShapeInfo
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> ShapeInfo
     for crate::nn::param::Buffer<S, B, K>
 {
     fn shape_info(&self) -> Option<String> {
@@ -287,12 +287,12 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 /// use incin::prelude::*;
 ///
 /// #[module]
-/// pub struct MyLayer<B: Backend> {
+/// pub struct MyLayer<B: crate::tensor::backend::VariableBackend> {
 ///     weight: Param<s![128, 128], B>,
 ///     bias: Param<s![128], B>,
 /// }
 ///
-/// impl<B: Backend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
+/// impl<B: crate::tensor::backend::VariableBackend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
 ///     type Output = Tensor<s![1, 128], B>;
 ///     type Error = Error;
 ///
@@ -335,7 +335,7 @@ where
     }
 }
 
-impl<B: Backend, NewD: Device, L1, L2> crate::tensor::transfer::ToDevice<B, NewD>
+impl<B: crate::tensor::backend::VariableBackend, NewD: Device, L1, L2> crate::tensor::transfer::ToDevice<B, NewD>
     for Sequential<L1, L2>
 where
     L1: ToDevice<B, NewD>,
@@ -349,7 +349,7 @@ where
     }
 }
 
-impl<B: Backend, L1, L2> Parameters<B> for Sequential<L1, L2>
+impl<B: crate::tensor::backend::VariableBackend, L1, L2> Parameters<B> for Sequential<L1, L2>
 where
     L1: Parameters<B>,
     L2: Parameters<B>,
@@ -359,7 +359,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.named_parameters_flat(prefix, 0, map);
     }
@@ -378,7 +378,7 @@ where
         &self,
         outer_prefix: &str,
         base_index: usize,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.0.named_parameters_flat(outer_prefix, base_index, map);
         self.1
@@ -408,7 +408,7 @@ impl<L1: TrainMode, L2: TrainMode> TrainMode for Sequential<L1, L2> {
     }
 }
 
-impl<B: Backend, L1, L2> StateDict<B> for Sequential<L1, L2>
+impl<B: crate::tensor::backend::VariableBackend, L1, L2> StateDict<B> for Sequential<L1, L2>
 where
     L1: StateDict<B>,
     L2: StateDict<B>,
@@ -453,12 +453,12 @@ where
 macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
-            impl<B: Backend> Parameters<B> for $t {
+            impl<B: crate::tensor::backend::VariableBackend> Parameters<B> for $t {
                 /// Collects named trainable parameters into `map` under the given `prefix`.
-                fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, B::RawVar>) {}
+                fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>) {}
             }
 
-            impl<B: Backend> StateDict<B> for $t {
+            impl<B: crate::tensor::backend::VariableBackend> StateDict<B> for $t {
             }
         )+
     };
@@ -466,7 +466,7 @@ macro_rules! impl_dummy_state {
 
 impl_dummy_state!(usize, f32);
 
-impl<T, B: Backend> Parameters<B> for core::marker::PhantomData<T>
+impl<T, B: crate::tensor::backend::VariableBackend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
@@ -474,18 +474,18 @@ where
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
-impl<T, B: Backend> StateDict<B> for core::marker::PhantomData<T> where T: crate::prelude::DType {}
+impl<T, B: crate::tensor::backend::VariableBackend> StateDict<B> for core::marker::PhantomData<T> where T: crate::prelude::DType {}
 
-impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
+impl<T: Parameters<B>, B: crate::tensor::backend::VariableBackend> Parameters<B> for Option<T> {
     /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         if let Some(v) = self {
             v.named_parameters(prefix, map);
@@ -493,7 +493,7 @@ impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
     }
 }
 
-impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
+impl<L: StateDict<B>, B: crate::tensor::backend::VariableBackend> StateDict<B> for Option<L> {
     fn collect_state(
         &self,
         path: &crate::nn::StatePath,
@@ -723,7 +723,7 @@ impl<T: TrainMode> TrainMode for Option<T> {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState>
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState>
     NamedLayers for crate::nn::param::Param<S, B, K, Train>
 {
     fn layer_structure(&self, _prefix: &str) -> Vec<LayerNode> {
@@ -731,7 +731,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainSt
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> NamedLayers
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> NamedLayers
     for crate::nn::param::Buffer<S, B, K>
 {
     fn layer_structure(&self, _prefix: &str) -> Vec<LayerNode> {
@@ -739,12 +739,12 @@ impl<S: Shape + DynShape, B: Backend, K: DType> NamedLayers
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState> TrainMode
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState> TrainMode
     for crate::nn::param::Param<S, B, K, Train>
 {
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> TrainMode
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> TrainMode
     for crate::nn::param::Buffer<S, B, K>
 {
 }

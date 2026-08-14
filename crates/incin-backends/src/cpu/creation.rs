@@ -454,7 +454,7 @@ impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         let total = crate::cpu::stride::checked_numel(shape)?;
         var_zeros_with_total(total, shape, dtype, device)
     }
@@ -464,7 +464,7 @@ impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         let total = crate::cpu::stride::checked_numel(shape)?;
         var_ones_with_total(total, shape, dtype, device)
     }
@@ -474,7 +474,7 @@ impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         let total = crate::cpu::stride::checked_numel(shape)?;
         var_rand_with_total(total, shape, dtype, device)
     }
@@ -484,7 +484,7 @@ impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         let total = crate::cpu::stride::checked_numel(shape)?;
         var_randn_with_total(total, shape, dtype, device)
     }

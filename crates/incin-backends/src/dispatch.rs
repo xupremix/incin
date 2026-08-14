@@ -696,7 +696,7 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for DispatchBacken
 }
 
 impl<D: Device> Backend for DispatchBackend<D> {
-    type RawVar = DispatchVar;
+
     type Grads = DispatchGrads;
     type InnerBackend = Self;
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
@@ -860,79 +860,6 @@ impl<D: Device> Backend for DispatchBackend<D> {
         }
     }
 
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
-        match var {
-            #[cfg(feature = "cpu")]
-            DispatchVar::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::var_as_tensor::<K>(value)
-                .map(DispatchStorage::Cpu),
-            #[cfg(feature = "wgpu")]
-            DispatchVar::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::var_as_tensor::<K>(value)
-                    .map(DispatchStorage::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchVar::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::var_as_tensor::<K>(value)
-                    .map(DispatchStorage::Cuda)
-            }
-            #[cfg(feature = "metal")]
-            DispatchVar::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::var_as_tensor::<K>(value)
-                    .map(DispatchStorage::Metal)
-            }
-            DispatchVar::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }
-
-    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar> {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::var_from_tensor::<K>(value).map(DispatchVar::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::var_from_tensor::<K>(value)
-                    .map(DispatchVar::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::var_from_tensor::<K>(value)
-                    .map(DispatchVar::Cuda)
-            }
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::var_from_tensor::<K>(value)
-                    .map(DispatchVar::Metal)
-            }
-            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }
-
-    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
-        match (var, storage) {
-            #[cfg(feature = "cpu")]
-            (DispatchVar::Cpu(var), DispatchStorage::Cpu(value)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::assign_var::<K>(var, value)
-            }
-            #[cfg(feature = "wgpu")]
-            (DispatchVar::Wgpu(var), DispatchStorage::Wgpu(value)) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::assign_var::<K>(var, value)
-            }
-            #[cfg(feature = "cuda")]
-            (DispatchVar::Cuda(var), DispatchStorage::Cuda(value)) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::assign_var::<K>(var, value)
-            }
-            #[cfg(feature = "metal")]
-            (DispatchVar::Metal(var), DispatchStorage::Metal(value)) => {
-                crate::metal::MetalBackendImpl::<Metal>::assign_var::<K>(var, value)
-            }
-            _ => Err(Error::UnsupportedBackendOperation {
-                op: "assign_var_cross_device",
-                backend: "DispatchBackend",
-            }),
-        }
-    }
 }
 
 impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
@@ -2050,6 +1977,84 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
         )
     }
 }
+
+
+impl<D: Device> VariableBackend for DispatchBackend<D> {
+type RawVar = DispatchVar;
+
+    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        match var {
+            #[cfg(feature = "cpu")]
+            DispatchVar::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::var_as_tensor::<K>(value)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchVar::Wgpu(value) => {
+                crate::wgpu::WgpuBackendImpl::<Wgpu>::var_as_tensor::<K>(value)
+                    .map(DispatchStorage::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchVar::Cuda(value) => {
+                crate::cuda::CudaBackendImpl::<Cuda>::var_as_tensor::<K>(value)
+                    .map(DispatchStorage::Cuda)
+            }
+            #[cfg(feature = "metal")]
+            DispatchVar::Metal(value) => {
+                crate::metal::MetalBackendImpl::<Metal>::var_as_tensor::<K>(value)
+                    .map(DispatchStorage::Metal)
+            }
+            DispatchVar::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar> {
+        match storage {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                crate::cpu::CpuBackendImpl::<Cpu>::var_from_tensor::<K>(value).map(DispatchVar::Cpu)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                crate::wgpu::WgpuBackendImpl::<Wgpu>::var_from_tensor::<K>(value)
+                    .map(DispatchVar::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                crate::cuda::CudaBackendImpl::<Cuda>::var_from_tensor::<K>(value)
+                    .map(DispatchVar::Cuda)
+            }
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => {
+                crate::metal::MetalBackendImpl::<Metal>::var_from_tensor::<K>(value)
+                    .map(DispatchVar::Metal)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
+        match (var, storage) {
+            #[cfg(feature = "cpu")]
+            (DispatchVar::Cpu(var), DispatchStorage::Cpu(value)) => {
+                crate::cpu::CpuBackendImpl::<Cpu>::assign_var::<K>(var, value)
+            }
+            #[cfg(feature = "wgpu")]
+            (DispatchVar::Wgpu(var), DispatchStorage::Wgpu(value)) => {
+                crate::wgpu::WgpuBackendImpl::<Wgpu>::assign_var::<K>(var, value)
+            }
+            #[cfg(feature = "cuda")]
+            (DispatchVar::Cuda(var), DispatchStorage::Cuda(value)) => {
+                crate::cuda::CudaBackendImpl::<Cuda>::assign_var::<K>(var, value)
+            }
+            #[cfg(feature = "metal")]
+            (DispatchVar::Metal(var), DispatchStorage::Metal(value)) => {
+                crate::metal::MetalBackendImpl::<Metal>::assign_var::<K>(var, value)
+            }
+            _ => Err(Error::UnsupportedBackendOperation {
+                op: "assign_var_cross_device",
+                backend: "DispatchBackend",
+            }),
+        }
+    }
+}
+
 
 impl<D: Device> LossOps<Self> for DispatchBackend<D> {
     // `mse_loss`, `l1_loss`, and `bce_with_logits_loss` are composed from the

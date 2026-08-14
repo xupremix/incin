@@ -202,8 +202,7 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for WgpuBackendImp
 impl incin_core::backend_authoring::StorageOutput for WgpuStorage {}
 
 impl<D: Device> Backend for WgpuBackendImpl<D> {
-    /// `RawVar`.
-    type RawVar = WgpuVar;
+
     /// `Grads`.
     type Grads = WgpuGrads;
     /// `InnerBackend`.
@@ -211,23 +210,6 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-    /// `var_as_tensor`.
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
-        Ok(var.value())
-    }
-
-    /// `var_from_tensor`.
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
-        let t: &WgpuStorage = t;
-        Ok(WgpuVar::new(t.clone()))
-    }
-
-    /// `assign_var`.
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
-        var.assign(tensor.clone());
-        Ok(())
-    }
 
     /// `backward`.
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
@@ -430,7 +412,7 @@ impl<D: Device> CreationOps<Self> for WgpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::zeros::<K>(shape, dtype, device)?;
         Ok(WgpuVar::new(s))
     }
@@ -440,7 +422,7 @@ impl<D: Device> CreationOps<Self> for WgpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::ones::<K>(shape, dtype, device)?;
         Ok(WgpuVar::new(s))
     }
@@ -450,7 +432,7 @@ impl<D: Device> CreationOps<Self> for WgpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::rand::<K>(shape, dtype, device)?;
         Ok(WgpuVar::new(s))
     }
@@ -460,7 +442,7 @@ impl<D: Device> CreationOps<Self> for WgpuBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::randn::<K>(shape, dtype, device)?;
         Ok(WgpuVar::new(s))
     }
@@ -4457,7 +4439,7 @@ impl<D: Device> QuantizedOps<Self> for WgpuBackendImpl<D> {
 impl<D: Device> OptimizerOps<Self> for WgpuBackendImpl<D> {
     /// `adamw_step`.
     fn adamw_step<K: DType>(
-        var: &mut <Self as Backend>::RawVar,
+        var: &mut <Self as VariableBackend>::RawVar,
         grad: &<Self as StorageBackend>::Storage<K>,
         m: &mut <Self as StorageBackend>::Storage<K>,
         v: &mut <Self as StorageBackend>::Storage<K>,
@@ -4493,6 +4475,26 @@ impl<D: Device> OptimizerOps<Self> for WgpuBackendImpl<D> {
         ];
 
         dispatch::dispatch_adamw(&parameter.buffer, &grad.buffer, &m.buffer, &v.buffer, &meta);
+        Ok(())
+    }
+}
+
+
+impl<D: Device> VariableBackend for WgpuBackendImpl<D> {
+    /// `RawVar`.
+    type RawVar = WgpuVar;
+
+    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        Ok(var.value())
+    }
+
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        let t: &WgpuStorage = t;
+        Ok(WgpuVar::new(t.clone()))
+    }
+
+    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        var.assign(tensor.clone());
         Ok(())
     }
 }

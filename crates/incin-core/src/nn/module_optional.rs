@@ -9,9 +9,9 @@ macro_rules! impl_module_for_optional_field {
             $( $field:ident: $field_ty_macro:tt ),* $(,)?
         }
     ) => {
-        impl<S: $shape_trait, B: crate::prelude::Backend, Bias: crate::nn::optional::OptionalField> crate::nn::module::Parameters<B> for $name<S, B, Bias> {
+        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::module::Parameters<B> for $name<S, B, Bias> {
             /// Collects named trainable parameters into `map` under the given `prefix`.
-            fn named_parameters(&self, prefix: &str, map: &mut alloc::collections::BTreeMap<String, <B as crate::prelude::Backend>::RawVar>) {
+            fn named_parameters(&self, prefix: &str, map: &mut alloc::collections::BTreeMap<String, <B as crate::prelude::VariableBackend>::RawVar>) {
                 let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
                 $(
                     crate::prelude::Parameters::named_parameters(
@@ -20,7 +20,7 @@ macro_rules! impl_module_for_optional_field {
             }
         }
 
-        impl<S: $shape_trait, B: crate::prelude::Backend, Bias: crate::nn::optional::OptionalField> crate::nn::StateDict<B> for $name<S, B, Bias> {
+        impl<S: $shape_trait, B: crate::prelude::VariableBackend, Bias: crate::nn::optional::OptionalField> crate::nn::StateDict<B> for $name<S, B, Bias> {
             fn collect_state(&self, path: &crate::nn::StatePath, snapshot: &mut crate::nn::StateSnapshot) -> crate::prelude::Result<()> {
                 $( crate::prelude::StateDict::collect_state(&self.$field, &path.child(stringify!($field)), snapshot)?; )*
                 Ok(())

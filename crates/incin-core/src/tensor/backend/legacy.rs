@@ -296,7 +296,7 @@ pub trait TensorOps<B: Backend> {
 /// Allocates fresh storage and trainable variables --- the only place new
 /// tensor data can originate from (every other op transforms existing
 /// storage).
-pub trait CreationOps<B: Backend> {
+pub trait CreationOps<B: VariableBackend> {
     /// Allocates a `shape`-sized tensor of `dtype`, filled with zero.
     fn zeros<K: DType>(
         shape: &[usize],
@@ -329,25 +329,25 @@ pub trait CreationOps<B: Backend> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<B::RawVar>;
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
     /// Same as `ones`, but returns a trainable `RawVar` directly.
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<B::RawVar>;
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
     /// Same as `rand`, but returns a trainable `RawVar` directly.
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<B::RawVar>;
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
     /// Same as `randn`, but returns a trainable `RawVar` directly.
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<B::RawVar>;
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>;
     /// Allocates a `shape`-sized tensor filled with `val`.
     fn full<K: DType>(
         val: f64,

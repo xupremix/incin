@@ -42,7 +42,7 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 /// improving training speed and stability. Widely used in modern LLMs (e.g. LLaMA).
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal)]
-pub struct RMSNorm<S: RMSNormShape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct RMSNorm<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
     pub weight: Param<S::ParamShape, B, K, Train>,
     #[module(ignore)]
     pub eps: f32,
@@ -50,7 +50,7 @@ pub struct RMSNorm<S: RMSNormShape, B: Backend, K: DType = f32, Train: TrainStat
     _phantom: PhantomData<(S, B, K, Train)>,
 }
 
-impl<S: RMSNormShape, B: Backend, K: DType, Train: TrainState> RMSNorm<S, B, K, Train> {
+impl<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> RMSNorm<S, B, K, Train> {
     /// Constructs an RMSNorm from a raw weight parameter and epsilon.
     pub fn from_raw_parts(weight: Param<S::ParamShape, B, K, Train>, eps: f32) -> Self {
         Self {
@@ -118,7 +118,7 @@ impl<S: RMSNormShape, Train: TrainState> RMSNormBuilder<S, Train> {
 
 impl<
     S: RMSNormShape,
-    B: Backend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
     K: DType,
 > RMSNorm<S, B, K, Trainable>
 {
@@ -154,7 +154,7 @@ impl<
 impl<
     S: RMSNormShape,
     InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels> + ReduceKeepAt<FromEnd<Here>>,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + crate::exec::Capabilities
         + Execute<op::Mul>
         + Execute<op::Div>

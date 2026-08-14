@@ -243,7 +243,7 @@ pub fn linear<S: LinearShape>(shape: ShapeValue<S>) -> LinearBuilder<S> {
 #[incin_macros::module(internal, no_stats)]
 pub struct Linear<
     S: LinearShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
     K: DType = f32,
     Train: TrainState = Trainable,
@@ -258,7 +258,7 @@ pub struct Linear<
 
 impl<
     S: LinearShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     Bias: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
@@ -271,7 +271,7 @@ impl<
 
 impl<
     S: LinearShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     Bias: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
@@ -310,7 +310,7 @@ impl<
 
 impl<
     S: LinearShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     Bias: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
@@ -418,7 +418,7 @@ where
 }
 
 impl<
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -453,7 +453,7 @@ where
 }
 
 impl<
-    B: Backend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
@@ -473,7 +473,7 @@ where
 }
 
 impl<
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -518,7 +518,7 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities
@@ -572,7 +572,7 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
@@ -612,7 +612,7 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::MatMulExact>
         + Execute<op::TransposeExact>
         + crate::exec::Capabilities

@@ -7,7 +7,7 @@ use crate::external::*;
 use candle_core as candle;
 
 impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBackend<D> {
-    type RawVar = candle_core::Var;
+
     type Grads = candle_core::backprop::GradStore;
     type InnerBackend = Self;
 
@@ -27,30 +27,6 @@ impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBack
             t.tensor(),
             t.tensor().stride()
         )
-    }
-
-    /// Clones the variable's underlying tensor out as plain storage.
-    fn var_as_tensor<K: incin_core::prelude::DType>(
-        var: &<Self as incin_core::prelude::Backend>::RawVar,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = var.as_tensor().clone();
-        CandleStorage::try_new(t)
-    }
-    /// Wraps a tensor in a new candle `Var`, cloning its data.
-    fn var_from_tensor<K: incin_core::prelude::DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
-        Ok(candle::Var::from_tensor(t.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-    }
-
-    /// Overwrites the variable's contents in place with `tensor`.
-    fn assign_var<K: incin_core::prelude::DType>(
-        var: &mut <Self as incin_core::prelude::Backend>::RawVar,
-        tensor: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<()> {
-        var.set(tensor.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
     }
 
     /// Runs backpropagation from `loss`, returning the resulting gradient
@@ -260,12 +236,38 @@ where
         variable: &Self::RawVar,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as Backend>::RawVar>
+    ) -> Result<<Self::Output as VariableBackend>::RawVar>
     where
         Self::Output: SupportsDType<K>,
     {
-        let storage = <Self as Backend>::var_as_tensor::<K>(variable)?;
+        let storage = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
         let transferred = Self::transfer_storage(&storage, dtype, device)?;
-        <Self::Output as Backend>::var_from_tensor::<K>(&transferred)
+        <Self::Output as VariableBackend>::var_from_tensor::<K>(&transferred)
+    }
+}
+
+
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::VariableBackend for CandleBackend<D> {
+    type RawVar = candle_core::Var;
+
+    fn var_as_tensor<K: incin_core::prelude::DType>(
+        var: &Self::RawVar,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        CandleStorage::try_new(var.as_tensor().clone())
+    }
+
+    fn var_from_tensor<K: incin_core::prelude::DType>(
+        t: &Self::Storage<K>,
+    ) -> Result<Self::RawVar> {
+        Ok(candle::Var::from_tensor(t.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+    }
+
+    fn assign_var<K: incin_core::prelude::DType>(
+        var: &mut Self::RawVar,
+        tensor: &Self::Storage<K>,
+    ) -> Result<()> {
+        var.set(tensor.tensor())
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
     }
 }

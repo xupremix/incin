@@ -302,7 +302,7 @@ pub fn lstm<S: LstmShape>(shape: ShapeValue<S>) -> LSTMBuilder<S> {
 #[derive(Debug, Clone)]
 pub struct LSTMCell<
     S: LstmShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
     K: DType = f32,
@@ -332,7 +332,7 @@ pub struct LSTMCell<
 impl<S, B, BiasIh, BiasHh, K: DType, Train: TrainState> LSTMCell<S, B, BiasIh, BiasHh, K, Train>
 where
     S: LstmShape,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + SupportsDType<K>
         + crate::tensor::backend::SupportsDType<K>
         + crate::nn::param::ParameterInit<K>,
@@ -457,7 +457,7 @@ where
 impl<
     In: Dim,
     Out: Dim,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -471,7 +471,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.wi_i.named_parameters(&format!("{}wi_i.", prefix), map);
         self.wi_f.named_parameters(&format!("{}wi_f.", prefix), map);
@@ -492,7 +492,7 @@ impl<
     In: Dim,
     Out: Dim,
     Batch: Dim,
-    B: Backend + Execute<op::Add> + Execute<op::Mul> + Execute<op::Sigmoid> + Execute<op::Tanh>,
+    B: crate::tensor::backend::VariableBackend + Execute<op::Add> + Execute<op::Mul> + Execute<op::Sigmoid> + Execute<op::Tanh>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -561,7 +561,7 @@ where
 #[allow(clippy::upper_case_acronyms)]
 pub struct LSTM<
     S: LstmShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
     K: DType = f32,
@@ -573,7 +573,7 @@ pub struct LSTM<
 
 impl<
     S: LstmShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -590,7 +590,7 @@ impl<
     where
         LSTMCell<S, B, BiasIh, BiasHh, K, Train>: Sized,
         S: LstmShape,
-        B: Backend
+        B: crate::tensor::backend::VariableBackend
             + SupportsDType<K>
             + crate::tensor::backend::SupportsDType<K>
             + crate::nn::param::ParameterInit<K>,
@@ -611,7 +611,7 @@ impl<
     where
         LSTMCell<S, B, BiasIh, BiasHh, K, Train>: Sized,
         S: LstmShape,
-        B: Backend
+        B: crate::tensor::backend::VariableBackend
             + SupportsDType<K>
             + crate::tensor::backend::SupportsDType<K>
             + crate::nn::param::ParameterInit<K>,
@@ -631,7 +631,7 @@ impl<
 impl<
     In: Dim,
     Out: Dim,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -644,7 +644,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
@@ -655,7 +655,7 @@ impl<
     Out: Dim<Arg = ()>,
     Batch: Dim<Arg = ()>,
     Seq: Dim<Arg = ()>,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::StackExact>
         + Execute<op::Narrow>
         + Execute<op::SqueezeExact>
@@ -720,7 +720,7 @@ where
 
 impl<
     S: LstmShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -799,7 +799,7 @@ where
 
 impl<
     S: LstmShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,

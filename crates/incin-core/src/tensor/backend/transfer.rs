@@ -1,4 +1,4 @@
-use super::{Backend, StorageBackend, SupportsDType};
+use super::{Backend, StorageBackend, SupportsDType, VariableBackend};
 use crate::err::Result;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
@@ -7,9 +7,9 @@ use crate::tensor::dtype::DType;
 ///
 /// Implementations must not assume that storage handles or raw variable types
 /// are compatible across backend families.
-pub trait TransferTo<NewD: Device>: Backend {
+pub trait TransferTo<NewD: Device>: VariableBackend {
     /// Backend selected for the destination device.
-    type Output: Backend<Device = NewD>;
+    type Output: VariableBackend<Device = NewD>;
 
     /// Transfers tensor storage while preserving shape and dtype.
     fn transfer_storage<K: DType>(
@@ -26,7 +26,7 @@ pub trait TransferTo<NewD: Device>: Backend {
         variable: &Self::RawVar,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as Backend>::RawVar>
+    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
     where
         Self::Output: SupportsDType<K>;
 }

@@ -1,6 +1,6 @@
 //! Central target-aware parameter materialization and NN layer initialization on [`TensorTarget`].
 
-use incin_core::backend_authoring::{Execute, SupportsDType, op};
+use incin_core::backend_authoring::{Execute, SupportsDType, VariableBackend, op};
 use incin_core::nn::batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape};
 use incin_core::nn::conv1d::{Conv1d, Conv1dBuilder, Conv1dShape};
 use incin_core::nn::conv2d::{Conv2d, Conv2dBuilder, Conv2dShape};
@@ -32,12 +32,12 @@ fn materialize_storage_plan<T, S>(
     shape_val: ShapeValue<S>,
     init: Init,
     context: InitContext,
-) -> Result<<TargetBackend<T> as Backend>::RawVar>
+) -> Result<<TargetBackend<T> as VariableBackend>::RawVar>
 where
     T: TensorTarget + TargetExt + Clone,
     S: Shape + DynShape,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+    TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -65,21 +65,21 @@ where
         InitPlan::Zeros => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Zeros)?;
             let storage = tensor.into_inner();
-            TargetBackend::<T>::var_from_tensor(&storage)
+            <TargetBackend<T> as VariableBackend>::var_from_tensor(&storage)
         }
         InitPlan::Ones => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Ones)?;
             let storage = tensor.into_inner();
-            TargetBackend::<T>::var_from_tensor(&storage)
+            <TargetBackend<T> as VariableBackend>::var_from_tensor(&storage)
         }
         InitPlan::Constant(val) => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Ones)?;
             if val == 1.0 {
                 let storage = tensor.into_inner();
-                TargetBackend::<T>::var_from_tensor(&storage)
+                <TargetBackend<T> as VariableBackend>::var_from_tensor(&storage)
             } else {
                 let scaled = tensor.mul_scalar(val)?.into_inner();
-                TargetBackend::<T>::var_from_tensor(&scaled)
+                <TargetBackend<T> as VariableBackend>::var_from_tensor(&scaled)
             }
         }
         InitPlan::Uniform { low, high } => {
@@ -95,7 +95,7 @@ where
             } else {
                 scaled.into_inner()
             };
-            TargetBackend::<T>::var_from_tensor(&shifted)
+            <TargetBackend<T> as VariableBackend>::var_from_tensor(&shifted)
         }
         InitPlan::Normal { mean, std } => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Normal)?;
@@ -109,7 +109,7 @@ where
             } else {
                 scaled.into_inner()
             };
-            TargetBackend::<T>::var_from_tensor(&shifted)
+            <TargetBackend<T> as VariableBackend>::var_from_tensor(&shifted)
         }
     }
 }
@@ -126,7 +126,7 @@ where
     S: Shape + DynShape,
     Train: TrainState,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -176,7 +176,7 @@ where
     T: TensorTarget + TargetExt + Clone,
     S: Shape + DynShape,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -228,7 +228,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -303,7 +303,7 @@ where
     S: LinearShape,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -340,7 +340,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -390,7 +390,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -447,7 +447,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -496,7 +496,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -574,7 +574,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -650,7 +650,7 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -735,7 +735,7 @@ where
         Into<Linear<S::HhShape, TargetBackend<T>, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -804,7 +804,7 @@ where
         Into<RNNCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -857,7 +857,7 @@ where
         Into<Linear<S::HhShape, TargetBackend<T>, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -950,7 +950,7 @@ where
         Into<LSTMCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
+TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>

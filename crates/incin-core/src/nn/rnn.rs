@@ -283,7 +283,7 @@ pub fn rnn<S: RnnShape>(shape: ShapeValue<S>) -> RNNBuilder<S> {
 #[derive(Debug, Clone)]
 pub struct RNNCell<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
     K: DType = f32,
@@ -300,7 +300,7 @@ pub struct RNNCell<
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -334,7 +334,7 @@ impl<
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -348,7 +348,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.wi.named_parameters(&format!("{}wi.", prefix), map);
         self.wh.named_parameters(&format!("{}wh.", prefix), map);
@@ -358,7 +358,7 @@ where
 impl<
     S: RnnShape,
     Batch: Dim,
-    B: Backend + Execute<op::Add> + Execute<op::Tanh>,
+    B: crate::tensor::backend::VariableBackend + Execute<op::Add> + Execute<op::Tanh>,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -444,7 +444,7 @@ where
 #[derive(Debug, Clone)]
 pub struct RNN<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
     K: DType = f32,
@@ -458,7 +458,7 @@ pub struct RNN<
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -493,7 +493,7 @@ impl<
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -507,7 +507,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
@@ -517,7 +517,7 @@ impl<
     S: RnnShape,
     Batch: Dim<Arg = ()>,
     Seq: Dim<Arg = ()>,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + Execute<op::StackExact>
         + Execute<op::Narrow>
         + Execute<op::SqueezeExact>
@@ -587,7 +587,7 @@ where
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -626,7 +626,7 @@ where
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -661,7 +661,7 @@ where
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
@@ -703,7 +703,7 @@ where
 
 impl<
     S: RnnShape,
-    B: Backend,
+    B: crate::tensor::backend::VariableBackend,
     BiasIh: crate::nn::optional::OptionalField,
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,

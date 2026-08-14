@@ -9,7 +9,7 @@ use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::{ArgInto, LayerArgInto};
 use crate::tensor::base::{Dyn, Tensor};
-use crate::tensor::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
+use crate::tensor::backend::{Backend, StorageBackend, SupportsDType, TransferTo, VariableBackend};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
@@ -48,7 +48,7 @@ impl TrainState for Frozen {
 ///
 /// This is implemented automatically for backends that provide the exact
 /// variable-creation and scalar operation descriptors used by `InitPlan`.
-pub trait ParameterInit<K: DType>: Backend + SupportsDType<K> {
+pub trait ParameterInit<K: DType>: VariableBackend + SupportsDType<K> {
     fn execute_plan_raw(
         dims: &[usize],
         dtype_field: &<K as DType>::Field,
@@ -58,14 +58,14 @@ pub trait ParameterInit<K: DType>: Backend + SupportsDType<K> {
 }
 
 fn validate_initialized_var<B, K>(
-    raw_var: &B::RawVar,
+    raw_var: &<B as crate::tensor::backend::VariableBackend>::RawVar,
     shape: &ShapeBuf,
     dtype: &K::Field,
     device: &<B::Device as Device>::Field,
     operation: &'static str,
 ) -> Result<()>
 where
-    B: Backend + SupportsDType<K>,
+    B: VariableBackend + SupportsDType<K>,
     K: DType,
 {
     let storage = B::var_as_tensor::<K>(raw_var)?;
@@ -97,7 +97,7 @@ where
 
 impl<B, K: DType> ParameterInit<K> for B
 where
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + SupportsDType<K>
         + Capabilities
         + Execute<op::VariableZeros>
@@ -107,8 +107,8 @@ where
         + Execute<op::NormalRandom>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>,
-    <B as Execute<op::VariableZeros>>::Output: Into<B::RawVar>,
-    <B as Execute<op::VariableOnes>>::Output: Into<B::RawVar>,
+    <B as Execute<op::VariableZeros>>::Output: Into<<B as crate::tensor::backend::VariableBackend>::RawVar>,
+    <B as Execute<op::VariableOnes>>::Output: Into<<B as crate::tensor::backend::VariableBackend>::RawVar>,
     <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::UniformRandom>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::NormalRandom>>::Output: Into<B::Storage<K>>,
@@ -120,7 +120,7 @@ where
         dtype_field: &<K as DType>::Field,
         device_field: &<B::Device as Device>::Field,
         plan: crate::nn::init::InitPlan,
-    ) -> Result<B::RawVar> {
+    ) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar> {
         let device = B::Device::to_incin(device_field)?;
         let dtype = B::resolve_dtype(dtype_field, &device)?;
         match plan {
@@ -176,7 +176,7 @@ pub fn execute_plan_raw<B, K: DType>(
     dtype_field: &<K as DType>::Field,
     device_field: &<B::Device as Device>::Field,
     plan: crate::nn::init::InitPlan,
-) -> Result<B::RawVar>
+) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>
 where
     B: ParameterInit<K>,
 {
@@ -187,11 +187,11 @@ fn execute_variable<O, B>(
     dims: &[usize],
     dtype: DTypeDescriptor,
     device: DeviceId,
-) -> Result<B::RawVar>
+) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>
 where
     O: Operation<Attributes = CreationAttributes>,
-    B: Backend + Execute<O> + Capabilities,
-    <B as Execute<O>>::Output: Into<B::RawVar>,
+    B: crate::tensor::backend::VariableBackend + Execute<O> + Capabilities,
+    <B as Execute<O>>::Output: Into<<B as crate::tensor::backend::VariableBackend>::RawVar>,
 {
     // Parameter allocation is outside the differentiable graph. The returned
     // variable becomes a graph input only when the caller uses it later.
@@ -213,7 +213,7 @@ where
 fn execute_storage<O, B, K>(attributes: O::Attributes, dims: &[usize]) -> Result<B::Storage<K>>
 where
     O: Operation,
-    B: Backend + Execute<O> + Capabilities,
+    B: crate::tensor::backend::VariableBackend + Execute<O> + Capabilities,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
@@ -229,7 +229,7 @@ where
 fn execute_scalar<O, B, K>(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>>
 where
     O: Operation<Attributes = ScalarAttributes>,
-    B: Backend + Execute<O> + Capabilities,
+    B: crate::tensor::backend::VariableBackend + Execute<O> + Capabilities,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
@@ -253,7 +253,7 @@ fn execute_initializer<B, K: DType>(
     dtype_field: &<K as DType>::Field,
     device_field: &<B::Device as Device>::Field,
     init: crate::nn::init::Init,
-) -> Result<B::RawVar>
+) -> Result<<B as crate::tensor::backend::VariableBackend>::RawVar>
 where
     B: ParameterInit<K>,
 {
@@ -263,15 +263,15 @@ where
 }
 
 /// A parameter storing an underlying backend variable that supports gradient computation.
-pub struct Param<S: Shape, B: Backend, K: DType = f32, Train: TrainState = Trainable> {
-    pub(crate) inner: <B as Backend>::RawVar,
+pub struct Param<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
+    pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::RawVar,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
     pub(crate) _train: PhantomData<Train>,
 }
 
-impl<S: Shape, B: Backend, K: DType, Train: TrainState> Clone for Param<S, B, K, Train> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Clone for Param<S, B, K, Train> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -283,16 +283,16 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Clone for Param<S, B, K,
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, Train: TrainState> core::fmt::Debug for Param<S, B, K, Train> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> core::fmt::Debug for Param<S, B, K, Train> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Param<S, B, K, Train> {
     /// Checked constructor boundary from parts.
     pub fn from_parts_checked(
-        raw_var: B::RawVar,
+        raw_var: <B as crate::tensor::backend::VariableBackend>::RawVar,
         shape: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
@@ -375,14 +375,14 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: TrainState> Param<S, B, K, Train> {
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Param<S, B, K, Train> {
     /// Returns the shape dimensions of this parameter.
     pub fn shape_dims(&self) -> Vec<usize> {
         self._shape.shape_buf().as_ref().to_vec()
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
     B: TransferTo<NewD>,
@@ -404,7 +404,7 @@ where
 
 impl<
     S: Shape + DynShape,
-    B: Backend + SupportsDType<K> + ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend + SupportsDType<K> + ParameterInit<K>,
     K: DType,
     Train: TrainState,
 > Param<S, B, K, Train>
@@ -529,7 +529,7 @@ where
     }
 
     /// Construct a Param directly from a backend's RawVar.
-    pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
+    pub fn from_raw<A>(inner: <B as crate::tensor::backend::VariableBackend>::RawVar, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
         B: SupportsDType<K>,
@@ -590,11 +590,11 @@ where
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, Train: TrainState> Parameters<B> for Param<S, B, K, Train> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Parameters<B> for Param<S, B, K, Train> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
         if Train::TRAINABLE {
             map.insert(prefix.to_string(), self.inner.clone());
@@ -602,11 +602,11 @@ impl<S: Shape, B: Backend, K: DType, Train: TrainState> Parameters<B> for Param<
     }
 }
 
-impl<S1: DynShape, B: Backend, K: DType, Train: TrainState> Param<S1, B, K, Train> {
+impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Param<S1, B, K, Train> {
     /// Reinterprets a dynamically-shaped parameter as a statically-shaped `S2`.
     pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B, K, Train>>
     where
-        B: Backend,
+        B: crate::tensor::backend::VariableBackend,
     {
         let current_dims = self._shape.shape_buf();
         let new_shape = S2::try_from_dims(current_dims.as_ref()).map_err(Error::Shape)?;
@@ -629,7 +629,7 @@ use alloc::collections::BTreeMap;
 /// `StateDict` for parameters of any `K: DType`.
 impl<
     S: Shape,
-    B: Backend + SupportsDType<K> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities,
     K: DType<Arg = ()>,
     Train: TrainState,
 > StateDict<B> for Param<S, B, K, Train>
@@ -686,20 +686,20 @@ impl<
         path: &crate::nn::StatePath,
         plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
-        self.inner = plan.take::<B::RawVar>(path)?;
+        self.inner = plan.take::<<B as crate::tensor::backend::VariableBackend>::RawVar>(path)?;
         Ok(())
     }
 }
 
 /// A non-trainable state buffer.
-pub struct Buffer<S: Shape, B: Backend, K: DType = f32> {
-    pub(crate) inner: <B as Backend>::RawVar,
+pub struct Buffer<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32> {
+    pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::RawVar,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
 }
 
-impl<S: Shape, B: Backend, K: DType> Clone for Buffer<S, B, K> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Clone for Buffer<S, B, K> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -710,16 +710,16 @@ impl<S: Shape, B: Backend, K: DType> Clone for Buffer<S, B, K> {
     }
 }
 
-impl<S: Shape, B: Backend, K: DType> core::fmt::Debug for Buffer<S, B, K> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> core::fmt::Debug for Buffer<S, B, K> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B, K> {
     /// Checked constructor boundary from parts.
     pub fn from_parts_checked(
-        raw_var: B::RawVar,
+        raw_var: <B as crate::tensor::backend::VariableBackend>::RawVar,
         shape: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
@@ -778,13 +778,13 @@ impl<S: Shape, B: Backend, K: DType> Buffer<S, B, K> {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> Buffer<S, B, K> {
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B, K> {
     pub fn shape_dims(&self) -> Vec<usize> {
         self._shape.shape_buf().as_ref().to_vec()
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, NewD: crate::prelude::Device>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, NewD: crate::prelude::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Buffer<S, B, K>
 where
     B: TransferTo<NewD>,
@@ -803,7 +803,7 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend + SupportsDType<K> + ParameterInit<K>, K: DType>
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + ParameterInit<K>, K: DType>
     Buffer<S, B, K>
 where
     (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
@@ -891,17 +891,17 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> Parameters<B> for Buffer<S, B, K> {
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B> for Buffer<S, B, K> {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
 
 /// `StateDict` for buffers of any `K: DType`.
-impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DType<Arg = ()>>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities, K: DType<Arg = ()>>
     StateDict<B> for Buffer<S, B, K>
 {
     fn collect_state(
@@ -955,7 +955,7 @@ impl<S: Shape, B: Backend + SupportsDType<K> + crate::exec::Capabilities, K: DTy
         path: &crate::nn::StatePath,
         plan: &mut crate::nn::StateLoadPlan,
     ) -> Result<()> {
-        self.inner = plan.take::<B::RawVar>(path)?;
+        self.inner = plan.take::<<B as crate::tensor::backend::VariableBackend>::RawVar>(path)?;
         Ok(())
     }
 }

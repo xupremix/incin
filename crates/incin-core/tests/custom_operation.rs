@@ -174,14 +174,30 @@ impl StorageBackend for CompanyBackend {
 }
 
 impl Backend for CompanyBackend {
-    type RawVar = ();
     type Grads = ();
     type InnerBackend = Self;
+}
 
-    fn shape<K: incin_core::prelude::DType>(
-        _storage: &<Self as StorageBackend>::Storage<K>,
-    ) -> ShapeBuf {
-        ShapeBuf::SCALAR
+impl incin_core::prelude::VariableBackend for CompanyBackend {
+    type RawVar = ();
+
+    fn var_as_tensor<K: incin_core::prelude::DType>(
+        _var: &Self::RawVar,
+    ) -> incin_core::prelude::Result<Self::Storage<K>> {
+        Ok(())
+    }
+
+    fn var_from_tensor<K: incin_core::prelude::DType>(
+        _storage: &Self::Storage<K>,
+    ) -> incin_core::prelude::Result<Self::RawVar> {
+        Ok(())
+    }
+
+    fn assign_var<K: incin_core::prelude::DType>(
+        _var: &mut Self::RawVar,
+        _storage: &Self::Storage<K>,
+    ) -> incin_core::prelude::Result<()> {
+        Ok(())
     }
 }
 

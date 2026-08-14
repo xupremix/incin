@@ -155,25 +155,12 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for MetalBackendIm
 impl incin_core::backend_authoring::StorageOutput for MetalStorage {}
 
 impl<D: Device> Backend for MetalBackendImpl<D> {
-    type RawVar = MetalVar;
+
     type Grads = MetalGrads;
     type InnerBackend = Self;
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
-        Ok(var.storage.clone())
-    }
-
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
-        Ok(MetalVar { storage: t.clone() })
-    }
-
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
-        var.storage = tensor.clone();
-        Ok(())
-    }
 
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
         crate::metal::tape::backward(loss)
@@ -337,7 +324,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::zeros::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -346,7 +333,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::ones::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -355,7 +342,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::rand::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -364,7 +351,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as VariableBackend>::RawVar> {
         let s = Self::randn::<K>(shape, dtype, device)?;
         Ok(MetalVar { storage: s })
     }
@@ -3066,3 +3053,21 @@ impl<D: Device> QuantizedOps<Self> for MetalBackendImpl<D> {
 // ─── OptimizerOps ───────────────────────────────────────────────────────────
 // Uses default adamw_step composed from NumericOps/FloatOps (via trait default).
 impl<D: Device> OptimizerOps<Self> for MetalBackendImpl<D> {}
+
+
+impl<D: Device> VariableBackend for MetalBackendImpl<D> {
+    type RawVar = MetalVar;
+
+    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        Ok(var.storage.clone())
+    }
+
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        Ok(MetalVar { storage: t.clone() })
+    }
+
+    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        var.storage = tensor.clone();
+        Ok(())
+    }
+}

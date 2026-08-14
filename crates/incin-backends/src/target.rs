@@ -74,7 +74,7 @@ use core::hash::Hash;
 
 use alloc::vec::Vec;
 
-use incin_core::backend_authoring::SupportsDType;
+use incin_core::backend_authoring::{SupportsDType, VariableBackend};
 pub use incin_core::exec::precision;
 pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
 use incin_core::prelude::{
@@ -99,7 +99,7 @@ pub trait TensorTarget {
     type Device: Device;
 
     /// The backend family owned by this target.
-    type Backend: Backend<Device = Self::Device>;
+    type Backend: Backend<Device = Self::Device> + VariableBackend;
 
     /// The selector value the device's own constructor argument needs.
     fn device_arg(&self) -> <Self::Device as Device>::Arg;
@@ -1012,7 +1012,7 @@ impl EngineSpec for Dyn {
 
 /// Maps an execution engine `E` and a physical device `D` to a backend family.
 pub trait EngineOn<D: Device>: EngineSpec {
-    type Backend: Backend<Device = D>;
+    type Backend: Backend<Device = D> + VariableBackend;
 }
 
 /// Backend type selected by engine `E` on physical device `D`.

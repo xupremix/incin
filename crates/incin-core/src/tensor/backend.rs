@@ -140,9 +140,6 @@ where
 pub trait Backend:
     StorageBackend + Capabilities + Default + Sized + Clone + Send + Sync + 'static
 {
-    /// Backend-native handle for a trainable variable (as opposed to a
-    /// plain, non-owning tensor view).
-    type RawVar: Clone;
     /// The gradient collection returned by `backward`, indexed however the
     /// backend's own tape implementation chooses (usually by tensor id).
     type Grads;
@@ -269,44 +266,4 @@ pub trait Backend:
         )))
     }
 
-    /// Views a trainable variable as a plain tensor storage handle.
-    fn var_as_tensor<K: DType>(
-        _var: &Self::RawVar,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "trainable variables",
-            },
-        )))
-    }
-    /// Promotes a plain tensor storage handle into a trainable variable.
-    fn var_from_tensor<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<Self::RawVar> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "trainable variables",
-            },
-        )))
-    }
-    /// Overwrites a variable's value in place (e.g. an optimizer step),
-    /// without changing its identity for gradient-tracking purposes.
-    ///
-    /// An implementation must be failure-atomic for this individual variable:
-    /// returning `Err` guarantees that `var` still contains its exact prior
-    /// bytes. Optimizers rely on that contract to roll back a multi-parameter
-    /// commit when a later assignment fails.
-    fn assign_var<K: DType>(
-        _var: &mut Self::RawVar,
-        _tensor: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<()> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "trainable variables",
-            },
-        )))
-    }
 }

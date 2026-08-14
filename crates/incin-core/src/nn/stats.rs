@@ -91,7 +91,7 @@ pub trait ComputeStats {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainState> ComputeStats
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState> ComputeStats
     for Param<S, B, K, Train>
 {
     /// A parameter's own element count; it has no operation of its own, so
@@ -105,7 +105,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, Train: crate::nn::param::TrainSt
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType> ComputeStats for Buffer<S, B, K> {
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> ComputeStats for Buffer<S, B, K> {
     fn compute_stats(&self, _batch: u64) -> LayerStats {
         LayerStats::default()
     }

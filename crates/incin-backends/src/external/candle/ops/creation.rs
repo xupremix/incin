@@ -72,7 +72,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::Crea
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         Ok(
             candle::Var::zeros(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
@@ -84,7 +84,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::Crea
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         Ok(
             candle::Var::ones(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
@@ -97,7 +97,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::Crea
         shape: &[usize],
         _dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         Ok(
             candle::Var::rand(0f32, 1f32, shape, &to_candle_device(device)?)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
@@ -110,7 +110,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::legacy::Crea
         shape: &[usize],
         _dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::Backend>::RawVar> {
+    ) -> Result<<Self as incin_core::prelude::VariableBackend>::RawVar> {
         let dev = to_candle_device(device)?;
         Ok(candle::Var::randn(0f32, 1f32, shape, &dev)
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)

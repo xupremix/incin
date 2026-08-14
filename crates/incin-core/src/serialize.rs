@@ -162,7 +162,7 @@ pub enum Format {
 }
 
 #[cfg(feature = "std")]
-pub trait ModelExt<B: Backend> {
+pub trait ModelExt<B: Backend + crate::tensor::backend::VariableBackend> {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
@@ -173,7 +173,7 @@ pub trait ModelExt<B: Backend> {
 }
 
 #[cfg(feature = "std")]
-impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
+impl<B: Backend + crate::tensor::backend::VariableBackend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,

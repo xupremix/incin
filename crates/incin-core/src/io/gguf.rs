@@ -137,7 +137,7 @@ impl GgufMetadata {
 }
 
 /// Exporter for saving `incin` modules to GGUF v3 format.
-pub struct GgufExporter<'a, B: Backend, M: StateDict<B>> {
+pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend, M: StateDict<B>> {
     module: &'a M,
     metadata: GgufMetadata,
     quant: QuantScheme,
@@ -146,7 +146,7 @@ pub struct GgufExporter<'a, B: Backend, M: StateDict<B>> {
 
 impl<'a, B, M> GgufExporter<'a, B, M>
 where
-    B: Backend + QuantizedOps<B>,
+    B: Backend + crate::tensor::backend::VariableBackend + QuantizedOps<B>,
     M: StateDict<B>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.

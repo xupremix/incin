@@ -786,8 +786,6 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
 }
 
 impl<B: Backend> Backend for TracingBackend<B> {
-    /// The wrapped backend's variable plus a tracing-graph node id.
-    type RawVar = TracingVar<B::RawVar>;
     /// Delegates to `B`'s gradient collection type — tracing adds no gradient bookkeeping of its own.
     type Grads = B::Grads;
     /// Delegates to `B`'s own inner backend (tracing is not itself a dispatch layer).
@@ -826,36 +824,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Self: crate::tensor::backend::TensorOps<Self>,
     {
         <Self as Backend>::format_tensor_display::<K>(t)
-    }
-
-    /// Delegates to `B::var_as_tensor`, carrying the variable's tracing-graph node id over to the resulting storage.
-    fn var_as_tensor<K: super::dtype::DType>(
-        var: &<Self as Backend>::RawVar,
-    ) -> Result<<Self as crate::tensor::backend::StorageBackend>::Storage<K>> {
-        let inner = B::var_as_tensor(&var.inner)?;
-        Ok(TracingTensor {
-            inner,
-            value_id: var.value_id,
-        })
-    }
-
-    /// Delegates to `B::var_from_tensor`, carrying the storage's tracing-graph node id over to the resulting variable.
-    fn var_from_tensor<K: super::dtype::DType>(
-        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_from_tensor(&t.inner)?;
-        Ok(TracingVar {
-            inner,
-            value_id: t.value_id,
-        })
-    }
-
-    /// Delegates to `B::assign_var`.
-    fn assign_var<K: super::dtype::DType>(
-        var: &mut <Self as Backend>::RawVar,
-        tensor: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Result<()> {
-        B::assign_var(&mut var.inner, &tensor.inner)
     }
 
     /// Delegates to `B::backward` — tracing does not itself affect gradient computation.
@@ -909,13 +877,38 @@ impl<B: Backend> Backend for TracingBackend<B> {
     }
 }
 
+impl<B: VariableBackend> VariableBackend for TracingBackend<B> {
+    type RawVar = TracingVar<<B as crate::tensor::backend::VariableBackend>::RawVar>;
+
+    fn var_as_tensor<K: DType>(
+        var: &Self::RawVar,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let inner = B::var_as_tensor(&var.inner)?;
+        Ok(TracingTensor { inner, value_id: var.value_id })
+    }
+
+    fn var_from_tensor<K: DType>(
+        tensor: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Self::RawVar> {
+        let inner = B::var_from_tensor(&tensor.inner)?;
+        Ok(TracingVar { inner, value_id: tensor.value_id })
+    }
+
+    fn assign_var<K: DType>(
+        var: &mut Self::RawVar,
+        tensor: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<()> {
+        B::assign_var(&mut var.inner, &tensor.inner)
+    }
+}
+
 impl<B: Backend + SupportsDType<K>, K: DType> SupportsDType<K> for TracingBackend<B> {
     fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeDescriptor> {
         B::resolve_dtype(field, device)
     }
 }
 
-impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
+impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
     /// Delegates to `B::zeros`, additionally recording a new
     /// tracing-graph value node for the result.
     fn zeros<K: super::dtype::DType>(
@@ -1011,7 +1004,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
         let inner = B::var_zeros::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1024,7 +1017,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
         let inner = B::var_ones::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1037,7 +1030,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
         let inner = B::var_rand::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1050,7 +1043,7 @@ impl<B: Backend + CreationOps<B>> CreationOps<Self> for TracingBackend<B> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as Backend>::RawVar> {
+    ) -> Result<<Self as crate::tensor::backend::VariableBackend>::RawVar> {
         let inner = B::var_randn::<K>(shape, dtype, device)?;
         let tensor = B::var_as_tensor::<K>(&inner)?;
         let value_id = Self::record_value(&tensor);
@@ -1090,7 +1083,7 @@ where
         variable: &Self::RawVar,
         dtype: &K::Field,
         device: &NewD::Field,
-    ) -> Result<<Self::Output as Backend>::RawVar>
+    ) -> Result<<Self::Output as crate::tensor::backend::VariableBackend>::RawVar>
     where
         Self::Output: SupportsDType<K>,
     {
@@ -1102,7 +1095,7 @@ where
         let storage = <<B as TransferTo<NewD>>::Output as Backend>::from_bytes::<K>(
             &bytes, &shape, dtype_id, &device_id,
         )?;
-        let inner = <<B as TransferTo<NewD>>::Output as Backend>::var_from_tensor(&storage)?;
+        let inner = <<B as TransferTo<NewD>>::Output as VariableBackend>::var_from_tensor(&storage)?;
         Ok(TracingVar {
             inner,
             value_id: variable.value_id,

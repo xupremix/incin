@@ -231,7 +231,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     tb.path
                         .segments
                         .last()
-                        .map(|s| s.ident == "Backend")
+                        .map(|s| s.ident == "Backend" || s.ident == "VariableBackend")
                         .unwrap_or(false)
                 } else {
                     false
@@ -252,11 +252,18 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else if is_internal {
         generics
             .params
-            .push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
+            .push(syn::parse_quote!(__B: #k_crate::prelude::Backend + #k_crate::prelude::VariableBackend));
         quote! { __B }
     } else {
         quote! { #k_crate::prelude::DefaultBackend }
     };
+
+    if let Some(ref b) = backend_generic {
+        generics
+            .make_where_clause()
+            .predicates
+            .push(syn::parse_quote!(#b: #k_crate::prelude::VariableBackend));
+    }
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
@@ -576,7 +583,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #impl_generics #k_crate::prelude::Parameters<#b_ident> for #name #ty_generics #where_clause {
             /// Named parameters.
-            fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
+            fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::VariableBackend>::RawVar>) {
                 let prefix = if prefix.is_empty() { #macro_support::String::new() } else { #macro_support::format!("{}.", prefix) };
                 #(#param_calls)*
             }

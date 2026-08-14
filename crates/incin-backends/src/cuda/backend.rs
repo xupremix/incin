@@ -2929,7 +2929,7 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CudaBackendImp
 impl incin_core::backend_authoring::StorageOutput for CudaStorage {}
 
 impl<D: Device> Backend for CudaBackendImpl<D> {
-    type RawVar = CudaVar;
+
     type Grads = CudaGrads;
 
     type InnerBackend = Self;
@@ -3007,18 +3007,6 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
             device_id: device.ordinal(),
         };
         Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
-    }
-    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
-        Ok(var.storage.clone())
-    }
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
-        let t: &CudaStorage = t;
-        Ok(CudaVar { storage: t.clone() })
-    }
-    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
-        let tensor: &CudaStorage = tensor;
-        var.storage = tensor.clone();
-        Ok(())
     }
 }
 
@@ -4612,5 +4600,25 @@ mod tests {
             download_f32_host(&out).unwrap(),
             vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]
         );
+    }
+}
+
+
+impl<D: Device> VariableBackend for CudaBackendImpl<D> {
+    type RawVar = CudaVar;
+
+    fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
+        Ok(var.storage.clone())
+    }
+
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
+        let t: &CudaStorage = t;
+        Ok(CudaVar { storage: t.clone() })
+    }
+
+    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+        let tensor: &CudaStorage = tensor;
+        var.storage = tensor.clone();
+        Ok(())
     }
 }

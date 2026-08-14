@@ -23,16 +23,16 @@ impl<Start, End> Flatten<Start, End> {
     }
 }
 
-impl<Start, End, B: Backend> Parameters<B> for Flatten<Start, End> {
+impl<Start, End, B: crate::tensor::backend::VariableBackend> Parameters<B> for Flatten<Start, End> {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     ) {
     }
 }
 
-impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {}
+impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::StateDict<B> for Flatten<Start, End> {}
 
 /// Runtime-rank models commonly flatten the image axes after a dynamic batch
 /// axis.  Keep that migration path on the same module type while the exact
@@ -40,7 +40,7 @@ impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {}
 /// shapes.
 impl<B, K, G> Module<Tensor<Dyn, B, K, G>> for Flatten<Next<Here>, Next<Next<Here>>>
 where
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
@@ -62,7 +62,7 @@ where
     End: StaticCursor,
     S: Shape + DynShape + FlattenAt<Start, End>,
     <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
-    B: Backend
+    B: crate::tensor::backend::VariableBackend
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
             Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,

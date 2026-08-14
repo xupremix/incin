@@ -1,7 +1,7 @@
 use crate::err::{Error, ErrorMessage, Result};
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::{Dyn, Tensor};
-use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::backend::{Backend, StorageBackend, VariableBackend};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
@@ -55,7 +55,7 @@ impl<G> Gradients<G> {
 ///
 /// Implementors receive a reference to the [`Gradients`] computed from a backward pass
 /// and apply the appropriate parameter update rule to all tracked variables.
-pub trait Optimizer<B: Backend> {
+pub trait Optimizer<B: VariableBackend> {
     /// Steps the optimizer using the given gradients, updating the tracked parameters.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
 }
@@ -72,7 +72,7 @@ struct PreparedUpdate<S> {
 ///
 /// Backend authors satisfy this profile by implementing the exact operation
 /// descriptors listed in the blanket implementation below.
-pub trait OptimizerBackend<K: DType>: Backend {
+pub trait OptimizerBackend<K: DType>: VariableBackend {
     fn optimizer_add(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
     fn optimizer_sub(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
     fn optimizer_mul(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
@@ -84,7 +84,7 @@ pub trait OptimizerBackend<K: DType>: Backend {
 
 impl<B, K: DType> OptimizerBackend<K> for B
 where
-    B: Backend
+    B: VariableBackend
         + Capabilities
         + Execute<op::Add>
         + Execute<op::Sub>
@@ -133,7 +133,7 @@ where
 fn execute_binary<O, B, K>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>
 where
     O: crate::exec::catalog::Operation<Attributes = NoAttributes>,
-    B: Backend + Capabilities + Execute<O>,
+    B: VariableBackend + Capabilities + Execute<O>,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
@@ -153,7 +153,7 @@ where
 fn execute_unary<O, B, K>(storage: &B::Storage<K>) -> Result<B::Storage<K>>
 where
     O: crate::exec::catalog::Operation<Attributes = NoAttributes>,
-    B: Backend + Capabilities + Execute<O>,
+    B: VariableBackend + Capabilities + Execute<O>,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
@@ -170,7 +170,7 @@ where
 fn execute_scalar<O, B, K>(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>>
 where
     O: crate::exec::catalog::Operation<Attributes = ScalarAttributes>,
-    B: Backend + Capabilities + Execute<O>,
+    B: VariableBackend + Capabilities + Execute<O>,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
@@ -237,7 +237,7 @@ fn validate_adam_config(
     Ok(())
 }
 
-fn validate_storage_pair<B: Backend, K: DType>(
+fn validate_storage_pair<B: VariableBackend, K: DType>(
     operation: &'static str,
     parameter: &B::Storage<K>,
     other: &B::Storage<K>,
@@ -274,10 +274,10 @@ type AdamState<S> = (
     alloc::collections::BTreeMap<String, S>,
 );
 
-fn load_adam_state<B: Backend, K: DType>(
+fn load_adam_state<B: VariableBackend, K: DType>(
     operation: &'static str,
     prefix: &str,
-    params: &alloc::collections::BTreeMap<String, B::RawVar>,
+    params: &alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
 ) -> Result<AdamState<B::Storage<K>>> {
     let prefix = if prefix.is_empty() {
@@ -317,9 +317,9 @@ fn load_adam_state<B: Backend, K: DType>(
     Ok((next_m, next_v))
 }
 
-fn commit_parameter_updates<B: Backend, K: DType>(
+fn commit_parameter_updates<B: VariableBackend, K: DType>(
     operation: &'static str,
-    params: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+    params: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     updates: &[PreparedUpdate<B::Storage<K>>],
 ) -> Result<()> {
     for update in updates {
@@ -439,16 +439,16 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```
-pub struct SGD<B: Backend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, B::RawVar>,
+pub struct SGD<B: VariableBackend, K: DType = f32> {
+    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     /// `lr`.
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
 }
 
-impl<B: Backend, K: DType> SGD<B, K> {
+impl<B: VariableBackend, K: DType> SGD<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
@@ -505,8 +505,8 @@ impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for SGD<B, K> {
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```
-pub struct AdamW<B: Backend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, B::RawVar>,
+pub struct AdamW<B: VariableBackend, K: DType = f32> {
+    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     /// `lr`.
     pub lr: f64,
     /// `beta1`.
@@ -522,9 +522,9 @@ pub struct AdamW<B: Backend, K: DType = f32> {
     step: usize,
 }
 
-impl<B: Backend, K: DType> AdamW<B, K> {
+impl<B: VariableBackend, K: DType> AdamW<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
@@ -684,8 +684,8 @@ impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for AdamW<B, K> {
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```
-pub struct Adam<B: Backend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, B::RawVar>,
+pub struct Adam<B: VariableBackend, K: DType = f32> {
+    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>,
     /// `lr`.
     pub lr: f64,
     /// `beta1`.
@@ -699,9 +699,9 @@ pub struct Adam<B: Backend, K: DType = f32> {
     step: usize,
 }
 
-impl<B: Backend, K: DType> Adam<B, K> {
+impl<B: VariableBackend, K: DType> Adam<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
