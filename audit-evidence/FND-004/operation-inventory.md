@@ -6,24 +6,24 @@ Each row is one exact executable identity. Families classify rows and never impl
 
 Total exact operations: 174
 
-Legacy operation-family trait methods with a reviewed descriptor mapping: 137
+Legacy operation-family trait methods with a reviewed descriptor mapping: 126
 
 | Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
 |---|---|---|---|---|---|---|---|
 | `tensor_from_data` | `Storage` | `Creation` | `Descriptor<op::TensorFromData>` | `DataAttributes` | 0-0 | 1-1 | `TensorArgsData` |
 | `tensor_from_bytes` | `Storage` | `Creation` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | 0-0 | 1-1 | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `Storage` | `Transfer` | `Descriptor<op::TensorToBytes>` | `NoAttributes` | 1-1 | 0-0 | `Tensor::to_bytes` |
-| `zeros` | `Fill` | `Creation` | `Descriptor<op::Zeros>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::zeros` |
-| `ones` | `Fill` | `Creation` | `Descriptor<op::Ones>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::ones` |
-| `rand` | `Random` | `Creation` | `Descriptor<op::UniformRandom>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::rand` |
-| `randn` | `Random` | `Creation` | `Descriptor<op::NormalRandom>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::randn` |
-| `var_zeros` | `Fill` | `Creation` | `Descriptor<op::VariableZeros>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::var_zeros` |
-| `var_ones` | `Fill` | `Creation` | `Descriptor<op::VariableOnes>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::var_ones` |
-| `var_rand` | `Random` | `Creation` | `Descriptor<op::VariableUniformRandom>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::var_rand` |
-| `var_randn` | `Random` | `Creation` | `Descriptor<op::VariableNormalRandom>` | `CreationAttributes` | 0-0 | 1-1 | `CreationOps::var_randn` |
-| `full` | `Fill` | `Creation` | `Descriptor<op::Full>` | `FullAttributes` | 0-0 | 1-1 | `CreationOps::full` |
-| `arange` | `Fill` | `Creation` | `Descriptor<op::Arange>` | `ArangeAttributes` | 0-0 | 1-1 | `CreationOps::arange` |
-| `linspace` | `Fill` | `Creation` | `Descriptor<op::Linspace>` | `LinspaceAttributes` | 0-0 | 1-1 | `CreationOps::linspace` |
+| `zeros` | `Fill` | `Creation` | `Descriptor<op::Zeros>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::Zeros>` |
+| `ones` | `Fill` | `Creation` | `Descriptor<op::Ones>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::Ones>` |
+| `rand` | `Random` | `Creation` | `Descriptor<op::UniformRandom>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::UniformRandom>` |
+| `randn` | `Random` | `Creation` | `Descriptor<op::NormalRandom>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::NormalRandom>` |
+| `var_zeros` | `Fill` | `Creation` | `Descriptor<op::VariableZeros>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::VariableZeros>` |
+| `var_ones` | `Fill` | `Creation` | `Descriptor<op::VariableOnes>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::VariableOnes>` |
+| `var_rand` | `Random` | `Creation` | `Descriptor<op::VariableUniformRandom>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::VariableUniformRandom>` |
+| `var_randn` | `Random` | `Creation` | `Descriptor<op::VariableNormalRandom>` | `CreationAttributes` | 0-0 | 1-1 | `Descriptor<op::VariableNormalRandom>` |
+| `full` | `Fill` | `Creation` | `Descriptor<op::Full>` | `FullAttributes` | 0-0 | 1-1 | `Descriptor<op::Full>` |
+| `arange` | `Fill` | `Creation` | `Descriptor<op::Arange>` | `ArangeAttributes` | 0-0 | 1-1 | `Descriptor<op::Arange>` |
+| `linspace` | `Fill` | `Creation` | `Descriptor<op::Linspace>` | `LinspaceAttributes` | 0-0 | 1-1 | `Descriptor<op::Linspace>` |
 | `sample` | `Random` | `Creation` | `Descriptor<op::Sample>` | `DistributionAttributes` | 0-0 | 1-1 | `Tensor::sample` |
 | `relu` | `Pointwise` | `UnaryFloat` | `Descriptor<op::Relu>` | `NoAttributes` | 1-1 | 1-1 | `FloatOps::relu` |
 | `step` | `Pointwise` | `UnaryFloat` | `Descriptor<op::Step>` | `NoAttributes` | 1-1 | 1-1 | `FloatOps::step` |
