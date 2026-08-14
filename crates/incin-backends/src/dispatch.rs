@@ -480,6 +480,24 @@ macro_rules! cpu_unary_call {
     (frac, $value:expr) => {
         crate::cpu::ops::elementwise::canonical_frac($value)
     };
+    (sign, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Sign,
+            $value,
+        )
+    };
+    (sin, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Sin,
+            $value,
+        )
+    };
+    (cos, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Cos,
+            $value,
+        )
+    };
     (floor, $value:expr) => {
         crate::cpu::ops::elementwise::canonical_unary(
             crate::cpu::ops::elementwise_kernel::UnaryOp::Floor,
