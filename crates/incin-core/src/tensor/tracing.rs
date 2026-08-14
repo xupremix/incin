@@ -1,7 +1,13 @@
 use crate::exec::catalog::TraceDescriptor;
 use crate::exec::spec::ExecutionDescriptor;
 use crate::graph::{Graph, ValueId};
-use crate::prelude::*;
+use crate::err::{BackendError, Error, Result};
+use crate::shapes::Shape;
+use crate::tensor::backend::Backend;
+use crate::tensor::backend::SupportsDType;
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DType, DTypeDescriptor};
+use alloc::vec::Vec;
 use crate::tensor::backend::*;
 // removed RefCell
 use spin::{Lazy, Mutex};

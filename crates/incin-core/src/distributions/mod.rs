@@ -4,8 +4,15 @@ use crate::backend_authoring::{Capabilities, Execute};
 use crate::exec::catalog::{CreationAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
-use crate::prelude::*;
+use crate::err::{Error, Result};
 use crate::shapes::ShapeValue;
+use crate::shapes::{DimCons, DynShape, Nil, Shape, ShapeBuf};
+use crate::tensor::base::Tensor;
+use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{Grad, RequiresGrad};
+use crate::tensor::arg::TensorArgs;
 use core::fmt::Debug;
 
 fn uniform_tensor<S, B, G>(

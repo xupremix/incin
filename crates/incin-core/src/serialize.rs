@@ -1,5 +1,11 @@
+use crate::err::{Error, Result};
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
-use crate::prelude::*;
+use crate::nn::module::StateDict;
+use crate::shapes::ShapeBuf;
+use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::base::Tensor;
+use crate::tensor::prelude::{DType, Device, DeviceId, Q8_0, StorageEncoding};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 #[cfg(feature = "std")]

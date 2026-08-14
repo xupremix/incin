@@ -4,7 +4,8 @@
 use crate::compiled::CapturedGraph;
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
-use crate::prelude::*;
+use crate::err::Error;
+use crate::tensor::dtype::DTypeId;
 use alloc::collections::BTreeMap;
 use prost::Message;
 use std::path::Path;

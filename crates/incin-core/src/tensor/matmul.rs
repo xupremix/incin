@@ -11,8 +11,17 @@ use crate::dist::Local;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::request::TensorHandle;
-use crate::prelude::*;
+use crate::err::Result;
+use crate::shapes::prelude::{
+    Axis, AxisTag, BroadcastDim, BroadcastShape, ConcreteStaticExtent, ConstDim, Dim, DimCons,
+    DimensionConstraint, DynShape, NamedDim, Nil, RankExpectation, Shape, ShapeBuf, ShapeError,
+    ShapeValue, SplitLast2, StructuralConcatShape,
+};
 use crate::shapes::error::OperationKind;
+use crate::tensor::base::{Dyn, Tensor};
+use crate::tensor::backend::Backend;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
 use alloc::vec::Vec;
