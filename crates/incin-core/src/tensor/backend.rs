@@ -7,6 +7,7 @@ use crate::exec::{TensorMeta, Validated};
 use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, ShapeBuf, convert_f64_to_i64};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
+use crate::tensor::reduction::Reduction;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// A backend-agnostic scalar, tagged by whether it originated as a float or
@@ -999,14 +1000,14 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
     fn mse_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
-        reduction: crate::nn::loss::Reduction,
+        reduction: crate::tensor::reduction::Reduction,
     ) -> Result<B::Storage<K>> {
         let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
         let sq = <B as NumericOps<B>>::mul::<K>(&diff, &diff)?;
         match reduction {
-            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&sq),
-            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&sq),
-            crate::nn::loss::Reduction::None => Ok(sq),
+            crate::tensor::reduction::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&sq),
+            crate::tensor::reduction::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&sq),
+            crate::tensor::reduction::Reduction::None => Ok(sq),
         }
     }
 
@@ -1014,14 +1015,14 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
     fn l1_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
-        reduction: crate::nn::loss::Reduction,
+        reduction: crate::tensor::reduction::Reduction,
     ) -> Result<B::Storage<K>> {
         let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
         let abs_diff = <B as FloatOps<B>>::abs::<K>(&diff)?;
         match reduction {
-            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&abs_diff),
-            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&abs_diff),
-            crate::nn::loss::Reduction::None => Ok(abs_diff),
+            crate::tensor::reduction::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&abs_diff),
+            crate::tensor::reduction::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&abs_diff),
+            crate::tensor::reduction::Reduction::None => Ok(abs_diff),
         }
     }
 
@@ -1032,7 +1033,7 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
     fn bce_with_logits_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
-        reduction: crate::nn::loss::Reduction,
+        reduction: crate::tensor::reduction::Reduction,
     ) -> Result<B::Storage<K>> {
         let max_x_0 = <B as FloatOps<B>>::relu::<K>(pred)?;
         let x_times_z = <B as NumericOps<B>>::mul::<K>(pred, target)?;
@@ -1047,9 +1048,9 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
         let loss_elem = <B as NumericOps<B>>::add::<K>(&term1, &term2)?;
 
         match reduction {
-            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&loss_elem),
-            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&loss_elem),
-            crate::nn::loss::Reduction::None => Ok(loss_elem),
+            crate::tensor::reduction::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&loss_elem),
+            crate::tensor::reduction::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&loss_elem),
+            crate::tensor::reduction::Reduction::None => Ok(loss_elem),
         }
     }
 
@@ -1060,7 +1061,7 @@ pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<KInt>,
-        reduction: crate::nn::loss::Reduction,
+        reduction: crate::tensor::reduction::Reduction,
     ) -> Result<B::Storage<K>>;
 }
 
@@ -1165,7 +1166,7 @@ pub fn adamw_step_composed<B: Backend + NumericOps<B> + FloatOps<B>, K: DType>(
 pub mod dummy {
     use super::*;
     use crate::exec::spec::ExecutionDescriptor;
-    use crate::nn::Reduction;
+    use crate::tensor::reduction::Reduction;
     use crate::prelude::Result;
     use crate::tensor::device::Device;
     use crate::tensor::device::DeviceId;

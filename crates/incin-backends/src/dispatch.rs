@@ -2093,7 +2093,7 @@ impl<D: Device> LossOps<Self> for DispatchBackend<D> {
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &DispatchStorage,
         target: &DispatchStorage,
-        reduction: incin_core::nn::loss::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<DispatchStorage> {
         dispatch_same_device!(
             pred,

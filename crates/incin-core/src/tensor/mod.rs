@@ -23,6 +23,8 @@ pub mod grad;
 pub mod matmul;
 /// Operator-trait implementations (`Add`, `Index`, etc.) for `Tensor`.
 pub mod ops;
+/// Runtime reduction semantics shared by tensor and neural-network operations.
+pub mod reduction;
 /// The ONNX-tracing backend wrapper used to record ops into a `Graph`.
 pub mod tracing;
 
@@ -51,6 +53,7 @@ pub mod prelude {
     };
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
     pub use super::matmul::MatMulShape;
+    pub use super::reduction::Reduction;
     pub use super::tracing::{
         TracingBackend, extract_graph, tracing_mark_input, tracing_mark_input_typed,
         tracing_mark_output,

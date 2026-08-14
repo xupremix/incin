@@ -3042,7 +3042,7 @@ impl<D: Device> LossOps<Self> for MetalBackendImpl<D> {
     fn cross_entropy_loss<K: DType, KInt: DType>(
         _pred: &<Self as StorageBackend>::Storage<K>,
         _target: &<Self as StorageBackend>::Storage<KInt>,
-        _reduction: incin_core::nn::loss::Reduction,
+        _reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Err(unsupported("cross_entropy_loss"))
     }

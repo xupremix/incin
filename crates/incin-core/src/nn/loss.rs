@@ -7,18 +7,7 @@ use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
-
-/// Specifies the runtime reduction to apply to the output of a loss function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Reduction {
-    #[default]
-    /// `Mean`.
-    Mean,
-    /// `Sum`.
-    Sum,
-    /// `None`.
-    None,
-}
+pub use crate::tensor::reduction::Reduction;
 
 /// `ReductionMode`.
 pub trait ReductionMode: Clone + Default + 'static {
