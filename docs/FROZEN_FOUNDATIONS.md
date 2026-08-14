@@ -28,7 +28,9 @@ stops existing, so this file cannot rot into a list of deleted files.
 > backend-executable operations through `dispatch::execute` and its shaped
 > variants. The old operation-family traits remain only for backend-local
 > helpers, fused special execution sites, tracing adapters, and compatibility
-> tests. They are not a second stable tensor path.
+> tests. Their in-tree compatibility namespace is doc-hidden
+> (`incin_core::__backend_compat`); they are not a backend-authoring API or a
+> second stable tensor path.
 
 The shape of that table is the point. Each row is a decision made once and then
 made unrepeatable, so the cost of migrating operation number 118 is the same as
@@ -42,7 +44,7 @@ treated as settled.
 | Surface | Why it still moves |
 |---|---|
 | The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Sixteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
-| The nine operation-family traits | They remain only as backend-local implementation adapters and special execution sites. The stable tensor surface no longer depends on them |
+| The nine operation-family traits | They remain only as backend-local implementation adapters and special execution sites under the doc-hidden `incin_core::__backend_compat` namespace. The stable tensor surface and backend-authoring API no longer depend on them |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot state the tight per-operand pair directly, and no longer needs to: `INDEX_AND_F32_DTYPES` states the *union* the row can honestly claim, the same trick `descriptor_min_rank` already used for rank, and the descriptor's own per-operand contract (already `TypedContract`/hand-cased in `validate`, not something this added) rejects the wrong combination before any capability query runs. Both operations that needed it — `embedding` and `cross_entropy_loss` — are migrated on that technique, so no struct change to `CapabilityRule` was needed or made |
 | `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
