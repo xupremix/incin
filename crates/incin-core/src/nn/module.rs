@@ -1,6 +1,6 @@
 use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, Result, Shape, Tensor, ToDevice, VariableBackend};
 use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 /// A trait implemented by all Neural Network modules.
