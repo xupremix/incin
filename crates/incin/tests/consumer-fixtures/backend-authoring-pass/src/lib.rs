@@ -109,7 +109,7 @@ impl Backend for CompanyBackend {
 
 }
 
-impl incin_core::backend_authoring::HostInterop for CompanyBackend {
+impl incin::backend_authoring::HostInterop for CompanyBackend {
     fn to_bytes<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<u8>> {
             Ok(Vec::new())
         }
