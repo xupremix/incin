@@ -24,36 +24,6 @@ pub trait HostInterop: StorageBackend {
     fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String;
 }
 
-/// Trainable-variable storage capabilities.
-pub trait VariableBackend: StorageBackend {
-    /// Backend-native variable handle.
-    type RawVar: Clone;
-    /// Views a variable as ordinary tensor storage.
-    fn variable_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>>;
-    /// Promotes tensor storage to a trainable variable.
-    fn variable_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar>;
-    /// Failure-atomic variable assignment.
-    fn variable_assign<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()>;
-}
-
-/// Reverse-mode automatic differentiation capabilities.
-pub trait AutogradBackend: StorageBackend {
-    /// Backend-owned gradient collection.
-    type Grads;
-    /// Runs reverse-mode differentiation from `storage`.
-    fn autograd_backward<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Runs reverse-mode differentiation with an explicit seed.
-    fn autograd_backward_with<K: DType>(
-        storage: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads>;
-    /// Looks up a gradient for a storage handle.
-    fn autograd_get_grad<K: DType>(
-        storage: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>>;
-}
-
 /// Blanket host capability view for the compatibility `Backend` contract.
 impl<B: Backend + TensorOps<B>> HostInterop for B {
     fn host_shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
@@ -70,40 +40,6 @@ impl<B: Backend + TensorOps<B>> HostInterop for B {
     }
     fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
         <B as Backend>::format_tensor_debug(storage)
-    }
-}
-
-impl<B: Backend> VariableBackend for B {
-    type RawVar = B::RawVar;
-
-    fn variable_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
-        <B as Backend>::var_as_tensor(var)
-    }
-    fn variable_from_tensor<K: DType>(storage: &Self::Storage<K>) -> Result<Self::RawVar> {
-        <B as Backend>::var_from_tensor(storage)
-    }
-    fn variable_assign<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
-        <B as Backend>::assign_var(var, storage)
-    }
-}
-
-impl<B: Backend> AutogradBackend for B {
-    type Grads = B::Grads;
-
-    fn autograd_backward<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Grads> {
-        <B as Backend>::backward(storage)
-    }
-    fn autograd_backward_with<K: DType>(
-        storage: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        <B as Backend>::backward_with(storage, seed)
-    }
-    fn autograd_get_grad<K: DType>(
-        storage: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        <B as Backend>::get_grad(storage, grads)
     }
 }
 

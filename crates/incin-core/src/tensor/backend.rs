@@ -9,8 +9,12 @@ mod execute;
 pub use execute::{Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput};
 mod transfer;
 pub use transfer::TransferTo;
+mod autograd;
+pub use autograd::AutogradBackend;
+mod variable;
+pub use variable::VariableBackend;
 mod capability;
-pub use capability::{AutogradBackend, HostInterop, TransferBackend, VariableBackend};
+pub use capability::{HostInterop, TransferBackend};
 mod optimizer;
 pub use optimizer::{OptimizerOps, adamw_step_composed};
 
