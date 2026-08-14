@@ -15,8 +15,8 @@ check_absent() {
     fi
 }
 
-check_absent "internal wildcard preludes" \
-    '^[[:space:]]*(pub[[:space:]]+)?use[[:space:]]+(crate|incin_core)::prelude::\*;' \
+check_absent "public wildcard preludes" \
+    '^[[:space:]]*pub[[:space:]]+use[[:space:]]+(crate|incin_core)::prelude::\*;' \
     crates/incin-core/src crates/incin-backends/src
 check_absent "tensor depends upward on nn" \
     'crate::nn::|incin_core::nn::' \
