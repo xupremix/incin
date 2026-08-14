@@ -23,6 +23,14 @@ if rg -n 'backend_authoring::legacy' crates/incin-core/src/lib.rs crates/incin/s
     exit 1
 fi
 
+# Loss and optimizer compatibility helpers are backend-local. Formatting is a
+# host-interoperability concern, not part of the backend identity contract.
+if rg -n '^pub trait (LossOps|OptimizerOps)|fn format_tensor_(display|debug)' \
+    crates/incin-core/src/tensor crates/incin-core/src/lib.rs --glob '*.rs'; then
+    echo "public API check failed: removed transitional backend surface reappeared" >&2
+    exit 1
+fi
+
 if ! rg -q '^pub\(crate\) mod backend;' crates/incin-core/src/tensor/mod.rs; then
     echo "public API check failed: tensor backend module is public" >&2
     exit 1
