@@ -1,8 +1,9 @@
 #![cfg(test)]
 
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
-use crate::wgpu::WgpuBackendImpl;
+use crate::wgpu::{WgpuBackendImpl, WgpuVar};
 use incin_core::backend_authoring::*;
+use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
@@ -43,7 +44,7 @@ type B = WgpuBackendImpl<WgpuN<incin_core::typenum::U0>>;
 /// `test_zeros`.
 fn test_zeros() {
     let s =
-        <B as CreationOps<B>>::zeros::<f32>(&[2, 3], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+        B::zeros::<f32>(&[2, 3], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
             .unwrap();
     assert_eq!(s.shape, vec![2, 3]);
     assert!(readback(&s).iter().all(|&x| x == 0.0));
@@ -53,7 +54,7 @@ fn test_zeros() {
 /// `test_ones`.
 fn test_ones() {
     let s =
-        <B as CreationOps<B>>::ones::<f32>(&[3, 2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+        B::ones::<f32>(&[3, 2], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
             .unwrap();
     assert!(readback(&s).iter().all(|&x| x == 1.0));
 }
@@ -62,7 +63,7 @@ fn test_ones() {
 /// `test_rand_shape`.
 fn test_rand_shape() {
     let s =
-        <B as CreationOps<B>>::rand::<f32>(&[4, 4], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+        B::rand::<f32>(&[4, 4], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
             .unwrap();
     assert_eq!(s.shape, vec![4, 4]);
     let data = readback(&s);
@@ -74,7 +75,7 @@ fn test_rand_shape() {
 /// `test_randn_shape`.
 fn test_randn_shape() {
     let s =
-        <B as CreationOps<B>>::randn::<f32>(&[100], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
+        B::randn::<f32>(&[100], DTypeId::F32.descriptor(), &DeviceId::wgpu(0))
             .unwrap();
     assert_eq!(s.shape, vec![100]);
 }

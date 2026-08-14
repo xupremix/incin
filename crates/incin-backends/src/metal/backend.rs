@@ -208,12 +208,12 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<
         }
 }
 
-// ─── CreationOps ────────────────────────────────────────────────────────────
+// ─── Concrete creation helpers ──────────────────────────────────────────────
 
-impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
+impl<D: Device> MetalBackendImpl<D> {
     /// `full`. Same host-fill-then-upload pattern `ones` above already
     /// uses.
-    fn full<K: DType>(
+    pub fn full<K: DType>(
         val: f64,
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -228,7 +228,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
     /// `arange`.
-    fn arange<K: DType>(
+    pub fn arange<K: DType>(
         start: f64,
         step: f64,
         shape: &[usize],
@@ -244,7 +244,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
     /// `linspace`.
-    fn linspace<K: DType>(
+    pub fn linspace<K: DType>(
         start: f64,
         end: f64,
         shape: &[usize],
@@ -267,7 +267,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    fn zeros<K: DType>(
+    pub fn zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -282,7 +282,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         )
     }
 
-    fn ones<K: DType>(
+    pub fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -296,7 +296,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    fn rand<K: DType>(
+    pub fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -310,7 +310,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    fn randn<K: DType>(
+    pub fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -324,7 +324,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    fn var_zeros<K: DType>(
+    pub fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -333,7 +333,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         Ok(MetalVar { storage: s })
     }
 
-    fn var_ones<K: DType>(
+    pub fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -342,7 +342,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         Ok(MetalVar { storage: s })
     }
 
-    fn var_rand<K: DType>(
+    pub fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -351,7 +351,7 @@ impl<D: Device> CreationOps<Self> for MetalBackendImpl<D> {
         Ok(MetalVar { storage: s })
     }
 
-    fn var_randn<K: DType>(
+    pub fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,

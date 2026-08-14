@@ -50,9 +50,7 @@ pub(crate) fn normal_random_storage(
     CandleStorage::try_new(t)
 }
 
-impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::CreationOps<Self>
-    for CandleBackend<D>
-{
+impl<D: incin_core::prelude::Device> CandleBackend<D> {
     // This adapter does not route candle's fill or sequence constructors yet.
     crate::unsupported::unsupported_creation_ops! {
         fill: full;
@@ -61,7 +59,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
 
     /// Allocates a tensor of `shape` filled with zeros on `device` with the
     /// given dtype.
-    fn zeros<K: incin_core::prelude::DType>(
+    pub fn zeros<K: incin_core::prelude::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -71,7 +69,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
 
     /// Allocates a tensor of `shape` filled with ones on `device` with the
     /// given dtype.
-    fn ones<K: incin_core::prelude::DType>(
+    pub fn ones<K: incin_core::prelude::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -81,7 +79,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
 
     /// Samples a uniform `[0, 1)` tensor of `shape` on `device`, then casts
     /// it to `dtype`.
-    fn rand<K: incin_core::prelude::DType>(
+    pub fn rand<K: incin_core::prelude::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -91,7 +89,7 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Creat
 
     /// Samples a standard-normal tensor of `shape` on `device`, then casts
     /// it to `dtype`.
-    fn randn<K: incin_core::prelude::DType>(
+    pub fn randn<K: incin_core::prelude::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,

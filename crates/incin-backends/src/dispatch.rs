@@ -883,7 +883,7 @@ macro_rules! create_var_dispatch {
 }
 
 macro_rules! variable_executors {
-    ($(($operation:ident, $method:ident)),* $(,)?) => {$ (
+    ($(($operation:ident, $cpu_method:ident, $backend_method:ident)),* $(,)?) => {$ (
         impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
             type Output = DispatchVar;
 
@@ -892,7 +892,7 @@ macro_rules! variable_executors {
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> core::result::Result<DispatchVar, BackendError> {
                 let attributes = request.operation.descriptor().attributes();
-                create_var_execute_dispatch!($method, $method, &attributes.shape, attributes.dtype, &attributes.device)
+                create_var_execute_dispatch!($cpu_method, $backend_method, &attributes.shape, attributes.dtype, &attributes.device)
                     .map_err(|error| BackendError::Execution {
                         operation: OperationKind::$operation,
                         message: alloc::format!("{error}").into(),
@@ -944,10 +944,10 @@ macro_rules! create_var_execute_dispatch {
 }
 
 variable_executors![
-    (VariableZeros, var_zeros_with_total),
-    (VariableOnes, var_ones_with_total),
-    (VariableUniformRandom, var_rand_with_total),
-    (VariableNormalRandom, var_randn_with_total),
+    (VariableZeros, var_zeros_with_total, var_zeros),
+    (VariableOnes, var_ones_with_total, var_ones),
+    (VariableUniformRandom, var_rand_with_total, var_rand),
+    (VariableNormalRandom, var_randn_with_total, var_randn),
 ];
 
 macro_rules! scalar_executors {
@@ -1160,36 +1160,36 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for DispatchBackend<D
         }
 }
 
-impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
-    fn zeros<K: DType>(
+impl<D: Device> DispatchBackend<D> {
+    pub fn zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
         create_dispatch!(zeros_with_total, zeros, shape, dtype, device)
     }
-    fn ones<K: DType>(
+    pub fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
         create_dispatch!(ones_with_total, ones, shape, dtype, device)
     }
-    fn rand<K: DType>(
+    pub fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
         create_dispatch!(rand_with_total, rand, shape, dtype, device)
     }
-    fn randn<K: DType>(
+    pub fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
         create_dispatch!(randn_with_total, randn, shape, dtype, device)
     }
-    fn full<K: DType>(
+    pub fn full<K: DType>(
         val: f64,
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -1227,7 +1227,7 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
             other => Err(unavailable(other)),
         }
     }
-    fn arange<K: DType>(
+    pub fn arange<K: DType>(
         start: f64,
         step: f64,
         shape: &[usize],
@@ -1272,7 +1272,7 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
             other => Err(unavailable(other)),
         }
     }
-    fn linspace<K: DType>(
+    pub fn linspace<K: DType>(
         start: f64,
         end: f64,
         shape: &[usize],

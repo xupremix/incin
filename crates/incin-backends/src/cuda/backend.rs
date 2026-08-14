@@ -1834,7 +1834,7 @@ pub(crate) fn log_softmax<K: DType, D: Device>(t: &CudaStorage, dim: usize) -> R
     CudaBackendImpl::<D>::sub::<K>(&diff, &log_sum)
 }
 
-impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
+impl<D: Device> CudaBackendImpl<D> {
     // No kernel fills an arbitrary value or generates a sequence yet.
     /// `full`. Same host-fill-then-upload pattern `zeros`/`ones` above
     /// already use — `cuda_from_f32` reinterprets a `Vec<f32>`'s bytes as
@@ -1843,7 +1843,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
     /// length check inside `cuda_from_bytes` rather than misreading, the
     /// same pre-existing behavior `zeros`/`ones`/`rand`/`randn` already
     /// have (not something this pass changes).
-    fn full<K: DType>(
+    pub fn full<K: DType>(
         val: f64,
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -1858,7 +1858,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         )
     }
     /// `arange`.
-    fn arange<K: DType>(
+    pub fn arange<K: DType>(
         start: f64,
         step: f64,
         shape: &[usize],
@@ -1870,7 +1870,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         cuda_from_f32(shape, dtype, device, values, "arange")
     }
     /// `linspace`.
-    fn linspace<K: DType>(
+    pub fn linspace<K: DType>(
         start: f64,
         end: f64,
         shape: &[usize],
@@ -1889,7 +1889,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         cuda_from_f32(shape, dtype, device, values, "linspace")
     }
 
-    fn zeros<K: DType>(
+    pub fn zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1903,7 +1903,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         )
     }
 
-    fn ones<K: DType>(
+    pub fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1917,7 +1917,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         )
     }
 
-    fn rand<K: DType>(
+    pub fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1928,7 +1928,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         cuda_from_f32(shape, dtype, device, values, "rand")
     }
 
-    fn randn<K: DType>(
+    pub fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1941,7 +1941,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         cuda_from_f32(shape, dtype, device, values, "randn")
     }
 
-    fn var_zeros<K: DType>(
+    pub fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1949,7 +1949,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         Self::zeros::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_ones<K: DType>(
+    pub fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1957,7 +1957,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         Self::ones::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_rand<K: DType>(
+    pub fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -1965,7 +1965,7 @@ impl<D: Device> CreationOps<Self> for CudaBackendImpl<D> {
         Self::rand::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 
-    fn var_randn<K: DType>(
+    pub fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -4548,7 +4548,7 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_full() {
-        let out = <B as CreationOps<B>>::full::<f32>(
+        let out = B::full::<f32>(
             3.5,
             &[2, 2],
             DTypeId::F32.into(),
@@ -4561,7 +4561,7 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_arange() {
-        let out = <B as CreationOps<B>>::arange::<f32>(
+        let out = B::arange::<f32>(
             1.0,
             2.0,
             &[4],
@@ -4575,7 +4575,7 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_linspace() {
-        let out = <B as CreationOps<B>>::linspace::<f32>(
+        let out = B::linspace::<f32>(
             0.0,
             10.0,
             &[5],

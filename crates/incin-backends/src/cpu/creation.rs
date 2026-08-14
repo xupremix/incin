@@ -116,7 +116,7 @@ fn fill_buffer(
 
 /// `zeros`, given an already-known element count.
 ///
-/// The `CreationOps` trait method below derives `total` itself so the direct,
+/// The creation helper derives `total` itself so the direct,
 /// non-descriptor API keeps working from a bare shape slice. The canonical
 /// executor in `cpu::canonical` calls this form directly with a total it may
 /// already hold as a compile-time constant (`Shape::STATIC_NUMEL`), so it
