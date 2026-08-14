@@ -2,6 +2,8 @@
 pub mod arg;
 /// Converts user-facing constructor arguments into each `TensorArgs` field.
 pub mod arg_into;
+/// Checked byte lengths for tensor storage allocation.
+pub mod allocation;
 /// Compile-time device selection from enabled features.
 pub mod auto_device;
 /// The `Backend` trait family and the test-only `DummyBackend` stand-in.
@@ -36,6 +38,7 @@ pub mod tracing;
 pub mod prelude {
     pub use super::arg::TensorArgs;
     pub use super::arg_into::{ArgInto, TensorArgsData};
+    pub use super::allocation::{CheckedByteLen, checked_byte_len_from_dims};
     pub use super::auto_device::{BestDevice, BestDeviceAt};
     pub use super::backend::{
         AutogradBackend, Backend, HostInterop, StorageBackend, SupportsDType, TransferBackend,

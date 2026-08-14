@@ -734,55 +734,12 @@ impl CheckedNumel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Bounded and verified allocation byte length (`SEC-011`).
-pub struct CheckedByteLen(usize);
-
-impl CheckedByteLen {
-    /// Computes and validates the dense byte length for `dims` and `dtype`.
-    pub fn from_dims(
-        operation: crate::shapes::error::OperationKind,
-        dims: &[usize],
-        dtype: crate::tensor::dtype::DTypeDescriptor,
-        limits: &crate::resource::ResourceLimits,
-    ) -> Result<Self, crate::shapes::error::ShapeError> {
-        let numel = CheckedNumel::from_dims(operation, dims, limits)?;
-        let bytes = dtype.size_bytes(numel.get(), operation)?;
-        if u64::try_from(bytes).map_or(true, |bytes| bytes > limits.max_tensor_bytes) {
-            return Err(crate::shapes::error::ShapeError::ArithmeticOverflow {
-                operation,
-                expression: "tensor byte length exceeds resource limit",
-            });
-        }
-        Ok(Self(bytes))
-    }
-
-    #[inline]
-    pub fn get(self) -> usize {
-        self.0
-    }
-}
-
 /// Safely computes shape element count using checked multiplication and limits (`SEC-011`).
 pub fn checked_numel_from_dims(
     dims: &[usize],
     limits: &crate::resource::ResourceLimits,
 ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
     CheckedNumel::from_dims(crate::shapes::error::OperationKind::Reshape, dims, limits)
-}
-
-/// Safely computes byte allocation length using dtype block metrics and limits (`SEC-011`).
-pub fn checked_byte_len_from_dims(
-    dims: &[usize],
-    dtype: crate::tensor::dtype::DTypeDescriptor,
-    limits: &crate::resource::ResourceLimits,
-) -> Result<CheckedByteLen, crate::shapes::error::ShapeError> {
-    CheckedByteLen::from_dims(
-        crate::shapes::error::OperationKind::Reshape,
-        dims,
-        dtype,
-        limits,
-    )
 }
 
 /// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
@@ -1117,9 +1074,6 @@ mod tests {
     use super::*;
     use crate::resource::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
-    use crate::tensor::dtype::{
-        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
-    };
 
     #[test]
     fn test_scalar_shape() {
@@ -1180,42 +1134,6 @@ mod tests {
             .get(),
             0
         );
-        assert_eq!(
-            CheckedByteLen::from_dims(
-                OperationKind::Storage,
-                &[2, 3],
-                <f32 as ConstDType>::DESCRIPTOR,
-                &limits
-            )
-            .unwrap()
-            .get(),
-            24
-        );
-        // Q8_0 block descriptor test (32 elements = 34 bytes)
-        assert_eq!(
-            CheckedByteLen::from_dims(
-                OperationKind::Storage,
-                &[64],
-                <Q8_0 as ConstDType>::DESCRIPTOR,
-                &limits
-            )
-            .unwrap()
-            .get(),
-            68
-        );
-        // Custom block descriptor test (16 elements = 20 bytes)
-        let custom_block_desc = DTypeDescriptor::new(
-            DTypeKey::new("custom", "test_block", 1),
-            DTypeKind::Quantized,
-            StorageEncoding::block(16, 20, 2),
-        );
-        assert_eq!(
-            CheckedByteLen::from_dims(OperationKind::Storage, &[32], custom_block_desc, &limits)
-                .unwrap()
-                .get(),
-            40
-        );
-
         assert!(matches!(
             CheckedNumel::from_dims(OperationKind::Storage, &[usize::MAX, 2], &limits),
             Err(ShapeError::ArithmeticOverflow { .. })
@@ -1238,15 +1156,5 @@ mod tests {
         ));
 
         limits.max_dimension = u64::MAX;
-        limits.max_tensor_bytes = 23;
-        assert!(matches!(
-            CheckedByteLen::from_dims(
-                OperationKind::Storage,
-                &[2, 3],
-                <f32 as ConstDType>::DESCRIPTOR,
-                &limits
-            ),
-            Err(ShapeError::ArithmeticOverflow { .. })
-        ));
     }
 }

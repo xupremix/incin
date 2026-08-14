@@ -1,6 +1,6 @@
 use crate::exec::catalog::TraceDescriptor;
 use crate::exec::spec::ExecutionDescriptor;
-use crate::graph::{Graph, ValueId};
+use crate::graph_recording::{Graph, ValueId};
 use crate::err::{BackendError, Error, Result};
 use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
@@ -115,7 +115,7 @@ impl<V> From<TracingTensor<V>> for TracingVar<V> {
 impl<B: Backend> TracingBackend<B> {
     fn canonical_graph_attributes<O>(
         descriptor: &crate::exec::catalog::Descriptor<O>,
-    ) -> Result<alloc::collections::BTreeMap<alloc::string::String, crate::graph::AttributeValue>>
+    ) -> Result<alloc::collections::BTreeMap<alloc::string::String, crate::graph_recording::AttributeValue>>
     where
         O: crate::exec::catalog::Operation,
     {

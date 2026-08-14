@@ -19,6 +19,7 @@ pub mod dist;
 pub mod distributions;
 pub mod exec;
 pub mod graph;
+mod graph_recording;
 
 pub mod io;
 pub mod metrics;
@@ -207,7 +208,7 @@ pub mod prelude {
     pub use super::shapes::prelude::{
         AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisKey, AxisSchema,
         AxisSelector, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape,
-        CheckedByteLen, CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim,
+        CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim,
         DimCons, DimIdx, DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim,
         FromEnd, HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap,
         NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape,
@@ -216,7 +217,7 @@ pub mod prelude {
         ShapeArgs, ShapeBuf, ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget,
         SpatialConv1d, SpatialConv2d, SpatialOut, StackShape, StaticAxis, StrideBuf,
         StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape,
-        TryReshape, broadcast_dim_slices, checked_byte_len_from_dims, checked_numel_from_dims,
+        TryReshape, broadcast_dim_slices, checked_numel_from_dims,
         shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]
@@ -229,6 +230,7 @@ pub mod prelude {
         HostInterop, StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs,
         TensorArgsData, TensorElement, ToDevice, TracingBackend, TransferBackend, StorageTransfer, TransferTo,
         VariableBackend,
+        CheckedByteLen, checked_byte_len_from_dims,
         extract_graph, tracing_mark_input,
         tracing_mark_input_typed, tracing_mark_output,
     };
