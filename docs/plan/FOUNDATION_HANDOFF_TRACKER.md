@@ -5,7 +5,7 @@ Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OP
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
 Last verified command: cargo test -p incin-core --test checkpoint_reshard --no-default-features --features std -- --test-threads=1
 Last verified result: PASS (5 tests)
-Next concrete action: complete the validation matrix and keep optimizer persistence and the typed variable-plan seam explicitly deferred.
+Next concrete action: complete the validation matrix and keep optimizer persistence and the full typed variable-backend migration explicitly deferred.
 
 Status vocabulary:
 
@@ -110,7 +110,7 @@ the next foundation blockers; none is claimed complete by the shape work:
 | --- | --- | --- |
 | NEXT-A | Legacy state API removal | Model `StateDict`, serializer traits, safetensors helpers, and hub loading are snapshot-native. Optimizer dictionaries remain intentionally separate and are tracked under NEXT-K. |
 | NEXT-I | Tied/shared parameter identity | `StatePath` is intentionally distinct from runtime variable identity. No safe alias/identity contract exists for tied parameters; define one before deduplicating or restoring shared variables. |
-| NEXT-J | Backend typed variable abstraction | `StateLoadPlan<B>` is opaque but internally stages `B::RawVar`. Replace this internal seam with a typed `VariableBackend::Var<K>` architecture only after the backend resource contract is settled. |
+| NEXT-J | Backend typed variable abstraction | Public model-state traversal no longer exposes `StateLoadPlan<B>` or `B::RawVar`: `StateLoadPlan` is backend-neutral type-erased staging, and typed leaves recover backend handles only at commit. The later full `VariableBackend::Var<K>` migration remains deferred until the backend resource contract is settled. |
 | NEXT-K | Heterogeneous optimizer/parameter visitor | Model traversal is heterogeneous, but optimizer parameter visitation and optimizer-state persistence remain homogeneous/RawVar-oriented. Design the visitor contract before claiming complete training-state persistence. |
 | NEXT-B | Backend resource ownership/lifecycle | `Backend` and `ExecutionContext` expose execution/storage capabilities but no foundation-wide resource lease or explicit stream/event lifetime contract. Define ownership and failure cleanup before async/resource APIs expand. |
 | NEXT-C | Mutation and rollback semantics | Mutation descriptors are classified, but backend mutation and optimizer paths do not expose a common transactional/rollback contract. Specify atomicity and partial-failure behavior before claiming mutation safety. |
