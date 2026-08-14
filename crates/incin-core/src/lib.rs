@@ -39,7 +39,7 @@ pub use typenum;
 /// Implementation details used by procedural macros expanded inside this crate.
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::nn::{ComputeStats, LayerStats, StateLoadPlan, StateMutVisitor, StatePath, StateSnapshot, StateVisitor, VisitState, VisitStateMut};
+    pub use crate::nn::{ComputeStats, LayerStats, StateDict, StateLoadPlan, StateMutVisitor, StatePath, StateSnapshot, StateVisitor, VisitState, VisitStateMut};
     pub use crate::tensor::backend::{SupportsDType, TransferTo};
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 }

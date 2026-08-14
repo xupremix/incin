@@ -371,7 +371,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     collect_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::collect_state(
+                        #macro_support::StateDict::collect_state(
                             &self.#fname, &child_path, snapshot)?;
                     });
                     visit_state_calls.push(quote! {
@@ -391,12 +391,12 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     prepare_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::prepare_state(
+                        #macro_support::StateDict::prepare_state(
                             &self.#fname, &child_path, snapshot, plan)?;
                     });
                     commit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::commit_state(
+                        #macro_support::StateDict::commit_state(
                             &mut self.#fname, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
@@ -466,7 +466,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     collect_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::collect_state(
+                        #macro_support::StateDict::collect_state(
                             &self.#idx, &child_path, snapshot)?;
                     });
                     visit_state_calls.push(quote! {
@@ -486,12 +486,12 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     prepare_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::prepare_state(
+                        #macro_support::StateDict::prepare_state(
                             &self.#idx, &child_path, snapshot, plan)?;
                     });
                     commit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::StateDict::commit_state(
+                        #macro_support::StateDict::commit_state(
                             &mut self.#idx, &child_path, plan)?;
                     });
                     named_layer_calls.push(quote! {
@@ -609,7 +609,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     for fty in &state_dict_field_types {
         state_dict_where_clause
             .predicates
-            .push(syn::parse_quote!(#fty: #k_crate::prelude::StateDict<#b_ident>));
+            .push(syn::parse_quote!(#fty: #macro_support::StateDict<#b_ident>));
     }
 
     let parameters_impl = if no_parameters {
@@ -672,7 +672,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
+            impl #impl_generics #macro_support::StateDict<#b_ident> for #name #ty_generics #state_dict_where_clause {
                 fn collect_state(&self, path: &#k_crate::prelude::StatePath, snapshot: &mut #k_crate::prelude::StateSnapshot) -> #k_crate::prelude::Result<()> {
                     #(#collect_state_calls)*
                     Ok(())

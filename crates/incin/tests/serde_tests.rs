@@ -1,7 +1,7 @@
 #![cfg(feature = "cpu")]
 
-use incin::StateDict;
 use incin::prelude::*;
+use incin::state::{collect_state, load_state};
 extern crate alloc;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -23,7 +23,7 @@ struct ExplicitStateNames {
 /// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
     let layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
-    let map = layer.state_dict()?;
+    let map = collect_state::<CpuBackendImpl, _>(&layer)?;
 
     // Linear has weight and bias (bias is optional, but new() creates it by default)
     assert_eq!(map.len(), 2);
@@ -32,7 +32,7 @@ fn test_state_dict_extraction() -> Result<()> {
 
     // Load state
     let mut new_layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
-    new_layer.load_state_dict(&map)?;
+    load_state::<CpuBackendImpl, _>(&mut new_layer, &map)?;
 
     // Test parameters
     let params = layer.parameters();
@@ -44,14 +44,14 @@ fn test_state_dict_extraction() -> Result<()> {
 #[test]
 fn test_owned_heterogeneous_snapshot_extraction() -> Result<()> {
     let layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
-    let snapshot = layer.state_snapshot()?;
+    let snapshot = collect_state::<CpuBackendImpl, _>(&layer)?;
     assert_eq!(snapshot.len(), 2);
     assert!(snapshot.iter().all(|(path, value)| {
         (path.as_str().ends_with("weight") || path.as_str().ends_with("bias"))
             && !value.bytes().is_empty()
     }));
     let mut restored = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
-    restored.load_state_snapshot(&snapshot)?;
+    load_state::<CpuBackendImpl, _>(&mut restored, &snapshot)?;
     Ok(())
 }
 
@@ -77,7 +77,7 @@ fn test_mixed_dtype_snapshot_round_trip() -> Result<()> {
             f16,
         >::build(())?,
     };
-    let snapshot = model.state_snapshot()?;
+    let snapshot = collect_state::<CpuBackendImpl, _>(&model)?;
     assert_eq!(snapshot.len(), 4);
     assert!(
         snapshot
@@ -111,7 +111,7 @@ fn test_mixed_dtype_checkpoint_round_trip() -> Result<()> {
             f16,
         >::build(())?,
     };
-    let expected = model.state_snapshot()?;
+    let expected = collect_state::<CpuBackendImpl, _>(&model)?;
     let dir = std::env::temp_dir().join(format!("incin-mixed-checkpoint-{}", std::process::id()));
     std::fs::create_dir_all(&dir)?;
     incin_core::nn::save::save_checkpoint::<CpuBackendImpl, _, _>(&model, &dir, 1)?;
@@ -135,7 +135,7 @@ fn test_mixed_dtype_checkpoint_round_trip() -> Result<()> {
         0,
         1,
     )?;
-    assert_eq!(restored.state_snapshot()?, expected);
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&restored)?, expected);
     std::fs::remove_dir_all(dir).ok();
     Ok(())
 }
@@ -145,7 +145,7 @@ fn test_explicit_state_name_is_schema_stable() -> Result<()> {
     let model = ExplicitStateNames {
         internal_query_projection: Linear::build(())?,
     };
-    let snapshot = model.state_snapshot()?;
+    let snapshot = collect_state::<CpuBackendImpl, _>(&model)?;
     assert!(
         snapshot
             .iter()
@@ -162,14 +162,14 @@ fn test_explicit_state_name_is_schema_stable() -> Result<()> {
 #[test]
 fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
     let mut model = Linear::<s![2, 2], CpuBackendImpl>::build(())?;
-    let original = model.state_snapshot()?;
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
 
     let mut missing = StateSnapshot::new();
     for (path, value) in original.iter().filter(|(path, _)| path.as_str() != "bias") {
         missing.insert(path.clone(), value.clone())?;
     }
-    assert!(model.load_state_snapshot(&missing).is_err());
-    assert_eq!(model.state_snapshot()?, original);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &missing).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
 
     let mut unexpected = original.clone();
     unexpected.insert(
@@ -181,8 +181,8 @@ fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
             StateRole::Buffer,
         )?,
     )?;
-    assert!(model.load_state_snapshot(&unexpected).is_err());
-    assert_eq!(model.state_snapshot()?, original);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &unexpected).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
 
     let weight = original.get(&StatePath::new("weight")?).unwrap();
     let mut wrong_shape = StateSnapshot::new();
@@ -201,8 +201,8 @@ fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
             },
         )?;
     }
-    assert!(model.load_state_snapshot(&wrong_shape).is_err());
-    assert_eq!(model.state_snapshot()?, original);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &wrong_shape).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
 
     let mut wrong_dtype = StateSnapshot::new();
     for (path, value) in original.iter() {
@@ -220,22 +220,26 @@ fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
             },
         )?;
     }
-    assert!(model.load_state_snapshot(&wrong_dtype).is_err());
-    assert_eq!(model.state_snapshot()?, original);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &wrong_dtype).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
     Ok(())
 }
 
 struct FailingState;
 
-impl<B: VariableBackend> StateDict<B> for FailingState {
-    fn collect_state(&self, _: &StatePath, _: &mut StateSnapshot) -> Result<()> {
+impl<B: VariableBackend> VisitState<B> for FailingState {
+    fn visit_state<V: StateVisitor<B>>(
+        &self,
+        _: &StatePath,
+        _: &mut V,
+    ) -> Result<()> {
         Err(Error::Msg("intentional state readback failure".into()))
     }
 }
 
 #[test]
 fn test_state_extraction_failure_propagates() {
-    assert!(StateDict::<CpuBackendImpl>::state_snapshot(&FailingState).is_err());
+    assert!(collect_state::<CpuBackendImpl, _>(&FailingState).is_err());
 }
 
 #[test]
@@ -250,7 +254,7 @@ fn test_sequential_state_dict_flat_keys_and_round_trip() -> Result<()> {
         ReLU,
         Linear::<s![5, 2], CpuBackendImpl>::build(())?
     );
-    let map = seq.state_dict()?;
+    let map = collect_state::<CpuBackendImpl, _>(&seq)?;
 
     let mut keys: Vec<&str> = map.iter().map(|(path, _)| path.as_str()).collect();
     keys.sort_unstable();
@@ -267,7 +271,7 @@ fn test_sequential_state_dict_flat_keys_and_round_trip() -> Result<()> {
         ReLU,
         Linear::<s![5, 2], CpuBackendImpl>::build(())?
     );
-    new_seq.load_state_dict(&map)?;
+    load_state::<CpuBackendImpl, _>(&mut new_seq, &map)?;
 
     Ok(())
 }

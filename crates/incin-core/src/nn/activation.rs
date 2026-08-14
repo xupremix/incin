@@ -371,6 +371,28 @@ impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B>
 impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Sigmoid {}
 impl<B: crate::tensor::backend::VariableBackend> crate::nn::module::StateDict<B> for Tanh {}
 
+macro_rules! impl_stateless_state_visitors {
+    ($($t:ty),+ $(,)?) => {$ (
+        impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitState<B> for $t {
+            fn visit_state<V: crate::nn::StateVisitor<B>>(
+                &self,
+                _: &crate::nn::StatePath,
+                _: &mut V,
+            ) -> crate::prelude::Result<()> { Ok(()) }
+        }
+
+        impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B> for $t {
+            fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+                &mut self,
+                _: &crate::nn::StatePath,
+                _: &mut V,
+            ) -> crate::prelude::Result<()> { Ok(()) }
+        }
+    )+ };
+}
+
+impl_stateless_state_visitors!(ReLU, GELU, Swish, Mish, ELU, Softmax, Sigmoid, Tanh);
+
 impl crate::nn::module::NamedLayers for ReLU {
     /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {

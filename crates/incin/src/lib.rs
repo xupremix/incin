@@ -85,7 +85,7 @@ pub use incin_core::prelude::{
     Buffer, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
-    QuantDType, RequiresGrad, Result, Shape, StateDict, StatePath, StateRole,
+    QuantDType, RequiresGrad, Result, Shape, StatePath, StateRole,
     StateSnapshot, StateValue, StateMutVisitor, StateVisitor, TrainState, VisitState, VisitStateMut, TensorElement, VariableBackend, bf16,
     convert_f64_to_i64, f16,
 };
@@ -118,7 +118,7 @@ pub mod types {
 #[doc(hidden)]
 pub mod __macro_support {
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
-    pub use incin_core::prelude::StateLoadPlan;
+    pub use incin_core::prelude::{StateDict, StateLoadPlan};
     pub use incin_core::backend_authoring::{SupportsDType, TransferTo};
     pub use incin_core::nn::{ComputeStats, LayerStats};
 }
@@ -289,7 +289,7 @@ pub mod nn {
         LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
         OptionalField, Param, ParameterVisitor, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
-        ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
+        ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, Sum, Swish, Tanh,
         TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
         format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
@@ -504,7 +504,7 @@ pub mod prelude {
         NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
-        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
+        Slice, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 
