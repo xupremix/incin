@@ -3,7 +3,7 @@
 Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
 
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
-Last verified command: cargo test -p incin-core --no-default-features --lib data_dependent_output_shapes_are_not_inferred_from_metadata
+Last verified command: cargo test -p incin-core --all-targets --no-default-features
 Last verified result: PASS
 Next concrete action: replace the homogeneous f32 StateDict boundary with dtype-preserving state storage.
 
@@ -101,7 +101,7 @@ checks do not prove the open remediation items above.
 ## 2026-08-14 foundation checkpoint status and next blockers
 
 Checkpoints 0–6 are complete in commits `ba85ff0`, `4ca1343`, `c528be4`,
-`b9d57d9`, `330bb5f`, `fb320cb`, `f2e33a3`, and `30fde1b`. The following are
+`b9d57d9`, `330bb5f`, `fb320cb`, `f2e33a3`, `30fde1b`, and `f11af38`. The following are
 the next foundation blockers; none is claimed complete by the shape work:
 
 | ID | Blocker | Evidence and required next seam |
