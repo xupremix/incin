@@ -7,7 +7,8 @@
 
 use incin_core::backend_authoring::operations::op;
 use incin_core::backend_authoring::{
-    Backend, Execute, ExecutionRequest, StorageBackend, SupportsDType,
+    AutogradBackend, Backend, Execute, ExecutionRequest, StorageBackend, SupportsDType,
+    VariableBackend,
 };
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, SupportLevel, TensorMeta, UnsupportedReason,
@@ -37,24 +38,7 @@ impl StorageBackend for CanonicalOnlyBackend {
 }
 
 impl Backend for CanonicalOnlyBackend {
-    type RawVar = ();
-    type Grads = ();
     type InnerBackend = Self;
-
-    fn shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
-        ShapeBuf::from_slice(storage.meta.shape.dims())
-    }
-
-    fn backward<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Grads> {
-        Ok(())
-    }
-
-    fn get_grad<K: DType>(
-        _tensor: &Self::Storage<K>,
-        _grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        Ok(None)
-    }
 
     fn to_bytes<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<u8>> {
         Ok(vec![])
@@ -79,6 +63,11 @@ impl Backend for CanonicalOnlyBackend {
         })
     }
 
+}
+
+impl VariableBackend for CanonicalOnlyBackend {
+    type RawVar = ();
+
     fn var_as_tensor<K: DType>(_var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Err(Error::Backend(BackendError::Unsupported {
             backend: Self::BACKEND_NAME,
@@ -95,6 +84,17 @@ impl Backend for CanonicalOnlyBackend {
     fn assign_var<K: DType>(_var: &mut Self::RawVar, _tensor: &Self::Storage<K>) -> Result<()> {
         Ok(())
     }
+}
+
+impl AutogradBackend for CanonicalOnlyBackend {
+    type Grads = ();
+
+    fn backward<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Grads> { Ok(()) }
+
+    fn get_grad<K: DType>(
+        _tensor: &Self::Storage<K>,
+        _grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> { Ok(None) }
 }
 
 impl Capabilities for CanonicalOnlyBackend {

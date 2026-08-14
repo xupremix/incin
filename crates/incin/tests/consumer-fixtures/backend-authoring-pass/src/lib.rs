@@ -2,9 +2,9 @@ use incin::backend_authoring::operations::{
     CreationAttributes, Descriptor, NoAttributes, OPERATION_CATALOG, op,
 };
 use incin::backend_authoring::{
-    Alignment, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
+    Alignment, AutogradBackend, Backend, Capabilities, CapabilityQuery, Execute, ExecutionDescriptor,
     ExecutionRequest, Operation, OperationKey, ShapeBuf, StorageBackend,
-    SupportLevel, TensorBackend, TensorMeta,
+    SupportLevel, TensorBackend, TensorMeta, VariableBackend,
 };
 use incin::prelude::{
     BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, Shape,
@@ -95,13 +95,7 @@ impl Execute<op::Zeros> for CompanyBackend {
 }
 
 impl Backend for CompanyBackend {
-    type RawVar = ShapeBuf;
-    type Grads = ();
     type InnerBackend = Self;
-
-    fn shape<K: DType>(storage: &<Self as StorageBackend>::Storage<K>) -> ShapeBuf {
-        storage.clone()
-    }
 
     fn format_tensor_display<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
         String::from("company")
@@ -109,17 +103,6 @@ impl Backend for CompanyBackend {
 
     fn format_tensor_debug<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> String {
         String::from("company")
-    }
-
-    fn backward<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Self::Grads> {
-        Ok(())
-    }
-
-    fn get_grad<K: DType>(
-        _: &<Self as StorageBackend>::Storage<K>,
-        _: &Self::Grads,
-    ) -> incin::prelude::Result<Option<<Self as StorageBackend>::Storage<K>>> {
-        Ok(None)
     }
 
     fn to_bytes<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<u8>> {
@@ -135,6 +118,11 @@ impl Backend for CompanyBackend {
         Ok(ShapeBuf::from_slice(shape))
     }
 
+}
+
+impl VariableBackend for CompanyBackend {
+    type RawVar = ShapeBuf;
+
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> incin::prelude::Result<<Self as StorageBackend>::Storage<K>> {
         Ok(var.clone())
     }
@@ -147,6 +135,17 @@ impl Backend for CompanyBackend {
         *var = storage.clone();
         Ok(())
     }
+}
+
+impl AutogradBackend for CompanyBackend {
+    type Grads = ();
+
+    fn backward<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Self::Grads> { Ok(()) }
+
+    fn get_grad<K: DType>(
+        _: &<Self as StorageBackend>::Storage<K>,
+        _: &Self::Grads,
+    ) -> incin::prelude::Result<Option<<Self as StorageBackend>::Storage<K>>> { Ok(None) }
 }
 
 pub fn accepts_backend_contract<B, O>()

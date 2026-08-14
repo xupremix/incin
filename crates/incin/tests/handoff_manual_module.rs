@@ -30,7 +30,7 @@ impl Parameters<CpuBackend> for ManualLinear {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut BTreeMap<String, <CpuBackend as Backend>::RawVar>,
+        map: &mut BTreeMap<String, <CpuBackend as VariableBackend>::RawVar>,
     ) {
         let child_prefix = if prefix.is_empty() {
             "layer".to_owned()
