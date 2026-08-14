@@ -43,7 +43,8 @@ use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_imp
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
     float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
-    int_to_vec1_storage, narrow_storage, squeeze_storage, sub_scalar_storage, transpose_storage,
+    int_to_vec1_storage, masked_fill_storage, narrow_storage, squeeze_storage, sub_scalar_storage,
+    transpose_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
@@ -1948,22 +1949,7 @@ impl<D: Device> Execute<op::MaskedFill> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let value = request.operation.descriptor().attributes().value;
-        match input.dtype().builtin_id() {
-            Some(DTypeId::F32) => <Self as TensorOps<Self>>::masked_fill::<f32>(input, mask, value),
-            Some(DTypeId::F64) => <Self as TensorOps<Self>>::masked_fill::<f64>(input, mask, value),
-            Some(DTypeId::I64) => <Self as TensorOps<Self>>::masked_fill::<i64>(input, mask, value),
-            Some(DTypeId::U8) => <Self as TensorOps<Self>>::masked_fill::<u8>(input, mask, value),
-            Some(DTypeId::U32) => <Self as TensorOps<Self>>::masked_fill::<u32>(input, mask, value),
-            Some(DTypeId::Bool) => {
-                <Self as TensorOps<Self>>::masked_fill::<bool>(input, mask, value)
-            }
-            _ => {
-                return Err(invalid(
-                    operation,
-                    "unsupported value dtype for masked_fill",
-                ));
-            }
-        }
+        masked_fill_storage(input, mask, value)
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

@@ -204,6 +204,24 @@ pub(crate) fn int_to_vec1_storage(t: &CpuStorage) -> Result<alloc::vec::Vec<i64>
     Ok(out)
 }
 
+pub(crate) fn masked_fill_storage(
+    t: &CpuStorage,
+    mask: &CpuStorage,
+    value: f64,
+) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        out.push(if mask.get_bool(&idx) { value } else { t.get(&idx) });
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    let buffer = t.buffer.from_f64_values(out)?;
+    Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+}
+
 /// Plain or batched matrix multiplication, chosen by operand rank.
 pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
@@ -992,19 +1010,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         mask: &<Self as StorageBackend>::Storage<bool>,
         value: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            let is_set = mask.get_bool(&idx);
-            let val = if is_set { value } else { t.get(&idx) };
-            out.push(val);
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        let buffer = t.buffer.from_f64_values(out)?;
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+        masked_fill_storage(t, mask, value)
     }
 
     fn unsqueeze<K: DType>(
