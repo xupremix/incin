@@ -1,5 +1,10 @@
 //! Compile-time broadcasting shape verification.
-use crate::prelude::*;
+use crate::shapes::dim::Dim;
+use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, ShapeError};
+use crate::shapes::shape::{DimCons, DynShape, Nil, Shape};
+use crate::shapes::ShapeBuf;
+use crate::tensor::base::Dyn;
+use alloc::vec::Vec;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible
 /// sizes instead of silently fabricating a wrong result via a bare `.max()`.

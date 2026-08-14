@@ -1,5 +1,12 @@
 use crate::nn::module::{Module, Parameters, TrainMode};
-use crate::prelude::*;
+use crate::err::{Error, Result};
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::base::Tensor;
+use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::RequiresGrad;
+use alloc::{string::{String, ToString}, vec::Vec};
 
 /// The Rectified Linear Unit (ReLU) activation function: `f(x) = max(0, x)`.
 ///

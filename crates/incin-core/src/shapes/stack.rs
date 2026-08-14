@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::shapes::Shape;
 use crate::shapes::idx::StaticCursor;
 use typenum::U2;
 

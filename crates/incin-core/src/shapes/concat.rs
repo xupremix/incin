@@ -1,4 +1,6 @@
-use crate::prelude::*;
+use crate::shapes::dim::Dim;
+use crate::shapes::shape::{DimCons, Shape};
+use crate::tensor::base::Dyn;
 use core::ops::Add;
 
 #[diagnostic::on_unimplemented(

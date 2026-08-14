@@ -1,4 +1,5 @@
-use crate::prelude::*;
+use crate::shapes::{AxisTag, DimCons, NamedDim, Nil, Shape};
+use alloc::vec::Vec;
 
 /// A marker type indicating that a reshape dimension should be inferred from the remaining elements.
 ///
