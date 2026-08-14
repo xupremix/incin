@@ -34,7 +34,7 @@ impl Execute<CompanyOp> for CpuBackendImpl<Cpu> {
         incin::backend_authoring::SupportLevel::Native
     }
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, CompanyOp, Self>,
     ) -> Result<Self::Output, BackendError> {

@@ -112,7 +112,7 @@ impl<K: DType> SupportsDType<K> for CanonicalOnlyBackend {
 impl Execute<op::Add> for CanonicalOnlyBackend {
     type Output = CanonicalStorage<f32>;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         _request: ExecutionRequest<'_, op::Add, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
@@ -134,7 +134,7 @@ impl Execute<op::Add> for CanonicalOnlyBackend {
 impl Execute<op::CmpEq> for CanonicalOnlyBackend {
     type Output = CanonicalStorage<bool>;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         _request: ExecutionRequest<'_, op::CmpEq, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {

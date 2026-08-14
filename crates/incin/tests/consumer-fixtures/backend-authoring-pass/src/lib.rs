@@ -71,7 +71,7 @@ impl Capabilities for CompanyBackend {
 impl Execute<CompanyOp> for CompanyBackend {
     type Output = ShapeBuf;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, CompanyOp, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -84,7 +84,7 @@ impl Execute<CompanyOp> for CompanyBackend {
 impl Execute<op::Zeros> for CompanyBackend {
     type Output = ShapeBuf;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Zeros, Self>,
     ) -> Result<Self::Output, BackendError> {
