@@ -1,7 +1,6 @@
 use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
@@ -2461,8 +2460,8 @@ pub fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: u
     Ok(())
 }
 
-impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
-    fn layer_norm<K: DType>(
+impl<D: Device> CudaBackendImpl<D> {
+    pub fn layer_norm<K: DType>(
         input: &CudaStorage,
         weight: &CudaStorage,
         bias: Option<&CudaStorage>,
@@ -2471,7 +2470,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         crate::cuda::ops::norm::launch_layer_norm(input, weight, bias, eps)
     }
 
-    fn batch_norm<K: DType>(
+    pub fn batch_norm<K: DType>(
         input: &CudaStorage,
         weight: Option<&CudaStorage>,
         bias: Option<&CudaStorage>,
@@ -2493,7 +2492,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// Embedding table lookup. Only `w` (the weight table) is differentiable
     /// — `t` (integer indices) is not part of the tape's `input_ids`,
     /// matching CPU's `embedding_impl` (`cpu/ops/embedding.rs`) exactly.
-    fn embedding<K: DType, KInt: DType>(
+    pub fn embedding<K: DType, KInt: DType>(
         t: &<Self as StorageBackend>::Storage<KInt>,
         w: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2533,7 +2532,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// Backward replays `max_indices` (captured from the forward pass)
     /// through `scatter_pool_grad_2d` — no forward recomputation needed,
     /// mirrors CPU's `max_window_2d`/`scatter_pool_grad_2d` pairing exactly.
-    fn max_pool2d<K: DType>(
+    pub fn max_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -2566,7 +2565,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// Backward is a real CUDA kernel (`avg_pool2d_backward`), unlike
     /// WGPU's host-readback-and-Rust-loop approach — see this file's
     /// module doc.
-    fn avg_pool2d<K: DType>(
+    pub fn avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -2592,7 +2591,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         Ok(out)
     }
 
-    fn adaptive_avg_pool2d<K: DType>(
+    pub fn adaptive_avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         output_size: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2620,7 +2619,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// per-batch `matmul` (CUDA’s own `matmul` is currently unbatched and 2D only) trades kernel-launch count for zero
     /// new hand-derived backward math in a compile-verified-only environment
     /// (no CUDA hardware here to gradcheck against).
-    fn conv1d<K: DType>(
+    pub fn conv1d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2694,7 +2693,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// doc), so this computes `weight_mat @ cols_b` directly per batch, no
     /// transpose of either operand needed (unlike CPU/WGPU's
     /// spatial-major `cols @ weight_mat^T`).
-    fn conv2d<K: DType>(
+    pub fn conv2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2773,7 +2772,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
     /// `output_padding` is its own final step via `pad_trailing_zeros_2d_tape`,
     /// never folded into `padding`'s symmetric arithmetic. Only `groups ==
     /// 1` is supported, matching CPU/WGPU's own documented scope.
-    fn conv_transpose2d<K: DType>(
+    pub fn conv_transpose2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -3649,7 +3648,7 @@ mod tests {
         // vocab_size=3, hidden_size=2
         let w = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let idx = cuda_i64(&[2], vec![2, 0]);
-        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+        let out = B::embedding::<f32, i64>(&idx, &w).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
 
@@ -3658,7 +3657,7 @@ mod tests {
     fn embedding_rejects_non_rank2_weight() {
         let w = cuda_f32(&[3, 2, 1], vec![0.0; 6]);
         let idx = cuda_i64(&[1], vec![0]);
-        assert!(<B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).is_err());
+        assert!(B::embedding::<f32, i64>(&idx, &w).is_err());
     }
 
     #[test]
@@ -3667,7 +3666,7 @@ mod tests {
         let w = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let idx = cuda_i64(&[2], vec![2, 0]);
         let w_id = w.id;
-        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+        let out = B::embedding::<f32, i64>(&idx, &w).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(w_id)
@@ -3681,7 +3680,7 @@ mod tests {
         // N=1,C=1,H=4,W=4, kernel=2, stride=2 -> 2x2 output
         let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
         let out =
-            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+            B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
     }
 
@@ -3691,7 +3690,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
         let t_id = t.id;
         let out =
-            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+            B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(t_id)
@@ -3703,7 +3702,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn avg_pool2d_computes_correct_output_shape() {
         let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
-        let out = <B as ModuleOps<B>>::avg_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0)).unwrap();
+        let out = B::avg_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
     }
 
@@ -3711,7 +3710,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn adaptive_avg_pool2d_matches_requested_output_size() {
         let t = cuda_f32(&[1, 1, 5, 5], vec![0.0; 25]);
-        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+        let out = B::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3, 3]);
     }
 
@@ -3720,7 +3719,7 @@ mod tests {
     fn adaptive_avg_pool2d_backward_matches_input_shape() {
         let t = cuda_f32(&[1, 1, 5, 5], vec![0.0; 25]);
         let t_id = t.id;
-        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+        let out = B::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(t_id)
@@ -3735,7 +3734,7 @@ mod tests {
         // matching CPU's hand-computed test fixture (conv.rs) exactly.
         let t = cuda_f32(&[1, 1, 4], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
-        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let out = B::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
         let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![3.0, 5.0, 7.0]);
@@ -3747,7 +3746,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 4], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
         let (t_id, w_id) = (t.id, w.id);
-        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let out = B::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 4]);
         assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2]);
@@ -3758,7 +3757,7 @@ mod tests {
     fn conv1d_rejects_groups_not_dividing_channels() {
         let t = cuda_f32(&[1, 3, 4], vec![0.0; 12]);
         let w = cuda_f32(&[3, 3, 2], vec![0.0; 18]);
-        assert!(<B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 2).is_err());
+        assert!(B::conv1d::<f32>(&t, &w, None, 1, 0, 1, 2).is_err());
     }
 
     #[test]
@@ -3771,7 +3770,7 @@ mod tests {
             vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
         );
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
-        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let out = B::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![12.0, 16.0, 24.0, 28.0]);
@@ -3783,7 +3782,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 1, 1], vec![1.0]);
         let bias = cuda_f32(&[1], vec![10.0]);
-        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
+        let out = B::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
         let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![11.0, 12.0, 13.0, 14.0]);
     }
@@ -3797,7 +3796,7 @@ mod tests {
         );
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let (t_id, w_id) = (t.id, w.id);
-        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let out = B::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 3, 3]);
         assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
@@ -3810,7 +3809,7 @@ mod tests {
         // independently, mirrors CPU's `conv2d_forward_groups_matches_two_independent_convs`.
         let t = cuda_f32(&[1, 2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
         let w = cuda_f32(&[2, 1, 1, 1], vec![2.0, 3.0]);
-        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
+        let out = B::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![1, 2, 2, 2]);
         let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![2.0, 4.0, 6.0, 8.0, 15.0, 18.0, 21.0, 24.0]);
@@ -3825,7 +3824,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let out =
-            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3, 3]);
     }
 
@@ -3835,7 +3834,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let out =
-            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
+            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 4, 4]);
     }
 
@@ -3846,7 +3845,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let (t_id, w_id) = (t.id, w.id);
         let out =
-            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 2, 2]);
         assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
@@ -3857,7 +3856,7 @@ mod tests {
     fn conv_transpose2d_rejects_groups_other_than_one() {
         let t = cuda_f32(&[1, 1, 2, 2], vec![0.0; 4]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![0.0; 4]);
-        assert!(<B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 2).is_err());
+        assert!(B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 2).is_err());
     }
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's

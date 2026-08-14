@@ -3,7 +3,6 @@
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use crate::wgpu::{WgpuBackendImpl, WgpuVar};
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
@@ -724,7 +723,7 @@ fn test_embedding() {
         vec![3, 4],
     );
     let indices = storage(vec![0.0, 2.0], vec![2]);
-    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+    let out = B::embedding::<f32, f32>(&indices, &weight).unwrap();
     assert_eq!(out.shape, vec![2, 4]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -739,7 +738,7 @@ fn test_layer_norm() {
     let x = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 4]);
     let gamma = storage(vec![1.0, 1.0, 1.0, 1.0], vec![4]);
     let beta = storage(vec![0.0, 0.0, 0.0, 0.0], vec![4]);
-    let out = <B as ModuleOps<B>>::layer_norm::<f32>(&x, &gamma, Some(&beta), 1e-5).unwrap();
+    let out = B::layer_norm::<f32>(&x, &gamma, Some(&beta), 1e-5).unwrap();
     let data = readback(&out);
     // After layer norm, mean≈0, std≈1
     let mean: f32 = data.iter().sum::<f32>() / 4.0;
@@ -754,7 +753,7 @@ fn test_adaptive_avg_pool2d() {
     // 1x1x4x4 -> 1x1x2x2
     let data: Vec<f32> = (1..=16).map(|x| x as f32).collect();
     let inp = storage(data, vec![1, 1, 4, 4]);
-    let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inp, (2, 2)).unwrap();
+    let out = B::adaptive_avg_pool2d::<f32>(&inp, (2, 2)).unwrap();
     assert_eq!(out.shape, vec![1, 1, 2, 2]);
     let result = readback(&out);
     // Top-left 2x2 avg = (1+2+5+6)/4 = 3.5
@@ -769,7 +768,7 @@ fn test_max_pool2d() {
         1.0, 3.0, 2.0, 4.0, 5.0, 7.0, 6.0, 8.0, 9.0, 11.0, 10.0, 12.0, 13.0, 15.0, 14.0, 16.0,
     ];
     let inp = storage(data, vec![1, 1, 4, 4]);
-    let out = <B as ModuleOps<B>>::max_pool2d::<f32>(&inp, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+    let out = B::max_pool2d::<f32>(&inp, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
     assert_eq!(out.shape, vec![1, 1, 2, 2]);
     let result = readback(&out);
     assert!(approx_eq(result[0], 7.0, 1e-4));
@@ -862,7 +861,7 @@ fn test_conv2d_identity_kernel() {
         vec![1, 1, 3, 3],
     );
     let weight = storage(vec![1.0], vec![1, 1, 1, 1]);
-    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+    let out = B::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 1, 3, 3]);
     assert!(vec_approx_eq(
         &readback(&out),
@@ -879,7 +878,7 @@ fn test_conv2d_known_output() {
     let inp_data: Vec<f32> = (1..=16).map(|x| x as f32).collect();
     let inp = storage(inp_data, vec![1, 1, 4, 4]);
     let weight = storage(vec![1.0, 0.0, 0.0, 1.0], vec![1, 1, 2, 2]);
-    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+    let out = B::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 1, 3, 3]);
     let result = readback(&out);
     // out[0,0] = inp[0,0]*1 + inp[0,1]*0 + inp[1,0]*0 + inp[1,1]*1 = 1 + 6 = 7
@@ -894,7 +893,7 @@ fn test_conv2d_with_bias() {
     let inp = storage(vec![1.0, 2.0, 2.0, 1.0], vec![1, 1, 2, 2]);
     let weight = storage(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
     let bias = storage(vec![10.0], vec![1]);
-    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
+    let out = B::conv2d::<f32>(&inp, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 1, 1, 1]);
     // sum(1+2+2+1) = 6, + bias 10 = 16
     assert!(approx_eq(readback(&out)[0], 16.0, 1e-4));
@@ -909,7 +908,7 @@ fn test_conv2d_padding() {
         vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
         vec![1, 1, 3, 3],
     );
-    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 1, 1, 1).unwrap();
+    let out = B::conv2d::<f32>(&inp, &weight, None, 1, 1, 1, 1).unwrap();
     // Input padded: only center = 1.0, matches weight center (index 4)
     assert_eq!(out.shape, vec![1, 1, 1, 1]);
     assert!(approx_eq(readback(&out)[0], 1.0, 1e-4));
@@ -928,7 +927,7 @@ fn test_conv2d_two_output_channels() {
         ],
         vec![2, 1, 2, 2],
     );
-    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+    let out = B::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 2, 1, 1]);
     let data = readback(&out);
     assert!(approx_eq(data[0], 10.0, 1e-4)); // 1+2+3+4=10
@@ -941,7 +940,7 @@ fn test_conv1d_basic() {
     // Input: 1 batch, 1 channel, 4 elements; Weight: 1 out, 1 in, 2 kernel
     let inp = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 4]);
     let weight = storage(vec![1.0, 1.0], vec![1, 1, 2]);
-    let out = <B as ModuleOps<B>>::conv1d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+    let out = B::conv1d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
     assert_eq!(out.shape, vec![1, 1, 3]);
     // out[0] = 1+2=3, out[1] = 2+3=5, out[2] = 3+4=7
     assert!(vec_approx_eq(&readback(&out), &[3.0, 5.0, 7.0], 1e-4));
@@ -1244,7 +1243,7 @@ fn embedding_backward_accumulates_gradients() {
         vec![2, 2],
     );
     let indices = storage(vec![0.0, 0.0], vec![2]);
-    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+    let out = B::embedding::<f32, f32>(&indices, &weight).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g_weight = grads.get(weight.id).expect("weight should have gradient");
     // Row 0 was chosen twice with output grad 1.0 per element, so its grad accumulated to 2.0. Row 1 was not chosen, so grad is 0.0.
@@ -1274,7 +1273,7 @@ fn embedding_backward_handles_nonzero_indices() {
         vec![3, 2],
     );
     let indices = storage(vec![2.0, 1.0, 2.0], vec![3]);
-    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+    let out = B::embedding::<f32, f32>(&indices, &weight).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let g_weight = grads.get(weight.id).expect("weight should have gradient");
     // Row 0: never chosen -> 0.0. Row 1: chosen once -> 1.0. Row 2: chosen
@@ -1400,7 +1399,7 @@ fn layer_norm_backward_matches_finite_difference() {
     let eps = 1e-5f32;
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
-            <B as ModuleOps<B>>::layer_norm::<f32>(&inputs[0], &inputs[1], Some(&inputs[2]), eps)
+            B::layer_norm::<f32>(&inputs[0], &inputs[1], Some(&inputs[2]), eps)
                 .unwrap();
         B::sum_all::<f32>(&out).unwrap()
     };
@@ -1420,7 +1419,7 @@ fn batch_norm_backward_matches_finite_difference() {
     let running_var = storage(vec![1.0, 2.0, 0.5], vec![3]);
     let eps = 1e-5f32;
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ModuleOps<B>>::batch_norm::<f32>(
+        let out = B::batch_norm::<f32>(
             &inputs[0],
             Some(&inputs[1]),
             Some(&inputs[2]),
@@ -1449,7 +1448,7 @@ fn avg_pool2d_backward_matches_finite_difference() {
     let t = storage(data, vec![1, 1, 4, 4]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
-            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0)).unwrap();
+            B::avg_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0)).unwrap();
         B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
@@ -1469,7 +1468,7 @@ fn avg_pool2d_backward_accumulates_over_overlapping_windows() {
     let t = storage(data, vec![1, 1, 3, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
-            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+            B::avg_pool2d::<f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
         B::sum_all::<f32>(&out).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
@@ -1489,7 +1488,7 @@ fn max_pool2d_backward_matches_finite_difference() {
     let t = storage(data, vec![1, 1, 4, 4]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let out =
-            <B as ModuleOps<B>>::max_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0), (1, 1))
+            B::max_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0), (1, 1))
                 .unwrap();
         B::sum_all::<f32>(&out).unwrap()
     };
@@ -1508,7 +1507,7 @@ fn adaptive_avg_pool2d_backward_matches_finite_difference_with_uneven_windows() 
     let data: Vec<f32> = (1..=25).map(|x| x as f32 * 0.3).collect();
     let t = storage(data, vec![1, 1, 5, 5]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
-        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inputs[0], (3, 3)).unwrap();
+        let out = B::adaptive_avg_pool2d::<f32>(&inputs[0], (3, 3)).unwrap();
         B::sum_all::<f32>(&out).unwrap()
     };
     // Larger fd-eps than the other pooling tests: with 25 summed elements

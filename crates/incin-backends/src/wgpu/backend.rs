@@ -1,7 +1,6 @@
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,
@@ -3222,11 +3221,11 @@ pub fn conv_transpose_output_dim(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ModuleOps
+//
 // ─────────────────────────────────────────────────────────────────────────────
-impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// `embedding`.
-    fn embedding<K: DType, KInt: DType>(
+    pub fn embedding<K: DType, KInt: DType>(
         indices: &<Self as StorageBackend>::Storage<KInt>,
         weight: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -3292,7 +3291,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `layer_norm`.
-    fn layer_norm<K: DType>(
+    pub fn layer_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -3335,7 +3334,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `batch_norm`.
-    fn batch_norm<K: DType>(
+    pub fn batch_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: Option<&<Self as StorageBackend>::Storage<K>>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -3406,7 +3405,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `adaptive_avg_pool2d`.
-    fn adaptive_avg_pool2d<K: DType>(
+    pub fn adaptive_avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         output_size: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -3492,7 +3491,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `avg_pool2d`.
-    fn avg_pool2d<K: DType>(
+    pub fn avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -3602,7 +3601,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `max_pool2d`.
-    fn max_pool2d<K: DType>(
+    pub fn max_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -3725,7 +3724,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `conv1d`.
-    fn conv1d<K: DType>(
+    pub fn conv1d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -3904,7 +3903,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `conv2d`.
-    fn conv2d<K: DType>(
+    pub fn conv2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -4081,7 +4080,7 @@ impl<D: Device> ModuleOps<Self> for WgpuBackendImpl<D> {
     }
 
     /// `conv_transpose2d`.
-    fn conv_transpose2d<K: DType>(
+    pub fn conv_transpose2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,

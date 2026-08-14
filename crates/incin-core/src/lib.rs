@@ -131,20 +131,6 @@ pub mod backend_authoring {
     }
 }
 
-/// Implementation-only compatibility hooks for the in-tree backend adapters.
-///
-/// This is intentionally outside [`backend_authoring`]: legacy operation-family
-/// traits are not a supported backend-authoring model and must not be copied by
-/// new backends. Migrate an adapter to exact [`backend_authoring::Execute`]
-/// implementations instead.
-#[doc(hidden)]
-pub mod __backend_compat {
-    pub mod legacy {
-        pub use crate::tensor::backend::legacy::{
-            ModuleOps, };
-    }
-}
-
 /// Expert type-level shape vocabulary kept outside the normal prelude.
 pub mod types {
     pub use crate::prelude::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};

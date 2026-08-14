@@ -8,7 +8,6 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
-use incin_core::__backend_compat::legacy::{ModuleOps};
 
 use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
@@ -141,7 +140,7 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::Conv2dExact, "weight is not CUDA storage"))?;
         let attrs = request.operation.descriptor().attributes();
-        <Self as ModuleOps<Self>>::conv2d::<f32>(
+        Self::conv2d::<f32>(
             input,
             weight,
             None,
@@ -171,7 +170,7 @@ impl<D: Device> Execute<op::MaxPool2d> for CudaBackendImpl<D> {
             .ok_or_else(|| invalid(OperationKind::MaxPool2d, "input is not CUDA storage"))?;
         let attrs = request.operation.descriptor().attributes();
         let pair = |[h, w]: [usize; 2]| (h, w);
-        <Self as ModuleOps<Self>>::max_pool2d::<f32>(
+        Self::max_pool2d::<f32>(
             input,
             pair(attrs.kernel),
             pair(attrs.stride),
@@ -199,7 +198,7 @@ impl<D: Device> Execute<op::AvgPool2d> for CudaBackendImpl<D> {
             .ok_or_else(|| invalid(OperationKind::AvgPool2d, "input is not CUDA storage"))?;
         let attrs = request.operation.descriptor().attributes();
         let pair = |[h, w]: [usize; 2]| (h, w);
-        <Self as ModuleOps<Self>>::avg_pool2d::<f32>(
+        Self::avg_pool2d::<f32>(
             input,
             pair(attrs.kernel),
             pair(attrs.stride),

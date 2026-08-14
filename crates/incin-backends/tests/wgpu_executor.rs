@@ -22,7 +22,6 @@ use incin_core::exec::{
 use incin_core::prelude::{
     Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
-use incin_core::__backend_compat::legacy::{ModuleOps};
 use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;
@@ -315,7 +314,7 @@ fn conv2d_descriptor_execution_matches_the_legacy_path() {
     let bias = storage(&[3], &[0.5, -0.25, 1.0]);
     let validated = lower_conv2d();
 
-    let legacy = <TestBackend as ModuleOps<TestBackend>>::conv2d::<f32>(
+    let legacy = TestBackend::conv2d::<f32>(
         &input,
         &weight,
         Some(&bias),

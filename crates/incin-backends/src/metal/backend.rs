@@ -3,7 +3,6 @@
 use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
 use incin_core::prelude::{
@@ -2813,10 +2812,10 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ─── ModuleOps ──────────────────────────────────────────────────────────────
+// ───  ──────────────────────────────────────────────────────────────
 
-impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
-    fn layer_norm<K: DType>(
+impl<D: Device> MetalBackendImpl<D> {
+    pub fn layer_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2866,7 +2865,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
     }
 
-    fn batch_norm<K: DType>(
+    pub fn batch_norm<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: Option<&<Self as StorageBackend>::Storage<K>>,
         b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2948,14 +2947,14 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
     }
 
-    fn embedding<K: DType, KInt: DType>(
+    pub fn embedding<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<KInt>,
         _w: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Err(unsupported("embedding"))
     }
 
-    fn conv1d<K: DType>(
+    pub fn conv1d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _w: &<Self as StorageBackend>::Storage<K>,
         _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2967,7 +2966,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("conv1d"))
     }
 
-    fn conv2d<K: DType>(
+    pub fn conv2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _w: &<Self as StorageBackend>::Storage<K>,
         _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2979,7 +2978,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("conv2d"))
     }
 
-    fn conv_transpose2d<K: DType>(
+    pub fn conv_transpose2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _w: &<Self as StorageBackend>::Storage<K>,
         _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2992,7 +2991,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("conv_transpose2d"))
     }
 
-    fn max_pool2d<K: DType>(
+    pub fn max_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _kernel_size: (usize, usize),
         _stride: (usize, usize),
@@ -3002,7 +3001,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("max_pool2d"))
     }
 
-    fn avg_pool2d<K: DType>(
+    pub fn avg_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _kernel_size: (usize, usize),
         _stride: (usize, usize),
@@ -3011,7 +3010,7 @@ impl<D: Device> ModuleOps<Self> for MetalBackendImpl<D> {
         Err(unsupported("avg_pool2d"))
     }
 
-    fn adaptive_avg_pool2d<K: DType>(
+    pub fn adaptive_avg_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _output_size: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {

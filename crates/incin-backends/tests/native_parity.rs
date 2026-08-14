@@ -20,7 +20,6 @@ use incin_backends::external::candle::CandleBackend;
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::HostInterop;
-use incin_core::__backend_compat::legacy::{ModuleOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -895,7 +894,7 @@ fn argsort_forward_parity() {
     );
 }
 
-// ── ModuleOps (9 methods, forward+backward) ────────────────────────────────
+// ──  (9 methods, forward+backward) ────────────────────────────────
 
 /// `layer_norm` forward-only parity — backward is NOT compared. Confirmed by
 /// direct source read of `candle-nn-0.9.1/src/ops.rs::layer_norm`: it calls

@@ -19,7 +19,6 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::__backend_compat::legacy::{};
 
 type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -607,7 +606,7 @@ fn the_spatial_family_executes_with_expected_values() {
 
 /// An anisotropic convolution window computes with both axes' extents.
 ///
-/// It used to be refused, because `ModuleOps::conv2d` states one extent for
+/// It used to be refused, because `::conv2d` states one extent for
 /// both axes and applying the first to both would have been a quiet wrong
 /// answer. The kernel behind that signature never needed them equal, so the
 /// descriptor's pair is forwarded whole now.

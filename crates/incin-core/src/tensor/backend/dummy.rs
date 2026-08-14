@@ -1133,9 +1133,9 @@ use super::*;
     /// compute their real output spatial size via `conv_out_size`/
     /// `conv_transpose_out_size` (the saturating helpers above) so tests
     /// can assert on shape correctness even though no data is computed.
-    impl<D: Device + Clone + 'static> ModuleOps<Self> for DummyBackend<D> {
+    impl<D: Device + Clone + 'static> DummyBackend<D> {
         /// Returns `t`'s shape unchanged.
-        fn layer_norm<K: DType>(
+        pub fn layer_norm<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _w: &<Self as StorageBackend>::Storage<K>,
             _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -1144,7 +1144,7 @@ use super::*;
             Ok(t.clone())
         }
         /// Returns `t`'s shape unchanged.
-        fn batch_norm<K: DType>(
+        pub fn batch_norm<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             _w: Option<&<Self as StorageBackend>::Storage<K>>,
             _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -1156,7 +1156,7 @@ use super::*;
             Ok(t.clone())
         }
         /// Always an empty shape --- no real gather is performed.
-        fn embedding<K: DType, KInt: DType>(
+        pub fn embedding<K: DType, KInt: DType>(
             _t: &<Self as StorageBackend>::Storage<KInt>,
             _w: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1164,7 +1164,7 @@ use super::*;
         }
         /// Computes the real output shape: channel dim from `w[0]`, spatial
         /// dim via `conv_out_size`.
-        fn conv1d<K: DType>(
+        pub fn conv1d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             w: &<Self as StorageBackend>::Storage<K>,
             _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -1186,7 +1186,7 @@ use super::*;
         }
         /// Computes the real output shape: channel dim from `w[0]`, spatial
         /// dims via `conv_out_size`.
-        fn conv2d<K: DType>(
+        pub fn conv2d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             w: &<Self as StorageBackend>::Storage<K>,
             _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -1212,7 +1212,7 @@ use super::*;
         /// Computes the real output shape: channel dim from `w[1]`
         /// (transposed conv's weight layout), spatial dims via
         /// `conv_transpose_out_size`.
-        fn conv_transpose2d<K: DType>(
+        pub fn conv_transpose2d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             w: &<Self as StorageBackend>::Storage<K>,
             _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -1237,7 +1237,7 @@ use super::*;
             Ok(out)
         }
         /// Computes the real output spatial shape via `conv_out_size`.
-        fn max_pool2d<K: DType>(
+        pub fn max_pool2d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             k: (usize, usize),
             s: (usize, usize),
@@ -1257,7 +1257,7 @@ use super::*;
         /// Computes the real output spatial shape via `conv_out_size`
         /// (dilation fixed to 1, matching `avg_pool2d` having no dilation
         /// parameter).
-        fn avg_pool2d<K: DType>(
+        pub fn avg_pool2d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             k: (usize, usize),
             s: (usize, usize),
@@ -1276,7 +1276,7 @@ use super::*;
         /// Sets the trailing two dimensions directly to `out` (adaptive
         /// pooling's whole point is that the output size is exact,
         /// regardless of input size).
-        fn adaptive_avg_pool2d<K: DType>(
+        pub fn adaptive_avg_pool2d<K: DType>(
             t: &<Self as StorageBackend>::Storage<K>,
             out: (usize, usize),
         ) -> Result<<Self as StorageBackend>::Storage<K>> {

@@ -200,7 +200,6 @@ of problem:
 | Area | Current reason for size | Maintainer action |
 | --- | --- | --- |
 | `crates/incin-core/src/exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
-| `crates/incin-core/src/tensor/tracing.rs` | tracing backend, graph recording, and legacy adapters | split graph recording from backend adapters after capability migration |
 | `crates/incin-core/src/tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once catalog ownership is stable |
 | `crates/incin-core/src/tensor/backend/dummy.rs` | shape-only test backend and test operation coverage | keep test-only behavior isolated from production backend identity |
 | `crates/incin-core/src/dist/{plan,context}.rs` | distributed placement/planning prototypes | remain feature-gated and split only with a concrete ownership seam |

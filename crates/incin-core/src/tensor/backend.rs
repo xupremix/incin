@@ -14,10 +14,7 @@ mod variable;
 pub use variable::VariableBackend;
 mod capability;
 pub use capability::{HostInterop, HostReadback, TransferBackend};
-pub mod legacy;
-pub mod dummy {
-    pub use super::legacy::DummyBackend;
-}
+pub mod dummy;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// A backend-agnostic scalar, tagged by whether it originated as a float or

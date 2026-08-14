@@ -1,7 +1,6 @@
 //! Runtime backend selection used by `IncinBackend<_, Dyn>`.
 
 use incin_core::backend_authoring::*;
-use incin_core::__backend_compat::legacy::*;
 use incin_core::prelude::{
     BackendError, DType, DTypeDescriptor, Device, DeviceId, DeviceKind, Dyn, Error, FloatDType,
     OperationKind, QuantDType, Result, ShapeBuf, StorageBackend, SupportsDType, bf16, f16,
@@ -2227,8 +2226,8 @@ impl<D: Device> DispatchBackend<D> {
     }
 }
 
-impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
-    fn layer_norm<K: DType>(
+impl<D: Device> DispatchBackend<D> {
+    pub fn layer_norm<K: DType>(
         t: &DispatchStorage,
         weight: &DispatchStorage,
         bias: Option<&DispatchStorage>,
@@ -2242,7 +2241,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [eps]
         )
     }
-    fn batch_norm<K: DType>(
+    pub fn batch_norm<K: DType>(
         t: &DispatchStorage,
         w: Option<&DispatchStorage>,
         b: Option<&DispatchStorage>,
@@ -2259,13 +2258,13 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [e, momentum]
         )
     }
-    fn embedding<K: DType, KInt: DType>(
+    pub fn embedding<K: DType, KInt: DType>(
         t: &DispatchStorage,
         w: &DispatchStorage,
     ) -> Result<DispatchStorage> {
         dispatch_module_same_device!(t, crate::cpu::ops::embedding::embedding_impl::<Cpu, K, KInt>, embedding::<K, KInt>, req = [w], opt = [], args = [])
     }
-    fn conv1d<K: DType>(
+    pub fn conv1d<K: DType>(
         t: &DispatchStorage,
         w: &DispatchStorage,
         b: Option<&DispatchStorage>,
@@ -2282,7 +2281,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [stride, padding, dilation, groups]
         )
     }
-    fn conv2d<K: DType>(
+    pub fn conv2d<K: DType>(
         t: &DispatchStorage,
         w: &DispatchStorage,
         b: Option<&DispatchStorage>,
@@ -2299,7 +2298,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [stride, padding, dilation, groups]
         )
     }
-    fn conv_transpose2d<K: DType>(
+    pub fn conv_transpose2d<K: DType>(
         t: &DispatchStorage,
         w: &DispatchStorage,
         b: Option<&DispatchStorage>,
@@ -2317,7 +2316,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [stride, padding, output_padding, dilation, groups]
         )
     }
-    fn max_pool2d<K: DType>(
+    pub fn max_pool2d<K: DType>(
         t: &DispatchStorage,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -2332,7 +2331,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [kernel_size, stride, padding, dilation]
         )
     }
-    fn avg_pool2d<K: DType>(
+    pub fn avg_pool2d<K: DType>(
         t: &DispatchStorage,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -2346,7 +2345,7 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
             args = [kernel_size, stride, padding]
         )
     }
-    fn adaptive_avg_pool2d<K: DType>(
+    pub fn adaptive_avg_pool2d<K: DType>(
         t: &DispatchStorage,
         output_size: (usize, usize),
     ) -> Result<DispatchStorage> {

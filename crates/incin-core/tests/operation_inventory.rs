@@ -24,7 +24,7 @@ const OPERATION_TRAITS: &[&str] = &[
     "",
     "",
     "",
-    "ModuleOps",
+    "",
 ];
 
 fn repo_root() -> PathBuf {
