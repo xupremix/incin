@@ -1,7 +1,7 @@
 use crate::backend_authoring::{Execute, op};
 use crate::nn::StateDict;
 use crate::prelude::*;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use std::path::Path;
@@ -353,6 +353,33 @@ where
     let checkpoint = crate::serialize::deserialize_snapshot_safetensors(&weights_path)
         .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))?;
     let current = module.state_dict()?;
+    let expected_paths: BTreeSet<_> = current.iter().map(|(path, _)| path).collect();
+    let checkpoint_paths: BTreeSet<_> = checkpoint.iter().map(|(path, _)| path).collect();
+    if expected_paths != checkpoint_paths {
+        let missing = expected_paths
+            .difference(&checkpoint_paths)
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let unexpected = checkpoint_paths
+            .difference(&expected_paths)
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        return Err(Error::InvalidModuleState {
+            operation: "load checkpoint",
+            reason: ErrorMessage::new(format!(
+                "checkpoint paths differ: missing {:?}, unexpected {:?}",
+                missing, unexpected
+            )),
+        });
+    }
+    let manifest_paths: BTreeSet<_> = manifest.tensors.keys().map(String::as_str).collect();
+    let manifest_expected: BTreeSet<_> = expected_paths.iter().map(|path| path.as_str()).collect();
+    if manifest_paths != manifest_expected {
+        return Err(Error::InvalidModuleState {
+            operation: "load checkpoint",
+            reason: ErrorMessage::new("checkpoint manifest paths differ from model state"),
+        });
+    }
     let mut resharded = crate::nn::StateSnapshot::new();
 
     for (name, current_value) in current.iter() {
@@ -372,6 +399,26 @@ where
         let target_shape = current_value.shape().dims();
         let bytes = st_value.bytes();
         let dtype_desc = meta.dtype.descriptor()?;
+        if global_shape != meta.global_shape {
+            return Err(Error::InvalidModuleState {
+                operation: "load checkpoint",
+                reason: ErrorMessage::new(format!(
+                    "manifest shape {:?} does not match checkpoint shape {:?} for {}",
+                    meta.global_shape, global_shape, name
+                )),
+            });
+        }
+        if st_value.dtype() != dtype_desc {
+            return Err(Error::InvalidModuleState {
+                operation: "load checkpoint",
+                reason: ErrorMessage::new(format!(
+                    "manifest dtype {} does not match checkpoint dtype {} for {}",
+                    dtype_desc.name(),
+                    st_value.dtype().name(),
+                    name
+                )),
+            });
+        }
 
         let (final_bytes, final_shape) = if global_shape == target_shape {
             (bytes.to_vec(), global_shape)
