@@ -25,7 +25,7 @@ note: required by a bound in `Dim`
    |
    | pub trait Dim:
    |           --- required by a bound in this trait
-   |     sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+   |     sealed::Dim
    |     ^^^^^^^^^^^ required by this bound in `Dim`
    = note: `Dim` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::dim::sealed::Dim`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
    = help: the following types implement the trait:
@@ -38,6 +38,88 @@ note: required by a bound in `Dim`
              incin_core::shapes::ExactDivDim<A, B>
              incin_core::shapes::MulDim<A, B>
            and $N others
+
+error[E0277]: the trait bound `Forged: shapes::projection::DimProjection` is not satisfied
+  --> tests/compile_fail/dim_trait_is_sealed.rs:10:5
+   |
+10 |     fn resolve_arg(_: Self::Arg) -> Result<usize, ShapeError> { Ok(1) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `shapes::projection::DimProjection` is not implemented for `Forged`
+  --> tests/compile_fail/dim_trait_is_sealed.rs:4:1
+   |
+ 4 | struct Forged;
+   | ^^^^^^^^^^^^^
+   = help: the following other types implement trait `shapes::projection::DimProjection`:
+             AddDim<A, B>
+             BroadcastExtent<L, R>
+             CheckedSubDim<A, B>
+             ConstDim<N>
+             ExactDivDim<A, B>
+             MulDim<A, B>
+             NamedDim<Tag, Extent>
+             UInt<U, B>
+           and $N others
+note: required by a bound in `Dim`
+  --> src/shapes/dim.rs
+   |
+   | pub trait Dim:
+   |           --- required by a bound in this trait
+   |     sealed::Dim
+   |     + crate::shapes::projection::DimProjection
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Dim`
+   = note: `Dim` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::projection::DimProjection`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             usize
+             incin_core::shapes::ConstDim<N>
+             incin_core::typenum::UTerm
+             incin_core::typenum::UInt<U, B>
+             incin_core::shapes::AddDim<A, B>
+             incin_core::shapes::CheckedSubDim<A, B>
+             incin_core::shapes::ExactDivDim<A, B>
+             incin_core::shapes::MulDim<A, B>
+           and $N others
+
+error[E0277]: the trait bound `Forged: shapes::projection::DimProjection` is not satisfied
+ --> tests/compile_fail/dim_trait_is_sealed.rs:6:14
+  |
+6 | impl Dim for Forged {
+  |              ^^^^^^ unsatisfied trait bound
+  |
+help: the trait `shapes::projection::DimProjection` is not implemented for `Forged`
+ --> tests/compile_fail/dim_trait_is_sealed.rs:4:1
+  |
+4 | struct Forged;
+  | ^^^^^^^^^^^^^
+  = help: the following other types implement trait `shapes::projection::DimProjection`:
+            AddDim<A, B>
+            BroadcastExtent<L, R>
+            CheckedSubDim<A, B>
+            ConstDim<N>
+            ExactDivDim<A, B>
+            MulDim<A, B>
+            NamedDim<Tag, Extent>
+            UInt<U, B>
+          and $N others
+note: required by a bound in `Dim`
+ --> src/shapes/dim.rs
+  |
+  | pub trait Dim:
+  |           --- required by a bound in this trait
+  |     sealed::Dim
+  |     + crate::shapes::projection::DimProjection
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Dim`
+  = note: `Dim` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::projection::DimProjection`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+  = help: the following types implement the trait:
+            usize
+            incin_core::shapes::ConstDim<N>
+            incin_core::typenum::UTerm
+            incin_core::typenum::UInt<U, B>
+            incin_core::shapes::AddDim<A, B>
+            incin_core::shapes::CheckedSubDim<A, B>
+            incin_core::shapes::ExactDivDim<A, B>
+            incin_core::shapes::MulDim<A, B>
+          and $N others
 
 error[E0277]: the trait bound `Forged: dim::sealed::Dim` is not satisfied
  --> tests/compile_fail/dim_trait_is_sealed.rs:6:14
@@ -66,7 +148,7 @@ note: required by a bound in `Dim`
   |
   | pub trait Dim:
   |           --- required by a bound in this trait
-  |     sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+  |     sealed::Dim
   |     ^^^^^^^^^^^ required by this bound in `Dim`
   = note: `Dim` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::dim::sealed::Dim`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
   = help: the following types implement the trait:

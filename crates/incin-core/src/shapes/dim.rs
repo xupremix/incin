@@ -38,7 +38,16 @@ mod sealed {
 }
 
 pub trait Dim:
-    sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+    sealed::Dim
+    + crate::shapes::projection::DimProjection
+    + 'static
+    + Copy
+    + Clone
+    + core::fmt::Debug
+    + Send
+    + Sync
+    + Eq
+    + PartialEq
 {
     /// The same semantic axis after a keep-dimension reduction.
     type KeepDim: Dim;
@@ -61,20 +70,6 @@ pub trait Dim:
 
     /// Semantic name carried by this axis, when it is named.
     const NAME: Option<&'static str> = None;
-
-    /// Projects this extent into the compiler-facing symbolic shape language.
-    /// Runtime values become symbols, while valid static proofs remain
-    /// constants. Invalid arithmetic is kept explicit as an unknown value.
-    #[inline]
-    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
-        match Self::STATIC {
-            StaticExtent::Value(value) => crate::exec::DimExpr::Const(value),
-            StaticExtent::RuntimeUnknown => {
-                crate::exec::DimExpr::Fresh(base.saturating_add(axis as u32))
-            }
-            StaticExtent::Invalid => crate::exec::DimExpr::Unknown,
-        }
-    }
 
     /// Tests semantic tag identity for the runtime named-lookup fallback.
     /// Untagged dimensions never match a named selector.
@@ -484,14 +479,6 @@ macro_rules! static_op_dim {
 
             type Arg = usize;
 
-            fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
-                crate::exec::DimExpr::$symbolic(
-                    alloc::boxed::Box::new(A::symbolic_expr(axis, base)),
-                    alloc::boxed::Box::new(B::symbolic_expr(axis, base.saturating_add(1))),
-                )
-                .simplify()
-            }
-
             fn resolve_arg(
                 arg: Self::Arg,
             ) -> core::result::Result<usize, crate::shapes::error::ShapeError> {
@@ -555,15 +542,6 @@ impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
     const NAME: Option<&'static str> = Some(Tag::NAME);
     type Arg = Extent::Arg;
 
-    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
-        crate::exec::DimExpr::NamedExpr {
-            expr: alloc::boxed::Box::new(Extent::symbolic_expr(axis, base)),
-            id: crate::exec::SymbolId(base.saturating_add(axis as u32)),
-            name: alloc::string::String::from(Tag::NAME),
-            identity: alloc::string::String::from(Tag::KEY),
-        }
-    }
-
     #[inline]
     fn matches_tag<Other: AxisTag>() -> bool {
         core::any::TypeId::of::<Tag>() == core::any::TypeId::of::<Other>()
@@ -599,14 +577,6 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
     };
 
     type Arg = usize;
-
-    fn symbolic_expr(axis: usize, base: u32) -> crate::exec::DimExpr {
-        crate::exec::DimExpr::Mul(
-            alloc::boxed::Box::new(A::symbolic_expr(axis, base)),
-            alloc::boxed::Box::new(B::symbolic_expr(axis, base.saturating_add(1))),
-        )
-        .simplify()
-    }
 
     fn resolve_arg(
         arg: Self::Arg,

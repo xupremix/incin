@@ -71,3 +71,5 @@ pub mod prelude {
     pub use crate::exec::{AxisSet, RankSupport};
     pub use crate::tensor::matmul::{StaticDim, StaticOrNamedDim};
 }
+
+pub(crate) mod projection;

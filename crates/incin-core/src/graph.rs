@@ -239,7 +239,7 @@ impl Graph {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
-        let shape_expr = self.remap_input_symbols(S::symbolic_expr(1));
+        let shape_expr = self.remap_input_symbols(crate::shapes::projection::shape_expr::<S>(1));
         if let Some(value) = self.values.get_mut(&value_id) {
             value.shape_expr = shape_expr;
         }
