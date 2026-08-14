@@ -170,36 +170,6 @@ pub trait Parameters<B: Backend> {
     }
 }
 
-/// A trait to transfer ownership of a module to a new device.
-pub trait ToDevice<B: Backend, NewD: Device> {
-    /// The same module type, but rebuilt on backend `NewD` — e.g.
-    /// `Linear<S, NativeBackend<Cpu>>` transferred to `Wgpu` becomes
-    /// `Linear<S, NativeBackend<Wgpu>>`.
-    type Output;
-    /// Moves every parameter/buffer this module owns onto device `arg`,
-    /// returning the module rebuilt on the new backend.
-    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output>;
-}
-
-impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Option<T> {
-    /// `None` stays `None`; `Some(t)` becomes `Some(t.to_device(..))`.
-    type Output = Option<T::Output>;
-    /// Transfers the wrapped value if present; a no-op for `None`.
-    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
-        self.map(|t| t.to_device(arg)).transpose()
-    }
-}
-
-impl<B: Backend, NewD: Device> ToDevice<B, NewD> for () {
-    /// `()` has no per-device state, so transferring it is a no-op.
-    type Output = ();
-
-    /// No-op: `()` carries nothing to transfer.
-    fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
-        Ok(())
-    }
-}
-
 #[doc(hidden)]
 /// Autoref-specialization fallback: the `&&T` blanket impl every type gets
 /// "for free," used so `#[module]`-derived fields that don't implement
@@ -532,7 +502,8 @@ where
     }
 }
 
-impl<B: Backend, NewD: Device, L1, L2> ToDevice<B, NewD> for Sequential<L1, L2>
+impl<B: Backend, NewD: Device, L1, L2> crate::tensor::transfer::ToDevice<B, NewD>
+    for Sequential<L1, L2>
 where
     L1: ToDevice<B, NewD>,
     L2: ToDevice<B, NewD>,

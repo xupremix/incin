@@ -416,7 +416,7 @@ impl crate::nn::module::NamedLayers for Softmax {
 macro_rules! impl_unit_to_device {
     ($($t:ty),+) => {
         $(
-            impl<B: Backend, NewD: Device> crate::nn::module::ToDevice<B, NewD> for $t {
+            impl<B: Backend, NewD: Device> crate::tensor::transfer::ToDevice<B, NewD> for $t {
                 type Output = $t;
                 fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
                     Ok(self)

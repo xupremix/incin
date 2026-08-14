@@ -175,7 +175,7 @@ pub mod prelude {
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
         module::{
-            LayerNode, Module, NamedLayers, Parameters, Sequential, StateDict, ToDevice, TrainMode,
+            LayerNode, Module, NamedLayers, Parameters, Sequential, StateDict, TrainMode,
         },
         optional::{False, OptionalField, True},
         param::{Buffer, Frozen, Param, TrainState, Trainable},
@@ -211,7 +211,7 @@ pub mod prelude {
         DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
         IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
         StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs, TensorArgsData,
-        TensorElement, TracingBackend, TransferTo, extract_graph, tracing_mark_input,
+        TensorElement, ToDevice, TracingBackend, TransferTo, extract_graph, tracing_mark_input,
         tracing_mark_input_typed, tracing_mark_output,
     };
     #[cfg(feature = "cuda")]

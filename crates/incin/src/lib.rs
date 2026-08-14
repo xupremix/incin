@@ -281,9 +281,10 @@ pub mod nn {
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
         OptionalField, Param, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
         ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
-        ToDevice, TrainMode, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        TrainMode, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
         format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
+    pub use incin_core::tensor::transfer::ToDevice;
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
 }
@@ -545,7 +546,7 @@ pub mod prelude {
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
-        module::{LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode},
+        module::{LayerNode, NamedLayers, Parameters, Sequential, TrainMode},
         rms_norm::RMSNorm,
     };
 

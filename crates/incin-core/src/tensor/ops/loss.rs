@@ -8,15 +8,14 @@ use crate::dist::placement::Local;
 use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::loss::{
+use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
-    ReductionMode,
+    Reduction, ReductionMode,
 };
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
-use crate::tensor::reduction::Reduction;
 use alloc::vec::Vec;
 
 fn execute_loss_descriptor<

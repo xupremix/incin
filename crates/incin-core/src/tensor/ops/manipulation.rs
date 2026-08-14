@@ -2299,7 +2299,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     NewD: crate::prelude::Device,
-> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
+> crate::tensor::transfer::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,

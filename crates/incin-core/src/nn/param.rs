@@ -371,7 +371,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, Train: TrainState> Param<S, B, K
 }
 
 impl<S: Shape, B: Backend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
-    crate::nn::module::ToDevice<B, NewD> for Param<S, B, K, Train>
+    crate::tensor::transfer::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
     B: TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
@@ -773,7 +773,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType> Buffer<S, B, K> {
 }
 
 impl<S: Shape, B: Backend, K: DType, NewD: crate::prelude::Device>
-    crate::nn::module::ToDevice<B, NewD> for Buffer<S, B, K>
+    crate::tensor::transfer::ToDevice<B, NewD> for Buffer<S, B, K>
 where
     B: TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
