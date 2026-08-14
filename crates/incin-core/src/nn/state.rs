@@ -141,7 +141,10 @@ pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
     ) -> Result<()>
     where
         S: crate::shapes::Shape,
-        K: crate::tensor::dtype::DType,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState;
 
     fn visit_buffer<S, K>(
@@ -151,7 +154,10 @@ pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
     ) -> Result<()>
     where
         S: crate::shapes::Shape,
-        K: crate::tensor::dtype::DType;
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop;
 }
 
 /// Structural traversal of typed parameter and buffer leaves.
@@ -161,6 +167,68 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()>;
+}
+
+/// Collects typed leaves into the durable, backend-neutral snapshot format.
+#[derive(Debug, Default)]
+pub struct StateSnapshotVisitor {
+    snapshot: StateSnapshot,
+}
+
+impl StateSnapshotVisitor {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn into_snapshot(self) -> StateSnapshot {
+        self.snapshot
+    }
+}
+
+impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateSnapshotVisitor {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        crate::nn::module::StateDict::collect_state(param, path, &mut self.snapshot)
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        buffer: &crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        crate::nn::module::StateDict::collect_state(buffer, path, &mut self.snapshot)
+    }
+}
+
+/// Runs typed state traversal and returns an owned snapshot.
+pub fn collect_state<B, M>(module: &M) -> Result<StateSnapshot>
+where
+    B: crate::tensor::backend::VariableBackend,
+    M: VisitState<B>,
+{
+    let mut visitor = StateSnapshotVisitor::new();
+    module.visit_state(&StatePath::root(), &mut visitor)?;
+    Ok(visitor.into_snapshot())
 }
 
 /// One owned, exact-dtype state value.

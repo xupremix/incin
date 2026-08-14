@@ -591,7 +591,7 @@ where
     }
 }
 
-impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> crate::nn::VisitState<B>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>, Train: TrainState> crate::nn::VisitState<B>
     for Param<S, B, K, Train>
 {
     fn visit_state<V: crate::nn::StateVisitor<B>>(
@@ -904,7 +904,7 @@ where
     }
 }
 
-impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> crate::nn::VisitState<B>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>> crate::nn::VisitState<B>
     for Buffer<S, B, K>
 {
     fn visit_state<V: crate::nn::StateVisitor<B>>(

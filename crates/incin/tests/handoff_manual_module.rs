@@ -97,7 +97,10 @@ impl StateVisitor<CpuBackend> for VisitedPaths {
     ) -> Result<()>
     where
         S: Shape,
-        K: DType,
+        K: DType<Arg = ()>,
+        CpuBackend: incin::backend_authoring::SupportsDType<K>
+            + incin::backend_authoring::Capabilities
+            + incin::backend_authoring::HostInterop,
         Train: TrainState,
     {
         self.0.push(path.to_string());
@@ -111,7 +114,10 @@ impl StateVisitor<CpuBackend> for VisitedPaths {
     ) -> Result<()>
     where
         S: Shape,
-        K: DType,
+        K: DType<Arg = ()>,
+        CpuBackend: incin::backend_authoring::SupportsDType<K>
+            + incin::backend_authoring::Capabilities
+            + incin::backend_authoring::HostInterop,
     {
         self.0.push(path.to_string());
         Ok(())
@@ -169,6 +175,10 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     );
     assert_eq!(
         manual.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 
