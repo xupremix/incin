@@ -1,22 +1,9 @@
-//! `TensorOps` for `CpuBackendImpl<D>`: real `reshape`/`transpose`/
-//! `broadcast_as`/`matmul`/`float_to_scalar`/`float_to_vec1`; every other
-//! method is a typed stub returning `Error::UnsupportedBackendOperation`.
-//!
-//! This is the single `impl TensorOps<..> for CpuBackendImpl<..>` block for
-//! the whole crate — `matmul`'s method body delegates to
-//! `ops::matmul::matmul_impl` (see that file's module doc for why the naive
-//! loop lives in its own file as a plain function rather than its own impl
-//! block). `reshape`/`transpose`/`broadcast_as` are thin wrappers over
-//! `CpuStorage`'s own already-O(1) view methods (Plan 01) — they do not
-//! duplicate that logic, only add tape tracking (D-05: every op is a graph
-//! node, unconditionally recorded).
+//! CPU tensor and shape operation helpers.
 
-use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::{
-    Backend, BackendError, DType, DTypeDescriptor, DTypeId, Device, Error, OperationKind, Result,
-    ShapeBuf, ShapeError, StorageBackend,
+    BackendError, DTypeDescriptor, DTypeId, Device, Error, OperationKind, Result,
+    ShapeBuf, ShapeError,
 };
-use incin_core::__backend_compat::legacy::TensorOps;
 
 use crate::cpu::ops::elementwise::{
     add_storage, canonical_mul_scalar, canonical_softmax, elementwise_unary,
@@ -25,11 +12,8 @@ use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
-// `reshape`, `broadcast_as` and `matmul` are free functions so that the
-// canonical `Execute<op::ReshapeExact>` executors in
-// `cpu::canonical` and the legacy `TensorOps` methods below run the same body.
-// One implementation is the point: a descriptor path that re-derived the view
-// would be a second semantics to keep in agreement.
+// Canonical executors and dynamic dispatch share these helpers so each
+// operation has one CPU implementation.
 
 /// Reshape a view and record the inverse for backward.
 pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStorage> {
@@ -869,6 +853,44 @@ pub(crate) fn elementwise_cmp(
     Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), out_shape))
 }
 
+pub(crate) fn elementwise_float_binary(
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    f: impl Fn(f64, f64) -> f64,
+) -> Result<CpuStorage> {
+    if lhs.shape != rhs.shape {
+        return Err(Error::ShapeMismatch {
+            op: "elementwise_binary",
+            expected: lhs.shape.to_vec(),
+            got: rhs.shape.to_vec(),
+            msg: "CPU binary operation requires equal shapes".into(),
+        });
+    }
+    let total = crate::cpu::stride::checked_numel(&lhs.shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; lhs.shape.len()];
+    for _ in 0..total {
+        out.push(f(lhs.get(&idx), rhs.get(&idx)));
+        if !lhs.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out)?, lhs.shape.to_vec()))
+}
+
+pub(crate) fn logical_not_storage(t: &CpuStorage) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        out.push(if t.get(&idx) == 0.0 { 1u8 } else { 0u8 });
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), t.shape.to_vec()))
+}
+
 pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
     elementwise_unary(t, |value| value - val)
 }
@@ -1004,731 +1026,10 @@ fn triangular_storage(t: &CpuStorage, k: i64, upper: bool) -> Result<CpuStorage>
     ))
 }
 
-impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
-    /// `reshape`.
-    fn reshape<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        shape: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        reshape_storage(t, shape)
-    }
-
-    /// `transpose`.
-    fn transpose<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim1: usize,
-        dim2: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        transpose_storage(t, dim1, dim2)
-    }
-
-    /// `broadcast_as`.
-    fn broadcast_as<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        shape: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        broadcast_as_storage(t, shape)
-    }
-
-    /// `matmul`.
-    fn matmul<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        matmul_storage(lhs, rhs)
-    }
-
-    /// `narrow`.
-    fn narrow<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        narrow_storage(t, dim, start, len)
-    }
-
-    /// `squeeze`.
-    fn squeeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        squeeze_storage(t, dim)
-    }
-
-    /// `stack`.
-    fn stack<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::ShapeMismatch {
-                op: "stack",
-                expected: vec![],
-                got: vec![],
-                msg: alloc::string::String::from("stack requires at least one input tensor"),
-            });
-        }
-
-        let rank = tensors[0].shape.len();
-        if dim > rank {
-            return Err(Error::ShapeMismatch {
-                op: "stack",
-                expected: tensors[0].shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
-                    tensors[0].shape
-                ),
-            });
-        }
-
-        for t in tensors.iter().skip(1) {
-            if t.shape != tensors[0].shape {
-                return Err(Error::ShapeMismatch {
-                    op: "stack",
-                    expected: tensors[0].shape.to_vec(),
-                    got: t.shape.to_vec(),
-                    msg: format!(
-                        "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
-                        tensors[0].shape, t.shape
-                    ),
-                });
-            }
-        }
-
-        // Unsqueeze each input by reshaping to a target shape with a new
-        // size-1 axis spliced in at `dim` (the TensorOps trait has no
-        // dedicated `unsqueeze` method), then delegate to Self::concat —
-        // this composition needs zero new backward code: reshape's and
-        // concat's own tape entries compose correctly on their own.
-        let mut unsqueezed = Vec::with_capacity(tensors.len());
-        for t in tensors.iter() {
-            let mut target_shape = t.shape.to_vec();
-            target_shape.insert(dim, 1);
-            unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
-        }
-
-        let refs: Vec<&<Self as StorageBackend>::Storage<K>> = unsqueezed.iter().collect();
-        Self::concat::<K>(&refs, dim)
-    }
-
-    /// `concat`.
-    fn concat<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::ShapeMismatch {
-                op: "concat",
-                expected: vec![],
-                got: vec![],
-                msg: alloc::string::String::from("concat requires at least one input tensor"),
-            });
-        }
-
-        let rank = tensors[0].shape.len();
-        if dim >= rank {
-            return Err(Error::ShapeMismatch {
-                op: "concat",
-                expected: tensors[0].shape.to_vec(),
-                got: vec![dim],
-                msg: format!(
-                    "concat dim {dim} out of range for rank-{rank} shape {:?}",
-                    tensors[0].shape
-                ),
-            });
-        }
-
-        for t in tensors.iter().skip(1) {
-            if t.shape.len() != rank {
-                return Err(Error::ShapeMismatch {
-                    op: "concat",
-                    expected: tensors[0].shape.to_vec(),
-                    got: t.shape.to_vec(),
-                    msg: format!(
-                        "concat requires every input to have the same rank; expected rank {rank}, got shape {:?}",
-                        t.shape
-                    ),
-                });
-            }
-            // Every axis EXCEPT `dim` must match EXACTLY — never
-            // broadcast-compatible (Pitfall 5: a size-1-vs-larger mismatch
-            // here must be REJECTED, not silently accepted the way
-            // stride::broadcast_shape would treat it).
-            for (axis, (&a, &b)) in tensors[0].shape.iter().zip(t.shape.iter()).enumerate() {
-                if axis != dim && a != b {
-                    return Err(Error::ShapeMismatch {
-                        op: "concat",
-                        expected: tensors[0].shape.to_vec(),
-                        got: t.shape.to_vec(),
-                        msg: format!(
-                            "concat requires exact equality on every non-concat axis; axis {axis} has size {a} vs {b}"
-                        ),
-                    });
-                }
-            }
-        }
-
-        let mut out_shape = tensors[0].shape.to_vec();
-        out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
-            total.checked_add(tensor.shape[dim]).ok_or(
-                incin_core::prelude::ShapeError::ArithmeticOverflow {
-                    operation: incin_core::prelude::OperationKind::Concat,
-                    expression: "sum of concatenated axis dimensions",
-                },
-            )
-        })?;
-        let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-
-        // Cumulative offset of each input along `dim`, needed by both the
-        // forward copy and the backward narrow-based scatter.
-        let mut cumulative_offsets = Vec::with_capacity(tensors.len());
-        let mut running = 0usize;
-        for t in tensors.iter() {
-            cumulative_offsets.push(running);
-            running = running.checked_add(t.shape[dim]).ok_or(
-                incin_core::prelude::ShapeError::ArithmeticOverflow {
-                    operation: incin_core::prelude::OperationKind::Concat,
-                    expression: "cumulative concatenation offset",
-                },
-            )?;
-        }
-
-        macro_rules! concat_variant {
-            ($variant:ident, $ty:ty) => {{
-                let mut out: Vec<$ty> = vec![Default::default(); total];
-                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
-                    // Read this input through ITS OWN strides directly — no
-                    // prior `.contiguous()` materialization.
-                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-                    let mut multi_idx = vec![0usize; t.shape.len()];
-                    for _ in 0..value_count {
-                        let mut flat_dest = 0usize;
-                        for (axis, &i) in multi_idx.iter().enumerate() {
-                            let dest_i = if axis == dim { i + offset } else { i };
-                            flat_dest += dest_i * out_strides[axis];
-                        }
-                        out[flat_dest] = t.get(&multi_idx) as $ty;
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::$variant(out)
-            }};
-        }
-
-        let new_buffer = match &*tensors[0].buffer {
-            CpuBuffer::F32(_) => concat_variant!(F32, f32),
-            CpuBuffer::F64(_) => concat_variant!(F64, f64),
-            CpuBuffer::U8(_) => concat_variant!(U8, u8),
-            CpuBuffer::Bool(_) => concat_variant!(Bool, u8),
-            CpuBuffer::U32(_) => concat_variant!(U32, u32),
-            CpuBuffer::I64(_) => concat_variant!(I64, i64),
-            CpuBuffer::F16(_) => {
-                let mut out: Vec<half::f16> = vec![half::f16::from_f64(0.0); total];
-                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
-                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-                    let mut multi_idx = vec![0usize; t.shape.len()];
-                    for _ in 0..value_count {
-                        let mut flat_dest = 0usize;
-                        for (axis, &i) in multi_idx.iter().enumerate() {
-                            let dest_i = if axis == dim { i + offset } else { i };
-                            flat_dest += dest_i * out_strides[axis];
-                        }
-                        out[flat_dest] = half::f16::from_f64(t.get(&multi_idx));
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::F16(out)
-            }
-            CpuBuffer::BF16(_) => {
-                let mut out: Vec<half::bf16> = vec![half::bf16::from_f64(0.0); total];
-                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
-                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-                    let mut multi_idx = vec![0usize; t.shape.len()];
-                    for _ in 0..value_count {
-                        let mut flat_dest = 0usize;
-                        for (axis, &i) in multi_idx.iter().enumerate() {
-                            let dest_i = if axis == dim { i + offset } else { i };
-                            flat_dest += dest_i * out_strides[axis];
-                        }
-                        out[flat_dest] = half::bf16::from_f64(t.get(&multi_idx));
-                        crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
-                    }
-                }
-                CpuBuffer::BF16(out)
-            }
-            CpuBuffer::Q8_0(_) => {
-                return Err(Error::UnsupportedDType {
-                    dtype: DTypeId::Q8_0.descriptor(),
-                    backend: "cpu",
-                    op: "concat",
-                });
-            }
-        };
-
-        let out = CpuStorage::from_contiguous(new_buffer, out_shape);
-
-        let out_id = out.id;
-        let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
-        let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
-        let offsets = cumulative_offsets.clone();
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids,
-            // Collecting an iterator of `Result` straight into
-            // `Result<Vec<_>>` is the whole conversion here: the recipe's
-            // return type is now exactly what `collect` already produced.
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                offsets
-                    .iter()
-                    .zip(input_dim_sizes.iter())
-                    .map(|(&offset, &len)| grad_out.narrow(dim, offset, len))
-                    .collect()
-            }),
-        });
-
-        Ok(out)
-    }
-
-    /// `slice`.
-    fn slice<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        ranges: &[(usize, usize)],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        slice_storage(t, ranges)
-    }
-
-    /// `flatten`.
-    fn flatten<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        start_dim: usize,
-        end_dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        flatten_storage(t, start_dim, end_dim)
-    }
-
-    /// `broadcast_left`.
-    fn broadcast_left<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        shape: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        broadcast_left_storage(t, shape)
-    }
-
-    /// `float_to_scalar`.
-    fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
-        float_to_scalar_storage(t)
-    }
-
-    /// `float_to_vec1`.
-    fn float_to_vec1<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<alloc::vec::Vec<f64>> {
-        float_to_vec1_storage(t)
-    }
-
-    /// `int_to_scalar`.
-    fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
-        int_to_scalar_storage(t)
-    }
-
-    /// `int_to_vec1`.
-    fn int_to_vec1<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<alloc::vec::Vec<i64>> {
-        int_to_vec1_storage(t)
-    }
-
-    /// `tensor_to_dtype`.
-    fn tensor_to_dtype<K: DType, K2: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dtype: DTypeDescriptor,
-    ) -> Result<<Self as StorageBackend>::Storage<K2>> {
-        tensor_to_dtype_storage(t, dtype)
-    }
-
-    fn where_cond<K: DType>(
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        on_true: &<Self as StorageBackend>::Storage<K>,
-        on_false: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        where_storage(mask, on_true, on_false)
-    }
-
-    fn gather<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        gather_storage(t, dim, index)
-    }
-
-    fn scatter<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-        src: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        scatter_storage(t, dim, index, src)
-    }
-
-    fn index_select<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        index_select_storage(t, dim, index)
-    }
-
-    fn masked_fill<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        value: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        masked_fill_storage(t, mask, value)
-    }
-
-    fn unsqueeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        unsqueeze_storage(t, dim)
-    }
-
-    fn repeat<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        repeats: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        repeat_storage(t, repeats)
-    }
-
-    fn pad<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        padding: &[(usize, usize)],
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        pad_storage(t, padding, val)
-    }
-
-    fn triu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        triu_storage(t, k)
-    }
-
-    fn tril<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        tril_storage(t, k)
-    }
-
-    fn diag<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        diag_storage(t, k)
-    }
-
-    fn cmp_eq<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a == b)
-    }
-
-    fn cmp_ne<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a != b)
-    }
-
-    fn cmp_lt<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a < b)
-    }
-
-    fn cmp_le<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a <= b)
-    }
-
-    fn cmp_gt<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a > b)
-    }
-
-    fn cmp_ge<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a >= b)
-    }
-
-    fn logical_and(
-        lhs: &<Self as StorageBackend>::Storage<bool>,
-        rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a != 0.0 && b != 0.0)
-    }
-
-    fn logical_or(
-        lhs: &<Self as StorageBackend>::Storage<bool>,
-        rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        elementwise_cmp(lhs, rhs, |a, b| a != 0.0 || b != 0.0)
-    }
-
-    fn logical_not(
-        t: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            let v = if t.get(&idx) == 0.0 { 1u8 } else { 0u8 };
-            out.push(v);
-            if !t.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &t.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Bool(out),
-            t.shape.to_vec(),
-        ))
-    }
-
-    fn sub_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        sub_scalar_storage(t, val)
-    }
-
-    fn div_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        div_scalar_storage(t, val)
-    }
-
-    fn maximum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; lhs.shape.len()];
-        for _ in 0..total {
-            let v = lhs.get(&idx).max(rhs.get(&idx));
-            out.push(v);
-            if !lhs.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out)?,
-            lhs.shape.to_vec(),
-        ))
-    }
-
-    fn minimum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; lhs.shape.len()];
-        for _ in 0..total {
-            let v = lhs.get(&idx).min(rhs.get(&idx));
-            out.push(v);
-            if !lhs.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out)?,
-            lhs.shape.to_vec(),
-        ))
-    }
-
-    fn abs_diff<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; lhs.shape.len()];
-        for _ in 0..total {
-            let v = (lhs.get(&idx) - rhs.get(&idx)).abs();
-            out.push(v);
-            if !lhs.shape.is_empty() {
-                crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
-            }
-        }
-        Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out)?,
-            lhs.shape.to_vec(),
-        ))
-    }
-
-    fn lerp<K: DType>(
-        start: &<Self as StorageBackend>::Storage<K>,
-        end: &<Self as StorageBackend>::Storage<K>,
-        weight: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        lerp_storage(start, end, weight)
-    }
-
-    fn addmm<K: DType>(
-        mat: &<Self as StorageBackend>::Storage<K>,
-        mat1: &<Self as StorageBackend>::Storage<K>,
-        mat2: &<Self as StorageBackend>::Storage<K>,
-        beta: f64,
-        alpha: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        addmm_storage(mat, mat1, mat2, beta, alpha)
-    }
-
-    fn bmm<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Self::matmul::<K>(lhs, rhs)
-    }
-
-    fn scaled_dot_product_attention<K: DType>(
-        q: &<Self as StorageBackend>::Storage<K>,
-        k: &<Self as StorageBackend>::Storage<K>,
-        v: &<Self as StorageBackend>::Storage<K>,
-        mask: Option<&<Self as StorageBackend>::Storage<K>>,
-        scale: Option<f64>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let k_rank = k.shape.len();
-        let k_t = if k_rank >= 2 {
-            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
-        } else {
-            k.clone()
-        };
-        let scores = Self::matmul::<K>(q, &k_t)?;
-        let d_k = *q.shape.last().unwrap_or(&1) as f64;
-        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = canonical_mul_scalar(&scores, s)?;
-        let masked_scores = if let Some(m) = mask {
-            add_storage(&scaled_scores, m)?
-        } else {
-            scaled_scores
-        };
-        let attn = canonical_softmax::<D>(&masked_scores, scores.shape.len() - 1)?;
-        Self::matmul::<K>(&attn, v)
-    }
-
-    fn unfold<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        size: usize,
-        step: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dim_len = t.shape[dim];
-        if size > dim_len {
-            return Err(Error::Msg(
-                "unfold size cannot exceed dimension length".into(),
-            ));
-        }
-        let n_windows = (dim_len - size) / step + 1;
-        let mut out_shape = t.shape.to_vec();
-        out_shape[dim] = n_windows;
-        out_shape.push(size);
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let win_idx = idx[dim];
-            let offset_idx = idx[out_shape.len() - 1];
-            let mut src_idx = idx[..t.shape.len()].to_vec();
-            src_idx[dim] = win_idx * step + offset_idx;
-            out.push(t.get(&src_idx));
-            crate::cpu::storage::increment_index(&mut idx, &out_shape);
-        }
-        Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out)?,
-            out_shape,
-        ))
-    }
-
-    fn pixel_shuffle<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        upscale_factor: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if t.shape.len() != 4 {
-            return Err(Error::Msg(
-                "pixel_shuffle expects 4D tensor (N, C, H, W)".into(),
-            ));
-        }
-        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
-        let r = upscale_factor;
-        let r_sq = r * r;
-        if c % r_sq != 0 {
-            return Err(Error::Msg(
-                "pixel_shuffle channels must be divisible by upscale_factor^2".into(),
-            ));
-        }
-        let out_c = c / r_sq;
-        let out_h = h * r;
-        let out_w = w * r;
-        let out_shape = vec![n, out_c, out_h, out_w];
-        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; 4];
-        for _ in 0..total {
-            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
-            let h_in = h_out / r;
-            let w_in = w_out / r;
-            let r_h = h_out % r;
-            let r_w = w_out % r;
-            let c_in = c_out * r_sq + r_h * r + r_w;
-            out.push(t.get(&[b, c_in, h_in, w_in]));
-            crate::cpu::storage::increment_index(&mut idx, &out_shape);
-        }
-        Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out)?,
-            out_shape,
-        ))
-    }
-
-    fn group_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        groups: usize,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        group_norm_storage(t, groups, eps)
-    }
-
-    fn instance_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        instance_norm_storage(t, eps)
-    }
-}
-
 #[cfg(test)]
 /// `tests`.
 mod tests {
     use super::*;
-
-    /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1748,7 +1049,7 @@ mod tests {
     fn reshape_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.reshape(&[3, 2]).unwrap();
-        let via_trait = TestBackend::reshape::<f32>(&t, &[3, 2]).unwrap();
+        let via_trait = reshape_storage(&t, &[3, 2]).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
@@ -1758,7 +1059,7 @@ mod tests {
     fn transpose_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.transpose(0, 1).unwrap();
-        let via_trait = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        let via_trait = transpose_storage(&t, 0, 1).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(via_trait.strides, direct.strides);
     }
@@ -1768,7 +1069,7 @@ mod tests {
     fn broadcast_as_through_trait_matches_direct_storage_call() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let direct = t.broadcast_as(&[4, 3]).unwrap();
-        let via_trait = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+        let via_trait = broadcast_as_storage(&t, &[4, 3]).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(via_trait.strides, direct.strides);
     }
@@ -1777,7 +1078,7 @@ mod tests {
     /// `float_to_scalar_reads_single_element`.
     fn float_to_scalar_reads_single_element() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![42.0]), vec![]);
-        let v = TestBackend::float_to_scalar::<f32>(&t).unwrap();
+        let v = float_to_scalar_storage(&t).unwrap();
         assert_eq!(v, 42.0);
     }
 
@@ -1785,7 +1086,7 @@ mod tests {
     /// `float_to_vec1_reads_all_elements_row_major`.
     fn float_to_vec1_reads_all_elements_row_major() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
-        let v = TestBackend::float_to_vec1::<f32>(&t).unwrap();
+        let v = float_to_vec1_storage(&t).unwrap();
         assert_eq!(v, vec![1.0, 2.0, 3.0]);
     }
 
@@ -1793,7 +1094,7 @@ mod tests {
     /// `reshape_backward_reshapes_grad_back_to_original_shape`.
     fn reshape_backward_reshapes_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = TestBackend::reshape::<f32>(&t, &[6]).unwrap();
+        let out = reshape_storage(&t, &[6]).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1804,7 +1105,7 @@ mod tests {
     /// `transpose_backward_reapplies_same_transpose`.
     fn transpose_backward_reapplies_same_transpose() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        let out = transpose_storage(&t, 0, 1).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1815,7 +1116,7 @@ mod tests {
     /// `broadcast_as_backward_unbroadcasts_to_original_shape`.
     fn broadcast_as_backward_unbroadcasts_to_original_shape() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
-        let out = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+        let out = broadcast_as_storage(&t, &[4, 3]).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![1, 3]);
@@ -1834,7 +1135,7 @@ mod tests {
             3,
             4,
         );
-        let out = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+        let out = matmul_storage(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 4]);
         assert_eq!(
             f32_vec(&out),
@@ -1849,7 +1150,7 @@ mod tests {
         // All other TensorOps methods are now fully implemented. We prove that
         // unsupported operations return typed errors by attempting to convert
         // to Q8_0, which is intentionally left unsupported in the Cpu backend.
-        let result = TestBackend::tensor_to_dtype::<f32, f32>(&t, DTypeId::Q8_0.descriptor());
+        let result = tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
         assert!(matches!(
             result,
             Err(Error::UnsupportedBackendOperation {
@@ -1865,7 +1166,7 @@ mod tests {
     fn narrow_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
         let direct = t.narrow(0, 1, 1).unwrap();
-        let via_trait = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+        let via_trait = narrow_storage(&t, 0, 1, 1).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
@@ -1875,7 +1176,7 @@ mod tests {
     #[test]
     fn narrow_backward_zero_pads_grad_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
-        let out = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+        let out = narrow_storage(&t, 0, 1, 1).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![3, 2]);
@@ -1886,7 +1187,7 @@ mod tests {
     #[test]
     fn narrow_out_of_bounds_returns_err_not_panic() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
-        let result = TestBackend::narrow::<f32>(&t, 0, 2, 2);
+        let result = narrow_storage(&t, 0, 2, 2);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -1895,9 +1196,9 @@ mod tests {
     #[test]
     fn narrow_on_transposed_input_produces_correct_values_without_materializing() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        let transposed = transpose_storage(&t, 0, 1).unwrap();
         // transposed is logically [[1,4],[2,5],[3,6]], shape [3,2]
-        let narrowed = TestBackend::narrow::<f32>(&transposed, 0, 1, 1).unwrap();
+        let narrowed = narrow_storage(&transposed, 0, 1, 1).unwrap();
         assert_eq!(narrowed.shape, vec![1, 2]);
         assert_eq!(narrowed.get(&[0, 0]), 2.0);
         assert_eq!(narrowed.get(&[0, 1]), 5.0);
@@ -1914,10 +1215,10 @@ mod tests {
             4,
             3,
         );
-        let manual = TestBackend::narrow::<f32>(&t, 0, 1, 2).unwrap();
-        let manual = TestBackend::narrow::<f32>(&manual, 1, 0, 2).unwrap();
+        let manual = narrow_storage(&t, 0, 1, 2).unwrap();
+        let manual = narrow_storage(&manual, 1, 0, 2).unwrap();
 
-        let via_slice = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        let via_slice = slice_storage(&t, &[(1, 3), (0, 2)]).unwrap();
         assert_eq!(via_slice.shape, manual.shape);
         assert_eq!(f32_vec(&via_slice), f32_vec(&manual));
     }
@@ -1928,10 +1229,10 @@ mod tests {
     #[test]
     fn slice_on_transposed_input_across_multiple_dims_produces_correct_values() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        let transposed = transpose_storage(&t, 0, 1).unwrap();
         // transposed: [[1,4],[2,5],[3,6]], shape [3,2]
         // slice rows [1,3) and cols [0,1) -> [[2],[3]]
-        let out = TestBackend::slice::<f32>(&transposed, &[(1, 3), (0, 1)]).unwrap();
+        let out = slice_storage(&transposed, &[(1, 3), (0, 1)]).unwrap();
         assert_eq!(out.shape, vec![2, 1]);
         assert_eq!(out.get(&[0, 0]), 2.0);
         assert_eq!(out.get(&[1, 0]), 3.0);
@@ -1948,7 +1249,7 @@ mod tests {
             4,
             3,
         );
-        let out = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        let out = slice_storage(&t, &[(1, 3), (0, 2)]).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![4, 3]);
@@ -1969,7 +1270,7 @@ mod tests {
             4,
             3,
         );
-        let result = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 5)]);
+        let result = slice_storage(&t, &[(1, 3), (0, 5)]);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -1984,7 +1285,7 @@ mod tests {
     fn squeeze_removes_size_one_axis_and_preserves_values() {
         let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
         let t = tensor3(data.clone(), 3, 1, 4);
-        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+        let out = squeeze_storage(&t, 1).unwrap();
         assert_eq!(out.shape, vec![3, 4]);
         assert_eq!(f32_vec(&out), data);
     }
@@ -1995,7 +1296,7 @@ mod tests {
     fn squeeze_on_non_one_sized_axis_returns_shape_mismatch() {
         let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
         let t = tensor3(data, 3, 1, 4);
-        let result = TestBackend::squeeze::<f32>(&t, 0);
+        let result = squeeze_storage(&t, 0);
         match result {
             Err(Error::ShapeMismatch { op, .. }) => assert_eq!(op, "squeeze"),
             other => panic!("expected squeeze-specific ShapeMismatch, got {other:?}"),
@@ -2008,7 +1309,7 @@ mod tests {
     fn squeeze_backward_reshapes_grad_to_original_shape() {
         let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
         let t = tensor3(data, 3, 1, 4);
-        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+        let out = squeeze_storage(&t, 1).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![3, 1, 4]);
@@ -2021,7 +1322,7 @@ mod tests {
     fn flatten_merges_middle_dims() {
         let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
         let t = tensor3(data.clone(), 2, 3, 4);
-        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+        let out = flatten_storage(&t, 1, 2).unwrap();
         assert_eq!(out.shape, vec![2, 12]);
         assert_eq!(f32_vec(&out), data);
     }
@@ -2032,7 +1333,7 @@ mod tests {
     fn flatten_all_dims_produces_1d_shape() {
         let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
         let t = tensor3(data.clone(), 2, 3, 4);
-        let out = TestBackend::flatten::<f32>(&t, 0, 2).unwrap();
+        let out = flatten_storage(&t, 0, 2).unwrap();
         assert_eq!(out.shape, vec![24]);
         assert_eq!(f32_vec(&out), data);
     }
@@ -2043,7 +1344,7 @@ mod tests {
     fn flatten_backward_reshapes_grad_to_original_shape() {
         let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
         let t = tensor3(data, 2, 3, 4);
-        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+        let out = flatten_storage(&t, 1, 2).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![2, 3, 4]);
@@ -2064,7 +1365,7 @@ mod tests {
             4,
         );
         let direct = matmul_impl(&lhs, &rhs).unwrap();
-        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+        let via_trait = matmul_storage(&lhs, &rhs).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
@@ -2081,7 +1382,7 @@ mod tests {
         let rhs = CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data), vec![2, 4, 5]);
 
         let direct = batched_matmul_impl(&lhs, &rhs).unwrap();
-        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+        let via_trait = matmul_storage(&lhs, &rhs).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
@@ -2097,7 +1398,7 @@ mod tests {
             3,
             3,
         );
-        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+        let out = concat_storage(&[&a, &b], 0).unwrap();
         assert_eq!(out.shape, vec![5, 3]);
         assert_eq!(
             f32_vec(&out),
@@ -2113,7 +1414,7 @@ mod tests {
     fn concat_dim1_interleaves_columns_by_row() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![7.0, 8.0, 9.0, 10.0], 2, 2);
-        let out = TestBackend::concat::<f32>(&[&a, &b], 1).unwrap();
+        let out = concat_storage(&[&a, &b], 1).unwrap();
         assert_eq!(out.shape, vec![2, 5]);
         assert_eq!(
             f32_vec(&out),
@@ -2138,7 +1439,7 @@ mod tests {
             3,
             4,
         );
-        let result = TestBackend::concat::<f32>(&[&a, &b], 0);
+        let result = concat_storage(&[&a, &b], 0);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -2146,7 +1447,7 @@ mod tests {
     /// `Err(Error::ShapeMismatch)`, not a panic.
     #[test]
     fn concat_empty_input_list_returns_err_not_panic() {
-        let result: Result<CpuStorage> = TestBackend::concat::<f32>(&[], 0);
+        let result: Result<CpuStorage> = concat_storage(&[], 0);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -2156,7 +1457,7 @@ mod tests {
     fn concat_dim_out_of_bounds_returns_err() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let result = TestBackend::concat::<f32>(&[&a, &b], 2);
+        let result = concat_storage(&[&a, &b], 2);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -2171,7 +1472,7 @@ mod tests {
             3,
             3,
         );
-        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+        let out = concat_storage(&[&a, &b], 0).unwrap();
         let grads = tape::backward(&out).unwrap();
 
         let ga = grads.get(a.id).expect("a should have a gradient");
@@ -2197,10 +1498,10 @@ mod tests {
     #[test]
     fn concat_on_transposed_input_produces_correct_values_without_materializing() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let transposed = TestBackend::transpose::<f32>(&a, 0, 1).unwrap();
+        let transposed = transpose_storage(&a, 0, 1).unwrap();
         // transposed: [[1,4],[2,5],[3,6]], shape [3,2]
         let b = matrix(vec![100.0, 200.0], 1, 2);
-        let out = TestBackend::concat::<f32>(&[&transposed, &b], 0).unwrap();
+        let out = concat_storage(&[&transposed, &b], 0).unwrap();
         assert_eq!(out.shape, vec![4, 2]);
         assert_eq!(
             f32_vec(&out),
@@ -2215,7 +1516,7 @@ mod tests {
     fn stack_dim0_inserts_new_leading_axis() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
-        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+        let out = stack_storage(&[&a, &b], 0).unwrap();
         assert_eq!(out.shape, vec![2, 2, 3]);
         assert_eq!(
             f32_vec(&out),
@@ -2231,7 +1532,7 @@ mod tests {
     fn stack_dim_equal_to_rank_appends_new_trailing_axis() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
-        let out = TestBackend::stack::<f32>(&[&a, &b], 2).unwrap();
+        let out = stack_storage(&[&a, &b], 2).unwrap();
         assert_eq!(out.shape, vec![2, 3, 2]);
         // Element [r,c,0] == a[r,c], [r,c,1] == b[r,c]
         for r in 0..2 {
@@ -2249,7 +1550,7 @@ mod tests {
     fn stack_rejects_mismatched_shapes() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], 2, 4);
-        let result = TestBackend::stack::<f32>(&[&a, &b], 0);
+        let result = stack_storage(&[&a, &b], 0);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -2257,7 +1558,7 @@ mod tests {
     /// `Err(Error::ShapeMismatch)`, not a panic.
     #[test]
     fn stack_empty_input_list_returns_err_not_panic() {
-        let result: Result<CpuStorage> = TestBackend::stack::<f32>(&[], 0);
+        let result: Result<CpuStorage> = stack_storage(&[], 0);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
@@ -2268,7 +1569,7 @@ mod tests {
     fn stack_backward_narrows_and_squeezes_grad_to_original_shape() {
         let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
-        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+        let out = stack_storage(&[&a, &b], 0).unwrap();
         let grads = tape::backward(&out).unwrap();
 
         let ga = grads.get(a.id).expect("a should have a gradient");
@@ -2294,7 +1595,7 @@ mod tests {
     #[test]
     fn broadcast_left_prepends_single_new_leading_dim() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
-        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        let out = broadcast_left_storage(&t, &[4]).unwrap();
         assert_eq!(out.shape, vec![4, 3]);
         for row in 0..4 {
             assert_eq!(out.get(&[row, 0]), 1.0);
@@ -2308,7 +1609,7 @@ mod tests {
     #[test]
     fn broadcast_left_prepends_multiple_new_leading_dims() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
-        let out = TestBackend::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+        let out = broadcast_left_storage(&t, &[2, 4]).unwrap();
         assert_eq!(out.shape, vec![2, 4, 3]);
         for i in 0..2 {
             for j in 0..4 {
@@ -2325,7 +1626,7 @@ mod tests {
     #[test]
     fn broadcast_left_backward_unbroadcasts_to_original_shape() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
-        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        let out = broadcast_left_storage(&t, &[4]).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(g.shape, vec![3]);
@@ -2340,7 +1641,7 @@ mod tests {
     fn broadcast_left_through_trait_matches_direct_broadcast_as_call() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
         let direct = t.broadcast_as(&[4, 3]).unwrap();
-        let via_trait = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        let via_trait = broadcast_left_storage(&t, &[4]).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(via_trait.strides, direct.strides);
     }
@@ -2358,7 +1659,7 @@ mod tests {
         let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(data), vec![2, 4, 1, 2]);
 
-        let out = f32_vec(&TestBackend::group_norm::<f32>(&t, 2, 1e-5).unwrap());
+        let out = f32_vec(&group_norm_storage(&t, 2, 1e-5).unwrap());
 
         assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
         // Group 0 of sample 0 is [0,1,2,3]: mean 1.5, population variance 1.25.
@@ -2387,7 +1688,7 @@ mod tests {
             vec![2, 2, 2],
         );
 
-        let out = f32_vec(&TestBackend::instance_norm::<f32>(&t, 1e-5).unwrap());
+        let out = f32_vec(&instance_norm_storage(&t, 1e-5).unwrap());
 
         for flat in [0, 1, 4, 5] {
             assert!(
@@ -2410,7 +1711,7 @@ mod tests {
     fn attention_keeps_the_operand_dtype() {
         let operand =
             || CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0]), vec![2, 2]);
-        let out = TestBackend::scaled_dot_product_attention::<f64>(
+        let out = scaled_dot_product_attention_storage::<incin_core::prelude::Cpu>(
             &operand(),
             &operand(),
             &operand(),

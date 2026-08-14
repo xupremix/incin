@@ -387,6 +387,8 @@ macro_rules! dispatch_module_same_device {
 }
 
 macro_rules! cpu_unary_call {
+    (sub_scalar, $value:expr, $scalar:expr) => { crate::cpu::ops::shape_ops::sub_scalar_storage($value, $scalar) };
+    (div_scalar, $value:expr, $scalar:expr) => { crate::cpu::ops::shape_ops::div_scalar_storage($value, $scalar) };
     (relu, $value:expr $(, $arg:expr)*) => {
         crate::cpu::ops::elementwise::canonical_relu($value)
     };
@@ -612,6 +614,11 @@ macro_rules! cpu_shape_call {
     (triu, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::triu_storage($value, $k) };
     (tril, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::tril_storage($value, $k) };
     (diag, $value:expr, $k:expr) => { crate::cpu::ops::shape_ops::diag_storage($value, $k) };
+    (squeeze, $value:expr, $dim:expr) => { crate::cpu::ops::shape_ops::squeeze_storage($value, $dim) };
+    (unfold, $value:expr, $dim:expr, $size:expr, $step:expr) => { crate::cpu::ops::shape_ops::unfold_storage($value, $dim, $size, $step) };
+    (pixel_shuffle, $value:expr, $factor:expr) => { crate::cpu::ops::shape_ops::pixel_shuffle_storage($value, $factor) };
+    (group_norm, $value:expr, $groups:expr, $eps:expr) => { crate::cpu::ops::shape_ops::group_norm_storage($value, $groups, $eps) };
+    (instance_norm, $value:expr, $eps:expr) => { crate::cpu::ops::shape_ops::instance_norm_storage($value, $eps) };
     ($method:ident, $value:expr $(, $arg:expr)*) => {
         crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
     };
@@ -664,7 +671,11 @@ macro_rules! dispatch_slice {
                     .iter()
                     .map(|operand| cpu_operand(routed, operand))
                     .collect::<Result<Vec<_>>>()?;
-                crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>(&concrete, $dim)
+                match stringify!($method) {
+                    "stack" => crate::cpu::ops::shape_ops::stack_storage(&concrete, $dim),
+                    "concat" => crate::cpu::ops::shape_ops::concat_storage(&concrete, $dim),
+                    _ => unreachable!("unsupported CPU slice operation"),
+                }
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -720,6 +731,39 @@ macro_rules! cpu_binary_call {
     };
     (remainder, $lhs:expr, $rhs:expr) => {
         crate::cpu::ops::elementwise::canonical_remainder($lhs, $rhs)
+    };
+    (matmul, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::matmul_storage($lhs, $rhs)
+    };
+    (bmm, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::matmul_storage($lhs, $rhs)
+    };
+    (cmp_eq, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a == b)
+    };
+    (cmp_ne, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a != b)
+    };
+    (cmp_lt, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a < b)
+    };
+    (cmp_le, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a <= b)
+    };
+    (cmp_gt, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a > b)
+    };
+    (cmp_ge, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_cmp($lhs, $rhs, |a, b| a >= b)
+    };
+    (maximum, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_float_binary($lhs, $rhs, f64::max)
+    };
+    (minimum, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_float_binary($lhs, $rhs, f64::min)
+    };
+    (abs_diff, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::shape_ops::elementwise_float_binary($lhs, $rhs, |a, b| (a - b).abs())
     };
     ($method:ident, $lhs:expr, $rhs:expr) => {
         crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($lhs, $rhs)
@@ -1342,7 +1386,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         dispatch_shape_unary!(t, narrow, dim, start, len)
     }
     fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
-        dispatch_unary!(t, squeeze, dim)
+        dispatch_shape_unary!(t, squeeze, dim)
     }
     fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
         dispatch_slice!(t, stack, dim)
@@ -1364,7 +1408,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (mask, on_true, on_false) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(t), DispatchStorage::Cpu(f)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::where_cond::<K>(m, t, f)
+                crate::cpu::ops::shape_ops::where_storage(m, t, f)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1391,7 +1435,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (t, index) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::gather::<K, KInt>(t, dim, idx)
+                crate::cpu::ops::shape_ops::gather_storage(t, dim, idx)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1419,7 +1463,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (t, index, src) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx), DispatchStorage::Cpu(s)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::scatter::<K, KInt>(t, dim, idx, s)
+                crate::cpu::ops::shape_ops::scatter_storage(t, dim, idx, s)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1446,7 +1490,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (t, index) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::index_select::<K, KInt>(t, dim, idx)
+                crate::cpu::ops::shape_ops::index_select_storage(t, dim, idx)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1473,7 +1517,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (t, mask) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(t), DispatchStorage::Cpu(m)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::masked_fill::<K>(t, m, value)
+                crate::cpu::ops::shape_ops::masked_fill_storage(t, m, value)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1521,7 +1565,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::float_to_scalar::<K>(value)
+                crate::cpu::ops::shape_ops::float_to_scalar_storage(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1542,7 +1586,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::float_to_vec1::<K>(value)
+                crate::cpu::ops::shape_ops::float_to_vec1_storage(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1563,7 +1607,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::int_to_scalar::<K>(value)
+                crate::cpu::ops::shape_ops::int_to_scalar_storage(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1584,7 +1628,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::HostReadback>::int_to_vec1::<K>(value)
+                crate::cpu::ops::shape_ops::int_to_vec1_storage(value)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1608,7 +1652,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::tensor_to_dtype::<K, K2>(value, dtype)
+                crate::cpu::ops::shape_ops::tensor_to_dtype_storage(value, dtype)
                     .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
@@ -1653,7 +1697,8 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (lhs, rhs) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::logical_and(lhs, rhs).map(DispatchStorage::Cpu)
+                crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, |a, b| a != 0.0 && b != 0.0)
+                    .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
             (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
@@ -1677,7 +1722,8 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (lhs, rhs) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::logical_or(lhs, rhs).map(DispatchStorage::Cpu)
+                crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, |a, b| a != 0.0 || b != 0.0)
+                    .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
             (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
@@ -1701,7 +1747,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::logical_not(value).map(DispatchStorage::Cpu)
+                crate::cpu::ops::shape_ops::logical_not_storage(value).map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => {
@@ -1744,11 +1790,8 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (start, end) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(s), DispatchStorage::Cpu(e)) => {
-                #[cfg(feature = "cpu")]
-                {
-                    crate::cpu::CpuBackendImpl::<Cpu>::lerp::<K>(s, e, _weight)
-                        .map(DispatchStorage::Cpu)
-                }
+                crate::cpu::ops::shape_ops::lerp_storage(s, e, _weight)
+                    .map(DispatchStorage::Cpu)
             }
             _ => Err(Error::Msg("mismatched backends in lerp".into())),
         }
@@ -1764,11 +1807,8 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         match (mat, mat1, mat2) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(m1), DispatchStorage::Cpu(m2)) => {
-                #[cfg(feature = "cpu")]
-                {
-                    crate::cpu::CpuBackendImpl::<Cpu>::addmm::<K>(m, m1, m2, _beta, _alpha)
-                        .map(DispatchStorage::Cpu)
-                }
+                crate::cpu::ops::shape_ops::addmm_storage(m, m1, m2, _beta, _alpha)
+                    .map(DispatchStorage::Cpu)
             }
             _ => Err(Error::Msg("mismatched backends in addmm".into())),
         }
@@ -1797,7 +1837,7 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
                         None => None,
                         _ => return Err(Error::Msg("mismatched mask backend".into())),
                     };
-                    crate::cpu::CpuBackendImpl::<Cpu>::scaled_dot_product_attention::<K>(
+                    crate::cpu::ops::shape_ops::scaled_dot_product_attention_storage::<Cpu>(
                         q_cpu, k_cpu, v_cpu, m_cpu, _scale,
                     )
                     .map(DispatchStorage::Cpu)
@@ -1813,23 +1853,23 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         size: usize,
         step: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, unfold, dim, size, step)
+        dispatch_shape_unary!(t, unfold, dim, size, step)
     }
     fn pixel_shuffle<K: DType>(
         t: &DispatchStorage,
         upscale_factor: usize,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, pixel_shuffle, upscale_factor)
+        dispatch_shape_unary!(t, pixel_shuffle, upscale_factor)
     }
     fn group_norm<K: DType>(
         t: &DispatchStorage,
         groups: usize,
         eps: f64,
     ) -> Result<DispatchStorage> {
-        dispatch_unary!(t, group_norm, groups, eps)
+        dispatch_shape_unary!(t, group_norm, groups, eps)
     }
     fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
-        dispatch_unary!(t, instance_norm, eps)
+        dispatch_shape_unary!(t, instance_norm, eps)
     }
 }
 impl<D: Device> NumericOps<Self> for DispatchBackend<D> {
