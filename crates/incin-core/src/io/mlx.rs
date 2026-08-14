@@ -1,5 +1,5 @@
 use crate::err::Result;
-use crate::nn::StateDict;
+use crate::nn::VisitState;
 use crate::nn::save::save_safetensors;
 use crate::tensor::backend::Backend;
 use std::fs::{File, create_dir_all};
@@ -13,7 +13,7 @@ impl MlxExporter {
     /// Exports a `incin` module to an MLX-compatible directory structure containing:
     /// - `weights.safetensors`: Safetensors binary model weights
     /// - `config.json`: Model architecture configuration
-    pub fn export_dir<B: Backend + crate::tensor::backend::VariableBackend, M: StateDict<B>, P: AsRef<Path>>(
+    pub fn export_dir<B: Backend + crate::tensor::backend::VariableBackend, M: VisitState<B>, P: AsRef<Path>>(
         module: &M,
         dir_path: P,
         config_json: &str,

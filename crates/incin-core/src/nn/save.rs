@@ -1,5 +1,5 @@
 use crate::backend_authoring::{Execute, op};
-use crate::nn::StateDict;
+use crate::nn::{VisitState, VisitStateMut};
 use crate::err::ErrorMessage;
 use crate::io::ResourceLimits;
 use crate::prelude::{
@@ -279,21 +279,21 @@ pub fn load_safetensors_snapshot<P: AsRef<Path>>(path: P) -> Result<crate::nn::S
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where
     B: crate::tensor::backend::VariableBackend,
-    M: StateDict<B>,
+    M: VisitState<B> + VisitStateMut<B>,
     P: AsRef<Path>,
 {
     let snapshot = load_safetensors_snapshot(path)?;
-    module.load_state_dict(&snapshot)
+    crate::nn::load_state::<B, _>(module, &snapshot)
 }
 
 /// Saves the module's weights to a safetensors file.
 pub fn save_safetensors<B, M, P>(module: &M, path: P) -> Result<()>
 where
     B: crate::tensor::backend::VariableBackend,
-    M: StateDict<B>,
+    M: VisitState<B>,
     P: AsRef<Path>,
 {
-    let snapshot = module.state_dict()?;
+    let snapshot = crate::nn::collect_state::<B, _>(module)?;
     crate::serialize::serialize_snapshot_safetensors(&snapshot, path.as_ref())
         .map_err(|e| Error::Msg(format!("Safetensors serialization failed: {}", e)))
 }
@@ -303,13 +303,13 @@ where
 pub fn save_checkpoint<B, M, P>(module: &M, dir_path: P, world_size: usize) -> Result<()>
 where
     B: crate::tensor::backend::VariableBackend,
-    M: StateDict<B>,
+    M: VisitState<B>,
     P: AsRef<Path>,
 {
     let dir = dir_path.as_ref();
     std::fs::create_dir_all(dir)?;
 
-    let snapshot = module.state_dict()?;
+    let snapshot = crate::nn::collect_state::<B, _>(module)?;
 
     let mut manifest = GlobalCheckpointManifest::new(world_size);
     for (name, value) in snapshot.iter() {
@@ -340,7 +340,7 @@ pub fn load_resharded_checkpoint<B, M, P>(
 ) -> Result<()>
 where
     B: crate::tensor::backend::VariableBackend + Execute<op::TensorFromBytes>,
-    M: StateDict<B>,
+    M: VisitState<B> + VisitStateMut<B>,
     P: AsRef<Path>,
 {
     let dir = dir_path.as_ref();
@@ -357,7 +357,7 @@ where
     let weights_path = dir.join("model.safetensors");
     let checkpoint = crate::serialize::deserialize_snapshot_safetensors(&weights_path)
         .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))?;
-    let current = module.state_dict()?;
+    let current = crate::nn::collect_state::<B, _>(module)?;
     let expected_paths: BTreeSet<_> = current.iter().map(|(path, _)| path).collect();
     let checkpoint_paths: BTreeSet<_> = checkpoint.iter().map(|(path, _)| path).collect();
     if expected_paths != checkpoint_paths {
@@ -480,7 +480,7 @@ where
         resharded.insert(path, value)?;
     }
 
-    module.load_state_dict(&resharded)?;
+    crate::nn::load_state::<B, _>(module, &resharded)?;
     Ok(())
 }
 
