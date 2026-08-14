@@ -85,7 +85,7 @@ pub use incin_core::prelude::{
     Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
     DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
     FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
-    QuantDType, RequiresGrad, Result, Shape, StateDict, StateLoadPlan, StatePath, StateRole,
+    QuantDType, RequiresGrad, Result, Shape, StateDict, StatePath, StateRole,
     StateSnapshot, StateValue, TensorElement, VariableBackend, bf16,
     convert_f64_to_i64, f16,
 };
@@ -339,6 +339,11 @@ pub use incin_core::typenum;
 #[cfg(feature = "std")]
 pub mod doctor;
 
+/// Model checkpoint artifacts and transactional state loading.
+pub mod state {
+    pub use incin_core::prelude::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue};
+}
+
 // Enabling an accelerator must never silently change application behavior.
 // CPU remains the default whenever it is available; accelerator-only builds
 // get the one enabled device family.
@@ -495,7 +500,7 @@ pub mod prelude {
         NamedAxisSelector, NamedDim, Next, Nil, NoGrad, NonFiniteSite, PlainDType, Q8_0,
         QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
         ShapeValue, ComputeStats,
-        Slice, StateDict, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue,
+        Slice, StateDict, StatePath, StateRole, StateSnapshot, StateValue,
         TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
     };
 

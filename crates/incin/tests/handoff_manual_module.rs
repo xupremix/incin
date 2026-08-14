@@ -7,6 +7,7 @@
 
 use incin::nn::{Module, Parameters, StateDict};
 use incin::prelude::*;
+use incin::state::StateLoadPlan;
 use std::collections::BTreeMap;
 
 type CpuBackend = incin_backends::cpu::CpuBackendImpl;
