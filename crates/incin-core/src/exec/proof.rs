@@ -63,6 +63,51 @@ pub enum ProofLevel {
     Dynamic,
 }
 
+/// Runtime evidence lowered from a typed frontend proof.
+///
+/// This is the only shape information that crosses the backend boundary. It
+/// preserves useful semantic facts without making backend executors generic
+/// over the caller's concrete `Shape` type.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ShapeEvidence {
+    pub(crate) proof: ProofLevel,
+    pub(crate) static_rank: Option<usize>,
+    pub(crate) static_numel: Option<usize>,
+}
+
+impl ShapeEvidence {
+    pub(crate) const fn dynamic() -> Self {
+        Self {
+            proof: ProofLevel::Dynamic,
+            static_rank: None,
+            static_numel: None,
+        }
+    }
+
+    pub(crate) const fn of<S: Shape>() -> Self {
+        Self {
+            proof: S::PROOF,
+            static_rank: S::RANK,
+            static_numel: S::STATIC_NUMEL,
+        }
+    }
+
+    #[must_use]
+    pub const fn proof(self) -> ProofLevel {
+        self.proof
+    }
+
+    #[must_use]
+    pub const fn static_rank(self) -> Option<usize> {
+        self.static_rank
+    }
+
+    #[must_use]
+    pub const fn static_numel(self) -> Option<usize> {
+        self.static_numel
+    }
+}
+
 impl ProofLevel {
     /// The proof carried by shape `S`.
     ///
@@ -192,6 +237,7 @@ impl fmt::Display for ProofLevel {
 pub struct Validated<O> {
     descriptor: O,
     proof: ProofLevel,
+    evidence: ShapeEvidence,
 }
 
 impl<O> Validated<O> {
@@ -201,7 +247,22 @@ impl<O> Validated<O> {
     /// lowering rules are its only callers; they hold the shape types the
     /// proof is derived from, which no external caller does.
     pub(crate) const fn new(descriptor: O, proof: ProofLevel) -> Self {
-        Self { descriptor, proof }
+        Self {
+            descriptor,
+            proof,
+            evidence: ShapeEvidence {
+                proof,
+                ..ShapeEvidence::dynamic()
+            },
+        }
+    }
+
+    pub(crate) const fn new_with_evidence(descriptor: O, evidence: ShapeEvidence) -> Self {
+        Self {
+            descriptor,
+            proof: evidence.proof,
+            evidence,
+        }
     }
 
     /// The resolved operation.
@@ -214,6 +275,12 @@ impl<O> Validated<O> {
     #[must_use]
     pub const fn proof_level(&self) -> ProofLevel {
         self.proof
+    }
+
+    /// Typed shape facts lowered alongside this validated descriptor.
+    #[must_use]
+    pub const fn shape_evidence(&self) -> ShapeEvidence {
+        self.evidence
     }
 
     /// Take the descriptor back out, discarding the proof.

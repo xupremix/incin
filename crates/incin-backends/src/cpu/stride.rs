@@ -74,8 +74,8 @@ pub(crate) fn validated_numel(shape: &[usize]) -> usize {
 /// exactly that on every test run and costs nothing in release, matching the
 /// pattern `resolved_output_shape` in `cpu::canonical` already uses for the
 /// pointwise family.
-pub(crate) fn numel_for<S: incin_core::prelude::Shape>(shape: &[usize]) -> Result<usize> {
-    if let Some(total) = S::STATIC_NUMEL {
+pub(crate) fn numel_for_evidence(shape: &[usize], static_numel: Option<usize>) -> Result<usize> {
+    if let Some(total) = static_numel {
         debug_assert_eq!(
             checked_numel(shape).ok(),
             Some(total),
@@ -116,7 +116,7 @@ mod tests {
 
         let shape = [2usize, 3usize];
         type S23 = DimCons<U2, DimCons<U3, Nil>>;
-        assert_eq!(numel_for::<S23>(&shape).unwrap(), 6);
+        assert_eq!(numel_for_evidence(&shape, Some(6)).unwrap(), 6);
     }
 
     #[test]
@@ -125,7 +125,7 @@ mod tests {
 
         let shape = [2usize, 3usize, 4usize];
         assert_eq!(
-            numel_for::<Dyn>(&shape).unwrap(),
+            numel_for_evidence(&shape, None).unwrap(),
             checked_numel(&shape).unwrap(),
         );
     }

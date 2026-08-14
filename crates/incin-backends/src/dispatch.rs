@@ -545,7 +545,7 @@ macro_rules! variable_executors {
         impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
             type Output = DispatchVar;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> core::result::Result<DispatchVar, BackendError> {
@@ -607,7 +607,7 @@ macro_rules! scalar_executors {
         impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> core::result::Result<DispatchStorage, BackendError> {

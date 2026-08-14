@@ -411,7 +411,7 @@ where
         .collect::<Vec<_>>();
     context
         .backend()
-        .execute_shaped::<Dyn>(ExecutionRequest {
+        .execute(ExecutionRequest {
             operation: &validated,
             inputs: &handles,
             context,

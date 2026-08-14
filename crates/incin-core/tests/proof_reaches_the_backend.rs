@@ -1,10 +1,7 @@
 //! The frontend's shape evidence reaches the backend, not just the descriptor.
 //!
-//! `exec::catalog`'s own unit test proves `ValidatedInvocation::infer`
-//! preserves the proof level it is handed. This proves the other half: that
-//! `dispatch::execute_shaped` derives the evidence from the caller's shape type
-//! and that the `Validated` carrying it is the value the backend's
-//! `execute_shaped` receives — alongside that same type.
+//! `dispatch::execute_shaped` derives evidence from the caller's shape type and
+//! passes it to a non-Shape-generic backend executor.
 //!
 //! Without this, "the typed frontend's proof survives lowering" would be an
 //! inference across two separately-tested links rather than an observation.
@@ -61,12 +58,13 @@ impl Capabilities for RecordingBackend {
 impl Execute<op::Zeros> for RecordingBackend {
     type Output = ();
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Zeros, Self>,
     ) -> Result<Self::Output, incin_core::prelude::BackendError> {
         OBSERVED.with(|slot| slot.set(Some(request.operation.proof_level())));
-        OBSERVED_STATIC_NUMEL.with(|slot| slot.set(Some(ShapeTy::STATIC_NUMEL)));
+        OBSERVED_STATIC_NUMEL
+            .with(|slot| slot.set(Some(request.operation.shape_evidence().static_numel())));
         Ok(())
     }
 }

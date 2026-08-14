@@ -7,7 +7,7 @@
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
+use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
 use incin_core::tensor::backend::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 
 use super::backend::WgpuBackendImpl;
@@ -51,7 +51,7 @@ macro_rules! impl_wgpu_canonical {
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
@@ -72,7 +72,7 @@ impl_wgpu_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
 
 impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -100,7 +100,7 @@ impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
 
 impl<D: Device> Execute<op::BroadcastAs> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -121,7 +121,7 @@ impl<D: Device> Execute<op::BroadcastAs> for WgpuBackendImpl<D> {
 
 impl<D: Device> Execute<op::MatMulExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -158,7 +158,7 @@ impl<D: Device> Execute<op::MatMulExact> for WgpuBackendImpl<D> {
 
 impl<D: Device> Execute<op::Conv2dExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -223,7 +223,7 @@ impl<D: Device> Execute<op::Conv2dExact> for WgpuBackendImpl<D> {
 
 impl<D: Device> Execute<op::MaxPool2d> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -251,7 +251,7 @@ impl<D: Device> Execute<op::MaxPool2d> for WgpuBackendImpl<D> {
 
 impl<D: Device> Execute<op::AvgPool2d> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<WgpuStorage, BackendError> {
@@ -280,7 +280,7 @@ macro_rules! impl_wgpu_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
@@ -298,7 +298,7 @@ macro_rules! impl_wgpu_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
@@ -373,7 +373,7 @@ macro_rules! impl_wgpu_unary_float {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
             type Output = WgpuStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {

@@ -60,7 +60,7 @@ macro_rules! impl_data_creation_executors {
                 {
                     type Output = $storage;
 
-                    fn execute_shaped<ShapeTy: Shape>(
+                    fn execute(
                         &self,
                         request: incin_core::backend_authoring::ExecutionRequest<
                             '_,
@@ -111,7 +111,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -146,7 +146,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -181,7 +181,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -216,7 +216,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -251,7 +251,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -287,7 +287,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,
@@ -324,7 +324,7 @@ macro_rules! impl_creation_executors {
             for $backend
         {
             type Output = $storage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: incin_core::backend_authoring::ExecutionRequest<
                     '_,

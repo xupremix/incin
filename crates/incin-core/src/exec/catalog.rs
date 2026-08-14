@@ -4081,7 +4081,7 @@ impl<O: Operation> ValidatedInvocation<O> {
             ));
         }
         Ok(Self {
-            validated: crate::exec::Validated::new(
+            validated: crate::exec::Validated::new_with_evidence(
                 Descriptor {
                     attributes,
                     inputs: inputs.clone(),
@@ -4089,7 +4089,7 @@ impl<O: Operation> ValidatedInvocation<O> {
                     identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
-                crate::exec::ProofLevel::of::<S>(),
+                crate::exec::ShapeEvidence::of::<S>(),
             ),
             inputs,
         })
@@ -4415,7 +4415,16 @@ where
             }
         }
 
-        Self::validate(attributes, inputs, outputs, expected.proof_level())
+        let validated = Self::validate(attributes, inputs, outputs, expected.proof_level())?;
+        let inputs = validated.inputs;
+        let descriptor = validated.validated.into_descriptor();
+        Ok(Self {
+            validated: crate::exec::Validated::new_with_evidence(
+                descriptor,
+                crate::exec::ShapeEvidence::of::<S>(),
+            ),
+            inputs,
+        })
     }
 }
 

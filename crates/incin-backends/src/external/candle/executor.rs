@@ -140,7 +140,7 @@ const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError
 impl<D: Device> Execute<op::MatMulExact> for CandleBackend<D> {
     type Output = CandleStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
@@ -189,7 +189,7 @@ impl<D: Device> Execute<op::MatMulExact> for CandleBackend<D> {
 impl<D: Device> Execute<op::ReshapeExact> for CandleBackend<D> {
     type Output = CandleStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
@@ -244,7 +244,7 @@ macro_rules! impl_candle_creation_executors {
     ($(($op:ident, $func:ident $(, $arg:ident)*)),* $(,)?) => {$(
         impl<D: Device> Execute<incin_core::backend_authoring::op::$op> for CandleBackend<D> {
             type Output = CandleStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, incin_core::backend_authoring::op::$op, Self>,
             ) -> core::result::Result<CandleStorage, BackendError> {

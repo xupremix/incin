@@ -23,7 +23,7 @@ macro_rules! impl_metal_canonical {
         impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {
@@ -44,7 +44,7 @@ impl_metal_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
 
 impl<D: Device> Execute<op::ReshapeExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -65,7 +65,7 @@ impl<D: Device> Execute<op::ReshapeExact> for MetalBackendImpl<D> {
 
 impl<D: Device> Execute<op::BroadcastAs> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -86,7 +86,7 @@ impl<D: Device> Execute<op::BroadcastAs> for MetalBackendImpl<D> {
 
 impl<D: Device> Execute<op::MatMulExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -109,7 +109,7 @@ impl<D: Device> Execute<op::MatMulExact> for MetalBackendImpl<D> {
 
 impl<D: Device> Execute<op::Conv2dExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -141,7 +141,7 @@ impl<D: Device> Execute<op::Conv2dExact> for MetalBackendImpl<D> {
 
 impl<D: Device> Execute<op::MaxPool2d> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -169,7 +169,7 @@ impl<D: Device> Execute<op::MaxPool2d> for MetalBackendImpl<D> {
 
 impl<D: Device> Execute<op::AvgPool2d> for MetalBackendImpl<D> {
     type Output = MetalStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<MetalStorage, BackendError> {
@@ -198,7 +198,7 @@ macro_rules! impl_metal_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {
@@ -216,7 +216,7 @@ macro_rules! impl_metal_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
             type Output = MetalStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<MetalStorage, BackendError> {

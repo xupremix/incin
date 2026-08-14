@@ -22,7 +22,6 @@ use incin_core::exec::{
 };
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
-    Shape,
 };
 use incin_core::tensor::backend::{
     CreationOps, FloatOps, LossOps, ModuleOps, QuantizedOps, TensorOps,
@@ -135,7 +134,7 @@ macro_rules! pointwise_binary_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -229,7 +228,7 @@ macro_rules! allocating_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -238,7 +237,10 @@ macro_rules! allocating_executors {
                     return Err(invalid(operation, "an allocation takes no operand"));
                 }
                 let attributes = request.operation.descriptor().attributes();
-                let total = crate::cpu::stride::numel_for::<ShapeTy>(&attributes.shape)
+                let total = crate::cpu::stride::numel_for_evidence(
+                    &attributes.shape,
+                    request.operation.shape_evidence().static_numel(),
+                )
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
                 crate::cpu::creation::$method(
                     total,
@@ -270,7 +272,7 @@ macro_rules! data_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -311,7 +313,7 @@ macro_rules! variable_allocating_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = super::var::CpuVar;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<super::var::CpuVar, BackendError> {
@@ -320,7 +322,10 @@ macro_rules! variable_allocating_executors {
                     return Err(invalid(operation, "an allocation takes no operand"));
                 }
                 let attributes = request.operation.descriptor().attributes();
-                let total = crate::cpu::stride::numel_for::<ShapeTy>(&attributes.shape)
+                let total = crate::cpu::stride::numel_for_evidence(
+                    &attributes.shape,
+                    request.operation.shape_evidence().static_numel(),
+                )
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
                 crate::cpu::creation::$method(
                     total,
@@ -357,7 +362,7 @@ macro_rules! readback_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = $output;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<$output, BackendError> {
@@ -386,7 +391,7 @@ readback_executors![
 impl<D: Device> Execute<op::TensorToBytes> for CpuBackendImpl<D> {
     type Output = Vec<u8>;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::TensorToBytes, Self>,
     ) -> Result<Vec<u8>, BackendError> {
@@ -402,7 +407,7 @@ impl<D: Device> Execute<op::TensorToBytes> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::ReshapeExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -422,7 +427,7 @@ impl<D: Device> Execute<op::ReshapeExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::BroadcastAs> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -445,7 +450,7 @@ impl<D: Device> Execute<op::BroadcastAs> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::MatMulExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -496,7 +501,7 @@ macro_rules! reduce_all_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -523,7 +528,7 @@ macro_rules! reduce_axis_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -557,7 +562,7 @@ reduce_axis_executors![
 impl<D: Device> Execute<op::Cumsum> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Cumsum, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -620,7 +625,7 @@ macro_rules! index_reduction_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -642,7 +647,7 @@ index_reduction_executors![(ArgMax, argmax), (ArgMin, argmin)];
 impl<D: Device> Execute<op::Argsort> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Argsort, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -679,7 +684,7 @@ impl<D: Device> Execute<op::Argsort> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::TopK> for CpuBackendImpl<D> {
     type Output = (CpuStorage, CpuStorage);
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::TopK, Self>,
     ) -> Result<(CpuStorage, CpuStorage), BackendError> {
@@ -775,7 +780,7 @@ fn narrowed_epsilon(operation: OperationKind, epsilon: f64) -> Result<f32, Backe
 impl<D: Device> Execute<op::Conv2dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -824,7 +829,7 @@ impl<D: Device> Execute<op::Conv2dExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::MaxPool2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -853,7 +858,7 @@ impl<D: Device> Execute<op::MaxPool2d> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::AvgPool2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -881,7 +886,7 @@ impl<D: Device> Execute<op::AvgPool2d> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Conv1dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Conv1dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -922,7 +927,7 @@ impl<D: Device> Execute<op::Conv1dExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::ConvTranspose2d> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ConvTranspose2d, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -989,7 +994,7 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::AdaptiveAvgPool2dExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1021,7 +1026,7 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::EmbeddingExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1051,7 +1056,7 @@ macro_rules! canonical_unary_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1072,7 +1077,7 @@ macro_rules! canonical_unary_executors {
 impl<D: Device> Execute<op::Relu> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Relu, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1107,7 +1112,7 @@ canonical_unary_executors![
 impl<D: Device> Execute<op::Tanh> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Tanh, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1125,7 +1130,7 @@ impl<D: Device> Execute<op::Tanh> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Sigmoid> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Sigmoid, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1143,7 +1148,7 @@ impl<D: Device> Execute<op::Sigmoid> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Log> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Log, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1163,7 +1168,7 @@ macro_rules! direct_unary_no_grad_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1185,7 +1190,7 @@ direct_unary_no_grad_executors![(Trunc, canonical_trunc), (Frac, canonical_frac)
 impl<D: Device> Execute<op::Elu> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Elu, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1203,7 +1208,7 @@ impl<D: Device> Execute<op::Elu> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Mish> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Mish, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1221,7 +1226,7 @@ impl<D: Device> Execute<op::Mish> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Sqrt> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Sqrt, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1239,7 +1244,7 @@ impl<D: Device> Execute<op::Sqrt> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Abs> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Abs, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1257,7 +1262,7 @@ impl<D: Device> Execute<op::Abs> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Exp> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Exp, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1275,7 +1280,7 @@ impl<D: Device> Execute<op::Exp> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Step> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Step, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1293,7 +1298,7 @@ impl<D: Device> Execute<op::Step> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Neg> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Neg, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1313,7 +1318,7 @@ macro_rules! direct_unary_float_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1348,7 +1353,7 @@ macro_rules! scalar_float_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1374,7 +1379,7 @@ macro_rules! binary_float_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1398,7 +1403,7 @@ binary_float_executors![(Fmod, canonical_fmod), (Remainder, canonical_remainder)
 impl<D: Device> Execute<op::Atan2> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Atan2, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1418,7 +1423,7 @@ impl<D: Device> Execute<op::Atan2> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Clamp> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Clamp, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1439,7 +1444,7 @@ impl<D: Device> Execute<op::Clamp> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Softmax, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1460,7 +1465,7 @@ impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::LayerNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::LayerNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1499,7 +1504,7 @@ impl<D: Device> Execute<op::LayerNorm> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::BatchNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BatchNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1615,7 +1620,7 @@ macro_rules! numeric_binary_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1642,7 +1647,7 @@ macro_rules! cmp_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1672,7 +1677,7 @@ macro_rules! logical_binary_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1698,7 +1703,7 @@ logical_binary_tensor_executors![
 impl<D: Device> Execute<op::BatchedMatMul> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BatchedMatMul, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1720,7 +1725,7 @@ macro_rules! scalar_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1745,7 +1750,7 @@ macro_rules! diagonal_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1771,7 +1776,7 @@ macro_rules! axis_tensor_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -1794,7 +1799,7 @@ axis_tensor_executors![
 impl<D: Device> Execute<op::LogicalNot> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::LogicalNot, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1817,7 +1822,7 @@ impl<D: Device> Execute<op::LogicalNot> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::TransposeExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1838,7 +1843,7 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Narrow> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Narrow, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1859,7 +1864,7 @@ impl<D: Device> Execute<op::Narrow> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::FlattenExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::FlattenExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1884,7 +1889,7 @@ impl<D: Device> Execute<op::FlattenExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::WhereCond, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1930,7 +1935,7 @@ impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::MaskedFill> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaskedFill, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -1966,7 +1971,7 @@ impl<D: Device> Execute<op::MaskedFill> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Lerp> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Lerp, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2034,7 +2039,7 @@ fn ternary_operands<'a, D: Device>(
 impl<D: Device> Execute<op::ConcatExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ConcatExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2055,7 +2060,7 @@ impl<D: Device> Execute<op::ConcatExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::StackExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::StackExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2076,7 +2081,7 @@ impl<D: Device> Execute<op::StackExact> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::SliceExact> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::SliceExact, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2099,7 +2104,7 @@ macro_rules! indexing_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -2124,7 +2129,7 @@ indexing_executors![(Gather, gather), (IndexSelect, index_select)];
 impl<D: Device> Execute<op::Scatter> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Scatter, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2151,7 +2156,7 @@ impl<D: Device> Execute<op::Scatter> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Repeat, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2172,7 +2177,7 @@ impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Pad> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Pad, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2193,7 +2198,7 @@ impl<D: Device> Execute<op::Pad> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Unfold> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Unfold, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2219,7 +2224,7 @@ impl<D: Device> Execute<op::Unfold> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::PixelShuffle> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::PixelShuffle, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2240,7 +2245,7 @@ impl<D: Device> Execute<op::PixelShuffle> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::GroupNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::GroupNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2274,7 +2279,7 @@ impl<D: Device> Execute<op::GroupNorm> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Dropout, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2324,7 +2329,7 @@ impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Linear> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Linear, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2369,7 +2374,7 @@ impl<D: Device> Execute<op::Linear> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::RmsNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::RmsNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2396,7 +2401,7 @@ impl<D: Device> Execute<op::RmsNorm> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::InstanceNorm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::InstanceNorm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2424,7 +2429,7 @@ impl<D: Device> Execute<op::InstanceNorm> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::BroadcastLeft> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BroadcastLeft, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2452,7 +2457,7 @@ impl<D: Device> Execute<op::BroadcastLeft> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Addmm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Addmm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2478,7 +2483,7 @@ impl<D: Device> Execute<op::Addmm> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ScaledDotProductAttention, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2525,7 +2530,7 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ToDType, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2559,7 +2564,7 @@ impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Quantize, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2593,7 +2598,7 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Dequantize, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2625,7 +2630,7 @@ impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::QuantizedMatMul> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::QuantizedMatMul, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2650,7 +2655,7 @@ impl<D: Device> Execute<op::QuantizedMatMul> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Dot> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Dot, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2675,7 +2680,7 @@ impl<D: Device> Execute<op::Dot> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Outer> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Outer, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -2741,7 +2746,7 @@ fn consecutive_pieces<D: Device>(
 impl<D: Device> Execute<op::Chunk> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Chunk, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
@@ -2775,7 +2780,7 @@ impl<D: Device> Execute<op::Chunk> for CpuBackendImpl<D> {
 impl<D: Device> Execute<op::Split> for CpuBackendImpl<D> {
     type Output = Vec<CpuStorage>;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Split, Self>,
     ) -> Result<Vec<CpuStorage>, BackendError> {
@@ -2847,7 +2852,7 @@ macro_rules! variance_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -2981,7 +2986,7 @@ variance_executors![
 impl<D: Device> Execute<op::Norm> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Norm, Self>,
     ) -> Result<CpuStorage, BackendError> {
@@ -3031,7 +3036,7 @@ macro_rules! loss_executors {
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
             type Output = CpuStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> Result<CpuStorage, BackendError> {
@@ -3085,7 +3090,7 @@ loss_executors![
 impl<D: Device> Execute<op::CrossEntropyLoss> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::CrossEntropyLoss, Self>,
     ) -> Result<CpuStorage, BackendError> {

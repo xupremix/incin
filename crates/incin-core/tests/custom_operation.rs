@@ -16,7 +16,7 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, DTypeId, Device, DeviceId, Local, Shape, ShapeBuf, ShapeValue,
+    Backend, BackendError, Cpu, DTypeId, Device, DeviceId, Local, ShapeBuf, ShapeValue,
     TracingBackend, extract_graph,
 };
 use incin_core::test_utils::DummyBackend;
@@ -204,18 +204,22 @@ impl Capabilities for CompanyBackend {
 impl Execute<StaticRankProbe> for CompanyBackend {
     type Output = i32;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
-        _: ExecutionRequest<'_, StaticRankProbe, Self>,
+        request: ExecutionRequest<'_, StaticRankProbe, Self>,
     ) -> Result<Self::Output, BackendError> {
-        Ok(S::RANK.map_or(-1, |rank| rank as i32))
+        Ok(request
+            .operation
+            .shape_evidence()
+            .static_rank()
+            .map_or(-1, |rank| rank as i32))
     }
 }
 
 impl Execute<CompanyIdentity> for CompanyBackend {
     type Output = ProofLevel;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, CompanyIdentity, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -230,7 +234,7 @@ impl Execute<CompanyIdentity> for CompanyBackend {
 impl Execute<PayloadOperation> for CompanyBackend {
     type Output = Vec<u8>;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, PayloadOperation, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -256,7 +260,7 @@ impl Execute<MetadataFreeOperation> for CompanyBackend {
         })
     }
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, MetadataFreeOperation, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -281,7 +285,7 @@ impl Execute<CpuIdentityOperation> for CpuBackendImpl<Cpu> {
         }
     }
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, CpuIdentityOperation, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -300,7 +304,7 @@ impl Execute<CpuIdentityOperation> for CpuBackendImpl<Cpu> {
 impl Execute<op::Zeros> for CompanyBackend {
     type Output = ProofLevel;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Zeros, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -311,7 +315,7 @@ impl Execute<op::Zeros> for CompanyBackend {
 impl Execute<op::TensorFromBytes> for CompanyBackend {
     type Output = ProofLevel;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::TensorFromBytes, Self>,
     ) -> Result<Self::Output, BackendError> {
@@ -330,7 +334,7 @@ impl Execute<CompanyIdentity> for CpuBackendImpl<Cpu> {
         SupportLevel::Native
     }
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, CompanyIdentity, Self>,
     ) -> Result<Self::Output, BackendError> {

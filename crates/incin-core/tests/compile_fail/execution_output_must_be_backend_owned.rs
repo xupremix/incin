@@ -2,7 +2,7 @@ extern crate incin_core as incin;
 
 use incin::backend_authoring::{Execute, ExecutionRequest, StorageBackend};
 use incin::exec::op;
-use incin::prelude::{BackendError, Shape};
+use incin::prelude::BackendError;
 
 struct Probe;
 
@@ -21,7 +21,7 @@ impl StorageBackend for Probe {
 impl Execute<op::Add> for Probe {
     type Output = usize;
 
-    fn execute_shaped<S: Shape>(
+    fn execute(
         &self,
         _request: ExecutionRequest<'_, op::Add, Self>,
     ) -> Result<Self::Output, BackendError> {

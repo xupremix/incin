@@ -261,7 +261,7 @@ where
 
     context
         .backend()
-        .execute_shaped::<crate::prelude::Dyn>(ExecutionRequest {
+        .execute(ExecutionRequest {
             operation: invocation.validated(),
             inputs,
             context,
@@ -372,7 +372,7 @@ where
 
     context
         .backend()
-        .execute_shaped::<S>(ExecutionRequest {
+        .execute(ExecutionRequest {
             operation: invocation.validated(),
             inputs,
             context,

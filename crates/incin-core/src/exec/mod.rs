@@ -99,7 +99,7 @@ pub use precision::{
     LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,
 };
-pub use proof::{ProofLevel, Validated};
+pub use proof::{ProofLevel, ShapeEvidence, Validated};
 pub use rule::{MatMulRule, ReduceKeepRule, ReduceRule, ReshapeRule, ShapeRule};
 
 pub use request::TensorHandle;

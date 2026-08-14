@@ -694,7 +694,7 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
 {
     type Output = TracingTensor<B::Output>;
 
-    fn execute_shaped<S: crate::prelude::Shape>(
+    fn execute(
         &self,
         request: crate::tensor::backend::ExecutionRequest<'_, O, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
@@ -705,13 +705,12 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
             .iter()
             .map(crate::exec::request::TensorHandle::execution_view)
             .collect();
-        let inner_res =
-            inner_backend.execute_shaped::<S>(crate::tensor::backend::ExecutionRequest {
-                operation: request.operation,
-                inputs: &inner_inputs,
-                context: &inner_context,
-                payload: request.payload,
-            })?;
+        let inner_res = inner_backend.execute(crate::tensor::backend::ExecutionRequest {
+            operation: request.operation,
+            inputs: &inner_inputs,
+            context: &inner_context,
+            payload: request.payload,
+        })?;
 
         let output_id = {
             let mut g = TRACING_GRAPH.lock();

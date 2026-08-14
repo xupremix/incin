@@ -180,7 +180,7 @@ pub mod template {
     impl Execute<MatMulOperation> for TemplateBackend {
         type Output = TemplateStorage;
 
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -241,7 +241,7 @@ pub mod template {
     impl Execute<ReshapeOperation> for TemplateBackend {
         type Output = TemplateStorage;
 
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -367,7 +367,7 @@ mod broken {
 
     impl Execute<MatMulOperation> for OverclaimingBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -382,7 +382,7 @@ mod broken {
 
     impl Execute<ReshapeOperation> for OverclaimingBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -437,7 +437,7 @@ mod broken {
 
     impl Execute<MatMulOperation> for IndexingBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -456,7 +456,7 @@ mod broken {
 
     impl Execute<ReshapeOperation> for IndexingBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -510,7 +510,7 @@ mod broken {
 
     impl Execute<MatMulOperation> for SwappedBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -559,7 +559,7 @@ mod broken {
 
     impl Execute<ReshapeOperation> for SwappedBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -628,7 +628,7 @@ mod broken {
 
     impl Execute<MatMulOperation> for EmptyBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             _request: ExecutionRequest<'_, MatMulOperation, Self>,
         ) -> Result<Self::Output, BackendError> {
@@ -641,7 +641,7 @@ mod broken {
 
     impl Execute<ReshapeOperation> for EmptyBackend {
         type Output = TemplateStorage;
-        fn execute_shaped<ShapeTy: Shape>(
+        fn execute(
             &self,
             _request: ExecutionRequest<'_, ReshapeOperation, Self>,
         ) -> Result<Self::Output, BackendError> {

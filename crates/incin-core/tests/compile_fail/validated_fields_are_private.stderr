@@ -1,9 +1,25 @@
-error[E0451]: fields `descriptor` and `proof` of struct `Validated` are private
-  --> tests/compile_fail/validated_fields_are_private.rs:19:9
+error: cannot construct `Validated<_>` with struct literal syntax due to private fields
+  --> tests/compile_fail/validated_fields_are_private.rs:18:19
    |
 18 |     let _forged = Validated {
-   |                   --------- in this type
+   |                   ^^^^^^^^^
 19 |         descriptor: spec,
-   |         ^^^^^^^^^^ private field
+   |         ---------------- private field
 20 |         proof: ProofLevel::Static,
-   |         ^^^^^ private field
+   |         ------------------------- private field
+   |
+   = note: ...and other private field `evidence` that was not provided
+help: you might have meant to use an associated function to build this type
+   |
+18 -     let _forged = Validated {
+19 -         descriptor: spec,
+20 -         proof: ProofLevel::Static,
+21 -     };
+18 +     let _forged = Validated::new(_, _);
+   |
+18 -     let _forged = Validated {
+19 -         descriptor: spec,
+20 -         proof: ProofLevel::Static,
+21 -     };
+18 +     let _forged = Validated::new_with_evidence(_, _);
+   |

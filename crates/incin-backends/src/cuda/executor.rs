@@ -33,7 +33,7 @@ macro_rules! impl_cuda_canonical {
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {
@@ -59,7 +59,7 @@ impl_cuda_canonical![
 
 impl<D: Device> Execute<op::ReshapeExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::ReshapeExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -80,7 +80,7 @@ impl<D: Device> Execute<op::ReshapeExact> for CudaBackendImpl<D> {
 
 impl<D: Device> Execute<op::BroadcastAs> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::BroadcastAs, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -101,7 +101,7 @@ impl<D: Device> Execute<op::BroadcastAs> for CudaBackendImpl<D> {
 
 impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MatMulExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -124,7 +124,7 @@ impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
 
 impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -156,7 +156,7 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
 
 impl<D: Device> Execute<op::MaxPool2d> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaxPool2d, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -184,7 +184,7 @@ impl<D: Device> Execute<op::MaxPool2d> for CudaBackendImpl<D> {
 
 impl<D: Device> Execute<op::AvgPool2d> for CudaBackendImpl<D> {
     type Output = CudaStorage;
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::AvgPool2d, Self>,
     ) -> Result<CudaStorage, BackendError> {
@@ -213,7 +213,7 @@ macro_rules! impl_cuda_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {
@@ -231,7 +231,7 @@ macro_rules! impl_cuda_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<CudaStorage, BackendError> {

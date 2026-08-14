@@ -13,7 +13,7 @@
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
 use incin_core::exec::{ExecutionContext, TensorHandle};
-use incin_core::prelude::{BackendError, Device, OperationKind, Shape, StorageBackend};
+use incin_core::prelude::{BackendError, Device, OperationKind, StorageBackend};
 
 use crate::descriptor_bind::invalid;
 use crate::dispatch::{DispatchBackend, DispatchStorage};
@@ -36,7 +36,7 @@ macro_rules! route_single_operand {
         impl<D: Device> Execute<$descriptor> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, $descriptor, Self>,
             ) -> Result<DispatchStorage, BackendError> {
@@ -62,7 +62,7 @@ macro_rules! route_single_operand {
                         let inputs = [TensorHandle::from_storage::<Concrete, Dyn, Local>(input)];
                         context
                             .backend()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -83,7 +83,7 @@ macro_rules! route_single_operand {
                         let inputs = [TensorHandle::from_storage::<Concrete, Dyn, Local>(input)];
                         context
                             .backend()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -104,7 +104,7 @@ macro_rules! route_single_operand {
                         let inputs = [TensorHandle::from_storage::<Concrete, Dyn, Local>(input)];
                         context
                             .backend()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -141,7 +141,7 @@ macro_rules! impl_dispatch_binary {
         impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
@@ -171,7 +171,7 @@ macro_rules! impl_dispatch_binary {
                             inputs: &inputs,
                         };
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(inner_req)
+                            .execute(inner_req)
                             .map(DispatchStorage::Cpu)
                     }
                     #[cfg(feature = "cuda")]
@@ -191,7 +191,7 @@ macro_rules! impl_dispatch_binary {
                             payload: request.payload,
                         };
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(inner_req)
+                            .execute(inner_req)
                             .map(DispatchStorage::Cuda)
                     }
                     #[cfg(feature = "wgpu")]
@@ -211,7 +211,7 @@ macro_rules! impl_dispatch_binary {
                             payload: request.payload,
                         };
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(inner_req)
+                            .execute(inner_req)
                             .map(DispatchStorage::Wgpu)
                     }
                     _ => Err(BackendError::Execution {
@@ -232,7 +232,7 @@ macro_rules! impl_dispatch_binary_with_metal {
         impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
@@ -263,7 +263,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                             TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
                         ];
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -285,7 +285,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                             TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
                         ];
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -307,7 +307,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                             TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
                         ];
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -329,7 +329,7 @@ macro_rules! impl_dispatch_binary_with_metal {
                             TensorHandle::from_storage::<Concrete, Dyn, Local>(rhs),
                         ];
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -355,7 +355,7 @@ macro_rules! route_cpu_unary {
         impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
@@ -378,7 +378,7 @@ macro_rules! route_cpu_unary {
                         );
                         let inputs = [TensorHandle::from_storage::<Concrete, Dyn, Local>(input)];
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &inputs,
                                 context: &context,
@@ -454,7 +454,7 @@ macro_rules! route_cpu_variadic {
         impl<D: Device> Execute<op::$op> for DispatchBackend<D> {
             type Output = DispatchStorage;
 
-            fn execute_shaped<ShapeTy: Shape>(
+            fn execute(
                 &self,
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<DispatchStorage, BackendError> {
@@ -495,7 +495,7 @@ macro_rules! route_cpu_variadic {
                             })
                             .collect::<Result<Vec<_>, BackendError>>()?;
                         Concrete::new()
-                            .execute_shaped::<ShapeTy>(ExecutionRequest {
+                            .execute(ExecutionRequest {
                                 operation: request.operation,
                                 inputs: &handles,
                                 context: &context,
@@ -524,7 +524,7 @@ route_cpu_variadic!(
 impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
     type Output = DispatchStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::WhereCond, Self>,
     ) -> Result<DispatchStorage, BackendError> {
@@ -565,9 +565,7 @@ impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
                     operation: request.operation,
                     inputs: &inputs,
                 };
-                Concrete::new()
-                    .execute_shaped::<ShapeTy>(inner_req)
-                    .map(DispatchStorage::Cpu)
+                Concrete::new().execute(inner_req).map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "cuda")]
             (DispatchStorage::Cuda(_), DispatchStorage::Cuda(_), DispatchStorage::Cuda(_)) => {
@@ -602,7 +600,7 @@ impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
 impl<D: Device> Execute<op::MaskedFill> for DispatchBackend<D> {
     type Output = DispatchStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::MaskedFill, Self>,
     ) -> Result<DispatchStorage, BackendError> {
@@ -639,9 +637,7 @@ impl<D: Device> Execute<op::MaskedFill> for DispatchBackend<D> {
                     inputs: &inputs,
                     payload: request.payload,
                 };
-                Concrete::new()
-                    .execute_shaped::<ShapeTy>(inner_req)
-                    .map(DispatchStorage::Cpu)
+                Concrete::new().execute(inner_req).map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "cuda")]
             (DispatchStorage::Cuda(_), DispatchStorage::Cuda(_)) => Err(BackendError::unsupported(

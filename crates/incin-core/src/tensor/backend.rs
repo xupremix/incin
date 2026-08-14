@@ -198,46 +198,16 @@ where
         crate::exec::SupportLevel::Native
     }
 
-    /// Run the invocation, told the frontend's shape type.
+    /// Run a validated invocation using lowered runtime semantic evidence.
     ///
-    /// `S` is the shape the caller held before the data existed, not a
-    /// description of the operands. It carries no values --- the extents still
-    /// arrive in the descriptor --- but it carries what the descriptor cannot:
-    /// [`Shape::PROOF`] and [`Shape::STATIC_NUMEL`] as constants. Runtime
-    /// dimensions are supplied by the canonical `ShapeBuf` metadata.
-    ///
-    /// Before this, a `Validated` descriptor carried a runtime
-    /// [`ProofLevel`](crate::exec::ProofLevel) saying the geometry *had been*
-    /// compile-time known, and an executor could do nothing with that: by the
-    /// time it ran, every extent was a `Vec<usize>`. Threading the type is what
-    /// makes "a backend may specialize on a constant extent" a statement about
-    /// this API rather than an aspiration.
-    ///
-    /// Most executors ignore `S` and are correct. Specializing on it is an
-    /// optimization, never a requirement, and an implementation that never
-    /// mentions `S` behaves exactly as it did.
-    ///
-    /// [`Shape::PROOF`]: crate::prelude::Shape::PROOF
-    fn execute_shaped<S: crate::prelude::Shape>(
-        &self,
-        request: ExecutionRequest<'_, O, Self>,
-    ) -> core::result::Result<Self::Output, BackendError>;
-
-    /// [`execute_shaped`](Self::execute_shaped) for a caller holding no shape
-    /// type.
-    ///
-    /// Provided rather than required, and deliberately not the other way round.
-    /// A required `execute` with a defaulted `execute_shaped` would let a
-    /// backend implement only the erased form and silently never specialize,
-    /// which is the shape of default this crate has been bitten by before. Here
-    /// the shape-typed method is the one a backend must write, and this is the
-    /// `Dyn` instantiation of it.
+    /// The frontend may preserve static proof, rank, and element-count facts
+    /// in `request.operation.shape_evidence()`. The concrete frontend `Shape`
+    /// type never crosses this boundary, so executor code is not monomorphized
+    /// once per caller shape.
     fn execute(
         &self,
         request: ExecutionRequest<'_, O, Self>,
-    ) -> core::result::Result<Self::Output, BackendError> {
-        self.execute_shaped::<crate::prelude::Dyn>(request)
-    }
+    ) -> core::result::Result<Self::Output, BackendError>;
 }
 
 /// Resolves the dtype represented by `K` for a concrete runtime device.
@@ -1267,7 +1237,7 @@ pub mod dummy {
     {
         type Output = alloc::vec::Vec<usize>;
 
-        fn execute_shaped<S: crate::prelude::Shape>(
+        fn execute(
             &self,
             request: ExecutionRequest<'_, O, Self>,
         ) -> core::result::Result<Self::Output, BackendError> {

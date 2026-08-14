@@ -7,7 +7,7 @@ use incin_core::exec::{
 };
 use incin_core::backend_authoring::operations::NoAttributes;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, SupportsDType};
-use incin_core::prelude::{BackendError, Cpu, DeviceId, DType, DTypeId, Local, Shape, ShapeBuf, Wgpu};
+use incin_core::prelude::{BackendError, Cpu, DeviceId, DType, DTypeId, Local, ShapeBuf, Wgpu};
 
 #[derive(Clone)]
 struct Storage {
@@ -29,7 +29,7 @@ impl StorageBackend for Probe {
 impl Execute<op::Add> for Probe {
     type Output = Vec<usize>;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
         request: ExecutionRequest<'_, op::Add, Self>,
     ) -> Result<Self::Output, BackendError> {
