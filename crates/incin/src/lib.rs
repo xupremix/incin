@@ -232,7 +232,7 @@ pub mod backend_authoring {
         ExecutionRequest, LogicalTensorMeta, LossScaling, Operation, OperationIdentity,
         OperationKey, PrecisionSpec, RuntimePrecisionPolicy, ShapeBuf, StorageBackend,
         StorageOutput, SupportLevel, SupportsDType, TensorBackend, TensorMeta, TransferBackend,
-        TransferTo, UnsupportedReason, Validated, VariableBackend, HostInterop, HostReadback,
+        TransferTo, VariableTransfer, UnsupportedReason, Validated, VariableBackend, HostInterop, HostReadback,
     };
     pub use incin_core::backend_authoring::{
         execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,

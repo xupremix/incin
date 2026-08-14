@@ -31,6 +31,41 @@ pub trait TransferTo<NewD: Device>: VariableBackend {
         Self::Output: SupportsDType<K>;
 }
 
+/// Transfers backend-owned variables without requiring callers to use the
+/// combined storage-and-variable compatibility contract.
+pub trait VariableTransfer<NewD: Device>: VariableBackend {
+    /// Backend selected for destination variables.
+    type VariableOutput: VariableBackend<Device = NewD>;
+
+    /// Transfers a variable into destination-native variable storage.
+    fn transfer_var<K: DType>(
+        variable: &Self::Var<K>,
+        dtype: &K::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::VariableOutput as VariableBackend>::Var<K>>
+    where
+        Self::VariableOutput: SupportsDType<K>;
+}
+
+impl<B, NewD> VariableTransfer<NewD> for B
+where
+    B: TransferTo<NewD>,
+    NewD: Device,
+{
+    type VariableOutput = <B as TransferTo<NewD>>::Output;
+
+    fn transfer_var<K: DType>(
+        variable: &Self::Var<K>,
+        dtype: &K::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::VariableOutput as VariableBackend>::Var<K>>
+    where
+        Self::VariableOutput: SupportsDType<K>,
+    {
+        <B as TransferTo<NewD>>::transfer_var(variable, dtype, device)
+    }
+}
+
 /// Storage-only transfer capability for inference and tensor movement.
 ///
 /// This capability deliberately has no `VariableBackend` bound. Existing
