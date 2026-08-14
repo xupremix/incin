@@ -20,37 +20,7 @@ use crate::{
 
 pub mod scheduler;
 pub use scheduler::*;
-
-/// Encapsulates the backend-specific gradients obtained from a backward pass.
-///
-/// This is a newtype wrapper around the backend's raw gradient container (e.g., `candle_core::backprop::GradStore`).
-/// Obtain it by calling `.backward()` on a scalar loss tensor. Pass it to [`Optimizer::step`] to update parameters.
-pub struct Gradients<G>(G);
-
-impl<G> Gradients<G> {
-    pub(crate) fn from_backend(inner: G) -> Self {
-        Self(inner)
-    }
-
-    /// Borrows the backend-specific gradient container.
-    #[must_use]
-    pub fn as_backend(&self) -> &G {
-        &self.0
-    }
-
-    /// Mutably borrows the backend container for backend-authoring and
-    /// distributed gradient synchronization.
-    #[must_use]
-    pub fn as_backend_mut(&mut self) -> &mut G {
-        &mut self.0
-    }
-
-    /// Consumes this handle and returns its backend-specific container.
-    #[must_use]
-    pub fn into_backend(self) -> G {
-        self.0
-    }
-}
+pub use crate::tensor::gradients::Gradients;
 
 /// Trait defining a generic optimization algorithm.
 ///
@@ -466,7 +436,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
-            if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 validate_storage_pair::<B, K>(OPERATION, &t, &grad)?;
                 let grad_scaled = B::optimizer_mul_scalar(&grad, self.lr)?;
                 let updated = B::optimizer_sub(&t, &grad_scaled)?;
@@ -619,7 +589,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
-            if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
                     OPERATION,
                     &t,
@@ -788,7 +758,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
-            if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
                     OPERATION,
                     &t,

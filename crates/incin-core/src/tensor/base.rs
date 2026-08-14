@@ -1053,7 +1053,7 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
     pub fn backward_with(
         &self,
         seed: &Tensor<S, B, K, NoGrad, P>,
-    ) -> Result<crate::optim::Gradients<B::Grads>> {
+    ) -> Result<crate::tensor::gradients::Gradients<B::Grads>> {
         if self.shape_buf() != seed.shape_buf() {
             return Err(Error::Backend(crate::err::BackendError::InvalidInput {
                 operation: crate::prelude::OperationKind::Storage,
@@ -1066,14 +1066,14 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
                 reason: "backward seed metadata does not match the output",
             }));
         }
-        B::backward_with(&self.inner, seed.inner()).map(crate::optim::Gradients::from_backend)
+        B::backward_with(&self.inner, seed.inner()).map(crate::tensor::gradients::Gradients::from_backend)
     }
 }
 
 impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
     /// Computes the backward pass for a scalar tensor.
-    pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
-        B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
+    pub fn backward(&self) -> Result<crate::tensor::gradients::Gradients<B::Grads>> {
+        B::backward(&self.inner).map(crate::tensor::gradients::Gradients::from_backend)
     }
 }
 
