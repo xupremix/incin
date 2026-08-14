@@ -514,7 +514,7 @@ mod tests {
         ];
         let input = tensor(input_data, vec![1, 1, 4, 4]);
         let out = max_pool2d_impl::<Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
-        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(input.id).expect("grad_input should exist");
         let vals = f32_vec(g);
@@ -544,7 +544,7 @@ mod tests {
         assert_eq!(out.shape, vec![1, 1, 1, 2]);
         assert_eq!(f32_vec(&out), vec![100.0, 100.0]);
 
-        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(input.id).expect("grad_input should exist");
         let vals = f32_vec(g);
@@ -563,7 +563,7 @@ mod tests {
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let out =
                 max_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0), (1, 1)).unwrap();
-            TestBackend::sum_all::<f32>(&out).unwrap()
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);
         assert!(
@@ -606,7 +606,7 @@ mod tests {
         // window0 mean{1,2}=1.5, window1 mean{2,3}=2.5
         assert_eq!(f32_vec(&out), vec![1.5, 2.5]);
 
-        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(input.id).expect("grad_input should exist");
         let vals = f32_vec(g);
@@ -625,7 +625,7 @@ mod tests {
         );
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let out = avg_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
-            TestBackend::sum_all::<f32>(&out).unwrap()
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);
         assert!(
@@ -691,7 +691,7 @@ mod tests {
         let input = tensor(input_data, vec![1, 1, 7, 1]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let out = adaptive_avg_pool2d_impl::<Cpu, f32>(&inputs[0], (3, 1)).unwrap();
-            TestBackend::sum_all::<f32>(&out).unwrap()
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[input], 1e-4);
         assert!(

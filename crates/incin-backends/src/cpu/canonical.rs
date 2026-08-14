@@ -3291,17 +3291,11 @@ mod tests {
         );
     }
 
-    /// The canonical and legacy paths must produce the *same* gradient, not
-    /// merely two gradients that each survive a finite-difference check.
-    ///
-    /// This is the assertion that makes the migration a migration. Because
-    /// both paths run the same kernel body and push the same tape entry, the
-    /// agreement is exact rather than approximate, so it is compared exactly:
-    /// a tolerance here would let a genuine divergence through.
+    /// The descriptor path and the backend-local helper must produce the same
+    /// gradient. Both paths intentionally share the concrete kernel bodies.
     #[test]
     fn canonical_and_legacy_gradients_are_identical() {
         use crate::cpu::tape;
-        use incin_core::__backend_compat::legacy::{NumericOps, ReductionOps};
 
         let context = context();
         let lhs = storage(&[0.5, 1.5, -2.0, 3.0], &[4]);
@@ -3327,22 +3321,22 @@ mod tests {
             .expect("rhs receives a gradient")
             .clone();
 
-        let legacy_scalar = {
-            let product = <TestBackend as NumericOps<TestBackend>>::mul::<f32>(&lhs, &rhs).unwrap();
-            <TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&product).unwrap()
-        };
-        let legacy = tape::backward(&legacy_scalar).expect("backward succeeds");
-        let legacy_lhs = legacy.get(lhs.id).expect("lhs receives a gradient");
-        let legacy_rhs = legacy.get(rhs.id).expect("rhs receives a gradient");
+        let helper_product = crate::cpu::ops::elementwise::mul_storage(&lhs, &rhs)
+            .expect("helper mul executes");
+        let helper_scalar = crate::cpu::ops::reduce::sum_all(&helper_product)
+            .expect("helper sum_all executes");
+        let helper = tape::backward(&helper_scalar).expect("backward succeeds");
+        let helper_lhs = helper.get(lhs.id).expect("lhs receives a gradient");
+        let helper_rhs = helper.get(rhs.id).expect("rhs receives a gradient");
 
-        for (index, (canonical, legacy)) in
-            [(&canonical_lhs, legacy_lhs), (&canonical_rhs, legacy_rhs)]
+        for (index, (canonical, helper)) in
+            [(&canonical_lhs, helper_lhs), (&canonical_rhs, helper_rhs)]
                 .into_iter()
                 .enumerate()
         {
             assert_eq!(
                 canonical.shape.to_vec(),
-                legacy.shape.to_vec(),
+                helper.shape.to_vec(),
                 "operand {index} gradient shape diverged"
             );
             for flat in 0..canonical.shape.iter().product::<usize>() {
@@ -3354,7 +3348,7 @@ mod tests {
                 }
                 assert_eq!(
                     canonical.get(&multi),
-                    legacy.get(&multi),
+                    helper.get(&multi),
                     "operand {index} gradient diverged at {multi:?}"
                 );
             }

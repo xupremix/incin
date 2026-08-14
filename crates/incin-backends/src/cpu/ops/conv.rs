@@ -1078,7 +1078,7 @@ mod tests {
     /// `conv1d_sum_op`.
     fn conv1d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out = conv1d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
-        TestBackend::sum_all::<f32>(&out).unwrap()
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
     }
 
     /// Backward test (gradcheck against input AND weight): a small
@@ -1104,7 +1104,7 @@ mod tests {
         let input = tensor(vec![1.0, 2.0, 3.0], vec![1, 1, 3]);
         let weight = tensor(vec![1.0, 1.0], vec![1, 1, 2]);
         let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
-        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let grad_input = grads.get(input.id).expect("grad_input should exist");
         // grad w.r.t weight[k] summed over both output positions = 1 each,
@@ -1196,7 +1196,7 @@ mod tests {
     /// `conv2d_sum_op`.
     fn conv2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out = conv2d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
-        TestBackend::sum_all::<f32>(&out).unwrap()
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
     }
 
     /// Backward test: gradcheck on a small [1,1,4,4]/[1,1,2,2] pair
@@ -1309,7 +1309,7 @@ mod tests {
     fn conv_transpose2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out =
             conv_transpose2d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1).unwrap();
-        TestBackend::sum_all::<f32>(&out).unwrap()
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
     }
 
     /// Backward test: gradcheck on the basic [1,1,2,2]/[1,1,2,2] case

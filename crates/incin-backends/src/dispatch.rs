@@ -1890,26 +1890,62 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
         t: &DispatchStorage,
         dim: Option<usize>,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(t, argmax::<K, KInt>, req = [], opt = [], args = [dim])
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::ops::reduce::argmax::<KInt>(value, dim)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::argmax::<K, KInt>(value, dim)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::argmax::<K, KInt>(value, dim)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::argmax::<K, KInt>(value, dim)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
     }
     fn argmin<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: Option<usize>,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(t, argmin::<K, KInt>, req = [], opt = [], args = [dim])
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::ops::reduce::argmin::<KInt>(value, dim)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::argmin::<K, KInt>(value, dim)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::argmin::<K, KInt>(value, dim)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::argmin::<K, KInt>(value, dim)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
     }
     fn argsort<K: DType, KInt: DType>(
         t: &DispatchStorage,
         dim: usize,
         descending: bool,
     ) -> Result<DispatchStorage> {
-        dispatch_same_device!(
-            t,
-            argsort::<K, KInt>,
-            req = [],
-            opt = [],
-            args = [dim, descending]
-        )
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::ops::reduce::argsort::<KInt>(value, dim, descending)
+                .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::argsort::<K, KInt>(value, dim, descending)
+                .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::argsort::<K, KInt>(value, dim, descending)
+                .map(DispatchStorage::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::argsort::<K, KInt>(value, dim, descending)
+                .map(DispatchStorage::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
     }
     // `topk` returns a value/index pair rather than one storage, so it does
     // not fit `dispatch_same_device!` and is routed by hand.
@@ -1922,8 +1958,9 @@ impl<D: Device> ReductionOps<Self> for DispatchBackend<D> {
         match t {
             #[cfg(feature = "cpu")]
             DispatchStorage::Cpu(value) => {
-                let (values, indices) =
-                    crate::cpu::CpuBackendImpl::<Cpu>::topk::<K, KInt>(value, k, dim, largest)?;
+                let (values, indices) = crate::cpu::ops::reduce::topk::<KInt>(
+                    value, k, dim, largest,
+                )?;
                 Ok((DispatchStorage::Cpu(values), DispatchStorage::Cpu(indices)))
             }
             #[cfg(feature = "wgpu")]

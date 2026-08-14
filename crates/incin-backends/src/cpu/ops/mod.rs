@@ -8,7 +8,7 @@
 //! * `shape_ops` — full `TensorOps` impl: real
 //!   `reshape`/`transpose`/`broadcast_as`/`matmul`/`float_to_scalar`/
 //!   `float_to_vec1`, typed stubs for the rest.
-//! * `reduce` — full `ReductionOps` impl: real
+//! * `reduce` — concrete reduction kernels
 //!   `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim`, typed stubs for the rest.
 //! * `loss` — full `LossOps` impl: real `mse_loss`/`l1_loss`/
 //!   `bce_with_logits_loss`/`cross_entropy_loss` (all 4 methods real,

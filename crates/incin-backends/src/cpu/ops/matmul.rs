@@ -1057,7 +1057,7 @@ mod tests {
     /// requires a scalar-output op) can drive it.
     fn batched_matmul_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out = batched_matmul_impl(&inputs[0], &inputs[1]).unwrap();
-        TestBackend::sum_all::<f32>(&out).unwrap()
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
     }
 
     /// Test 1: gradcheck on `batched_matmul_impl` for the UNBATCHED
@@ -1125,7 +1125,7 @@ mod tests {
         // Re-run once more, outside gradcheck's internal tape usage, to
         // directly inspect grad_lhs's shape after a real backward() walk.
         let out = batched_matmul_impl(&lhs, &rhs).unwrap();
-        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let sum = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&sum).unwrap();
         let grad_lhs = grads.get(lhs_id).expect("grad_lhs should exist");
         let _ = rhs_id;
@@ -1150,7 +1150,7 @@ mod tests {
         );
 
         let out = batched_matmul_impl(&lhs, &rhs).unwrap();
-        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let sum = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&sum).unwrap();
         let grad_rhs = grads.get(rhs_id).expect("grad_rhs should exist");
         assert_eq!(grad_rhs.shape, vec![1, 4, 5]);
@@ -1340,7 +1340,7 @@ mod tests {
         // backward closure recurses into the forward kernel, which no longer
         // records. Entries pushed during a walk are dead weight, because
         // `backward` drains the tape before it starts.
-        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let sum = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&sum).unwrap();
         assert!(grads.get(lhs.id).is_some());
         assert_eq!(

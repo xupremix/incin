@@ -1180,17 +1180,12 @@ pub(crate) fn log_softmax<D: incin_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     dim: usize,
 ) -> Result<CpuStorage> {
-    use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, ReductionOps};
-
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
-    let max = <B<D> as ReductionOps<B<D>>>::max_keepdim::<K>(t, dim)?;
-    let diff = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &max)?;
-    let exp_diff = <B<D> as FloatOps<B<D>>>::exp::<K>(&diff)?;
-    let sum_exp = <B<D> as ReductionOps<B<D>>>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let log_sum_exp = <B<D> as FloatOps<B<D>>>::log::<K>(&sum_exp)?;
-    <B<D> as NumericOps<B<D>>>::sub::<K>(&diff, &log_sum_exp)
+    let max = crate::cpu::ops::reduce::max_keepdim(t, dim)?;
+    let diff = sub_storage(t, &max)?;
+    let exp_diff = canonical_exp(&diff)?;
+    let sum_exp = crate::cpu::ops::reduce::sum_keepdim(&exp_diff, dim)?;
+    let log_sum_exp = canonical_log(&sum_exp)?;
+    sub_storage(&diff, &log_sum_exp)
 }
 
 #[cfg(test)]

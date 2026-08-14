@@ -178,7 +178,7 @@ mod tests {
         let x = vector(vec![2.0, 3.0, -1.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             let squared = TestBackend::mul::<f32>(&inputs[0], &inputs[0]).unwrap();
-            TestBackend::sum_all::<f32>(&squared).unwrap()
+            crate::cpu::ops::reduce::sum_all(&squared).unwrap()
         };
 
         let max_rel_err = gradcheck(op, &[x], 1e-4);
@@ -199,7 +199,7 @@ mod tests {
             let x = &inputs[0];
             let x2 = TestBackend::mul::<f32>(x, x).unwrap();
             let x3 = TestBackend::mul::<f32>(&x2, x).unwrap();
-            TestBackend::sum_all::<f32>(&x3).unwrap()
+            crate::cpu::ops::reduce::sum_all(&x3).unwrap()
         };
 
         let eps = 1e-4;

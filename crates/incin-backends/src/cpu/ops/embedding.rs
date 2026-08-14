@@ -214,7 +214,7 @@ mod tests {
         // Manually seed grad_out as ones (mirrors ones_like seeding via a
         // sum_all-style consumer) by summing the output through the real
         // ReductionOps::sum_all so tape::backward seeds correctly.
-        let loss = B::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(w.id).expect("weight should have gradient");
         assert_eq!(g.shape, vec![2, 2]);
@@ -231,7 +231,7 @@ mod tests {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
         let idx = indices_i64(vec![1], vec![1]);
         let out = embedding_impl::<Cpu, f32, i64>(&idx, &w).unwrap();
-        let loss = B::sum_all::<f32>(&out).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
         let grads = tape::backward(&loss).unwrap();
         let g = grads.get(w.id).expect("weight should have gradient");
         let vals = f32_vec(g);

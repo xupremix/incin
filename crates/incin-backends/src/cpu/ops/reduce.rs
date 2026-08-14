@@ -1,4 +1,4 @@
-//! `ReductionOps` for `CpuBackendImpl<D>`: every method now has a real
+//! CPU reduction kernels: every method now has a real
 //! implementation — `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
 //! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
 //! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
@@ -43,12 +43,10 @@
 //!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
-use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::Error;
 use incin_core::prelude::{
-    DType, DTypeId, Device, DTypeDescriptor, OperationKind, Result, ShapeError, StorageBackend,
+    DType, DTypeId, DTypeDescriptor, OperationKind, Result, ShapeError,
 };
-use incin_core::__backend_compat::legacy::ReductionOps;
 
 use crate::cpu::ops::elementwise::increment_index;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -1098,77 +1096,6 @@ pub(crate) fn argsort<KInt: DType>(
     ))
 }
 
-// Legacy trait entry points remain for the public backend-authoring API. The
-// canonical descriptor path calls the concrete kernels above directly.
-impl<D: Device> ReductionOps<Self> for CpuBackendImpl<D> {
-    fn sum_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
-        sum_all(t)
-    }
-    fn mean_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
-        mean_all(t)
-    }
-    fn max_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
-        max_all(t)
-    }
-    fn min_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
-        min_all(t)
-    }
-    fn prod_all<K: DType>(t: &CpuStorage) -> Result<CpuStorage> {
-        prod_all(t)
-    }
-    fn sum_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        sum_dim(t, dim)
-    }
-    fn mean_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        mean_dim(t, dim)
-    }
-    fn max_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        max_dim(t, dim)
-    }
-    fn min_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        min_dim(t, dim)
-    }
-    fn prod_dim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        prod_dim(t, dim)
-    }
-    fn sum_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        sum_keepdim(t, dim)
-    }
-    fn mean_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        mean_keepdim(t, dim)
-    }
-    fn max_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        max_keepdim(t, dim)
-    }
-    fn min_keepdim<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        min_keepdim(t, dim)
-    }
-    fn cumsum<K: DType>(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
-        cumsum(t, dim)
-    }
-    fn argmax<K: DType, KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
-        argmax::<KInt>(t, dim)
-    }
-    fn argmin<K: DType, KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<CpuStorage> {
-        argmin::<KInt>(t, dim)
-    }
-    fn topk<K: DType, KInt: DType>(
-        t: &CpuStorage,
-        k: usize,
-        dim: usize,
-        largest: bool,
-    ) -> Result<(CpuStorage, CpuStorage)> {
-        topk::<KInt>(t, k, dim, largest)
-    }
-    fn argsort<K: DType, KInt: DType>(
-        t: &CpuStorage,
-        dim: usize,
-        descending: bool,
-    ) -> Result<CpuStorage> {
-        argsort::<KInt>(t, dim, descending)
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
@@ -1179,9 +1106,6 @@ mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::tape;
-
-    /// `B`.
-    type B = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1208,7 +1132,7 @@ mod tests {
     /// `sum_all_on_2x3_returns_correct_scalar`.
     fn sum_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_all::<f32>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::sum_all(&t).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new()); // scalar shape []
         assert_eq!(out.get(&[]), 21.0);
     }
@@ -1217,7 +1141,7 @@ mod tests {
     /// `sum_all_backward_distributes_grad_uniformly`.
     fn sum_all_backward_distributes_grad_uniformly() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_all::<f32>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::sum_all(&t).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1231,7 +1155,7 @@ mod tests {
     /// `prod_all_on_2x3_returns_correct_scalar`.
     fn prod_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::prod_all::<f32>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::prod_all(&t).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         assert_eq!(out.get(&[]), 720.0);
     }
@@ -1240,7 +1164,7 @@ mod tests {
     /// `prod_all_keeps_the_operand_dtype`.
     fn prod_all_keeps_the_operand_dtype() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
-        let out = CpuBackendImpl::<incin_core::prelude::Cpu>::prod_all::<f64>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::prod_all(&t).unwrap();
         assert_eq!(out.dtype, DTypeId::F64.descriptor());
         assert_eq!(out.get(&[]), 24.0);
     }
@@ -1249,7 +1173,7 @@ mod tests {
     /// `prod_dim_multiplies_along_the_named_axis_only`.
     fn prod_dim_multiplies_along_the_named_axis_only() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::prod_dim::<f32>(&t, 1).unwrap();
+        let out = crate::cpu::ops::reduce::prod_dim(&t, 1).unwrap();
         assert_eq!(out.shape, vec![2]);
         assert_eq!(out.get(&[0]), 6.0); // 1*2*3
         assert_eq!(out.get(&[1]), 120.0); // 4*5*6
@@ -1261,7 +1185,7 @@ mod tests {
     /// `mean_all_on_2x3_returns_correct_scalar`.
     fn mean_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::mean_all::<f32>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::mean_all(&t).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         // mean = 21/6 = 3.5
         let v = out.get(&[]);
@@ -1272,7 +1196,7 @@ mod tests {
     /// `mean_all_backward_distributes_grad_scaled_by_1_over_n`.
     fn mean_all_backward_distributes_grad_scaled_by_1_over_n() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::mean_all::<f32>(&t).unwrap();
+        let out = crate::cpu::ops::reduce::mean_all(&t).unwrap();
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1291,7 +1215,7 @@ mod tests {
     /// `sum_dim_removes_axis_0_on_2x3`.
     fn sum_dim_removes_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_dim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::sum_dim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         // col sums: 1+4=5, 2+5=7, 3+6=9
         assert_eq!(f32_vec(&out), vec![5.0, 7.0, 9.0]);
@@ -1301,7 +1225,7 @@ mod tests {
     /// `sum_dim_removes_axis_1_on_2x3`.
     fn sum_dim_removes_axis_1_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_dim::<f32>(&t, 1).unwrap();
+        let out = crate::cpu::ops::reduce::sum_dim(&t, 1).unwrap();
         assert_eq!(out.shape, vec![2]);
         // row sums: 1+2+3=6, 4+5+6=15
         assert_eq!(f32_vec(&out), vec![6.0, 15.0]);
@@ -1311,7 +1235,7 @@ mod tests {
     /// `sum_dim_backward_broadcasts_grad_back_to_original_shape`.
     fn sum_dim_backward_broadcasts_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_dim::<f32>(&t, 0).unwrap(); // shape [3]
+        let out = crate::cpu::ops::reduce::sum_dim(&t, 0).unwrap(); // shape [3]
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1325,7 +1249,7 @@ mod tests {
     /// `sum_keepdim_retains_axis_0_on_2x3`.
     fn sum_keepdim_retains_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_keepdim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::sum_keepdim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![1, 3]);
         assert_eq!(f32_vec(&out), vec![5.0, 7.0, 9.0]);
     }
@@ -1334,7 +1258,7 @@ mod tests {
     /// `sum_keepdim_backward_broadcasts_grad_to_original_shape`.
     fn sum_keepdim_backward_broadcasts_grad_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::sum_keepdim::<f32>(&t, 0).unwrap(); // shape [1, 3]
+        let out = crate::cpu::ops::reduce::sum_keepdim(&t, 0).unwrap(); // shape [1, 3]
         let grads = tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have gradient");
         assert_eq!(g.shape, vec![2, 3]);
@@ -1351,7 +1275,7 @@ mod tests {
         // instead of 1.0 by composing with a scalar mul.
         // Simplest approach: verify via a custom tape entry.
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let sum_out = B::sum_all::<f32>(&t).unwrap();
+        let sum_out = crate::cpu::ops::reduce::sum_all(&t).unwrap();
         // Manually build a loss = 2.0 * sum_out by pushing a tape entry
         let loss = CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32]), vec![]);
         let (sum_id, loss_id) = (sum_out.id, loss.id);
@@ -1381,7 +1305,7 @@ mod tests {
     /// `mean_dim_column_means_on_2x3`.
     fn mean_dim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::mean_dim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::mean_dim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         let vals = f32_vec(&out);
         for (v, expected) in vals.iter().zip([2.5, 3.5, 4.5].iter()) {
@@ -1393,7 +1317,7 @@ mod tests {
     /// `mean_keepdim_column_means_on_2x3`.
     fn mean_keepdim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = B::mean_keepdim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::mean_keepdim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![1, 3]);
         let vals = f32_vec(&out);
         for (v, expected) in vals.iter().zip([2.5, 3.5, 4.5].iter()) {
@@ -1406,8 +1330,8 @@ mod tests {
     fn mean_dim_gradcheck_dim0() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let reduced = B::mean_dim::<f32>(&inputs[0], 0).unwrap();
-            B::sum_all::<f32>(&reduced).unwrap()
+            let reduced = crate::cpu::ops::reduce::mean_dim(&inputs[0], 0).unwrap();
+            crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1421,8 +1345,8 @@ mod tests {
     fn mean_keepdim_gradcheck_dim1() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let reduced = B::mean_keepdim::<f32>(&inputs[0], 1).unwrap();
-            B::sum_all::<f32>(&reduced).unwrap()
+            let reduced = crate::cpu::ops::reduce::mean_keepdim(&inputs[0], 1).unwrap();
+            crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1437,7 +1361,7 @@ mod tests {
     /// `max_dim_column_maxima_on_2x3`.
     fn max_dim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::max_dim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::max_dim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         assert_eq!(f32_vec(&out), vec![4.0, 5.0, 6.0]);
     }
@@ -1446,7 +1370,7 @@ mod tests {
     /// `max_keepdim_column_maxima_on_2x3`.
     fn max_keepdim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::max_keepdim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::max_keepdim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![1, 3]);
         assert_eq!(f32_vec(&out), vec![4.0, 5.0, 6.0]);
     }
@@ -1455,7 +1379,7 @@ mod tests {
     /// `min_dim_column_minima_on_2x3`.
     fn min_dim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::min_dim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::min_dim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         assert_eq!(f32_vec(&out), vec![1.0, 2.0, 3.0]);
     }
@@ -1464,7 +1388,7 @@ mod tests {
     /// `min_keepdim_column_minima_on_2x3`.
     fn min_keepdim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::min_keepdim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::min_keepdim(&t, 0).unwrap();
         assert_eq!(out.shape, vec![1, 3]);
         assert_eq!(f32_vec(&out), vec![1.0, 2.0, 3.0]);
     }
@@ -1473,11 +1397,11 @@ mod tests {
     /// `max_all_and_min_all_on_flat_vector`.
     fn max_all_and_min_all_on_flat_vector() {
         let t = vector(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
-        let max_out = B::max_all::<f32>(&t).unwrap();
+        let max_out = crate::cpu::ops::reduce::max_all(&t).unwrap();
         assert_eq!(max_out.shape, Vec::<usize>::new());
         assert_eq!(max_out.get(&[]), 6.0);
 
-        let min_out = B::min_all::<f32>(&t).unwrap();
+        let min_out = crate::cpu::ops::reduce::min_all(&t).unwrap();
         assert_eq!(min_out.shape, Vec::<usize>::new());
         assert_eq!(min_out.get(&[]), 1.0);
     }
@@ -1487,8 +1411,8 @@ mod tests {
     fn max_dim_gradcheck_all_distinct_values() {
         let x = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let reduced = B::max_dim::<f32>(&inputs[0], 0).unwrap();
-            B::sum_all::<f32>(&reduced).unwrap()
+            let reduced = crate::cpu::ops::reduce::max_dim(&inputs[0], 0).unwrap();
+            crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
         assert!(
@@ -1506,7 +1430,7 @@ mod tests {
     fn max_dim_backward_routes_gradient_to_exactly_one_winner_on_tie() {
         // Matrix [2,2]: column 0 = [2.0, 2.0] (tie), column 1 = [1.0, 3.0].
         let t = matrix(vec![2.0, 1.0, 2.0, 3.0], 2, 2);
-        let out = B::max_dim::<f32>(&t, 0).unwrap();
+        let out = crate::cpu::ops::reduce::max_dim(&t, 0).unwrap();
         assert_eq!(f32_vec(&out), vec![2.0, 3.0]);
 
         let grads = tape::backward(&out).unwrap();
@@ -1544,7 +1468,7 @@ mod tests {
     /// `argmax_dim0_returns_row_index_of_column_max`.
     fn argmax_dim0_returns_row_index_of_column_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
+        let out = crate::cpu::ops::reduce::argmax::<i64>(&t, Some(0)).unwrap();
         assert_eq!(out.shape, vec![3]);
         // col0 max is row1's 4 -> idx 1; col1 max is row0's 5 -> idx 0;
         // col2 max is row1's 6 -> idx 1.
@@ -1555,7 +1479,7 @@ mod tests {
     /// `argmax_dim_none_returns_scalar_flat_index_of_global_max`.
     fn argmax_dim_none_returns_scalar_flat_index_of_global_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out = B::argmax::<f32, i64>(&t, None).unwrap();
+        let out = crate::cpu::ops::reduce::argmax::<i64>(&t, None).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
         // global max 6.0 is at flat index 5.
         assert_eq!(i64_vec(&out), vec![5]);
@@ -1565,13 +1489,13 @@ mod tests {
     /// `argmin_dim0_and_dim_none_mirror_argmax`.
     fn argmin_dim0_and_dim_none_mirror_argmax() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let out_dim0 = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
+        let out_dim0 = crate::cpu::ops::reduce::argmin::<i64>(&t, Some(0)).unwrap();
         assert_eq!(out_dim0.shape, vec![3]);
         // col0 min is row0's 1 -> idx 0; col1 min is row1's 2 -> idx 1;
         // col2 min is row0's 3 -> idx 0.
         assert_eq!(i64_vec(&out_dim0), vec![0, 1, 0]);
 
-        let out_none = B::argmin::<f32, i64>(&t, None).unwrap();
+        let out_none = crate::cpu::ops::reduce::argmin::<i64>(&t, None).unwrap();
         assert_eq!(out_none.shape, Vec::<usize>::new());
         // global min 1.0 is at flat index 0.
         assert_eq!(i64_vec(&out_none), vec![0]);
@@ -1584,17 +1508,17 @@ mod tests {
     #[test]
     fn argmax_argmin_do_not_push_tape_entries() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
-        let _ = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
-        let _ = B::argmax::<f32, i64>(&t, None).unwrap();
-        let _ = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
-        let _ = B::argmin::<f32, i64>(&t, None).unwrap();
+        let _ = crate::cpu::ops::reduce::argmax::<i64>(&t, Some(0)).unwrap();
+        let _ = crate::cpu::ops::reduce::argmax::<i64>(&t, None).unwrap();
+        let _ = crate::cpu::ops::reduce::argmin::<i64>(&t, Some(0)).unwrap();
+        let _ = crate::cpu::ops::reduce::argmin::<i64>(&t, None).unwrap();
 
         // Build and run an unrelated small graph immediately after; if
         // argmax/argmin had pushed spurious TapeEntry values, this
         // unrelated backward() would either panic or produce a corrupted
         // gradient for `unrelated`.
         let unrelated = vector(vec![10.0, 20.0, 30.0]);
-        let sum_out = B::sum_all::<f32>(&unrelated).unwrap();
+        let sum_out = crate::cpu::ops::reduce::sum_all(&unrelated).unwrap();
         let grads = tape::backward(&sum_out).unwrap();
         let g = grads
             .get(unrelated.id)
