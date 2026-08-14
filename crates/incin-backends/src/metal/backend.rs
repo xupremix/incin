@@ -155,30 +155,16 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for MetalBackendIm
 impl incin_core::backend_authoring::StorageOutput for MetalStorage {}
 
 impl<D: Device> Backend for MetalBackendImpl<D> {
-
-    type Grads = MetalGrads;
     type InnerBackend = Self;
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
-    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        crate::metal::tape::backward(loss)
-    }
+    
 
-    fn backward_with<K: DType>(
-        loss: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        crate::metal::tape::backward_with(loss, seed)
-    }
+    
 
-    fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        Ok(grads.get(t.id()).cloned())
-    }
+    
 
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
         t.as_bytes().map(<[u8]>::to_vec)
@@ -3055,6 +3041,28 @@ impl<D: Device> QuantizedOps<Self> for MetalBackendImpl<D> {
 impl<D: Device> OptimizerOps<Self> for MetalBackendImpl<D> {}
 
 
+
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for MetalBackendImpl<D> {
+    type Grads = MetalGrads;
+
+    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+            crate::metal::tape::backward(loss)
+        }
+
+    fn backward_with<K: DType>(
+            loss: &Self::Storage<K>,
+            seed: &Self::Storage<K>,
+        ) -> Result<Self::Grads> {
+            crate::metal::tape::backward_with(loss, seed)
+        }
+
+    fn get_grad<K: DType>(
+            t: &Self::Storage<K>,
+            grads: &Self::Grads,
+        ) -> Result<Option<Self::Storage<K>>> {
+            Ok(grads.get(t.id()).cloned())
+        }
+}
 impl<D: Device> VariableBackend for MetalBackendImpl<D> {
     type RawVar = MetalVar;
 

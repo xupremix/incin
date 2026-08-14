@@ -8,7 +8,6 @@ use candle_core as candle;
 
 impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBackend<D> {
 
-    type Grads = candle_core::backprop::GradStore;
     type InnerBackend = Self;
 
     /// Formats the tensor using candle's own `Display` implementation.
@@ -27,29 +26,6 @@ impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBack
             t.tensor(),
             t.tensor().stride()
         )
-    }
-
-    /// Runs backpropagation from `loss`, returning the resulting gradient
-    /// store.
-    fn backward<K: incin_core::prelude::DType>(
-        loss: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Grads> {
-        loss.tensor()
-            .backward()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
-    }
-
-    /// Looks up the accumulated gradient for `t` in `grads`, if one was
-    /// recorded during backward.
-    fn get_grad<K: incin_core::prelude::DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        grads: &<Self as incin_core::prelude::Backend>::Grads,
-    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
-        if let Some(grad) = grads.get(t.tensor()).cloned() {
-            Ok(Some(CandleStorage::try_new(grad)?))
-        } else {
-            Ok(None)
-        }
     }
 
     /// Flattens the tensor and returns its raw byte representation according to its actual dtype.
@@ -246,6 +222,29 @@ where
     }
 }
 
+
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::AutogradBackend for CandleBackend<D> {
+    type Grads = candle_core::backprop::GradStore;
+
+    fn backward<K: incin_core::prelude::DType>(
+        loss: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<Self::Grads> {
+        loss.tensor()
+            .backward()
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+    }
+
+    fn get_grad<K: incin_core::prelude::DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
+        if let Some(grad) = grads.get(t.tensor()).cloned() {
+            Ok(Some(CandleStorage::try_new(grad)?))
+        } else {
+            Ok(None)
+        }
+    }
+}
 
 impl<D: incin_core::prelude::Device> incin_core::backend_authoring::VariableBackend for CandleBackend<D> {
     type RawVar = candle_core::Var;

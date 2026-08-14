@@ -786,8 +786,6 @@ impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::O
 }
 
 impl<B: Backend> Backend for TracingBackend<B> {
-    /// Delegates to `B`'s gradient collection type — tracing adds no gradient bookkeeping of its own.
-    type Grads = B::Grads;
     /// Delegates to `B`'s own inner backend (tracing is not itself a dispatch layer).
     type InnerBackend = B::InnerBackend;
 
@@ -826,29 +824,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
         <Self as Backend>::format_tensor_display::<K>(t)
     }
 
-    /// Delegates to `B::backward` — tracing does not itself affect gradient computation.
-    fn backward<K: super::dtype::DType>(
-        loss: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Grads> {
-        B::backward(&loss.inner)
-    }
-
-    fn backward_with<K: super::dtype::DType>(
-        loss: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-        seed: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Grads> {
-        B::backward_with(&loss.inner, &seed.inner)
-    }
-
-    /// Always `None` — tracing doesn't maintain its own gradient map;
-    /// gradient lookup must go through the wrapped backend `B` directly.
-    fn get_grad<K: super::dtype::DType>(
-        _var: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-        _grads: &<Self as Backend>::Grads,
-    ) -> Result<Option<<Self as crate::tensor::backend::StorageBackend>::Storage<K>>> {
-        Ok(None)
-    }
-
     /// Delegates to `B::from_bytes`, additionally recording the result
     /// as a graph initializer (constant input) node.
     fn from_bytes<K: super::dtype::DType>(
@@ -874,6 +849,30 @@ impl<B: Backend> Backend for TracingBackend<B> {
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<u8>> {
         B::to_bytes(&t.inner)
+    }
+}
+
+impl<B: Backend> crate::tensor::backend::AutogradBackend for TracingBackend<B> {
+    type Grads = B::Grads;
+
+    fn backward<K: super::dtype::DType>(
+        loss: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<Self::Grads> {
+        B::backward(&loss.inner)
+    }
+
+    fn backward_with<K: super::dtype::DType>(
+        loss: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+        seed: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<Self::Grads> {
+        B::backward_with(&loss.inner, &seed.inner)
+    }
+
+    fn get_grad<K: super::dtype::DType>(
+        _var: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+        _grads: &Self::Grads,
+    ) -> Result<Option<<Self as crate::tensor::backend::StorageBackend>::Storage<K>>> {
+        Ok(None)
     }
 }
 

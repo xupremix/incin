@@ -138,12 +138,16 @@ where
 /// `Tensor<S, B, K, G>` is generic over `B: Backend` and stores exactly one
 /// `B::Storage<K>` handle.
 pub trait Backend:
-    StorageBackend + Capabilities + Default + Sized + Clone + Send + Sync + 'static
+    StorageBackend
+        + Capabilities
+        + AutogradBackend
+        + Default
+        + Sized
+        + Clone
+        + Send
+        + Sync
+        + 'static
 {
-    /// The gradient collection returned by `backward`, indexed however the
-    /// backend's own tape implementation chooses (usually by tensor id).
-    type Grads;
-
     /// The backend actually doing the compute once any runtime-dispatch
     /// wrapper (see `Dyn`'s `DispatchBackend`) has been resolved. Equal to
     /// `Self` for every concrete (non-dispatching) backend.
@@ -197,45 +201,6 @@ pub trait Backend:
         Self: TensorOps<Self>,
     {
         Self::format_tensor_display::<K>(t)
-    }
-
-    /// Runs backpropagation from `t` through the backend's recorded tape,
-    /// returning the resulting per-tensor gradients.
-    ///
-    /// There is one of these since `GRD-005`. Whether the pass checks its
-    /// gradients for a non-finite value is
-    /// [`NanPolicy`](crate::exec::NanPolicy), an ambient execution-policy axis
-    /// every backend's walk reads, rather than a second method that also
-    /// decided to abort the process on failure.
-    fn backward<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "backward",
-            },
-        )))
-    }
-
-    /// Runs backpropagation with an explicit output cotangent.
-    fn backward_with<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _seed: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<Self::Grads> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "seeded backward",
-            },
-        )))
-    }
-    /// Looks up the gradient computed for `t` in a `Grads` collection
-    /// returned by `backward`. `None` if `t` received no gradient (e.g. it
-    /// wasn't reachable from the tensor `backward` was called on).
-    fn get_grad<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _grads: &Self::Grads,
-    ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
-        Ok(None)
     }
 
     /// Serializes storage to a flat, dtype-native byte buffer (row-major,

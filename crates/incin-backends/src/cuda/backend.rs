@@ -2930,32 +2930,14 @@ impl incin_core::backend_authoring::StorageOutput for CudaStorage {}
 
 impl<D: Device> Backend for CudaBackendImpl<D> {
 
-    type Grads = CudaGrads;
-
     type InnerBackend = Self;
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        let loss: &CudaStorage = loss;
-        crate::cuda::tape::backward(loss)
-    }
+    
 
-    fn backward_with<K: DType>(
-        loss: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        let loss: &CudaStorage = loss;
-        let seed: &CudaStorage = seed;
-        crate::cuda::tape::backward_with(loss, seed)
-    }
-    fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        let t: &CudaStorage = t;
-        Ok(grads.get(t.id).cloned())
-    }
+    
+    
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         let t: &CudaStorage = t;
         let bytes = t
@@ -4604,6 +4586,32 @@ mod tests {
 }
 
 
+
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendImpl<D> {
+    type Grads = CudaGrads;
+
+    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+            let loss: &CudaStorage = loss;
+            crate::cuda::tape::backward(loss)
+        }
+
+    fn backward_with<K: DType>(
+            loss: &Self::Storage<K>,
+            seed: &Self::Storage<K>,
+        ) -> Result<Self::Grads> {
+            let loss: &CudaStorage = loss;
+            let seed: &CudaStorage = seed;
+            crate::cuda::tape::backward_with(loss, seed)
+        }
+
+    fn get_grad<K: DType>(
+            t: &Self::Storage<K>,
+            grads: &Self::Grads,
+        ) -> Result<Option<Self::Storage<K>>> {
+            let t: &CudaStorage = t;
+            Ok(grads.get(t.id).cloned())
+        }
+}
 impl<D: Device> VariableBackend for CudaBackendImpl<D> {
     type RawVar = CudaVar;
 

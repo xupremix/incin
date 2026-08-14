@@ -91,8 +91,6 @@ use super::*;
     }
 
     impl<D: Device + Clone + 'static> Backend for DummyBackend<D> {
-        /// No real gradients are tracked, so this carries no data.
-        type Grads = ();
         /// No dispatch wrapper --- this stand-in is always its own inner backend.
         type InnerBackend = Self;
 
@@ -107,17 +105,6 @@ use super::*;
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> alloc::string::String {
             alloc::string::String::from("dummy")
-        }
-        /// No-op: there is no tape to run backward through.
-        fn backward<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<Self::Grads> {
-            Ok(())
-        }
-        /// Always `None`: `Grads` carries no data to look a gradient up in.
-        fn get_grad<K: DType>(
-            _t: &<Self as StorageBackend>::Storage<K>,
-            _grads: &Self::Grads,
-        ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
-            Ok(None)
         }
         /// Always empty: there are no element values to serialize.
         fn to_bytes<K: DType>(
@@ -134,6 +121,28 @@ use super::*;
             _device: &DeviceId,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(shape.to_vec())
+        }
+    }
+
+    impl<D: Device + Clone + 'static> AutogradBackend for DummyBackend<D> {
+        type Grads = ();
+
+        fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
+            Ok(())
+        }
+
+        fn backward_with<K: DType>(
+            _t: &Self::Storage<K>,
+            _seed: &Self::Storage<K>,
+        ) -> Result<Self::Grads> {
+            Ok(())
+        }
+
+        fn get_grad<K: DType>(
+            _t: &Self::Storage<K>,
+            _grads: &Self::Grads,
+        ) -> Result<Option<Self::Storage<K>>> {
+            Ok(None)
         }
     }
 

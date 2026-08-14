@@ -204,7 +204,6 @@ impl incin_core::backend_authoring::StorageOutput for WgpuStorage {}
 impl<D: Device> Backend for WgpuBackendImpl<D> {
 
     /// `Grads`.
-    type Grads = WgpuGrads;
     /// `InnerBackend`.
     type InnerBackend = Self;
 
@@ -212,24 +211,12 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
     /// `backward`.
-    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        crate::wgpu::tape::backward(loss)
-    }
+    
 
-    fn backward_with<K: DType>(
-        loss: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        crate::wgpu::tape::backward_with(loss, seed)
-    }
+    
 
     /// `get_grad`.
-    fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        Ok(grads.get(t.id).cloned())
-    }
+    
 
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
@@ -4480,6 +4467,28 @@ impl<D: Device> OptimizerOps<Self> for WgpuBackendImpl<D> {
 }
 
 
+
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for WgpuBackendImpl<D> {
+    type Grads = WgpuGrads;
+
+    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+            crate::wgpu::tape::backward(loss)
+        }
+
+    fn backward_with<K: DType>(
+            loss: &Self::Storage<K>,
+            seed: &Self::Storage<K>,
+        ) -> Result<Self::Grads> {
+            crate::wgpu::tape::backward_with(loss, seed)
+        }
+
+    fn get_grad<K: DType>(
+            t: &Self::Storage<K>,
+            grads: &Self::Grads,
+        ) -> Result<Option<Self::Storage<K>>> {
+            Ok(grads.get(t.id).cloned())
+        }
+}
 impl<D: Device> VariableBackend for WgpuBackendImpl<D> {
     /// `RawVar`.
     type RawVar = WgpuVar;

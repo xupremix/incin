@@ -175,36 +175,10 @@ impl incin_core::backend_authoring::StorageOutput for storage::CpuStorage {}
 
 impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
 
-    /// `Grads`.
-    type Grads = tape::CpuGrads;
     /// `InnerBackend`.
     type InnerBackend = Self;
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-    /// `backward`.
-    fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
-        let t: &storage::CpuStorage = t;
-        tape::backward(t)
-    }
-
-    fn backward_with<K: DType>(
-        t: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        let t: &storage::CpuStorage = t;
-        let seed: &storage::CpuStorage = seed;
-        tape::backward_with(t, seed)
-    }
-
-    /// `get_grad`.
-    fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        let t: &storage::CpuStorage = t;
-        Ok(grads.get(t.id).cloned())
-    }
 
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
@@ -347,6 +321,28 @@ impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
         Ok(storage::CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
+}
+
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImpl<D> {
+    type Grads = tape::CpuGrads;
+
+    fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
+        tape::backward(t)
+    }
+
+    fn backward_with<K: DType>(
+        t: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        tape::backward_with(t, seed)
+    }
+
+    fn get_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        Ok(grads.get(t.id).cloned())
+    }
 }
 
 

@@ -697,101 +697,9 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for DispatchBacken
 
 impl<D: Device> Backend for DispatchBackend<D> {
 
-    type Grads = DispatchGrads;
     type InnerBackend = Self;
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-    fn backward<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Grads> {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::backward::<K>(value).map(DispatchGrads::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::backward::<K>(value).map(DispatchGrads::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::backward::<K>(value).map(DispatchGrads::Cuda)
-            }
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::backward::<K>(value)
-                    .map(DispatchGrads::Metal)
-            }
-            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }
-
-    #[allow(unreachable_patterns)]
-    fn backward_with<K: DType>(
-        loss: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        match (loss, seed) {
-            #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(loss), DispatchStorage::Cpu(seed)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::backward_with::<K>(loss, seed)
-                    .map(DispatchGrads::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(loss), DispatchStorage::Wgpu(seed)) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::backward_with::<K>(loss, seed)
-                    .map(DispatchGrads::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(loss), DispatchStorage::Cuda(seed)) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::backward_with::<K>(loss, seed)
-                    .map(DispatchGrads::Cuda)
-            }
-            #[cfg(feature = "metal")]
-            (DispatchStorage::Metal(loss), DispatchStorage::Metal(seed)) => {
-                crate::metal::MetalBackendImpl::<Metal>::backward_with::<K>(loss, seed)
-                    .map(DispatchGrads::Metal)
-            }
-            (DispatchStorage::Unavailable, _) | (_, DispatchStorage::Unavailable) => {
-                Err(unavailable(DeviceKind::Cpu))
-            }
-            _ => Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Storage,
-                reason: "backward seed and loss must use the same backend",
-            })),
-        }
-    }
-
-    fn get_grad<K: DType>(
-        storage: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        match (storage, grads) {
-            #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(value), DispatchGrads::Cpu(gs)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::get_grad::<K>(value, gs)
-                    .map(|value| value.map(DispatchStorage::Cpu))
-            }
-            #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(value), DispatchGrads::Wgpu(gs)) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::get_grad::<K>(value, gs)
-                    .map(|value| value.map(DispatchStorage::Wgpu))
-            }
-            #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(value), DispatchGrads::Cuda(gs)) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::get_grad::<K>(value, gs)
-                    .map(|value| value.map(DispatchStorage::Cuda))
-            }
-            #[cfg(feature = "metal")]
-            (DispatchStorage::Metal(value), DispatchGrads::Metal(gs)) => {
-                crate::metal::MetalBackendImpl::<Metal>::get_grad::<K>(value, gs)
-                    .map(|value| value.map(DispatchStorage::Metal))
-            }
-            _ => Err(Error::DeviceMismatch {
-                left: DeviceId::cpu(),
-                right: DeviceId::cpu(),
-            }),
-        }
-    }
 
     fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<Vec<u8>> {
         match storage {
@@ -1978,6 +1886,53 @@ impl<D: Device> ModuleOps<Self> for DispatchBackend<D> {
     }
 }
 
+
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for DispatchBackend<D> {
+    type Grads = DispatchGrads;
+
+    fn backward<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Grads> {
+        match storage {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::AutogradBackend>::backward::<K>(value).map(DispatchGrads::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::AutogradBackend>::backward::<K>(value).map(DispatchGrads::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::AutogradBackend>::backward::<K>(value).map(DispatchGrads::Cuda),
+            #[cfg(feature = "metal")]
+            DispatchStorage::Metal(value) => <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::AutogradBackend>::backward::<K>(value).map(DispatchGrads::Metal),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+
+    fn backward_with<K: DType>(loss: &Self::Storage<K>, seed: &Self::Storage<K>) -> Result<Self::Grads> {
+        match (loss, seed) {
+            #[cfg(feature = "cpu")]
+            (DispatchStorage::Cpu(loss), DispatchStorage::Cpu(seed)) => <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::AutogradBackend>::backward_with::<K>(loss, seed).map(DispatchGrads::Cpu),
+            #[cfg(feature = "wgpu")]
+            (DispatchStorage::Wgpu(loss), DispatchStorage::Wgpu(seed)) => <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::AutogradBackend>::backward_with::<K>(loss, seed).map(DispatchGrads::Wgpu),
+            #[cfg(feature = "cuda")]
+            (DispatchStorage::Cuda(loss), DispatchStorage::Cuda(seed)) => <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::AutogradBackend>::backward_with::<K>(loss, seed).map(DispatchGrads::Cuda),
+            #[cfg(feature = "metal")]
+            (DispatchStorage::Metal(loss), DispatchStorage::Metal(seed)) => <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::AutogradBackend>::backward_with::<K>(loss, seed).map(DispatchGrads::Metal),
+            (DispatchStorage::Unavailable, _) | (_, DispatchStorage::Unavailable) => Err(unavailable(DeviceKind::Cpu)),
+            _ => Err(Error::Backend(BackendError::InvalidInput { operation: OperationKind::Storage, reason: "backward seed and loss must use the same backend" })),
+        }
+    }
+
+    fn get_grad<K: DType>(storage: &Self::Storage<K>, grads: &Self::Grads) -> Result<Option<Self::Storage<K>>> {
+        match (storage, grads) {
+            #[cfg(feature = "cpu")]
+            (DispatchStorage::Cpu(value), DispatchGrads::Cpu(gs)) => <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::AutogradBackend>::get_grad::<K>(value, gs).map(|value| value.map(DispatchStorage::Cpu)),
+            #[cfg(feature = "wgpu")]
+            (DispatchStorage::Wgpu(value), DispatchGrads::Wgpu(gs)) => <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::AutogradBackend>::get_grad::<K>(value, gs).map(|value| value.map(DispatchStorage::Wgpu)),
+            #[cfg(feature = "cuda")]
+            (DispatchStorage::Cuda(value), DispatchGrads::Cuda(gs)) => <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::AutogradBackend>::get_grad::<K>(value, gs).map(|value| value.map(DispatchStorage::Cuda)),
+            #[cfg(feature = "metal")]
+            (DispatchStorage::Metal(value), DispatchGrads::Metal(gs)) => <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::AutogradBackend>::get_grad::<K>(value, gs).map(|value| value.map(DispatchStorage::Metal)),
+            _ => Err(Error::DeviceMismatch { left: DeviceId::cpu(), right: DeviceId::cpu() }),
+        }
+    }
+}
 
 impl<D: Device> VariableBackend for DispatchBackend<D> {
 type RawVar = DispatchVar;

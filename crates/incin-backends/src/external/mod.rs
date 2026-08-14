@@ -4,12 +4,15 @@
 //! intentionally separate from Incin native CPU, CUDA, and WGPU backends.
 
 pub use incin_core::backend_authoring::{
-    Alignment, AttributeContract, Backend, CanonicalOperation, Capabilities, CapabilityQuery,
+    Alignment, AttributeContract, AutogradBackend, Backend, CanonicalOperation, Capabilities, CapabilityQuery,
     CapabilityRegistry, Descriptor, DescriptorError, Execute, ExecuteOutput, ExecutionContext,
     ExecutionDescriptor, ExecutionRequest, LogicalTensorMeta, Operation, OperationCatalogEntry,
     OperationIdentity, OperationKey, ShapeBuf, StorageBackend, StorageOutput, SupportLevel,
-    SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, execute,
+    SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, VariableBackend, execute,
     execute_shaped, execute_shaped_with_payload, execute_with_payload,
+};
+pub use incin_core::prelude::{
+    BackendError, DType, DTypeDescriptor, DTypeId, Device, DeviceId, Error, OperationKind, Result,
 };
 
 /// The conformance suite an external backend runs against itself (`EXE-010`).
