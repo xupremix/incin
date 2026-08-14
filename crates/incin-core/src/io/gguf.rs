@@ -1,7 +1,7 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::nn::StateDict;
-use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::backend::{Backend, HostInterop, SupportsDType};
 use crate::tensor::backend::legacy::QuantizedOps;
 use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
@@ -138,7 +138,7 @@ impl GgufMetadata {
 }
 
 /// Exporter for saving `incin` modules to GGUF v3 format.
-pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend, M: StateDict<B>> {
+pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend + HostInterop, M: StateDict<B>> {
     module: &'a M,
     metadata: GgufMetadata,
     quant: QuantScheme,
@@ -147,7 +147,7 @@ pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend
 
 impl<'a, B, M> GgufExporter<'a, B, M>
 where
-    B: Backend + crate::tensor::backend::VariableBackend + QuantizedOps<B>,
+    B: Backend + crate::tensor::backend::VariableBackend + QuantizedOps<B> + HostInterop,
     M: StateDict<B>,
 {
     /// Creates a new exporter for the given module, auto-deriving architecture metadata.

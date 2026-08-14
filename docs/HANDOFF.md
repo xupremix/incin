@@ -55,9 +55,9 @@ contract is intentionally small; legacy operation-family declarations live in
 `backend/legacy.rs` and are exposed only through the doc-hidden
 `incin_core::__backend_compat` adapter namespace. The shape-only test backend
 lives in `backend/dummy.rs`.
-Host byte serialization now belongs to `HostInterop`; only the tensor formatting
-compatibility methods remain on `Backend` while the descriptor migration removes
-their operation-family dependencies.
+Host byte serialization and tensor formatting belong to `HostInterop`; neither
+is required by the base `Backend` contract. `AutogradBackend` is likewise an
+independent capability, so an inference-only backend need not implement it.
 Experimental graph, compiled,
 distributed, import, and tooling APIs are explicitly unstable.
 
@@ -161,9 +161,8 @@ status paths and must not be presented as current API guidance.
 
 ## Unresolved architecture
 
-The complete removal of the remaining legacy operation-family adapters, the final public
-API allowlist, and the complete manual-first module traversal contract remain
-active consolidation work. Resolve these against
+The complete removal of the remaining legacy operation-family adapters and the
+final public API allowlist remain active consolidation work. Resolve these against
 `docs/FROZEN_FOUNDATIONS.md`, `docs/API_DESIGN.md`, and source tests before
 expanding the public surface.
 

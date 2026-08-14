@@ -158,8 +158,10 @@ backend's float element), gradient-tracking marker (`Grad` or `NoGrad`,
 defaults to `Grad`), and placement (defaults to `Local`). Most code only ever
 writes the first two.
 
-**Two ways to create one**, and they are not interchangeable conveniences —
-each is right for a different thing:
+The stable construction story is the classic typed constructor (plus the
+`tensor!` literal convenience). The opt-in `target-api` spelling is an
+additive allocation-target experiment; it lowers to the same descriptor
+execution architecture and does not introduce a second tensor runtime:
 
 ```rust
 // 1. The classic constructor: shape is the type parameter, `Arg` is the

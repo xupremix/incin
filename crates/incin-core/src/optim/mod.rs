@@ -1,7 +1,7 @@
 use crate::err::{Error, ErrorMessage, Result};
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::{Dyn, Tensor};
-use crate::tensor::backend::{Backend, StorageBackend, VariableBackend};
+use crate::tensor::backend::{AutogradBackend, Backend, StorageBackend, VariableBackend};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
@@ -55,7 +55,7 @@ impl<G> Gradients<G> {
 ///
 /// Implementors receive a reference to the [`Gradients`] computed from a backward pass
 /// and apply the appropriate parameter update rule to all tracked variables.
-pub trait Optimizer<B: VariableBackend> {
+pub trait Optimizer<B: VariableBackend + AutogradBackend> {
     /// Steps the optimizer using the given gradients, updating the tracked parameters.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
 }
@@ -457,7 +457,7 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
     }
 }
 
-impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for SGD<B, K> {
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "sgd_step";
@@ -599,7 +599,7 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
     }
 }
 
-impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for AdamW<B, K> {
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adamw_step";
@@ -775,7 +775,7 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
     }
 }
 
-impl<B: OptimizerBackend<K>, K: DType> Optimizer<B> for Adam<B, K> {
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         const OPERATION: &str = "adam_step";

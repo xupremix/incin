@@ -10,7 +10,7 @@ use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
     DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
-    SupportsDType, TensorArgs, TransferTo, HostInterop,
+    SupportsDType, TensorArgs, TransferTo, HostInterop, AutogradBackend,
 };
 use crate::shapes::Nil;
 use crate::tensor::dtype::PlainDType;
@@ -1062,7 +1062,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
     }
 }
 
-impl<S: Shape, B: Backend, K: FloatDType, P: Placement> Tensor<S, B, K, Grad, P> {
+impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<S, B, K, Grad, P> {
     /// Computes a vector-Jacobian product using an explicit output cotangent.
     pub fn backward_with(
         &self,
@@ -1084,7 +1084,7 @@ impl<S: Shape, B: Backend, K: FloatDType, P: Placement> Tensor<S, B, K, Grad, P>
     }
 }
 
-impl<B: Backend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
+impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
     /// Computes the backward pass for a scalar tensor.
     pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
         B::backward(&self.inner).map(crate::optim::Gradients::from_backend)

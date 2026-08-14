@@ -31,6 +31,10 @@ check_absent "autoref module traversal" \
     crates/incin-macros/src/module.rs
 check_absent "crate-wide core warning suppressions" \
     '^#!\[allow\((dead_code|unused_imports)\)\]' crates/incin-core/src/lib.rs
+if sed -n '/^pub trait Backend:/,/^}/p' crates/incin-core/src/tensor/backend.rs | rg -n 'HostInterop|AutogradBackend'; then
+    echo "architecture check failed: Backend requires optional host/autograd capabilities" >&2
+    failures=$((failures + 1))
+fi
 
 if [[ ! -x tools/check-package.sh ]]; then
     echo "architecture check failed: tools/check-package.sh is missing or not executable" >&2

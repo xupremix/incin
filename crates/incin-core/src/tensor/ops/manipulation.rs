@@ -20,7 +20,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::NoGrad;
 use crate::prelude::{
-    Backend, DType, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
+    Backend, DType, Dyn, DynShape, HostInterop, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
@@ -864,7 +864,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// reinterpreting an arbitrary stored byte as `bool` via
     /// `read_unaligned` would be undefined behavior whenever that byte
     /// isn't `0` or `1`.
-    pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E> {
+    pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E>
+    where
+        B: HostInterop,
+    {
         if !is_valid_scalar_type::<E>() {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Invalid target scalar type for tensor extraction: {:?}",
@@ -920,7 +923,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts a 1D vector of scalars from this tensor.
-    pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>> {
+    pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>>
+    where
+        B: HostInterop,
+    {
         if !is_valid_scalar_type::<E>() {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Invalid target scalar type for vector extraction: {:?}",

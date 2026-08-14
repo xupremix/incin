@@ -9,7 +9,7 @@ use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::{ArgInto, LayerArgInto};
 use crate::tensor::base::{Dyn, Tensor};
-use crate::tensor::backend::{Backend, StorageBackend, SupportsDType, TransferTo, VariableBackend};
+use crate::tensor::backend::{Backend, HostInterop, StorageBackend, SupportsDType, TransferTo, VariableBackend};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
@@ -629,7 +629,7 @@ use alloc::collections::BTreeMap;
 /// `StateDict` for parameters of any `K: DType`.
 impl<
     S: Shape,
-    B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop,
     K: DType<Arg = ()>,
     Train: TrainState,
 > StateDict<B> for Param<S, B, K, Train>
@@ -901,7 +901,7 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
 }
 
 /// `StateDict` for buffers of any `K: DType`.
-impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities, K: DType<Arg = ()>>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + crate::exec::Capabilities + HostInterop, K: DType<Arg = ()>>
     StateDict<B> for Buffer<S, B, K>
 {
     fn collect_state(

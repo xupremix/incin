@@ -148,6 +148,55 @@ impl AutogradBackend for CompanyBackend {
     ) -> incin::prelude::Result<Option<<Self as StorageBackend>::Storage<K>>> { Ok(None) }
 }
 
+/// A deliberately inference-only backend. It has no host serialization,
+/// variable, or autograd implementation; `Backend` must still be enough to
+/// execute a descriptor.
+#[derive(Debug, Clone, Default)]
+pub struct InferenceBackend;
+
+impl StorageBackend for InferenceBackend {
+    const BACKEND_NAME: &'static str = "inference-only";
+    type Storage<K: DType> = ShapeBuf;
+    type Device = Cpu;
+
+    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
+        let shape = storage.clone();
+        Box::leak(Box::new(
+            TensorMeta::contiguous(
+                shape.clone(),
+                K::descriptor(&K::Field::default()),
+                DeviceId::cpu(),
+                Alignment::of::<f32>(),
+                shape.numel().expect("fixture shape"),
+            )
+            .expect("fixture metadata"),
+        ))
+    }
+}
+
+impl Capabilities for InferenceBackend {
+    fn support(&self, _query: &CapabilityQuery) -> SupportLevel {
+        SupportLevel::Native
+    }
+}
+
+impl Execute<op::Zeros> for InferenceBackend {
+    type Output = ShapeBuf;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Zeros, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        Ok(ShapeBuf::from_slice(
+            &request.operation.descriptor().attributes().shape,
+        ))
+    }
+}
+
+impl Backend for InferenceBackend {
+    type InnerBackend = Self;
+}
+
 pub fn accepts_backend_contract<B, O>()
 where
     B: TensorBackend<f32> + StorageBackend + Execute<O>,
@@ -184,6 +233,17 @@ pub fn custom_backend_runs_builtin_operation() -> ShapeBuf {
     };
     incin::backend_authoring::execute::<op::Zeros, _>(&context, attributes, &[])
         .expect("custom backend built-in operation")
+}
+
+pub fn inference_only_backend_runs_builtin_operation() -> ShapeBuf {
+    let context = incin::backend_authoring::ExecutionContext::new(InferenceBackend);
+    let attributes = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    incin::backend_authoring::execute::<op::Zeros, _>(&context, attributes, &[])
+        .expect("inference-only backend operation")
 }
 
 pub fn built_in_operation_contract<B>()

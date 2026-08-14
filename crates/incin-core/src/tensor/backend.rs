@@ -132,12 +132,12 @@ where
 /// The framework's single extension point: implement this to add a new compute backend.
 ///
 /// `Tensor<S, B, K, G>` is generic over `B: Backend` and stores exactly one
-/// `B::Storage<K>` handle.
+/// `B::Storage<K>` handle. Host interop and autograd are deliberately not
+/// supertraits: inference-only backends can implement storage and execution
+/// without also providing training or serialization.
 pub trait Backend:
     StorageBackend
         + Capabilities
-        + HostInterop
-        + AutogradBackend
         + Default
         + Sized
         + Clone

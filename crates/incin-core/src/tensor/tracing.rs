@@ -791,7 +791,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
     type InnerBackend = B::InnerBackend;
 }
 
-impl<B: Backend> crate::tensor::backend::HostInterop for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
     /// Tracing storage uses the normal host renderer; formatting does not add
     /// graph nodes or otherwise alter the trace.
     fn host_format_display<K: super::dtype::DType>(
@@ -856,7 +856,7 @@ impl<B: Backend> crate::tensor::backend::HostInterop for TracingBackend<B> {
         }
 }
 
-impl<B: Backend> crate::tensor::backend::AutogradBackend for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backend::AutogradBackend for TracingBackend<B> {
     type Grads = B::Grads;
 
     fn backward<K: super::dtype::DType>(
@@ -1056,7 +1056,8 @@ impl<B: VariableBackend + CreationOps<B>> CreationOps<Self> for TracingBackend<B
 
 impl<B, NewD> TransferTo<NewD> for TracingBackend<B>
 where
-    B: Backend + TransferTo<NewD>,
+    B: Backend + TransferTo<NewD> + crate::tensor::backend::HostInterop,
+    <B as TransferTo<NewD>>::Output: crate::tensor::backend::HostInterop,
     NewD: crate::tensor::device::Device,
 {
     type Output = TracingBackend<<B as TransferTo<NewD>>::Output>;

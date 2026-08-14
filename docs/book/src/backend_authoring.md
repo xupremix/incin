@@ -38,6 +38,12 @@ tensor type is foreign and carries no such metadata, pair it with one in a
 wrapper: that is exactly what the Candle adapter does, validating the foreign
 tensor's geometry once at the boundary.
 
+`Backend` itself only combines storage, capability admission, and execution.
+`HostInterop`, `VariableBackend`, and `AutogradBackend` are optional capability
+owners: add them only when the backend supports readback, mutable parameters,
+or training. An inference-only backend can stop after `StorageBackend`,
+`Capabilities`, `Backend`, and the `Execute` implementations it advertises.
+
 ## Capabilities: claim only what you run
 
 ```rust,ignore

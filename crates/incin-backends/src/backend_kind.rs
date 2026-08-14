@@ -9,6 +9,8 @@ macro_rules! impl_transfer {
         impl<D: Device, NewD: Device> incin_core::prelude::TransferTo<NewD> for $source
         where
             crate::target::Native: crate::target::EngineOn<NewD>,
+            $source: HostInterop,
+            crate::IncinBackend<NewD>: HostInterop,
         {
             type Output = crate::IncinBackend<NewD>;
 

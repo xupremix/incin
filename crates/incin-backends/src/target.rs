@@ -304,7 +304,7 @@ pub trait TargetExt: TensorTarget + Sized {
     /// Propagates backend allocation failure.
     fn tensor<D: TensorData>(&self, data: D) -> Result<TargetTensor<Self, D::Shape, D::Elem>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device>,
+        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
     {
         let values = data.into_row_major();
         let dims = D::dims();
@@ -330,7 +330,7 @@ pub trait TargetExt: TensorTarget + Sized {
         spec: Sp,
     ) -> Result<TargetTensor<Self, Sp::Shape, K>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device>,
+        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
     {
         let shape_val = spec.resolve()?;
         let dims = shape_val.dims();
@@ -358,7 +358,7 @@ pub trait TargetExt: TensorTarget + Sized {
         field: ShapeBuf,
     ) -> Result<TargetTensor<Self, S, K>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device>,
+        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
     {
         let expected = incin_core::shapes::ShapeBuf::from_slice(&dims)
             .checked_numel(incin_core::prelude::OperationKind::Storage)?;
