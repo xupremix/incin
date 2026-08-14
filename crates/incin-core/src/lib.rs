@@ -1,6 +1,4 @@
 //! Core tensor operations, static shape checking, and autograd for Incin.
-#![allow(dead_code)]
-#![allow(unused_imports)]
 // Incin errors intentionally carry rich operation, dtype, device, and shape
 // context. Keep that error contract by allowing clippy's size heuristic at
 // this crate boundary instead of boxing every error variant.

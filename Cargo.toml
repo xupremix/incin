@@ -59,8 +59,6 @@ path_statements = "allow"
 [workspace.lints.clippy]
 # Public generic signatures keep primary trait bounds near parameters and capability bounds in where clauses.
 multiple_bound_locations = "allow"
-type_complexity = "allow"
-too_many_arguments = "allow"
 # The public error contract intentionally returns the structured framework
 # error by value. Test and example targets also use that contract directly.
 result_large_err = "allow"
