@@ -81,7 +81,7 @@ macro_rules! impl_data_creation_executors {
                                 "data creation requires borrowed bytes",
                             )
                         })?;
-                        <Self as incin_core::backend_authoring::Backend>::from_bytes::<f32>(
+                        <Self as incin_core::backend_authoring::HostInterop>::from_bytes::<f32>(
                             bytes,
                             &attr.shape,
                             attr.dtype,

@@ -3,7 +3,7 @@
 use alloc::format;
 use alloc::vec::Vec;
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, HostInterop};
 use incin_core::compiled::CompiledPlan;
 use incin_core::exec::catalog::{CanonicalOperation, CapturedDescriptor, Descriptor, op};
 use incin_core::exec::{ExecutionContext, OperationIdentity, TensorHandle};
@@ -267,7 +267,7 @@ impl CpuCompiledInvocation {
                     "initializer value {value_id} has no captured metadata"
                 ))
             })?;
-            let storage = <CpuBackendImpl<Cpu> as incin_core::prelude::Backend>::from_bytes::<Dyn>(
+            let storage = <CpuBackendImpl<Cpu> as HostInterop>::from_bytes::<Dyn>(
                 bytes,
                 &value.shape,
                 value.dtype,

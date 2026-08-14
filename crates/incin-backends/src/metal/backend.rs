@@ -160,28 +160,31 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
-    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
-        t.as_bytes().map(<[u8]>::to_vec)
-    }
 
+}
+
+impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<D> {
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
+            t.as_bytes().map(<[u8]>::to_vec)
+        }
     fn from_bytes<K: DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<Self::Storage<K>> {
-        validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
-        let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-        let numel = num_elements(shape)?;
-        let meta =
-            TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), numel)?;
-        MetalStorage::from_bytes(
-            bytes.to_vec(),
-            meta,
-            MetalStorageMode::Shared,
-            device.ordinal(),
-        )
-    }
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
+            let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
+            let numel = num_elements(shape)?;
+            let meta =
+                TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), numel)?;
+            MetalStorage::from_bytes(
+                bytes.to_vec(),
+                meta,
+                MetalStorageMode::Shared,
+                device.ordinal(),
+            )
+        }
 }
 
 // ─── CreationOps ────────────────────────────────────────────────────────────

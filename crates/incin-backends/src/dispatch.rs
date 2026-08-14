@@ -701,73 +701,76 @@ impl<D: Device> Backend for DispatchBackend<D> {
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
+
+
+}
+
+impl<D: Device> incin_core::backend_authoring::HostInterop for DispatchBackend<D> {
     fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<Vec<u8>> {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::to_bytes::<K>(value),
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<Wgpu>::to_bytes::<K>(value)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<Cuda>::to_bytes::<K>(value)
-            }
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => {
-                crate::metal::MetalBackendImpl::<Metal>::to_bytes::<K>(value)
-            }
-            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }
-
-    fn from_bytes<K: DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<Self::Storage<K>> {
-        match device.kind() {
-            DeviceKind::Cpu => {
+            match storage {
                 #[cfg(feature = "cpu")]
-                return crate::cpu::CpuBackendImpl::<Cpu>::from_bytes::<K>(
-                    bytes, shape, dtype, device,
-                )
-                .map(DispatchStorage::Cpu);
-                #[cfg(not(feature = "cpu"))]
-                Err(unavailable(DeviceKind::Cpu))
-            }
-            DeviceKind::Wgpu => {
+                DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::to_bytes::<K>(value),
                 #[cfg(feature = "wgpu")]
-                return crate::wgpu::WgpuBackendImpl::<Wgpu>::from_bytes::<K>(
-                    bytes, shape, dtype, device,
-                )
-                .map(DispatchStorage::Wgpu);
-                #[cfg(not(feature = "wgpu"))]
-                Err(unavailable(DeviceKind::Wgpu))
-            }
-            DeviceKind::Cuda => {
+                DispatchStorage::Wgpu(value) => {
+                    crate::wgpu::WgpuBackendImpl::<Wgpu>::to_bytes::<K>(value)
+                }
                 #[cfg(feature = "cuda")]
-                return crate::cuda::CudaBackendImpl::<Cuda>::from_bytes::<K>(
-                    bytes, shape, dtype, device,
-                )
-                .map(DispatchStorage::Cuda);
-                #[cfg(not(feature = "cuda"))]
-                Err(unavailable(DeviceKind::Cuda))
-            }
-            DeviceKind::Metal => {
+                DispatchStorage::Cuda(value) => {
+                    crate::cuda::CudaBackendImpl::<Cuda>::to_bytes::<K>(value)
+                }
                 #[cfg(feature = "metal")]
-                return crate::metal::MetalBackendImpl::<Metal>::from_bytes::<K>(
-                    bytes, shape, dtype, device,
-                )
-                .map(DispatchStorage::Metal);
-                #[cfg(not(feature = "metal"))]
-                Err(unavailable(DeviceKind::Metal))
+                DispatchStorage::Metal(value) => {
+                    crate::metal::MetalBackendImpl::<Metal>::to_bytes::<K>(value)
+                }
+                DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
             }
-            other => Err(unavailable(other)),
         }
-    }
-
+    fn from_bytes<K: DType>(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            match device.kind() {
+                DeviceKind::Cpu => {
+                    #[cfg(feature = "cpu")]
+                    return crate::cpu::CpuBackendImpl::<Cpu>::from_bytes::<K>(
+                        bytes, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cpu);
+                    #[cfg(not(feature = "cpu"))]
+                    Err(unavailable(DeviceKind::Cpu))
+                }
+                DeviceKind::Wgpu => {
+                    #[cfg(feature = "wgpu")]
+                    return crate::wgpu::WgpuBackendImpl::<Wgpu>::from_bytes::<K>(
+                        bytes, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Wgpu);
+                    #[cfg(not(feature = "wgpu"))]
+                    Err(unavailable(DeviceKind::Wgpu))
+                }
+                DeviceKind::Cuda => {
+                    #[cfg(feature = "cuda")]
+                    return crate::cuda::CudaBackendImpl::<Cuda>::from_bytes::<K>(
+                        bytes, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cuda);
+                    #[cfg(not(feature = "cuda"))]
+                    Err(unavailable(DeviceKind::Cuda))
+                }
+                DeviceKind::Metal => {
+                    #[cfg(feature = "metal")]
+                    return crate::metal::MetalBackendImpl::<Metal>::from_bytes::<K>(
+                        bytes, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Metal);
+                    #[cfg(not(feature = "metal"))]
+                    Err(unavailable(DeviceKind::Metal))
+                }
+                other => Err(unavailable(other)),
+            }
+        }
 }
 
 impl<D: Device> CreationOps<Self> for DispatchBackend<D> {

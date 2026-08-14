@@ -372,7 +372,7 @@ pub trait TargetExt: TensorTarget + Sized {
         }
         let device = self.device_id()?;
         let bytes = bytemuck::cast_slice(values);
-        let storage = <TargetBackend<Self> as Backend>::from_bytes::<K>(
+        let storage = <TargetBackend<Self> as incin_core::prelude::HostInterop>::from_bytes::<K>(
             bytes,
             &dims,
             K::DTYPE.descriptor(),

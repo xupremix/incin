@@ -106,14 +106,19 @@ use super::*;
         ) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
+    }
+
+    impl<D: Device + Clone + 'static> crate::tensor::backend::HostInterop
+        for DummyBackend<D>
+    {
         /// Always empty: there are no element values to serialize.
         fn to_bytes<K: DType>(
             _t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
-        /// Ignores `bytes` entirely and reconstructs storage from `shape`
-        /// alone, since `Storage<K>` only ever tracks shape.
+
+        /// Ignores `bytes` entirely and reconstructs storage from `shape`.
         fn from_bytes<K: DType>(
             _bytes: &[u8],
             shape: &[usize],

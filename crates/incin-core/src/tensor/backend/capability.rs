@@ -4,7 +4,7 @@
 //! [`Backend`](super::Backend) contract. They deliberately do not introduce a
 //! runtime/session abstraction: ownership remains with the backend type.
 
-use super::{Backend, StorageBackend, TensorOps};
+use super::StorageBackend;
 use crate::err::Result;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
@@ -13,34 +13,36 @@ use crate::shapes::ShapeBuf;
 /// Host-visible tensor metadata and formatting capabilities.
 pub trait HostInterop: StorageBackend {
     /// Returns the logical shape of a storage handle.
-    fn host_shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf;
-    /// Returns the physical dtype when the storage exposes it.
-    fn host_storage_dtype<K: DType>(storage: &Self::Storage<K>) -> Option<DTypeDescriptor>;
-    /// Returns the physical device when the storage exposes it.
-    fn host_storage_device<K: DType>(storage: &Self::Storage<K>) -> Option<DeviceId>;
-    /// Formats a storage value for human-facing display.
-    fn host_format_display<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String;
-    /// Formats a storage value for diagnostic output.
-    fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String;
-}
-
-/// Blanket host capability view for the compatibility `Backend` contract.
-impl<B: Backend + TensorOps<B>> HostInterop for B {
     fn host_shape<K: DType>(storage: &Self::Storage<K>) -> ShapeBuf {
-        <B as StorageBackend>::shape(storage)
+        <Self as StorageBackend>::shape(storage)
     }
+    /// Returns the physical dtype when the storage exposes it.
     fn host_storage_dtype<K: DType>(storage: &Self::Storage<K>) -> Option<DTypeDescriptor> {
-        <B as StorageBackend>::storage_dtype(storage)
+        <Self as StorageBackend>::storage_dtype(storage)
     }
+    /// Returns the physical device when the storage exposes it.
     fn host_storage_device<K: DType>(storage: &Self::Storage<K>) -> Option<DeviceId> {
-        <B as StorageBackend>::storage_device(storage)
+        <Self as StorageBackend>::storage_device(storage)
     }
-    fn host_format_display<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
-        <B as Backend>::format_tensor_display(storage)
+    /// Formats a storage value for human-facing display.
+    fn host_format_display<K: DType>(_storage: &Self::Storage<K>) -> alloc::string::String {
+        alloc::format!("<{} tensor>", Self::BACKEND_NAME)
     }
+    /// Formats a storage value for diagnostic output.
     fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
-        <B as Backend>::format_tensor_debug(storage)
+        Self::host_format_display(storage)
     }
+
+    /// Serializes storage to a flat, dtype-native byte buffer.
+    fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
+
+    /// Reconstructs storage from bytes produced by [`Self::to_bytes`].
+    fn from_bytes<K: DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>>;
 }
 
 /// Explicit capability marker for backends that can move storage or

@@ -2934,58 +2934,63 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
+
+
+}
+
+impl<D: Device> incin_core::backend_authoring::HostInterop for CudaBackendImpl<D> {
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-        let t: &CudaStorage = t;
-        let bytes = t
-            .buffer
-            .device
-            .default_stream()
-            .clone_dtoh(&*t.buffer.data)
-            .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))?;
-        let expected = checked_storage_byte_len(t.buffer.len, t.buffer.dtype)?;
-        if bytes.len() != expected {
-            return Err(Error::InvalidByteLength {
-                expected,
-                got: bytes.len(),
-            });
+            let t: &CudaStorage = t;
+            let bytes = t
+                .buffer
+                .device
+                .default_stream()
+                .clone_dtoh(&*t.buffer.data)
+                .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))?;
+            let expected = checked_storage_byte_len(t.buffer.len, t.buffer.dtype)?;
+            if bytes.len() != expected {
+                return Err(Error::InvalidByteLength {
+                    expected,
+                    got: bytes.len(),
+                });
+            }
+            Ok(bytes)
         }
-        Ok(bytes)
-    }
     fn from_bytes<K: DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<Self::Storage<K>> {
-        validate_cuda_storage(dtype, device, "from_bytes")?;
-        let numel = checked_numel(shape)?;
-        let expected = checked_storage_byte_len(numel, dtype)?;
-        if bytes.len() != expected {
-            return Err(Error::InvalidByteLength {
-                expected,
-                got: bytes.len(),
-            });
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            validate_cuda_storage(dtype, device, "from_bytes")?;
+            let numel = checked_numel(shape)?;
+            let expected = checked_storage_byte_len(numel, dtype)?;
+            if bytes.len() != expected {
+                return Err(Error::InvalidByteLength {
+                    expected,
+                    got: bytes.len(),
+                });
+            }
+            let context =
+                crate::cuda::gpu::cuda_cache::try_get_cuda_device(device.ordinal()).map_err(|_| {
+                    Error::InvalidDeviceOrdinal {
+                        backend: "Cuda",
+                        ordinal: device.ordinal(),
+                    }
+                })?;
+            let data = context
+                .default_stream()
+                .clone_htod(bytes)
+                .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
+            let buffer = crate::cuda::storage::CudaBuffer {
+                len: numel,
+                dtype,
+                data: Arc::new(data),
+                device: context,
+                device_id: device.ordinal(),
+            };
+            Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
         }
-        let context =
-            crate::cuda::gpu::cuda_cache::try_get_cuda_device(device.ordinal()).map_err(|_| {
-                Error::InvalidDeviceOrdinal {
-                    backend: "Cuda",
-                    ordinal: device.ordinal(),
-                }
-            })?;
-        let data = context
-            .default_stream()
-            .clone_htod(bytes)
-            .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
-        let buffer = crate::cuda::storage::CudaBuffer {
-            len: numel,
-            dtype,
-            data: Arc::new(data),
-            device: context,
-            device_id: device.ordinal(),
-        };
-        Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
-    }
 }
 
 fn validate_cuda(dtype: DTypeDescriptor, device: &DeviceId, op: &'static str) -> Result<()> {

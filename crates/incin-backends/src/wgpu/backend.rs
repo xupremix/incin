@@ -210,35 +210,38 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
-    /// `to_bytes`.
-    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
-        let t: &WgpuStorage = t;
-        t.buffer.to_vec::<u8>()
-    }
 
-    /// `from_bytes`.
-    fn from_bytes<K: DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<Self::Storage<K>> {
-        validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
-        let expected = num_elements(shape)?
-            .checked_mul(core::mem::size_of::<f32>())
-            .ok_or(incin_core::prelude::ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Storage,
-                expression: "WGPU element count * element byte width",
-            })?;
-        if bytes.len() != expected {
-            return Err(Error::InvalidByteLength {
-                expected,
-                got: bytes.len(),
-            });
+}
+
+impl<D: Device> incin_core::backend_authoring::HostInterop for WgpuBackendImpl<D> {
+    /// `to_bytes`.
+        fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
+            let t: &WgpuStorage = t;
+            t.buffer.to_vec::<u8>()
         }
-        let buffer = WgpuBuffer::try_from_slice(bytes)?;
-        Ok(WgpuStorage::new(buffer, shape.to_vec()))
-    }
+    /// `from_bytes`.
+        fn from_bytes<K: DType>(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
+            let expected = num_elements(shape)?
+                .checked_mul(core::mem::size_of::<f32>())
+                .ok_or(incin_core::prelude::ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Storage,
+                    expression: "WGPU element count * element byte width",
+                })?;
+            if bytes.len() != expected {
+                return Err(Error::InvalidByteLength {
+                    expected,
+                    got: bytes.len(),
+                });
+            }
+            let buffer = WgpuBuffer::try_from_slice(bytes)?;
+            Ok(WgpuStorage::new(buffer, shape.to_vec()))
+        }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

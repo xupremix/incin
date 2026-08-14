@@ -28,135 +28,138 @@ impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBack
         )
     }
 
+
+}
+
+impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
     /// Flattens the tensor and returns its raw byte representation according to its actual dtype.
-    fn to_bytes<K: incin_core::prelude::DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<alloc::vec::Vec<u8>> {
-        let flat = t
-            .tensor()
-            .flatten_all()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        match flat.dtype() {
-            candle_core::DType::F32 => {
-                let v = flat
-                    .to_vec1::<f32>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
-            }
-            candle_core::DType::F64 => {
-                let v = flat
-                    .to_vec1::<f64>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
-            }
-            candle_core::DType::U8 => {
-                let v = flat
-                    .to_vec1::<u8>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(v)
-            }
-            candle_core::DType::U32 => {
-                let v = flat
-                    .to_vec1::<u32>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
-            }
-            candle_core::DType::I64 => {
-                let v = flat
-                    .to_vec1::<i64>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
-            }
-            candle_core::DType::F16 => {
-                let v = flat
-                    .to_vec1::<half::f16>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
-            }
-            candle_core::DType::BF16 => {
-                let v = flat
-                    .to_vec1::<half::bf16>()
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-                Ok(bytemuck::cast_slice(&v).to_vec())
+        fn to_bytes<K: incin_core::prelude::DType>(
+            t: &<Self as StorageBackend>::Storage<K>,
+        ) -> Result<alloc::vec::Vec<u8>> {
+            let flat = t
+                .tensor()
+                .flatten_all()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            match flat.dtype() {
+                candle_core::DType::F32 => {
+                    let v = flat
+                        .to_vec1::<f32>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
+                candle_core::DType::F64 => {
+                    let v = flat
+                        .to_vec1::<f64>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
+                candle_core::DType::U8 => {
+                    let v = flat
+                        .to_vec1::<u8>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(v)
+                }
+                candle_core::DType::U32 => {
+                    let v = flat
+                        .to_vec1::<u32>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
+                candle_core::DType::I64 => {
+                    let v = flat
+                        .to_vec1::<i64>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
+                candle_core::DType::F16 => {
+                    let v = flat
+                        .to_vec1::<half::f16>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
+                candle_core::DType::BF16 => {
+                    let v = flat
+                        .to_vec1::<half::bf16>()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    Ok(bytemuck::cast_slice(&v).to_vec())
+                }
             }
         }
-    }
-
     /// Reinterprets `bytes` as typed scalar elements matching `dtype`, constructs
-    /// a tensor with `shape` on `device`, and returns it.
-    fn from_bytes<K: incin_core::prelude::DType>(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let d = to_candle_device(device)?;
-        let c_dtype = to_candle_dtype(dtype)?;
-        let expected_bytes = dtype.size_bytes(
-            shape.iter().copied().product(),
-            incin_core::shapes::error::OperationKind::Storage,
-        )?;
-        if bytes.len() != expected_bytes {
-            return Err(anyhow::anyhow!(
-                "Byte length mismatch in Candle from_bytes: expected {} bytes for shape {:?} and dtype {:?}, got {}",
-                expected_bytes, shape, dtype, bytes.len()
-            ).into());
-        }
+        /// a tensor with `shape` on `device`, and returns it.
+        fn from_bytes<K: incin_core::prelude::DType>(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<<Self as StorageBackend>::Storage<K>> {
+            let d = to_candle_device(device)?;
+            let c_dtype = to_candle_dtype(dtype)?;
+            let expected_bytes = dtype.size_bytes(
+                shape.iter().copied().product(),
+                incin_core::shapes::error::OperationKind::Storage,
+            )?;
+            if bytes.len() != expected_bytes {
+                return Err(anyhow::anyhow!(
+                    "Byte length mismatch in Candle from_bytes: expected {} bytes for shape {:?} and dtype {:?}, got {}",
+                    expected_bytes, shape, dtype, bytes.len()
+                ).into());
+            }
 
-        let raw = match c_dtype {
-            candle_core::DType::F32 => {
-                let floats: Vec<f32> = bytes
-                    .chunks_exact(4)
-                    .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&floats, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-            candle_core::DType::F64 => {
-                let doubles: Vec<f64> = bytes
-                    .chunks_exact(8)
-                    .map(|chunk| f64::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&doubles, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-            candle_core::DType::U8 => candle_core::Tensor::from_slice(bytes, shape, &d)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
-            candle_core::DType::U32 => {
-                let uints: Vec<u32> = bytes
-                    .chunks_exact(4)
-                    .map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&uints, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-            candle_core::DType::I64 => {
-                let ints: Vec<i64> = bytes
-                    .chunks_exact(8)
-                    .map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&ints, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-            candle_core::DType::F16 => {
-                let f16s: Vec<half::f16> = bytes
-                    .chunks_exact(2)
-                    .map(|chunk| half::f16::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&f16s, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-            candle_core::DType::BF16 => {
-                let bf16s: Vec<half::bf16> = bytes
-                    .chunks_exact(2)
-                    .map(|chunk| half::bf16::from_ne_bytes(chunk.try_into().unwrap()))
-                    .collect();
-                candle_core::Tensor::from_slice(&bf16s, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
-            }
-        };
-        CandleStorage::try_new(raw)
-    }
+            let raw = match c_dtype {
+                candle_core::DType::F32 => {
+                    let floats: Vec<f32> = bytes
+                        .chunks_exact(4)
+                        .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&floats, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+                candle_core::DType::F64 => {
+                    let doubles: Vec<f64> = bytes
+                        .chunks_exact(8)
+                        .map(|chunk| f64::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&doubles, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+                candle_core::DType::U8 => candle_core::Tensor::from_slice(bytes, shape, &d)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+                candle_core::DType::U32 => {
+                    let uints: Vec<u32> = bytes
+                        .chunks_exact(4)
+                        .map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&uints, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+                candle_core::DType::I64 => {
+                    let ints: Vec<i64> = bytes
+                        .chunks_exact(8)
+                        .map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&ints, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+                candle_core::DType::F16 => {
+                    let f16s: Vec<half::f16> = bytes
+                        .chunks_exact(2)
+                        .map(|chunk| half::f16::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&f16s, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+                candle_core::DType::BF16 => {
+                    let bf16s: Vec<half::bf16> = bytes
+                        .chunks_exact(2)
+                        .map(|chunk| half::bf16::from_ne_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    candle_core::Tensor::from_slice(&bf16s, shape, &d)
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                }
+            };
+            CandleStorage::try_new(raw)
+        }
 }
 
 impl<K: DType, D: Device> SupportsDType<K> for CandleBackend<D> {

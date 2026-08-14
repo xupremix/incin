@@ -40,29 +40,32 @@ impl StorageBackend for CanonicalOnlyBackend {
 impl Backend for CanonicalOnlyBackend {
     type InnerBackend = Self;
 
+
+
+}
+
+impl incin_core::backend_authoring::HostInterop for CanonicalOnlyBackend {
     fn to_bytes<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<u8>> {
-        Ok(vec![])
-    }
-
+            Ok(vec![])
+        }
     fn from_bytes<K: DType>(
-        _bytes: &[u8],
-        dims: &[usize],
-        dtype: DTypeDescriptor,
-        _device: &DeviceId,
-    ) -> Result<Self::Storage<K>> {
-        let meta = TensorMeta::contiguous(
-            ShapeBuf::from_slice(dims),
-            dtype,
-            DeviceId::CPU,
-            Alignment::new(1)?,
-            dims.iter().product(),
-        )?;
-        Ok(CanonicalStorage {
-            meta,
-            _phantom: core::marker::PhantomData,
-        })
-    }
-
+            _bytes: &[u8],
+            dims: &[usize],
+            dtype: DTypeDescriptor,
+            _device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            let meta = TensorMeta::contiguous(
+                ShapeBuf::from_slice(dims),
+                dtype,
+                DeviceId::CPU,
+                Alignment::new(1)?,
+                dims.iter().product(),
+            )?;
+            Ok(CanonicalStorage {
+                meta,
+                _phantom: core::marker::PhantomData,
+            })
+        }
 }
 
 impl VariableBackend for CanonicalOnlyBackend {

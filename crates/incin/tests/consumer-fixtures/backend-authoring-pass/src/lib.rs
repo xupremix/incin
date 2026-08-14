@@ -105,19 +105,22 @@ impl Backend for CompanyBackend {
         String::from("company")
     }
 
+
+
+}
+
+impl incin_core::backend_authoring::HostInterop for CompanyBackend {
     fn to_bytes<K: DType>(_: &<Self as StorageBackend>::Storage<K>) -> incin::prelude::Result<Vec<u8>> {
-        Ok(Vec::new())
-    }
-
+            Ok(Vec::new())
+        }
     fn from_bytes<K: DType>(
-        _: &[u8],
-        shape: &[usize],
-        _: DTypeDescriptor,
-        _: &DeviceId,
-    ) -> incin::prelude::Result<<Self as StorageBackend>::Storage<K>> {
-        Ok(ShapeBuf::from_slice(shape))
-    }
-
+            _: &[u8],
+            shape: &[usize],
+            _: DTypeDescriptor,
+            _: &DeviceId,
+        ) -> incin::prelude::Result<<Self as StorageBackend>::Storage<K>> {
+            Ok(ShapeBuf::from_slice(shape))
+        }
 }
 
 impl VariableBackend for CompanyBackend {

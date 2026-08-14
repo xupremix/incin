@@ -140,6 +140,7 @@ where
 pub trait Backend:
     StorageBackend
         + Capabilities
+        + HostInterop
         + AutogradBackend
         + Default
         + Sized
@@ -201,34 +202,6 @@ pub trait Backend:
         Self: TensorOps<Self>,
     {
         Self::format_tensor_display::<K>(t)
-    }
-
-    /// Serializes storage to a flat, dtype-native byte buffer (row-major,
-    /// no header) --- the inverse of `from_bytes`.
-    fn to_bytes<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<alloc::vec::Vec<u8>> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "tensor readback",
-            },
-        )))
-    }
-    /// Reconstructs storage from raw bytes produced by `to_bytes`,
-    /// validating that `bytes.len()` matches `shape`/`dtype`'s expected size.
-    fn from_bytes<K: DType>(
-        _bytes: &[u8],
-        _shape: &[usize],
-        _dtype: DTypeDescriptor,
-        _device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(crate::err::Error::Backend(BackendError::unsupported(
-            Self::BACKEND_NAME,
-            crate::exec::UnsupportedReason::MissingDeviceFeature {
-                feature: "tensor creation from bytes",
-            },
-        )))
     }
 
 }

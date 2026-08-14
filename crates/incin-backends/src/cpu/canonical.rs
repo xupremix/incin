@@ -12,7 +12,7 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{Backend, Execute, ExecutionRequest, StorageBackend};
+use incin_core::backend_authoring::{Backend, Execute, ExecutionRequest, HostInterop, StorageBackend};
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
 };
@@ -282,7 +282,7 @@ macro_rules! data_executors {
                 let bytes = request
                     .payload
                     .ok_or_else(|| invalid(operation, "data creation requires borrowed bytes"))?;
-                <Self as Backend>::from_bytes::<f32>(
+                <Self as HostInterop>::from_bytes::<f32>(
                     bytes,
                     &attributes.shape,
                     attributes.dtype,
@@ -396,7 +396,7 @@ impl<D: Device> Execute<op::TensorToBytes> for CpuBackendImpl<D> {
         let operation = OperationKind::TensorToBytes;
         let training = training_mode(request.context);
         let input = reduction_operand(self, request.inputs, operation, training)?;
-        <Self as Backend>::to_bytes::<f32>(input)
+        <Self as HostInterop>::to_bytes::<f32>(input)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

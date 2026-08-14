@@ -1,6 +1,6 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
-use incin_core::prelude::{Backend, DType, Device, StorageBackend, VariableBackend};
+use incin_core::prelude::{Backend, DType, Device, HostInterop, StorageBackend, VariableBackend};
 #[cfg(test)]
 use incin_core::prelude::{Cpu, Dyn, ShapeBuf};
 
@@ -45,7 +45,7 @@ macro_rules! impl_transfer {
                     <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
                 let shape = Self::shape::<K>(storage);
                 let bytes = Self::to_bytes::<K>(storage)?;
-                <Self::Output as Backend>::from_bytes::<K>(
+                <Self::Output as HostInterop>::from_bytes::<K>(
                     &bytes,
                     &shape,
                     dtype_descriptor,
@@ -77,7 +77,7 @@ macro_rules! impl_transfer {
                     <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
                 let shape = Self::shape::<K>(&source);
                 let bytes = Self::to_bytes::<K>(&source)?;
-                let storage = <Self::Output as Backend>::from_bytes::<K>(
+                let storage = <Self::Output as HostInterop>::from_bytes::<K>(
                     &bytes,
                     &shape,
                     dtype_descriptor,
