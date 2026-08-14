@@ -13,6 +13,12 @@ struct MixedStateModel {
     fp16: incin_core::nn::Linear<s![2, 2], CpuBackendImpl, incin_core::nn::optional::True, f16>,
 }
 
+#[module]
+struct ExplicitStateNames {
+    #[state(name = "q_proj")]
+    internal_query_projection: Linear<s![2, 2], CpuBackendImpl>,
+}
+
 #[test]
 /// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
@@ -91,6 +97,25 @@ fn test_mixed_dtype_snapshot_round_trip() -> Result<()> {
     let loaded = incin_core::prelude::load_safetensors_snapshot(&path)?;
     assert_eq!(loaded, snapshot);
     std::fs::remove_file(path).ok();
+    Ok(())
+}
+
+#[test]
+fn test_explicit_state_name_is_schema_stable() -> Result<()> {
+    let model = ExplicitStateNames {
+        internal_query_projection: Linear::build(())?,
+    };
+    let snapshot = model.state_snapshot()?;
+    assert!(
+        snapshot
+            .iter()
+            .any(|(path, _)| path.as_str() == "q_proj.weight")
+    );
+    assert!(
+        snapshot
+            .iter()
+            .any(|(path, _)| path.as_str() == "q_proj.bias")
+    );
     Ok(())
 }
 
