@@ -1,18 +1,16 @@
-//! Free-function normalization helpers for `CpuBackendImpl<D>`.
+//! Free-function normalization helpers for CPU storage.
 //!
 //! `layer_norm_impl` and `batch_norm_impl` are called by the trait dispatch
 //! methods in `ops/module.rs`. They are `pub(crate)` rather than `pub` so
 //! they stay internal to this crate and are not part of the public API surface.
 //!
-//! Both are composed entirely from already-tape-tracked primitives
-//! (sub / mul / div / add / sqrt / add_scalar_float / mean_keepdim) — zero
+//! Both are composed entirely from canonical storage primitives
+//! (sub / mul / div / add / sqrt / scalar arithmetic / mean_keepdim) — zero
 //! new `tape::push`/backward closures are written here. The existing backward
 //! closures already handle the unbroadcast math correctly for any shape.
 
 use incin_core::prelude::{DType, Result};
-use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, ReductionOps};
 
-use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 // ---------------------------------------------------------------------------
@@ -43,28 +41,25 @@ pub(crate) fn layer_norm_impl<D: incin_core::prelude::Device, K: DType>(
     bias: Option<&CpuStorage>,
     eps: f32,
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     let rank = t.shape.len();
     let last_dim = rank - 1;
 
     // ── NATIVE CUDA FAST PATH ──
 
     // 1. mean_keepdim over the trailing dim → shape matches t with last dim = 1
-    let mean = <B<D> as ReductionOps<B<D>>>::mean_keepdim::<K>(t, last_dim)?;
+    let mean = crate::cpu::ops::reduce::mean_keepdim(t, last_dim)?;
     // 2. centered = t - mean  (broadcast sub)
-    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &mean)?;
+    let centered = crate::cpu::ops::elementwise::sub_storage(t, &mean)?;
     // 3. variance = mean_keepdim(centered², trailing dim)
-    let sq = <B<D> as NumericOps<B<D>>>::mul::<K>(&centered, &centered)?;
-    let variance = <B<D> as ReductionOps<B<D>>>::mean_keepdim::<K>(&sq, last_dim)?;
+    let sq = crate::cpu::ops::elementwise::mul_storage(&centered, &centered)?;
+    let variance = crate::cpu::ops::reduce::mean_keepdim(&sq, last_dim)?;
     // 4. std = sqrt(variance + eps)
-    let var_plus_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
-    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&var_plus_eps)?;
+    let var_plus_eps = crate::cpu::ops::elementwise::canonical_add_scalar(&variance, eps as f64)?;
+    let std = crate::cpu::ops::elementwise::canonical_sqrt(&var_plus_eps)?;
     // 5. normalized = centered / std
-    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
+    let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
     // 6. affine: normalized * weight + bias
-    let scaled = <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, weight)?;
+    let scaled = crate::cpu::ops::elementwise::mul_storage(&normalized, weight)?;
     // Default-fallback: absent bias → zero-filled buffer shaped like weight.
     let bias_storage: CpuStorage;
     let bias_ref = match bias {
@@ -76,7 +71,7 @@ pub(crate) fn layer_norm_impl<D: incin_core::prelude::Device, K: DType>(
             &bias_storage
         }
     };
-    <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, bias_ref)
+    crate::cpu::ops::elementwise::add_storage(&scaled, bias_ref)
 }
 
 // ---------------------------------------------------------------------------
@@ -104,9 +99,6 @@ pub(crate) fn batch_norm_impl<D: incin_core::prelude::Device, K: DType>(
     eps: f32,
     _momentum: f64, // deliberately unused — inference-mode-only (CONTEXT.md carried-forward decision)
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
     let num_channels = t.shape[channel_dim];
@@ -165,12 +157,12 @@ pub(crate) fn batch_norm_impl<D: incin_core::prelude::Device, K: DType>(
     };
 
     // (t - rm) / sqrt(rv + eps) * w + b — all broadcast via existing tape-tracked ops.
-    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &rm_ref)?;
-    let rv_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&rv_ref, eps as f64)?;
-    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&rv_eps)?;
-    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
-    let scaled = <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, &w_ref)?;
-    <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, &b_ref)
+    let centered = crate::cpu::ops::elementwise::sub_storage(t, &rm_ref)?;
+    let rv_eps = crate::cpu::ops::elementwise::canonical_add_scalar(&rv_ref, eps as f64)?;
+    let std = crate::cpu::ops::elementwise::canonical_sqrt(&rv_eps)?;
+    let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
+    let scaled = crate::cpu::ops::elementwise::mul_storage(&normalized, &w_ref)?;
+    crate::cpu::ops::elementwise::add_storage(&scaled, &b_ref)
 }
 
 // ---------------------------------------------------------------------------
@@ -206,9 +198,6 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::prelude::Device, K: DType>
     b: Option<&CpuStorage>,
     eps: f32,
 ) -> Result<CpuStorage> {
-    /// `B`.
-    type B<D> = CpuBackendImpl<D>;
-
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
     let num_channels = t.shape[channel_dim];
@@ -236,27 +225,27 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::prelude::Device, K: DType>
 
     let inv_count = 1.0 / count as f64;
     let total = sum_over_reduced(t)?;
-    let mean = <B<D> as FloatOps<B<D>>>::mul_scalar_float::<K>(&total, inv_count)?;
-    let centered = <B<D> as NumericOps<B<D>>>::sub::<K>(t, &mean)?;
-    let squared = <B<D> as NumericOps<B<D>>>::mul::<K>(&centered, &centered)?;
+    let mean = crate::cpu::ops::elementwise::canonical_mul_scalar(&total, inv_count)?;
+    let centered = crate::cpu::ops::elementwise::sub_storage(t, &mean)?;
+    let squared = crate::cpu::ops::elementwise::mul_storage(&centered, &centered)?;
     let squared_total = sum_over_reduced(&squared)?;
-    let variance = <B<D> as FloatOps<B<D>>>::mul_scalar_float::<K>(&squared_total, inv_count)?;
+    let variance = crate::cpu::ops::elementwise::canonical_mul_scalar(&squared_total, inv_count)?;
 
-    let variance_eps = <B<D> as FloatOps<B<D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
-    let std = <B<D> as FloatOps<B<D>>>::sqrt::<K>(&variance_eps)?;
-    let normalized = <B<D> as NumericOps<B<D>>>::div::<K>(&centered, &std)?;
+    let variance_eps = crate::cpu::ops::elementwise::canonical_add_scalar(&variance, eps as f64)?;
+    let std = crate::cpu::ops::elementwise::canonical_sqrt(&variance_eps)?;
+    let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
 
     let scaled = match w {
         Some(weight) => {
             let weight = weight.reshape(&bcast_shape)?;
-            <B<D> as NumericOps<B<D>>>::mul::<K>(&normalized, &weight)?
+            crate::cpu::ops::elementwise::mul_storage(&normalized, &weight)?
         }
         None => normalized,
     };
     match b {
         Some(bias) => {
             let bias = bias.reshape(&bcast_shape)?;
-            <B<D> as NumericOps<B<D>>>::add::<K>(&scaled, &bias)
+            crate::cpu::ops::elementwise::add_storage(&scaled, &bias)
         }
         None => Ok(scaled),
     }
@@ -268,9 +257,6 @@ mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::{CpuBuffer, CpuStorage};
-
-    /// `TestB`.
-    type TestB = CpuBackendImpl<incin_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -419,7 +405,7 @@ mod tests {
                 eps,
             )
             .unwrap();
-            TestB::sum_all::<f32>(&out).unwrap()
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[t], 1e-3);
         assert!(
@@ -697,7 +683,7 @@ mod tests {
                 0.0,
             )
             .unwrap();
-            TestB::sum_all::<f32>(&out).unwrap()
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
         let max_rel_err = gradcheck(op, &[t], 1e-3);
         assert!(
