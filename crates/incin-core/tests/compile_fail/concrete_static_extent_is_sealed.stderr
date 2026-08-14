@@ -1,0 +1,100 @@
+error[E0277]: the trait bound `Forged: dim::sealed::Dim` is not satisfied
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:12:14
+   |
+12 | impl Dim for Forged {
+   |              ^^^^^^ unsatisfied trait bound
+   |
+help: the trait `dim::sealed::Dim` is not implemented for `Forged`
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:6:1
+   |
+ 6 | struct Forged;
+   | ^^^^^^^^^^^^^
+   = note: `Forged` implements similarly named trait `Dim`, but not `dim::sealed::Dim`
+   = help: the following other types implement trait `dim::sealed::Dim`:
+             AddDim<A, B>
+             BroadcastExtent<L, R>
+             CheckedSubDim<A, B>
+             ConstDim<N>
+             ExactDivDim<A, B>
+             MulDim<A, B>
+             NamedDim<Tag, Extent>
+             UInt<U, B>
+           and $N others
+note: required by a bound in `Dim`
+  --> src/shapes/dim.rs
+   |
+   | pub trait Dim:
+   |           --- required by a bound in this trait
+   |     sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+   |     ^^^^^^^^^^^ required by this bound in `Dim`
+   = note: `Dim` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::dim::sealed::Dim`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             incin_core::shapes::BroadcastExtent<L, R>
+             usize
+             incin_core::shapes::ConstDim<N>
+             incin_core::shapes::NamedDim<Tag, Extent>
+             incin_core::shapes::AddDim<A, B>
+             incin_core::shapes::CheckedSubDim<A, B>
+             incin_core::shapes::ExactDivDim<A, B>
+             incin_core::shapes::MulDim<A, B>
+           and $N others
+
+error[E0277]: the trait bound `Forged: dim::sealed::Dim` is not satisfied
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:17:31
+   |
+17 | impl ConcreteStaticExtent for Forged {
+   |                               ^^^^^^ unsatisfied trait bound
+   |
+help: the trait `dim::sealed::Dim` is not implemented for `Forged`
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:6:1
+   |
+ 6 | struct Forged;
+   | ^^^^^^^^^^^^^
+   = note: `Forged` implements similarly named trait `Dim`, but not `dim::sealed::Dim`
+   = help: the following other types implement trait `dim::sealed::Dim`:
+             AddDim<A, B>
+             BroadcastExtent<L, R>
+             CheckedSubDim<A, B>
+             ConstDim<N>
+             ExactDivDim<A, B>
+             MulDim<A, B>
+             NamedDim<Tag, Extent>
+             UInt<U, B>
+           and $N others
+   = note: required for `Forged` to implement `Dim`
+note: required by a bound in `ConcreteStaticExtent`
+  --> src/shapes/dim.rs
+   |
+   | pub trait ConcreteStaticExtent: Dim + sealed::ConcreteStaticExtent {
+   |                                 ^^^ required by this bound in `ConcreteStaticExtent`
+
+error[E0277]: the trait bound `Forged: dim::sealed::ConcreteStaticExtent` is not satisfied
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:17:31
+   |
+17 | impl ConcreteStaticExtent for Forged {
+   |                               ^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Unsigned` is not implemented for `Forged`
+  --> tests/compile_fail/concrete_static_extent_is_sealed.rs:6:1
+   |
+ 6 | struct Forged;
+   | ^^^^^^^^^^^^^
+help: the following other types implement trait `Unsigned`
+  --> $CARGO/typenum-$VERSION/src/uint.rs
+   |
+   | impl Unsigned for UTerm {
+   | ^^^^^^^^^^^^^^^^^^^^^^^ `UTerm`
+...
+   | impl<U: Unsigned, B: Bit> Unsigned for UInt<U, B> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
+   = note: required for `Forged` to implement `dim::sealed::ConcreteStaticExtent`
+note: required by a bound in `ConcreteStaticExtent`
+  --> src/shapes/dim.rs
+   |
+   | pub trait ConcreteStaticExtent: Dim + sealed::ConcreteStaticExtent {
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ConcreteStaticExtent`
+   = note: `ConcreteStaticExtent` is a "sealed trait", because to implement it you also need to implement `incin_core::shapes::dim::sealed::ConcreteStaticExtent`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             T
+             incin_core::shapes::NamedDim<Tag, Extent>
+             incin_core::shapes::BroadcastExtent<L, R>

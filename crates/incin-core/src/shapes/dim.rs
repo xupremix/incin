@@ -1,3 +1,5 @@
+use typenum::{Bit, UInt, UTerm, Unsigned};
+
 /// Semantic tri-state extent classification for a dimension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StaticExtent {
@@ -30,7 +32,14 @@ impl StaticExtent {
     }
 }
 
-pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
+mod sealed {
+    pub trait Dim {}
+    pub trait ConcreteStaticExtent {}
+}
+
+pub trait Dim:
+    sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+{
     /// The same semantic axis after a keep-dimension reduction.
     type KeepDim: Dim;
     /// Whether this axis's *size* is fixed by the type rather than supplied at
@@ -138,9 +147,47 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
 /// namespace.  In particular, a semantic named axis is static only when its
 /// extent is static too; `NamedDim<Tag, usize>` intentionally does not
 /// implement this trait.
-pub trait ConcreteStaticExtent: Dim {
+pub trait ConcreteStaticExtent: Dim + sealed::ConcreteStaticExtent {
     /// The underlying typenum natural used by static arithmetic.
     type Nat: typenum::Unsigned;
+}
+
+impl<L: Dim, R: Dim> sealed::Dim for BroadcastExtent<L, R> {}
+impl sealed::Dim for usize {}
+impl<const N: usize> sealed::Dim for ConstDim<N> {}
+impl<Tag: AxisTag, Extent: Dim> sealed::Dim for NamedDim<Tag, Extent> {}
+impl<A: Dim, B: Dim> sealed::Dim for AddDim<A, B> {}
+impl<A: Dim, B: Dim> sealed::Dim for CheckedSubDim<A, B> {}
+impl<A: Dim, B: Dim> sealed::Dim for ExactDivDim<A, B> {}
+impl<A: Dim, B: Dim> sealed::Dim for MulDim<A, B> {}
+impl sealed::Dim for UTerm {}
+impl<U, B> sealed::Dim for UInt<U, B>
+where
+    U: Unsigned + Dim,
+    B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    UInt<U, B>: Unsigned
+        + Default
+        + Copy
+        + Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + Eq
+        + PartialEq
+        + 'static,
+{
+}
+
+impl<T> sealed::ConcreteStaticExtent for T where T: Dim + typenum::Unsigned {}
+impl<Tag: AxisTag, Extent: ConcreteStaticExtent> sealed::ConcreteStaticExtent
+    for NamedDim<Tag, Extent>
+{
+}
+impl<L, R> sealed::ConcreteStaticExtent for BroadcastExtent<L, R>
+where
+    L: Dim + ConcreteStaticExtent,
+    R: Dim + ConcreteStaticExtent,
+{
 }
 
 #[doc(hidden)]
@@ -578,8 +625,6 @@ impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
         }
     }
 }
-
-use typenum::{Bit, UInt, UTerm, Unsigned};
 
 use crate::exec::ProofLevel::Static;
 

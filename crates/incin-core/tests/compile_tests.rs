@@ -74,9 +74,12 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         // Proof lowering: the seal around `Validated` and the descriptor
         // taxonomy (`EXE-002`), and the frontend binding (`EXE-003`).
         ("operation_spec_is_sealed", "E0277"),
-        ("validated_fields_are_private", "E0451"),
+        ("validated_fields_are_private", "private fields"),
         ("validated_new_is_crate_private", "E0624"),
         ("unsupported_dtype_backend_pair", "E0277"),
+        ("shape_trait_is_sealed", "E0277"),
+        ("dim_trait_is_sealed", "E0277"),
+        ("concrete_static_extent_is_sealed", "E0277"),
         // `EXE-009`: an operation family with no unsupported default, so a
         // backend that omits a method fails to compile instead of answering
         // the call with an error at run time.

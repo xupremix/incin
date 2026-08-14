@@ -15,6 +15,10 @@ pub trait ForwardCursor {}
 impl ForwardCursor for Here {}
 impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 
+mod sealed {
+    pub trait Shape {}
+}
+
 /// The fundamental trait for all tensor shape types.
 ///
 /// A `Shape` encodes the rank (number of dimensions) and, optionally, the static size of each
@@ -25,7 +29,7 @@ impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 /// * **`Ranked<R>`** - Runtime extents with a typenum-known rank.
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
-pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
+pub trait Shape: sealed::Shape + 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Compile-time validity gate for exact structural shape expressions.
     ///
     /// The default is intentionally permissive for dynamic and legacy input
@@ -105,6 +109,11 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Implementors must define this proof obligation explicitly.
     fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError>;
 }
+
+impl sealed::Shape for Nil {}
+impl<H: Dim, T: Shape> sealed::Shape for DimCons<H, T> {}
+impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> sealed::Shape for Ranked<R> {}
+impl sealed::Shape for Dyn {}
 
 /// Terminator node for canonical recursive fixed-rank shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
