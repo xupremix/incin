@@ -320,6 +320,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut prepare_state_calls = Vec::new();
     let mut commit_state_calls = Vec::new();
     let mut visit_state_calls = Vec::new();
+    let mut visit_parameter_calls = Vec::new();
     let mut state_dict_field_types = Vec::new();
     let mut to_device_fields = Vec::new();
     let mut named_layer_calls = Vec::new();
@@ -375,6 +376,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
+                            &self.#fname, &child_path, visitor)?;
+                    });
+                    visit_parameter_calls.push(quote! {
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::VisitParameters::visit_parameters(
                             &self.#fname, &child_path, visitor)?;
                     });
                     prepare_state_calls.push(quote! {
@@ -460,6 +466,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
+                            &self.#idx, &child_path, visitor)?;
+                    });
+                    visit_parameter_calls.push(quote! {
+                        let child_path = path.child(#state_component);
+                        #k_crate::prelude::VisitParameters::visit_parameters(
                             &self.#idx, &child_path, visitor)?;
                     });
                     prepare_state_calls.push(quote! {
@@ -621,6 +632,31 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    let visit_parameters_impl = if no_parameters {
+        quote! {}
+    } else {
+        let mut visit_where_clause = where_clause
+            .cloned()
+            .unwrap_or_else(|| syn::parse_quote!(where));
+        for fty in &state_dict_field_types {
+            visit_where_clause
+                .predicates
+                .push(syn::parse_quote!(#fty: #k_crate::prelude::VisitParameters<#b_ident>));
+        }
+        quote! {
+            impl #impl_generics #k_crate::prelude::VisitParameters<#b_ident> for #name #ty_generics #visit_where_clause {
+                fn visit_parameters<V: #k_crate::prelude::ParameterVisitor<#b_ident>>(
+                    &self,
+                    path: &#k_crate::prelude::StatePath,
+                    visitor: &mut V,
+                ) -> #k_crate::prelude::Result<()> {
+                    #(#visit_parameter_calls)*
+                    Ok(())
+                }
+            }
+        }
+    };
+
     let state_impl = if no_state {
         quote! {}
     } else {
@@ -770,6 +806,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         #parameters_impl
+        #visit_parameters_impl
         #state_impl
         #visit_state_impl
         #named_layers_impl

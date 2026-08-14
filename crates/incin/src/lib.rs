@@ -285,9 +285,9 @@ pub mod nn {
         EmbeddingShape, False, Flatten, GELU, Init, L1Loss, L1ReductionShape, L1Shape, LSTM,
         LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
-        OptionalField, Param, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
+        OptionalField, Param, ParameterVisitor, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
         ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
-        TrainMode, TrainState, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
         format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
     pub use incin_core::tensor::transfer::ToDevice;
@@ -559,7 +559,7 @@ pub mod prelude {
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
-        module::{LayerNode, NamedLayers, Parameters, Sequential, TrainMode},
+        module::{LayerNode, NamedLayers, ParameterVisitor, Parameters, Sequential, TrainMode, VisitParameters},
         rms_norm::RMSNorm,
     };
 

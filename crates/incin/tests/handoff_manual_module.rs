@@ -5,10 +5,8 @@
 
 #![cfg(all(feature = "cpu", feature = "target-api"))]
 
-use incin::nn::{Module, Parameters, StateDict, TrainState};
+use incin::nn::{Module, ParameterVisitor, StateDict, TrainState, VisitParameters};
 use incin::prelude::*;
-use incin::state::StateLoadPlan;
-use std::collections::BTreeMap;
 
 type CpuBackend = incin_backends::cpu::CpuBackendImpl;
 type Input = Tensor<Dyn, CpuBackend, f32, Grad>;
@@ -27,21 +25,6 @@ impl Module<Input> for ManualLinear {
     }
 }
 
-impl<K: DType> Parameters<CpuBackend, K> for ManualLinear {
-    fn named_parameters(
-        &self,
-        prefix: &str,
-        map: &mut BTreeMap<String, <CpuBackend as VariableBackend>::Var<K>>,
-    ) {
-        let child_prefix = if prefix.is_empty() {
-            "layer".to_owned()
-        } else {
-            format!("{prefix}.layer")
-        };
-        self.layer.named_parameters(&child_prefix, map);
-    }
-}
-
 impl VisitState<CpuBackend> for ManualLinear {
     fn visit_state<V: StateVisitor<CpuBackend>>(
         &self,
@@ -52,22 +35,14 @@ impl VisitState<CpuBackend> for ManualLinear {
     }
 }
 
-impl StateDict<CpuBackend> for ManualLinear {
-    fn collect_state(&self, prefix: &StatePath, snapshot: &mut StateSnapshot) -> Result<()> {
-        self.layer.collect_state(&prefix.child("layer"), snapshot)
-    }
-
-    fn prepare_state(
+impl VisitParameters<CpuBackend> for ManualLinear {
+    fn visit_parameters<V: ParameterVisitor<CpuBackend>>(
         &self,
-        prefix: &StatePath,
-        snapshot: &StateSnapshot,
-        plan: &mut StateLoadPlan,
+        path: &StatePath,
+        visitor: &mut V,
     ) -> Result<()> {
-        self.layer.prepare_state(&prefix.child("layer"), snapshot, plan)
-    }
-
-    fn commit_state(&mut self, prefix: &StatePath, plan: &mut StateLoadPlan) -> Result<()> {
-        self.layer.commit_state(&prefix.child("layer"), plan)
+        self.layer
+            .visit_parameters(&path.child("layer"), visitor)
     }
 }
 
@@ -124,6 +99,22 @@ impl StateVisitor<CpuBackend> for VisitedPaths {
     }
 }
 
+impl ParameterVisitor<CpuBackend> for VisitedPaths {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        _param: &incin::nn::param::Param<S, CpuBackend, K, Train>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        K: DType,
+        Train: TrainState,
+    {
+        self.0.push(path.to_string());
+        Ok(())
+    }
+}
+
 impl Module<Input> for ForwardOnlyField {
     type Output = Input;
     type Error = Error;
@@ -165,16 +156,16 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
         layer: Linear::build(())?,
     };
 
+    let mut manual_parameters = VisitedPaths(Vec::new());
+    manual.visit_parameters(&StatePath::root(), &mut manual_parameters)?;
+    let mut macro_parameters = VisitedPaths(Vec::new());
+    macro_layer.visit_parameters(&StatePath::root(), &mut macro_parameters)?;
+    manual_parameters.0.sort();
+    macro_parameters.0.sort();
+    assert_eq!(manual_parameters.0, macro_parameters.0);
+    let manual_snapshot = incin::state::collect_state::<CpuBackend, _>(&manual)?;
     assert_eq!(
-        <ManualLinear as Parameters<CpuBackend, f32>>::parameters(&manual)
-            .keys()
-            .collect::<Vec<_>>(),
-        <MacroLinear as Parameters<CpuBackend, f32>>::parameters(&macro_layer)
-            .keys()
-            .collect::<Vec<_>>(),
-    );
-    assert_eq!(
-        manual.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        manual_snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         macro_layer.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
     assert_eq!(
@@ -193,19 +184,23 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     let loss = manual_output.mse_loss(&target_output)?;
     let _grads = loss.backward()?;
 
-    let snapshot = manual.state_dict()?;
-    let mut restored = manual;
+    let snapshot = macro_layer.state_dict()?;
+    let mut restored = macro_layer;
     restored.load_state_dict(&snapshot)?;
     assert_eq!(
         restored.state_dict()?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 
-    let mut manual_paths = VisitedPaths(Vec::new());
-    restored.visit_state(&StatePath::root(), &mut manual_paths)?;
-    let mut macro_paths = VisitedPaths(Vec::new());
-    macro_layer.visit_state(&StatePath::root(), &mut macro_paths)?;
-    assert_eq!(manual_paths.0, macro_paths.0);
+    let mut restored_paths = VisitedPaths(Vec::new());
+    restored.visit_state(&StatePath::root(), &mut restored_paths)?;
+    let mut expected_paths = manual_snapshot
+        .iter()
+        .map(|(path, _)| path.to_string())
+        .collect::<Vec<_>>();
+    restored_paths.0.sort();
+    expected_paths.sort();
+    assert_eq!(restored_paths.0, expected_paths);
 
     Ok(())
 }

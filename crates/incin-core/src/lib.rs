@@ -184,7 +184,7 @@ pub mod prelude {
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
         module::{
-            LayerNode, Module, NamedLayers, Parameters, Sequential, ShapeInfo, StateDict, TrainMode,
+            LayerNode, Module, NamedLayers, ParameterVisitor, Parameters, Sequential, ShapeInfo, StateDict, TrainMode, VisitParameters,
         },
         optional::{False, OptionalField, True},
         param::{Buffer, Frozen, Param, TrainState, Trainable},

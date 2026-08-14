@@ -172,6 +172,28 @@ pub trait Parameters<B: VariableBackend, K: DType> {
     }
 }
 
+/// Receives trainable parameter leaves without exposing backend handle maps.
+pub trait ParameterVisitor<B: VariableBackend> {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        param: &crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        K: DType,
+        Train: crate::nn::param::TrainState;
+}
+
+/// Traverses trainable parameter leaves using a typed visitor.
+pub trait VisitParameters<B: VariableBackend> {
+    fn visit_parameters<V: ParameterVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()>;
+}
+
 /// Recursively switches a module (and every submodule reachable through
 /// `#[module]`-derived fields) between training and evaluation behavior —
 /// `#[module]` auto-implements this exactly like it does `Parameters`/
@@ -456,6 +478,23 @@ where
     }
 }
 
+impl<B, L1, L2> crate::nn::VisitParameters<B> for Sequential<L1, L2>
+where
+    B: crate::tensor::backend::VariableBackend,
+    L1: crate::nn::VisitParameters<B> + StateDict<B>,
+    L2: crate::nn::VisitParameters<B> + StateDict<B>,
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_parameters(&path.index(0), visitor)?;
+        self.1
+            .visit_parameters(&path.index(L1::flat_width()), visitor)
+    }
+}
+
 // Dummy implementations for primitive/marker types that are often fields in modules.
 macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
@@ -546,6 +585,23 @@ where
     ) -> Result<()> {
         if let Some(value) = self {
             value.visit_state(path, visitor)?;
+        }
+        Ok(())
+    }
+}
+
+impl<L, B> crate::nn::VisitParameters<B> for Option<L>
+where
+    L: crate::nn::VisitParameters<B>,
+    B: crate::tensor::backend::VariableBackend,
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if let Some(value) = self {
+            value.visit_parameters(path, visitor)?;
         }
         Ok(())
     }

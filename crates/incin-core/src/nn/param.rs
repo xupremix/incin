@@ -615,6 +615,21 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
     }
 }
 
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    crate::nn::VisitParameters<B> for Param<S, B, K, Train>
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if Train::TRAINABLE {
+            visitor.visit_param(path, self)?;
+        }
+        Ok(())
+    }
+}
+
 impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Param<S1, B, K, Train> {
     /// Reinterprets a dynamically-shaped parameter as a statically-shaped `S2`.
     pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B, K, Train>>
@@ -922,6 +937,18 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
         _prefix: &str,
         _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
     ) {
+    }
+}
+
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType>
+    crate::nn::VisitParameters<B> for Buffer<S, B, K>
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        _path: &crate::nn::StatePath,
+        _visitor: &mut V,
+    ) -> Result<()> {
+        Ok(())
     }
 }
 
