@@ -4,6 +4,38 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
+pub(crate) fn add_storage(lhs: &CandleStorage, rhs: &CandleStorage) -> Result<CandleStorage> {
+    let t = lhs
+        .tensor()
+        .broadcast_add(rhs.tensor())
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn sub_storage(lhs: &CandleStorage, rhs: &CandleStorage) -> Result<CandleStorage> {
+    let t = lhs
+        .tensor()
+        .broadcast_sub(rhs.tensor())
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn mul_storage(lhs: &CandleStorage, rhs: &CandleStorage) -> Result<CandleStorage> {
+    let t = lhs
+        .tensor()
+        .broadcast_mul(rhs.tensor())
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
+pub(crate) fn div_storage(lhs: &CandleStorage, rhs: &CandleStorage) -> Result<CandleStorage> {
+    let t = lhs
+        .tensor()
+        .broadcast_div(rhs.tensor())
+        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+    CandleStorage::try_new(t)
+}
+
 impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::NumericOps<Self>
     for CandleBackend<D>
 {
@@ -12,43 +44,27 @@ impl<D: incin_core::prelude::Device> incin_core::__backend_compat::legacy::Numer
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = lhs
-            .tensor()
-            .broadcast_add(rhs.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        add_storage(lhs, rhs)
     }
     /// Element-wise subtraction with broadcasting.
     fn sub<K: incin_core::prelude::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = lhs
-            .tensor()
-            .broadcast_sub(rhs.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        sub_storage(lhs, rhs)
     }
     /// Element-wise multiplication with broadcasting.
     fn mul<K: incin_core::prelude::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = lhs
-            .tensor()
-            .broadcast_mul(rhs.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        mul_storage(lhs, rhs)
     }
     /// Element-wise division with broadcasting.
     fn div<K: incin_core::prelude::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let t = lhs
-            .tensor()
-            .broadcast_div(rhs.tensor())
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        CandleStorage::try_new(t)
+        div_storage(lhs, rhs)
     }
 }

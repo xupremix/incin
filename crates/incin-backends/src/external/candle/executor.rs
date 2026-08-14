@@ -116,6 +116,10 @@ impl<D: Device> Capabilities for CandleBackend<D> {
             OperationIdentity::Builtin(
                 OperationKind::MatMulExact
                 | OperationKind::ReshapeExact
+                | OperationKind::Add
+                | OperationKind::Sub
+                | OperationKind::Mul
+                | OperationKind::Div
                 | OperationKind::Zeros
                 | OperationKind::Ones
                 | OperationKind::UniformRandom
@@ -239,6 +243,37 @@ impl<D: Device> Execute<op::ReshapeExact> for CandleBackend<D> {
         Ok(output)
     }
 }
+
+macro_rules! impl_candle_binary_executors {
+    ($(($op:ident, $func:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<incin_core::backend_authoring::op::$op> for CandleBackend<D> {
+            type Output = CandleStorage;
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, incin_core::backend_authoring::op::$op, Self>,
+            ) -> core::result::Result<CandleStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [lhs_handle, rhs_handle] = request.inputs else {
+                    return Err(invalid(operation, "binary operation expects exactly two inputs"));
+                };
+                let lhs = lhs_handle.downcast_ref::<CandleStorage>()
+                    .ok_or_else(|| invalid(operation, "left input is not Candle storage"))?;
+                let rhs = rhs_handle.downcast_ref::<CandleStorage>()
+                    .ok_or_else(|| invalid(operation, "right input is not Candle storage"))?;
+                super::ops::numeric::$func(lhs, rhs).map_err(|err| {
+                    crate::descriptor_bind::kernel_error(Self::BACKEND_NAME, operation, err)
+                })
+            }
+        }
+    )*};
+}
+
+impl_candle_binary_executors![
+    (Add, add_storage),
+    (Sub, sub_storage),
+    (Mul, mul_storage),
+    (Div, div_storage),
+];
 
 macro_rules! impl_candle_creation_executors {
     ($(($op:ident, $func:ident $(, $arg:ident)*)),* $(,)?) => {$(

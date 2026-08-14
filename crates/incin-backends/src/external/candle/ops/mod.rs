@@ -7,7 +7,7 @@ pub(crate) mod creation;
 mod float;
 mod loss;
 mod module;
-mod numeric;
+pub(crate) mod numeric;
 mod quant;
 mod reduce;
 mod tensor;
