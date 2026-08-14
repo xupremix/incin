@@ -1007,15 +1007,6 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    pub fn sample<D: crate::distributions::Distribution<K>, A>(dist: &D, args: A) -> Result<Self>
-    where
-        A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        B: SupportsDType<K> + crate::distributions::DistributionExecutor<D, K>,
-    {
-        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
-        dist.sample::<S, B, G>(_shape, &_device)
-    }
-
     /// Wraps an existing backend storage in a Tensor.
     pub fn from_raw<A>(raw_tensor: B::Storage<K>, args: A) -> Result<Self>
     where

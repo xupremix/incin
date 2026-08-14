@@ -121,6 +121,33 @@ pub trait DistributionExecutor<D: ?Sized, K: DType>: Backend + SupportsDType<K> 
         (S, K, Self::Device, G): TensorArgs<S, K, Self::Device, G>;
 }
 
+/// Extension trait for sampling a typed tensor from a distribution.
+pub trait TensorDistributionExt<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> {
+    /// Samples a tensor using the distribution's backend execution protocol.
+    fn sample<D: Distribution<K>, A>(distribution: &D, args: A) -> Result<Tensor<S, B, K, G>>
+    where
+        A: crate::tensor::arg_into::ArgInto<
+            <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
+        >,
+        B: SupportsDType<K> + DistributionExecutor<D, K>;
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> TensorDistributionExt<S, B, K, G>
+    for Tensor<S, B, K, G>
+{
+    fn sample<D: Distribution<K>, A>(distribution: &D, args: A) -> Result<Tensor<S, B, K, G>>
+    where
+        A: crate::tensor::arg_into::ArgInto<
+            <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
+        >,
+        B: SupportsDType<K> + DistributionExecutor<D, K>,
+    {
+        let (shape, _dtype, device, _grad) =
+            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        distribution.sample::<S, B, G>(shape, &device)
+    }
+}
+
 /// Uniform probability distribution over `[low, high)`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Uniform<K = f32> {

@@ -227,6 +227,7 @@ pub mod prelude {
         extract_graph, tracing_mark_input,
         tracing_mark_input_typed, tracing_mark_output,
     };
+    pub use crate::distributions::TensorDistributionExt;
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};
     #[cfg(feature = "metal")]
