@@ -24,7 +24,8 @@ use incin_core::prelude::{
     Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0,
     Reduction, ShapeBuf, ShapeValue,
 };
-use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps, TensorOps};
+use incin_backends::__backend_compat::legacy::LossOps;
 
 use incin_core::tensor::arg_into::ArgInto;
 

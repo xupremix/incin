@@ -2,6 +2,7 @@ use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
+use crate::legacy::LossOps;
 use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,

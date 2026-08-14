@@ -21,6 +21,12 @@ pub mod codegen;
 ))]
 pub(crate) mod descriptor_bind;
 pub mod dispatch;
+#[doc(hidden)]
+pub mod __backend_compat {
+    pub mod legacy {
+        pub use crate::legacy::LossOps;
+    }
+}
 pub(crate) mod legacy;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
 mod dispatch_executor;

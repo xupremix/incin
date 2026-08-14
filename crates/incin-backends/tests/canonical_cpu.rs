@@ -19,7 +19,8 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::__backend_compat::legacy::{LossOps, ModuleOps, NumericOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, NumericOps, TensorOps};
+use incin_backends::__backend_compat::legacy::LossOps;
 
 type TestBackend = CpuBackendImpl<Cpu>;
 

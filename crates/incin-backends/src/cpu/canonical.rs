@@ -23,7 +23,8 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, LossOps, ModuleOps, QuantizedOps, TensorOps};
+use incin_core::__backend_compat::legacy::{CreationOps, FloatOps, ModuleOps, QuantizedOps, TensorOps};
+use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};

@@ -6,7 +6,7 @@ Each row is one exact executable identity. Families classify rows and never impl
 
 Total exact operations: 174
 
-Legacy operation-family trait methods with a reviewed descriptor mapping: 141
+Legacy operation-family trait methods with a reviewed descriptor mapping: 137
 
 | Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
 |---|---|---|---|---|---|---|---|
@@ -174,10 +174,10 @@ Legacy operation-family trait methods with a reviewed descriptor mapping: 141
 | `dropout` | `Pointwise` | `Composite` | `Descriptor<op::Dropout>` | `DropoutAttributes` | 1-1 | 1-1 | `Dropout::forward` |
 | `rnn` | `Pointwise` | `Composite` | `Descriptor<op::Rnn>` | `RecurrentAttributes` | 2-2 | 2-2 | `RNN::forward` |
 | `lstm` | `Pointwise` | `Composite` | `Descriptor<op::Lstm>` | `RecurrentAttributes` | 3-3 | 3-3 | `LSTM::forward` |
-| `mse_loss` | `Reduction` | `Loss` | `Descriptor<op::MseLoss>` | `LossAttributes` | 2-2 | 1-1 | `LossOps::mse_loss` |
-| `l1_loss` | `Reduction` | `Loss` | `Descriptor<op::L1Loss>` | `LossAttributes` | 2-2 | 1-1 | `LossOps::l1_loss` |
-| `bce_with_logits_loss` | `Reduction` | `Loss` | `Descriptor<op::BceWithLogitsLoss>` | `LossAttributes` | 2-2 | 1-1 | `LossOps::bce_with_logits_loss` |
-| `cross_entropy_loss` | `Reduction` | `Loss` | `Descriptor<op::CrossEntropyLoss>` | `LossAttributes` | 2-2 | 1-1 | `LossOps::cross_entropy_loss` |
+| `mse_loss` | `Reduction` | `Loss` | `Descriptor<op::MseLoss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::mse_loss` |
+| `l1_loss` | `Reduction` | `Loss` | `Descriptor<op::L1Loss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::l1_loss` |
+| `bce_with_logits_loss` | `Reduction` | `Loss` | `Descriptor<op::BceWithLogitsLoss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::bce_with_logits_loss` |
+| `cross_entropy_loss` | `Reduction` | `Loss` | `Descriptor<op::CrossEntropyLoss>` | `LossAttributes` | 2-2 | 1-1 | `Loss::cross_entropy_loss` |
 | `quantize` | `Pointwise` | `Quantized` | `Descriptor<op::Quantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `QuantizedOps::quantize` |
 | `dequantize` | `Pointwise` | `Quantized` | `Descriptor<op::Dequantize>` | `QuantizationAttributes` | 1-1 | 1-1 | `QuantizedOps::dequantize` |
 | `quantized_matmul` | `Reduction` | `Quantized` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | 2-2 | 1-1 | `QuantizedOps::quantized_matmul` |

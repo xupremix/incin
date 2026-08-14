@@ -9,7 +9,7 @@ use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use alloc::vec::Vec;
 use crate::tensor::backend::*;
-use crate::tensor::backend::legacy::{CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
+use crate::tensor::backend::legacy::{CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 // removed RefCell
 use spin::{Lazy, Mutex};
 
@@ -2607,100 +2607,6 @@ impl<B: Backend + crate::tensor::backend::legacy::ModuleOps<B>> ModuleOps<Self> 
                 dilation: [dilation, dilation],
                 groups,
                 has_bias: b.is_some(),
-            },
-        )
-    }
-}
-
-impl<B: Backend + crate::tensor::backend::legacy::LossOps<B>> LossOps<Self> for TracingBackend<B> {
-    /// Delegates to `B::cross_entropy_loss`, additionally recording an `OperationKind::CrossEntropyLoss` node.
-    fn cross_entropy_loss<K: super::dtype::DType, KInt: super::dtype::DType>(
-        logits: &<Self as StorageBackend>::Storage<K>,
-        targets: &<Self as StorageBackend>::Storage<KInt>,
-        reduction: crate::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let inner = B::cross_entropy_loss(&logits.inner, &targets.inner, reduction)?;
-        Self::trace_canonical_inputs_with_attributes::<crate::exec::catalog::op::CrossEntropyLoss, K>(
-            alloc::vec![logits.value_id, targets.value_id],
-            alloc::vec![
-                crate::exec::catalog::LogicalTensorMeta {
-                    shape: Some(B::shape(&logits.inner)),
-                    dtype: Some(Self::traced_dtype(&logits.inner)),
-                    device: Some(B::metadata(&logits.inner).device),
-                },
-                crate::exec::catalog::LogicalTensorMeta {
-                    shape: Some(B::shape(&targets.inner)),
-                    dtype: Some(Self::traced_dtype(&targets.inner)),
-                    device: Some(B::metadata(&targets.inner).device),
-                },
-            ],
-            &inner,
-            crate::exec::catalog::LossAttributes {
-                reduction: match reduction {
-                    crate::tensor::reduction::Reduction::None => crate::exec::catalog::LossReduction::None,
-                    crate::tensor::reduction::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
-                    crate::tensor::reduction::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
-                },
-            },
-        )
-    }
-
-    /// Delegates to `B::mse_loss`, additionally recording an `OperationKind::MseLoss` node.
-    fn mse_loss<K: super::dtype::DType>(
-        predictions: &<Self as StorageBackend>::Storage<K>,
-        targets: &<Self as StorageBackend>::Storage<K>,
-        reduction: crate::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let inner = B::mse_loss(&predictions.inner, &targets.inner, reduction)?;
-        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::MseLoss, K>(
-            &[predictions, targets],
-            &inner,
-            crate::exec::catalog::LossAttributes {
-                reduction: match reduction {
-                    crate::tensor::reduction::Reduction::None => crate::exec::catalog::LossReduction::None,
-                    crate::tensor::reduction::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
-                    crate::tensor::reduction::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
-                },
-            },
-        )
-    }
-
-    /// Delegates to `B::l1_loss`, additionally recording an `OperationKind::L1Loss` node.
-    fn l1_loss<K: super::dtype::DType>(
-        predictions: &<Self as StorageBackend>::Storage<K>,
-        targets: &<Self as StorageBackend>::Storage<K>,
-        reduction: crate::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let inner = B::l1_loss(&predictions.inner, &targets.inner, reduction)?;
-        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::L1Loss, K>(
-            &[predictions, targets],
-            &inner,
-            crate::exec::catalog::LossAttributes {
-                reduction: match reduction {
-                    crate::tensor::reduction::Reduction::None => crate::exec::catalog::LossReduction::None,
-                    crate::tensor::reduction::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
-                    crate::tensor::reduction::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
-                },
-            },
-        )
-    }
-
-    /// Delegates to `B::bce_with_logits_loss`, additionally recording an `OperationKind::BceWithLogitsLoss` node.
-    fn bce_with_logits_loss<K: super::dtype::DType>(
-        logits: &<Self as StorageBackend>::Storage<K>,
-        targets: &<Self as StorageBackend>::Storage<K>,
-        _r: crate::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner, _r)?;
-        Self::trace_canonical_multi_shape::<crate::exec::catalog::op::BceWithLogitsLoss, K>(
-            &[logits, targets],
-            &inner,
-            crate::exec::catalog::LossAttributes {
-                reduction: match _r {
-                    crate::tensor::reduction::Reduction::None => crate::exec::catalog::LossReduction::None,
-                    crate::tensor::reduction::Reduction::Mean => crate::exec::catalog::LossReduction::Mean,
-                    crate::tensor::reduction::Reduction::Sum => crate::exec::catalog::LossReduction::Sum,
-                },
             },
         )
     }

@@ -1366,44 +1366,6 @@ use super::*;
         }
     }
 
-    /// All four losses reduce to an empty (scalar) shape, ignoring
-    /// `reduction`'s actual `None`/`Sum`/`Mean` distinction since there are
-    /// no real values to reduce.
-    impl<D: Device + Clone + 'static> LossOps<Self> for DummyBackend<D> {
-        /// Always an empty (scalar) shape.
-        fn mse_loss<K: DType>(
-            _pred: &<Self as StorageBackend>::Storage<K>,
-            _target: &<Self as StorageBackend>::Storage<K>,
-            _r: Reduction,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
-            Ok(alloc::vec![])
-        }
-        /// Always an empty (scalar) shape.
-        fn l1_loss<K: DType>(
-            _pred: &<Self as StorageBackend>::Storage<K>,
-            _target: &<Self as StorageBackend>::Storage<K>,
-            _r: Reduction,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
-            Ok(alloc::vec![])
-        }
-        /// Always an empty (scalar) shape.
-        fn bce_with_logits_loss<K: DType>(
-            _pred: &<Self as StorageBackend>::Storage<K>,
-            _target: &<Self as StorageBackend>::Storage<K>,
-            _r: Reduction,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
-            Ok(alloc::vec![])
-        }
-        /// Always an empty (scalar) shape.
-        fn cross_entropy_loss<K: DType, KInt: DType>(
-            _pred: &<Self as StorageBackend>::Storage<K>,
-            _target: &<Self as StorageBackend>::Storage<KInt>,
-            _r: Reduction,
-        ) -> Result<<Self as StorageBackend>::Storage<K>> {
-            Ok(alloc::vec![])
-        }
-    }
-
     /// All quantization ops are no-ops returning an empty shape --- there is
     /// no real data to (de)quantize.
     impl<D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<D> {

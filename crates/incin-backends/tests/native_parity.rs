@@ -20,8 +20,9 @@ use incin_backends::external::candle::CandleBackend;
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::{
-    CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+    CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
+use incin_backends::__backend_compat::legacy::LossOps;
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 

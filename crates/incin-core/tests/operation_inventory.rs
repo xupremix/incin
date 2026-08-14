@@ -26,7 +26,6 @@ const OPERATION_TRAITS: &[&str] = &[
     "TensorOps",
     "ReductionOps",
     "ModuleOps",
-    "LossOps",
     "QuantizedOps",
 ];
 

@@ -161,10 +161,10 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `linear` | `Kernel` | yes | `Linear::forward` |
 | `rms_norm` | `Kernel` | yes | `RMSNorm::forward` |
 | `dropout` | `Kernel` | yes | `Dropout::forward` |
-| `mse_loss` | `Kernel` | yes | `LossOps::mse_loss` |
-| `l1_loss` | `Kernel` | yes | `LossOps::l1_loss` |
-| `bce_with_logits_loss` | `Kernel` | yes | `LossOps::bce_with_logits_loss` |
-| `cross_entropy_loss` | `Kernel` | yes | `LossOps::cross_entropy_loss` |
+| `mse_loss` | `Kernel` | yes | `Loss::mse_loss` |
+| `l1_loss` | `Kernel` | yes | `Loss::l1_loss` |
+| `bce_with_logits_loss` | `Kernel` | yes | `Loss::bce_with_logits_loss` |
+| `cross_entropy_loss` | `Kernel` | yes | `Loss::cross_entropy_loss` |
 | `quantize` | `Kernel` | yes | `QuantizedOps::quantize` |
 | `dequantize` | `Kernel` | yes | `QuantizedOps::dequantize` |
 | `quantized_matmul` | `Kernel` | yes | `QuantizedOps::quantized_matmul` |

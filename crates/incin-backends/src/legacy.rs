@@ -6,8 +6,70 @@
 //! representable by the current `Execute` output contract.
 
 use incin_core::__backend_compat::legacy::{FloatOps, NumericOps};
+use incin_core::__backend_compat::legacy::ReductionOps;
 use incin_core::backend_authoring::VariableBackend;
-use incin_core::prelude::{DType, Result};
+use incin_core::prelude::{Backend, DType, Reduction, Result};
+
+/// Backend-local composed loss helpers retained for compatibility and parity
+/// tests. Stable loss operations use exact `Execute<O>` descriptors.
+pub trait LossOps<B: Backend + NumericOps<B> + FloatOps<B> + ReductionOps<B>>:
+    NumericOps<B> + FloatOps<B> + ReductionOps<B>
+{
+    fn mse_loss<K: DType>(
+        pred: &B::Storage<K>,
+        target: &B::Storage<K>,
+        reduction: Reduction,
+    ) -> Result<B::Storage<K>> {
+        let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
+        let sq = <B as NumericOps<B>>::mul::<K>(&diff, &diff)?;
+        match reduction {
+            Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&sq),
+            Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&sq),
+            Reduction::None => Ok(sq),
+        }
+    }
+
+    fn l1_loss<K: DType>(
+        pred: &B::Storage<K>,
+        target: &B::Storage<K>,
+        reduction: Reduction,
+    ) -> Result<B::Storage<K>> {
+        let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
+        let abs_diff = <B as FloatOps<B>>::abs::<K>(&diff)?;
+        match reduction {
+            Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&abs_diff),
+            Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&abs_diff),
+            Reduction::None => Ok(abs_diff),
+        }
+    }
+
+    fn bce_with_logits_loss<K: DType>(
+        pred: &B::Storage<K>,
+        target: &B::Storage<K>,
+        reduction: Reduction,
+    ) -> Result<B::Storage<K>> {
+        let max_x_0 = <B as FloatOps<B>>::relu::<K>(pred)?;
+        let x_times_z = <B as NumericOps<B>>::mul::<K>(pred, target)?;
+        let term1 = <B as NumericOps<B>>::sub::<K>(&max_x_0, &x_times_z)?;
+        let abs_x = <B as FloatOps<B>>::abs::<K>(pred)?;
+        let neg_abs_x = <B as FloatOps<B>>::neg::<K>(&abs_x)?;
+        let exp_neg_abs_x = <B as FloatOps<B>>::exp::<K>(&neg_abs_x)?;
+        let one_plus = <B as FloatOps<B>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
+        let term2 = <B as FloatOps<B>>::log::<K>(&one_plus)?;
+        let loss_elem = <B as NumericOps<B>>::add::<K>(&term1, &term2)?;
+        match reduction {
+            Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&loss_elem),
+            Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&loss_elem),
+            Reduction::None => Ok(loss_elem),
+        }
+    }
+
+    fn cross_entropy_loss<K: DType, KInt: DType>(
+        pred: &B::Storage<K>,
+        target: &B::Storage<KInt>,
+        reduction: Reduction,
+    ) -> Result<B::Storage<K>>;
+}
 
 pub(crate) trait OptimizerOps<B: VariableBackend + NumericOps<B> + FloatOps<B>> {
     fn adamw_step<K: DType>(

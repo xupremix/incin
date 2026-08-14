@@ -30,7 +30,8 @@ use incin_core::prelude::{
     Axis, BackendError, ConversionFailure, DType, DTypeId, Device, DimensionConstraint, Error,
     OperationKind, RankExpectation, Result, ShapeBuf, ShapeError, StorageBackend,
 };
-use incin_core::__backend_compat::legacy::{FloatOps, LossOps, NumericOps, ReductionOps};
+use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, ReductionOps};
+use crate::legacy::LossOps;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 

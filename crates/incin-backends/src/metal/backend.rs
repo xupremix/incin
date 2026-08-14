@@ -4,6 +4,7 @@ use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
 use incin_core::__backend_compat::legacy::*;
+use crate::legacy::LossOps;
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
 use incin_core::prelude::{
