@@ -23,6 +23,7 @@ pub use incin_core::prelude::{
 };
 
 mod canonical;
+mod capability;
 #[cfg(feature = "compiled")]
 pub mod compiled;
 #[cfg(feature = "compiled")]

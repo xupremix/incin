@@ -25,6 +25,7 @@ use incin_core::prelude::{
 };
 
 use super::CpuBackendImpl;
+use super::capability::CPU_NAME;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
 use super::ops::embedding::embedding_impl;
 use super::ops::elementwise::{
@@ -59,19 +60,12 @@ use super::ops::shape_ops::{
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
-impl<D: Device> Capabilities for CpuBackendImpl<D> {
-    fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-        crate::capability::support(DeviceKind::Cpu, query)
-    }
-}
-
 /// The name the CPU executors answer to when they refuse work.
 ///
 /// Read off the `StorageBackend` impl rather than spelled out again, so renaming
 /// the backend cannot leave this file naming one that no longer exists. The type
 /// parameters are arbitrary: `CpuBackendImpl` reports the same name for every
 /// instantiation, and the free helpers below have no `Self` to ask.
-const CPU_NAME: &str = <CpuBackendImpl<Cpu> as StorageBackend>::BACKEND_NAME;
 
 /// Recover CPU storage from a checked handle.
 ///

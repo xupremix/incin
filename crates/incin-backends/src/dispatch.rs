@@ -16,7 +16,6 @@ use incin_core::prelude::Wgpu;
 #[cfg(feature = "metal")]
 use incin_core::prelude::Metal;
 
-use incin_core::exec::{PrecisionCapabilities, PrecisionRequest, ResolvedPrecision};
 
 /// Backend whose concrete implementation is selected from a [`DeviceId`].
 #[derive(Clone)]
@@ -58,67 +57,6 @@ impl_dispatch_storage_dtype!(f32, f64, f16, bf16, u8, u32, i64, bool);
 impl<D: Device> SupportsDType<Dyn> for DispatchBackend<D> {
     fn resolve_dtype(field: &DTypeDescriptor, _device: &DeviceId) -> Result<DTypeDescriptor> {
         Ok(*field)
-    }
-}
-
-impl<D: Device> PrecisionCapabilities for DispatchBackend<D> {
-    fn native_precision(&self, request: &PrecisionRequest) -> Result<ResolvedPrecision> {
-        #[cfg(feature = "cpu")]
-        {
-            crate::cpu::CpuBackendImpl::<Cpu>::new().native_precision(request)
-        }
-        #[cfg(not(feature = "cpu"))]
-        {
-            Err(Error::BackendUnavailable {
-                backend: "DispatchBackend",
-            })
-        }
-    }
-}
-
-impl<D: Device> incin_core::exec::Capabilities for DispatchBackend<D> {
-    fn support(&self, query: &incin_core::exec::CapabilityQuery) -> incin_core::exec::SupportLevel {
-        #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda", feature = "metal"))]
-        {
-            // Delegate to whichever concrete backend is selected at runtime.
-            // The detailed per-operation answer is filled in by dispatch_executor.rs;
-            // here we provide the baseline so the trait is satisfied even in
-            // configurations where no single concrete backend is statically known.
-            #[cfg(feature = "cpu")]
-            {
-                crate::cpu::CpuBackendImpl::<Cpu>::default().support(query)
-            }
-            #[cfg(all(
-                not(feature = "cpu"),
-                any(feature = "wgpu", feature = "cuda", feature = "metal")
-            ))]
-            let _ = query;
-            #[cfg(all(
-                not(feature = "cpu"),
-                any(feature = "wgpu", feature = "cuda", feature = "metal")
-            ))]
-            incin_core::exec::SupportLevel::Native
-        }
-        #[cfg(not(any(feature = "cpu", feature = "wgpu", feature = "cuda", feature = "metal")))]
-        {
-            let incin_core::exec::OperationIdentity::Builtin(operation) = &query.operation else {
-                return incin_core::exec::SupportLevel::Unsupported(
-                    incin_core::exec::UnsupportedReason::CustomOperation {
-                        operation: match &query.operation {
-                            incin_core::exec::OperationIdentity::Custom(operation) => {
-                                operation.clone()
-                            }
-                            incin_core::exec::OperationIdentity::Builtin(_) => unreachable!(),
-                        },
-                    },
-                );
-            };
-            incin_core::exec::SupportLevel::Unsupported(
-                incin_core::exec::UnsupportedReason::Operation {
-                    operation: *operation,
-                },
-            )
-        }
     }
 }
 
