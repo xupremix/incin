@@ -5,6 +5,7 @@ use incin_core::prelude::{
     BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
     Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,
 };
+pub(crate) use crate::wgpu::capability::{native_precision, validate_wgpu_dtype};
 
 /// WebGPU compute backend implementation for Incin.
 #[derive(Clone)]
@@ -21,63 +22,6 @@ impl<D> WgpuBackendImpl<D> {
 impl<D> Default for WgpuBackendImpl<D> {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-macro_rules! impl_wgpu_supports_dtype {
-    ($($t:ty),*) => {
-        $(
-            impl<D: Device> SupportsDType<$t> for WgpuBackendImpl<D> {
-                fn resolve_dtype(field: &<$t as DType>::Field, _device: &DeviceId) -> Result<DTypeDescriptor> {
-                    let dt = <$t as DType>::descriptor(field);
-                    validate_wgpu_dtype(dt, "dtype")?;
-                    Ok(dt)
-                }
-            }
-        )*
-    };
-}
-
-impl_wgpu_supports_dtype!(f32, u32, i64, u8, half::f16, half::bf16);
-
-impl<D: Device> SupportsDType<Dyn> for WgpuBackendImpl<D> {
-    fn resolve_dtype(field: &DTypeDescriptor, _device: &DeviceId) -> Result<DTypeDescriptor> {
-        validate_wgpu_dtype(*field, "dtype")?;
-        Ok(*field)
-    }
-}
-
-pub(crate) fn validate_wgpu_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
-    if dtype.builtin_id() == Some(DTypeId::F32) {
-        Ok(())
-    } else {
-        Err(Error::UnsupportedDType {
-            dtype,
-            backend: "Wgpu",
-            op,
-        })
-    }
-}
-
-pub(crate) fn native_precision(
-    request: &incin_core::exec::PrecisionRequest,
-) -> Result<incin_core::exec::ResolvedPrecision> {
-    validate_wgpu_dtype(request.storage, "native_precision")?;
-    Ok(incin_core::exec::ResolvedPrecision::new(
-        request.storage,
-        DTypeId::F32.descriptor(),
-        DTypeId::F32.descriptor(),
-        request.output,
-        incin_core::exec::LossScaling::None,
-    ))
-}
-
-impl<D: Device> incin_core::exec::PrecisionCapabilities for WgpuBackendImpl<D> {
-    fn native_precision(
-        &self,
-        request: &incin_core::exec::PrecisionRequest,
-    ) -> Result<incin_core::exec::ResolvedPrecision> {
-        native_precision(request)
     }
 }
 
