@@ -91,9 +91,9 @@ pub mod backend_authoring {
     /// [`Execute`] and exact operation descriptors instead.
     #[doc(hidden)]
     pub mod legacy {
-        pub use crate::tensor::backend::{
-            adamw_step_composed, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps,
-            OptimizerOps, QuantizedOps, ReductionOps, TensorOps,
+        pub use crate::tensor::backend::legacy::{
+            CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, OptimizerOps, QuantizedOps,
+            ReductionOps, TensorOps, adamw_step_composed,
         };
     }
     /// Read the tracing graph mid-flight, without draining it.

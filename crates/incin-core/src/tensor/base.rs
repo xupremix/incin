@@ -1208,7 +1208,7 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
 
 impl<
     S: crate::prelude::Shape,
-    B: crate::prelude::Backend + crate::tensor::backend::TensorOps<B>,
+    B: crate::prelude::Backend + crate::tensor::backend::legacy::TensorOps<B>,
     K: DType,
     G: RequiresGrad,
     P: Placement,
@@ -1257,7 +1257,7 @@ impl<
 
 impl<
     S: crate::prelude::Shape,
-    B: crate::prelude::Backend + crate::tensor::backend::TensorOps<B>,
+    B: crate::prelude::Backend + crate::tensor::backend::legacy::TensorOps<B>,
     K: DType,
     G: RequiresGrad,
     P: Placement,

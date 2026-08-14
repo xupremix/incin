@@ -1,6 +1,6 @@
 //! Legacy optimizer adapter kept behind `backend_authoring::legacy`.
 
-use super::{Backend, FloatOps, NumericOps, VariableBackend};
+use super::{Backend, VariableBackend, legacy::{FloatOps, NumericOps}};
 use crate::err::Result;
 use crate::tensor::dtype::DType;
 

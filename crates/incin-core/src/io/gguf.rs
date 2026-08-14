@@ -1,7 +1,8 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::nn::StateDict;
-use crate::tensor::backend::{Backend, QuantizedOps, SupportsDType};
+use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::backend::legacy::QuantizedOps;
 use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
 use alloc::format;

@@ -1,5 +1,7 @@
 use super::*;
 
+pub use super::optimizer::{OptimizerOps, adamw_step_composed};
+
 pub trait FloatOps<B: Backend> {
     /// Rectified linear unit: `max(0, x)`.
     fn relu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>>;

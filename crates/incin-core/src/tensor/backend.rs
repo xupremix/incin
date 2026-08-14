@@ -17,8 +17,8 @@ mod capability;
 pub use capability::{HostInterop, TransferBackend};
 mod optimizer;
 pub use optimizer::{OptimizerOps, adamw_step_composed};
-mod legacy;
-pub use legacy::{CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps, TensorOps};
+pub mod legacy;
+use legacy::TensorOps;
 pub mod dummy {
     pub use super::legacy::DummyBackend;
 }

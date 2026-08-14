@@ -4,7 +4,7 @@
 //! [`Backend`](super::Backend) contract. They deliberately do not introduce a
 //! runtime/session abstraction: ownership remains with the backend type.
 
-use super::{StorageBackend, TensorOps};
+use super::{StorageBackend, legacy::TensorOps};
 use crate::err::Result;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};

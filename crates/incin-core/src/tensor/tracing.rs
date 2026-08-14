@@ -9,6 +9,7 @@ use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use alloc::vec::Vec;
 use crate::tensor::backend::*;
+use crate::tensor::backend::legacy::{CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 // removed RefCell
 use spin::{Lazy, Mutex};
 
@@ -793,9 +794,9 @@ impl<B: Backend> Backend for TracingBackend<B> {
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
-        Self: crate::tensor::backend::TensorOps<Self>,
+        Self: crate::tensor::backend::legacy::TensorOps<Self>,
     {
-        use crate::tensor::backend::TensorOps;
+        use crate::tensor::backend::legacy::TensorOps;
         use crate::tensor::display::{Values, render};
         let shape = <Self as crate::tensor::backend::StorageBackend>::shape(t);
         match <Self as crate::tensor::backend::StorageBackend>::storage_dtype(t) {
@@ -819,7 +820,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
     ) -> alloc::string::String
     where
-        Self: crate::tensor::backend::TensorOps<Self>,
+        Self: crate::tensor::backend::legacy::TensorOps<Self>,
     {
         <Self as Backend>::format_tensor_display::<K>(t)
     }
@@ -2353,7 +2354,7 @@ impl<B: Backend + TensorOps<B>> TensorOps<Self> for TracingBackend<B> {
     }
 }
 
-impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::legacy::ModuleOps<B>> ModuleOps<Self> for TracingBackend<B> {
     /// Delegates to `B::conv1d`, additionally recording an
     /// `OperationKind::Conv1d` node with `strides`/`pads`/`dilations` attributes.
     fn conv1d<K: super::dtype::DType>(
@@ -2611,7 +2612,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
     }
 }
 
-impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::legacy::LossOps<B>> LossOps<Self> for TracingBackend<B> {
     /// Delegates to `B::cross_entropy_loss`, additionally recording an `OperationKind::CrossEntropyLoss` node.
     fn cross_entropy_loss<K: super::dtype::DType, KInt: super::dtype::DType>(
         logits: &<Self as StorageBackend>::Storage<K>,
