@@ -38,7 +38,7 @@ pub use typenum;
 /// Implementation details used by procedural macros expanded inside this crate.
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::nn::{ComputeStats, LayerStats, StateLoadPlan, StatePath, StateSnapshot};
+    pub use crate::nn::{ComputeStats, LayerStats, StateLoadPlan, StatePath, StateSnapshot, StateVisitor, VisitState};
     pub use crate::tensor::backend::{SupportsDType, TransferTo};
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 }
@@ -190,7 +190,7 @@ pub mod prelude {
         param::{Buffer, Frozen, Param, TrainState, Trainable},
         rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm},
         rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell},
-        state::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue},
+        state::{StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState},
         stats::{ComputeStats, LayerStats, ModelStats},
     };
     pub use crate::seq;

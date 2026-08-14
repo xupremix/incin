@@ -132,6 +132,37 @@ pub enum StateRole {
     Buffer,
 }
 
+/// Receives typed state leaves during module traversal.
+pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType,
+        Train: crate::nn::param::TrainState;
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        buffer: &crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType;
+}
+
+/// Structural traversal of typed parameter and buffer leaves.
+pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
+    fn visit_state<V: StateVisitor<B>>(
+        &self,
+        path: &StatePath,
+        visitor: &mut V,
+    ) -> Result<()>;
+}
+
 /// One owned, exact-dtype state value.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StateValue {

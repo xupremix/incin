@@ -591,6 +591,18 @@ where
     }
 }
 
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> crate::nn::VisitState<B>
+    for Param<S, B, K, Train>
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit_param(path, self)
+    }
+}
+
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Parameters<B, K> for Param<S, B, K, Train> {
     fn named_parameters(
         &self,
@@ -889,6 +901,18 @@ where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
     {
         Self::ones_raw(args.into_arg())
+    }
+}
+
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> crate::nn::VisitState<B>
+    for Buffer<S, B, K>
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit_buffer(path, self)
     }
 }
 
