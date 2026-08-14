@@ -1,5 +1,5 @@
-//! `CreationOps` for `CpuBackendImpl<D>`: `zeros`/`ones`/`rand`/`randn` and
-//! their `var_*` counterparts.
+//! CPU creation kernels and their backend-local helper entry points:
+//! `zeros`/`ones`/`rand`/`randn` and their `var_*` counterparts.
 //!
 //! `rand` uses `rand::distributions::Uniform` (uniform `[0.0, 1.0)`);
 //! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
@@ -8,10 +8,9 @@
 use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::{
     Backend, ConversionFailure, Device, DeviceId, DeviceKind, DType, DTypeDescriptor, DTypeId,
-    Error, FloatToIntPolicy, OperationKind, Result, StorageBackend, StorageTransfer,
+    Error, FloatToIntPolicy, OperationKind, Result, StorageTransfer,
     convert_f64_to_i64,
 };
-use incin_core::__backend_compat::legacy::CreationOps;
 #[allow(unused_imports)]
 use rand::Rng;
 #[allow(unused_imports)]
@@ -373,123 +372,6 @@ pub(crate) fn linspace_with_total(
     Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
 }
 
-impl<D: Device> CreationOps<Self> for CpuBackendImpl<D> {
-    /// `zeros`.
-    fn zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        zeros_with_total(total, shape, dtype, device)
-    }
-
-    /// `ones`.
-    fn ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        ones_with_total(total, shape, dtype, device)
-    }
-
-    /// `rand`.
-    fn rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        rand_with_total(total, shape, dtype, device)
-    }
-
-    /// `randn`.
-    fn randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        randn_with_total(total, shape, dtype, device)
-    }
-
-    /// `full`.
-    fn full<K: DType>(
-        val: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        full_with_total(total, val, shape, dtype, device)
-    }
-
-    /// `arange`.
-    fn arange<K: DType>(
-        start: f64,
-        step: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        arange_with_total(total, start, step, shape, dtype, device)
-    }
-
-    /// `linspace`.
-    fn linspace<K: DType>(
-        start: f64,
-        end: f64,
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        linspace_with_total(total, start, end, shape, dtype, device)
-    }
-
-    /// `var_zeros`.
-    fn var_zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_zeros_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_ones`.
-    fn var_ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_ones_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_rand`.
-    fn var_rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_rand_with_total(total, shape, dtype, device)
-    }
-
-    /// `var_randn`.
-    fn var_randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
-        let total = crate::cpu::stride::checked_numel(shape)?;
-        var_randn_with_total(total, shape, dtype, device)
-    }
-}
-
 /// `var_zeros`, given an already-known element count. See [`zeros_with_total`].
 pub(crate) fn var_zeros_with_total(
     total: usize,
@@ -530,10 +412,62 @@ pub(crate) fn var_randn_with_total(
     var::var_from_tensor(&randn_with_total(total, shape, dtype, device)?)
 }
 
+/// Inherent creation entry points used by runtime dispatch.
+///
+/// These wrappers keep dispatch on ordinary CPU helpers. The descriptor
+/// executors use the same helpers directly, so runtime-selected creation does
+/// not need the historical `CreationOps` family as an adapter.
+impl<D: Device> CpuBackendImpl<D> {
+    pub(crate) fn zeros<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        zeros_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn ones<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        ones_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn rand<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        rand_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn randn<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        randn_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn full<K: DType>(value: f64, shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        full_with_total(crate::cpu::stride::checked_numel(shape)?, value, shape, dtype, device)
+    }
+
+    pub(crate) fn arange<K: DType>(start: f64, step: f64, shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        arange_with_total(crate::cpu::stride::checked_numel(shape)?, start, step, shape, dtype, device)
+    }
+
+    pub(crate) fn linspace<K: DType>(start: f64, end: f64, shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<CpuStorage> {
+        linspace_with_total(crate::cpu::stride::checked_numel(shape)?, start, end, shape, dtype, device)
+    }
+
+    pub(crate) fn var_zeros<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<var::CpuVar> {
+        var_zeros_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn var_ones<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<var::CpuVar> {
+        var_ones_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn var_rand<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<var::CpuVar> {
+        var_rand_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+
+    pub(crate) fn var_randn<K: DType>(shape: &[usize], dtype: DTypeDescriptor, device: &DeviceId) -> Result<var::CpuVar> {
+        var_randn_with_total(crate::cpu::stride::checked_numel(shape)?, shape, dtype, device)
+    }
+}
+
 #[cfg(test)]
 /// `tests`.
 mod tests {
     use super::*;
+    use incin_core::backend_authoring::VariableBackend;
     use incin_core::prelude::{Backend, Cpu};
 
     /// `TestBackend`.
@@ -542,6 +476,10 @@ mod tests {
     /// `dev`.
     fn dev() -> DeviceId {
         DeviceId::cpu()
+    }
+
+    fn total(shape: &[usize]) -> usize {
+        crate::cpu::stride::checked_numel(shape).unwrap()
     }
 
     /// `f32_vec`.
@@ -555,7 +493,7 @@ mod tests {
     #[test]
     /// `zeros_produces_correct_shape_and_all_zero_values`.
     fn zeros_produces_correct_shape_and_all_zero_values() {
-        let t = TestBackend::zeros::<f32>(&[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = zeros_with_total(total(&[2, 3]), &[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
         assert!(f32_vec(&t).iter().all(|&v| v == 0.0));
     }
@@ -563,7 +501,7 @@ mod tests {
     #[test]
     /// `ones_produces_correct_shape_and_all_one_values`.
     fn ones_produces_correct_shape_and_all_one_values() {
-        let t = TestBackend::ones::<f32>(&[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = ones_with_total(total(&[2, 3]), &[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
         assert!(f32_vec(&t).iter().all(|&v| v == 1.0));
     }
@@ -571,7 +509,7 @@ mod tests {
     #[test]
     /// `Dyn` carries its runtime dtype through backend creation.
     fn dyn_dtype_uses_runtime_buffer_variant() {
-        let t = TestBackend::ones::<Dyn>(&[2], DTypeId::F64.descriptor(), &dev()).unwrap();
+        let t = ones_with_total(total(&[2]), &[2], DTypeId::F64.descriptor(), &dev()).unwrap();
         assert!(matches!(&*t.buffer, CpuBuffer::F64(values) if values == &vec![1.0, 1.0]));
     }
 
@@ -585,7 +523,7 @@ mod tests {
             (256.0, DTypeId::U8.descriptor()),
         ] {
             assert!(matches!(
-                TestBackend::full::<Dyn>(value, &[1], dtype, &dev()),
+                full_with_total(total(&[1]), value, &[1], dtype, &dev()),
                 Err(Error::InvalidConversion { .. })
             ));
         }
@@ -594,7 +532,7 @@ mod tests {
     #[test]
     fn integer_ranges_reject_fractional_values() {
         assert!(matches!(
-            TestBackend::arange::<Dyn>(0.5, 1.0, &[2], DTypeId::I64.descriptor(), &dev()),
+            arange_with_total(total(&[2]), 0.5, 1.0, &[2], DTypeId::I64.descriptor(), &dev()),
             Err(Error::InvalidConversion {
                 operation: "arange",
                 reason: ConversionFailure::Fractional,
@@ -602,7 +540,7 @@ mod tests {
             })
         ));
         assert!(matches!(
-            TestBackend::linspace::<Dyn>(0.0, 1.0, &[3], DTypeId::I64.descriptor(), &dev()),
+            linspace_with_total(total(&[3]), 0.0, 1.0, &[3], DTypeId::I64.descriptor(), &dev()),
             Err(Error::InvalidConversion {
                 operation: "linspace",
                 reason: ConversionFailure::Fractional,
@@ -614,7 +552,7 @@ mod tests {
     #[test]
     /// `rand_produces_values_in_zero_one_range`.
     fn rand_produces_values_in_zero_one_range() {
-        let t = TestBackend::rand::<f32>(&[100], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = rand_with_total(total(&[100]), &[100], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![100]);
         let data = f32_vec(&t);
         assert_eq!(data.len(), 100);
@@ -624,7 +562,7 @@ mod tests {
     #[test]
     /// `randn_produces_statistically_plausible_standard_normal_samples`.
     fn randn_produces_statistically_plausible_standard_normal_samples() {
-        let t = TestBackend::randn::<f32>(&[1000], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = randn_with_total(total(&[1000]), &[1000], DTypeId::F32.descriptor(), &dev()).unwrap();
         let data = f32_vec(&t);
         assert_eq!(data.len(), 1000);
         let n = data.len() as f64;
@@ -641,8 +579,7 @@ mod tests {
     #[test]
     /// `var_zeros_wraps_equivalent_zeros_result`.
     fn var_zeros_wraps_equivalent_zeros_result() {
-        let var =
-            TestBackend::var_zeros::<f32>(&[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_zeros_with_total(total(&[2, 2]), &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![2, 2]);
         assert!(f32_vec(&t).iter().all(|&v| v == 0.0));
@@ -651,7 +588,7 @@ mod tests {
     #[test]
     /// `var_ones_wraps_equivalent_ones_result`.
     fn var_ones_wraps_equivalent_ones_result() {
-        let var = TestBackend::var_ones::<f32>(&[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_ones_with_total(total(&[2, 2]), &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![2, 2]);
         assert!(f32_vec(&t).iter().all(|&v| v == 1.0));
@@ -660,7 +597,7 @@ mod tests {
     #[test]
     /// `var_rand_wraps_equivalent_rand_result`.
     fn var_rand_wraps_equivalent_rand_result() {
-        let var = TestBackend::var_rand::<f32>(&[10], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_rand_with_total(total(&[10]), &[10], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![10]);
         assert!(f32_vec(&t).iter().all(|&v| (0.0..1.0).contains(&v)));
@@ -669,7 +606,7 @@ mod tests {
     #[test]
     /// `var_randn_wraps_equivalent_randn_result`.
     fn var_randn_wraps_equivalent_randn_result() {
-        let var = TestBackend::var_randn::<f32>(&[50], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_randn_with_total(total(&[50]), &[50], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![50]);
     }
@@ -678,7 +615,7 @@ mod tests {
     #[test]
     /// Same-device transfer returns equivalent destination-native storage.
     fn transfer_to_cpu_returns_equivalent_storage() {
-        let t = TestBackend::zeros::<f32>(&[3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = zeros_with_total(total(&[3]), &[3], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t2 = <TestBackend as StorageTransfer<Cpu>>::transfer_storage::<f32>(
             &t,
             &Default::default(),
