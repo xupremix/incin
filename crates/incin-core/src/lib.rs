@@ -180,6 +180,7 @@ pub mod prelude {
         param::{Buffer, Frozen, Param, TrainState, Trainable},
         rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm},
         rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell},
+        state::{StatePath, StateRole, StateSnapshot, StateValue},
         stats::{ComputeStats, LayerStats, ModelStats},
     };
     pub use crate::seq;

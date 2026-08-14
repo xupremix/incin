@@ -88,6 +88,8 @@ pub mod rnn;
 #[cfg(feature = "std")]
 /// `save`.
 pub mod save;
+/// Backend-neutral model state artifacts.
+pub mod state;
 /// `stats`.
 pub mod stats;
 
@@ -113,4 +115,5 @@ pub use rms_norm::*;
 pub use rnn::*;
 #[cfg(feature = "std")]
 pub use save::*;
+pub use state::{StatePath, StateRole, StateSnapshot, StateValue};
 pub use stats::*;
