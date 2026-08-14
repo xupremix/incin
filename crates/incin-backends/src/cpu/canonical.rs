@@ -23,7 +23,7 @@ use incin_core::exec::{
 use incin_core::prelude::{
     BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Q8_0, Reduction,
 };
-use incin_core::__backend_compat::legacy::{FloatOps, QuantizedOps, TensorOps};
+use incin_core::__backend_compat::legacy::{QuantizedOps, TensorOps};
 use crate::legacy::LossOps;
 
 use super::CpuBackendImpl;
@@ -1047,8 +1047,8 @@ impl<D: Device> Execute<op::EmbeddingExact> for CpuBackendImpl<D> {
     }
 }
 
-// Canonical elementwise executors use concrete CPU helpers. FloatOps remains
-// available to internal composed kernels and legacy tensor adapters.
+// Canonical elementwise executors use concrete CPU helpers; no operation-family
+// trait is needed on this execution path.
 
 macro_rules! canonical_unary_executors {
     ($(($operation:ident, $helper:ident)),* $(,)?) => {
@@ -2293,7 +2293,7 @@ impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
             return Ok(input.clone());
         }
         if attributes.probability >= 1.0 {
-            return <Self as FloatOps<Self>>::mul_scalar_float::<f32>(input, 0.0).map_err(wrap);
+            return canonical_mul_scalar(input, 0.0).map_err(wrap);
         }
 
         let metadata = input.metadata();
@@ -2308,16 +2308,10 @@ impl<D: Device> Execute<op::Dropout> for CpuBackendImpl<D> {
         // `step` is one above zero and zero at or below it, so shifting the
         // uniform draw down by the probability turns it into the mask directly
         // and keeps exactly the share of elements the attribute asked for.
-        let shifted =
-            <Self as FloatOps<Self>>::add_scalar_float::<f32>(&draw, -attributes.probability)
-                .map_err(wrap)?;
-        let mask = <Self as FloatOps<Self>>::step::<f32>(&shifted).map_err(wrap)?;
+        let shifted = canonical_add_scalar(&draw, -attributes.probability).map_err(wrap)?;
+        let mask = canonical_step(&shifted).map_err(wrap)?;
         let kept = crate::cpu::ops::elementwise::mul_storage(input, &mask).map_err(wrap)?;
-        <Self as FloatOps<Self>>::mul_scalar_float::<f32>(
-            &kept,
-            1.0 / (1.0 - attributes.probability),
-        )
-        .map_err(wrap)
+        canonical_mul_scalar(&kept, 1.0 / (1.0 - attributes.probability)).map_err(wrap)
     }
 }
 
@@ -2391,9 +2385,8 @@ impl<D: Device> Execute<op::RmsNorm> for CpuBackendImpl<D> {
         let axis = input.shape.len().saturating_sub(1);
         let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
         let mean = crate::cpu::ops::reduce::mean_keepdim(&squared, axis).map_err(wrap)?;
-        let guarded =
-            <Self as FloatOps<Self>>::add_scalar_float::<f32>(&mean, epsilon).map_err(wrap)?;
-        let scale = <Self as FloatOps<Self>>::sqrt::<f32>(&guarded).map_err(wrap)?;
+        let guarded = canonical_add_scalar(&mean, epsilon).map_err(wrap)?;
+        let scale = canonical_sqrt(&guarded).map_err(wrap)?;
         let normalized = crate::cpu::ops::elementwise::div_storage(input, &scale).map_err(wrap)?;
         crate::cpu::ops::elementwise::mul_storage(&normalized, weight).map_err(wrap)
     }
@@ -2866,7 +2859,7 @@ macro_rules! variance_executors {
                 let squared = squared_deviations(input, &mean, operation)?;
                 let summed = <Self as VarianceAxis<D>>::$reduce(&squared, attributes)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
-                let scaled = <Self as FloatOps<Self>>::mul_scalar_float::<f32>(
+                let scaled = canonical_mul_scalar(
                     &summed,
                     variance_scale(count, attributes.unbiased),
                 )
@@ -2956,7 +2949,8 @@ fn identity(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
 }
 
 fn square_root<D: Device>(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
-    <CpuBackendImpl<D> as FloatOps<CpuBackendImpl<D>>>::sqrt::<f32>(storage)
+    let _ = core::marker::PhantomData::<D>;
+    canonical_sqrt(storage)
 }
 
 variance_executors![
@@ -3003,18 +2997,18 @@ impl<D: Device> Execute<op::Norm> for CpuBackendImpl<D> {
         let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
         if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
-            let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
+            let magnitude = canonical_abs(input).map_err(wrap)?;
             return crate::cpu::ops::reduce::sum_all(&magnitude).map_err(wrap);
         }
         if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
             let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
             let summed = crate::cpu::ops::reduce::sum_all(&squared).map_err(wrap)?;
-            return <Self as FloatOps<Self>>::sqrt::<f32>(&summed).map_err(wrap);
+            return canonical_sqrt(&summed).map_err(wrap);
         }
-        let magnitude = <Self as FloatOps<Self>>::abs::<f32>(input).map_err(wrap)?;
-        let raised = <Self as FloatOps<Self>>::powf::<f32>(&magnitude, order).map_err(wrap)?;
+        let magnitude = canonical_abs(input).map_err(wrap)?;
+        let raised = canonical_powf(&magnitude, order).map_err(wrap)?;
         let summed = crate::cpu::ops::reduce::sum_all(&raised).map_err(wrap)?;
-        <Self as FloatOps<Self>>::powf::<f32>(&summed, 1.0 / order).map_err(wrap)
+        canonical_powf(&summed, 1.0 / order).map_err(wrap)
     }
 }
 
