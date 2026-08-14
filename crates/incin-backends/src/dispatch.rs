@@ -435,6 +435,81 @@ macro_rules! cpu_unary_call {
     (mul_scalar_float, $value:expr, $scalar:expr) => {
         crate::cpu::ops::elementwise::canonical_mul_scalar($value, $scalar)
     };
+    (powf, $value:expr, $exponent:expr) => {
+        crate::cpu::ops::elementwise::canonical_powf($value, $exponent)
+    };
+    (clamp, $value:expr, $min:expr, $max:expr) => {
+        crate::cpu::ops::elementwise::canonical_clamp($value, $min, $max)
+    };
+    (tan, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_tan($value)
+    };
+    (asin, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_asin($value)
+    };
+    (acos, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_acos($value)
+    };
+    (atan, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_atan($value)
+    };
+    (sinh, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_sinh($value)
+    };
+    (cosh, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_cosh($value)
+    };
+    (asinh, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_asinh($value)
+    };
+    (acosh, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_acosh($value)
+    };
+    (atanh, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_atanh($value)
+    };
+    (erf, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_erf($value)
+    };
+    (rsqrt, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_rsqrt($value)
+    };
+    (trunc, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_trunc($value)
+    };
+    (frac, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_frac($value)
+    };
+    (floor, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Floor,
+            $value,
+        )
+    };
+    (ceil, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Ceil,
+            $value,
+        )
+    };
+    (round, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Round,
+            $value,
+        )
+    };
+    (log2, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Log2,
+            $value,
+        )
+    };
+    (log10, $value:expr) => {
+        crate::cpu::ops::elementwise::canonical_unary(
+            crate::cpu::ops::elementwise_kernel::UnaryOp::Log10,
+            $value,
+        )
+    };
     ($method:ident, $value:expr $(, $arg:expr)*) => {
         crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
     };
