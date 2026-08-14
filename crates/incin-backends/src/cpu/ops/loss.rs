@@ -35,6 +35,51 @@ use crate::legacy::LossOps;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
+fn reduce_loss(t: CpuStorage, reduction: Reduction) -> Result<CpuStorage> {
+    match reduction {
+        Reduction::Mean => crate::cpu::ops::reduce::mean_all(&t),
+        Reduction::Sum => crate::cpu::ops::reduce::sum_all(&t),
+        Reduction::None => Ok(t),
+    }
+}
+
+pub(crate) fn mse_loss_storage(
+    pred: &CpuStorage,
+    target: &CpuStorage,
+    reduction: Reduction,
+) -> Result<CpuStorage> {
+    let diff = crate::cpu::ops::elementwise::sub_storage(pred, target)?;
+    let squared = crate::cpu::ops::elementwise::mul_storage(&diff, &diff)?;
+    reduce_loss(squared, reduction)
+}
+
+pub(crate) fn l1_loss_storage(
+    pred: &CpuStorage,
+    target: &CpuStorage,
+    reduction: Reduction,
+) -> Result<CpuStorage> {
+    let diff = crate::cpu::ops::elementwise::sub_storage(pred, target)?;
+    let absolute = crate::cpu::ops::elementwise::canonical_abs(&diff)?;
+    reduce_loss(absolute, reduction)
+}
+
+pub(crate) fn bce_with_logits_loss_storage(
+    pred: &CpuStorage,
+    target: &CpuStorage,
+    reduction: Reduction,
+) -> Result<CpuStorage> {
+    let max_x_0 = crate::cpu::ops::elementwise::canonical_relu(pred)?;
+    let x_times_z = crate::cpu::ops::elementwise::mul_storage(pred, target)?;
+    let term1 = crate::cpu::ops::elementwise::sub_storage(&max_x_0, &x_times_z)?;
+    let abs_x = crate::cpu::ops::elementwise::canonical_abs(pred)?;
+    let neg_abs_x = crate::cpu::ops::elementwise::canonical_neg(&abs_x)?;
+    let exp_neg_abs_x = crate::cpu::ops::elementwise::canonical_exp(&neg_abs_x)?;
+    let one_plus = crate::cpu::ops::elementwise::canonical_add_scalar(&exp_neg_abs_x, 1.0)?;
+    let term2 = crate::cpu::ops::elementwise::canonical_log(&one_plus)?;
+    let loss = crate::cpu::ops::elementwise::add_storage(&term1, &term2)?;
+    reduce_loss(loss, reduction)
+}
+
 impl<D: Device> LossOps<Self> for CpuBackendImpl<D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).

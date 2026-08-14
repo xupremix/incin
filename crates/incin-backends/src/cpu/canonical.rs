@@ -39,6 +39,7 @@ use super::ops::elementwise::{
 };
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
+use super::ops::loss::{bce_with_logits_loss_storage, l1_loss_storage, mse_loss_storage};
 use super::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
 use super::ops::shape_ops::{
     broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
@@ -3003,7 +3004,7 @@ macro_rules! loss_executors {
                 let reduction = loss_reduction(
                     request.operation.descriptor().attributes().reduction,
                 );
-                <Self as LossOps<Self>>::$method::<f32>(prediction, target, reduction)
+                $method(prediction, target, reduction)
                     .map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -3024,9 +3025,9 @@ fn loss_reduction(reduction: LossReduction) -> Reduction {
 }
 
 loss_executors![
-    (MseLoss, mse_loss),
-    (L1Loss, l1_loss),
-    (BceWithLogitsLoss, bce_with_logits_loss),
+    (MseLoss, mse_loss_storage),
+    (L1Loss, l1_loss_storage),
+    (BceWithLogitsLoss, bce_with_logits_loss_storage),
 ];
 
 /// Negative log likelihood over logits addressed by integer class targets.
