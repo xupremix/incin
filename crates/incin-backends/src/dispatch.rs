@@ -530,9 +530,6 @@ macro_rules! cpu_unary_call {
             $value,
         )
     };
-    ($method:ident, $value:expr $(, $arg:expr)*) => {
-        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
-    };
 }
 
 macro_rules! dispatch_unary {
@@ -575,9 +572,6 @@ macro_rules! cpu_reduction_call {
     (prod_all, $value:expr) => { crate::cpu::ops::reduce::prod_all($value) };
     (prod_dim, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::prod_dim($value, $dim) };
     (cumsum, $value:expr, $dim:expr) => { crate::cpu::ops::reduce::cumsum($value, $dim) };
-    ($method:ident, $value:expr $(, $arg:expr)*) => {
-        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
-    };
 }
 
 macro_rules! dispatch_reduction_unary {
@@ -619,9 +613,6 @@ macro_rules! cpu_shape_call {
     (pixel_shuffle, $value:expr, $factor:expr) => { crate::cpu::ops::shape_ops::pixel_shuffle_storage($value, $factor) };
     (group_norm, $value:expr, $groups:expr, $eps:expr) => { crate::cpu::ops::shape_ops::group_norm_storage($value, $groups, $eps) };
     (instance_norm, $value:expr, $eps:expr) => { crate::cpu::ops::shape_ops::instance_norm_storage($value, $eps) };
-    ($method:ident, $value:expr $(, $arg:expr)*) => {
-        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
-    };
 }
 
 macro_rules! dispatch_shape_unary {
@@ -764,9 +755,6 @@ macro_rules! cpu_binary_call {
     };
     (abs_diff, $lhs:expr, $rhs:expr) => {
         crate::cpu::ops::shape_ops::elementwise_float_binary($lhs, $rhs, |a, b| (a - b).abs())
-    };
-    ($method:ident, $lhs:expr, $rhs:expr) => {
-        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($lhs, $rhs)
     };
 }
 
