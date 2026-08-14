@@ -158,10 +158,12 @@ backend's float element), gradient-tracking marker (`Grad` or `NoGrad`,
 defaults to `Grad`), and placement (defaults to `Local`). Most code only ever
 writes the first two.
 
-The stable construction story is the classic typed constructor (plus the
-`tensor!` literal convenience). The opt-in `target-api` spelling is an
-additive allocation-target surface; it lowers to the same descriptor
-execution architecture and does not introduce a second tensor runtime:
+The stable default-build construction story is the classic typed constructor
+(plus the `tensor!` literal convenience). When the opt-in `target-api` feature
+is enabled, its allocation-target spelling is the preferred application
+surface; it lowers to the same descriptor execution architecture and does not
+introduce a second tensor runtime. Projects that do not opt in retain the
+constructor as their canonical allocation API:
 
 ```rust
 // 1. The classic constructor: shape is the type parameter, `Arg` is the
@@ -302,10 +304,12 @@ an alternate stable tensor execution path.
 
 ## 7. The target API: allocation targets
 
-The target API is Incin's preferred allocation UX: choose the device at the
-call site (`Cpu.zeros(...)`, `Wgpu::new(0).zeros(...)`) and let the target
-select the backend. `Tensor::<S, B>::zeros(...)` remains the explicit
-constructor form for backend authors and code that intentionally fixes `B`.
+With `target-api` enabled, the target API is Incin's preferred application
+allocation UX: choose the device at the call site (`Cpu.zeros(...)`,
+`Wgpu::new(0).zeros(...)`) and let the target select the backend.
+`Tensor::<S, B>::zeros(...)` remains the stable default-build API and the
+explicit constructor form for backend authors or code that intentionally fixes
+`B`.
 
 Feature `target-api`. A **target** is a value that knows where and how to
 allocate — a device (`Cpu`, `Wgpu::new(0)`, ...) or a backend value rebound to
