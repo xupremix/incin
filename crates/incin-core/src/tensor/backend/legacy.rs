@@ -89,20 +89,6 @@ pub trait FloatOps<B: Backend> {
     fn remainder<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
 }
 
-// NumericOps operates generically over any TensorKind!
-/// Elementwise binary arithmetic with NumPy-style broadcasting (any
-/// mismatched dimension must be size 1 on one side).
-pub trait NumericOps<B: Backend> {
-    /// Elementwise addition: `lhs + rhs`.
-    fn add<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Elementwise subtraction: `lhs - rhs`.
-    fn sub<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Elementwise multiplication: `lhs * rhs`.
-    fn mul<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Elementwise division: `lhs / rhs`.
-    fn div<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-}
-
 /// Shape, layout, and dtype manipulation that doesn't change element
 /// values (aside from `tensor_to_dtype`'s cast) --- reshapes, views,
 /// concatenation, and host-readback conversions.

@@ -141,7 +141,7 @@ pub mod backend_authoring {
 pub mod __backend_compat {
     pub mod legacy {
         pub use crate::tensor::backend::legacy::{
-            FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+            FloatOps, ModuleOps, ReductionOps, TensorOps,
         };
     }
 }

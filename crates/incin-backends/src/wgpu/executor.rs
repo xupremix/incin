@@ -8,7 +8,7 @@
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
-use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, ReductionOps, TensorOps};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
@@ -61,7 +61,7 @@ macro_rules! impl_wgpu_canonical {
                 };
                 let lhs = lhs.downcast_ref::<WgpuStorage>().ok_or_else(|| invalid(operation, "operand is not WGPU storage"))?;
                 let rhs = rhs.downcast_ref::<WgpuStorage>().ok_or_else(|| invalid(operation, "operand is not WGPU storage"))?;
-                <Self as NumericOps<Self>>::$method::<f32>(lhs, rhs)
+                Self::$method::<f32>(lhs, rhs)
                     .map_err(|error| kernel_error("Wgpu", operation, error))
             }
         }

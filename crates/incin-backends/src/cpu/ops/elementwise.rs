@@ -637,10 +637,10 @@ fn erf_approx(x: f64) -> f64 {
 }
 
 // The four pointwise binary kernels below are free functions rather than trait
-// bodies because two entry points now need them: `NumericOps` for the legacy
+// bodies because two entry points now need them: `` for the legacy
 // tensor surface, and the canonical `Execute<op::Add>` executor in
 // `cpu::canonical`. Keeping one body means the descriptor path cannot drift
-// from the path it is replacing, and when `NumericOps` is deleted these
+// from the path it is replacing, and when `` is deleted these
 // functions stay exactly as they are.
 
 /// Broadcast elementwise addition, with its gradient recorded.

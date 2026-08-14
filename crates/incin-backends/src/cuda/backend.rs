@@ -935,7 +935,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
         let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
-        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+        Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU
     /// and WGPU.
@@ -968,7 +968,7 @@ impl<D: Device> TensorOps<Self> for CudaBackendImpl<D> {
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
-            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+            Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
@@ -1414,29 +1414,29 @@ pub(crate) fn cuda_div_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<C
     Ok(out)
 }
 
-impl<D: Device> NumericOps<Self> for CudaBackendImpl<D> {
-    fn add<K: DType>(
+impl<D: Device> CudaBackendImpl<D> {
+    pub fn add<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_add_storage(lhs, rhs)
     }
 
-    fn sub<K: DType>(
+    pub fn sub<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_sub_storage(lhs, rhs)
     }
 
-    fn mul<K: DType>(
+    pub fn mul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         cuda_mul_storage(lhs, rhs)
     }
 
-    fn div<K: DType>(
+    pub fn div<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2682,7 +2682,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         match bias {
             Some(bv) => {
                 let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1])?;
-                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+                Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
         }
@@ -2760,7 +2760,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         match bias {
             Some(bv) => {
                 let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
-                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+                Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
         }
@@ -2866,7 +2866,7 @@ impl<D: Device> ModuleOps<Self> for CudaBackendImpl<D> {
         match bias {
             Some(bv) => {
                 let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
-                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+                Self::add::<K>(&conv_out, &bias_shaped)
             }
             None => Ok(conv_out),
         }
@@ -2878,8 +2878,8 @@ impl<D: Device> CudaBackendImpl<D> {
         target: &CudaStorage,
         reduction: incin_core::prelude::Reduction,
     ) -> Result<CudaStorage> {
-        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
-        let squared = <Self as NumericOps<Self>>::mul::<K>(&diff, &diff)?;
+        let diff = Self::sub::<K>(pred, target)?;
+        let squared = Self::mul::<K>(&diff, &diff)?;
         match reduction {
             incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&squared),
             incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&squared),
@@ -2892,7 +2892,7 @@ impl<D: Device> CudaBackendImpl<D> {
         target: &CudaStorage,
         reduction: incin_core::prelude::Reduction,
     ) -> Result<CudaStorage> {
-        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
+        let diff = Self::sub::<K>(pred, target)?;
         let absolute = <Self as FloatOps<Self>>::abs::<K>(&diff)?;
         match reduction {
             incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&absolute),
@@ -2907,14 +2907,14 @@ impl<D: Device> CudaBackendImpl<D> {
         reduction: incin_core::prelude::Reduction,
     ) -> Result<CudaStorage> {
         let max_x_0 = <Self as FloatOps<Self>>::relu::<K>(pred)?;
-        let x_times_target = <Self as NumericOps<Self>>::mul::<K>(pred, target)?;
-        let term1 = <Self as NumericOps<Self>>::sub::<K>(&max_x_0, &x_times_target)?;
+        let x_times_target = Self::mul::<K>(pred, target)?;
+        let term1 = Self::sub::<K>(&max_x_0, &x_times_target)?;
         let abs_x = <Self as FloatOps<Self>>::abs::<K>(pred)?;
         let neg_abs_x = <Self as FloatOps<Self>>::neg::<K>(&abs_x)?;
         let exp_neg_abs_x = <Self as FloatOps<Self>>::exp::<K>(&neg_abs_x)?;
         let one_plus = <Self as FloatOps<Self>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
         let term2 = <Self as FloatOps<Self>>::log::<K>(&one_plus)?;
-        let loss = <Self as NumericOps<Self>>::add::<K>(&term1, &term2)?;
+        let loss = Self::add::<K>(&term1, &term2)?;
         match reduction {
             incin_core::prelude::Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss),
             incin_core::prelude::Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&loss),
@@ -3862,7 +3862,7 @@ mod tests {
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's
     // the free loss helpers (`incin-backends/src/legacy.rs`),
-    // which compose entirely from `NumericOps`/`FloatOps`/`ReductionOps`
+    // which compose entirely from ``/`FloatOps`/`ReductionOps`
     // (already wired on CUDA). These tests exist to prove that resolution
     // actually compiles and runs correctly, not to add new functionality.
 

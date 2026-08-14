@@ -3,7 +3,7 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
-use incin_core::__backend_compat::legacy::{ModuleOps, NumericOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{ModuleOps, ReductionOps, TensorOps};
 
 use super::backend::MetalBackendImpl;
 use super::storage::MetalStorage;
@@ -33,7 +33,7 @@ macro_rules! impl_metal_canonical {
                 };
                 let lhs = lhs.downcast_ref::<MetalStorage>().ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
                 let rhs = rhs.downcast_ref::<MetalStorage>().ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
-                <Self as NumericOps<Self>>::$method::<f32>(lhs, rhs)
+                Self::$method::<f32>(lhs, rhs)
                     .map_err(|error| kernel_error("Metal", operation, error))
             }
         }

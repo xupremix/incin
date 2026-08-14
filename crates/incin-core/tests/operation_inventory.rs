@@ -21,7 +21,7 @@ use incin_core::exec::OPERATION_CATALOG;
 /// and lifecycle, not semantic operations, and FND-005 keeps them that way.
 const OPERATION_TRAITS: &[&str] = &[
     "FloatOps",
-    "NumericOps",
+    "",
     "TensorOps",
     "ReductionOps",
     "ModuleOps",

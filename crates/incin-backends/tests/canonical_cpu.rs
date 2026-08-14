@@ -19,7 +19,7 @@ use incin_core::exec::{
     OperationIdentity, SupportLevel, TensorHandle, UnsupportedReason,
 };
 use incin_core::prelude::{Cpu, DTypeId, Local, OperationKind, Reduction};
-use incin_core::__backend_compat::legacy::{NumericOps, TensorOps};
+use incin_core::__backend_compat::legacy::{TensorOps};
 
 type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -88,7 +88,7 @@ fn a_canonical_invocation_matches_the_legacy_operation_family_result() {
     let canonical =
         dispatch::execute::<op::Add, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
             .expect("add is a registered CPU capability");
-    let legacy = <TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs)
+    let legacy = TestBackend::add::<f32>(&lhs, &rhs)
         .expect("the legacy path computes the same operation");
 
     assert_eq!(values(&canonical), values(&legacy));
@@ -112,7 +112,7 @@ fn every_migrated_pointwise_operation_matches_its_legacy_counterpart() {
                 )
                 .unwrap(),
             ),
-            values(&<TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs).unwrap()),
+            values(&TestBackend::add::<f32>(&lhs, &rhs).unwrap()),
         ),
         (
             "sub",
@@ -124,7 +124,7 @@ fn every_migrated_pointwise_operation_matches_its_legacy_counterpart() {
                 )
                 .unwrap(),
             ),
-            values(&<TestBackend as NumericOps<TestBackend>>::sub::<f32>(&lhs, &rhs).unwrap()),
+            values(&TestBackend::sub::<f32>(&lhs, &rhs).unwrap()),
         ),
         (
             "mul",
@@ -136,7 +136,7 @@ fn every_migrated_pointwise_operation_matches_its_legacy_counterpart() {
                 )
                 .unwrap(),
             ),
-            values(&<TestBackend as NumericOps<TestBackend>>::mul::<f32>(&lhs, &rhs).unwrap()),
+            values(&TestBackend::mul::<f32>(&lhs, &rhs).unwrap()),
         ),
         (
             "div",
@@ -148,7 +148,7 @@ fn every_migrated_pointwise_operation_matches_its_legacy_counterpart() {
                 )
                 .unwrap(),
             ),
-            values(&<TestBackend as NumericOps<TestBackend>>::div::<f32>(&lhs, &rhs).unwrap()),
+            values(&TestBackend::div::<f32>(&lhs, &rhs).unwrap()),
         ),
     ];
 
@@ -1988,7 +1988,7 @@ fn a_broadcasting_canonical_invocation_matches_the_legacy_result() {
     assert_eq!(dims(&add), vec![2, 3]);
     assert_eq!(
         values(&add),
-        values(&<TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::add::<f32>(&lhs, &rhs).unwrap())
     );
 
     let sub =
@@ -1997,7 +1997,7 @@ fn a_broadcasting_canonical_invocation_matches_the_legacy_result() {
     assert_eq!(dims(&sub), vec![2, 3]);
     assert_eq!(
         values(&sub),
-        values(&<TestBackend as NumericOps<TestBackend>>::sub::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::sub::<f32>(&lhs, &rhs).unwrap())
     );
 
     let mul =
@@ -2006,7 +2006,7 @@ fn a_broadcasting_canonical_invocation_matches_the_legacy_result() {
     assert_eq!(dims(&mul), vec![2, 3]);
     assert_eq!(
         values(&mul),
-        values(&<TestBackend as NumericOps<TestBackend>>::mul::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::mul::<f32>(&lhs, &rhs).unwrap())
     );
 
     let div =
@@ -2015,7 +2015,7 @@ fn a_broadcasting_canonical_invocation_matches_the_legacy_result() {
     assert_eq!(dims(&div), vec![2, 3]);
     assert_eq!(
         values(&div),
-        values(&<TestBackend as NumericOps<TestBackend>>::div::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::div::<f32>(&lhs, &rhs).unwrap())
     );
 }
 
@@ -2036,7 +2036,7 @@ fn a_left_broadcasting_canonical_invocation_matches_the_legacy_result() {
     assert_eq!(dims(&add), vec![2, 3]);
     assert_eq!(
         values(&add),
-        values(&<TestBackend as NumericOps<TestBackend>>::add::<f32>(&lhs, &rhs).unwrap())
+        values(&TestBackend::add::<f32>(&lhs, &rhs).unwrap())
     );
 }
 

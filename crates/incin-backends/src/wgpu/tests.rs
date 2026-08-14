@@ -87,7 +87,7 @@ fn test_randn_shape() {
 fn test_add() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let b = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
-    let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
+    let out = B::add::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![11.0, 22.0, 33.0, 44.0]);
 }
 
@@ -96,7 +96,7 @@ fn test_add() {
 fn test_sub() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
     let b = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
+    let out = B::sub::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![9.0, 18.0, 27.0]);
 }
 
@@ -105,7 +105,7 @@ fn test_sub() {
 fn test_mul() {
     let a = storage(vec![2.0, 3.0, 4.0], vec![3]);
     let b = storage(vec![5.0, 6.0, 7.0], vec![3]);
-    let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+    let out = B::mul::<f32>(&a, &b).unwrap();
     assert_eq!(readback(&out), vec![10.0, 18.0, 28.0]);
 }
 
@@ -114,7 +114,7 @@ fn test_mul() {
 fn test_div() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
     let b = storage(vec![2.0, 4.0, 5.0], vec![3]);
-    let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
+    let out = B::div::<f32>(&a, &b).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[5.0, 5.0, 6.0], 1e-5));
 }
 
@@ -981,7 +981,7 @@ fn test_quantize_dequantize() {
 fn add_backward_gives_grad_one_to_both_operands() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![10.0, 20.0, 30.0], vec![3]);
-    let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
+    let out = B::add::<f32>(&a, &b).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let ga = grads.get(a.id).expect("a should have a gradient");
     let gb = grads.get(b.id).expect("b should have a gradient");
@@ -993,7 +993,7 @@ fn add_backward_gives_grad_one_to_both_operands() {
 fn sub_backward_negates_rhs_contribution() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
     let b = storage(vec![1.0, 2.0, 3.0], vec![3]);
-    let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
+    let out = B::sub::<f32>(&a, &b).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let ga = grads.get(a.id).unwrap();
     let gb = grads.get(b.id).unwrap();
@@ -1006,7 +1006,7 @@ fn mul_backward_uses_other_operands_real_values() {
     // d(a*b)/da = b, d(a*b)/db = a.
     let a = storage(vec![2.0, 3.0, 4.0], vec![3]);
     let b = storage(vec![5.0, 6.0, 7.0], vec![3]);
-    let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+    let out = B::mul::<f32>(&a, &b).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let ga = grads.get(a.id).unwrap();
     let gb = grads.get(b.id).unwrap();
@@ -1019,7 +1019,7 @@ fn div_backward_matches_quotient_rule() {
     // d(a/b)/da = 1/b, d(a/b)/db = -a/b^2.
     let a = storage(vec![6.0, 8.0], vec![2]);
     let b = storage(vec![2.0, 4.0], vec![2]);
-    let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
+    let out = B::div::<f32>(&a, &b).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
     let ga = grads.get(a.id).unwrap();
     let gb = grads.get(b.id).unwrap();
@@ -1181,8 +1181,8 @@ fn chained_ops_accumulate_gradient_through_multiple_hops() {
     // contributions SUMMED rather than overwritten.
     let a = storage(vec![2.0], vec![1]);
     let b = storage(vec![3.0], vec![1]);
-    let ab = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
-    let out = <B as NumericOps<B>>::add::<f32>(&ab, &a).unwrap();
+    let ab = B::mul::<f32>(&a, &b).unwrap();
+    let out = B::add::<f32>(&ab, &a).unwrap();
     let loss = <B as FloatOps<B>>::relu::<f32>(&out).unwrap();
 
     let grads = <B as Backend>::backward::<f32>(&loss).unwrap();
@@ -1224,7 +1224,7 @@ fn softmax_gradient_via_nontrivial_loss_matches_finite_difference() {
     let weight = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
         let sm = <B as FloatOps<B>>::softmax::<f32>(&inputs[0], 1).unwrap();
-        let weighted = <B as NumericOps<B>>::mul::<f32>(&sm, &inputs[1]).unwrap();
+        let weighted = B::mul::<f32>(&sm, &inputs[1]).unwrap();
         <B as ReductionOps<B>>::sum_all::<f32>(&weighted).unwrap()
     };
     let max_abs_diff = gradcheck_wgpu(op, &[t, weight], 1e-3);
@@ -1893,7 +1893,7 @@ fn binary_operations_broadcast_a_rank_one_operand() {
     let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let bias = storage(vec![10.0, 20.0, 30.0], vec![3]);
 
-    let sum = <B as NumericOps<B>>::add::<f32>(&lhs, &bias).unwrap();
+    let sum = B::add::<f32>(&lhs, &bias).unwrap();
     assert_eq!(sum.shape, vec![2, 3]);
     assert!(vec_approx_eq(
         &readback(&sum),
@@ -1902,7 +1902,7 @@ fn binary_operations_broadcast_a_rank_one_operand() {
     ));
 
     // The stretched operand may be either side.
-    let product = <B as NumericOps<B>>::mul::<f32>(&bias, &lhs).unwrap();
+    let product = B::mul::<f32>(&bias, &lhs).unwrap();
     assert_eq!(product.shape, vec![2, 3]);
     assert!(vec_approx_eq(
         &readback(&product),
@@ -1918,7 +1918,7 @@ fn binary_operations_still_refuse_an_unbroadcastable_pair() {
     let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let rhs = storage(vec![1.0, 2.0], vec![2]);
 
-    assert!(<B as NumericOps<B>>::add::<f32>(&lhs, &rhs).is_err());
+    assert!(B::add::<f32>(&lhs, &rhs).is_err());
 }
 
 /// The gradient of a broadcast bias add is the sum over the broadcast axis.
@@ -1931,7 +1931,7 @@ fn a_broadcast_bias_add_unbroadcasts_its_gradient() {
     let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let bias = storage(vec![10.0, 20.0, 30.0], vec![3]);
 
-    let sum = <B as NumericOps<B>>::add::<f32>(&lhs, &bias).unwrap();
+    let sum = B::add::<f32>(&lhs, &bias).unwrap();
     let loss = <B as ReductionOps<B>>::sum_all::<f32>(&sum).unwrap();
     let grads = B::backward::<f32>(&loss).unwrap();
 

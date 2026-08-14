@@ -454,7 +454,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NumericOps  (add, sub, mul, div)
+//   (add, sub, mul, div)
 // ─────────────────────────────────────────────────────────────────────────────
 /// Materialize `t` at `shape`, recording the broadcast on the tape.
 ///
@@ -554,9 +554,9 @@ fn binary_op<T: DType>(
     Ok(WgpuStorage::new(out_buf, lhs.shape.to_vec()))
 }
 
-impl<D: Device> NumericOps<Self> for WgpuBackendImpl<D> {
+impl<D: Device> WgpuBackendImpl<D> {
     /// `add`.
-    fn add<K: DType>(
+    pub fn add<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -576,7 +576,7 @@ impl<D: Device> NumericOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sub`.
-    fn sub<K: DType>(
+    pub fn sub<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -597,7 +597,7 @@ impl<D: Device> NumericOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mul`.
-    fn mul<K: DType>(
+    pub fn mul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -620,7 +620,7 @@ impl<D: Device> NumericOps<Self> for WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `div`.
-    fn div<K: DType>(
+    pub fn div<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1232,7 +1232,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
-            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+            Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
@@ -1482,7 +1482,7 @@ impl<D: Device> TensorOps<Self> for WgpuBackendImpl<D> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
         let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
-        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+        Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching CPU.
     fn bmm<K: DType>(

@@ -10,7 +10,7 @@ use incin::backend_authoring::*;
 use incin::prelude::*;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, ReductionOps, TensorOps};
 
 type Native = CpuBackendImpl;
 type Wgpu = WgpuBackendImpl<incin::WgpuN<incin::typenum::U0>>;

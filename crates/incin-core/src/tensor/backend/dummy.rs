@@ -277,30 +277,30 @@ use super::*;
     /// stand-in whose shape arithmetic disagrees with every real backend's is
     /// not a stand-in, and this crate's own documented examples of
     /// `broadcast_add` were the first thing to run into it.
-    impl<D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<D> {
+    impl<D: Device + Clone + 'static> DummyBackend<D> {
         /// Returns the two operands' broadcast shape.
-        fn add<K: DType>(
+        pub fn add<K: DType>(
             lhs: &<Self as StorageBackend>::Storage<K>,
             rhs: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
-        fn sub<K: DType>(
+        pub fn sub<K: DType>(
             lhs: &<Self as StorageBackend>::Storage<K>,
             rhs: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
-        fn mul<K: DType>(
+        pub fn mul<K: DType>(
             lhs: &<Self as StorageBackend>::Storage<K>,
             rhs: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
             Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
         /// Returns the two operands' broadcast shape.
-        fn div<K: DType>(
+        pub fn div<K: DType>(
             lhs: &<Self as StorageBackend>::Storage<K>,
             rhs: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -649,7 +649,7 @@ use super::*;
     }
 
     /// The `TensorOps` members whose output shape equals an input's, split by
-    /// which operand supplies it. These mirror `NumericOps`' convention above,
+    /// which operand supplies it. These mirror ``' convention above,
     /// where a binary op reports `lhs`'s shape.
     macro_rules! shape_preserving_tensor_ops {
         (

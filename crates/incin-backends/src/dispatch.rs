@@ -1859,17 +1859,17 @@ impl<D: Device> TensorOps<Self> for DispatchBackend<D> {
         dispatch_shape_unary!(t, instance_norm, eps)
     }
 }
-impl<D: Device> NumericOps<Self> for DispatchBackend<D> {
-    fn add<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+impl<D: Device> DispatchBackend<D> {
+    pub fn add<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, add)
     }
-    fn sub<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn sub<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, sub)
     }
-    fn mul<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn mul<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, mul)
     }
-    fn div<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    pub fn div<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, div)
     }
 }

@@ -10,7 +10,7 @@ use incin_core::exec::{Descriptor, ExecutionContext, TapeStorage, TensorHandle, 
 // not prelude. This file asked the prelude for them, which never had them, and
 // nothing noticed because no CI job compiles the Metal test targets.
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, FloatOps, NumericOps, ReductionOps,
+    Execute, ExecutionRequest, FloatOps, ReductionOps,
 };
 use incin_core::prelude::{Backend, DTypeId, DeviceId, Local, ShapeBuf};
 
@@ -105,16 +105,16 @@ fn test_metal_forward_ops() {
     let a = create_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
     let b = create_storage(&[2, 2], &[5.0, 6.0, 7.0, 8.0]);
 
-    let add = <TestBackend as NumericOps<TestBackend>>::add::<f32>(&a, &b).unwrap();
+    let add = TestBackend::add::<f32>(&a, &b).unwrap();
     assert_eq!(read_storage(&add), vec![6.0, 8.0, 10.0, 12.0]);
 
-    let sub = <TestBackend as NumericOps<TestBackend>>::sub::<f32>(&b, &a).unwrap();
+    let sub = TestBackend::sub::<f32>(&b, &a).unwrap();
     assert_eq!(read_storage(&sub), vec![4.0, 4.0, 4.0, 4.0]);
 
-    let mul = <TestBackend as NumericOps<TestBackend>>::mul::<f32>(&a, &b).unwrap();
+    let mul = TestBackend::mul::<f32>(&a, &b).unwrap();
     assert_eq!(read_storage(&mul), vec![5.0, 12.0, 21.0, 32.0]);
 
-    let div = <TestBackend as NumericOps<TestBackend>>::div::<f32>(&b, &a).unwrap();
+    let div = TestBackend::div::<f32>(&b, &a).unwrap();
     assert_eq!(read_storage(&div), vec![5.0, 3.0, 2.3333333, 2.0]);
 
     let relu = <TestBackend as FloatOps<TestBackend>>::relu::<f32>(&create_storage(
@@ -133,7 +133,7 @@ fn test_metal_autograd_backward() {
     let x = create_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
     let w = create_storage(&[2, 2], &[0.5, -1.0, 2.0, 1.5]);
 
-    let xw = <TestBackend as NumericOps<TestBackend>>::mul::<f32>(&x, &w).unwrap();
+    let xw = TestBackend::mul::<f32>(&x, &w).unwrap();
     let loss = <TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&xw).unwrap();
 
     let grads = TestBackend::backward::<f32>(&loss).expect("backward execution should succeed");

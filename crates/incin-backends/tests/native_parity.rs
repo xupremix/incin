@@ -20,7 +20,7 @@ use incin_backends::external::candle::CandleBackend;
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
 use incin_core::backend_authoring::HostInterop;
-use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
+use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, ReductionOps, TensorOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 
@@ -234,7 +234,7 @@ fn transfer_to_device_parity() {
     );
 }
 
-// ── NumericOps ───────────────────────────────────────────────────────────
+// ──  ───────────────────────────────────────────────────────────
 
 #[test]
 /// Verifies numerical parity of forward and backward pass between backends for `add_forward_and_backward_parity`.

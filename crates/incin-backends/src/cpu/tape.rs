@@ -188,7 +188,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
 
 /// Elementwise sum of two ALREADY-shape-matching gradients.
 ///
-/// This is intentionally NOT the public `NumericOps::add` (which must
+/// This is intentionally NOT the public `::add` (which must
 /// broadcast) — tape-internal accumulation only ever sums two gradients that
 /// have already been shape-matched to their target via `unbroadcast`, so no
 /// broadcast logic is needed here.

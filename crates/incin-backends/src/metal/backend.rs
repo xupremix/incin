@@ -854,10 +854,10 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
     MetalStorage::from_bytes(out_bytes, meta, storage.mode(), storage.device_ordinal())
 }
 
-// ─── NumericOps ─────────────────────────────────────────────────────────────
+// ───  ─────────────────────────────────────────────────────────────
 
-impl<D: Device> NumericOps<Self> for MetalBackendImpl<D> {
-    fn add<K: DType>(
+impl<D: Device> MetalBackendImpl<D> {
+    pub fn add<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -880,7 +880,7 @@ impl<D: Device> NumericOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn sub<K: DType>(
+    pub fn sub<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -904,7 +904,7 @@ impl<D: Device> NumericOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn mul<K: DType>(
+    pub fn mul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -930,7 +930,7 @@ impl<D: Device> NumericOps<Self> for MetalBackendImpl<D> {
         Ok(out)
     }
 
-    fn div<K: DType>(
+    pub fn div<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2381,7 +2381,7 @@ impl<D: Device> TensorOps<Self> for MetalBackendImpl<D> {
         let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
         let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
         let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
-        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+        Self::add::<K>(&mat_beta, &mm_alpha)
     }
     /// `bmm`. `matmul` already handles the batch dimensions, matching every
     /// other backend.
@@ -2413,7 +2413,7 @@ impl<D: Device> TensorOps<Self> for MetalBackendImpl<D> {
         let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
         let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
         let masked_scores = if let Some(m) = mask {
-            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+            Self::add::<K>(&scaled_scores, m)?
         } else {
             scaled_scores
         };
