@@ -96,6 +96,11 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     assert_eq!(manual_output.dims(), macro_output.dims());
     assert_eq!(manual_output.dims(), [2, 2]);
 
+    // Exercise the training capability boundary as well as forward/state.
+    let target_output = target.zeros(shape![2, 2])?.into_dyn();
+    let loss = manual_output.mse_loss(&target_output)?;
+    let _grads = loss.backward()?;
+
     let snapshot = manual.state_dict()?;
     let mut restored = manual;
     restored.load_state_dict(&snapshot)?;

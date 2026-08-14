@@ -156,8 +156,7 @@ fn test_seq_ty_matches_seq_value_type() -> Result<()> {
 /// `TrainMode` via its default no-op body (like every other stateless
 /// leaf layer), which is what makes `Sequential<Linear<..>, Dropout>: TrainMode`
 /// satisfiable at all — see `TrainMode`'s own doc for why this needs
-/// explicit bounds rather than the autoref trick `#[module]`'s generated
-/// code uses for its own fields.
+/// explicit bounds rather than relying on an unconstrained generic fallback.
 fn test_train_mode_propagates_through_sequential_dropout() -> Result<()> {
     let mut seq = seq!(
         Linear::<s![4, 4], CpuBackendImpl>::build(())?,

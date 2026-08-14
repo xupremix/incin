@@ -175,9 +175,8 @@ pub trait Parameters<B: VariableBackend> {
 /// Recursively switches a module (and every submodule reachable through
 /// `#[module]`-derived fields) between training and evaluation behavior —
 /// `#[module]` auto-implements this exactly like it does `Parameters`/
-/// `StateDict`, walking every field and delegating to whichever ones
-/// implement `TrainMode` themselves (via the same autoref-specialization
-/// pattern those two use), so calling `.eval()` on a top-level model
+/// `StateDict`, walking every field and delegating to its `TrainMode`
+/// implementation, so calling `.eval()` on a top-level model
 /// propagates all the way down to every nested [`crate::nn::dropout::Dropout`]
 /// without the caller needing to reach into the tree by hand.
 ///
@@ -387,16 +386,8 @@ where
 }
 
 // Explicit bounds + direct calls, matching `Parameters`/`StateDict`'s own
-// impls for `Sequential` immediately below/above — NOT the autoref-
-// specialization trick `#[module]`'s generated code uses for its fields.
-// That trick only resolves to the "real" impl when the compiler can PROVE
-// the bound holds while checking the generic code, which is impossible for
-// `L1`/`L2` here: they're bare, unconstrained type parameters with no
-// `TrainMode` bound, so autoref would *always* silently pick the no-op
-// fallback regardless of what `L1`/`L2` are eventually monomorphized to —
-// verified empirically while building this (a `Sequential<Linear<..>,
-// Dropout>`'s `.eval()` call still ran `Dropout` in training mode with the
-// autoref version). Every leaf layer with no training-dependent behavior
+// impls for `Sequential` immediately below/above. Every leaf layer with no
+// training-dependent behavior
 // (`Linear`, `ReLU`, `Conv2d`, pooling layers, ...) implements `TrainMode`
 // via its default no-op body specifically so this bound is satisfiable for
 // real `seq!`-built chains, not just chains containing `Dropout`.
