@@ -37,7 +37,7 @@ pub mod prelude {
     pub use super::auto_device::{BestDevice, BestDeviceAt};
     pub use super::backend::{
         AutogradBackend, Backend, HostInterop, StorageBackend, SupportsDType, TransferBackend,
-        TransferTo, VariableBackend,
+        StorageTransfer, TransferTo, VariableBackend,
     };
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;

@@ -20,7 +20,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::prelude::NoGrad;
 use crate::prelude::{
-    Backend, DType, Dyn, DynShape, HostInterop, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
+    Backend, DType, Dyn, DynShape, HostInterop, RequiresGrad, Result, Shape, SupportsDType, Tensor, StorageTransfer,
 };
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
@@ -2307,11 +2307,11 @@ impl<
     NewD: crate::prelude::Device,
 > crate::tensor::transfer::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
-    B: Backend + TransferTo<NewD>,
-    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
+    B: Backend + StorageTransfer<NewD>,
+    <B as StorageTransfer<NewD>>::Output: SupportsDType<K>,
 {
     /// The same tensor, rebuilt on backend `NewD`.
-    type Output = Tensor<S, <B as TransferTo<NewD>>::Output, K, NoGrad>;
+    type Output = Tensor<S, <B as StorageTransfer<NewD>>::Output, K, NoGrad>;
     /// Transfers storage to device `arg` and detaches graph tracking.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());

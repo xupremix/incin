@@ -10,7 +10,7 @@ use crate::exec::request::TensorHandle;
 use crate::prelude::{
     ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
     DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
-    SupportsDType, TensorArgs, TransferTo, HostInterop, AutogradBackend,
+    SupportsDType, TensorArgs, StorageTransfer, HostInterop, AutogradBackend,
 };
 use crate::shapes::Nil;
 use crate::tensor::dtype::PlainDType;
@@ -1082,13 +1082,13 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, NoGrad, P> {
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,
-    ) -> Result<Tensor<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>>
+    ) -> Result<Tensor<S, <B as StorageTransfer<D2>>::Output, K, NoGrad, P>>
     where
-        B: TransferTo<D2>,
-        <B as TransferTo<D2>>::Output: SupportsDType<K>,
+        B: StorageTransfer<D2>,
+        <B as StorageTransfer<D2>>::Output: SupportsDType<K>,
     {
         let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
-        Tensor::<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
+        Tensor::<S, <B as StorageTransfer<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
             new_inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -1107,13 +1107,13 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,
-    ) -> Result<Tensor<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>>
+    ) -> Result<Tensor<S, <B as StorageTransfer<D2>>::Output, K, NoGrad, P>>
     where
-        B: TransferTo<D2>,
-        <B as TransferTo<D2>>::Output: SupportsDType<K>,
+        B: StorageTransfer<D2>,
+        <B as StorageTransfer<D2>>::Output: SupportsDType<K>,
     {
         let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
-        Tensor::<S, <B as TransferTo<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
+        Tensor::<S, <B as StorageTransfer<D2>>::Output, K, NoGrad, P>::from_shape_value_placed(
             new_inner,
             self._shape.clone(),
             self._dtype.clone(),

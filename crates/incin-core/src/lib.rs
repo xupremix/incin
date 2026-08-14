@@ -222,7 +222,7 @@ pub mod prelude {
         DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
         IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
         HostInterop, StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs,
-        TensorArgsData, TensorElement, ToDevice, TracingBackend, TransferBackend, TransferTo,
+        TensorArgsData, TensorElement, ToDevice, TracingBackend, TransferBackend, StorageTransfer, TransferTo,
         VariableBackend,
         extract_graph, tracing_mark_input,
         tracing_mark_input_typed, tracing_mark_output,

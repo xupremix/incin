@@ -7,7 +7,7 @@ use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 mod execute;
 pub use execute::{Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput};
 mod transfer;
-pub use transfer::TransferTo;
+pub use transfer::{StorageTransfer, TransferTo};
 mod autograd;
 pub use autograd::AutogradBackend;
 mod variable;
