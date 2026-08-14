@@ -6,7 +6,7 @@ use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::Backend;
+use incin_core::backend_authoring::{Backend, HostInterop};
 #[cfg(feature = "cuda")]
 use incin_core::backend_authoring::StorageBackend;
 use incin_core::exec::catalog::{

@@ -500,13 +500,14 @@ macro_rules! dispatch_binary {
 }
 
 macro_rules! create_dispatch {
-    ($method:ident, $shape:expr, $dtype:expr, $device:expr) => {
+    ($helper:ident, $method:ident, $shape:expr, $dtype:expr, $device:expr) => {
         match $device.kind() {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>(
-                        $shape, $dtype, $device,
+                    let total = crate::cpu::stride::checked_numel($shape)?;
+                    return crate::cpu::creation::$helper(
+                        total, $shape, $dtype, $device,
                     )
                     .map(DispatchStorage::Cpu);
                 }
@@ -552,13 +553,14 @@ macro_rules! create_dispatch {
 }
 
 macro_rules! create_var_dispatch {
-    ($method:ident, $shape:expr, $dtype:expr, $device:expr) => {
+    ($helper:ident, $method:ident, $shape:expr, $dtype:expr, $device:expr) => {
         match $device.kind() {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>(
-                        $shape, $dtype, $device,
+                    let total = crate::cpu::stride::checked_numel($shape)?;
+                    return crate::cpu::creation::$helper(
+                        total, $shape, $dtype, $device,
                     )
                     .map(DispatchVar::Cpu);
                 }
@@ -602,7 +604,7 @@ macro_rules! variable_executors {
                 request: ExecutionRequest<'_, op::$operation, Self>,
             ) -> core::result::Result<DispatchVar, BackendError> {
                 let attributes = request.operation.descriptor().attributes();
-                create_var_execute_dispatch!($method, &attributes.shape, attributes.dtype, &attributes.device)
+                create_var_execute_dispatch!($method, $method, &attributes.shape, attributes.dtype, &attributes.device)
                     .map_err(|error| BackendError::Execution {
                         operation: OperationKind::$operation,
                         message: alloc::format!("{error}").into(),
@@ -613,12 +615,18 @@ macro_rules! variable_executors {
 }
 
 macro_rules! create_var_execute_dispatch {
-    ($method:ident, $shape:expr, $dtype:expr, $device:expr) => {
+    ($helper:ident, $method:ident, $shape:expr, $dtype:expr, $device:expr) => {
         match $device.kind() {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<Cpu>::$method::<Dyn>($shape, $dtype, $device)
+                    let total = crate::cpu::stride::checked_numel($shape).map_err(|error| {
+                        BackendError::Execution {
+                            operation: OperationKind::Storage,
+                            message: alloc::format!("{error}").into(),
+                        }
+                    })?;
+                    crate::cpu::creation::$helper(total, $shape, $dtype, $device)
                         .map(DispatchVar::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
@@ -648,10 +656,10 @@ macro_rules! create_var_execute_dispatch {
 }
 
 variable_executors![
-    (VariableZeros, var_zeros),
-    (VariableOnes, var_ones),
-    (VariableUniformRandom, var_rand),
-    (VariableNormalRandom, var_randn),
+    (VariableZeros, var_zeros_with_total),
+    (VariableOnes, var_ones_with_total),
+    (VariableUniformRandom, var_rand_with_total),
+    (VariableNormalRandom, var_randn_with_total),
 ];
 
 macro_rules! scalar_executors {
@@ -824,28 +832,28 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
-        create_dispatch!(zeros, shape, dtype, device)
+        create_dispatch!(zeros_with_total, zeros, shape, dtype, device)
     }
     fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
-        create_dispatch!(ones, shape, dtype, device)
+        create_dispatch!(ones_with_total, ones, shape, dtype, device)
     }
     fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
-        create_dispatch!(rand, shape, dtype, device)
+        create_dispatch!(rand_with_total, rand, shape, dtype, device)
     }
     fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchStorage> {
-        create_dispatch!(randn, shape, dtype, device)
+        create_dispatch!(randn_with_total, randn, shape, dtype, device)
     }
     fn full<K: DType>(
         val: f64,
@@ -857,7 +865,8 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<Cpu>::full::<K>(val, shape, dtype, device)
+                    let total = crate::cpu::stride::checked_numel(shape)?;
+                    crate::cpu::creation::full_with_total(total, val, shape, dtype, device)
                         .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
@@ -895,10 +904,11 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<Cpu>::arange::<K>(
-                        start, step, shape, dtype, device,
+                    let total = crate::cpu::stride::checked_numel(shape)?;
+                    crate::cpu::creation::arange_with_total(
+                        total, start, step, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cpu)
+                        .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -939,10 +949,11 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<Cpu>::linspace::<K>(
-                        start, end, shape, dtype, device,
+                    let total = crate::cpu::stride::checked_numel(shape)?;
+                    crate::cpu::creation::linspace_with_total(
+                        total, start, end, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cpu)
+                        .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -977,28 +988,28 @@ impl<D: Device> CreationOps<Self> for DispatchBackend<D> {
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_zeros, shape, dtype, device)
+        create_var_dispatch!(var_zeros_with_total, var_zeros, shape, dtype, device)
     }
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_ones, shape, dtype, device)
+        create_var_dispatch!(var_ones_with_total, var_ones, shape, dtype, device)
     }
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_rand, shape, dtype, device)
+        create_var_dispatch!(var_rand_with_total, var_rand, shape, dtype, device)
     }
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_randn, shape, dtype, device)
+        create_var_dispatch!(var_randn_with_total, var_randn, shape, dtype, device)
     }
 }
 

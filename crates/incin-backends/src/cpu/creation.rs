@@ -416,7 +416,6 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use incin_core::backend_authoring::VariableBackend;
-    use incin_core::__backend_compat::legacy::CreationOps;
     use incin_core::prelude::{
         Backend, ConversionFailure, Cpu, Dyn, Error, StorageTransfer,
     };
@@ -440,7 +439,7 @@ mod tests {
     #[test]
     /// `zeros_produces_correct_shape_and_all_zero_values`.
     fn zeros_produces_correct_shape_and_all_zero_values() {
-        let t = TestBackend::zeros::<f32>(&[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = zeros_with_total(6, &[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
         assert!(f32_vec(&t).iter().all(|&v| v == 0.0));
     }
@@ -448,7 +447,7 @@ mod tests {
     #[test]
     /// `ones_produces_correct_shape_and_all_one_values`.
     fn ones_produces_correct_shape_and_all_one_values() {
-        let t = TestBackend::ones::<f32>(&[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = ones_with_total(6, &[2, 3], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
         assert!(f32_vec(&t).iter().all(|&v| v == 1.0));
     }
@@ -456,7 +455,7 @@ mod tests {
     #[test]
     /// `Dyn` carries its runtime dtype through backend creation.
     fn dyn_dtype_uses_runtime_buffer_variant() {
-        let t = TestBackend::ones::<Dyn>(&[2], DTypeId::F64.descriptor(), &dev()).unwrap();
+        let t = ones_with_total(2, &[2], DTypeId::F64.descriptor(), &dev()).unwrap();
         assert!(matches!(&*t.buffer, CpuBuffer::F64(values) if values == &vec![1.0, 1.0]));
     }
 
@@ -470,7 +469,7 @@ mod tests {
             (256.0, DTypeId::U8.descriptor()),
         ] {
             assert!(matches!(
-                TestBackend::full::<Dyn>(value, &[1], dtype, &dev()),
+                full_with_total(1, value, &[1], dtype, &dev()),
                 Err(Error::InvalidConversion { .. })
             ));
         }
@@ -479,7 +478,7 @@ mod tests {
     #[test]
     fn integer_ranges_reject_fractional_values() {
         assert!(matches!(
-            TestBackend::arange::<Dyn>(0.5, 1.0, &[2], DTypeId::I64.descriptor(), &dev()),
+            arange_with_total(2, 0.5, 1.0, &[2], DTypeId::I64.descriptor(), &dev()),
             Err(Error::InvalidConversion {
                 operation: "arange",
                 reason: ConversionFailure::Fractional,
@@ -487,7 +486,7 @@ mod tests {
             })
         ));
         assert!(matches!(
-            TestBackend::linspace::<Dyn>(0.0, 1.0, &[3], DTypeId::I64.descriptor(), &dev()),
+            linspace_with_total(3, 0.0, 1.0, &[3], DTypeId::I64.descriptor(), &dev()),
             Err(Error::InvalidConversion {
                 operation: "linspace",
                 reason: ConversionFailure::Fractional,
@@ -499,7 +498,7 @@ mod tests {
     #[test]
     /// `rand_produces_values_in_zero_one_range`.
     fn rand_produces_values_in_zero_one_range() {
-        let t = TestBackend::rand::<f32>(&[100], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = rand_with_total(100, &[100], DTypeId::F32.descriptor(), &dev()).unwrap();
         assert_eq!(t.shape, vec![100]);
         let data = f32_vec(&t);
         assert_eq!(data.len(), 100);
@@ -509,7 +508,7 @@ mod tests {
     #[test]
     /// `randn_produces_statistically_plausible_standard_normal_samples`.
     fn randn_produces_statistically_plausible_standard_normal_samples() {
-        let t = TestBackend::randn::<f32>(&[1000], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = randn_with_total(1000, &[1000], DTypeId::F32.descriptor(), &dev()).unwrap();
         let data = f32_vec(&t);
         assert_eq!(data.len(), 1000);
         let n = data.len() as f64;
@@ -527,7 +526,7 @@ mod tests {
     /// `var_zeros_wraps_equivalent_zeros_result`.
     fn var_zeros_wraps_equivalent_zeros_result() {
         let var =
-            TestBackend::var_zeros::<f32>(&[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
+            var_zeros_with_total(4, &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![2, 2]);
         assert!(f32_vec(&t).iter().all(|&v| v == 0.0));
@@ -536,7 +535,7 @@ mod tests {
     #[test]
     /// `var_ones_wraps_equivalent_ones_result`.
     fn var_ones_wraps_equivalent_ones_result() {
-        let var = TestBackend::var_ones::<f32>(&[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_ones_with_total(4, &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![2, 2]);
         assert!(f32_vec(&t).iter().all(|&v| v == 1.0));
@@ -545,7 +544,7 @@ mod tests {
     #[test]
     /// `var_rand_wraps_equivalent_rand_result`.
     fn var_rand_wraps_equivalent_rand_result() {
-        let var = TestBackend::var_rand::<f32>(&[10], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_rand_with_total(10, &[10], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![10]);
         assert!(f32_vec(&t).iter().all(|&v| (0.0..1.0).contains(&v)));
@@ -554,7 +553,7 @@ mod tests {
     #[test]
     /// `var_randn_wraps_equivalent_randn_result`.
     fn var_randn_wraps_equivalent_randn_result() {
-        let var = TestBackend::var_randn::<f32>(&[50], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_randn_with_total(50, &[50], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![50]);
     }
@@ -563,7 +562,7 @@ mod tests {
     #[test]
     /// Same-device transfer returns equivalent destination-native storage.
     fn transfer_to_cpu_returns_equivalent_storage() {
-        let t = TestBackend::zeros::<f32>(&[3], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let t = zeros_with_total(3, &[3], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t2 = <TestBackend as StorageTransfer<Cpu>>::transfer_storage::<f32>(
             &t,
             &Default::default(),

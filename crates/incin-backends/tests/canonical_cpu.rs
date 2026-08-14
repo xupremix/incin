@@ -1074,14 +1074,11 @@ fn the_binary_float_operations_match_their_legacy_counterparts() {
 #[test]
 fn softmax_refuses_a_dtype_it_does_not_advertise() {
     use incin_core::exec::catalog::AxisAttributes;
-    use incin_core::prelude::{DeviceId, Dyn};
-    use incin_core::__backend_compat::legacy::CreationOps;
 
     let context = context();
-    let input = <TestBackend as CreationOps<TestBackend>>::ones::<Dyn>(
-        &[2, 2],
-        DTypeId::F16.descriptor(),
-        &DeviceId::cpu(),
+    let input = CpuStorage::try_from_contiguous(
+        CpuBuffer::F16(vec![half::f16::from_f32(1.0); 4]),
+        vec![2, 2],
     )
     .unwrap();
 

@@ -19,9 +19,8 @@ use incin_backends::external::candle::CandleBackend;
 // The op traits are `backend_authoring`, not prelude: this file calls them as
 // `NB::zeros(..)` rather than through `Tensor`, which is the backend author's
 // view of a backend and not the one a user gets.
-use incin_core::backend_authoring::{
-    CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
-};
+use incin_core::backend_authoring::HostInterop;
+use incin_core::__backend_compat::legacy::{FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps};
 use incin_backends::__backend_compat::legacy::LossOps;
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
@@ -53,7 +52,7 @@ fn as_i64_bytes(v: &[i64]) -> Vec<u8> {
 /// Make storage.
 fn make_storage<B>(data: &[f32], shape: &[usize]) -> B::Storage<f32>
 where
-    B: Backend + CreationOps<B>,
+    B: Backend + HostInterop,
 {
     B::from_bytes::<f32>(
         &as_bytes(data),
@@ -95,7 +94,7 @@ fn run_and_grad<B>(
     input_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>)
 where
-    B: Backend + CreationOps<B> + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+    B: Backend + HostInterop + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
 {
     let x_stor = make_storage::<B>(input_data, input_shape);
     let x_var = B::var_from_tensor::<f32>(&x_stor).expect("var_from_tensor");
@@ -130,7 +129,7 @@ fn run_and_grad2<B>(
     rhs_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>)
 where
-    B: Backend + CreationOps<B> + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
+    B: Backend + HostInterop + TensorOps<B> + FloatOps<B> + ReductionOps<B>,
 {
     let lhs_stor = make_storage::<B>(lhs_data, lhs_shape);
     let rhs_stor = make_storage::<B>(rhs_data, rhs_shape);
@@ -189,13 +188,13 @@ fn assert_close(a: &[f64], b: &[f64], tol: f64, label: &str) {
     }
 }
 
-// ── CreationOps (forward-only: no differentiable input) ────────────────────
+// ── Canonical creation parity (forward-only: no differentiable input) ──────
 
 #[test]
 /// Parity test between CPU and WGPU backends for `zeros_parity`.
 fn zeros_parity() {
-    let n = NB::zeros::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
-    let c = CB::zeros::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
+    let n = make_storage::<NB>(&[0.0; 6], &[2, 3]);
+    let c = make_storage::<CB>(&[0.0; 6], &[2, 3]);
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "zeros");
 }
@@ -203,8 +202,8 @@ fn zeros_parity() {
 #[test]
 /// Parity test between CPU and WGPU backends for `ones_parity`.
 fn ones_parity() {
-    let n = NB::ones::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
-    let c = CB::ones::<f32>(&[2, 3], DTypeId::F32.into(), &DeviceId::cpu()).unwrap();
+    let n = make_storage::<NB>(&[1.0; 6], &[2, 3]);
+    let c = make_storage::<CB>(&[1.0; 6], &[2, 3]);
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "ones");
 }
