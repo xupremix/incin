@@ -1,6 +1,13 @@
 use crate::nn::{Module, Parameters};
-use crate::prelude::*;
+use crate::err::Result;
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::base::Dyn;
+use crate::tensor::base::Tensor;
+use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::RequiresGrad;
 use crate::shapes::FlattenAt;
+use alloc::string::String;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::idx::{Here, Next};
 use core::marker::PhantomData;

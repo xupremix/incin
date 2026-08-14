@@ -5,7 +5,14 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Parameters, TrainMode};
-use crate::prelude::*;
+use crate::err::{Error, Result};
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::base::Tensor;
+use crate::tensor::backend::{Backend, StorageBackend, SupportsDType};
+use crate::tensor::device::ConstDevice;
+use crate::tensor::dtype::{BuiltinDType, DType};
+use crate::tensor::grad::RequiresGrad;
+use alloc::string::String;
 use crate::tensor::backend::Execute;
 
 /// A Dropout layer.
