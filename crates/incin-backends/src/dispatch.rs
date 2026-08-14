@@ -387,11 +387,65 @@ macro_rules! dispatch_module_same_device {
     }};
 }
 
+macro_rules! cpu_unary_call {
+    (relu, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_relu($value)
+    };
+    (step, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_step($value)
+    };
+    (mish, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_mish($value)
+    };
+    (elu, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_elu($value)
+    };
+    (gelu, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_gelu($value)
+    };
+    (abs, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_abs($value)
+    };
+    (exp, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_exp($value)
+    };
+    (neg, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_neg($value)
+    };
+    (sqrt, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_sqrt($value)
+    };
+    (log, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_log($value)
+    };
+    (tanh, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_tanh($value)
+    };
+    (sigmoid, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_sigmoid($value)
+    };
+    (swish, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::ops::elementwise::canonical_swish($value)
+    };
+    (softmax, $value:expr, $dim:expr) => {
+        crate::cpu::ops::elementwise::canonical_softmax::<Cpu>($value, $dim)
+    };
+    (add_scalar_float, $value:expr, $scalar:expr) => {
+        crate::cpu::ops::elementwise::canonical_add_scalar($value, $scalar)
+    };
+    (mul_scalar_float, $value:expr, $scalar:expr) => {
+        crate::cpu::ops::elementwise::canonical_mul_scalar($value, $scalar)
+    };
+    ($method:ident, $value:expr $(, $arg:expr)*) => {
+        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($value $(, $arg)*)
+    };
+}
+
 macro_rules! dispatch_unary {
     ($storage:expr, $method:ident $(, $arg:expr)*) => {
         match $storage {
             #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>(value $(, $arg)*)
+            DispatchStorage::Cpu(value) => cpu_unary_call!($method, value $(, $arg)*)
                 .map(DispatchStorage::Cpu),
             #[cfg(feature = "wgpu")]
             DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<K>(value $(, $arg)*)
@@ -469,12 +523,39 @@ macro_rules! dispatch_slice {
     }};
 }
 
+macro_rules! cpu_binary_call {
+    (add, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::add_storage($lhs, $rhs)
+    };
+    (sub, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::sub_storage($lhs, $rhs)
+    };
+    (mul, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::mul_storage($lhs, $rhs)
+    };
+    (div, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::div_storage($lhs, $rhs)
+    };
+    (atan2, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::canonical_atan2($lhs, $rhs)
+    };
+    (fmod, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::canonical_fmod($lhs, $rhs)
+    };
+    (remainder, $lhs:expr, $rhs:expr) => {
+        crate::cpu::ops::elementwise::canonical_remainder($lhs, $rhs)
+    };
+    ($method:ident, $lhs:expr, $rhs:expr) => {
+        crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>($lhs, $rhs)
+    };
+}
+
 macro_rules! dispatch_binary {
     ($lhs:expr, $rhs:expr, $method:ident) => {
         match ($lhs, $rhs) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
-                crate::cpu::CpuBackendImpl::<Cpu>::$method::<K>(lhs, rhs).map(DispatchStorage::Cpu)
+                cpu_binary_call!($method, lhs, rhs).map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
             (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
