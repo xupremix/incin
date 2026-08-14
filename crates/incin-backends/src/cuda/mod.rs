@@ -2,6 +2,7 @@
 // appear when the public `IncinBackend` alias is normalized. They are not
 // re-exported from the public prelude.
 pub(crate) mod backend;
+pub(crate) mod capability;
 pub(crate) mod executor;
 pub(crate) mod gpu;
 pub(crate) mod ops;
