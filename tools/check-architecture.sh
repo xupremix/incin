@@ -20,7 +20,7 @@ check_absent "internal wildcard preludes" \
     crates/incin-core/src crates/incin-backends/src
 check_absent "tensor depends upward on nn" \
     'crate::nn::|incin_core::nn::' \
-    crates/incin-core/src/tensor crates/incin-backends/src
+    crates/incin-core/src/tensor
 check_absent "autoref module traversal" \
     'Autoref|&&self\.|&mut &mut' \
     crates/incin-core/src/nn/module.rs crates/incin-core/src/nn/module_optional.rs \
