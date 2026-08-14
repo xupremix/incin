@@ -175,7 +175,6 @@ impl<
     Train: TrainState,
 > Module<Tensor<InS, B, InK>> for Embedding<S, B, K, Train>
 where
-    S::Embed: typenum::Unsigned,
     B: Backend + crate::exec::Capabilities + Execute<op::EmbeddingExact>,
     <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
@@ -192,7 +191,9 @@ where
         let weight_handle = TensorHandle::from_storage::<B, K, Local>(weight.inner());
         let context = ExecutionContext::from_scope(B::default());
         let mut dims = x.shape_buf().as_ref().to_vec();
-        dims.push(<S::Embed as typenum::Unsigned>::USIZE);
+        // Read the validated weight extent so named static axes and runtime
+        // axes share the same execution path.
+        dims.push(weight.shape_buf()[1]);
         let shape = shape_buf_from_dims::<<InS as AppendDim<S::Embed>>::Output>(
             OperationKind::Embedding,
             &dims,
