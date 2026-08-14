@@ -76,5 +76,3 @@ pub mod prelude {
     pub use super::spatial::*;
     pub use super::stack::*;
 }
-
-pub(crate) mod projection;

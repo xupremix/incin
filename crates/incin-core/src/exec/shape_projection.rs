@@ -8,11 +8,11 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use super::dim::{
+use crate::shapes::dim::{
     AddDim, BroadcastExtent, CheckedSubDim, ConstDim, Dim, ExactDivDim, MulDim, NamedDim,
     StaticExtent,
 };
-use super::shape::{DimCons, Nil, Ranked, Shape};
+use crate::shapes::shape::{DimCons, Nil, Ranked, Shape};
 use crate::exec::{DimExpr, RankExpr, ShapeExpr, SymbolId};
 use crate::shapes::Dyn;
 use typenum::{Bit, UInt, UTerm, Unsigned};
@@ -83,7 +83,7 @@ impl<L: DimProjection, R: DimProjection> DimProjection for BroadcastExtent<L, R>
     }
 }
 
-impl<Tag: super::dim::AxisTag, Extent: DimProjection> DimProjection for NamedDim<Tag, Extent> {
+impl<Tag: crate::shapes::dim::AxisTag, Extent: DimProjection> DimProjection for NamedDim<Tag, Extent> {
     fn project(axis: usize, base: u32) -> DimExpr {
         DimExpr::NamedExpr {
             expr: Box::new(Extent::project(axis, base)),

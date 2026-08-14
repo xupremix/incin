@@ -59,6 +59,7 @@ pub mod request;
 pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
+pub mod shape_projection;
 pub mod symbolic;
 /// The backend-neutral autograd tape.
 pub mod tape;

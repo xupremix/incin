@@ -235,11 +235,14 @@ impl Graph {
     /// Marks an input while retaining the typed frontend shape proof that
     /// produced it. Runtime axes are assigned graph-local symbols; static
     /// axes remain constants and therefore do not receive redundant guards.
-    pub fn mark_input_with_shape<S: crate::prelude::Shape>(&mut self, value_id: ValueId) {
+    pub fn mark_input_with_shape<S>(&mut self, value_id: ValueId)
+    where
+        S: crate::prelude::Shape + crate::exec::shape_projection::ShapeProjection,
+    {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
-        let shape_expr = self.remap_input_symbols(crate::shapes::projection::shape_expr::<S>(1));
+        let shape_expr = self.remap_input_symbols(crate::exec::shape_projection::shape_expr::<S>(1));
         if let Some(value) = self.values.get_mut(&value_id) {
             value.shape_expr = shape_expr;
         }

@@ -39,7 +39,6 @@ mod sealed {
 
 pub trait Dim:
     sealed::Dim
-    + crate::shapes::projection::DimProjection
     + 'static
     + Copy
     + Clone

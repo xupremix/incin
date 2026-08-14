@@ -31,7 +31,6 @@ mod sealed {
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape:
     sealed::Shape
-    + crate::shapes::projection::ShapeProjection
     + 'static
     + Clone
     + Debug
