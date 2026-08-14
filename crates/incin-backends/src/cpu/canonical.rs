@@ -47,6 +47,7 @@ use super::ops::shape_ops::{
     masked_fill_storage, narrow_storage, pad_storage, repeat_storage, scatter_storage,
     slice_storage,
     squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
+    unfold_storage,
     where_storage,
     tril_storage, triu_storage, unsqueeze_storage,
 };
@@ -2180,12 +2181,7 @@ impl<D: Device> Execute<op::Unfold> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        <Self as TensorOps<Self>>::unfold::<f32>(
-            input,
-            attributes.axis,
-            attributes.size,
-            attributes.step,
-        )
+        unfold_storage(input, attributes.axis, attributes.size, attributes.step)
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

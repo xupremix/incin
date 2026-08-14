@@ -120,6 +120,39 @@ pub(crate) fn unsqueeze_storage(t: &CpuStorage, dim: usize) -> Result<CpuStorage
     reshape_storage(t, &target_shape)
 }
 
+pub(crate) fn unfold_storage(
+    t: &CpuStorage,
+    dim: usize,
+    size: usize,
+    step: usize,
+) -> Result<CpuStorage> {
+    let dim_len = t.shape[dim];
+    if size > dim_len {
+        return Err(Error::Msg(
+            "unfold size cannot exceed dimension length".into(),
+        ));
+    }
+    let n_windows = (dim_len - size) / step + 1;
+    let mut out_shape = t.shape.to_vec();
+    out_shape[dim] = n_windows;
+    out_shape.push(size);
+    let total: usize = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        let win_idx = idx[dim];
+        let offset_idx = idx[out_shape.len() - 1];
+        let mut src_idx = idx[..t.shape.len()].to_vec();
+        src_idx[dim] = win_idx * step + offset_idx;
+        out.push(t.get(&src_idx));
+        crate::cpu::storage::increment_index(&mut idx, &out_shape);
+    }
+    Ok(CpuStorage::from_contiguous(
+        t.buffer.from_f64_values(out)?,
+        out_shape,
+    ))
+}
+
 pub(crate) fn flatten_storage(
     t: &CpuStorage,
     start_dim: usize,
