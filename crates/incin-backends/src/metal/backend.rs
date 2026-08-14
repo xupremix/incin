@@ -160,12 +160,6 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
-    
-
-    
-
-    
-
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
         t.as_bytes().map(<[u8]>::to_vec)
     }

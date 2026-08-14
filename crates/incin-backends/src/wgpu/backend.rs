@@ -210,14 +210,6 @@ impl<D: Device> Backend for WgpuBackendImpl<D> {
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
 
-    /// `backward`.
-    
-
-    
-
-    /// `get_grad`.
-    
-
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
         let t: &WgpuStorage = t;

@@ -2934,10 +2934,6 @@ impl<D: Device> Backend for CudaBackendImpl<D> {
 
     // `format_tensor_display`/`format_tensor_debug` use `Backend`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-    
-
-    
-    
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         let t: &CudaStorage = t;
         let bytes = t
