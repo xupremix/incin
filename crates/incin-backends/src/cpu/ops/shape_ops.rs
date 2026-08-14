@@ -18,7 +18,7 @@ use incin_core::prelude::{
 };
 use incin_core::__backend_compat::legacy::{FloatOps, NumericOps, TensorOps};
 
-use crate::cpu::ops::elementwise::elementwise_unary;
+use crate::cpu::ops::elementwise::{add_storage, canonical_mul_scalar, elementwise_unary};
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
@@ -371,6 +371,19 @@ pub(crate) fn where_storage(
         }),
     });
     Ok(out_storage)
+}
+
+pub(crate) fn addmm_storage(
+    mat: &CpuStorage,
+    mat1: &CpuStorage,
+    mat2: &CpuStorage,
+    beta: f64,
+    alpha: f64,
+) -> Result<CpuStorage> {
+    let product = matmul_storage(mat1, mat2)?;
+    let scaled_product = canonical_mul_scalar(&product, alpha)?;
+    let scaled_mat = canonical_mul_scalar(mat, beta)?;
+    add_storage(&scaled_mat, &scaled_product)
 }
 
 /// Plain or batched matrix multiplication, chosen by operand rank.
@@ -1313,10 +1326,7 @@ impl<D: Device> TensorOps<Self> for CpuBackendImpl<D> {
         beta: f64,
         alpha: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mm = Self::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
-        Self::add::<K>(&mat_beta, &mm_alpha)
+        addmm_storage(mat, mat1, mat2, beta, alpha)
     }
 
     fn bmm<K: DType>(
