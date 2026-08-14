@@ -1,7 +1,7 @@
 use crate::backend_authoring::TensorBackend;
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
-use crate::prelude::{Backend, ComputeStats, Device, DType, Dim, DimCons, Dyn, DynShape, Error, Frozen, GradJoin, JoinedGrad, LayerStats, Nil, Param, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor, TrainState, Trainable};
+use crate::prelude::{Backend, ComputeStats, Device, DType, Dim, DimCons, Dyn, DynShape, Error, Frozen, GradJoin, JoinedGrad, LayerStats, Nil, Param, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeInfo, ShapeValue, SupportsDType, Tensor, TrainState, Trainable};
 use alloc::string::String;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -254,6 +254,19 @@ pub struct Linear<
     pub bias: Option<Param<S::BiasShape, B, K, Train>>,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias, K, Train)>,
+}
+
+impl<
+    S: LinearShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> ShapeInfo for Linear<S, B, Bias, K, Train>
+{
+    fn shape_info(&self) -> Option<String> {
+        None
+    }
 }
 
 impl<

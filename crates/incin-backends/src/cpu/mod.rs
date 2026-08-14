@@ -21,6 +21,10 @@ pub use incin_core::backend_authoring::{
     SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, execute,
     execute_shaped, execute_shaped_with_payload, execute_with_payload,
 };
+pub use incin_core::prelude::{
+    BackendError, ConversionFailure, Cpu, Device, DeviceId, DeviceKind, DType, DTypeDescriptor,
+    DTypeId, Error, ErrorMessage, FloatDType, OperationKind, QuantDType, Result,
+};
 
 mod canonical;
 #[cfg(feature = "compiled")]

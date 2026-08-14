@@ -482,7 +482,8 @@ pub mod prelude {
         DeviceSetError, Dim, DimCons, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
         FloatToIntPolicy, Grad, Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup,
         NamedAxisSelector, NamedDim, Next, Nil, NoGrad, NonFiniteSite, PlainDType, Q8_0,
-        QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeSpec, ShapeValue,
+        QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
+        ShapeValue, ComputeStats,
         Slice, StateDict, StateLoadPlan, StatePath, StateRole, StateSnapshot, StateValue,
         StorageEncoding, TensorElement, bf16, convert_f64_to_i64, f16,
     };
