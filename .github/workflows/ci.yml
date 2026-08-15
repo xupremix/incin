@@ -322,9 +322,9 @@ jobs:
   # was on. `--features metal` alone did not compile at all, and nothing here
   # was in a position to say so. Those helpers now live in `crate::layout`.
   #
-  # `cargo check` per backend rather than a feature powerset: `incin-backends`
-  # has 17 features, so the powerset job's `-p incin-backends` leg is 65k
-  # combinations and is not what caught this. Metal is compile-checked here
+  # `cargo check` per backend rather than a feature Cartesian product:
+  # `incin-backends` has many orthogonal opt-ins, so the supported contract
+  # matrix names the combinations that matter. Metal is compile-checked here
   # rather than only on the macOS runner in hardware.yml because the feature
   # pulls in no platform-gated dependency, so a Linux runner type-checks it.
   backend-isolation:

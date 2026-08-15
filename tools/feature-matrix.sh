@@ -34,6 +34,7 @@ run_row "core-serialization" cargo check -p incin-core --no-default-features --f
 run_row "backend-cpu-minimal" cargo check -p incin-backends --no-default-features --features std,cpu
 run_row "backend-default" cargo check -p incin-backends
 run_row "backend-cpu-blas" cargo check -p incin-backends --no-default-features --features std,cpu,cpu-blas
+run_row "backend-cpu-target-api" cargo check -p incin-backends --no-default-features --features std,cpu,target-api
 run_row "backend-wgpu-compile" cargo check -p incin-backends --no-default-features --features std,wgpu
 run_row "backend-cuda-compile" cargo check -p incin-backends --no-default-features --features std,cuda
 run_row "backend-metal-compile" cargo check -p incin-backends --no-default-features --features std,metal
