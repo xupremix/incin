@@ -1,12 +1,9 @@
 Canonical export validation
 
-Command:
-tools/export-snapshot.sh /tmp/hnd004c-canonical-final-v2.zip
+Command used for the final artifact:
+tools/export-snapshot.sh /tmp/hnd004c-canonical-final.zip
 
 Result: exit 0
-SHA-256:
-493378904f3ac2a70777b633d77f11057b135df9e60a40d739ad7a3ce9755588
-
 The exporter validated the tracked snapshot, architecture/dependency/
 large-file/public-API gates, and a minimal unpacked core check. Independent
 archive inspection found the required distributed source trees, Transformer

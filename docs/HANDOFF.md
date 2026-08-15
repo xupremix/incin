@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004c
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004c-canonical-final-v2.zip # passed at final commit
+tools/export-snapshot.sh /tmp/hnd004c-canonical-final.zip # passed at final commit
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
