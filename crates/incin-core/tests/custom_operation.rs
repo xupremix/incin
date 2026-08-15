@@ -174,12 +174,11 @@ impl StorageBackend for CompanyBackend {
 }
 
 impl Backend for CompanyBackend {
-    type Grads = ();
     type InnerBackend = Self;
 }
 
 impl incin_core::prelude::VariableBackend for CompanyBackend {
-    type Var<K: DType> = ();
+    type Var<K: incin_core::prelude::DType> = ();
 
     fn var_as_tensor<K: incin_core::prelude::DType>(
         _var: &Self::Var<K>,

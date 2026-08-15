@@ -24,6 +24,7 @@ use incin_core::exec::{
 };
 use incin_core::exec::{TapeStorage, TensorId};
 use incin_core::prelude::*;
+use incin_core::backend_authoring::AutogradBackend;
 use incin_macros::s;
 
 type B = CpuBackendImpl;
@@ -44,7 +45,7 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
 
 fn seeded_backward(
     loss: &Tensor<s![2, 2], B, f32, Grad>,
-) -> Result<incin_core::optim::Gradients<<B as Backend>::Grads>> {
+) -> Result<incin_core::optim::Gradients<<B as AutogradBackend>::Grads>> {
     let seed = Tensor::<s![2, 2], B, f32>::ones(()).unwrap();
     loss.backward_with(&seed)
 }
@@ -185,7 +186,7 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
 /// `t`'s accumulated gradient, as `f32`s.
 fn gradient_of(
     t: &Tensor<s![2, 2], B, f32, Grad>,
-    grads: &incin_core::optim::Gradients<<B as Backend>::Grads>,
+    grads: &incin_core::optim::Gradients<<B as AutogradBackend>::Grads>,
 ) -> Vec<f32> {
     let g = B::get_grad::<f32>(t.inner(), grads.as_backend())
         .unwrap()

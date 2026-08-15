@@ -397,7 +397,7 @@ fn backward_still_reaches_the_parameters_it_did_before() {
         .to_scalar::<f32>()
         .unwrap();
 
-    let mut optim = incin_core::optim::SGD::<B>::new(model.parameters(), 0.1);
+    let mut optim = incin_core::optim::SGD::<B>::from_module(&model, 0.1).unwrap();
     let loss = model.forward(x.clone()).unwrap().mse_loss(&y).unwrap();
     optim.step(&loss.backward().unwrap()).unwrap();
 
