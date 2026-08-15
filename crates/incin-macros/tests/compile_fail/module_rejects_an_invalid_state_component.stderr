@@ -1,0 +1,5 @@
+error: invalid #[state(name = ...)] component; use a non-empty name without `.`
+ --> tests/compile_fail/module_rejects_an_invalid_state_component.rs:6:20
+  |
+6 |     #[state(name = "q_proj.weight")]
+  |                    ^^^^^^^^^^^^^^^

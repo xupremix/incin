@@ -62,11 +62,30 @@ impl StatePath {
     /// Adds a named child component.
     #[must_use]
     pub fn child(&self, name: &str) -> Self {
-        let component = name.trim_matches('.');
+        match self.try_child(name) {
+            Ok(path) => path,
+            Err(error) => panic!("invalid state path child `{name}`: {error}"),
+        }
+    }
+
+    /// Fallibly adds exactly one named child component.
+    ///
+    /// Components are non-empty strings that do not contain `.`.  Dotted
+    /// paths must be built one component at a time so every durable path
+    /// produced by traversal has the same grammar as [`Self::new`].
+    pub fn try_child(&self, name: &str) -> Result<Self> {
+        if name.is_empty() || name.contains('.') {
+            return Err(Error::InvalidModuleState {
+                operation: "state path child",
+                reason: ErrorMessage::new(
+                    "component must be non-empty and must not contain `.`",
+                ),
+            });
+        }
         if self.0.is_empty() {
-            Self(component.into())
+            Ok(Self(name.into()))
         } else {
-            Self(format!("{}.{}", self.0, component))
+            Ok(Self(format!("{}.{}", self.0, name)))
         }
     }
 
@@ -622,6 +641,19 @@ mod tests {
         assert_eq!(root.index(3).as_str(), "3");
         assert!(StatePath::new("q_proj.weight").is_ok());
         assert!(StatePath::new("q_proj..weight").is_err());
+    }
+
+    #[test]
+    fn child_accepts_only_one_non_empty_component() {
+        let root = StatePath::root();
+        for invalid in ["", ".", "..", "a.b", "a..b", ".a", "a."] {
+            assert!(root.try_child(invalid).is_err(), "accepted `{invalid}`");
+        }
+        for valid in ["weight", "bias", "running_mean", "layer_0"] {
+            let path = root.try_child(valid).expect("valid component");
+            assert_eq!(path.as_str(), valid);
+            assert_eq!(postcard::from_bytes::<StatePath>(&postcard::to_allocvec(&path).unwrap()).unwrap(), path);
+        }
     }
 
     #[test]

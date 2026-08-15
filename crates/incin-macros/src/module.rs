@@ -182,7 +182,17 @@ fn process_field_attributes(
                                 match meta {
                                     syn::Meta::NameValue(value) if value.path.is_ident("name") => {
                                         match value.value {
-                                            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(lit), .. }) => state_name = Some(lit.value()),
+                                            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(lit), .. }) => {
+                                                let value = lit.value();
+                                                if value.is_empty() || value.contains('.') {
+                                                    err = Some(syn::Error::new_spanned(
+                                                        lit,
+                                                        "invalid #[state(name = ...)] component; use a non-empty name without `.`",
+                                                    ));
+                                                } else {
+                                                    state_name = Some(value);
+                                                }
+                                            }
                                             other => err = Some(syn::Error::new_spanned(other, "#[state(name = ...)] requires a string literal")),
                                         }
                                     }

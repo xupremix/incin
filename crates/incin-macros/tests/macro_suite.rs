@@ -50,6 +50,10 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
             "module_rejects_an_unknown_argument",
             "unknown attribute argument for #[module]",
         ),
+        (
+            "module_rejects_an_invalid_state_component",
+            "invalid #[state(name = ...)] component",
+        ),
         ("s_rejects_a_non_path_dim", "expected identifier"),
         (
             "s_rejects_a_repeat_without_a_count",
