@@ -2,9 +2,9 @@ use incin::backend_authoring::{Execute, SupportsDType, operations::op};
 use incin::prelude::*;
 use incin_core::nn::param::ParameterInit;
 
-#[module]
+#[module(no_shape_info)]
 /// Basic block.
-pub struct BasicBlock<B: Backend> {
+pub struct BasicBlock<B: VariableBackend> {
     /// Conv1.
     pub conv1: incin::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B>,
     /// Bn1.
@@ -15,7 +15,7 @@ pub struct BasicBlock<B: Backend> {
     pub bn2: incin::BatchNorm2d<s![dyn], B>,
 }
 
-impl<B: Backend + ParameterInit<f32>> BasicBlock<B>
+impl<B: VariableBackend + ParameterInit<f32>> BasicBlock<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
@@ -43,7 +43,7 @@ where
 }
 
 impl<
-    B: Backend
+    B: VariableBackend
         + Execute<op::Add>
         + Execute<op::Relu>
         + Execute<op::Conv2dExact>
@@ -70,9 +70,9 @@ where
     }
 }
 
-#[module]
+#[module(no_shape_info)]
 /// Res net.
-pub struct ResNet<B: Backend> {
+pub struct ResNet<B: VariableBackend> {
     /// Conv1.
     pub conv1: incin::Conv2d<s![dyn, dyn, 7, 2, 3, 1], B>,
     /// Bn1.
@@ -83,7 +83,7 @@ pub struct ResNet<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<B: Backend + ParameterInit<f32>> ResNet<B>
+impl<B: VariableBackend + ParameterInit<f32>> ResNet<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
@@ -100,7 +100,7 @@ where
 }
 
 impl<
-    B: Backend
+    B: VariableBackend
         + Execute<op::Add>
         + Execute<op::Relu>
         + Execute<op::Conv2dExact>

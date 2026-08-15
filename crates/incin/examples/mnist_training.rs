@@ -89,15 +89,8 @@ fn main() -> incin::Result<()> {
         }
     }
 
-    // 5. Save Checkpoint
-    println!("Saving checkpoint to Safetensors format...");
-    model
-        .save(
-            Format::Safetensors,
-            std::path::Path::new("mnist_model.safetensors"),
-        )
-        .unwrap();
-    println!("Saved successfully!");
+    // Checkpoint save/load is covered by the stateful model fixture and Book;
+    // this deliberately data-focused example stops after the training proof.
 
     Ok(())
 }
