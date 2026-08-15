@@ -6,7 +6,8 @@
 //! ## Examples
 //!
 //! A `Dataset` supplies items by index; a `Collate` turns a batch of them into
-//! whatever the training step wants; a `DataLoader` joins the two.
+//! whatever the training step wants; a `DataLoader` joins the two and yields
+//! typed `Result` values so worker failures cannot look like end-of-data.
 //!
 //! ```rust
 //! use incin_data::{Collate, DataLoader, Dataset};
@@ -20,8 +21,8 @@
 //!         100
 //!     }
 //!
-//!     fn get(&self, index: usize) -> Option<Self::Item> {
-//!         u32::try_from(index).ok().filter(|_| index < self.len()).map(|i| i * i)
+//!     fn get(&self, index: usize) -> Result<Option<Self::Item>, incin_data::DataError> {
+//!         Ok(u32::try_from(index).ok().filter(|_| index < self.len()).map(|i| i * i))
 //!     }
 //! }
 //!
@@ -30,8 +31,8 @@
 //! impl Collate<u32> for IntoBatch {
 //!     type Output = Vec<u32>;
 //!
-//!     fn collate(&self, batch: Vec<u32>) -> Self::Output {
-//!         batch
+//!     fn collate(&self, batch: Vec<u32>) -> incin_data::BatchResult<Self::Output> {
+//!         Ok(batch)
 //!     }
 //! }
 //!
@@ -39,7 +40,7 @@
 //! // borrows the loader, so the same one can be iterated each epoch.
 //! let loader = DataLoader::new(Squares, IntoBatch, 32).unwrap().with_shuffle(true);
 //!
-//! let batches: Vec<Vec<u32>> = (&loader).into_iter().collect();
+//! let batches: Vec<Vec<u32>> = (&loader).into_iter().collect::<Result<_, _>>().unwrap();
 //! assert_eq!(batches.len(), 4); // 100 items is three full batches and a short one
 //! assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 100);
 //! ```
@@ -65,7 +66,7 @@ pub mod vision;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;
-pub use loader::{Collate, DataLoader};
+pub use loader::{BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder};
 pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
 
 /// Prelude.

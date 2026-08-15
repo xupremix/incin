@@ -1,5 +1,7 @@
 use alloc::sync::Arc;
 
+use crate::loader::DataError;
+
 /// Dataset.
 pub trait Dataset: Send + Sync {
     /// Item.
@@ -14,7 +16,7 @@ pub trait Dataset: Send + Sync {
     }
 
     /// Get.
-    fn get(&self, index: usize) -> Option<Self::Item>;
+    fn get(&self, index: usize) -> Result<Option<Self::Item>, DataError>;
 }
 
 // Implement for Arc<T>
@@ -28,7 +30,7 @@ impl<T: Dataset + ?Sized> Dataset for Arc<T> {
     }
 
     /// Get.
-    fn get(&self, index: usize) -> Option<Self::Item> {
+    fn get(&self, index: usize) -> Result<Option<Self::Item>, DataError> {
         (**self).get(index)
     }
 }

@@ -181,20 +181,26 @@ impl crate::dataset::Dataset for MnistDataset {
     }
 
     /// Get.
-    fn get(&self, index: usize) -> Option<Self::Item> {
+    fn get(&self, index: usize) -> Result<Option<Self::Item>, crate::loader::DataError> {
         if index >= self.labels.len() {
-            return None;
+            return Ok(None);
         }
         let label = self.labels[index];
         const PIXELS_PER_IMAGE: usize = 28 * 28;
-        let start = index.checked_mul(PIXELS_PER_IMAGE)?;
-        let end = start.checked_add(PIXELS_PER_IMAGE)?;
-        let img = self.images.get(start..end)?;
+        let start = index.checked_mul(PIXELS_PER_IMAGE).ok_or_else(|| {
+            crate::loader::DataError::Dataset("MNIST image offset overflow".into())
+        })?;
+        let end = start.checked_add(PIXELS_PER_IMAGE).ok_or_else(|| {
+            crate::loader::DataError::Dataset("MNIST image end offset overflow".into())
+        })?;
+        let img = self.images.get(start..end).ok_or_else(|| {
+            crate::loader::DataError::Dataset("MNIST image buffer is truncated".into())
+        })?;
         let mut img_f32 = Vec::with_capacity(28 * 28);
         for &b in img {
             img_f32.push(b as f32 / 255.0);
         }
-        Some((img_f32, label))
+        Ok(Some((img_f32, label)))
     }
 }
 
@@ -215,7 +221,7 @@ mod tests {
         assert!(!dataset.is_training());
         assert_eq!(dataset.image_bytes().len(), 2 * 28 * 28);
         assert_eq!(dataset.labels(), &[3, 7]);
-        assert_eq!(dataset.get(1).unwrap().1, 7);
-        assert!(dataset.get(2).is_none());
+        assert_eq!(dataset.get(1).unwrap().unwrap().1, 7);
+        assert!(dataset.get(2).unwrap().is_none());
     }
 }

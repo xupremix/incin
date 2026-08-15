@@ -1,6 +1,6 @@
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
-use incin_data::{Collate, DataLoader, Dataset};
+use incin_data::{BatchResult, Collate, DataError, DataLoader, Dataset};
 use std::path::PathBuf;
 
 type Backend = incin_backends::cpu::CpuBackendImpl;
@@ -13,7 +13,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
     type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend, f32, Grad>);
 
     /// Collate.
-    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
+    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> BatchResult<Self::Output> {
         let batch_size = batch.len();
         let mut images = Vec::with_capacity(batch_size * 784);
         let mut labels = Vec::with_capacity(batch_size);
@@ -23,12 +23,13 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
             labels.push(label as f32); // F32 target tensor for CrossEntropyLoss
         }
 
-        (
-            Tensor::<Dyn, Backend>::from_slice(&images, vec![batch_size, 1, 28, 28]).unwrap(),
+        Ok((
+            Tensor::<Dyn, Backend>::from_slice(&images, vec![batch_size, 1, 28, 28])
+                .map_err(|error| DataError::Dataset(error.to_string()))?,
             Tensor::<Dyn, Backend>::from_slice(&labels, vec![batch_size])
-                .unwrap()
+                .map_err(|error| DataError::Dataset(error.to_string()))?
                 .require_grad(),
-        )
+        ))
     }
 }
 
@@ -60,7 +61,8 @@ fn main() -> incin::Result<()> {
     // 4. Real Training Loop
     println!("Starting training...");
     let mut batch_idx = 0;
-    for (images, labels) in &dataloader {
+    for batch in &dataloader {
+        let (images, labels) = batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
         // Forward pass
         let output = model.forward(images)?;
 

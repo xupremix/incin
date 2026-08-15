@@ -316,7 +316,9 @@ pub mod metrics {
 /// Dataset abstractions and data loading utilities.
 pub mod data {
     pub use incin_data::vision;
-    pub use incin_data::{Collate, DataLoader, Dataset, Downloader};
+    pub use incin_data::{
+        BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, Dataset, Downloader,
+    };
 }
 
 /// Data transformations and augmentation pipeline.

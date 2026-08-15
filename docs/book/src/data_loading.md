@@ -1,6 +1,6 @@
 # Data loading
 
-`Dataset` is a random-access source (`len` + `get(index) -> Option<Item>`),
+`Dataset` is a random-access source (`len` + `get(index) -> Result<Option<Item>, DataError>`),
 and `Collate` turns a `Vec<Item>` into whatever batched form your model
 actually wants — a tensor, a tuple of tensors, or anything else.
 
@@ -15,8 +15,8 @@ impl Dataset for Toy {
     fn len(&self) -> usize {
         10
     }
-    fn get(&self, index: usize) -> Option<Self::Item> {
-        Some(index as f32)
+    fn get(&self, index: usize) -> Result<Option<Self::Item>, incin_data::DataError> {
+        Ok(Some(index as f32))
     }
 }
 
@@ -24,8 +24,8 @@ struct SumCollate;
 
 impl Collate<f32> for SumCollate {
     type Output = f32;
-    fn collate(&self, batch: Vec<f32>) -> f32 {
-        batch.iter().sum()
+    fn collate(&self, batch: Vec<f32>) -> incin_data::BatchResult<f32> {
+        Ok(batch.iter().sum())
     }
 }
 
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
 
     let mut total = 0.0;
     for batch in &loader {
-        total += batch;
+        total += batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
     }
     assert_eq!(total, 45.0); // 0+1+...+9
     Ok(())
@@ -58,7 +58,7 @@ struct MnistCollate;
 impl Collate<(Vec<f32>, u8)> for MnistCollate {
     type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
 
-    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
+    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> incin_data::BatchResult<Self::Output> {
         let batch_size = batch.len();
         let mut images = Vec::with_capacity(batch_size * 784);
         let mut labels = Vec::with_capacity(batch_size);
@@ -70,7 +70,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
 
         // ... build tensors from the flattened Vecs (see the full example
         // for the from_bytes plumbing) ...
-        # unimplemented!()
+        # Ok(unimplemented!())
     }
 }
 ```

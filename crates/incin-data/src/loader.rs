@@ -1,16 +1,61 @@
 use crate::dataset::Dataset;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use std::collections::BTreeMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self, JoinHandle};
+use std::num::NonZeroUsize;
+use std::time::Duration;
+
+/// A recoverable data-pipeline failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataError {
+    /// The dataset reported malformed or otherwise invalid data.
+    Dataset(String),
+    /// A requested index was outside the dataset's declared range.
+    IndexOutOfBounds { index: usize, len: usize },
+    /// A worker caught a panic while reading a sample.
+    WorkerPanicked { worker_id: usize, stage: &'static str },
+    /// A worker caught a panic while collating a batch.
+    CollatePanicked { worker_id: usize },
+    /// A worker stopped unexpectedly before completing the epoch.
+    WorkerDisconnected,
+    /// The configured worker receive timeout elapsed.
+    Timeout { duration: Duration },
+}
+
+impl core::fmt::Display for DataError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Dataset(message) => write!(f, "dataset error: {message}"),
+            Self::IndexOutOfBounds { index, len } => {
+                write!(f, "dataset index {index} is outside length {len}")
+            }
+            Self::WorkerPanicked { worker_id, stage } => {
+                write!(f, "worker {worker_id} panicked while {stage}")
+            }
+            Self::CollatePanicked { worker_id } => {
+                write!(f, "worker {worker_id} panicked while collating")
+            }
+            Self::WorkerDisconnected => f.write_str("data-loader worker disconnected"),
+            Self::Timeout { duration } => write!(f, "data-loader timed out after {duration:?}"),
+        }
+    }
+}
+
+/// A batch result returned by [`DataLoaderIter`].
+pub type BatchResult<T> = Result<T, DataError>;
 
 /// Collate.
 pub trait Collate<T>: Send + Sync {
     /// Output.
     type Output: Send + 'static;
     /// Collate.
-    fn collate(&self, batch: Vec<T>) -> Self::Output;
+    fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output>;
 }
 
 /// Data loader.
@@ -24,6 +69,120 @@ where
     batch_size: usize,
     num_workers: usize,
     shuffle: bool,
+    drop_last: bool,
+    prefetch: NonZeroUsize,
+    seed: u64,
+    epoch: u64,
+    timeout: Option<Duration>,
+}
+
+/// Configures a [`DataLoader`] before construction.
+pub struct DataLoaderBuilder<D, C>
+where
+    D: Dataset + 'static,
+    C: Collate<D::Item> + 'static,
+{
+    dataset: D,
+    collate_fn: C,
+    batch_size: NonZeroUsize,
+    workers: usize,
+    prefetch: NonZeroUsize,
+    drop_last: bool,
+    shuffle: bool,
+    seed: u64,
+    epoch: u64,
+    timeout: Option<Duration>,
+}
+
+impl<D, C> DataLoaderBuilder<D, C>
+where
+    D: Dataset + 'static,
+    C: Collate<D::Item> + 'static,
+{
+    /// Sets the batch size.
+    pub fn batch_size(mut self, batch_size: usize) -> incin_core::prelude::Result<Self> {
+        self.batch_size = NonZeroUsize::new(batch_size).ok_or_else(|| {
+            incin_core::prelude::Error::InvalidModuleState {
+                operation: "data_loader_builder",
+                reason: incin_core::prelude::ErrorMessage::new(
+                    "batch size must be non-zero",
+                ),
+            }
+        })?;
+        Ok(self)
+    }
+
+    /// Sets the number of worker threads.
+    #[must_use]
+    pub fn workers(mut self, workers: usize) -> Self {
+        self.workers = workers;
+        self
+    }
+
+    /// Sets the bounded worker prefetch capacity.
+    pub fn prefetch(mut self, prefetch: usize) -> incin_core::prelude::Result<Self> {
+        self.prefetch = NonZeroUsize::new(prefetch).ok_or_else(|| {
+            incin_core::prelude::Error::InvalidModuleState {
+                operation: "data_loader_builder",
+                reason: incin_core::prelude::ErrorMessage::new(
+                    "prefetch capacity must be non-zero",
+                ),
+            }
+        })?;
+        Ok(self)
+    }
+
+    /// Drops the final incomplete batch when enabled.
+    #[must_use]
+    pub fn drop_last(mut self, drop_last: bool) -> Self {
+        self.drop_last = drop_last;
+        self
+    }
+
+    /// Enables or disables deterministic shuffling.
+    #[must_use]
+    pub fn shuffle(mut self, shuffle: bool) -> Self {
+        self.shuffle = shuffle;
+        self
+    }
+
+    /// Sets the deterministic shuffle seed.
+    #[must_use]
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    /// Sets the epoch used in deterministic seed derivation.
+    #[must_use]
+    pub fn epoch(mut self, epoch: u64) -> Self {
+        self.epoch = epoch;
+        self
+    }
+
+    /// Sets an explicit worker receive timeout.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Builds the configured loader.
+    #[must_use]
+    pub fn build(self) -> DataLoader<D, C> {
+        DataLoader {
+            dataset: Arc::new(self.dataset),
+            collate_fn: Arc::new(self.collate_fn),
+            batch_size: self.batch_size.get(),
+            num_workers: self.workers,
+            shuffle: self.shuffle,
+            drop_last: self.drop_last,
+            prefetch: self.prefetch,
+            seed: self.seed,
+            epoch: self.epoch,
+            timeout: self.timeout,
+        }
+    }
 }
 
 impl<D, C> DataLoader<D, C>
@@ -45,7 +204,29 @@ where
             batch_size,
             num_workers: 0,
             shuffle: false,
+            drop_last: false,
+            prefetch: NonZeroUsize::new(2).expect("constant is non-zero"),
+            seed: 0,
+            epoch: 0,
+            timeout: None,
         })
+    }
+
+    /// Starts a builder with a default batch size of one.
+    #[must_use]
+    pub fn builder(dataset: D, collate_fn: C) -> DataLoaderBuilder<D, C> {
+        DataLoaderBuilder {
+            dataset,
+            collate_fn,
+            batch_size: NonZeroUsize::new(1).expect("constant is non-zero"),
+            workers: 0,
+            prefetch: NonZeroUsize::new(2).expect("constant is non-zero"),
+            drop_last: false,
+            shuffle: false,
+            seed: 0,
+            epoch: 0,
+            timeout: None,
+        }
     }
 
     /// With num workers.
@@ -59,20 +240,122 @@ where
         self.shuffle = shuffle;
         self
     }
+
+    /// Drops the final incomplete batch when enabled.
+    #[must_use]
+    pub fn with_drop_last(mut self, drop_last: bool) -> Self {
+        self.drop_last = drop_last;
+        self
+    }
+
+    /// Sets bounded worker prefetch capacity.
+    #[must_use]
+    pub fn with_prefetch(mut self, prefetch: NonZeroUsize) -> Self {
+        self.prefetch = prefetch;
+        self
+    }
+
+    /// Sets deterministic shuffle seed.
+    #[must_use]
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    /// Sets the deterministic epoch number.
+    #[must_use]
+    pub fn with_epoch(mut self, epoch: u64) -> Self {
+        self.epoch = epoch;
+        self
+    }
+
+    /// Sets an explicit worker receive timeout.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.timeout = timeout;
+        self
+    }
 }
 
 /// Data loader iter.
 pub struct DataLoaderIter<T> {
-    receiver: Receiver<T>,
+    receiver: Option<Receiver<(usize, BatchResult<T>)>>,
+    pending: BTreeMap<usize, BatchResult<T>>,
+    next_sequence: usize,
+    total_batches: usize,
+    terminated: bool,
+    timeout: Option<Duration>,
+    cancel: Arc<AtomicBool>,
+    workers: Vec<JoinHandle<()>>,
 }
 
 impl<T> Iterator for DataLoaderIter<T> {
     /// Item.
-    type Item = T;
+    type Item = BatchResult<T>;
 
     /// Next.
     fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.recv().ok()
+        if self.terminated || self.next_sequence >= self.total_batches {
+            return None;
+        }
+        if let Some(batch) = self.pending.remove(&self.next_sequence) {
+            self.next_sequence += 1;
+            if batch.is_err() {
+                self.terminated = true;
+                self.cancel.store(true, Ordering::Release);
+                self.receiver.take();
+            }
+            return Some(batch);
+        }
+        let receiver = self.receiver.as_ref()?;
+        loop {
+            let received = match self.timeout {
+                Some(duration) => receiver
+                    .recv_timeout(duration)
+                    .map_err(|error| match error {
+                        std::sync::mpsc::RecvTimeoutError::Timeout => {
+                            DataError::Timeout { duration }
+                        }
+                        std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                            DataError::WorkerDisconnected
+                        }
+                    }),
+                None => receiver.recv().map_err(|_| DataError::WorkerDisconnected),
+            };
+            match received {
+                Ok((sequence, batch)) if sequence == self.next_sequence => {
+                    self.next_sequence += 1;
+                    if batch.is_err() {
+                        self.terminated = true;
+                        self.cancel.store(true, Ordering::Release);
+                        self.receiver.take();
+                    }
+                    return Some(batch);
+                }
+                Ok((sequence, batch)) => {
+                    self.pending.insert(sequence, batch);
+                }
+                Err(error) => {
+                    self.receiver = None;
+                    self.terminated = true;
+                    return Some(Err(error));
+                }
+            }
+            if let Some(batch) = self.pending.remove(&self.next_sequence) {
+                self.next_sequence += 1;
+                return Some(batch);
+            }
+        }
+    }
+}
+
+impl<T> Drop for DataLoaderIter<T> {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Release);
+        self.receiver.take();
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -82,7 +365,7 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// Item.
-    type Item = C::Output;
+    type Item = BatchResult<C::Output>;
     /// Into iter.
     type IntoIter = DataLoaderIter<C::Output>;
 
@@ -90,10 +373,17 @@ where
     fn into_iter(self) -> Self::IntoIter {
         let mut indices: Vec<usize> = (0..self.dataset.len()).collect();
         if self.shuffle {
-            indices.shuffle(&mut thread_rng());
+            let shuffle_seed = self
+                .seed
+                .wrapping_add(self.epoch.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+            indices.shuffle(&mut StdRng::seed_from_u64(shuffle_seed));
         }
 
-        let num_batches = indices.len().div_ceil(self.batch_size);
+        let num_batches = if self.drop_last {
+            indices.len() / self.batch_size
+        } else {
+            indices.len().div_ceil(self.batch_size)
+        };
         let mut batch_indices = Vec::with_capacity(num_batches);
 
         for i in 0..num_batches {
@@ -106,44 +396,84 @@ where
         let channel_capacity = if self.num_workers == 0 {
             num_batches.max(1)
         } else {
-            self.num_workers * 2 + 2
+            self.prefetch.get()
         };
         let (tx, rx) = sync_channel(channel_capacity);
 
         let dataset = self.dataset.clone();
         let collate_fn = self.collate_fn.clone();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut workers = Vec::new();
 
         if self.num_workers == 0 {
             // Synchronous mode is deliberately executed on the caller's
             // thread. This keeps `num_workers == 0` deterministic and avoids
             // creating a hidden worker whose panic or drop would look like a
             // clean end-of-iteration.
-            for batch_idx in batch_indices {
+            for (sequence, batch_idx) in batch_indices.into_iter().enumerate() {
                 let mut batch = Vec::with_capacity(batch_idx.len());
                 for idx in batch_idx {
-                    if let Some(item) = dataset.get(idx) {
-                        batch.push(item);
+                    match dataset.get(idx) {
+                        Ok(Some(item)) => batch.push(item),
+                        Ok(None) => {
+                            let _ = tx.send((
+                                sequence,
+                                Err(DataError::IndexOutOfBounds {
+                                    index: idx,
+                                    len: dataset.len(),
+                                }),
+                            ));
+                            return DataLoaderIter {
+                                receiver: Some(rx),
+                                pending: BTreeMap::new(),
+                                next_sequence: 0,
+                                total_batches: num_batches,
+                                terminated: false,
+                                timeout: self.timeout,
+                                cancel,
+                                workers,
+                            };
+                        }
+                        Err(error) => {
+                            let _ = tx.send((sequence, Err(error)));
+                            return DataLoaderIter {
+                                receiver: Some(rx),
+                                pending: BTreeMap::new(),
+                                next_sequence: 0,
+                                total_batches: num_batches,
+                                terminated: false,
+                                timeout: self.timeout,
+                                cancel,
+                                workers,
+                            };
+                        }
                     }
                 }
                 if !batch.is_empty() {
-                    let collated = collate_fn.collate(batch);
-                    if tx.send(collated).is_err() {
+                    let collated = catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
+                        .map_err(|_| DataError::CollatePanicked { worker_id: 0 })
+                        .and_then(|result| result);
+                    if tx.send((sequence, collated)).is_err() {
                         break;
                     }
                 }
             }
         } else {
             // Multi-threaded
-            let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter()));
+            let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter().enumerate()));
 
-            for _ in 0..self.num_workers {
+            for worker_id in 0..self.num_workers {
                 let dataset = dataset.clone();
                 let collate_fn = collate_fn.clone();
                 let tx = tx.clone();
                 let batch_indices = batch_indices.clone();
+                let cancel = cancel.clone();
 
-                thread::spawn(move || {
+                workers.push(thread::spawn(move || {
                     loop {
+                        if cancel.load(Ordering::Acquire) {
+                            break;
+                        }
                         let next_batch = {
                             // The lock only protects `Iterator::next`; user
                             // dataset/collate code runs after it is released.
@@ -155,16 +485,40 @@ where
                             iter.next()
                         };
 
-                        if let Some(batch_idx) = next_batch {
+                        if let Some((sequence, batch_idx)) = next_batch {
                             let mut batch = Vec::with_capacity(batch_idx.len());
                             for idx in batch_idx {
-                                if let Some(item) = dataset.get(idx) {
-                                    batch.push(item);
+                                let result = catch_unwind(AssertUnwindSafe(|| dataset.get(idx)))
+                                    .map_err(|_| DataError::WorkerPanicked {
+                                        worker_id,
+                                        stage: "reading a sample",
+                                    })
+                                    .and_then(|result| result);
+                                match result {
+                                    Ok(Some(item)) => batch.push(item),
+                                    Ok(None) => {
+                                        let _ = tx.send((
+                                            sequence,
+                                            Err(DataError::IndexOutOfBounds {
+                                                index: idx,
+                                                len: dataset.len(),
+                                            }),
+                                        ));
+                                        cancel.store(true, Ordering::Release);
+                                        return;
+                                    }
+                                    Err(error) => {
+                                        let _ = tx.send((sequence, Err(error)));
+                                        cancel.store(true, Ordering::Release);
+                                        return;
+                                    }
                                 }
                             }
                             if !batch.is_empty() {
-                                let collated = collate_fn.collate(batch);
-                                if tx.send(collated).is_err() {
+                                let collated = catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
+                                    .map_err(|_| DataError::CollatePanicked { worker_id })
+                                    .and_then(|result| result);
+                                if tx.send((sequence, collated)).is_err() {
                                     break;
                                 }
                             }
@@ -172,11 +526,21 @@ where
                             break;
                         }
                     }
-                });
+                }));
             }
         }
 
-        DataLoaderIter { receiver: rx }
+        drop(tx);
+        DataLoaderIter {
+            receiver: Some(rx),
+            pending: BTreeMap::new(),
+            next_sequence: 0,
+            total_batches: num_batches,
+            terminated: false,
+            timeout: self.timeout,
+            cancel,
+            workers,
+        }
     }
 }
 
@@ -194,11 +558,11 @@ mod tests {
         fn len(&self) -> usize {
             self.0
         }
-        fn get(&self, index: usize) -> Option<i32> {
+        fn get(&self, index: usize) -> BatchResult<Option<i32>> {
             if index < self.0 {
-                Some(index as i32)
+                Ok(Some(index as i32))
             } else {
-                None
+                Ok(None)
             }
         }
     }
@@ -207,8 +571,8 @@ mod tests {
     struct VecCollate;
     impl Collate<i32> for VecCollate {
         type Output = Vec<i32>;
-        fn collate(&self, batch: Vec<i32>) -> Vec<i32> {
-            batch
+        fn collate(&self, batch: Vec<i32>) -> BatchResult<Vec<i32>> {
+            Ok(batch)
         }
     }
 
@@ -216,16 +580,19 @@ mod tests {
     // worker-thread loop (e.g. a channel deadlock, an off-by-one in
     // `batch_indices` that spins forever) must fail loudly and quickly
     // instead of hanging the test suite indefinitely.
-    fn collect_with_timeout<T>(iter: impl Iterator<Item = T> + Send + 'static) -> Vec<T>
+    fn collect_with_timeout<T>(
+        iter: impl Iterator<Item = BatchResult<T>> + Send + 'static,
+    ) -> Vec<T>
     where
         T: Send + 'static,
     {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = tx.send(iter.collect::<Vec<T>>());
+            let _ = tx.send(iter.collect::<Result<Vec<T>, DataError>>());
         });
         rx.recv_timeout(Duration::from_secs(10))
             .expect("DataLoader iteration did not finish within 10s (possible deadlock/hang)")
+            .expect("data loader returned an unexpected test error")
     }
 
     #[test]
@@ -353,8 +720,8 @@ mod tests {
         struct SumCollate;
         impl Collate<i32> for SumCollate {
             type Output = i32;
-            fn collate(&self, batch: Vec<i32>) -> i32 {
-                batch.into_iter().sum()
+            fn collate(&self, batch: Vec<i32>) -> BatchResult<i32> {
+                Ok(batch.into_iter().sum())
             }
         }
 
@@ -363,5 +730,93 @@ mod tests {
         sums.sort_unstable();
         // batch [0,1,2] -> 3, batch [3,4,5] -> 12
         assert_eq!(sums, vec![3, 12]);
+    }
+
+    struct PanicDataset;
+    impl Dataset for PanicDataset {
+        type Item = i32;
+
+        fn len(&self) -> usize {
+            1
+        }
+
+        fn get(&self, _index: usize) -> BatchResult<Option<Self::Item>> {
+            panic!("fixture panic")
+        }
+    }
+
+    struct PanicCollate;
+    impl Collate<i32> for PanicCollate {
+        type Output = i32;
+
+        fn collate(&self, _batch: Vec<i32>) -> BatchResult<Self::Output> {
+            panic!("fixture panic")
+        }
+    }
+
+    #[test]
+    fn worker_panics_are_explicit_iterator_errors() {
+        let loader = DataLoader::new(PanicDataset, VecCollate, 1)
+            .unwrap()
+            .with_num_workers(2);
+        let error = (&loader).into_iter().next().unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            DataError::WorkerPanicked {
+                stage: "reading a sample",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn collate_panics_are_explicit_iterator_errors() {
+        let loader = DataLoader::new(RangeDataset(1), PanicCollate, 1).unwrap();
+        let error = (&loader).into_iter().next().unwrap().unwrap_err();
+        assert!(matches!(error, DataError::CollatePanicked { worker_id: 0 }));
+    }
+
+    struct FailingDataset;
+    impl Dataset for FailingDataset {
+        type Item = i32;
+
+        fn len(&self) -> usize {
+            1
+        }
+
+        fn get(&self, _index: usize) -> BatchResult<Option<Self::Item>> {
+            Err(DataError::Dataset("fixture failure".into()))
+        }
+    }
+
+    #[test]
+    fn dataset_errors_are_not_treated_as_end_of_data() {
+        let loader = DataLoader::new(FailingDataset, VecCollate, 1).unwrap();
+        assert!(matches!(
+            (&loader).into_iter().next().unwrap(),
+            Err(DataError::Dataset(message)) if message == "fixture failure"
+        ));
+    }
+
+    #[test]
+    fn builder_controls_drop_last_and_deterministic_shuffle() {
+        let make = || {
+            DataLoader::builder(RangeDataset(10), VecCollate)
+                .batch_size(3)
+                .unwrap()
+                .drop_last(true)
+                .shuffle(true)
+                .seed(17)
+                .epoch(4)
+                .prefetch(1)
+                .unwrap()
+                .build()
+        };
+        let first_loader = make();
+        let second_loader = make();
+        let first = collect_with_timeout((&first_loader).into_iter());
+        let second = collect_with_timeout((&second_loader).into_iter());
+        assert_eq!(first, second);
+        assert_eq!(first.iter().map(Vec::len).sum::<usize>(), 9);
     }
 }
