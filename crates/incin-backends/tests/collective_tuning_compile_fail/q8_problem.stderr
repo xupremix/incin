@@ -1,16 +1,16 @@
-error[E0277]: the trait bound `incin_backends::Q8_0: CollectiveDType` is not satisfied
+error[E0277]: the trait bound `incin_core::prelude::Q8_0: CollectiveDType` is not satisfied
  --> tests/collective_tuning_compile_fail/q8_problem.rs:9:51
   |
 9 |     let _ = CollectiveTuningProblem::new_static::<Q8_0, U32, TuneAllGather>(
-  |                                                   ^^^^ the trait `CollectiveDType` is not implemented for `incin_backends::Q8_0`
+  |                                                   ^^^^ the trait `CollectiveDType` is not implemented for `incin_core::prelude::Q8_0`
   |
   = help: the following other types implement trait `CollectiveDType`:
             Dyn
             f32
             f64
             i64
-            incin_backends::bf16
-            incin_backends::f16
+            incin_core::prelude::bf16
+            incin_core::prelude::f16
             u32
             u8
 note: required by a bound in `CollectiveTuningProblem::new_static`

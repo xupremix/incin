@@ -6,9 +6,8 @@ hosted anywhere by itself.
 Starts from mdBook's own built-in `print.html` (every chapter already
 concatenated and correctly rendered in reading order) and:
   - inlines the CSS actually needed for the navy theme and code highlighting
-  - inlines highlight.js plus a two-line replacement for book.js's syntax-
-    highlighting call, since that's the only piece of book.js's behavior a
-    single unpaginated page still needs
+  - inlines highlight.js plus a small replacement for book.js's syntax-
+    highlighting call when mdBook emits that optional asset
   - removes the sidebar, search bar, theme picker, and next/previous-chapter
     navigation - all of them are multi-page UI with nothing to point at here
   - drops the FontAwesome icon font and the custom web font declaration
@@ -117,21 +116,21 @@ def main() -> None:
     )
     soup.head.append(style)
 
-    # Inline highlight.js and replace book.js's role with the two calls a
-    # static page still needs: apply the syntax highlighter, and enable the
-    # copy-to-clipboard-free "click a code block, select all" affordance
-    # mdBook's own CSS already styles for.
-    hljs_src = (BUILD / "highlight.js").read_text(encoding="utf-8")
-    # This is highlight.js 10.x (mdBook's bundled version, not the newer API
-    # the "highlightAll" name might suggest) - `highlightBlock(el)` per node
-    # is the call book.js itself uses; there is no `highlightAll` here.
-    script = soup.new_tag("script")
-    script.string = (
-        hljs_src
-        + "\nhljs.configure({tabReplace: '    ', languages: []});"
-        + "\ndocument.querySelectorAll('pre code').forEach(hljs.highlightBlock);\n"
-    )
-    soup.body.append(script)
+    # mdBook versions differ in whether they emit highlight.js. The generated
+    # HTML remains valid without it because syntax highlighting is optional.
+    hljs_path = BUILD / "highlight.js"
+    if hljs_path.exists():
+        # This is highlight.js 10.x (mdBook's bundled version, not the newer
+        # API the "highlightAll" name might suggest) - `highlightBlock(el)`
+        # per node is the call book.js itself uses.
+        hljs_src = hljs_path.read_text(encoding="utf-8")
+        script = soup.new_tag("script")
+        script.string = (
+            hljs_src
+            + "\nhljs.configure({tabReplace: '    ', languages: []});"
+            + "\ndocument.querySelectorAll('pre code').forEach(hljs.highlightBlock);\n"
+        )
+        soup.body.append(script)
 
     # The <html class="navy sidebar-visible" ...> class drove book.js's
     # dynamic sidebar; without a sidebar there's nothing to toggle.
