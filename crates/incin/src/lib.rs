@@ -420,10 +420,10 @@ pub mod state {
 pub type DefaultDevice = incin_core::tensor::device::Cpu;
 #[cfg(all(not(feature = "cpu"), feature = "wgpu"))]
 /// Default device for a WGPU-only build.
-pub type DefaultDevice = crate::tensor::device::Wgpu;
+pub type DefaultDevice = incin_core::tensor::device::Wgpu;
 #[cfg(all(not(feature = "cpu"), not(feature = "wgpu"), feature = "cuda"))]
 /// Default device for a CUDA-only build.
-pub type DefaultDevice = crate::tensor::device::Cuda;
+pub type DefaultDevice = incin_core::tensor::device::Cuda;
 
 #[cfg(feature = "train")]
 mod plan_report;
