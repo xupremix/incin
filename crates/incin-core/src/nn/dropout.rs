@@ -32,6 +32,14 @@ pub struct Dropout {
     pub is_training: bool,
 }
 
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> for Dropout {
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> { Ok(()) }
+}
+
 impl Dropout {
     /// Creates a new Dropout module with the specified probability.
     /// By default, `is_training` is set to true.

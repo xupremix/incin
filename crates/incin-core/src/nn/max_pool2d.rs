@@ -13,6 +13,14 @@ pub struct MaxPool2d<K: Unsigned, S: Unsigned, P: Unsigned = typenum::U0, D: Uns
     _phantom: core::marker::PhantomData<(K, S, P, D)>,
 }
 
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: crate::tensor::backend::VariableBackend>
+    crate::nn::VisitParameters<B> for MaxPool2d<K, S, P, D>
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self, _: &crate::nn::StatePath, _: &mut V,
+    ) -> Result<()> { Ok(()) }
+}
+
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> MaxPool2d<K, S, P, D> {
     /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {

@@ -17,6 +17,16 @@ use core::marker::PhantomData;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Flatten<Start, End>(PhantomData<fn() -> (Start, End)>);
 
+impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B>
+    for Flatten<Start, End>
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> { Ok(()) }
+}
+
 impl<Start, End> Flatten<Start, End> {
     pub fn new() -> Self {
         Self(PhantomData)

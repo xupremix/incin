@@ -34,8 +34,8 @@ fn test_state_dict_extraction() -> Result<()> {
     let mut new_layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
     load_state::<CpuBackendImpl, _>(&mut new_layer, &map)?;
 
-    // Test parameters
-    let params = layer.parameters();
+    // Test optimizer-owned parameter collection
+    let params = ParameterGroup::<CpuBackendImpl, f32>::from_module(&layer)?;
     assert_eq!(params.len(), 2);
 
     Ok(())

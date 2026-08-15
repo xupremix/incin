@@ -109,8 +109,8 @@ fn test_sequential_state_dict_keys_are_flat_like_pytorch() -> Result<()> {
         Linear::<s![5, 2], CpuBackendImpl>::build(())?
     );
 
-    let params = seq.parameters();
-    let mut keys: Vec<&String> = params.keys().collect();
+    let params = ParameterGroup::<CpuBackendImpl, f32>::from_module(&seq)?;
+    let mut keys: Vec<&String> = params.iter().map(|(key, _)| key).collect();
     keys.sort();
     assert_eq!(
         keys,
@@ -142,9 +142,7 @@ fn test_seq_ty_matches_seq_value_type() -> Result<()> {
     let out = net.forward(input)?;
     assert_eq!(out.dims().dims(), &[4, 2]);
 
-    // Parameters still flow through the aliased type exactly like a
-    // directly-typed `Sequential`, e.g. for an optimizer.
-    let params = net.parameters();
+    let params = ParameterGroup::<CpuBackendImpl, f32>::from_module(&net)?;
     assert_eq!(params.len(), 4); // 2 Linear layers x (weight, bias)
 
     Ok(())

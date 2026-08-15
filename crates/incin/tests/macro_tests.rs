@@ -106,8 +106,7 @@ fn test_module_macro() -> Result<()> {
         ln: LayerNorm::build(1e-5)?,
     };
 
-    // The generated parameter adapter remains available for optimizer setup:
-    let params = layer.parameters();
+    let params = ParameterGroup::<CpuBackendImpl, f32>::from_module(&layer)?;
     assert_eq!(params.len(), 4); // linear.weight, linear.bias, ln.weight, ln.bias
 
     Ok(())

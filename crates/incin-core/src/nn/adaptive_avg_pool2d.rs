@@ -16,6 +16,14 @@ pub struct AdaptiveAvgPool2d<HOut: Unsigned, WOut: Unsigned> {
     _phantom: core::marker::PhantomData<(HOut, WOut)>,
 }
 
+impl<HOut: Unsigned, WOut: Unsigned, B: crate::tensor::backend::VariableBackend>
+    crate::nn::VisitParameters<B> for AdaptiveAvgPool2d<HOut, WOut>
+{
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self, _: &crate::nn::StatePath, _: &mut V,
+    ) -> Result<()> { Ok(()) }
+}
+
 impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
     fn default() -> Self {
         Self::new()
