@@ -11,13 +11,17 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
-use crate::prelude::{Backend, DTypeId, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::err::{Error, Result};
+use crate::tensor::backend::Backend;
+use crate::tensor::base::Tensor;
+use crate::tensor::dtype::{DType, DTypeId};
+use crate::tensor::grad::{NoGrad, RequiresGrad};
+use crate::shapes::{Dyn, DynShape, Shape};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::backend::Execute;
-use crate::tensor::dtype::DType;
 
 fn reduction_descriptor<O>(shape: &ShapeBuf, axis: usize) -> Result<Descriptor<O>>
 where
@@ -32,7 +36,7 @@ where
         }],
     )
     .map(|validated| validated.into_descriptor())
-    .map_err(|error| crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error)))
+    .map_err(|error| crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error)))
 }
 
 macro_rules! impl_reduction_op {
@@ -49,7 +53,7 @@ macro_rules! impl_reduction_op {
             let output_shape = crate::shapes::ShapeValue::<crate::shapes::Nil>::try_new(
                 crate::shapes::ShapeBuf::scalar(),
             )
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
             let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
             let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
             let inner = G::grad_mode(&self._grad)
@@ -99,17 +103,17 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             &self.shape_buf_value(),
             crate::exec::catalog::AxisAttributes { axis },
         )
-        .map_err(crate::prelude::Error::Shape)?
+        .map_err(crate::err::Error::Shape)?
         .into_descriptor();
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: crate::shapes::error::OperationKind::SumDim,
                 rank: 0,
             })
         })?;
         let output_shape =
             crate::shapes::ShapeValue::<<S as ReduceAt<C>>::Output>::try_new(output_dims)
-                .map_err(crate::prelude::Error::Shape)?;
+                .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -156,17 +160,17 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 &self.shape_buf_value(),
                 crate::exec::catalog::AxisAttributes { axis },
             )
-            .map_err(crate::prelude::Error::Shape)?
+            .map_err(crate::err::Error::Shape)?
             .into_descriptor();
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: crate::shapes::error::OperationKind::SumKeepDim,
                 rank: 0,
             })
         })?;
         let output_shape =
             crate::shapes::ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(output_dims)
-                .map_err(crate::prelude::Error::Shape)?;
+                .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -195,7 +199,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
 
     /// Sums one runtime-selected axis and erases only the unavailable output
     /// position facts.
-    pub fn sum_runtime(&self, axis: usize) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    pub fn sum_runtime(&self, axis: usize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         B: Execute<op::SumDim> + crate::exec::Capabilities,
         <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
@@ -210,7 +214,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     pub fn sum_keepdim_runtime(
         &self,
         axis: usize,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -231,7 +235,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     pub fn sum_named<Tag>(
         &self,
         selector: crate::shapes::idx::NamedAxisSelector<Tag>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
@@ -248,7 +252,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     pub fn sum_keepdim_named<Tag>(
         &self,
         selector: crate::shapes::idx::NamedAxisSelector<Tag>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
@@ -263,7 +267,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     fn execute_named_reduction<O>(
         &self,
         descriptor: Descriptor<O>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         O: crate::exec::catalog::CanonicalOperation
             + crate::exec::catalog::Operation<Attributes = crate::exec::catalog::AxisAttributes>,
@@ -272,18 +276,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     {
         let axis = descriptor.attributes().axis;
         let output_dims = descriptor.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: O::ID,
                 rank: 0,
             })
         })?;
-        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(output_dims)
-            .map_err(crate::prelude::Error::Shape)?;
+        let output_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(output_dims)
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<O, B, crate::prelude::Dyn>(
+                crate::exec::dispatch::execute_shaped::<O, B, crate::shapes::Dyn>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis },
                     &[input],
@@ -291,7 +295,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 )
             })?
             .into();
-        Tensor::<crate::prelude::Dyn, B, K, G, P>::from_shape_buf_placed(
+        Tensor::<crate::shapes::Dyn, B, K, G, P>::from_shape_buf_placed(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -311,7 +315,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
@@ -325,7 +329,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
@@ -339,7 +343,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
@@ -353,7 +357,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()
@@ -377,14 +381,14 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             .normalize(self.rank())?
             .into_iter()
             .next()
-            .ok_or(crate::prelude::Error::Shape(
+            .ok_or(crate::err::Error::Shape(
                 crate::shapes::error::ShapeError::InvalidAxis {
                     axis: C::INDEX.unsigned_abs(),
                     rank: self.rank(),
                 },
             ))?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -437,10 +441,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
 }
 
 impl<
-    S: crate::prelude::Shape + crate::shapes::DynShape,
-    B: crate::prelude::Backend + Execute<op::Sub> + Execute<op::Mul>,
-    K: crate::prelude::DType,
-    G: crate::prelude::RequiresGrad,
+    S: crate::shapes::Shape + crate::shapes::DynShape,
+    B: crate::tensor::backend::Backend + Execute<op::Sub> + Execute<op::Mul>,
+    K: crate::tensor::dtype::DType,
+    G: crate::tensor::grad::RequiresGrad,
 > Tensor<S, B, K, G>
 where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
@@ -452,7 +456,7 @@ where
     pub fn argmax(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
@@ -466,15 +470,15 @@ where
         } else {
             out_dims = alloc::vec![];
         }
-        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(
+        let output_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
             crate::shapes::ShapeBuf::from_slice(&out_dims),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let inner = GradMode::Disabled
             .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::prelude::Dyn>(
+                crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::shapes::Dyn>(
                     &context,
                     crate::exec::catalog::IndexReductionAttributes {
                         axis: normalized,
@@ -491,7 +495,7 @@ where
             output_shape.shape_buf().clone(),
             u32::init(()),
             self._device.clone(),
-            crate::prelude::NoGrad::init(()),
+            crate::tensor::grad::NoGrad::init(()),
         )
     }
 
@@ -501,7 +505,7 @@ where
     pub fn argmin(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>>
+    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
@@ -515,15 +519,15 @@ where
         } else {
             out_dims = alloc::vec![];
         }
-        let output_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(
+        let output_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
             crate::shapes::ShapeBuf::from_slice(&out_dims),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let inner = GradMode::Disabled
             .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::prelude::Dyn>(
+                crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::shapes::Dyn>(
                     &context,
                     crate::exec::catalog::IndexReductionAttributes {
                         axis: normalized,
@@ -540,7 +544,7 @@ where
             output_shape.shape_buf().clone(),
             u32::init(()),
             self._device.clone(),
-            crate::prelude::NoGrad::init(()),
+            crate::tensor::grad::NoGrad::init(()),
         )
     }
 
@@ -552,8 +556,8 @@ where
         dim: usize,
         largest: bool,
     ) -> Result<(
-        Tensor<crate::prelude::Dyn, B, K, crate::prelude::NoGrad>,
-        Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>,
+        Tensor<crate::shapes::Dyn, B, K, crate::tensor::grad::NoGrad>,
+        Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>,
     )>
     where
         B: Execute<op::TopK> + crate::exec::Capabilities,
@@ -575,10 +579,10 @@ where
         }
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims[dim] = k;
-        let out_shape = crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(
+        let out_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
             crate::shapes::ShapeBuf::from_slice(&out_dims),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let (values_inner, indices_inner) = GradMode::Disabled
@@ -601,14 +605,14 @@ where
             out_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
-            crate::prelude::NoGrad::init(()),
+            crate::tensor::grad::NoGrad::init(()),
         )?;
         let indices = Tensor::from_parts(
             indices_inner,
             out_shape.shape_buf().clone(),
             core::marker::PhantomData,
             self._device.clone(),
-            crate::prelude::NoGrad::init(()),
+            crate::tensor::grad::NoGrad::init(()),
         )?;
         Ok((values, indices))
     }
@@ -618,7 +622,7 @@ where
         &self,
         dim: usize,
         descending: bool,
-    ) -> Result<Tensor<S, B, u32, crate::prelude::NoGrad>>
+    ) -> Result<Tensor<S, B, u32, crate::tensor::grad::NoGrad>>
     where
         B: Execute<op::Argsort> + crate::exec::Capabilities,
         <B as Execute<op::Argsort>>::Output: Into<B::Storage<u32>>,
@@ -628,7 +632,7 @@ where
         // about what runs, not only about which APIs the result offers.
         let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, self.rank())?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
         let indices_inner = GradMode::Disabled
@@ -650,7 +654,7 @@ where
             output_shape,
             core::marker::PhantomData,
             self._device.clone(),
-            crate::prelude::NoGrad::init(()),
+            crate::tensor::grad::NoGrad::init(()),
         )
     }
 }
@@ -660,8 +664,8 @@ where
 // -------------------------------------------------------------------------
 
 impl<
-    S: crate::prelude::Shape + crate::shapes::DynShape,
-    B: crate::prelude::Backend
+    S: crate::shapes::Shape + crate::shapes::DynShape,
+    B: crate::tensor::backend::Backend
         + Execute<op::Sub>
         + Execute<op::Mul>
         + Execute<op::Sqrt>
@@ -669,8 +673,8 @@ impl<
         + Execute<op::SumAll>
         + Execute<op::MulScalar>
         + crate::exec::Capabilities,
-    K: crate::prelude::DType,
-    G: crate::prelude::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
+    K: crate::tensor::dtype::DType,
+    G: crate::tensor::grad::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
 > Tensor<S, B, K, G>
 where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
