@@ -51,12 +51,29 @@ required=(
     tools/check-large-files.sh
     tools/check-public-api.sh
 )
+required_dirs=(
+    crates/incin-core/src/dist
+    crates/incin-backends/src/dist
+)
+for path in "${required_dirs[@]}"; do
+    [[ -d "$snapshot/$path" ]] || {
+        echo "required handoff directory is missing: $path" >&2
+        exit 1
+    }
+done
 for path in "${required[@]}"; do
     [[ -f "$snapshot/$path" ]] || {
         echo "required handoff file is missing: $path" >&2
         exit 1
     }
 done
+
+tracked_rs=$(git ls-files '*.rs' | wc -l)
+archived_rs=$(find "$snapshot" -type f -name '*.rs' | wc -l)
+if [[ "$tracked_rs" -ne "$archived_rs" ]]; then
+    echo "Rust source coverage mismatch: tracked=$tracked_rs archived=$archived_rs" >&2
+    exit 1
+fi
 
 (cd "$snapshot" && bash tools/check-architecture.sh)
 (cd "$snapshot" && bash tools/check-large-files.sh)
