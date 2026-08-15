@@ -155,9 +155,9 @@ jobs:
 
     # `nightly` is excluded everywhere because it enables `#![feature]`, which
     # the stable channel rejects before any of this crate's own code is
-    # reached, and `candle` because it is a deprecated alias that expands to
-    # exactly `external-candle` (D-014) and so doubles the combination count
-    # without covering anything new.
+    # reached. The external-candle feature is excluded from the broad matrix
+    # because it pulls a large optional dependency graph; it has a focused
+    # compile job elsewhere.
     - name: incin-core, every feature combination
       run: cargo hack check -p incin-core --feature-powerset --all-targets --exclude-features nightly
 
@@ -171,10 +171,10 @@ jobs:
       run: cargo hack check -p incin-diagnostics --feature-powerset --all-targets
 
     - name: incin-backends, every feature combination
-      run: cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features candle
+      run: cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
 
     - name: incin, every feature combination
-      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,candle
+      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle
 
   # Every job above proves the unsafe code compiles. None of them proves it is
   # sound, and roughly 170 `unsafe` sites sit behind the CPU backend's SIMD

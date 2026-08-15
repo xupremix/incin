@@ -117,8 +117,8 @@ if [ $SKIP_POWERSET -eq 0 ]; then
         cargo hack check -p incin-core --feature-powerset --all-targets --exclude-features nightly
         cargo hack check -p incin-macros --feature-powerset --no-dev-deps --exclude-features nightly
         cargo hack check -p incin-diagnostics --feature-powerset --all-targets
-        cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features candle
-        cargo hack check -p incin-exclude-features nightly,candle
+        cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
+        cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle
         success "Powerset OK"
     else
         echo -e "${YELLOW}cargo-hack not found, skipping powerset check. Install with: cargo install cargo-hack${NC}"
