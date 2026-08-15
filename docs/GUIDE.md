@@ -153,10 +153,9 @@ a wrong one. Where the stronger, fully-static form matters, write it directly:
 
 ## 4. Tensors: creation, dtype, device
 
-`Tensor<S, B, K, G, P>` — shape, backend, element type (defaults to the
-backend's float element), gradient-tracking marker (`Grad` or `NoGrad`,
-defaults to `Grad`), and placement (defaults to `Local`). Most code only ever
-writes the first two.
+`Tensor<S, B, K, G, P>` — shape, backend, element type (defaults to `f32`),
+gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), and
+placement (defaults to `Local`). Most code only ever writes the first two.
 
 The stable default-build construction story is the classic typed constructor
 (plus the `tensor!` literal convenience). When the opt-in `target-api` feature
@@ -179,7 +178,7 @@ let d = tensor![1, 2, 3]?;                        // i64, matching torch.tensor'
 
 // 3. (feature = "target-api") An allocation target — see §7 — for anything
 //    that needs to say *where*.
-let e = Cpu.zeros(s![2, 3])?;
+let e = Cpu.zeros(shape![2, 3])?;
 ```
 
 Dtype comes from `K`. `Dyn` as the dtype parameter (`Tensor<S, B, Dyn>`) keeps
@@ -297,14 +296,14 @@ explicit constructor form for backend authors or code that intentionally fixes
 
 Feature `target-api`. A **target** is a value that knows where and how to
 allocate — a device (`Cpu`, `Wgpu::new(0)`, ...) or a backend value rebound to
-a specific dtype (`.with_dtype::<f64>()`). It has no construction step and
+a specific dtype (`.dtype::<f64>()`). It has no construction step and
 owns no resources; it is a value you pass around, not a runtime handle you
 initialize and hold.
 
 ```rust
 use incin::prelude::*;
 
-let x = Cpu.zeros(s![2, 3])?;                       // static shape, static proof
+let x = Cpu.zeros(shape![2, 3])?;                  // static shape, static proof
 let y = Cpu.zeros(shape![2, 3])?;                    // same, via the value macro
 let batch = 4;
 let z = Cpu.zeros(shape![batch, 3])?;                // dynamic batch axis
@@ -325,7 +324,7 @@ CPU). Prefer the ordinary forms for application code.
 
 `TensorTarget`/`DtypeTarget` extend the same idea to data-carrying and
 dtype-rebinding constructors — `gpu.tensor([[1.0, 2.0]])`,
-`gpu.with_dtype::<f64>().zeros(...)`. This whole surface is marked
+`gpu.dtype::<f64>().zeros(...)`. This whole surface is marked
 feature-gated in the prelude comment (`crates/incin/src/lib.rs:496`) — it
 is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 

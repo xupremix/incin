@@ -1,6 +1,6 @@
 # Autograd
 
-Gradient tracking is a type parameter, `G`, defaulting to `Grad`. A
+Gradient tracking is a type parameter, `G`, defaulting to `NoGrad`. A
 `Tensor<S, B, K, Grad>` records a tape entry for the operations that produce
 it; a `Tensor<S, B, K, NoGrad>` never does — the distinction is visible in
 the type, not just at runtime.

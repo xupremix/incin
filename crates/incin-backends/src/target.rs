@@ -62,7 +62,7 @@
 //! backend family. Carrying a default float dtype as an associated type on
 //! [`TensorTarget`] rather than a generic parameter keeps type inference
 //! total: `Cpu` is a target at `f32`, and
-//! [`with_dtype`](DtypeTarget::with_dtype) produces the view for any other
+//! [`dtype`](DtypeTarget::dtype) produces the view for any other
 //! dtype.
 //!
 //! The float is the dtype of *generated* tensors and layer parameters only.

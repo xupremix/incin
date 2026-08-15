@@ -7,7 +7,7 @@ two almost always and let the rest default:
 |---|---|---|
 | `S` | Shape (see [Shapes](./shapes.md)) | required |
 | `B` | Backend (which device this runs on) | required (`DefaultBackend` if `cpu` is on) |
-| `K` | Element dtype | `B::FloatElem` (`f32` for the default backend) |
+| `K` | Element dtype | `f32` |
 | `G` | Gradient tracking (`Grad` / `NoGrad`) | `NoGrad` |
 | `P` | Placement (distributed only) | `Local` |
 
@@ -47,7 +47,7 @@ sizes.
 use incin::prelude::*;
 type B = DefaultBackend;
 
-// K defaults to B::FloatElem (f32). Say it explicitly for anything else:
+// K defaults to f32. Say it explicitly for anything else:
 let doubles = Tensor::<s![2, 2], B, f64>::ones(())?;
 let ints = Tensor::<s![2, 2], B, i64>::zeros(())?;
 
