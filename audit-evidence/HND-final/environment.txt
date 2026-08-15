@@ -1,0 +1,26 @@
+HND-final environment
+
+Starting commit: 6cb6b660c268799fb6ea40158d30493f436a24e5
+Candidate final source commit: 43a3a4d632437b2be51362234571e76f2970139e
+Branch: develop
+
+Command: git status --short
+Result: only the pre-existing untracked AGENTS.md.bak-20260810-030034 was present.
+
+Command: rustc -Vv
+Result: rustc 1.97.1 (8bab26f4f 2026-07-14), host x86_64-unknown-linux-gnu.
+
+Command: cargo -V
+Result: cargo 1.97.1 (c980f4866 2026-06-30).
+
+Command: mdbook --version
+Result: mdbook v0.4.52.
+
+Command: git ls-files docs/book/book
+Result: no tracked generated mdBook HTML files.
+
+Command: git check-ignore -v docs/book/book/index.html
+Result: .gitignore:4:docs/book/book/ confirms generated HTML is ignored.
+
+Command: git diff --check; bash -n tools/feature-matrix.sh tools/ci-local.sh tools/check-package.sh tools/soundness.sh
+Result: exit 0.

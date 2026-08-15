@@ -1,0 +1,23 @@
+HND-final canonical export evidence
+
+The canonical exporter command is:
+
+    tools/export-snapshot.sh /tmp/incin-hnd-final-20260815.zip
+
+The final export is generated after the evidence archive commit from the
+tracked final HEAD. The exporter itself verifies exact tracked-file coverage,
+the two distributed source trees, architecture/dependency/large-file/public
+API gates, and a minimal core Cargo check. The final report records the exact
+archive byte size and SHA-256 after this command completes.
+
+Unpacked export validation requirements:
+
+- `crates/incin-core/src/dist/`
+- `crates/incin-backends/src/dist/`
+- `docs/book/src/`
+- Transformer proof/test
+- `audit-evidence/HND-final/`
+- `tools/feature-matrix.sh`
+
+The exporter rejects target output, downloaded datasets, checkpoints, caches,
+and ignored generated mdBook HTML because they are not tracked source files.

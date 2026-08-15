@@ -1,0 +1,23 @@
+HND-final validation evidence
+
+All commands below ran from source commit 43a3a4d632437b2be51362234571e76f2970139e.
+
+Command: cargo fmt --all -- --check
+Exit code: 0.
+
+Commands: cargo check -p incin-core --no-default-features; cargo check -p incin-core; cargo check -p incin-backends --no-default-features --features std,cpu
+Exit code: 0 for each.
+
+Commands: cargo test -p incin-backends --no-default-features --features std,cpu; cargo test -p incin-core; cargo test -p incin; cargo test -p incin-data
+Exit code: 0 for each. Backend, core, facade, and data test suites completed successfully.
+
+Commands: cargo check --workspace; cargo test --workspace; cargo test --doc --workspace
+Exit code: 0 for each.
+
+Commands: cargo clippy --workspace --all-targets -- -D warnings; cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
+Exit code: 0 for each.
+
+Focused commands also passed: the renamed backend-helper gradient parity test,
+canonical-only backend contract, operation inventory, generated capability
+docs, conformance, Transformer proof, macro trybuild suites, and distributed
+compile tests.

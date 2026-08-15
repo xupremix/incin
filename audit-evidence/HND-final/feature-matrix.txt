@@ -1,0 +1,19 @@
+HND-final feature contract evidence
+
+Source commit: 43a3a4d632437b2be51362234571e76f2970139e
+
+Command: rg -c '^[[:space:]]*run_row ' tools/feature-matrix.sh
+Result: 32 rows: core 4, backends 13, facade 15.
+
+Command: cargo xtask feature-matrix
+Exit code: 0
+Result: === Supported feature contract matrix: PASS ===
+
+The general matrix covers CUDA vendor compatibility explicitly. Platform and
+hardware delegated features are documented in docs/FEATURE_MATRIX.md:
+cpu-blas, metal-mps, autotune, and distributed-nccl have dedicated CI or
+hardware jobs. CUDA, WGPU, Metal, CUDA vendor, and NCCL general rows are
+compile contracts only.
+
+Hardware-only runtime checks were not run on this Linux host because no
+matching CUDA multi-node or Apple Silicon runner is available locally.

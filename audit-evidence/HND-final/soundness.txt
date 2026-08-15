@@ -1,0 +1,15 @@
+HND-final soundness evidence
+
+Source commit: 43a3a4d632437b2be51362234571e76f2970139e
+
+Command: tools/soundness.sh all
+Exit code: 0.
+Result: Miri passed 139 incin-core tests and the CPU backend suite with the
+documented seven numerical skips. AddressSanitizer and LeakSanitizer passed
+the baseline and +avx2 backend legs. The script ended with "Soundness gate
+passed.".
+
+ThreadSanitizer was not run. tools/soundness.sh deliberately excludes it from
+the default all selector because its current -Zbuild-std/hashbrown dependency
+conflict makes the constituent command unavailable as a trustworthy gate; the
+script documents that limitation in run_tsan.

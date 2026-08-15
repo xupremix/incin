@@ -1,0 +1,17 @@
+HND-final documentation and repository gates
+
+All commands ran from source commit 43a3a4d632437b2be51362234571e76f2970139e.
+
+Command: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
+Exit code: 0.
+
+Command: mdbook build docs/book
+Exit code: 0.
+
+Commands: tools/check-architecture.sh; tools/check-dependencies.sh --check; tools/check-large-files.sh; tools/check-public-api.sh; tools/check-package.sh; tools/audit-shapes.sh --check
+Exit code: 0 for each. Results included architecture, dependency, large-file,
+public API, package reproducibility, and shape-audit passed.
+
+Commands: cargo xtask ledger; cargo xtask budgets; cargo xtask docs --check
+Exit code: 0 for each. Results: 101/101 ledger tasks complete, budgets pass,
+and README feature tables match the manifests.
