@@ -1,25 +1,24 @@
 # Saving and loading
 
-Checkpointing is safetensors-based and works for any type implementing the
-typed state visitor contract (which `#[module]` generates automatically).
-
-> `save_safetensors`/`load_safetensors` are not currently re-exported
-> through the `incin` facade — only through `incin_core::nn::save` directly.
-> Add `incin_core` as an explicit dependency to reach them until that's
-> fixed; this is tracked as a known gap.
+Checkpointing works through the facade's `ModelExt` trait for any type
+implementing the typed state visitor contract (which `#[module]` generates
+automatically). Safetensors and postcard are supported state formats.
 
 ```rust,no_run
 use incin::prelude::*;
-use incin_core::nn::save::{load_safetensors, save_safetensors};
 
 type B = DefaultBackend;
 
 fn main() -> Result<()> {
     let model = Linear::<s![4, 2], B>::build(())?;
-    save_safetensors::<B, _, _>(&model, "model.safetensors")?;
+    model.save(Format::Safetensors, std::path::Path::new("model.safetensors"))?;
 
     let mut reloaded = Linear::<s![4, 2], B>::build(())?;
-    load_safetensors::<B, _, _>(&mut reloaded, "model.safetensors")?;
+    reloaded.load(
+        Format::Safetensors,
+        std::path::Path::new("model.safetensors"),
+        &DeviceId::cpu(),
+    )?;
 
     let x = Tensor::<s![1, 4], B>::ones(())?;
     let a = model.forward(x.clone())?;
@@ -29,8 +28,10 @@ fn main() -> Result<()> {
 }
 ```
 
-`save_safetensors`/`load_safetensors` work on a single layer, a hand-composed
-`#[module]` struct, or a `Sequential` chain through typed state visitors.
+`ModelExt::save`/`ModelExt::load` work on a single layer, a hand-composed
+`#[module]` struct, or a `Sequential` chain through typed state visitors. The
+trait is exported from `incin::prelude`; import it by name if you do not use
+the prelude.
 
 ## ONNX
 

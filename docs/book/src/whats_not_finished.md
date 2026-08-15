@@ -28,21 +28,19 @@ of repeating a number that won't.
 
 - **Scoped gradient policy** is intentionally explicit through
   `incin_core::exec::GradMode::Disabled.scope` and has no facade alias.
-- **`save_safetensors`/`load_safetensors`** are only reachable via
-  `incin_core::nn::save`, not through `incin::prelude` or anywhere in the
-  `incin` crate.
-
-The save helpers remain listed because code following this book needs the
-`incin_core`-qualified path for those functions.
+- **The lower-level `save_safetensors`/`load_safetensors` helpers** remain
+  available under `incin_core::nn::save` for compatibility, while normal
+  facade users should use `incin::prelude::{Format, ModelExt}`. The facade
+  path currently supports the same typed snapshot contract through
+  `ModelExt::save` and `ModelExt::load`.
 
 ## Architecture in progress (affects contributors more than users)
 
-- **Backend migration is still in progress.** Ordinary tensor operations use
+- **Backend decomposition is still in progress.** Ordinary tensor operations use
   the per-operation descriptor execution path. The seven remaining broad
-  operation-family traits remain only as hidden compatibility adapters for backend
-  implementations, tracing, and tests; they are not a second application
-  execution path. The remaining work is extracting their last backend-facing
-  responsibilities from `Backend`.
+  operation-family traits have been removed from production source. Remaining
+  work is splitting large backend files and making exceptional execution sites
+  that cannot fit `Execute<O>` easier to maintain.
 - **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
   complete planning layer behind the `distributed` feature but no execution
   path yet — a design surface, not a training feature to reach for.

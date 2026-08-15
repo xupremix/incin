@@ -24,12 +24,13 @@ stops existing, so this file cannot rot into a list of deleted files.
 | The completeness proof | `crates/incin-backends/src/cpu/canonical.rs` | A capability row advertised without an `Execute<op::X>` behind it does not compile | `assert_every_advertised_row_executes!`, driven by the same declaration that generates the rows |
 | The generated evidence | `docs/capabilities.md`, `docs/OPERATION_SEMANTICS.md`, `audit-evidence/FND-005/cpu-migration-status.md` | Every number in them is derived from the Rust source rather than written by hand | A test fails when the committed file and the regenerated one differ; `docs/README.md` lists the regeneration command for each |
 
-> **Adoption, as distinct from design.** The stable tensor methods now route
+> **Adoption, as distinct from design.** The stable tensor methods route
 > backend-executable operations through `dispatch::execute` and its shaped
-> variants. The old operation-family traits remain only for backend-local
-> helpers, fused special execution sites, tracing adapters, and compatibility
-> tests. Their in-tree compatibility namespace is doc-hidden
-> They are not a backend-authoring API or a second stable tensor path.
+> variants. The old core operation-family traits have been removed from
+> production source. Backend-local helpers, fused special execution sites,
+> tracing adapters, and compatibility tests use ordinary functions or explicit
+> execution sites. They are not a backend-authoring API or a second stable
+> tensor path.
 
 The shape of that table is the point. Each row is a decision made once and then
 made unrepeatable, so the cost of migrating operation number 118 is the same as

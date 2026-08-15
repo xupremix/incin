@@ -72,12 +72,12 @@ documentation rather than a contract.
 ## Writing an executor
 
 ```rust,ignore
-impl<T: DType, D: Device> Execute<Descriptor<op::Add>> for MyBackend<T, D> {
+impl Execute<op::Add> for MyBackend {
     type Output = MyStorage;
 
-    fn execute_shaped<ShapeTy: Shape>(
+    fn execute(
         &self,
-        request: ExecutionRequest<'_, Descriptor<op::Add>, Self>,
+        request: ExecutionRequest<'_, op::Add, Self>,
     ) -> Result<MyStorage, BackendError> {
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(OperationKind::Add, "add expects two operands"));
@@ -85,37 +85,25 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Add>> for MyBackend<T, D> {
         // `request.operation` is `Validated` — its output shape was derived
         // and checked before you were reached. Read it rather than
         // re-deriving it.
-        let out_shape = request.operation.descriptor().outputs();
+        let out_shape = request.operation.descriptor().output_shape();
         todo!("run the kernel")
     }
 }
 ```
 
-Three things worth knowing about that signature:
-
-**`execute_shaped<S>` is the required method; `execute` is provided.** The
-delegation runs `execute_shaped::<Dyn>`. It is deliberately this way round: a
-required `execute` with a defaulted `execute_shaped` would let a backend
-implement only the erased form and silently never specialize.
-
-**`S` carries compile-time facts.** `S::PROOF` says how much of the shape the
-compiler settled; `S::STATIC_NUMEL` is `Some(n)` when the element count is a
-constant. Because `S` is a type parameter, `if let Some(n) = S::STATIC_NUMEL`
-collapses to one arm at monomorphization rather than branching at run time.
-The CPU creation executors use exactly this to skip a runtime element-count
-loop for statically-shaped allocations.
-
-**The output associated type is not fixed to storage.** A readback returns an
-`f64` or a `Vec<f64>`; `chunk`/`split` return several storages; `topk` returns
-a pair. Naming the output as an associated type is what lets those exist
-without a wrapper that gets immediately unwrapped.
+The backend executor receives a validated descriptor and checked tensor
+handles. Shape-typed callers use `exec::dispatch::execute_shaped` before this
+boundary; the executor itself reads the validated output metadata rather than
+re-deriving a shape from the Rust type. The output associated type is not fixed
+to storage: readback can return an `f64` or a vector, and multi-output
+operations can return a tuple.
 
 ## The checklist
 
 1. `StorageBackend` — name, storage type, device type, metadata accessor.
 2. Your storage type produces a valid `TensorMeta`.
 3. `Capabilities` — claim exactly what you execute, refuse with typed reasons.
-4. `Execute<Descriptor<op::X>>` for each advertised operation.
+4. `Execute<op::X>` for each advertised operation.
 5. A capability-matrix test that *runs* each advertised row rather than
    asserting the table against itself.
 
