@@ -2,7 +2,12 @@
 use crate::exec::catalog::{BatchNormAttributes, Descriptor, LayerNormAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::{Backend, Dyn, DynShape, Local, RequiresGrad, Result, Shape, Tensor};
+use crate::dist::Local;
+use crate::err::{Error, Result};
+use crate::shapes::{Dyn, DynShape, Shape};
+use crate::tensor::backend::Backend;
+use crate::tensor::base::Tensor;
+use crate::tensor::grad::RequiresGrad;
 use crate::tensor::backend::Execute;
 
 impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -35,7 +40,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             crate::tensor::grad::execution_context::<B, G>(&self._grad).with_training(true);
         let inner =
             dispatch::execute_shaped::<op::LayerNorm, B, S>(&context, attributes, &inputs, &shape)
-                .map_err(crate::prelude::Error::from)?;
+                .map_err(Error::from)?;
         Tensor::from_shape_value(
             inner.into(),
             shape,
@@ -79,7 +84,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner =
             dispatch::execute_shaped::<op::BatchNorm, B, S>(&context, attributes, &inputs, &shape)
-                .map_err(crate::prelude::Error::from)?;
+                .map_err(Error::from)?;
         Tensor::from_shape_value(
             inner.into(),
             shape,

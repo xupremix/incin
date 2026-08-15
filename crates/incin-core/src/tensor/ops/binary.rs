@@ -16,9 +16,11 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::{
-    Backend, DynShape, GradJoin, JoinedGrad, RequiresGrad, Result, Shape, Tensor,
-};
+use crate::err::Result;
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::backend::Backend;
+use crate::tensor::base::Tensor;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use crate::shapes::ShapeValue;
 use crate::tensor::backend::Execute;
 use crate::tensor::dtype::DType;

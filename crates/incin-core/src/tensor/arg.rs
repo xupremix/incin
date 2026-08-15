@@ -1,4 +1,8 @@
-use crate::prelude::{DType, Device, RequiresGrad, Shape, ShapeBuf};
+use crate::shapes::{Shape, ShapeBuf};
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::RequiresGrad;
+use crate::tensor::arg_into::TensorArgsData;
 
 /// Connects a tensor's type parameters to the runtime arguments
 /// needed for construction. For each parameter (Shape, DType, Device, Grad),
@@ -25,7 +29,7 @@ where
     G: RequiresGrad,
 {
     /// A struct bundling each parameter's `Arg` (shape dims, dtype id, device id, grad flag).
-    type Args = crate::prelude::TensorArgsData<S::Arg, K::Arg, D::Arg, G::Arg>;
+    type Args = TensorArgsData<S::Arg, K::Arg, D::Arg, G::Arg>;
 
     #[inline]
     /// Initializes each parameter's `Field` independently from its slot in `args`.

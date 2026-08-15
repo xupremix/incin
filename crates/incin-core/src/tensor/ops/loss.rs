@@ -12,7 +12,11 @@ use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     Reduction, ReductionMode,
 };
-use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
+use crate::err::Result;
+use crate::shapes::Shape;
+use crate::tensor::backend::Backend;
+use crate::tensor::base::Tensor;
+use crate::tensor::grad::RequiresGrad;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;

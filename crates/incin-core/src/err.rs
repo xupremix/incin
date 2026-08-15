@@ -2,6 +2,9 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use crate::shapes::error::OperationKind;
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 /// Maximum diagnostic text retained from a backend, parser, or external
 /// library. Errors carry enough context to diagnose a failure without allowing
@@ -240,7 +243,7 @@ pub enum Error {
     #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
     /// The backend or operation cannot represent the requested dtype.
     UnsupportedDType {
-        dtype: crate::prelude::DTypeDescriptor,
+        dtype: DTypeDescriptor,
         backend: &'static str,
         op: &'static str,
     },
@@ -250,9 +253,9 @@ pub enum Error {
     )]
     /// Requested precision choice cannot be honored by the backend.
     UnsupportedPrecision {
-        operation: crate::prelude::OperationKind,
-        storage: crate::prelude::DTypeDescriptor,
-        requested: crate::prelude::DTypeDescriptor,
+        operation: OperationKind,
+        storage: DTypeDescriptor,
+        requested: DTypeDescriptor,
         role: crate::exec::PrecisionRole,
         backend: &'static str,
     },
@@ -260,8 +263,8 @@ pub enum Error {
     #[error("Tensor dtype metadata {expected:?} does not match storage {got:?}")]
     /// Logical dtype differs from physical storage.
     DTypeStorageMismatch {
-        expected: crate::prelude::DTypeDescriptor,
-        got: crate::prelude::DTypeDescriptor,
+        expected: DTypeDescriptor,
+        got: DTypeDescriptor,
     },
 
     #[error("{operation}: cannot convert {from:?} to {to:?}: {reason}")]
@@ -271,9 +274,9 @@ pub enum Error {
         /// Stable operation identity.
         operation: &'static str,
         /// Physical source dtype.
-        from: crate::prelude::DTypeDescriptor,
+        from: DTypeDescriptor,
         /// Requested destination dtype.
-        to: crate::prelude::DTypeDescriptor,
+        to: DTypeDescriptor,
         /// Bounded classification of the rejected value.
         reason: ConversionFailure,
     },
@@ -282,30 +285,30 @@ pub enum Error {
     /// An operation received a dtype outside its declared contract.
     DTypeMismatch {
         operation: &'static str,
-        expected: crate::prelude::DTypeDescriptor,
-        actual: crate::prelude::DTypeDescriptor,
+        expected: DTypeDescriptor,
+        actual: DTypeDescriptor,
     },
 
     #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
     /// Logical device differs from physical storage.
     DeviceStorageMismatch {
-        expected: crate::prelude::DeviceId,
-        got: crate::prelude::DeviceId,
+        expected: DeviceId,
+        got: DeviceId,
     },
 
     #[error("Device mismatch: left {left:?}, right {right:?}")]
     /// Inputs reside on different devices.
     DeviceMismatch {
-        left: crate::prelude::DeviceId,
-        right: crate::prelude::DeviceId,
+        left: DeviceId,
+        right: DeviceId,
     },
 
     #[error("{operation}: device or placement mismatch: expected {expected:?}, got {actual:?}")]
     /// An operation received storage on a different device or placement.
     PlacementMismatch {
         operation: &'static str,
-        expected: crate::prelude::DeviceId,
-        actual: crate::prelude::DeviceId,
+        expected: DeviceId,
+        actual: DeviceId,
     },
 
     #[error("Invalid byte length: expected {expected}, got {got}")]
@@ -487,7 +490,7 @@ impl From<crate::exec::MetaError> for Error {
 /// must name truncation or saturation when those semantics are intended.
 pub fn convert_f64_to_i64(
     operation: &'static str,
-    from: crate::prelude::DTypeDescriptor,
+    from: DTypeDescriptor,
     value: f64,
     policy: FloatToIntPolicy,
 ) -> Result<i64> {
@@ -577,7 +580,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "index_readback",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 42.0,
                 FloatToIntPolicy::Exact,
             )
@@ -595,7 +598,7 @@ mod tests {
         ] {
             let err = convert_f64_to_i64(
                 "index_readback",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 value,
                 FloatToIntPolicy::Exact,
             )
@@ -608,8 +611,8 @@ mod tests {
             } = err
             {
                 assert_eq!(operation, "index_readback");
-                assert_eq!(from, crate::prelude::DTypeId::F64.descriptor());
-                assert_eq!(to, crate::prelude::DTypeId::I64.descriptor());
+                assert_eq!(from, DTypeId::F64.descriptor());
+                assert_eq!(to, DTypeId::I64.descriptor());
                 assert_eq!(reason, expected);
             } else {
                 panic!("expected Error::InvalidConversion");
@@ -622,7 +625,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_truncate",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 -42.75,
                 FloatToIntPolicy::Truncate,
             )
@@ -632,7 +635,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 f64::INFINITY,
                 FloatToIntPolicy::Saturate,
             )
@@ -642,7 +645,7 @@ mod tests {
         assert_eq!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 f64::NEG_INFINITY,
                 FloatToIntPolicy::Saturate,
             )
@@ -652,7 +655,7 @@ mod tests {
         assert!(matches!(
             convert_f64_to_i64(
                 "explicit_saturate",
-                crate::prelude::DTypeId::F64.descriptor(),
+                DTypeId::F64.descriptor(),
                 f64::NAN,
                 FloatToIntPolicy::Saturate,
             ),
