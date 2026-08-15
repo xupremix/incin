@@ -10,10 +10,12 @@
 //! is the thin backend-facing wrapper that reports its failures as the crate's
 //! [`Error`] type.
 
-use incin_core::prelude::{DTypeDescriptor, OperationKind, Result};
+use incin_core::error::Result;
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::dtype::DTypeDescriptor;
 
 #[cfg(test)]
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 
 /// Bytes needed to hold `elements` values of `dtype`.
 ///

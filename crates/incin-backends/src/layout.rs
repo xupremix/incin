@@ -20,7 +20,9 @@
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+use incin_core::error::{Error, Result};
+use incin_core::shapes::error::OperationKind;
+use incin_core::shapes::buf::ShapeBuf;
 use incin_core::shapes::broadcast::broadcast_dim_slices;
 
 /// Compute row-major (C-contiguous) strides for `shape`.
@@ -29,7 +31,7 @@ use incin_core::shapes::broadcast::broadcast_dim_slices;
 /// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
 /// returns an empty stride vector.
 pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
-    incin_core::prelude::StrideBuf::contiguous_for(
+    incin_core::shapes::buf::StrideBuf::contiguous_for(
         &ShapeBuf::from_slice(shape),
         OperationKind::Storage,
     )

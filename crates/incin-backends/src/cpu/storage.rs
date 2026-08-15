@@ -13,8 +13,9 @@ use core::ops::Deref;
 
 use half::{bf16, f16};
 use incin_core::exec::{Alignment, TensorMeta};
-use incin_core::prelude::Result;
-use incin_core::prelude::{DTypeDescriptor, DTypeId, Error};
+use incin_core::error::{Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 use crate::cpu::stride;
 
@@ -240,7 +241,7 @@ impl CpuStorage {
             strides.as_slice().into(),
             offset_elements,
             buffer.descriptor(),
-            incin_core::prelude::DeviceId::cpu(),
+            DeviceId::cpu(),
             buffer.alignment(),
             buffer.len(),
         )
@@ -360,29 +361,29 @@ impl CpuStorage {
             CpuBuffer::Bool(values) => Ok(i64::from(values[flat])),
             CpuBuffer::U32(values) => Ok(i64::from(values[flat])),
             CpuBuffer::I64(values) => Ok(values[flat]),
-            CpuBuffer::F32(values) => incin_core::prelude::convert_f64_to_i64(
+            CpuBuffer::F32(values) => convert_f64_to_i64(
                 operation,
                 DTypeId::F32.descriptor(),
                 f64::from(values[flat]),
-                incin_core::prelude::FloatToIntPolicy::Exact,
+                FloatToIntPolicy::Exact,
             ),
-            CpuBuffer::F64(values) => incin_core::prelude::convert_f64_to_i64(
+            CpuBuffer::F64(values) => convert_f64_to_i64(
                 operation,
                 DTypeId::F64.descriptor(),
                 values[flat],
-                incin_core::prelude::FloatToIntPolicy::Exact,
+                FloatToIntPolicy::Exact,
             ),
-            CpuBuffer::F16(values) => incin_core::prelude::convert_f64_to_i64(
+            CpuBuffer::F16(values) => convert_f64_to_i64(
                 operation,
                 DTypeId::F16.descriptor(),
                 values[flat].to_f64(),
-                incin_core::prelude::FloatToIntPolicy::Exact,
+                FloatToIntPolicy::Exact,
             ),
-            CpuBuffer::BF16(values) => incin_core::prelude::convert_f64_to_i64(
+            CpuBuffer::BF16(values) => convert_f64_to_i64(
                 operation,
                 DTypeId::BF16.descriptor(),
                 values[flat].to_f64(),
-                incin_core::prelude::FloatToIntPolicy::Exact,
+                FloatToIntPolicy::Exact,
             ),
             CpuBuffer::Q8_0(_) => Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),

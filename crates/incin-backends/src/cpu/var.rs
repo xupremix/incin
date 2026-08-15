@@ -16,10 +16,11 @@ use core::cell::RefCell;
 #[cfg(feature = "test-utils")]
 use core::cell::Cell;
 
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 
 #[cfg(feature = "test-utils")]
-use incin_core::prelude::{BackendError, Error, OperationKind};
+use incin_core::error::{BackendError, Error};
+use incin_core::shapes::error::OperationKind;
 
 use crate::cpu::storage::CpuStorage;
 
