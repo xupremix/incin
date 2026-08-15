@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-zip-proj /home/xupremix/Projects/incin /tmp/hnd004b-final-v10.zip # passed
+tools/export-snapshot.sh /tmp/hnd004b-canonical-v3.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
