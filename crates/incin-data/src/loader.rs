@@ -280,6 +280,7 @@ where
 
 /// Data loader iter.
 pub struct DataLoaderIter<T> {
+    sync_next: Option<Box<dyn FnMut() -> Option<BatchResult<T>> + Send>>,
     receiver: Option<Receiver<(usize, BatchResult<T>)>>,
     pending: BTreeMap<usize, BatchResult<T>>,
     next_sequence: usize,
@@ -296,6 +297,17 @@ impl<T> Iterator for DataLoaderIter<T> {
 
     /// Next.
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(sync_next) = self.sync_next.as_mut() {
+            let batch = sync_next();
+            if batch.is_none() {
+                self.sync_next = None;
+            }
+            if batch.as_ref().is_some_and(|item| item.is_err()) {
+                self.terminated = true;
+                self.sync_next = None;
+            }
+            return batch;
+        }
         if self.terminated || self.next_sequence >= self.total_batches {
             return None;
         }
@@ -353,6 +365,7 @@ impl<T> Iterator for DataLoaderIter<T> {
 impl<T> Drop for DataLoaderIter<T> {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Release);
+        self.sync_next.take();
         self.receiver.take();
         for worker in self.workers.drain(..) {
             let _ = worker.join();
@@ -393,74 +406,54 @@ where
             batch_indices.push(indices[start..end].to_vec());
         }
 
-        // Bounded channel to prevent over-fetching
-        let channel_capacity = if self.num_workers == 0 {
-            num_batches.max(1)
-        } else {
-            self.prefetch.get()
-        };
-        let (tx, rx) = sync_channel(channel_capacity);
-
         let dataset = self.dataset.clone();
         let collate_fn = self.collate_fn.clone();
         let cancel = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::new();
 
         if self.num_workers == 0 {
-            // Synchronous mode is deliberately executed on the caller's
-            // thread. This keeps `num_workers == 0` deterministic and avoids
-            // creating a hidden worker whose panic or drop would look like a
-            // clean end-of-iteration.
-            for (sequence, batch_idx) in batch_indices.into_iter().enumerate() {
+            // Keep the synchronous path lazy: constructing the iterator only
+            // prepares indices. Dataset access and collation happen in the
+            // caller's `next()` call, one batch at a time.
+            let mut batches = batch_indices.into_iter();
+            let sync_next = Box::new(move || {
+                let batch_idx = batches.next()?;
                 let mut batch = Vec::with_capacity(batch_idx.len());
                 for idx in batch_idx {
                     match dataset.get(idx) {
                         Ok(Some(item)) => batch.push(item),
                         Ok(None) => {
-                            let _ = tx.send((
-                                sequence,
-                                Err(DataError::IndexOutOfBounds {
-                                    index: idx,
-                                    len: dataset.len(),
-                                }),
-                            ));
-                            return DataLoaderIter {
-                                receiver: Some(rx),
-                                pending: BTreeMap::new(),
-                                next_sequence: 0,
-                                total_batches: num_batches,
-                                terminated: false,
-                                timeout: self.timeout,
-                                cancel,
-                                workers,
-                            };
+                            return Some(Err(DataError::IndexOutOfBounds {
+                                index: idx,
+                                len: dataset.len(),
+                            }));
                         }
                         Err(error) => {
-                            let _ = tx.send((sequence, Err(error)));
-                            return DataLoaderIter {
-                                receiver: Some(rx),
-                                pending: BTreeMap::new(),
-                                next_sequence: 0,
-                                total_batches: num_batches,
-                                terminated: false,
-                                timeout: self.timeout,
-                                cancel,
-                                workers,
-                            };
+                            return Some(Err(error));
                         }
                     }
                 }
                 if !batch.is_empty() {
-                    let collated = catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
+                    return Some(catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
                         .map_err(|_| DataError::CollatePanicked { worker_id: 0 })
-                        .and_then(|result| result);
-                    if tx.send((sequence, collated)).is_err() {
-                        break;
-                    }
+                        .and_then(|result| result));
                 }
-            }
+                Some(Err(DataError::WorkerDisconnected))
+            });
+            return DataLoaderIter {
+                sync_next: Some(sync_next),
+                receiver: None,
+                pending: BTreeMap::new(),
+                next_sequence: 0,
+                total_batches: num_batches,
+                terminated: false,
+                timeout: self.timeout,
+                cancel,
+                workers,
+            };
         } else {
             // Multi-threaded
+            let (tx, rx) = sync_channel(self.prefetch.get());
             let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter().enumerate()));
 
             for worker_id in 0..self.num_workers {
@@ -529,18 +522,18 @@ where
                     }
                 }));
             }
-        }
-
-        drop(tx);
-        DataLoaderIter {
-            receiver: Some(rx),
-            pending: BTreeMap::new(),
-            next_sequence: 0,
-            total_batches: num_batches,
-            terminated: false,
-            timeout: self.timeout,
-            cancel,
-            workers,
+            drop(tx);
+            DataLoaderIter {
+                sync_next: None,
+                receiver: Some(rx),
+                pending: BTreeMap::new(),
+                next_sequence: 0,
+                total_batches: num_batches,
+                terminated: false,
+                timeout: self.timeout,
+                cancel,
+                workers,
+            }
         }
     }
 }
@@ -575,6 +568,45 @@ mod tests {
         fn collate(&self, batch: Vec<i32>) -> BatchResult<Vec<i32>> {
             Ok(batch)
         }
+    }
+
+    struct CountingDataset {
+        reads: Arc<std::sync::atomic::AtomicUsize>,
+        len: usize,
+    }
+
+    impl Dataset for CountingDataset {
+        type Item = i32;
+
+        fn len(&self) -> usize {
+            self.len
+        }
+
+        fn get(&self, index: usize) -> BatchResult<Option<Self::Item>> {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            Ok((index < self.len).then_some(index as i32))
+        }
+    }
+
+    #[test]
+    fn zero_worker_iterator_fetches_only_the_next_batch() {
+        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let loader = DataLoader::new(
+            CountingDataset {
+                reads: reads.clone(),
+                len: 9,
+            },
+            VecCollate,
+            3,
+        )
+        .unwrap();
+
+        let mut iter = (&loader).into_iter();
+        assert_eq!(reads.load(Ordering::Relaxed), 0);
+        assert_eq!(iter.next().unwrap().unwrap(), vec![0, 1, 2]);
+        assert_eq!(reads.load(Ordering::Relaxed), 3);
+        assert_eq!(iter.next().unwrap().unwrap(), vec![3, 4, 5]);
+        assert_eq!(reads.load(Ordering::Relaxed), 6);
     }
 
     // Every test below has a hard wall-clock timeout: a regression in the
