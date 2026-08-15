@@ -8,12 +8,11 @@ a training run. Dynamic shapes are just as first-class (`Tensor<Dyn, Backend>`)
 for the parts of a model that genuinely are dynamic (batch size, sequence
 length), and the two compose in the same program.
 
-This book is a hands-on tour. Every code block in it is checked against the
-actual crate — most were lifted directly from a working end-to-end smoke test
-covering tensors, autograd, every common layer type, a full training loop,
-metrics, and checkpoint save/load, all run on CPU before being written down
-here. Where something is not finished, the book says so plainly rather than
-describing the design intent as if it were shipped — see
+This book is a hands-on tour. Rust snippets are checked where they are wired
+into doctests or executable fixtures; prose snippets are not promised to be
+automatically executed. The examples below are drawn from the current crate
+and its CPU-focused smoke tests. Where something is not finished, the book
+says so plainly rather than describing design intent as if it were shipped — see
 [What's not finished yet](./whats_not_finished.md) for the current honest
 state, especially around GPU backends.
 

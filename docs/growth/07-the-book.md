@@ -25,11 +25,11 @@ example-first, unafraid of the hard parts, but always motivating *why* before
 - **mdBook.** Location: `docs/book/` (committed; distinct from `docs/growth/`).
 - `docs/book/book.toml`, `docs/book/src/SUMMARY.md` (the chapter map),
   `docs/book/src/**/*.md`.
-- **Every code block is a real, tested doctest or example.** Wire the book's
-  snippets to compile: prefer pulling code via `{{#include ../../..
-  /crates/incin/examples/…}}` (mdBook include) so examples cannot rot, or use
-  `mdbook-keeper`/`skeptic`-style testing. A code sample that no longer compiles
-  is the fastest way to lose trust — CI must build the book's code.
+- **Executable snippets remain the goal, not a current blanket claim.** Wire
+  important book snippets to doctests or executable fixtures, preferably by
+  pulling code via `{{#include ../../.. /crates/incin/examples/…}}` so examples
+  cannot rot. `mdbook build docs/book` checks the Markdown book; the repository
+  documents which Rust snippets are actually compiled.
 - Add a CI job: `mdbook build docs/book` + `mdbook test docs/book` (the latter
   against a crate that re-exports the prelude). Document the exact commands in
   `docs/book/README.md`.

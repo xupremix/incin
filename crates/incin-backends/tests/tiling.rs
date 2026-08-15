@@ -1,3 +1,4 @@
+#![cfg(any(feature = "cpu", feature = "cuda"))]
 #![allow(clippy::needless_range_loop)]
 
 use incin_backends::iteration::tile_2d;

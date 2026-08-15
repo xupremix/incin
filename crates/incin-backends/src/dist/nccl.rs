@@ -2203,6 +2203,7 @@ pub enum NcclTransportError {
 mod tests {
     use super::*;
     use incin_core::backend_authoring::Backend;
+    use incin_core::backend_authoring::HostInterop;
 
     fn all_reduce_plan() -> CollectivePlan {
         type Mesh =
