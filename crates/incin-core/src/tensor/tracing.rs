@@ -35,7 +35,7 @@ pub fn tracing_mark_input(value_id: ValueId) {
 /// Marks a traced tensor input while retaining its frontend shape proof.
 pub fn tracing_mark_input_typed<S>(value_id: ValueId)
 where
-    S: crate::prelude::Shape + crate::exec::shape_projection::ShapeProjection,
+    S: crate::shapes::Shape + crate::exec::shape_projection::ShapeProjection,
 {
     TRACING_GRAPH.lock().mark_input_with_shape::<S>(value_id);
 }

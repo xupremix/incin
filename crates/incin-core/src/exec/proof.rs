@@ -100,7 +100,7 @@ impl ShapeEvidence {
 /// override is a wrong specialization rather than unsoundness. What this type
 /// removes is the ability to assert a level with *no* type behind it at all.
 ///
-/// [`Shape::PROOF`]: crate::prelude::Shape::PROOF
+/// [`Shape::PROOF`]: crate::shapes::Shape::PROOF
 /// A descriptor together with the proof that produced it.
 ///
 /// The only way to obtain one outside `incin-core` is from a lowering rule,
@@ -248,7 +248,7 @@ mod tests {
     use super::*;
     use crate::exec::catalog::NoAttributes;
     use crate::exec::{Descriptor, LogicalTensorMeta, op};
-    use crate::prelude::{Dyn, ShapeBuf};
+    use crate::shapes::{Dyn, ShapeBuf};
     use typenum::{U2, U3};
     type Static23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<U3, crate::shapes::Nil>>;
     type Mixed23 = crate::shapes::DimCons<U2, crate::shapes::DimCons<usize, crate::shapes::Nil>>;

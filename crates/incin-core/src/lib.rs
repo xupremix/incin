@@ -100,7 +100,7 @@ pub mod backend_authoring {
     ///
     /// Here rather than in the prelude because the caller is a backend's tape
     /// emitting telemetry, not a user collecting a graph they built: the
-    /// prelude's [`extract_graph`](crate::prelude::extract_graph) drains and is
+    /// public [`extract_graph`](crate::tensor::tracing::extract_graph) drains and is
     /// the one a user wants. `crate::tensor` is `pub(crate)`, so a re-export is
     /// the only way out of the crate at all, and putting a snapshot hook in the
     /// user prelude implies an audience that does not call it.
@@ -140,7 +140,7 @@ pub mod backend_authoring {
 
 /// Expert type-level shape vocabulary kept outside the normal prelude.
 pub mod types {
-    pub use crate::prelude::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
+    pub use crate::shapes::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
 }
 
 #[cfg(any(test, feature = "test-utils"))]

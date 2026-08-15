@@ -271,7 +271,7 @@ where
                     value.bytes(),
                     shape,
                     DTypeId::F32.descriptor(),
-                    &crate::prelude::DeviceId::cpu(),
+                    &crate::tensor::device::DeviceId::cpu(),
                 )?;
                 let input = TensorHandle::from_storage::<B, f32, Local>(&storage);
                 let context = ExecutionContext::from_scope(B::default());

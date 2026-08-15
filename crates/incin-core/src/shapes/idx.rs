@@ -540,7 +540,7 @@ impl<I: StaticCursor> ToAxisIndex for StaticAxis<I> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::{DimCons, Nil, Shape};
+    use crate::shapes::{DimCons, Nil, Shape};
     use typenum::{U0, U1, U2, U3, U4};
 
     trait Same<T> {}

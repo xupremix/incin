@@ -4,7 +4,7 @@ use super::*;
     use super::*;
     use crate::exec::spec::ExecutionDescriptor;
     use crate::tensor::reduction::Reduction;
-    use crate::prelude::Result;
+    use crate::err::Result;
     use crate::tensor::device::Device;
     use crate::tensor::device::DeviceId;
     use crate::tensor::dtype::DType;

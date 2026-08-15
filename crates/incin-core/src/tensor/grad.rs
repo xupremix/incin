@@ -1,6 +1,6 @@
 use crate::exec::context::ExecutionContext;
 use crate::exec::policy::GradMode;
-use crate::prelude::Dyn;
+use crate::shapes::Dyn;
 use crate::tensor::backend::StorageBackend;
 use core::fmt::Debug;
 use core::marker::PhantomData;

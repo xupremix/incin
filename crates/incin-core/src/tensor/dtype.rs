@@ -578,7 +578,7 @@ impl DTypeId {
     /// The lowercase name used in diagnostics, generated documentation, and
     /// `cargo incin doctor`'s report.
     ///
-    /// The counterpart of [`OperationKind::name`](crate::prelude::OperationKind::name)
+    /// The counterpart of [`OperationKind::name`](crate::shapes::error::OperationKind::name)
     /// and [`LayoutClass::as_str`](crate::exec::LayoutClass::as_str): one
     /// spelling per dtype, so the capability tables, the doctor's probe lines
     /// and a shape error cannot disagree about what to call `F32`.
@@ -588,7 +588,7 @@ impl DTypeId {
     }
 
     /// True for `U8`, `U32`, `I64` — dtypes with no fractional part, which
-    /// [`Tensor`](crate::prelude::Tensor)'s `Display`/`Debug` render as plain
+    /// [`Tensor`](crate::tensor::base::Tensor)'s `Display`/`Debug` render as plain
     /// integers rather than with decimal formatting.
     #[must_use]
     pub const fn is_integer(self) -> bool {

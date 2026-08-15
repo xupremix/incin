@@ -1042,7 +1042,7 @@ impl<D: Dim> AppendDim<D> for Dyn {
 ///
 /// `None` from any axis, or an overflowing product, makes the whole answer
 /// `None`. The multiplication is checked for the same reason
-/// [`checked_numel`](crate::prelude::CheckedNumel) is: a wrapped element count
+/// [`checked_numel`](crate::shapes::CheckedNumel) is: a wrapped element count
 /// undersizes an allocation, and one baked into a kernel as a constant would do
 /// so with no runtime check left to catch it.
 #[must_use]

@@ -192,23 +192,23 @@ mod tests {
             vec![
                 LogicalTensorMeta {
                     shape: Some(crate::shapes::ShapeBuf::from_slice(&[2, 3])),
-                    dtype: Some(crate::prelude::DTypeId::F32.into()),
-                    device: Some(crate::prelude::DeviceId::cpu()),
+                    dtype: Some(crate::tensor::dtype::DTypeId::F32.into()),
+                    device: Some(crate::tensor::device::DeviceId::cpu()),
                 },
                 LogicalTensorMeta {
                     shape: Some(crate::shapes::ShapeBuf::from_slice(&[2, 3])),
-                    dtype: Some(crate::prelude::DTypeId::F32.into()),
-                    device: Some(crate::prelude::DeviceId::cpu()),
+                    dtype: Some(crate::tensor::dtype::DTypeId::F32.into()),
+                    device: Some(crate::tensor::device::DeviceId::cpu()),
                 },
             ],
         )
         .expect("descriptor should validate");
         let mut graph = Graph::new();
-        let input = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
-        let rhs = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
-        let output = graph.add_value(vec![2, 3], crate::prelude::DTypeId::F32, None);
+        let input = graph.add_value(vec![2, 3], crate::tensor::dtype::DTypeId::F32, None);
+        let rhs = graph.add_value(vec![2, 3], crate::tensor::dtype::DTypeId::F32, None);
+        let output = graph.add_value(vec![2, 3], crate::tensor::dtype::DTypeId::F32, None);
         graph.add_node_with_descriptor_payload(
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Add),
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Add),
             vec![input, rhs],
             vec![output],
             descriptor

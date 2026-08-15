@@ -1,7 +1,16 @@
 use crate::backend_authoring::TensorBackend;
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
-use crate::prelude::{Backend, ComputeStats, Device, DType, Dim, DimCons, Dyn, DynShape, Error, Frozen, GradJoin, JoinedGrad, LayerStats, Nil, Param, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeInfo, ShapeValue, SupportsDType, Tensor, TrainState, Trainable};
+use crate::err::{Error, Result};
+use crate::shapes::{Dim, DimCons, Dyn, DynShape, Nil, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::base::Tensor;
+use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
+use crate::nn::module::ShapeInfo;
+use crate::nn::param::{Frozen, Param, TrainState, Trainable};
+use crate::nn::stats::{ComputeStats, LayerStats};
 use alloc::string::String;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -18,7 +27,8 @@ type LinearMatMulDescriptor = Descriptor<op::MatMulExact>;
 /// ## Examples
 /// ```rust
 /// # extern crate incin_core as incin;
-/// use incin_core::prelude::{LinearShape, s};
+/// use incin_core::nn::linear::LinearShape;
+/// use incin_core::shapes::s;
 /// // Static linear layer: 784 inputs → 256 outputs
 /// type S = s![784, 256];
 /// # fn assert_is_a_linear_shape<T: LinearShape>() {}
@@ -152,7 +162,7 @@ where
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // A fully static linear layer: 512 inputs → 256 outputs

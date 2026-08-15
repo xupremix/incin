@@ -16,7 +16,10 @@ use crate::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "wgpu")]
 use crate::tensor::device::{Wgpu, WgpuN};
 
-use crate::prelude::{Cpu, DTypeDescriptor, DTypeId, DeviceId, Dim, Grad, NoGrad, ShapeBuf};
+use crate::shapes::{Dim, ShapeBuf};
+use crate::tensor::device::{Cpu, DeviceId};
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::grad::{Grad, NoGrad};
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 use alloc::vec::Vec;

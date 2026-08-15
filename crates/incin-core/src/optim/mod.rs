@@ -480,7 +480,7 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -563,7 +563,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -758,7 +758,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;

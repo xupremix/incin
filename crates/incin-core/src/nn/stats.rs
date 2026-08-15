@@ -16,7 +16,10 @@
 //! forward pass or v2's type-level shape propagation. Both are out of scope
 //! here; this is an honest gap, not a bug.
 
-use crate::prelude::{Backend, DType, DynShape, OperationKind, Shape, ShapeBuf};
+use crate::shapes::{DynShape, Shape, ShapeBuf};
+use crate::shapes::error::OperationKind;
+use crate::tensor::backend::Backend;
+use crate::tensor::dtype::DType;
 use crate::nn::{AdaptiveAvgPool2d, GELU, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
 use crate::nn::param::{Buffer, Param, TrainState};
 use alloc::vec::Vec;
@@ -172,7 +175,7 @@ impl LayerStats {
 mod tests {
     // `s!` is written for consumers of the `incin` facade, so it expands to
     // `::incin::prelude::…`. `s![@ ..]` is the in-crate form and expands to
-    // `crate::prelude::…` instead — which is what this module needs, since
+    // the owning modules directly — which is what this module needs, since
     // `incin-core` does not depend on `incin`. The integration crates under
     // `tests/` use `extern crate incin_core as incin;`, which does create the
     // crate-root entry the absolute path resolves against; a `use crate as

@@ -341,7 +341,7 @@ pub enum DistributedError {
 /// Runtime counterpart of [`LegalTransition`].
 ///
 /// Static placement pairs fail through trait resolution. A tensor whose
-/// placement parameter is [`Dyn`](crate::prelude::Dyn) reaches this checked
+/// placement parameter is [`Dyn`](crate::shapes::Dyn) reaches this checked
 /// path and receives the same transition vocabulary as a structured error.
 pub fn validate_transition(
     from: PlacementKind,
