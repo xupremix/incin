@@ -467,7 +467,7 @@ mod scope {
 
     /// Run `body` with every gradient checked for a non-finite value.
     ///
-    /// The debugging counterpart to [`GradMode::Disabled::scope`]: a backward pass inside this
+    /// The debugging counterpart to [`ExecutionPolicy::scope`]: a backward pass inside this
     /// fails at the operation that first produced a `NaN` instead of at
     /// whatever notices later.
     pub fn check_gradients<R>(body: impl FnOnce() -> R) -> R {

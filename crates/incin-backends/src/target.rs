@@ -822,7 +822,7 @@ pub trait TargetExt: TensorTarget + Sized {
 
 impl<T: TensorTarget + Sized> TargetExt for T {}
 
-/// Which generated-tensor kernel [`TargetExt::generated`] should call.
+/// Which generated-tensor kernel [`TargetExt::generated_canonical`] should call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeneratedFill {
     /// Every element zero.

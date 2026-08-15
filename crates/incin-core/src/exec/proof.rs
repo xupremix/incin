@@ -90,9 +90,9 @@ impl ShapeEvidence {
 /// is provenance. A plain enum argument would let any caller write
 /// `ProofLevel::Static` beside whatever metadata it liked, which is precisely
 /// the forgery [`Validated`] exists to prevent one layer down. The only
-/// constructors here are [`of`](Self::of), which reads the level off a shape
+/// constructors here are [`ShapeEvidence::of`], which reads the level off a shape
 /// type and cannot be told a different answer, and
-/// [`dynamic`](Self::dynamic), which claims nothing.
+/// [`ShapeEvidence::dynamic`], which claims nothing.
 ///
 /// A `Shape` implemented outside this crate can still overstate its own
 /// `PROOF`, exactly as it can today — the trait's default is

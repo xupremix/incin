@@ -638,7 +638,7 @@ where
         Self::ones_raw(args.into_arg())
     }
 
-    /// Construct a Param directly from a backend's Var<K>.
+    /// Construct a Param directly from a backend's `Var<K>`.
     pub fn from_raw<A>(
         inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
         args: A,
