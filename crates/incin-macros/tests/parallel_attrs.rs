@@ -1,5 +1,6 @@
 use incin::prelude::*;
 use incin::VariableBackend;
+use incin::optim::ParameterGroup;
 use incin_macros::mesh;
 
 #[allow(dead_code)]
@@ -21,7 +22,8 @@ fn parallel_and_shard_field_attributes_pass() {
         layer2: Linear::build(()).unwrap(),
     };
 
-    assert_eq!(model.parameters().len(), 4);
+    let parameters = ParameterGroup::<DefaultBackend, f32>::from_module(&model).unwrap();
+    assert_eq!(parameters.len(), 4);
 }
 
 #[test]
