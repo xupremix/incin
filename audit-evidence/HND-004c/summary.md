@@ -45,13 +45,13 @@ The exact CI core powerset completed all 384 combinations successfully; its
 complete log is `powerset-core-final.log`. The current backend command expands
 to 8,212 generated `cargo check` commands. The exact command list is archived
 as `powerset-backends-command-list-current.txt`; a shared-target partitioned
-run was stopped during initial compilation after resource and wall-time
-inspection, with no compiler error observed in the saved output. Its four
-partial logs are `powerset-backends-partition-00.txt` through
-`powerset-backends-partition-03.txt`. This is incomplete validation, not a
-backend powerset pass. The facade command reports 36,608 combinations and was
-not run after the same assessment. Backend and facade final matrices are
-therefore unavailable, not passed.
+run and a separate-target retry were stopped during initial compilation after
+resource and wall-time inspection, with no compiler error observed in the
+saved output. Their partial logs and the retry command list are archived
+beside this file. This is incomplete validation, not a backend powerset pass.
+The facade command reports 36,608 combinations and was not run after the same
+assessment. Backend and facade final matrices are therefore unavailable, not
+passed.
 
 The current bounded final checks are archived in `final-checks-current.log`
 and `final-workspace-current.log`; both recorded exit status zero. Earlier

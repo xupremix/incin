@@ -1,0 +1,519 @@
+[slice 05] commands=503
+[slice 05] 1/503
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.22
+   Compiling quote v1.0.46
+   Compiling syn v2.0.118
+   Compiling libc v0.2.186
+    Checking cfg-if v1.0.4
+   Compiling autocfg v1.5.0
+   Compiling either v1.15.0
+   Compiling anyhow v1.0.103
+   Compiling zerocopy v0.8.31
+   Compiling zerocopy-derive v0.8.31
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling serde_core v1.0.228
+    Checking ppv-lite86 v0.2.21
+   Compiling bitflags v2.13.0
+   Compiling syn v1.0.109
+   Compiling getrandom v0.3.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling serde_derive v1.0.228
+   Compiling libm v0.2.15
+   Compiling once_cell v1.21.4
+   Compiling zmij v1.0.21
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling itertools v0.8.2
+   Compiling num-traits v0.2.19
+   Compiling indexmap v1.9.3
+   Compiling multimap v0.8.3
+   Compiling log v0.4.33
+   Compiling prost-derive v0.6.1
+    Checking rand_core v0.9.3
+   Compiling which v3.1.1
+   Compiling itertools v0.14.0
+   Compiling serde v1.0.228
+   Compiling bytes v0.5.6
+   Compiling hashbrown v0.12.3
+   Compiling serde_json v1.0.150
+   Compiling crossbeam-utils v0.8.21
+   Compiling prost v0.6.1
+   Compiling prost-derive v0.14.4
+   Compiling prost-build v0.6.1
+    Checking rand_chacha v0.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling fixedbitset v0.2.0
+   Compiling petgraph v0.5.1
+   Compiling heck v0.3.3
+    Checking rand v0.9.2
+   Compiling prost-types v0.6.1
+   Compiling bytemuck_derive v1.10.2
+   Compiling prettyplease v0.2.37
+   Compiling bytes v1.12.0
+   Compiling foldhash v0.1.5
+   Compiling semver v1.0.28
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling regex-syntax v0.8.11
+   Compiling regex-automata v0.4.14
+   Compiling indexmap v2.14.0
+   Compiling rustc_version v0.4.1
+   Compiling hashbrown v0.15.5
+   Compiling prost v0.14.4
+    Checking bytemuck v1.25.0
+    Checking crossbeam-epoch v0.9.18
+    Checking rand_distr v0.5.1
+    Checking scopeguard v1.2.0
+   Compiling version_check v0.9.5
+   Compiling thiserror v2.0.18
+   Compiling rayon-core v1.13.0
+   Compiling fixedbitset v0.5.7
+   Compiling petgraph v0.8.3
+   Compiling ahash v0.8.12
+    Checking lock_api v0.4.14
+    Checking half v2.7.1
+   Compiling onnx-pb v0.1.4
+    Checking crossbeam-deque v0.8.6
+   Compiling prost-types v0.14.4
+   Compiling heapless v0.7.17
+   Compiling regex v1.12.4
+    Checking getrandom v0.2.17
+   Compiling thiserror-impl v2.0.18
+   Compiling itoa v1.0.15
+   Compiling heck v0.5.0
+   Compiling memchr v2.7.6
+    Checking byteorder v1.5.0
+    Checking hash32 v0.2.1
+   Compiling prost-build v0.14.4
+    Checking rand_core v0.6.4
+    Checking spin v0.9.8
+    Checking stable_deref_trait v1.2.1
+    Checking rayon v1.12.0
+   Compiling safetensors v0.4.5
+    Checking rand_chacha v0.3.1
+    Checking cobs v0.3.0
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking digit-layout v0.3.1
+   Compiling target-triple v1.0.0
+    Checking rustc-std-workspace-alloc v1.0.1
+   Compiling cudarc v0.19.8
+    Checking winnow v1.0.3
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking hashbrown v0.14.5
+    Checking ggml-quants v0.1.0
+    Checking postcard v1.1.3
+    Checking rand v0.8.6
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking serde_spanned v1.1.1
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking libloading v0.9.0
+    Checking typenum v1.20.1
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking toml v1.1.2+spec-1.1.0
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking rand_distr v0.4.3
+    Checking fs2 v0.4.3
+    Checking termcolor v1.4.1
+    Checking glob v0.3.3
+    Checking trybuild v1.0.117
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 2m 10s
+[slice 05] 2/503
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 16.32s
+[slice 05] 3/503
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 26.12s
+[slice 05] 4/503
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 15.96s
+[slice 05] 5/503
+   Compiling matrixmultiply v0.3.11
+    Checking rawpointer v0.2.1
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 15.47s
+[slice 05] 6/503
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 16.12s
+[slice 05] 7/503
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 15.57s
+[slice 05] 8/503
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib test) generated 4 warnings (3 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized] target(s) in 16.95s
+[slice 05] 9/503
+    Checking half v2.7.1
+    Checking digit-layout v0.3.1
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking ggml-quants v0.1.0
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
