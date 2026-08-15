@@ -4,7 +4,7 @@
 //! different times:
 //!
 //! 1. **Which backend was this binary built to target?** Answered at compile
-//!    time by [`BestDevice`] / [`best_device!`](crate::best_device), from the
+//!    time by `BestDevice` / [`best_device!`](crate::best_device), from the
 //!    enabled Cargo features, in the order CUDA → WGPU → CPU.
 //! 2. **Which backend can actually run here?** Answered at runtime by probing
 //!    real hardware. That lives in `incin-backends::detect_device`, returns a

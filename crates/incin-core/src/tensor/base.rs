@@ -36,10 +36,10 @@ use core::marker::PhantomData;
 /// ## Type Parameters
 /// * `S`: The [`Shape`] of the tensor. This can be static (e.g., `s![2, 3, 224, 224]`), dynamic (`Dyn`), or partially dynamic.
 /// * `B`: The underlying compute [`Backend`]. It defines how the tensor is stored in memory and how mathematical operations are executed.
-/// * `K`: Element [`DType`], which may also be [`Dyn`] and runtime-checked.
+/// * `K`: Element [`DType`], which may also be [`crate::shapes::Dyn`] and runtime-checked.
 /// * `G`: Trait marker representing whether the tensor requires gradients ([`Grad`] or [`NoGrad`]). Defaults to `NoGrad`.
 /// * `P`: Logical [`Placement`]. Defaults to [`Local`]; distributed code may
-///   select a static placement or [`Dyn`] for runtime placement metadata.
+///   select a static placement or [`crate::shapes::Dyn`] for runtime placement metadata.
 ///
 /// ## Examples
 ///
@@ -1209,7 +1209,7 @@ impl<
     /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and — not
     /// requiring gradients. That last one is the mirror image of PyTorch's
     /// own rule for the literal reason that `G` defaults to
-    /// [`NoGrad`](crate::tensor::grad::NoGrad) here rather than `Grad`: printing
+    /// [`NoGrad`] here rather than `Grad`: printing
     /// `requires_grad=True` whenever `G::requires_grad` is true still means
     /// "printed exactly when true", while the default tensor remains inert.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

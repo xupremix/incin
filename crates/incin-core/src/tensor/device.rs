@@ -6,7 +6,7 @@
 //! ## Tier 1 — Fully Runtime (`Dyn`)
 //!
 //! Neither the backend family nor the device ordinal is known at compile
-//! time. The user passes a [`DeviceId`] at construction time and everything
+//! time. The user passes a [`crate::tensor::device::DeviceId`] at construction time and everything
 //! is dispatched at runtime.
 //!
 //! ```text

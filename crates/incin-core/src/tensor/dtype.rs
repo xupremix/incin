@@ -849,7 +849,7 @@ pub trait QuantDType: ConstDType {}
 /// **`Q8_0` is a logical dtype marker only.**
 ///
 /// It is NOT one physical scalar element per logical value. Physical data is
-/// stored as [`BlockQ8_0`](incin_backends::quant::BlockQ8_0) blocks in the
+/// stored as `BlockQ8_0` blocks in the backend-specific storage. The
 /// backend-specific storage. The block layout is:
 ///
 /// - 32 logical `i8` quantized values per block

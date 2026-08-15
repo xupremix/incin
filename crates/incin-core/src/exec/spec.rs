@@ -1,5 +1,5 @@
 //! Shared execution metadata.
-//! Exact operation descriptors live in [`super::catalog`]. This module retains
+//! Exact operation descriptors live in the catalog module. This module retains
 //! shared axis storage, schema versioning, distributed reduction vocabulary,
 //! and the neutral execution metadata trait.
 //!
@@ -32,7 +32,7 @@
 //! # Rank handling
 //!
 //! Descriptors use [`AxisSet`] for semantic axis collections. Its inline
-//! [`AxisMask`] representation is only an optimization; axes beyond 63 spill
+//! The inline axis-mask representation is only an optimization; axes beyond 63 spill
 //! into owned storage. Descriptor construction therefore has no frontend
 //! rank ceiling. Backend capability and resource-policy limits are checked at
 //! their respective boundaries.

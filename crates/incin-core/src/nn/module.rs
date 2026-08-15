@@ -633,7 +633,7 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
 ///
 /// Naming the *type* of that value (e.g. for a `#[module]` struct field)
 /// still requires hand-nesting `Sequential<L1, Sequential<L2, L3>>` — see
-/// [`SeqTy!`], which generates that same nesting from the same
+/// `SeqTy!`, which generates that same nesting from the same
 /// flat layer list so it never has to be written out by hand.
 #[macro_export]
 macro_rules! seq {
