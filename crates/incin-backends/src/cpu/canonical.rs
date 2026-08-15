@@ -20,9 +20,11 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, MathMode, SupportLevel, TensorHandle,
     UnsupportedReason,
 };
-use incin_core::prelude::{
-    BackendError, ConstDType, Cpu, DTypeId, Device, DeviceKind, OperationKind, Reduction,
-};
+use incin_core::error::BackendError;
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::device::{Cpu, Device, DeviceKind};
+use incin_core::tensor::dtype::{ConstDType, DTypeId};
+use incin_core::tensor::reduction::Reduction;
 
 use super::CpuBackendImpl;
 use super::capability::CPU_NAME;

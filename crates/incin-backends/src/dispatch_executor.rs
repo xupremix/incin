@@ -13,7 +13,10 @@
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
 use incin_core::exec::{ExecutionContext, TensorHandle};
-use incin_core::prelude::{BackendError, Device, OperationKind, StorageBackend};
+use incin_core::error::BackendError;
+use incin_core::shapes::error::OperationKind;
+use incin_core::backend_authoring::StorageBackend;
+use incin_core::tensor::device::Device;
 
 use crate::descriptor_bind::invalid;
 use crate::dispatch::{DispatchBackend, DispatchStorage};
