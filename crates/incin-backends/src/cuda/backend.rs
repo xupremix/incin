@@ -2115,8 +2115,8 @@ impl<D: Device> CudaBackendImpl<D> {
                 (t.clone(), d)
             }
             None => {
-                let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
-                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+                let numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(t.shape))
+                    .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
                 (Self::reshape::<K>(t, &[numel])?, 0)
             }
         };
@@ -2186,7 +2186,7 @@ impl<D: Device> CudaBackendImpl<D> {
         let k = lhs.shape[lhs.shape.len() - 1];
         let m: usize =
             incin_core::shapes::ShapeBuf::from_slice(&(lhs.shape[..lhs.shape.len() - 1]))
-                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+                .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
         let n = rhs.shape[0];
         if k != rhs.shape[1] {
             return Err(Error::Msg(format!(
@@ -2791,7 +2791,7 @@ impl<D: Device> CudaBackendImpl<D> {
     pub fn l1_loss<K: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<CudaStorage> {
         let diff = Self::sub::<K>(pred, target)?;
         let absolute = Self::abs::<K>(&diff)?;
@@ -3209,7 +3209,7 @@ fn cuda_topk_host(
     let n_slices: usize = incin_core::shapes::ShapeBuf::from_slice(&(base_shape))
         .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let mut out_vals = vec![0.0f32; out_numel];
     let mut out_indices = vec![0u32; out_numel];
 
@@ -3274,7 +3274,7 @@ fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<Cu
 
     let mut base_shape = shape.clone();
     base_shape[dim] = 1;
-    let n_slices: usize = incin_core::prelude::ShapeBuf::from_slice(&(base_shape))
+    let n_slices: usize = incin_core::shapes::ShapeBuf::from_slice(&(base_shape))
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut out = vec![0u32; ShapeBuf::from_slice(&shape).checked_numel(OperationKind::Storage)?];
 
@@ -3982,11 +3982,11 @@ mod tests {
         let lhs_f32 = cuda_f32(&[2, 16], vec![0.0; 32]);
         let rhs_f32 = cuda_f32(&[4, 16], vec![0.0; 64]);
         let lhs_q =
-            B::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
         let rhs_q =
-            B::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
         assert!(
-            B::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+            B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q)
                 .is_err()
         );
     }
