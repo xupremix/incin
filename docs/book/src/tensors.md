@@ -72,7 +72,7 @@ let diff = a.sub(&b)?;
 let prod = a.mul(&b)?;
 let quot = a.div(&b)?;
 let eq = a.eq(&b)?;       // elementwise comparison
-let both = a.logical_and(&b)?;
+let both = a.eq(&b)?.logical_and(&a.eq(&b)?)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -105,18 +105,18 @@ type B = DefaultBackend;
 
 let x = Tensor::<s![2, 3], B>::ones(())?;
 
-let by_row = x.sum_dim::<1>()?; // DIM is a const generic, checked at compile time
+let by_row = x.sum_keepdim::<Next<Here>>()?; // axis is checked at compile time
 let idx = x.argmax(Some(1))?;   // index dtype defaults to u32
 
 // `reshape` changes the geometry. The argument is the target shape's `Arg`
 // — `((), ())` for a fully static rank-2 target, since each static axis
 // contributes a unit.
-let reshaped = x.reshape::<s![3, 2]>(((), ()))?;
+let reshaped = x.reshape::<s![3, 2]>(((), ((), ())))?;
 
 // sum_all/mean_all consume the tensor (they're the last op in a reduction
 // chain more often than not), so clone first if you still need the original.
-let total: Tensor<(), B> = x.clone().sum_all()?;
-let mean: Tensor<(), B> = x.mean_all()?;
+let total = x.clone().sum_all()?;
+let mean = x.mean_all()?;
 # Ok::<(), incin::Error>(())
 ```
 

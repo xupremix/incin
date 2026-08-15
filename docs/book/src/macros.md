@@ -28,7 +28,7 @@ use incin::prelude::*;
 
 dim!(Batch, Seq);
 
-let x = Tensor::<s![Batch, 128], DefaultBackend>::zeros(8)?;
+let x = Tensor::<s![Batch, 128], DefaultBackend>::zeros((8usize, ()))?;
 assert_eq!(x.dims().as_ref(), &[8, 128]);
 # Ok::<(), incin::Error>(())
 ```
@@ -44,6 +44,9 @@ Names and extents are independent. A named static axis uses the same canonical
 structural representation as an anonymous static axis:
 
 ```rust,no_run
+use incin::prelude::*;
+
+dim!(Batch);
 type StaticBatch = s![Batch: 25, 128];
 ```
 

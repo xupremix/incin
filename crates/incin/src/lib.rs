@@ -17,7 +17,7 @@
 //! use incin::prelude::*;
 //!
 //! // Create a backend alias for convenience
-//! type Backend = IncinBackend<Cpu>;
+//! type Backend = DefaultBackend;
 //!
 //! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
 //! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
@@ -25,6 +25,7 @@
 //! // Dynamic shapes are also supported using the `Dyn` type:
 //! let y = Tensor::<Dyn, Backend>::ones(vec![2, 3, 224, 224]).unwrap();
 //! ```
+
 //!
 //! ## Neural Network Modules
 //!
@@ -38,7 +39,7 @@
 //!
 //! type Backend = IncinBackend<Cpu>;
 //!
-//! #[module]
+//! #[module(no_shape_info)]
 //! pub struct MLP {
 //!     net: SeqTy!(
 //!         Linear<s![768, 256], Backend>,
@@ -72,6 +73,38 @@
 //! initializers, unknown rank, control flow, custom domains, or unsupported
 //! nodes are rejected during macro expansion; no weights or metadata are
 //! invented.
+// mdBook's standalone tester does not receive Cargo's `--extern` arguments.
+// Keep a Cargo-backed doctest mirror so the user-facing chapters are checked
+// against the real facade and feature set.
+#[cfg(all(doctest, feature = "target-api", feature = "backend-authoring"))]
+#[doc = include_str!("../../../docs/book/src/introduction.md")]
+#[doc = include_str!("../../../docs/book/src/installation.md")]
+#[doc = include_str!("../../../docs/book/src/quickstart.md")]
+#[doc = include_str!("../../../docs/book/src/tensors.md")]
+#[doc = include_str!("../../../docs/book/src/shapes.md")]
+#[doc = include_str!("../../../docs/book/src/advanced_shapes.md")]
+#[doc = include_str!("../../../docs/book/src/autograd.md")]
+#[doc = include_str!("../../../docs/book/src/building_models.md")]
+#[doc = include_str!("../../../docs/book/src/sequential.md")]
+#[doc = include_str!("../../../docs/book/src/training.md")]
+#[doc = include_str!("../../../docs/book/src/data_loading.md")]
+#[doc = include_str!("../../../docs/book/src/saving_loading.md")]
+#[doc = include_str!("../../../docs/book/src/metrics.md")]
+#[doc = include_str!("../../../docs/book/src/backends.md")]
+#[doc = include_str!("../../../docs/book/src/macros.md")]
+#[doc = include_str!("../../../docs/book/src/errors.md")]
+#[doc = include_str!("../../../docs/book/src/invariants.md")]
+#[doc = include_str!("../../../docs/book/src/feature_flags.md")]
+#[doc = include_str!("../../../docs/book/src/backend_authoring.md")]
+#[doc = include_str!("../../../docs/book/src/experimental.md")]
+#[doc = include_str!("../../../docs/book/src/pytorch_cheatsheet.md")]
+#[doc = include_str!("../../../docs/book/src/whats_not_finished.md")]
+mod book_docs {}
+
+#[cfg(all(doctest, feature = "target-api", feature = "backend-authoring"))]
+#[doc = include_str!("../../../docs/book/src/target_api.md")]
+mod target_api_book_docs {}
+
 extern crate alloc;
 
 pub use incin_backends::IncinBackend;

@@ -15,7 +15,7 @@ type B = DefaultBackend;
 let x = Tensor::<s![2, 6], B>::zeros(())?;
 
 // reshape: a DIFFERENT geometry, same element count.
-let r = x.reshape::<s![3, 4]>(((), ()))?;
+let r = x.reshape::<s![3, 4]>(((), ((), ())))?;
 assert_eq!(r.dims().as_ref(), &[3, 4]);
 
 // to_shape: the SAME dims, re-asserted as a static type.

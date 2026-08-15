@@ -14,7 +14,7 @@ construction step and owns no resources.
 ```rust,no_run
 use incin::prelude::*;
 
-let x = Cpu.zeros(s![2, 3])?;                     // fully static shape and proof
+let x = Cpu.zeros(shape![2, 3])?;                 // fully static shape and proof
 let y = Cpu.zeros(shape![2, 3])?;                 // same, via the value macro
 let batch = 4;
 let z = Cpu.zeros(shape![batch, 3])?;             // dynamic batch axis

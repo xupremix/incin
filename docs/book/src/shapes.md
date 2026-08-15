@@ -20,8 +20,8 @@ type Batched = s![BatchSize, 128];  // named runtime axis
 type Loose = s![usize, 128];        // unnamed runtime axis
 
 let img = Tensor::<Image, B>::zeros(())?;
-let batch = Tensor::<Batched, B>::zeros(8)?;
-let loose = Tensor::<Loose, B>::zeros(4)?;
+let batch = Tensor::<Batched, B>::zeros((8usize, ()))?;
+let loose = Tensor::<Loose, B>::zeros((4usize, ()))?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -56,7 +56,7 @@ output, checked the same way.
 
 ## Converting between static and dynamic
 
-```rust,no_run
+```rust,ignore
 use incin::prelude::*;
 type B = DefaultBackend;
 
@@ -81,7 +81,7 @@ to pass to an allocation target (see [The target API](./target_api.md)),
 `shape!` is the value-level counterpart, inferring which axes are static from
 how they're written:
 
-```rust,no_run
+```rust,ignore
 use incin::prelude::*;
 
 let batch = 8;

@@ -250,7 +250,11 @@ cargo install --path crates/incin-lsp --bin incin-lsp
   tooling, deployment, and more — each with its own dated status ledger.
 - **The Book ("Incinnomicon"):** the current user guide lives in
   [`docs/book/src/SUMMARY.md`](docs/book/src/SUMMARY.md). Build it locally with
-  `mdbook build docs/book`; the older roadmap in `docs/growth/07-the-book.md`
+  `mdbook build docs/book`. Validate its Rust examples with
+  `cargo test -p incin --features 'target-api backend-authoring' --doc`;
+  `mdbook test` is not the validation command because standalone mdBook
+  rustdoc does not receive Cargo's dependency metadata. The older roadmap in
+  `docs/growth/07-the-book.md`
   is historical and is not the source of current documentation status.
 
 ## License

@@ -15,7 +15,7 @@ impl Dataset for Toy {
     fn len(&self) -> usize {
         10
     }
-    fn get(&self, index: usize) -> Result<Option<Self::Item>, incin_data::DataError> {
+    fn get(&self, index: usize) -> std::result::Result<Option<Self::Item>, incin_data::DataError> {
         Ok(Some(index as f32))
     }
 }

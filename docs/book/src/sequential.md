@@ -38,7 +38,7 @@ use incin::prelude::*;
 
 type B = DefaultBackend;
 
-#[module]
+#[module(no_shape_info)]
 pub struct MLP {
     net: SeqTy!(
         Linear<s![768, 256], B>,
@@ -58,7 +58,7 @@ impl MLP {
         })
     }
 
-    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B>> {
+    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B, f32, Grad>> {
         self.net.forward(x)
     }
 }

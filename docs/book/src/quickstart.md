@@ -4,9 +4,10 @@ A tensor, some arithmetic, and a gradient — the shortest useful program:
 
 ```rust,no_run
 use incin::prelude::*;
+use incin::backend_authoring::AutogradBackend;
 
 fn main() -> Result<()> {
-    let a = Tensor::<s![2, 2], DefaultBackend>::ones(())?;
+    let a = Tensor::<s![2, 2], DefaultBackend>::ones(())?.require_grad();
     let b = Tensor::<s![2, 2], DefaultBackend>::full(3.0, ())?;
 
     let c = a.mul(&b)?;
@@ -60,9 +61,9 @@ fn main() -> Result<()> {
     let x = Tensor::<s![3, 4], Backend>::ones(())?;
     let target = Tensor::<s![3, 2], Backend, f32, NoGrad>::zeros(())?;
 
-    let mut optim = Adam::<Backend>::new(model.parameters(), 1e-2);
+    let mut optim = AdamW::<Backend>::from_module(&model, 1e-2)?;
 
-    let pred = model.forward(x)?;
+    let pred = model.forward(x.require_grad())?;
     let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
     let grads = loss.backward()?;
     optim.step(&grads)?;

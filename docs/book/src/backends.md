@@ -8,7 +8,7 @@ type you wrote.
 ```rust,no_run
 use incin::prelude::*;
 
-type OnCpu = IncinBackend<f32, Cpu>;
+type OnCpu = IncinBackend<Cpu>;
 #[cfg(feature = "cuda")]
 type OnCuda = IncinBackend<f32, Cuda>;
 

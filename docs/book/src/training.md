@@ -31,15 +31,14 @@ type B = DefaultBackend;
 
 let model = Linear::<s![4, 2], B>::build(())?;
 
-// .parameters() collects every trainable Param the model owns (recursively,
-// through #[module] and Sequential), keyed by name — exactly what an
-// optimizer's constructor wants.
-let mut optim = Adam::<B>::new(model.parameters(), 1e-2);
+// `from_module` collects every trainable Param the model owns (recursively,
+// through #[module] and Sequential), keyed by name.
+let mut optim = AdamW::<B>::from_module(&model, 1e-2)?;
 
 let x = Tensor::<s![3, 4], B>::ones(())?;
 let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 
-let pred = model.forward(x)?;
+let pred = model.forward(x.require_grad())?;
 let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
 let grads = loss.backward()?;
 optim.step(&grads)?;
@@ -60,14 +59,14 @@ use incin::prelude::*;
 type B = DefaultBackend;
 
 let model = Linear::<s![4, 2], B>::build(())?;
-let mut optim = Adam::<B>::new(model.parameters(), 1e-2);
+let mut optim = AdamW::<B>::from_module(&model, 1e-2)?;
 let mut sched = CosineAnnealingLR::new(1e-2, 1e-4, 100); // start, min, total steps
 
 let x = Tensor::<s![3, 4], B>::ones(())?;
 let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 
 for _step in 0..3 {
-    let pred = model.forward(x.clone())?;
+    let pred = model.forward(x.clone().require_grad())?;
     let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
     let grads = loss.backward()?;
     optim.step(&grads)?;
@@ -92,14 +91,14 @@ type B = DefaultBackend;
 
 fn train() -> Result<()> {
     let model = Linear::<s![4, 2], B>::build(())?;
-    let mut optim = Adam::<B>::new(model.parameters(), 1e-2);
+    let mut optim = AdamW::<B>::from_module(&model, 1e-2)?;
     let mut sched = CosineAnnealingLR::new(1e-2, 1e-4, 10);
 
     let x = Tensor::<s![8, 4], B>::rand(())?;
     let target = Tensor::<s![8, 2], B, f32, NoGrad>::zeros(())?;
 
     for epoch in 0..10 {
-        let pred = model.forward(x.clone())?;
+        let pred = model.forward(x.clone().require_grad())?;
         let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
         let grads = loss.backward()?;
         optim.step(&grads)?;

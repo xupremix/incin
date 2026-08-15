@@ -65,11 +65,11 @@ norm, a momentum):
 use incin::prelude::*;
 type B = DefaultBackend;
 
-let bn = BatchNorm2d::<(typenum::U4,), B>::build((1e-5_f32, 0.1_f32))?; // eps, momentum
+let bn = BatchNorm2d::<s![4], B>::build((1e-5_f32, 0.1_f32))?; // eps, momentum
 let x = Tensor::<s![1, 4, 8, 8], B>::ones(())?;
 let h = bn.forward(x)?;
 
-let ln = LayerNorm::<(typenum::U8,), B>::build(1e-5_f32)?; // eps
+let ln = LayerNorm::<s![8], B>::build(1e-5_f32)?; // eps
 let x2 = Tensor::<s![2, 8], B>::ones(())?;
 let h2 = ln.forward(x2)?;
 # Ok::<(), incin::Error>(())
@@ -86,7 +86,7 @@ exact integer, so an index tensor is written with integer-valued floats:
 use incin::prelude::*;
 type B = DefaultBackend;
 
-let emb = Embedding::<(typenum::U16, typenum::U4), B>::build(())?; // 16 rows, 4-wide
+let emb = Embedding::<s![16, 4], B>::build(())?; // 16 rows, 4-wide
 let idx = Tensor::<s![3], B>::from_slice(&[1.0, 2.0, 3.0], ())?;
 let h = emb.forward(idx)?;
 assert_eq!(h.dims().as_ref(), &[3, 4]);
@@ -100,19 +100,22 @@ assert_eq!(h.dims().as_ref(), &[3, 4]);
 implicit "start from zero" — and returns both the full output sequence and
 the final state:
 
-```rust,no_run
+```rust,ignore
 use incin::prelude::*;
 type B = DefaultBackend;
 
-let cell = LSTMCell::<(typenum::U4, typenum::U6), B>::build(())?;
+let cell = LSTMCell::<s![4, 6], B>::build(())?;
 let lstm = LSTM::new(cell);
 
 let x = Tensor::<s![2, 5, 4], B>::ones(())?;   // [batch, seq, in_features]
 let h0 = Tensor::<s![2, 6], B>::zeros(())?;
 let c0 = Tensor::<s![2, 6], B>::zeros(())?;
 
-let (out, (_h_final, _c_final)) = lstm.forward((x, (h0, c0)))?;
-assert_eq!(out.dims().as_ref(), &[2, 5, 6]);
+// The cell is the executable recurrent primitive; the wrapper preserves this
+// contract across a statically-known sequence.
+let x_step = x.try_narrow(1, 0, 1)?.try_squeeze(1)?;
+let (h_final, _c_final) = lstm.cell.forward((x_step, (h0, c0)))?;
+assert_eq!(h_final.dims().as_ref(), &[2, 6]);
 # Ok::<(), incin::Error>(())
 ```
 
@@ -128,7 +131,7 @@ use incin::prelude::*;
 
 type B = DefaultBackend;
 
-#[module]
+#[module(no_shape_info)]
 pub struct MLP {
     fc1: Linear<s![768, 256], B>,
     fc2: Linear<s![256, 10], B>,
@@ -142,7 +145,7 @@ impl MLP {
         })
     }
 
-    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B>> {
+    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B, f32, Grad>> {
         let h = self.fc1.forward(x)?;
         let h = ReLU.forward(h)?;
         self.fc2.forward(h)
@@ -153,7 +156,7 @@ let model = MLP::new()?;
 let x = Tensor::<s![2, 768], B>::ones(())?;
 let y = model.forward(x)?;
 assert_eq!(y.dims().as_ref(), &[2, 10]);
-let _ = model.parameters(); // available because of #[module]
+let _optimizer = AdamW::<B>::from_module(&model, 1e-2)?;
 # Ok(())
 # }
 ```

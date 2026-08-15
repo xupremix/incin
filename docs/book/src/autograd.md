@@ -7,9 +7,10 @@ the type, not just at runtime.
 
 ```rust,no_run
 use incin::prelude::*;
+use incin::backend_authoring::AutogradBackend;
 type B = DefaultBackend;
 
-let a = Tensor::<s![2, 2], B>::ones(())?;      // Grad, by default
+let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
 let b = Tensor::<s![2, 2], B>::full(3.0, ())?;
 
 let c = a.mul(&b)?;
@@ -33,7 +34,7 @@ let grad_a = B::get_grad::<f32>(a.inner(), grads.as_backend())?
 use incin::prelude::*;
 type B = DefaultBackend;
 
-let a = Tensor::<s![2, 2], B>::ones(())?;
+let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
 let b = Tensor::<s![2, 2], B>::ones(())?;
 
 // Nothing inside this closure records a tape entry, regardless of what
@@ -69,8 +70,8 @@ no gradient at runtime.
 use incin::prelude::*;
 type B = DefaultBackend;
 
-let a = Tensor::<s![2, 2], B>::ones(())?;
-let stopped: Tensor<s![2, 2], B, f32, NoGrad> = a.clone().detach();
+let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
+let stopped: Tensor<s![2, 2], B, f32, NoGrad> = a.detach();
 let resumed: Tensor<s![2, 2], B, f32, Grad> = stopped.require_grad();
 # Ok::<(), incin::Error>(())
 ```
