@@ -103,29 +103,35 @@ where
         }
 
         // Bounded channel to prevent over-fetching
-        let (tx, rx) = sync_channel(self.num_workers * 2 + 2);
+        let channel_capacity = if self.num_workers == 0 {
+            num_batches.max(1)
+        } else {
+            self.num_workers * 2 + 2
+        };
+        let (tx, rx) = sync_channel(channel_capacity);
 
         let dataset = self.dataset.clone();
         let collate_fn = self.collate_fn.clone();
 
         if self.num_workers == 0 {
-            // Single-threaded
-            thread::spawn(move || {
-                for batch_idx in batch_indices {
-                    let mut batch = Vec::with_capacity(batch_idx.len());
-                    for idx in batch_idx {
-                        if let Some(item) = dataset.get(idx) {
-                            batch.push(item);
-                        }
-                    }
-                    if !batch.is_empty() {
-                        let collated = collate_fn.collate(batch);
-                        if tx.send(collated).is_err() {
-                            break;
-                        }
+            // Synchronous mode is deliberately executed on the caller's
+            // thread. This keeps `num_workers == 0` deterministic and avoids
+            // creating a hidden worker whose panic or drop would look like a
+            // clean end-of-iteration.
+            for batch_idx in batch_indices {
+                let mut batch = Vec::with_capacity(batch_idx.len());
+                for idx in batch_idx {
+                    if let Some(item) = dataset.get(idx) {
+                        batch.push(item);
                     }
                 }
-            });
+                if !batch.is_empty() {
+                    let collated = collate_fn.collate(batch);
+                    if tx.send(collated).is_err() {
+                        break;
+                    }
+                }
+            }
         } else {
             // Multi-threaded
             let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter()));
