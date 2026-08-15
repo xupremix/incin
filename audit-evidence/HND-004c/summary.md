@@ -29,16 +29,25 @@ Environment: Linux x86_64, `rustc 1.97.1 (8bab26f4f 2026-07-14)`,
 - Diagnostics feature powerset: 3 combinations passed.
 - Compile benchmark with `CLEAN_EACH=1`: every case passed. The final
   incremental portfolio is reported separately and is not a clean sample.
+- Final workspace matrix: formatting, workspace check, workspace tests,
+  workspace doctests, workspace clippy with `-D warnings`, crate checks/tests,
+  workspace docs, mdBook, architecture, dependency, large-file, public-API,
+  and package gates all exited zero. Full output is in `final-matrix.log`.
+- Soundness constituents passed: corrected backend Miri completed 322 tests
+  with 3 ignored numerical tests, and baseline plus AVX2 ASan completed
+  successfully. The backend Miri log is `miri-backend-final.log`; the ASan
+  log is `asan-final.log`.
 
 ## Resource-bounded validation
 
-The exact CI core powerset enumerates 384 combinations. It was started and
-reached combination 9 without a failure, then stopped after the observed rate
-made completion impractical in this environment. The unbounded facade probe
-enumerated 279,552 combinations before being stopped during combination 3.
-Backend and facade final matrices are therefore `UNAVAILABLE`, not passed.
-The interrupted logs are retained beside this file. No feature-matrix pass is
-claimed for those incomplete runs.
+The exact CI core powerset completed all 384 combinations successfully; its
+complete log is `powerset-core-final.log`. The current backend command reports
+8,212 combinations and was stopped at 49 after storage and wall-time
+inspection. A fixed-feature partition attempt was also stopped before
+completion because separate targets duplicated artifacts. The facade command
+reports 36,608 combinations and was not run after that resource assessment.
+Backend and facade final matrices are therefore unavailable, not passed. The
+interrupted logs and exact status are retained beside this file.
 
 ## Audit conclusions
 
@@ -47,6 +56,6 @@ history. Their useful current coverage exists in capability registration tests,
 backend unit tests, core autograd tests, and current canonical dispatch tests.
 Current CI and ledger references no longer name the deleted test binaries.
 
-The canonical export passed after the final documentation commit with
-`tools/export-snapshot.sh`; its size and SHA-256 are reported with the final
+The canonical export will be regenerated after the final evidence and
+documentation commit; its size and SHA-256 are reported with the final
 handoff.

@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004c
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004c-canonical-v19.zip # passed
+tools/export-snapshot.sh /tmp/hnd004c-canonical-final.zip # passed at final commit
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -277,13 +277,13 @@ inside exported snapshots. Remaining caveats are explicitly recorded in
 `docs/PROTOTYPING.md`, `docs/PROJECT_STATUS.md`, and
 `audit-evidence/HND-004c/summary.md`, including unavailable accelerator
 hardware and resource-bounded feature matrices. Repository formatting passes.
-The exact macro and diagnostics cargo-hack powersets pass. The core and
-facade matrices are recorded as incomplete because their current exact
+The exact core, macro, and diagnostics cargo-hack powersets pass. The backend
+and facade matrices are recorded as incomplete because their current exact
 combination counts are resource-prohibitive here; neither is claimed as
-passed. Soundness validation is complete for the
-supported local targets: Miri passed 138 core tests and 324 backend tests
-with three ignored numerical tests, and the baseline and AVX2 ASan runs
-passed. The facade's representative feature combination was checked after
+passed. Soundness validation is complete for the supported local targets:
+Miri passed 139 core tests and 322 backend tests with three ignored numerical
+tests, and the baseline and AVX2 ASan runs passed. The facade's representative
+feature combination was checked after
 the stale ignored CUDA fixtures were moved
 behind the explicit `hardware-tests` feature, and all three hardware fixtures
 compile with that feature. Those fixtures now validate NCCL plan and

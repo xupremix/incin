@@ -1,0 +1,1710 @@
+
+[1m[0;33m=== [SOUNDNESS] AddressSanitizer + LeakSanitizer (baseline target features) ===[0m
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.22
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling either v1.15.0
+   Compiling anyhow v1.0.103
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling autocfg v1.5.0
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.31
+   Compiling linux-raw-sys v0.12.1
+   Compiling syn v1.0.109
+   Compiling zmij v1.0.21
+   Compiling bitflags v2.13.0
+   Compiling fastrand v2.4.1
+   Compiling once_cell v1.21.4
+   Compiling serde_json v1.0.150
+   Compiling itertools v0.8.2
+   Compiling multimap v0.8.3
+   Compiling log v0.4.33
+   Compiling itertools v0.14.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling hashbrown v0.12.3
+   Compiling bytes v0.5.6
+   Compiling serde v1.0.228
+   Compiling fixedbitset v0.2.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling indexmap v1.9.3
+   Compiling prettyplease v0.2.37
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling foldhash v0.1.5
+   Compiling semver v1.0.28
+   Compiling regex-syntax v0.8.11
+   Compiling bytes v1.12.0
+   Compiling heck v0.3.3
+   Compiling hashbrown v0.15.5
+   Compiling rustc_version v0.4.1
+   Compiling crossbeam-epoch v0.9.18
+   Compiling syn v2.0.118
+   Compiling thiserror v2.0.18
+   Compiling rayon-core v1.13.0
+   Compiling indexmap v2.14.0
+   Compiling fixedbitset v0.5.7
+   Compiling petgraph v0.5.1
+   Compiling version_check v0.9.5
+   Compiling which v3.1.1
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling getrandom v0.2.17
+   Compiling crossbeam-deque v0.8.6
+   Compiling heapless v0.7.17
+   Compiling prost-build v0.6.1
+   Compiling ahash v0.8.12
+   Compiling libm v0.2.15
+   Compiling byteorder v1.5.0
+   Compiling itoa v1.0.15
+   Compiling memchr v2.7.6
+   Compiling heck v0.5.0
+   Compiling hash32 v0.2.1
+   Compiling petgraph v0.8.3
+   Compiling spin v0.9.8
+   Compiling rand_core v0.6.4
+   Compiling num-traits v0.2.19
+   Compiling regex-automata v0.4.14
+   Compiling stable_deref_trait v1.2.1
+   Compiling rustc-std-workspace-alloc v1.0.1
+   Compiling tempfile v3.27.0
+   Compiling target-triple v1.0.0
+   Compiling winnow v1.0.3
+   Compiling rayon v1.12.0
+   Compiling typenum v1.20.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling fs2 v0.4.3
+   Compiling termcolor v1.4.1
+   Compiling toml v1.1.2+spec-1.1.0
+   Compiling glob v0.3.3
+   Compiling regex v1.12.4
+   Compiling prost-derive v0.6.1
+   Compiling prost v0.6.1
+   Compiling zerocopy-derive v0.8.31
+   Compiling serde_derive v1.0.228
+   Compiling prost-derive v0.14.4
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling prost-types v0.6.1
+   Compiling bytemuck v1.25.0
+   Compiling cobs v0.3.0
+   Compiling prost v0.14.4
+   Compiling prost-types v0.14.4
+   Compiling onnx-pb v0.1.4
+   Compiling prost-build v0.14.4
+   Compiling ppv-lite86 v0.2.21
+   Compiling half v2.7.1
+   Compiling safetensors v0.4.5
+   Compiling trybuild v1.0.117
+   Compiling hashbrown v0.14.5
+   Compiling digit-layout v0.3.1
+   Compiling rand_chacha v0.3.1
+   Compiling ggml-quants v0.1.0
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling rand v0.8.6
+   Compiling postcard v1.1.3
+   Compiling rand_distr v0.4.3
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 37.15s
+     Running unittests src/lib.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/incin_backends-42c38e13a97cd98e)
+
+running 332 tests
+test backend_kind::tests::runtime_dispatch_reports_disabled_backend ... ok
+test backend_kind::tests::checked_storage_wrapping_rejects_metadata_mismatches ... ok
+test backend_kind::tests::runtime_dispatch_selects_cpu_and_preserves_metadata ... ok
+test backend_kind::tests::device_transfer_detaches_tracked_tensor_type ... ok
+test backend_kind::tests::runtime_from_bytes_rejects_wrong_length ... ok
+test backend_kind::tests::selects_cpu_backend ... ok
+test backend_kind::tests::runtime_dispatch_reduces_and_transfers_through_host_bytes ... ok
+test backend_kind::tests::static_cpu_transfer_rebuilds_dynamic_dispatch_storage ... ok
+test capability_docs::tests::a_rank_bound_reads_as_a_bound_only_when_it_is_one ... ok
+test cpu::canonical::tests::a_compression_into_an_unsupported_representation_is_refused ... ok
+test backend_kind::tests::derived_module_transfer_changes_its_backend_output_type ... ok
+test capability::catalog_tests::exact_capability_rows_and_executor_admission_share_one_declaration ... ok
+test cpu::canonical::tests::a_conversion_to_a_quantized_dtype_is_refused_by_name ... ok
+test capability_docs::tests::repeated_registrations_are_unioned_rather_than_replaced ... ok
+test capability_docs::tests::a_backend_missing_an_operation_gets_an_explicit_dash ... ok
+test capability::catalog_tests::coverage_has_one_explicit_decision_per_catalog_operation ... ok
+test cpu::canonical::tests::a_non_f32_convolution_operand_is_refused ... ok
+test cpu::canonical::tests::an_allocation_given_an_operand_is_refused ... ok
+test cpu::canonical::tests::a_loss_with_no_reduction_keeps_the_elementwise_shape ... ok
+test cpu::canonical::tests::an_allocation_is_refused_by_a_row_it_does_not_match ... ok
+test cpu::canonical::tests::a_linear_layer_transposes_its_weight_and_adds_its_bias ... ok
+test cpu::canonical::tests::an_epsilon_that_flushes_to_zero_in_f32_is_refused ... ok
+test cpu::canonical::tests::a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound ... ok
+test cpu::canonical::tests::a_training_batch_norm_normalizes_by_the_batch_statistics ... ok
+test cpu::canonical::tests::an_uneven_axis_leaves_a_shorter_final_piece ... ok
+test cpu::canonical::tests::canonical_conv1d_executes_at_the_ranks_its_row_advertises ... ok
+test cpu::canonical::tests::an_inference_batch_norm_with_running_statistics_executes ... ok
+test cpu::canonical::tests::canonical_and_legacy_gradients_are_identical ... ok
+test cpu::canonical::tests::chunking_beyond_the_axis_extent_produces_fewer_pieces_not_empty_ones ... ok
+test backend_kind::tests::dynamic_layer_builders_consume_dtype_device_and_optional_flags ... ok
+test cpu::canonical::tests::canonical_layer_norm_executes_and_normalizes_each_row ... ok
+test cpu::canonical::tests::dropout_outside_training_returns_the_operand_unchanged ... ok
+test cpu::canonical::tests::quantization_round_trips_within_the_block_format_error ... ok
+test cpu::canonical::tests::rms_norm_scales_by_the_root_mean_square_without_centring ... ok
+test cpu::canonical::tests::each_canonical_loss_computes_its_own_formula ... ok
+test cpu::canonical::tests::the_ranged_fills_read_their_parameters_in_the_right_order ... ok
+test cpu::canonical::tests::the_dot_and_outer_products_contract_and_expand ... ok
+test cpu::creation::tests::dyn_dtype_uses_runtime_buffer_variant ... ok
+test cpu::canonical::tests::the_variance_estimators_differ_by_their_correction ... ok
+test cpu::creation::tests::integer_fill_rejects_implicit_truncation_and_saturation ... ok
+test cpu::creation::tests::integer_ranges_reject_fractional_values ... ok
+test cpu::creation::tests::rand_produces_values_in_zero_one_range ... ok
+test cpu::creation::tests::ones_produces_correct_shape_and_all_one_values ... ok
+test cpu::creation::tests::transfer_to_cpu_returns_equivalent_storage ... ok
+test cpu::canonical::tests::the_norm_orders_agree_where_the_fast_paths_meet_the_general_one ... ok
+test cpu::creation::tests::var_ones_wraps_equivalent_ones_result ... ok
+test cpu::canonical::tests::the_axis_variance_forms_reduce_the_axis_they_name ... ok
+test cpu::creation::tests::var_randn_wraps_equivalent_randn_result ... ok
+test cpu::canonical::tests::training_and_inference_batch_norm_disagree ... ok
+test cpu::creation::tests::var_rand_wraps_equivalent_rand_result ... ok
+test cpu::creation::tests::var_zeros_wraps_equivalent_zeros_result ... ok
+test cpu::gradcheck::tests::gradcheck_panics_on_non_scalar_output - should panic ... ok
+test cpu::creation::tests::zeros_produces_correct_shape_and_all_zero_values ... ok
+test cpu::creation::tests::randn_produces_statistically_plausible_standard_normal_samples ... ok
+test cpu::gradcheck::tests::numerical_grad_matches_closed_form_derivative_of_cube ... ok
+test cpu::ops::conv::tests::conv1d_forward_hand_computed_no_padding ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_bias_adds_per_channel_constant ... ok
+test cpu::ops::conv::tests::conv1d_backward_overlapping_windows_accumulates_grad_input ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_padding_zero_fills_boundary ... ok
+test cpu::ops::conv::tests::conv2d_forward_hand_computed_no_padding ... ok
+test cpu::gradcheck::tests::gradcheck_matches_analytic_gradient_of_sum_of_squares ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_hand_computed_basic ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_output_padding_appends_trailing_zeros_only ... ok
+test cpu::canonical::tests::canonical_pointwise_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv2d_forward_depthwise_groups_equal_cin ... ok
+test cpu::canonical::tests::canonical_view_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv2d_forward_groups_matches_two_independent_convs ... ok
+test cpu::canonical::tests::canonical_axis_reduction_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv1d_forward_groups_matches_two_independent_convs ... ok
+test cpu::ops::conv::tests::conv_transpose2d_rejects_groups_other_than_one ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_stride_upsamples ... ok
+test cpu::canonical::tests::canonical_matmul_gradients_match_finite_differences ... ok
+test cpu::ops::elementwise::tests::abs_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::add_broadcasts_forward_correctly ... ok
+test cpu::ops::elementwise::tests::add_backward_unbroadcasts_correctly_for_bias_vector_case ... ok
+test cpu::ops::elementwise::tests::add_preserves_f64_dtype_and_precision ... ok
+test cpu::ops::elementwise::tests::add_scalar_float_forward_and_backward ... ok
+test cpu::ops::conv::tests::conv1d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::gelu_forward_zero_and_one ... ok
+test cpu::ops::elementwise::tests::exp_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::gelu_gradcheck ... ok
+test cpu::ops::elementwise::tests::log_softmax_exp_sums_to_one_on_vector ... ok
+test cpu::ops::elementwise::tests::log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::mul_backward_uses_other_operands_real_values ... ok
+test cpu::ops::elementwise::tests::mul_forward_computes_elementwise_product_with_broadcast ... ok
+test cpu::ops::elementwise::tests::mul_backward_with_broadcast_bias_vector_case ... ok
+test cpu::ops::conv::tests::conv_transpose2d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::log_forward_gradcheck_and_domain_propagation ... ok
+test cpu::ops::elementwise::tests::neg_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::mul_scalar_float_forward_and_backward ... ok
+test cpu::canonical::tests::dropout_zeroes_some_elements_and_scales_the_rest_by_the_keep_reciprocal ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_half_storage_and_compute_in_f32 ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_non_contiguous_view_semantics ... ok
+test cpu::ops::elementwise::tests::log_softmax_gradcheck ... ok
+test cpu::ops::elementwise::tests::relu_forward_and_backward_zero_at_boundary ... ok
+test cpu::ops::elementwise::tests::relu_preserves_f64_dtype ... ok
+test cpu::ops::conv::tests::conv2d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::softmax_after_refactor_still_passes_all_prior_behavior ... ok
+test cpu::ops::elementwise::tests::relu_gradcheck_on_nonzero_input ... ok
+test cpu::ops::elementwise::tests::softmax_forward_stable_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_on_vector ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_per_row_on_matrix ... ok
+test cpu::ops::elementwise::tests::softmax_forward_uniform_on_all_zero_logits ... ok
+test cpu::ops::elementwise_kernel::tests::benchmark_cpu_binary_kernels ... ignored, microbenchmark: run explicitly with --release --ignored --nocapture
+test cpu::ops::elementwise::tests::sub_forward_computes_elementwise_difference_with_broadcast ... ok
+test cpu::ops::elementwise::tests::sub_backward_negates_rhs_contribution ... ok
+test cpu::ops::elementwise::tests::sigmoid_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::sqrt_forward_gradcheck_and_nan_propagation ... ok
+test cpu::ops::elementwise::tests::softmax_backward_finite_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise_kernel::tests::f64_contiguous_math_keeps_f64_precision ... ok
+test cpu::ops::elementwise_kernel::tests::general_broadcast_uses_typed_strided_kernel ... ok
+test cpu::ops::elementwise_kernel::tests::f32_contiguous_add_stays_typed ... ok
+test cpu::ops::elementwise_kernel::tests::half_storage_uses_f32_compute ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_vector_kernels_preserve_order_and_handle_tails ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_broadcast_preserves_operand_order ... ok
+test cpu::ops::elementwise::tests::tanh_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::vector_kernels_handle_odd_scalar_tails_for_every_operation ... ok
+test cpu::ops::elementwise::tests::swish_forward_and_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute ... ok
+test cpu::ops::embedding::tests::forward_1d_indices_gathers_correct_rows_with_repeats ... ok
+test cpu::ops::embedding::tests::backward_unaddressed_rows_get_exactly_zero_gradient ... ok
+test cpu::ops::elementwise_kernel::tests::dense_broadcast_vector_projection_preserves_order_and_odd_tails ... ok
+test cpu::ops::embedding::tests::backward_repeated_index_accumulates_not_overwrites ... ok
+test cpu::ops::embedding::tests::negative_index_returns_conversion_error_not_panic ... ok
+test cpu::ops::embedding::tests::forward_2d_indices_gathers_correct_rows ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_dense_broadcast_projection_crosses_chunk_boundaries ... ok
+test cpu::ops::embedding::tests::out_of_range_index_returns_typed_shape_error ... ok
+test cpu::ops::elementwise::tests::softmax_gradcheck ... ok
+test cpu::ops::loss::tests::bce_with_logits_backward_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_negative_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_positive_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_mean_at_zero_logit_equals_log2 ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_mean_matches_hand_computed_nll ... ok
+test cpu::ops::loss::tests::bce_with_logits_sum_and_none_dispatch_correctly ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_none_produces_per_sample_nll_vector ... ok
+test cpu::ops::loss::tests::l1_loss_none_produces_elementwise_absolute_diff ... ok
+test cpu::ops::loss::tests::cross_entropy_rejects_fractional_and_out_of_range_targets ... ok
+test cpu::ops::loss::tests::l1_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_uniform_logits_equal_log_num_classes ... ok
+test cpu::ops::loss::tests::l1_loss_gradcheck ... ok
+test cpu::ops::loss::tests::l1_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_none_produces_elementwise_squared_diff ... ok
+test cpu::ops::loss::tests::mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_sum_equals_batch_times_mean ... ok
+test cpu::ops::loss::tests::mse_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::matmul::tests::a_broadcast_non_contiguous_operand_matches_its_per_slice_reference ... ok
+test cpu::ops::loss::tests::bce_with_logits_gradcheck ... ok
+test cpu::ops::matmul::tests::a_contiguous_f64_matmul_computes_values_and_keeps_its_dtype ... ok
+test cpu::ops::matmul::tests::a_batched_non_f32_matmul_keeps_its_dtype ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_left_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::batch_axes_broadcast_on_both_sides_index_the_right_slices ... ok
+test cpu::ops::matmul::tests::a_batched_matmul_records_one_tape_entry_per_call_not_one_per_slice ... ok
+test cpu::ops::matmul::tests::batched_matmul_equal_batch_matches_per_slice_reference ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_right_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank3_broadcasts_against_rank4_leading_dim_insertion ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_zero_batch_produces_empty_output_without_panic ... ok
+test cpu::ops::matmul::tests::batched_matmul_unbatched_degenerate_matches_matmul_impl ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_one_batch_is_broadcast_not_unwrapped ... ok
+test cpu::ops::matmul::tests::every_layout_agrees_with_the_kernel_that_is_always_correct ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank4_matches_reference_at_one_batch_index ... ok
+test cpu::ops::matmul::tests::matmul_forward_transposed_lhs_view_is_correct_without_materializing ... ok
+test cpu::ops::matmul::tests::matmul_forward_hand_computed_2x3_times_3x4 ... ok
+test cpu::ops::matmul::tests::matmul_backward_matches_hand_computed_gradients ... ok
+test cpu::ops::matmul::tests::matmul_shape_incompatible_returns_err_not_panic ... ok
+test cpu::ops::norm::tests::batch_norm_all_args_provided_matches_hand_computed_formula ... ok
+test cpu::ops::norm::tests::batch_norm_rank2_uses_channel_dim_1 ... ok
+test cpu::ops::norm::tests::layer_norm_custom_weight_and_bias_applies_affine ... ok
+test cpu::ops::norm::tests::batch_norm_momentum_has_no_effect_on_output ... ok
+test cpu::ops::norm::tests::batch_norm_none_args_match_explicit_default_fallback ... ok
+test cpu::ops::norm::tests::layer_norm_identity_weight_zero_bias_normalizes_each_row ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_unbatched_degenerate ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_gradcheck ... ok
+test cpu::ops::norm::tests::layer_norm_rank3_normalizes_per_batch_seq_position ... ok
+test cpu::ops::norm::tests::layer_norm_none_bias_matches_explicit_zero_bias ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_non_evenly_dividing_produces_variable_windows ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d ... ok
+test cpu::ops::pool::tests::avg_pool2d_backward_overlapping_windows_sums_grad_contributions ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_with_padding_zero_boundary ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_overlapping_windows_shared_winner_accumulates ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_non_overlapping_routes_grad_to_winner_only ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_gradcheck_non_evenly_dividing ... ok
+test cpu::ops::pool::tests::avg_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::quant::tests::test_quantize_dequantize_fidelity ... ok
+test cpu::ops::pool::tests::max_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::quant::tests::unsupported_quantized_elementwise_arithmetic_is_typed ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_left ... ok
+test cpu::ops::quant::tests::test_quantized_matmul ... ok
+test cpu::ops::reduce::tests::argmax_dim0_returns_row_index_of_column_max ... ok
+test cpu::ops::reduce::tests::argmax_argmin_do_not_push_tape_entries ... ok
+test cpu::ops::pool::tests::avg_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::norm::tests::layer_norm_gradcheck ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_right ... ok
+test cpu::ops::matmul::tests::a_large_product_agrees_with_the_kernel_that_is_always_correct ... ok
+test cpu::ops::reduce::tests::argmax_dim_none_returns_scalar_flat_index_of_global_max ... ok
+test cpu::ops::reduce::tests::argmin_dim0_and_dim_none_mirror_argmax ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_equal_batch ... ok
+test cpu::ops::reduce::tests::max_all_and_min_all_on_flat_vector ... ok
+test cpu::ops::reduce::tests::max_dim_backward_routes_gradient_to_exactly_one_winner_on_tie ... ok
+test cpu::ops::reduce::tests::max_dim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::mean_dim_column_means_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_all_backward_distributes_grad_scaled_by_1_over_n ... ok
+test cpu::ops::reduce::tests::mean_keepdim_column_means_on_2x3 ... ok
+test cpu::ops::reduce::tests::prod_all_keeps_the_operand_dtype ... ok
+test cpu::ops::reduce::tests::min_keepdim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::max_keepdim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::min_dim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::prod_dim_multiplies_along_the_named_axis_only ... ok
+test cpu::ops::reduce::tests::sum_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::prod_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::max_dim_gradcheck_all_distinct_values ... ok
+test cpu::ops::reduce::tests::sum_all_backward_scales_by_incoming_gradient ... ok
+test cpu::ops::reduce::tests::sum_all_backward_distributes_grad_uniformly ... ok
+test cpu::ops::reduce::tests::sum_dim_backward_broadcasts_grad_back_to_original_shape ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_0_on_2x3 ... ok
+test cpu::ops::reduce::tests::sum_keepdim_backward_broadcasts_grad_to_original_shape ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_1_on_2x3 ... ok
+test cpu::ops::reduce::tests::sum_keepdim_retains_axis_0_on_2x3 ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_multiple_new_leading_dims ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_single_new_leading_dim ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_through_trait_matches_direct_broadcast_as_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::concat_dim0_stacks_rows_in_input_order ... ok
+test cpu::ops::shape_ops::tests::attention_keeps_the_operand_dtype ... ok
+test cpu::ops::shape_ops::tests::concat_backward_narrows_grad_to_each_inputs_own_shape_and_values ... ok
+test cpu::ops::shape_ops::tests::concat_dim_out_of_bounds_returns_err ... ok
+test cpu::ops::shape_ops::tests::concat_dim1_interleaves_columns_by_row ... ok
+test cpu::ops::norm::tests::batch_norm_gradcheck ... ok
+test cpu::ops::shape_ops::tests::concat_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::concat_rejects_non_concat_axis_size_mismatch_even_when_broadcast_compatible ... ok
+test cpu::ops::shape_ops::tests::concat_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::flatten_all_dims_produces_1d_shape ... ok
+test cpu::ops::reduce::tests::mean_keepdim_gradcheck_dim1 ... ok
+test cpu::ops::shape_ops::tests::float_to_vec1_reads_all_elements_row_major ... ok
+test cpu::ops::shape_ops::tests::flatten_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::instance_norm_normalizes_each_channel_of_each_sample_alone ... ok
+test cpu::ops::shape_ops::tests::float_to_scalar_reads_single_element ... ok
+test cpu::ops::shape_ops::tests::flatten_merges_middle_dims ... ok
+test cpu::ops::shape_ops::tests::group_norm_statistics_are_per_sample_not_across_the_batch ... ok
+test cpu::ops::reduce::tests::mean_dim_gradcheck_dim0 ... ok
+test cpu::ops::shape_ops::tests::matmul_via_trensor_ops_delegates_to_matmul_impl ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank3_matches_batched_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::reshape_backward_reshapes_grad_back_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank2_matches_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::narrow_out_of_bounds_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::narrow_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::reshape_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::narrow_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::narrow_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::slice_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::slice_out_of_bounds_range_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::slice_on_transposed_input_across_multiple_dims_produces_correct_values ... ok
+test cpu::ops::shape_ops::tests::slice_matches_manual_sequential_narrow_calls ... ok
+test cpu::ops::shape_ops::tests::squeeze_on_non_one_sized_axis_returns_shape_mismatch ... ok
+test cpu::ops::shape_ops::tests::squeeze_removes_size_one_axis_and_preserves_values ... ok
+test cpu::ops::shape_ops::tests::squeeze_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::stack_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::stack_rejects_mismatched_shapes ... ok
+test cpu::ops::shape_ops::tests::transpose_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::stack_dim_equal_to_rank_appends_new_trailing_axis ... ok
+test cpu::ops::shape_ops::tests::unsupported_methods_return_typed_error_not_silent_placeholder ... ok
+test cpu::ops::shape_ops::tests::transpose_backward_reapplies_same_transpose ... ok
+test cpu::ops::shape_ops::tests::stack_dim0_inserts_new_leading_axis ... ok
+test cpu::storage::tests::broadcast_as_expands_and_shares_buffer ... ok
+test cpu::storage::tests::checked_integer_readback_preserves_integer_values ... ok
+test cpu::ops::shape_ops::tests::stack_backward_narrows_and_squeezes_grad_to_original_shape ... ok
+test cpu::storage::tests::narrow_dim_out_of_range_errors ... ok
+test cpu::storage::tests::checked_integer_readback_rejects_lossy_float_values ... ok
+test cpu::storage::tests::narrow_on_transposed_view_reads_correct_values_without_materializing ... ok
+test cpu::storage::tests::narrow_boundary_values_succeed ... ok
+test cpu::storage::tests::narrow_contiguous_shares_buffer_and_slices_correct_values ... ok
+test cpu::storage::tests::from_contiguous_has_expected_shape_and_strides ... ok
+test cpu::storage::tests::narrow_out_of_bounds_length_errors ... ok
+test cpu::storage::tests::reshape_non_contiguous_materializes_then_reshapes ... ok
+test cpu::storage::tests::scatter_into_zeros_partial_overlap_writes_only_target_region ... ok
+test cpu::storage::tests::reshape_contiguous_shares_buffer_and_gets_new_id ... ok
+test cpu::storage::tests::scatter_into_zeros_full_overlap_matches_values_exactly ... ok
+test cpu::storage::tests::scatter_into_zeros_1d_case ... ok
+test cpu::storage::tests::transpose_shares_buffer_and_swaps_shape_strides ... ok
+test cpu::storage::tests::scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc ... ok
+test cpu::storage::tests::transposed_view_reads_correct_values_without_contiguous_call ... ok
+test cpu::stride::tests::is_contiguous_false_for_transposed_strides ... ok
+test cpu::stride::tests::is_contiguous_true_for_fresh_strides ... ok
+test cpu::stride::tests::numel_for_a_dynamic_shape_matches_checked_numel ... ok
+test cpu::stride::tests::numel_for_a_static_shape_reads_the_type_level_constant ... ok
+test cpu::tape::tests::a_non_finite_gradient_is_returned_rather_than_panicked ... ok
+test cpu::tape::tests::backward_drains_tape_and_second_call_is_not_contaminated ... ok
+test cpu::tape::tests::backward_seeds_loss_gradient_with_ones ... ok
+test cpu::tape::tests::tape_len_is_zero_immediately_after_any_backward_call ... ok
+test cpu::tape::tests::unbroadcast_same_shape_is_noop ... ok
+test cpu::tape::tests::backward_accumulates_not_overwrites_on_tensor_reuse ... ok
+test cpu::tape::tests::unbroadcast_bias_vector_b_n_to_n ... ok
+test cpu::var::tests::assign_var_replaces_value_and_subsequent_read_reflects_it ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_unary_f32 ... ok
+test cpu::var::tests::two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second ... ok
+test cpu::tape::tests::unbroadcast_scalar_target_sums_all_axes ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_f16_bf16 ... ok
+test cpu::var::tests::var_as_tensor_does_not_hold_live_borrow_across_assign_var ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_binary_f64 ... ok
+test cpu::var::tests::var_as_tensor_returns_clone_of_current_value ... ok
+test detect::tests::an_empty_preference_still_yields_the_cpu ... ok
+test detect::tests::a_family_that_is_not_compiled_in_is_never_detected ... ok
+test detect::tests::detection_agrees_with_itself ... ok
+test detect::tests::detection_always_yields_a_runnable_device ... ok
+test detect::tests::preference_order_is_honored ... ok
+test iteration::tests::contiguous_operands_keep_their_strides ... ok
+test iteration::tests::broadcast_axes_become_zero_stride ... ok
+test iteration::tests::coalesces_only_axes_contiguous_for_every_operand ... ok
+test iteration::tests::empty_iteration_has_no_physical_index ... ok
+test cpu::storage::tests::tensor_id_never_repeats_across_many_calls ... ok
+test iteration::tests::unary_plan_preserves_view_metadata_and_checks_bounds ... ok
+test iteration::tests::non_contiguous_strides_and_offsets_are_preserved ... ok
+test detect::tests::probing_repeatedly_from_several_threads_is_survivable ... ok
+test layout::tests::broadcast_shape_both_expand ... ok
+test iteration::tests::incompatible_shapes_are_rejected ... ok
+test iteration::tests::unit_axes_are_removed_regardless_of_stride ... ok
+test layout::tests::broadcast_shape_incompatible_errors ... ok
+test layout::tests::broadcast_shape_preserves_zero_extent ... ok
+test layout::tests::broadcast_shape_right_aligned_leading_dim_insert ... ok
+test layout::tests::contiguous_strides_row_major ... ok
+test layout::tests::contiguous_strides_scalar ... ok
+test layout::tests::broadcast_shape_scalar_broadcast ... ok
+test layout::tests::increment_index_wraps_at_the_end ... ok
+test layout::tests::increment_index_carries_across_axes ... ok
+test quant::tests::block_matches_the_dtype_tables_block_size ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_rank4 ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_vector_chunks_preserve_operations_and_tails ... ok
+
+test result: ok. 331 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/architecture_regression.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/architecture_regression-0a2fa67926c540cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/candle_executor.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/candle_executor-631e2862579f06ef)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/canonical_dispatch_smoke.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/canonical_dispatch_smoke-fb43a9eab4a0c016)
+
+running 2 tests
+test descriptor_validation_rejects_a_wrong_dtype_before_execution ... ok
+test add_uses_the_descriptor_executor_and_preserves_shape ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/codegen_pointwise.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/codegen_pointwise-445a91702ab47aee)
+
+running 5 tests
+test test_unary_relu_codegen ... ok
+test test_scalar_broadcast_layout ... ok
+test test_binary_add_f16_codegen ... ok
+test test_all_dtypes_type_mapping ... ok
+test test_complex_fma_gelu_expression ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/collective_tuning.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/collective_tuning-fce99ebfdad6dad1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_cpu.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/compiled_cpu-42857ce7cd51c325)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/conformance-55114d5344740273)
+
+running 6 tests
+test tolerance_accepts_either_bound_and_rejects_a_non_finite_surprise ... ok
+test a_backend_that_claims_nothing_skips_rather_than_fails ... ok
+test a_registry_that_claims_everything_fails_the_agreement_check ... ok
+test a_panicking_executor_is_a_reported_failure_not_a_dead_harness ... ok
+test the_template_backend_conforms ... ok
+test a_backend_that_computes_the_wrong_product_fails_only_the_tolerance_check ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cpu_migration_status.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/cpu_migration_status-609d84cd73e73424)
+
+running 5 tests
+test no_migrated_operation_still_claims_to_be_blocked ... ok
+test every_migrated_identity_is_a_catalog_operation ... ok
+test every_unmigrated_executable_operation_records_what_blocks_it ... ok
+test the_migration_status_document_matches_the_registrations ... ok
+test no_migrated_operation_sits_at_a_non_executable_site ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/data_parallel_reference.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/data_parallel_reference-8153b2fee5f9ac84)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generated_docs.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/generated_docs-09ecc0bc4c6bd1c1)
+
+running 4 tests
+test the_document_does_not_advertise_an_unregistered_operation ... ok
+test the_capability_document_matches_the_registrations ... ok
+test the_document_covers_every_registered_operation ... ok
+test no_public_example_is_excluded_from_compilation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/metal_tuning.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/metal_tuning-e1b33d29985bdf32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_contract.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/nccl_contract-be6cfff655e58e73)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_two_rank.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/nccl_two_rank-cb30cfb8d6688bb7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pipeline_reference.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/pipeline_reference-ad19fbc0434b829d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reference_collectives.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/reference_collectives-504fe6352cdec731)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_dtype_contract.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/runtime_dtype_contract-8feac0af0e0a1394)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safetensors_test.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/safetensors_test-29f0338784282baa)
+
+running 1 test
+test test_safetensors_save_and_load_roundtrip_cpu ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/simd_lanes.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/simd_lanes-8952659c71d4f5c4)
+
+running 2 tests
+test test_simd_lanes_const_eval ... ok
+test test_simd_lanes_positive_and_divisible ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/target_api-eed19703adf7f5b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api_wgpu.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/target_api_wgpu-267c802fc3689bcf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_meta.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tensor_meta-454e0e18617659f7)
+
+running 5 tests
+test nonzero_view_offset_weakens_but_never_strengthens_alignment ... ok
+test empty_views_are_valid_but_out_of_bounds_views_are_rejected ... ok
+test invalid_alignment_rank_and_arithmetic_overflow_are_rejected ... ok
+test every_enabled_backend_storage_uses_tensor_meta ... ok
+test contiguous_transpose_and_broadcast_have_one_checked_metadata_source ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_parallel_reference.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tensor_parallel_reference-28d388d73e705eb1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tiling.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tiling-b2f5675f1b4d0932)
+
+running 3 tests
+test test_tile_2d_coverage_edge_cases ... ok
+test test_tile_2d_coverage_rectangular_non_multiple ... ok
+test test_tile_2d_coverage_square ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_cache.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tuning_cache-5964f7761fe72c95)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_identity.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tuning_identity-930a5557a146d412)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_pruning.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tuning_pruning-99810725a7d628c8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_service.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tuning_service-3dff9ee679a7ef2d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_telemetry.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/tuning_telemetry-7984a5acddaf2d74)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wgpu_executor.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/wgpu_executor-582f0c1dfeba25c2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling cfg_aliases v0.1.1
+   Compiling once_cell v1.21.4
+   Compiling parking_lot_core v0.9.12
+   Compiling thiserror v1.0.69
+   Compiling thiserror-impl v1.0.69
+   Compiling libloading v0.8.9
+   Compiling ash v0.38.0+1.3.281
+   Compiling smallvec v1.15.2
+   Compiling foldhash v0.1.5
+   Compiling bit-vec v0.7.0
+   Compiling unicode-width v0.1.14
+   Compiling equivalent v1.0.2
+   Compiling khronos-egl v6.0.0
+   Compiling hashbrown v0.17.1
+   Compiling naga v22.1.0
+   Compiling wgpu-hal v22.0.0
+   Compiling gpu-alloc-types v0.3.1
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling hashbrown v0.15.5
+   Compiling spirv v0.3.0+sdk-1.3.268.0
+   Compiling unicode-xid v0.2.6
+   Compiling hexf-parse v0.2.1
+   Compiling arrayvec v0.7.8
+   Compiling rustc-hash v1.1.0
+   Compiling bit-set v0.6.0
+   Compiling codespan-reporting v0.11.1
+   Compiling gpu-alloc v0.6.2
+   Compiling wgpu-core v22.1.0
+   Compiling wgpu-types v22.0.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling litrs v1.0.0
+   Compiling raw-window-handle v0.6.2
+   Compiling glow v0.13.1
+   Compiling parking_lot v0.12.5
+   Compiling profiling v1.0.18
+   Compiling ahash v0.8.12
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling wgpu v22.1.0
+   Compiling static_assertions v1.1.0
+   Compiling pollster v0.3.0
+   Compiling indexmap v2.14.0
+   Compiling gpu-descriptor v0.3.2
+   Compiling hashbrown v0.14.5
+   Compiling tempfile v3.27.0
+   Compiling document-features v0.2.12
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 40.29s
+warning: the following packages contain code that will be rejected by a future version of Rust: naga v22.1.0, wgpu v22.1.0, wgpu-core v22.1.0, wgpu-hal v22.0.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/incin_core-e99bdd20ad7fca2c)
+
+running 139 tests
+test err::tests::exact_float_to_integer_conversion_rejects_lossy_values ... ok
+test exec::capability::tests::families_never_imply_exact_support ... ok
+test err::tests::lossy_float_to_integer_conversion_requires_an_explicit_policy ... ok
+test err::tests::error_message_is_bounded_at_a_utf8_boundary ... ok
+test err::tests::test_error_formatting ... ok
+test exec::capability::tests::rejection_identifies_the_first_unsatisfied_constraint ... ok
+test distributions::tests::test_custom_distribution ... ok
+test distributions::tests::test_comptime_known_device_sampling ... ok
+test distributions::tests::test_bernoulli_sampling ... ok
+test distributions::tests::test_normal_sampling ... ok
+test distributions::tests::test_uniform_sampling ... ok
+test distributions::tests::test_exponential_sampling ... ok
+test exec::catalog::tests::a_comparison_returns_boolean_dtype ... ok
+test exec::catalog::tests::batch_norm_state_is_rank_one_against_a_ranked_activation ... ok
+test exec::catalog::tests::an_unbiased_estimate_rejects_a_single_element_domain ... ok
+test distributions::tests::test_gumbel_sampling ... ok
+test exec::catalog::tests::coverage_is_derived_from_catalog_rows ... ok
+test exec::catalog::tests::conv1d_and_transposed_convolution_bias_use_the_same_role_contract ... ok
+test exec::catalog::tests::convolution_bias_is_validated_by_role_not_by_the_activation_window ... ok
+test exec::catalog::tests::cross_entropy_logits_and_targets_have_separate_rank_contracts ... ok
+test exec::catalog::tests::custom_operation_keeps_static_shape_proof ... ok
+test exec::catalog::tests::custom_typed_proof_requires_one_concrete_output ... ok
+test exec::catalog::tests::data_creation_rejects_non_exact_payload_byte_length ... ok
+test exec::catalog::tests::data_dependent_output_shapes_are_not_inferred_from_metadata ... ok
+test exec::catalog::tests::every_mutating_and_autograd_operation_is_classified_by_its_profile ... ok
+test exec::catalog::tests::every_tensor_returning_row_declares_an_inference_source ... ok
+test exec::catalog::tests::embedding_indices_and_weight_have_separate_rank_contracts ... ok
+test exec::catalog::tests::attribute_bearing_descriptor_round_trips_without_storage ... ok
+test exec::catalog::tests::every_typed_output_rule_is_fail_closed_or_exactly_inferred ... ok
+test exec::catalog::tests::empty_domain_behaviour_splits_within_the_reduction_family ... ok
+test exec::catalog::tests::frontend_shape_evidence_reaches_the_validated_descriptor ... ok
+test exec::catalog::tests::index_producing_operations_reject_a_non_integer_index_dtype ... ok
+test exec::catalog::tests::known_inputs_never_skip_output_shape_verification ... ok
+test exec::catalog::tests::inferred_metadata_cannot_be_fabricated ... ok
+test exec::catalog::tests::linear_weight_and_bias_have_separate_rank_contracts ... ok
+test exec::catalog::tests::logical_ops_require_boolean_inputs ... ok
+test exec::catalog::tests::operation_key_persistence_accepts_runtime_owned_identity ... ok
+test exec::catalog::tests::the_execution_site_agrees_with_the_arity_and_output_rules ... ok
+test exec::catalog::tests::operation_key_round_trips_through_persistence ... ok
+test exec::catalog::tests::multi_output_shapes_and_counts_are_inferred_exactly ... ok
+test exec::catalog::tests::recurrent_and_empty_reduction_contracts_are_storage_free ... ok
+test exec::catalog::tests::typed_attributes_fail_before_storage_access ... ok
+test exec::catalog::tests::optimizer_gradient_and_state_are_validated_against_the_parameter ... ok
+test exec::catalog::tests::the_axis_variance_operations_infer_their_output_shape ... ok
+test exec::catalog::tests::typed_data_creation_rejects_a_payload_dtype_mismatch ... ok
+test exec::catalog::tests::identities_and_names_occur_exactly_once ... ok
+test exec::catalog::tests::topk_values_keep_the_input_dtype_while_indices_take_the_index_dtype ... ok
+test exec::catalog::tests::zero_output_gradient_and_determinism_exceptions_override_their_family ... ok
+test exec::catalog::tests::unknown_metadata_stays_unknown ... ok
+test exec::catalog::tests::validation_rejects_wrong_arity_and_cross_device_inputs ... ok
+test exec::conformance::tests::required_semantic_edges_are_present_once_or_more ... ok
+test exec::meta::tests::a_view_offset_weakens_but_never_strengthens_alignment ... ok
+test exec::meta::tests::contiguous_layout_is_derived_not_asserted ... ok
+test exec::meta::tests::invalid_alignment_is_rejected ... ok
+test exec::meta::tests::empty_views_may_sit_at_but_not_after_the_allocation_end ... ok
+test exec::meta::tests::rank_and_arithmetic_failures_remain_structured ... ok
+test exec::meta::tests::strided_span_and_offset_are_checked_against_capacity ... ok
+test exec::meta::tests::zero_offset_preserves_the_allocation_alignment ... ok
+test exec::proof::tests::a_named_axis_is_typed_but_not_statically_sized ... ok
+test exec::proof::tests::a_fully_typed_shape_proves_itself_statically ... ok
+test exec::meta::tests::transposed_and_broadcast_views_are_strided ... ok
+test exec::proof::tests::a_ranked_shape_knows_its_rank_but_not_its_extents ... ok
+test exec::proof::tests::an_unranked_shape_proves_nothing_before_it_exists ... ok
+test exec::proof::tests::a_sealed_descriptor_still_reads_back_exactly ... ok
+test exec::proof::tests::meet_takes_the_weaker_operand ... ok
+test exec::proof::tests::one_runtime_axis_weakens_the_whole_shape ... ok
+test exec::proof::tests::meet_is_commutative_idempotent_and_topped_by_static ... ok
+test exec::proof::tests::the_proof_is_carried_not_recomputed ... ok
+test metrics::tests::test_precision_recall_f1 ... ok
+test metrics::tests::test_accuracy ... ok
+test nn::state::tests::child_accepts_only_one_non_empty_component ... ok
+test nn::state::tests::paths_are_ordered_and_distinct_from_runtime_identity ... ok
+test metrics::tests::test_mse ... ok
+test nn::state::tests::preserves_supported_native_dtype_payloads ... ok
+test nn::state::tests::rejects_overflow_and_malformed_payloads ... ok
+test nn::state::tests::root_and_nested_paths_roundtrip_through_postcard ... ok
+test nn::state::tests::validates_exact_native_byte_length ... ok
+test nn::stats::tests::into_model_stats_doubles_macs_for_flops ... ok
+test nn::state::tests::wire_deserialization_revalidates_paths_and_payload_lengths ... ok
+test nn::stats::tests::layer_stats_add_sums_both_fields ... ok
+test nn::stats::tests::layer_stats_sum_over_empty_iter_is_default ... ok
+test serialize::tests::postcard_supports_q8_and_safetensors_rejects_it_explicitly ... ok
+test onnx_exporter::tests::export_uses_canonical_identity_and_projected_attributes ... ok
+test nn::stats::tests::sequential_of_linear_and_relu_sums_correctly_and_relu_contributes_nothing ... ok
+test shapes::buf::tests::checked_span_rejects_rank_and_arithmetic_overflow ... ok
+test shapes::buf::tests::checked_numel_distinguishes_scalar_zero_and_overflow ... ok
+test serialize::tests::postcard_round_trips_exact_supported_native_dtypes ... ok
+test shapes::idx::tests::slice_full_passthrough ... ok
+test shapes::buf::tests::contiguous_strides_reject_unrepresentable_layouts_even_when_empty ... ok
+test shapes::reshape::tests::reshape_different_rank_same_numel ... ok
+test shapes::idx::tests::slice_range_output_shape ... ok
+test shapes::shape::tests::test_array_shape ... ok
+test nn::stats::tests::mlp_stats_match_the_growth_doc_hand_computed_numbers_at_batch_1 ... ok
+test shapes::shape::tests::dyn_is_zero_sized ... ok
+test shapes::reshape::tests::reshape_same_rank_same_numel ... ok
+test nn::stats::tests::named_layers_summary_with_stats_convenience_method_matches_the_free_function ... ok
+test shapes::shape::tests::test_dyn_shape ... ok
+test tensor::backend::scalar_value_tests::float_to_integer_requires_an_explicit_checked_policy ... ok
+test tensor::base::tests::dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel ... ok
+test nn::stats::tests::summary_with_stats_appends_a_readable_totals_footer ... ok
+test shapes::shape::tests::checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges ... ok
+test shapes::shape::tests::test_scalar_shape ... ok
+test tensor::allocation::tests::checked_allocation_lengths_cover_dense_and_block_storage ... ok
+test serialize::tests::safetensors_round_trips_exact_supported_native_dtypes ... ok
+test tensor::device::tests::a_device_set_keeps_the_order_it_was_given ... ok
+test tensor::base::tests::test_tensor_ones ... ok
+test tensor::base::tests::test_tensor_creation ... ok
+test nn::stats::tests::mlp_macs_scale_linearly_with_batch_but_params_do_not ... ok
+test tensor::device::tests::an_empty_ordinal_range_is_rejected_rather_than_defaulted ... ok
+test tensor::device::tests::test_dyn_tier1_fully_runtime ... ok
+test tensor::device::tests::a_device_set_rejects_what_cannot_describe_a_run ... ok
+test tensor::device::tests::external_device_identity_is_open_and_stable ... ok
+test tensor::device::tests::test_device_variants ... ok
+test tensor::device::tests::the_default_preference_is_the_cpu ... ok
+test tensor::device::tests::test_wgpu_tier2_runtime_ordinal ... ok
+test tensor::device::tests::test_wgpu_tier3_static_ordinal ... ok
+test tensor::device::tests::the_rfcs_three_gpu_call_builds_three_cuda_devices ... ok
+test tensor::display::tests::empty_dimension_renders_empty_brackets ... ok
+test tensor::display::tests::nan_and_infinity_render_like_pytorch ... ok
+test tensor::display::tests::long_one_d_axis_is_summarized ... ok
+test tensor::display::tests::integer_dtype_has_no_decimal_point ... ok
+test tensor::display::tests::long_outer_axis_drops_whole_rows ... ok
+test tensor::display::tests::non_integral_values_use_fixed_precision ... ok
+test tensor::display::tests::scalar_has_no_brackets ... ok
+test tensor::display::tests::one_d_float_is_comma_separated ... ok
+test tensor::display::tests::two_d_float_aligns_columns_and_wraps_rows ... ok
+test tensor::dtype::tests::block_overflow_returns_error ... ok
+test tensor::display::tests::very_large_and_small_magnitudes_switch_to_scientific ... ok
+test tensor::dtype::tests::custom_dtype_compile_test ... ok
+test tensor::dtype::tests::builtin_round_trip ... ok
+test tensor::dtype::tests::custom_dtype_has_no_builtin_id ... ok
+test tensor::dtype::tests::dtype_id_classification ... ok
+test tensor::dtype::tests::f32_descriptor ... ok
+test tensor::dtype::tests::f32_encoding_is_scalar ... ok
+test tensor::dtype::tests::f64_encoding ... ok
+test tensor::dtype::tests::q8_0_descriptor ... ok
+test tensor::dtype::tests::scalar_overflow_returns_error ... ok
+test tensor::dtype::tests::q8_0_encoding_is_block ... ok
+test exec::catalog::tests::generated_semantics_document_covers_every_row ... ok
+
+test result: ok. 139 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Compiling bytes v1.12.0
+   Compiling memchr v2.7.6
+   Compiling pin-project-lite v0.2.16
+   Compiling smallvec v1.15.2
+   Compiling futures-core v0.3.32
+   Compiling bitflags v2.13.0
+   Compiling futures-sink v0.3.32
+   Compiling syn v2.0.118
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling mio v1.2.1
+   Compiling socket2 v0.6.4
+   Compiling slab v0.4.12
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling futures-io v0.3.32
+   Compiling httparse v1.10.1
+   Compiling percent-encoding v2.3.2
+   Compiling futures-channel v0.3.32
+   Compiling cc v1.2.65
+   Compiling icu_properties_data v2.1.2
+   Compiling futures-task v0.3.32
+   Compiling icu_normalizer_data v2.1.1
+   Compiling zeroize v1.9.0
+   Compiling byteorder v1.5.0
+   Compiling untrusted v0.9.0
+   Compiling tracing-core v0.1.36
+   Compiling either v1.15.0
+   Compiling rustls v0.23.41
+   Compiling rustls-pki-types v1.15.0
+   Compiling thiserror v2.0.18
+   Compiling atomic-waker v1.1.2
+   Compiling try-lock v0.2.5
+   Compiling getrandom v0.3.4
+   Compiling fnv v1.0.7
+   Compiling subtle v2.6.1
+   Compiling base64 v0.22.1
+   Compiling tower-service v0.3.3
+   Compiling want v0.3.1
+   Compiling form_urlencoded v1.2.2
+   Compiling crc32fast v1.5.0
+   Compiling serde_json v1.0.150
+   Compiling http v1.4.2
+   Compiling utf8_iter v1.0.4
+   Compiling parking_lot_core v0.9.12
+   Compiling hash32 v0.2.1
+   Compiling tracing v0.1.44
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling gpu-alloc-types v0.3.1
+   Compiling spirv v0.3.0+sdk-1.3.268.0
+   Compiling webpki-roots v1.0.8
+   Compiling sync_wrapper v1.0.2
+   Compiling num-traits v0.2.19
+   Compiling tower-layer v0.3.3
+   Compiling adler2 v2.0.1
+   Compiling ipnet v2.12.0
+   Compiling portable-atomic v1.13.1
+   Compiling simd-adler32 v0.3.9
+   Compiling gpu-alloc v0.6.2
+   Compiling parking_lot v0.12.5
+   Compiling gpu-descriptor v0.3.2
+   Compiling rand_core v0.9.3
+   Compiling rayon v1.12.0
+   Compiling wgpu-types v22.0.0
+   Compiling miniz_oxide v0.8.9
+   Compiling anyhow v1.0.103
+   Compiling option-ext v0.2.0
+   Compiling ryu v1.0.20
+   Compiling unicode-width v0.2.2
+   Compiling allocator-api2 v0.2.21
+   Compiling dirs-sys v0.5.0
+   Compiling console v0.16.4
+   Compiling socks v0.3.4
+   Compiling http-body v1.0.1
+   Compiling flate2 v1.1.9
+   Compiling ureq-proto v0.6.0
+   Compiling http-body-util v0.1.3
+   Compiling encoding_rs v0.8.35
+   Compiling mime v0.3.17
+   Compiling ring v0.17.14
+   Compiling utf8-zero v0.8.1
+   Compiling unit-prefix v0.5.2
+   Compiling dirs v6.0.0
+   Compiling num_cpus v1.17.0
+   Compiling indicatif v0.18.6
+   Compiling ciborium-io v0.2.2
+   Compiling regex-syntax v0.8.11
+   Compiling anstyle v1.0.14
+   Compiling clap_lex v1.1.0
+   Compiling itertools v0.10.5
+   Compiling cast v0.3.0
+   Compiling same-file v1.0.6
+   Compiling is-terminal v0.4.17
+   Compiling anes v0.1.6
+   Compiling clap_builder v4.6.0
+   Compiling walkdir v2.5.0
+   Compiling oorandom v11.1.5
+   Compiling incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+   Compiling regex-automata v0.4.14
+   Compiling criterion-plot v0.5.0
+   Compiling synstructure v0.13.2
+   Compiling prettyplease v0.2.37
+   Compiling clap v4.6.1
+   Compiling serde_derive v1.0.228
+   Compiling zerocopy-derive v0.8.31
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling tokio-macros v2.7.0
+   Compiling bytemuck_derive v1.10.2
+   Compiling futures-macro v0.3.32
+   Compiling prost-derive v0.14.4
+   Compiling thiserror-impl v2.0.18
+   Compiling thiserror-impl v1.0.69
+   Compiling tokio v1.52.3
+   Compiling futures-util v0.3.32
+   Compiling regex v1.12.4
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.1
+   Compiling bytemuck v1.25.0
+   Compiling zerocopy v0.8.31
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling prost v0.14.4
+   Compiling thiserror v1.0.69
+   Compiling naga v22.1.0
+   Compiling cobs v0.3.0
+   Compiling prost-types v0.14.4
+   Compiling rustls-webpki v0.103.13
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling serde v1.0.228
+   Compiling prost-build v0.14.4
+   Compiling icu_provider v2.1.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling half v2.7.1
+   Compiling ahash v0.8.12
+   Compiling heapless v0.7.17
+   Compiling safetensors v0.4.5
+   Compiling serde_urlencoded v0.7.1
+   Compiling tinytemplate v1.2.1
+   Compiling trybuild v1.0.117
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling hashbrown v0.14.5
+   Compiling digit-layout v0.3.1
+   Compiling rand_chacha v0.3.1
+   Compiling ggml-quants v0.1.0
+   Compiling rand_chacha v0.9.0
+   Compiling ciborium-ll v0.2.2
+   Compiling postcard v1.1.3
+   Compiling futures-executor v0.3.32
+   Compiling rand v0.8.6
+   Compiling rand v0.9.2
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling ciborium v0.2.2
+   Compiling futures v0.3.32
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling criterion v0.5.1
+   Compiling rand_distr v0.4.3
+   Compiling url v2.5.8
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.15
+   Compiling tokio-rustls v0.26.4
+   Compiling ureq v3.3.0
+   Compiling wgpu-hal v22.0.0
+   Compiling hyper v1.10.1
+   Compiling hyper-util v0.1.20
+   Compiling wgpu-core v22.1.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling hf-hub v0.5.0
+   Compiling wgpu v22.1.0
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized] target(s) in 43.50s
+warning: the following packages contain code that will be rejected by a future version of Rust: naga v22.1.0, wgpu v22.1.0, wgpu-core v22.1.0, wgpu-hal v22.0.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (target/asan/x86_64-unknown-linux-gnu/debug/deps/incin-9dfd29be3d18f0d3)
+
+running 2 tests
+test tests::test_tensor_export ... ok
+test tests::test_runtime_dtype_tensor_creation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[0;32mOK: asan: baseline[0m
+
+[1m[0;33m=== [SOUNDNESS] AddressSanitizer with +avx2 (reaches the dense SIMD kernels) ===[0m
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.22
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling either v1.15.0
+   Compiling anyhow v1.0.103
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+   Compiling autocfg v1.5.0
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.31
+   Compiling linux-raw-sys v0.12.1
+   Compiling syn v1.0.109
+   Compiling zmij v1.0.21
+   Compiling bitflags v2.13.0
+   Compiling fastrand v2.4.1
+   Compiling once_cell v1.21.4
+   Compiling serde_json v1.0.150
+   Compiling multimap v0.8.3
+   Compiling itertools v0.8.2
+   Compiling log v0.4.33
+   Compiling itertools v0.14.0
+   Compiling hashbrown v0.12.3
+   Compiling bytes v0.5.6
+   Compiling serde v1.0.228
+   Compiling crossbeam-utils v0.8.21
+   Compiling fixedbitset v0.2.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling indexmap v1.9.3
+   Compiling foldhash v0.1.5
+   Compiling semver v1.0.28
+   Compiling regex-syntax v0.8.11
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling bytes v1.12.0
+   Compiling prettyplease v0.2.37
+   Compiling heck v0.3.3
+   Compiling rustc_version v0.4.1
+   Compiling hashbrown v0.15.5
+   Compiling syn v2.0.118
+   Compiling crossbeam-epoch v0.9.18
+   Compiling rayon-core v1.13.0
+   Compiling fixedbitset v0.5.7
+   Compiling petgraph v0.5.1
+   Compiling indexmap v2.14.0
+   Compiling which v3.1.1
+   Compiling scopeguard v1.2.0
+   Compiling thiserror v2.0.18
+   Compiling version_check v0.9.5
+   Compiling lock_api v0.4.14
+   Compiling getrandom v0.2.17
+   Compiling crossbeam-deque v0.8.6
+   Compiling prost-build v0.6.1
+   Compiling heapless v0.7.17
+   Compiling byteorder v1.5.0
+   Compiling ahash v0.8.12
+   Compiling itoa v1.0.15
+   Compiling memchr v2.7.6
+   Compiling heck v0.5.0
+   Compiling libm v0.2.15
+   Compiling hash32 v0.2.1
+   Compiling spin v0.9.8
+   Compiling regex-automata v0.4.14
+   Compiling rand_core v0.6.4
+   Compiling num-traits v0.2.19
+   Compiling petgraph v0.8.3
+   Compiling stable_deref_trait v1.2.1
+   Compiling rustc-std-workspace-alloc v1.0.1
+   Compiling tempfile v3.27.0
+   Compiling target-triple v1.0.0
+   Compiling winnow v1.0.3
+   Compiling rayon v1.12.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling typenum v1.20.1
+   Compiling fs2 v0.4.3
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling glob v0.3.3
+   Compiling termcolor v1.4.1
+   Compiling toml v1.1.2+spec-1.1.0
+   Compiling regex v1.12.4
+   Compiling prost-derive v0.6.1
+   Compiling prost v0.6.1
+   Compiling zerocopy-derive v0.8.31
+   Compiling serde_derive v1.0.228
+   Compiling prost-derive v0.14.4
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling prost-types v0.6.1
+   Compiling bytemuck v1.25.0
+   Compiling cobs v0.3.0
+   Compiling prost v0.14.4
+   Compiling prost-types v0.14.4
+   Compiling onnx-pb v0.1.4
+   Compiling prost-build v0.14.4
+   Compiling half v2.7.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling safetensors v0.4.5
+   Compiling trybuild v1.0.117
+   Compiling hashbrown v0.14.5
+   Compiling rand_chacha v0.3.1
+   Compiling digit-layout v0.3.1
+   Compiling ggml-quants v0.1.0
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling rand v0.8.6
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling postcard v1.1.3
+   Compiling rand_distr v0.4.3
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 39.59s
+     Running unittests src/lib.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/incin_backends-594e548dcd74ca22)
+
+running 332 tests
+test backend_kind::tests::selects_cpu_backend ... ok
+test backend_kind::tests::runtime_from_bytes_rejects_wrong_length ... ok
+test backend_kind::tests::runtime_dispatch_reports_disabled_backend ... ok
+test backend_kind::tests::runtime_dispatch_selects_cpu_and_preserves_metadata ... ok
+test backend_kind::tests::checked_storage_wrapping_rejects_metadata_mismatches ... ok
+test backend_kind::tests::device_transfer_detaches_tracked_tensor_type ... ok
+test backend_kind::tests::static_cpu_transfer_rebuilds_dynamic_dispatch_storage ... ok
+test cpu::canonical::tests::a_compression_into_an_unsupported_representation_is_refused ... ok
+test capability_docs::tests::a_rank_bound_reads_as_a_bound_only_when_it_is_one ... ok
+test backend_kind::tests::runtime_dispatch_reduces_and_transfers_through_host_bytes ... ok
+test cpu::canonical::tests::a_conversion_to_a_quantized_dtype_is_refused_by_name ... ok
+test capability_docs::tests::repeated_registrations_are_unioned_rather_than_replaced ... ok
+test backend_kind::tests::derived_module_transfer_changes_its_backend_output_type ... ok
+test capability::catalog_tests::exact_capability_rows_and_executor_admission_share_one_declaration ... ok
+test capability_docs::tests::a_backend_missing_an_operation_gets_an_explicit_dash ... ok
+test cpu::canonical::tests::an_allocation_given_an_operand_is_refused ... ok
+test cpu::canonical::tests::a_non_f32_convolution_operand_is_refused ... ok
+test cpu::canonical::tests::an_allocation_is_refused_by_a_row_it_does_not_match ... ok
+test cpu::canonical::tests::an_epsilon_that_flushes_to_zero_in_f32_is_refused ... ok
+test cpu::canonical::tests::a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound ... ok
+test cpu::canonical::tests::a_loss_with_no_reduction_keeps_the_elementwise_shape ... ok
+test capability::catalog_tests::coverage_has_one_explicit_decision_per_catalog_operation ... ok
+test cpu::canonical::tests::a_training_batch_norm_normalizes_by_the_batch_statistics ... ok
+test cpu::canonical::tests::a_linear_layer_transposes_its_weight_and_adds_its_bias ... ok
+test cpu::canonical::tests::an_inference_batch_norm_with_running_statistics_executes ... ok
+test cpu::canonical::tests::canonical_conv1d_executes_at_the_ranks_its_row_advertises ... ok
+test cpu::canonical::tests::chunking_beyond_the_axis_extent_produces_fewer_pieces_not_empty_ones ... ok
+test cpu::canonical::tests::dropout_outside_training_returns_the_operand_unchanged ... ok
+test cpu::canonical::tests::an_uneven_axis_leaves_a_shorter_final_piece ... ok
+test cpu::canonical::tests::canonical_and_legacy_gradients_are_identical ... ok
+test backend_kind::tests::dynamic_layer_builders_consume_dtype_device_and_optional_flags ... ok
+test cpu::canonical::tests::canonical_layer_norm_executes_and_normalizes_each_row ... ok
+test cpu::canonical::tests::quantization_round_trips_within_the_block_format_error ... ok
+test cpu::canonical::tests::each_canonical_loss_computes_its_own_formula ... ok
+test cpu::canonical::tests::rms_norm_scales_by_the_root_mean_square_without_centring ... ok
+test cpu::canonical::tests::the_dot_and_outer_products_contract_and_expand ... ok
+test cpu::canonical::tests::the_ranged_fills_read_their_parameters_in_the_right_order ... ok
+test cpu::canonical::tests::the_norm_orders_agree_where_the_fast_paths_meet_the_general_one ... ok
+test cpu::creation::tests::dyn_dtype_uses_runtime_buffer_variant ... ok
+test cpu::canonical::tests::the_variance_estimators_differ_by_their_correction ... ok
+test cpu::creation::tests::integer_fill_rejects_implicit_truncation_and_saturation ... ok
+test cpu::creation::tests::rand_produces_values_in_zero_one_range ... ok
+test cpu::creation::tests::integer_ranges_reject_fractional_values ... ok
+test cpu::creation::tests::ones_produces_correct_shape_and_all_one_values ... ok
+test cpu::canonical::tests::the_axis_variance_forms_reduce_the_axis_they_name ... ok
+test cpu::creation::tests::var_ones_wraps_equivalent_ones_result ... ok
+test cpu::creation::tests::var_rand_wraps_equivalent_rand_result ... ok
+test cpu::creation::tests::transfer_to_cpu_returns_equivalent_storage ... ok
+test cpu::creation::tests::var_zeros_wraps_equivalent_zeros_result ... ok
+test cpu::creation::tests::zeros_produces_correct_shape_and_all_zero_values ... ok
+test cpu::canonical::tests::training_and_inference_batch_norm_disagree ... ok
+test cpu::creation::tests::var_randn_wraps_equivalent_randn_result ... ok
+test cpu::gradcheck::tests::gradcheck_panics_on_non_scalar_output - should panic ... ok
+test cpu::gradcheck::tests::numerical_grad_matches_closed_form_derivative_of_cube ... ok
+test cpu::gradcheck::tests::gradcheck_matches_analytic_gradient_of_sum_of_squares ... ok
+test cpu::creation::tests::randn_produces_statistically_plausible_standard_normal_samples ... ok
+test cpu::ops::conv::tests::conv1d_backward_overlapping_windows_accumulates_grad_input ... ok
+test cpu::ops::conv::tests::conv1d_forward_hand_computed_no_padding ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_bias_adds_per_channel_constant ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_padding_zero_fills_boundary ... ok
+test cpu::canonical::tests::canonical_pointwise_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv1d_forward_groups_matches_two_independent_convs ... ok
+test cpu::canonical::tests::canonical_axis_reduction_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv2d_forward_hand_computed_no_padding ... ok
+test cpu::canonical::tests::canonical_view_gradients_match_finite_differences ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_hand_computed_basic ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_output_padding_appends_trailing_zeros_only ... ok
+test cpu::ops::conv::tests::conv2d_forward_groups_matches_two_independent_convs ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_stride_upsamples ... ok
+test cpu::ops::conv::tests::conv2d_forward_depthwise_groups_equal_cin ... ok
+test cpu::ops::conv::tests::conv_transpose2d_rejects_groups_other_than_one ... ok
+test cpu::ops::elementwise::tests::add_broadcasts_forward_correctly ... ok
+test cpu::ops::elementwise::tests::add_preserves_f64_dtype_and_precision ... ok
+test cpu::ops::elementwise::tests::add_backward_unbroadcasts_correctly_for_bias_vector_case ... ok
+test cpu::ops::elementwise::tests::add_scalar_float_forward_and_backward ... ok
+test cpu::canonical::tests::canonical_matmul_gradients_match_finite_differences ... ok
+test cpu::ops::elementwise::tests::abs_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::exp_forward_and_gradcheck ... ok
+test cpu::ops::conv::tests::conv1d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::gelu_forward_zero_and_one ... ok
+test cpu::ops::elementwise::tests::log_forward_gradcheck_and_domain_propagation ... ok
+test cpu::ops::elementwise::tests::gelu_gradcheck ... ok
+test cpu::ops::elementwise::tests::log_softmax_exp_sums_to_one_on_vector ... ok
+test cpu::ops::elementwise::tests::log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::mul_backward_uses_other_operands_real_values ... ok
+test cpu::ops::elementwise::tests::mul_backward_with_broadcast_bias_vector_case ... ok
+test cpu::ops::elementwise::tests::mul_scalar_float_forward_and_backward ... ok
+test cpu::ops::elementwise::tests::mul_forward_computes_elementwise_product_with_broadcast ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_non_contiguous_view_semantics ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_half_storage_and_compute_in_f32 ... ok
+test cpu::ops::elementwise::tests::relu_forward_and_backward_zero_at_boundary ... ok
+test cpu::ops::elementwise::tests::relu_preserves_f64_dtype ... ok
+test cpu::ops::conv::tests::conv_transpose2d_gradcheck_input_and_weight ... ok
+test cpu::canonical::tests::dropout_zeroes_some_elements_and_scales_the_rest_by_the_keep_reciprocal ... ok
+test cpu::ops::elementwise::tests::softmax_forward_stable_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::neg_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::softmax_forward_uniform_on_all_zero_logits ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_per_row_on_matrix ... ok
+test cpu::ops::elementwise::tests::softmax_backward_finite_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::softmax_after_refactor_still_passes_all_prior_behavior ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_on_vector ... ok
+test cpu::ops::elementwise::tests::relu_gradcheck_on_nonzero_input ... ok
+test cpu::ops::elementwise::tests::sub_forward_computes_elementwise_difference_with_broadcast ... ok
+test cpu::ops::elementwise::tests::sub_backward_negates_rhs_contribution ... ok
+test cpu::ops::elementwise_kernel::tests::benchmark_cpu_binary_kernels ... ignored, microbenchmark: run explicitly with --release --ignored --nocapture
+test cpu::ops::elementwise::tests::sigmoid_forward_and_gradcheck ... ok
+test cpu::ops::conv::tests::conv2d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::log_softmax_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::half_storage_uses_f32_compute ... ok
+test cpu::ops::elementwise_kernel::tests::f64_contiguous_math_keeps_f64_precision ... ok
+test cpu::ops::elementwise_kernel::tests::general_broadcast_uses_typed_strided_kernel ... ok
+test cpu::ops::elementwise_kernel::tests::f32_contiguous_add_stays_typed ... ok
+test cpu::ops::elementwise::tests::sqrt_forward_gradcheck_and_nan_propagation ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_vector_kernels_preserve_order_and_handle_tails ... ok
+test cpu::ops::elementwise::tests::tanh_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::vector_kernels_handle_odd_scalar_tails_for_every_operation ... ok
+test cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute ... ok
+test cpu::ops::embedding::tests::backward_repeated_index_accumulates_not_overwrites ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_dense_broadcast_projection_crosses_chunk_boundaries ... ok
+test cpu::ops::embedding::tests::backward_unaddressed_rows_get_exactly_zero_gradient ... ok
+test cpu::ops::elementwise_kernel::tests::dense_broadcast_vector_projection_preserves_order_and_odd_tails ... ok
+test cpu::ops::embedding::tests::forward_2d_indices_gathers_correct_rows ... ok
+test cpu::ops::elementwise::tests::swish_forward_and_gradcheck ... ok
+test cpu::ops::embedding::tests::negative_index_returns_conversion_error_not_panic ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_broadcast_preserves_operand_order ... ok
+test cpu::ops::elementwise::tests::softmax_gradcheck ... ok
+test cpu::ops::embedding::tests::forward_1d_indices_gathers_correct_rows_with_repeats ... ok
+test cpu::ops::embedding::tests::out_of_range_index_returns_typed_shape_error ... ok
+test cpu::ops::loss::tests::bce_with_logits_mean_at_zero_logit_equals_log2 ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_negative_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_backward_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_positive_logit ... ok
+test cpu::ops::loss::tests::cross_entropy_rejects_fractional_and_out_of_range_targets ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_mean_matches_hand_computed_nll ... ok
+test cpu::ops::loss::tests::bce_with_logits_sum_and_none_dispatch_correctly ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::l1_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::l1_loss_gradcheck ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_uniform_logits_equal_log_num_classes ... ok
+test cpu::ops::loss::tests::l1_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::l1_loss_none_produces_elementwise_absolute_diff ... ok
+test cpu::ops::loss::tests::mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_none_produces_per_sample_nll_vector ... ok
+test cpu::ops::loss::tests::mse_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_none_produces_elementwise_squared_diff ... ok
+test cpu::ops::loss::tests::mse_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::matmul::tests::a_batched_non_f32_matmul_keeps_its_dtype ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_sum_equals_batch_times_mean ... ok
+test cpu::ops::matmul::tests::a_contiguous_f64_matmul_computes_values_and_keeps_its_dtype ... ok
+test cpu::ops::matmul::tests::a_batched_matmul_records_one_tape_entry_per_call_not_one_per_slice ... ok
+test cpu::ops::loss::tests::bce_with_logits_gradcheck ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_left_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::a_broadcast_non_contiguous_operand_matches_its_per_slice_reference ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_right_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::batched_matmul_equal_batch_matches_per_slice_reference ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank3_broadcasts_against_rank4_leading_dim_insertion ... ok
+test cpu::ops::matmul::tests::batch_axes_broadcast_on_both_sides_index_the_right_slices ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank4_matches_reference_at_one_batch_index ... ok
+test cpu::ops::matmul::tests::batched_matmul_unbatched_degenerate_matches_matmul_impl ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_one_batch_is_broadcast_not_unwrapped ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_zero_batch_produces_empty_output_without_panic ... ok
+test cpu::ops::matmul::tests::matmul_forward_hand_computed_2x3_times_3x4 ... ok
+test cpu::ops::matmul::tests::every_layout_agrees_with_the_kernel_that_is_always_correct ... ok
+test cpu::ops::matmul::tests::matmul_backward_matches_hand_computed_gradients ... ok
+test cpu::ops::matmul::tests::matmul_shape_incompatible_returns_err_not_panic ... ok
+test cpu::ops::matmul::tests::matmul_forward_transposed_lhs_view_is_correct_without_materializing ... ok
+test cpu::ops::norm::tests::batch_norm_all_args_provided_matches_hand_computed_formula ... ok
+test cpu::ops::norm::tests::batch_norm_momentum_has_no_effect_on_output ... ok
+test cpu::ops::norm::tests::layer_norm_custom_weight_and_bias_applies_affine ... ok
+test cpu::ops::norm::tests::batch_norm_rank2_uses_channel_dim_1 ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_gradcheck ... ok
+test cpu::ops::norm::tests::batch_norm_none_args_match_explicit_default_fallback ... ok
+test cpu::ops::norm::tests::layer_norm_identity_weight_zero_bias_normalizes_each_row ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d ... ok
+test cpu::ops::norm::tests::layer_norm_rank3_normalizes_per_batch_seq_position ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_unbatched_degenerate ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_non_evenly_dividing_produces_variable_windows ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_gradcheck_non_evenly_dividing ... ok
+test cpu::ops::norm::tests::layer_norm_none_bias_matches_explicit_zero_bias ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_non_overlapping_routes_grad_to_winner_only ... ok
+test cpu::ops::pool::tests::avg_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::pool::tests::avg_pool2d_backward_overlapping_windows_sums_grad_contributions ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_overlapping_windows_shared_winner_accumulates ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_with_padding_zero_boundary ... ok
+test cpu::ops::quant::tests::test_quantize_dequantize_fidelity ... ok
+test cpu::ops::reduce::tests::argmax_dim0_returns_row_index_of_column_max ... ok
+test cpu::ops::quant::tests::unsupported_quantized_elementwise_arithmetic_is_typed ... ok
+test cpu::ops::quant::tests::test_quantized_matmul ... ok
+test cpu::ops::reduce::tests::argmin_dim0_and_dim_none_mirror_argmax ... ok
+test cpu::ops::reduce::tests::argmax_dim_none_returns_scalar_flat_index_of_global_max ... ok
+test cpu::ops::pool::tests::avg_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::reduce::tests::argmax_argmin_do_not_push_tape_entries ... ok
+test cpu::ops::reduce::tests::max_all_and_min_all_on_flat_vector ... ok
+test cpu::ops::reduce::tests::max_dim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::max_keepdim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::max_dim_backward_routes_gradient_to_exactly_one_winner_on_tie ... ok
+test cpu::ops::reduce::tests::mean_all_backward_distributes_grad_scaled_by_1_over_n ... ok
+test cpu::ops::pool::tests::max_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::reduce::tests::mean_dim_column_means_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_left ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_equal_batch ... ok
+test cpu::ops::reduce::tests::min_dim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_keepdim_column_means_on_2x3 ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_right ... ok
+test cpu::ops::matmul::tests::a_large_product_agrees_with_the_kernel_that_is_always_correct ... ok
+test cpu::ops::reduce::tests::prod_all_keeps_the_operand_dtype ... ok
+test cpu::ops::reduce::tests::min_keepdim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::prod_dim_multiplies_along_the_named_axis_only ... ok
+test cpu::ops::reduce::tests::prod_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::sum_all_backward_distributes_grad_uniformly ... ok
+test cpu::ops::reduce::tests::sum_all_backward_scales_by_incoming_gradient ... ok
+test cpu::ops::reduce::tests::sum_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_1_on_2x3 ... ok
+test cpu::ops::reduce::tests::sum_dim_backward_broadcasts_grad_back_to_original_shape ... ok
+test cpu::ops::norm::tests::layer_norm_gradcheck ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_0_on_2x3 ... ok
+test cpu::ops::reduce::tests::sum_keepdim_backward_broadcasts_grad_to_original_shape ... ok
+test cpu::ops::reduce::tests::max_dim_gradcheck_all_distinct_values ... ok
+test cpu::ops::reduce::tests::mean_dim_gradcheck_dim0 ... ok
+test cpu::ops::shape_ops::tests::attention_keeps_the_operand_dtype ... ok
+test cpu::ops::reduce::tests::mean_keepdim_gradcheck_dim1 ... ok
+test cpu::ops::reduce::tests::sum_keepdim_retains_axis_0_on_2x3 ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_multiple_new_leading_dims ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_single_new_leading_dim ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_through_trait_matches_direct_broadcast_as_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::concat_dim0_stacks_rows_in_input_order ... ok
+test cpu::ops::shape_ops::tests::concat_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::concat_dim1_interleaves_columns_by_row ... ok
+test cpu::ops::shape_ops::tests::concat_backward_narrows_grad_to_each_inputs_own_shape_and_values ... ok
+test cpu::ops::shape_ops::tests::concat_dim_out_of_bounds_returns_err ... ok
+test cpu::ops::shape_ops::tests::concat_rejects_non_concat_axis_size_mismatch_even_when_broadcast_compatible ... ok
+test cpu::ops::shape_ops::tests::flatten_all_dims_produces_1d_shape ... ok
+test cpu::ops::shape_ops::tests::concat_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::float_to_scalar_reads_single_element ... ok
+test cpu::ops::shape_ops::tests::flatten_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::flatten_merges_middle_dims ... ok
+test cpu::ops::shape_ops::tests::float_to_vec1_reads_all_elements_row_major ... ok
+test cpu::ops::shape_ops::tests::matmul_via_trensor_ops_delegates_to_matmul_impl ... ok
+test cpu::ops::shape_ops::tests::group_norm_statistics_are_per_sample_not_across_the_batch ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank2_matches_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::instance_norm_normalizes_each_channel_of_each_sample_alone ... ok
+test cpu::ops::shape_ops::tests::narrow_out_of_bounds_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank3_matches_batched_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::narrow_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::narrow_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::narrow_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::reshape_backward_reshapes_grad_back_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::reshape_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::slice_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::slice_matches_manual_sequential_narrow_calls ... ok
+test cpu::ops::shape_ops::tests::slice_on_transposed_input_across_multiple_dims_produces_correct_values ... ok
+test cpu::ops::shape_ops::tests::squeeze_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::slice_out_of_bounds_range_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::squeeze_on_non_one_sized_axis_returns_shape_mismatch ... ok
+test cpu::ops::shape_ops::tests::squeeze_removes_size_one_axis_and_preserves_values ... ok
+test cpu::ops::shape_ops::tests::stack_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::stack_dim0_inserts_new_leading_axis ... ok
+test cpu::ops::shape_ops::tests::stack_rejects_mismatched_shapes ... ok
+test cpu::ops::shape_ops::tests::transpose_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::stack_dim_equal_to_rank_appends_new_trailing_axis ... ok
+test cpu::ops::shape_ops::tests::stack_backward_narrows_and_squeezes_grad_to_original_shape ... ok
+test cpu::storage::tests::checked_integer_readback_preserves_integer_values ... ok
+test cpu::ops::shape_ops::tests::unsupported_methods_return_typed_error_not_silent_placeholder ... ok
+test cpu::storage::tests::broadcast_as_expands_and_shares_buffer ... ok
+test cpu::storage::tests::checked_integer_readback_rejects_lossy_float_values ... ok
+test cpu::storage::tests::narrow_boundary_values_succeed ... ok
+test cpu::ops::shape_ops::tests::transpose_backward_reapplies_same_transpose ... ok
+test cpu::storage::tests::narrow_contiguous_shares_buffer_and_slices_correct_values ... ok
+test cpu::storage::tests::from_contiguous_has_expected_shape_and_strides ... ok
+test cpu::storage::tests::narrow_dim_out_of_range_errors ... ok
+test cpu::storage::tests::narrow_on_transposed_view_reads_correct_values_without_materializing ... ok
+test cpu::storage::tests::reshape_contiguous_shares_buffer_and_gets_new_id ... ok
+test cpu::storage::tests::narrow_out_of_bounds_length_errors ... ok
+test cpu::storage::tests::scatter_into_zeros_1d_case ... ok
+test cpu::storage::tests::reshape_non_contiguous_materializes_then_reshapes ... ok
+test cpu::storage::tests::scatter_into_zeros_partial_overlap_writes_only_target_region ... ok
+test cpu::storage::tests::scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc ... ok
+test cpu::storage::tests::transposed_view_reads_correct_values_without_contiguous_call ... ok
+test cpu::storage::tests::transpose_shares_buffer_and_swaps_shape_strides ... ok
+test cpu::storage::tests::scatter_into_zeros_full_overlap_matches_values_exactly ... ok
+test cpu::stride::tests::is_contiguous_false_for_transposed_strides ... ok
+test cpu::stride::tests::is_contiguous_true_for_fresh_strides ... ok
+test cpu::stride::tests::numel_for_a_dynamic_shape_matches_checked_numel ... ok
+test cpu::stride::tests::numel_for_a_static_shape_reads_the_type_level_constant ... ok
+test cpu::tape::tests::a_non_finite_gradient_is_returned_rather_than_panicked ... ok
+test cpu::tape::tests::backward_seeds_loss_gradient_with_ones ... ok
+test cpu::tape::tests::backward_drains_tape_and_second_call_is_not_contaminated ... ok
+test cpu::tape::tests::tape_len_is_zero_immediately_after_any_backward_call ... ok
+test cpu::tape::tests::unbroadcast_bias_vector_b_n_to_n ... ok
+test cpu::tape::tests::unbroadcast_same_shape_is_noop ... ok
+test cpu::tape::tests::backward_accumulates_not_overwrites_on_tensor_reuse ... ok
+test cpu::tape::tests::unbroadcast_scalar_target_sums_all_axes ... ok
+test cpu::var::tests::assign_var_replaces_value_and_subsequent_read_reflects_it ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_unary_f32 ... ok
+test cpu::var::tests::var_as_tensor_returns_clone_of_current_value ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_f16_bf16 ... ok
+test cpu::var::tests::var_as_tensor_does_not_hold_live_borrow_across_assign_var ... ok
+test cpu::var::tests::two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second ... ok
+test detect::tests::an_empty_preference_still_yields_the_cpu ... ok
+test detect::tests::detection_agrees_with_itself ... ok
+test detect::tests::detection_always_yields_a_runnable_device ... ok
+test detect::tests::preference_order_is_honored ... ok
+test detect::tests::a_family_that_is_not_compiled_in_is_never_detected ... ok
+test iteration::tests::broadcast_axes_become_zero_stride ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_binary_f64 ... ok
+test iteration::tests::empty_iteration_has_no_physical_index ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_rank4 ... ok
+test iteration::tests::coalesces_only_axes_contiguous_for_every_operand ... ok
+test iteration::tests::contiguous_operands_keep_their_strides ... ok
+test layout::tests::broadcast_shape_both_expand ... ok
+test iteration::tests::unit_axes_are_removed_regardless_of_stride ... ok
+test iteration::tests::non_contiguous_strides_and_offsets_are_preserved ... ok
+test layout::tests::broadcast_shape_incompatible_errors ... ok
+test iteration::tests::unary_plan_preserves_view_metadata_and_checks_bounds ... ok
+test detect::tests::probing_repeatedly_from_several_threads_is_survivable ... ok
+test layout::tests::broadcast_shape_preserves_zero_extent ... ok
+test layout::tests::broadcast_shape_right_aligned_leading_dim_insert ... ok
+test cpu::ops::norm::tests::batch_norm_gradcheck ... ok
+test cpu::storage::tests::tensor_id_never_repeats_across_many_calls ... ok
+test layout::tests::contiguous_strides_row_major ... ok
+test layout::tests::contiguous_strides_scalar ... ok
+test iteration::tests::incompatible_shapes_are_rejected ... ok
+test layout::tests::broadcast_shape_scalar_broadcast ... ok
+test quant::tests::block_matches_the_dtype_tables_block_size ... ok
+test layout::tests::increment_index_wraps_at_the_end ... ok
+test layout::tests::increment_index_carries_across_axes ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_vector_chunks_preserve_operations_and_tails ... ok
+
+test result: ok. 331 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/architecture_regression.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/architecture_regression-cbe1d83deb9c8c18)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/candle_executor.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/candle_executor-2ca6df84113f4c12)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/canonical_dispatch_smoke.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/canonical_dispatch_smoke-eed3b877e4e2ee32)
+
+running 2 tests
+test descriptor_validation_rejects_a_wrong_dtype_before_execution ... ok
+test add_uses_the_descriptor_executor_and_preserves_shape ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/codegen_pointwise.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/codegen_pointwise-d82a4f7449556474)
+
+running 5 tests
+test test_unary_relu_codegen ... ok
+test test_scalar_broadcast_layout ... ok
+test test_binary_add_f16_codegen ... ok
+test test_complex_fma_gelu_expression ... ok
+test test_all_dtypes_type_mapping ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/collective_tuning.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/collective_tuning-5bb4ee739b2caea3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_cpu.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/compiled_cpu-5512538c8880e61d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/conformance-7cfd3bcba7d59f27)
+
+running 6 tests
+test tolerance_accepts_either_bound_and_rejects_a_non_finite_surprise ... ok
+test a_backend_that_claims_nothing_skips_rather_than_fails ... ok
+test a_backend_that_computes_the_wrong_product_fails_only_the_tolerance_check ... ok
+test a_registry_that_claims_everything_fails_the_agreement_check ... ok
+test the_template_backend_conforms ... ok
+test a_panicking_executor_is_a_reported_failure_not_a_dead_harness ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cpu_migration_status.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/cpu_migration_status-441f079db1133692)
+
+running 5 tests
+test every_unmigrated_executable_operation_records_what_blocks_it ... ok
+test every_migrated_identity_is_a_catalog_operation ... ok
+test no_migrated_operation_still_claims_to_be_blocked ... ok
+test the_migration_status_document_matches_the_registrations ... ok
+test no_migrated_operation_sits_at_a_non_executable_site ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/data_parallel_reference.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/data_parallel_reference-115f8a520a2c05ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generated_docs.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/generated_docs-993e4991c5bf257c)
+
+running 4 tests
+test the_document_does_not_advertise_an_unregistered_operation ... ok
+test the_capability_document_matches_the_registrations ... ok
+test the_document_covers_every_registered_operation ... ok
+test no_public_example_is_excluded_from_compilation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/metal_tuning.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/metal_tuning-56928226953fa66b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_contract.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/nccl_contract-5b750940565ee10e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_two_rank.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/nccl_two_rank-13064805f3d98143)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pipeline_reference.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/pipeline_reference-ebe50f5152b66e39)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reference_collectives.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/reference_collectives-9d03713260663a82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_dtype_contract.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/runtime_dtype_contract-77c6b417633c84da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safetensors_test.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/safetensors_test-8d26064e9cb39b5b)
+
+running 1 test
+test test_safetensors_save_and_load_roundtrip_cpu ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/simd_lanes.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/simd_lanes-55aef0dec89ed162)
+
+running 2 tests
+test test_simd_lanes_const_eval ... ok
+test test_simd_lanes_positive_and_divisible ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/target_api-eb5a52d64c80a245)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api_wgpu.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/target_api_wgpu-7f0be239577b98c0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_meta.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tensor_meta-9bed0dbc410a3957)
+
+running 5 tests
+test every_enabled_backend_storage_uses_tensor_meta ... ok
+test nonzero_view_offset_weakens_but_never_strengthens_alignment ... ok
+test empty_views_are_valid_but_out_of_bounds_views_are_rejected ... ok
+test contiguous_transpose_and_broadcast_have_one_checked_metadata_source ... ok
+test invalid_alignment_rank_and_arithmetic_overflow_are_rejected ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_parallel_reference.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tensor_parallel_reference-ca964aadabc58da0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tiling.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tiling-bd1b9b4f82c5712c)
+
+running 3 tests
+test test_tile_2d_coverage_edge_cases ... ok
+test test_tile_2d_coverage_rectangular_non_multiple ... ok
+test test_tile_2d_coverage_square ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_cache.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tuning_cache-a3b819a64d6f5be7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_identity.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tuning_identity-0de3bfcef5606ecc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_pruning.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tuning_pruning-19581b862784e10a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_service.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tuning_service-703475ee8fc148a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_telemetry.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/tuning_telemetry-9e51693fb8075c59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wgpu_executor.rs (target/asan-avx2/x86_64-unknown-linux-gnu/debug/deps/wgpu_executor-d9ed1ad13798943f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[0;32mOK: asan: +avx2[0m
+
+[1m[0;32mSoundness gate passed.[0m
