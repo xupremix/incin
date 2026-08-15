@@ -89,7 +89,7 @@ macro_rules! impl_transfer {
                         got,
                     });
                 }
-                let storage = <Self as incin_core::prelude::StorageTransfer<NewD>>::transfer_storage(
+                let storage = <Self as StorageTransfer<NewD>>::transfer_storage(
                     &source, dtype, device,
                 )?;
                 <Self::Output as VariableBackend>::var_from_tensor(&storage)
