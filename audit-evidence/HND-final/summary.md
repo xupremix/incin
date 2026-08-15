@@ -4,7 +4,9 @@ Branch: `develop`
 
 Starting commit: `6cb6b660c268799fb6ea40158d30493f436a24e5`
 
-Final source commit before evidence archive: `43a3a4d632437b2be51362234571e76f2970139e`
+Final implementation source commit: `43a3a4d632437b2be51362234571e76f2970139e`
+
+Final tracked handoff commit: `068b7ced20988f82f22a1ee650a99f8dd8813654`
 
 Commits created during this final task:
 
@@ -52,3 +54,8 @@ Remaining known limitations are the documented experimental accelerator,
 compiled, distributed, and telemetry maturity boundaries, plus the deliberate
 future questions listed in `docs/HANDOFF.md`. No broad migration remains
 necessary.
+
+Canonical export: `/tmp/incin-hnd-final-20260815.zip`, 4,082,343 bytes,
+SHA-256 `99f09c535b54f8a5852576c63ffbd7abce4b123027ced233fffd241b86ab5c6c`,
+created from tracked handoff commit `068b7ced20988f82f22a1ee650a99f8dd8813654`.
+The unpacked export validation passed.

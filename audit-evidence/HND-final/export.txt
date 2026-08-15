@@ -4,11 +4,17 @@ The canonical exporter command is:
 
     tools/export-snapshot.sh /tmp/incin-hnd-final-20260815.zip
 
-The final export is generated after the evidence archive commit from the
-tracked final HEAD. The exporter itself verifies exact tracked-file coverage,
-the two distributed source trees, architecture/dependency/large-file/public
-API gates, and a minimal core Cargo check. The final report records the exact
-archive byte size and SHA-256 after this command completes.
+The final export was generated from tracked handoff commit
+`068b7ced20988f82f22a1ee650a99f8dd8813654`. The exporter verifies exact
+tracked-file coverage, the two distributed source trees,
+architecture/dependency/large-file/public API gates, and a minimal core Cargo
+check.
+
+Archive basename: `incin-hnd-final-20260815.zip`
+Archive path: `/tmp/incin-hnd-final-20260815.zip`
+Archive size: `4082343` bytes
+SHA-256: `99f09c535b54f8a5852576c63ffbd7abce4b123027ced233fffd241b86ab5c6c`
+Unpacked export validation: PASS.
 
 Unpacked export validation requirements:
 
