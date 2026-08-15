@@ -6,7 +6,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::compiled::plan::CompiledPlan;
-use crate::prelude::{Error, Result};
+use crate::err::{Error, Result};
 
 /// Current artifact format version.
 pub const ARTIFACT_FORMAT_VERSION: u32 = 1;

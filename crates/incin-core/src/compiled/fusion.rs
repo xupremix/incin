@@ -3,8 +3,8 @@
 use alloc::vec::Vec;
 
 use crate::compiled::capture::{CapturedGraph, CapturedNode};
-use crate::prelude::OperationKind;
-use crate::prelude::Result;
+use crate::err::Result;
+use crate::shapes::error::OperationKind;
 
 fn builtin_operation(identity: &crate::exec::OperationIdentity) -> Option<OperationKind> {
     match identity {

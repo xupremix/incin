@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
 use crate::graph::ValueId;
-use crate::prelude::{Error, Result};
+use crate::err::{Error, Result};
 
 /// A bounded shape bucket for dynamic shape alignment.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

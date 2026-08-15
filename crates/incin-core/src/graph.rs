@@ -1,5 +1,8 @@
 use crate::exec::{ExecutionSite, LayoutClass, OperationIdentity, ShapeExpr};
-use crate::prelude::{DTypeDescriptor, DTypeId, OperationKind};
+use crate::err::{Error, Result};
+use crate::shapes::error::OperationKind;
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};
@@ -20,7 +23,7 @@ pub struct Value {
     pub dtype: DTypeDescriptor,
     /// Logical placement when known at capture time.
     #[serde(default)]
-    pub device: Option<crate::prelude::DeviceId>,
+    pub device: Option<DeviceId>,
     /// Layout fact when the capture backend can establish one.
     #[serde(default)]
     pub layout: Option<LayoutClass>,
@@ -146,11 +149,11 @@ impl Graph {
     pub fn set_value_placement(
         &mut self,
         value_id: ValueId,
-        device: Option<crate::prelude::DeviceId>,
+        device: Option<DeviceId>,
         layout: Option<LayoutClass>,
-    ) -> crate::prelude::Result<()> {
+    ) -> Result<()> {
         let value = self.values.get_mut(&value_id).ok_or_else(|| {
-            crate::prelude::Error::Msg(alloc::format!(
+            Error::Msg(alloc::format!(
                 "cannot set metadata for unknown graph value {value_id}"
             ))
         })?;
@@ -237,7 +240,7 @@ impl Graph {
     /// axes remain constants and therefore do not receive redundant guards.
     pub fn mark_input_with_shape<S>(&mut self, value_id: ValueId)
     where
-        S: crate::prelude::Shape + crate::exec::shape_projection::ShapeProjection,
+        S: crate::shapes::Shape + crate::exec::shape_projection::ShapeProjection,
     {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);

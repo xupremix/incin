@@ -174,15 +174,15 @@ fn expect_rank(
 )]
 /// Compile-time-checked 2D pooling (`max_pool2d`/`avg_pool2d`) output
 /// shape rule, given kernel `K`, stride `S`, padding `P`, and dilation `D`.
-pub trait Pool2dShape<K, S, P, D>: crate::prelude::Shape {
+pub trait Pool2dShape<K, S, P, D>: crate::shapes::Shape {
     /// The pooled output shape (same batch/channel dims, spatial dims
     /// reduced via `SpatialOut`).
-    type Output: crate::prelude::Shape + crate::prelude::DynShape;
+    type Output: crate::shapes::Shape + crate::shapes::DynShape;
     /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError>;
 }
 
-use crate::prelude::{Dyn, DynShape, Shape};
+use crate::shapes::{Dyn, DynShape, Shape};
 use typenum::Unsigned;
 
 // `$c`/`$h`/`$w` are the tuple indices of the channel and two spatial dims.
@@ -230,10 +230,10 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
 )]
 /// Compile-time-checked `conv1d` output shape rule, given output
 /// channels `COut`, kernel `K`, stride `S`, padding `P`, and dilation `D`.
-pub trait SpatialConv1d<COut, K, S, P, D>: crate::prelude::Shape {
+pub trait SpatialConv1d<COut, K, S, P, D>: crate::shapes::Shape {
     /// The convolved output shape (batch dims unchanged, channel dim
     /// replaced by `COut`, length dim reduced via `SpatialOut`).
-    type Output: crate::prelude::Shape + crate::prelude::DynShape;
+    type Output: crate::shapes::Shape + crate::shapes::DynShape;
     /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError>;
 }
@@ -280,10 +280,10 @@ impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()
 )]
 /// Compile-time-checked `conv2d` output shape rule, given output
 /// channels `COut`, kernel `K`, stride `S`, padding `P`, and dilation `D`.
-pub trait SpatialConv2d<COut, K, S, P, D>: crate::prelude::Shape {
+pub trait SpatialConv2d<COut, K, S, P, D>: crate::shapes::Shape {
     /// The convolved output shape (batch dims unchanged, channel dim
     /// replaced by `COut`, spatial dims reduced via `SpatialOut`).
-    type Output: crate::prelude::Shape + crate::prelude::DynShape;
+    type Output: crate::shapes::Shape + crate::shapes::DynShape;
     /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     fn compute_output_shape(input: &ShapeBuf, out_channels: usize) -> Result<ShapeBuf, ShapeError>;
 }
@@ -334,10 +334,10 @@ impl<COut, K: Dim<Arg = ()>, S: Dim<Arg = ()>, P: Dim<Arg = ()>, D: Dim<Arg = ()
 )]
 /// Compile-time-checked `adaptive_avg_pool2d` output shape rule: the
 /// output spatial size is exactly `(HOut, WOut)` regardless of input size.
-pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::prelude::Shape {
+pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::shapes::Shape {
     /// The pooled output shape: batch/channel dims unchanged, spatial dims
     /// fixed to `(HOut, WOut)`.
-    type Output: crate::prelude::Shape + crate::prelude::DynShape;
+    type Output: crate::shapes::Shape + crate::shapes::DynShape;
     /// Computes the runtime `ShapeBuf` of `Output` from the input buffer.
     fn compute_output_shape(input: &ShapeBuf) -> Result<ShapeBuf, ShapeError>;
 }

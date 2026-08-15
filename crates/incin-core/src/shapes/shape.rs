@@ -1,4 +1,4 @@
-use crate::prelude::{Dim, Dyn};
+use crate::shapes::{Dim, Dyn};
 use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};

@@ -11,7 +11,9 @@ use crate::exec::{
     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
 };
 use crate::graph::ValueId;
-use crate::prelude::{DTypeDescriptor, DTypeId, DeviceId, Error, Result};
+use crate::err::{Error, Result};
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 #[cfg(feature = "std")]
 use crate::exec::catalog::{CapturedDescriptor, Descriptor, op};

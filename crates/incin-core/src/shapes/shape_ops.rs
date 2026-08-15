@@ -1,4 +1,4 @@
-use crate::prelude::Shape;
+use crate::shapes::Shape;
 use crate::shapes::idx::{FromEnd, Here, Next, StaticCursor};
 use crate::shapes::{At, Dim, DimCons, Nil, RemoveAt, RemoveFromEnd, ReplaceAt, SwapAt};
 
@@ -112,6 +112,6 @@ where
     type Output = DimCons<H, <T as ReduceKeepAt<Cursor>>::Output>;
 }
 
-impl<Cursor> ReduceKeepAt<Cursor> for crate::prelude::Dyn {
-    type Output = crate::prelude::Dyn;
+impl<Cursor> ReduceKeepAt<Cursor> for crate::shapes::Dyn {
+    type Output = crate::shapes::Dyn;
 }
