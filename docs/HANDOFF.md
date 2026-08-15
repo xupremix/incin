@@ -204,6 +204,7 @@ of problem:
 | `crates/incin-core/src/tensor/backend/dummy.rs` | shape-only test backend and test operation coverage | keep test-only behavior isolated from production backend identity |
 | `crates/incin-core/src/dist/{plan,context}.rs` | distributed placement/planning prototypes | remain feature-gated and split only with a concrete ownership seam |
 | `crates/incin-core/src/tensor/base.rs` | central Tensor invariant and constructor implementation | keep invariant-preserving constructors together; extract only neutral value helpers |
+| `crates/incin-core/src/tensor/dtype.rs` | logical dtype descriptors, built-in dtype implementations, and storage encodings share one registry boundary | keep identity/validation/encoding contracts together; split only along a stable registry seam |
 | `crates/incin-backends/src/{cuda,wgpu,metal}/backend.rs` | feature-gated backend identity, storage, capability, and executor implementations | split remaining responsibility clusters when validated independently |
 | `crates/incin-backends/src/{cpu/canonical.rs,dispatch.rs,capability.rs}` | canonical registrations, dispatch routing, and capability declarations | keep generated/completeness coupling intact; extract operation families only with focused tests |
 | `crates/incin-backends/src/cpu/ops/{elementwise_kernel,elementwise,shape_ops,reduce,matmul,conv}.rs` | cohesive CPU operation families and kernel helpers | preserve family-local tests; split only where execution ownership becomes clearer |

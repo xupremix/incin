@@ -26,6 +26,7 @@ declare -A explained=(
     [crates/incin-backends/src/cpu/ops/reduce.rs]=1
     [crates/incin-backends/src/cpu/ops/matmul.rs]=1
     [crates/incin-core/src/tensor/backend/dummy.rs]=1
+    [crates/incin-core/src/tensor/dtype.rs]=1
     [crates/incin-backends/src/dist/tuning.rs]=1
     [crates/incin-backends/src/tuning/identity.rs]=1
     [crates/incin-core/src/dist/context.rs]=1
