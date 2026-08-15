@@ -3,7 +3,14 @@ use crate::nn::init::Init;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, VisitParameters};
-use crate::prelude::{AppendDim, Backend, ConstDType, Device, DType, Dim, Dyn, DynShape, Error, Grad, GradJoin, JoinedGrad, LinearShape, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{AppendDim, Dim, Dyn, DynShape, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::nn::linear::LinearShape;
+use crate::tensor::base::Tensor;
+use crate::tensor::device::{ConstDevice, Device};
+use crate::tensor::dtype::{ConstDType, DType};
+use crate::tensor::grad::{Grad, GradJoin, JoinedGrad, RequiresGrad};
 use alloc::string::String;
 use crate::shapes::shape::{DimCons, Nil};
 use crate::tensor::backend::Execute;
@@ -348,7 +355,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.wi.visit_parameters(&path.child("wi"), visitor)?;
         self.wh.visit_parameters(&path.child("wh"), visitor)
     }
@@ -422,7 +429,7 @@ where
 /// ```rust,no_run
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let cell = RNNCell::new(
@@ -506,7 +513,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.cell.visit_parameters(&path.child("cell"), visitor)
     }
 }
@@ -537,7 +544,7 @@ where
     S::In: Dim<Arg = ()>,
     S::Out: Dim<Arg = ()>,
     K: ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+        B::Device: ConstDevice,
     G: GradJoin<Train::TensorGrad, Output = G>,
     RNNCell<S, B, BiasIh, BiasHh, K, Train>: Module<
             (
@@ -599,7 +606,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.wi.visit_state(&path.child("wi"), visitor)?;
         self.wh.visit_state(&path.child("wh"), visitor)
     }
@@ -621,7 +628,7 @@ where
         &mut self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.wi.visit_state_mut(&path.child("wi"), visitor)?;
         self.wh.visit_state_mut(&path.child("wh"), visitor)
     }
@@ -642,7 +649,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.cell.visit_state(&path.child("cell"), visitor)
     }
 }
@@ -662,7 +669,7 @@ where
         &mut self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.cell.visit_state_mut(&path.child("cell"), visitor)
     }
 }

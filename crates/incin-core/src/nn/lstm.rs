@@ -3,7 +3,14 @@ use crate::nn::init::Init;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, VisitParameters};
-use crate::prelude::{AppendDim, Backend, ConstDType, Device, DType, Dim, Dyn, DynShape, Error, Grad, GradJoin, JoinedGrad, LinearShape, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{AppendDim, Dim, Dyn, DynShape, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::nn::linear::LinearShape;
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::{ConstDType, DType};
+use crate::tensor::grad::{Grad, GradJoin, JoinedGrad, RequiresGrad};
 use crate::shapes::shape::{DimCons, Nil};
 use crate::tensor::backend::Execute;
 use alloc::string::{String, ToString};
@@ -283,7 +290,7 @@ pub fn lstm<S: LstmShape>(shape: ShapeValue<S>) -> LSTMBuilder<S> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // Fully static, both biases present (default)
@@ -471,7 +478,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.wi_i.visit_parameters(&path.child("wi_i"), visitor)?;
         self.wi_f.visit_parameters(&path.child("wi_f"), visitor)?;
         self.wi_g.visit_parameters(&path.child("wi_g"), visitor)?;
@@ -643,7 +650,7 @@ where
         &self,
         path: &crate::nn::StatePath,
         visitor: &mut V,
-    ) -> crate::prelude::Result<()> {
+    ) -> crate::err::Result<()> {
         self.cell.visit_parameters(&path.child("cell"), visitor)
     }
 }
