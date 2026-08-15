@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-canonical-v12.zip # passed
+tools/export-snapshot.sh /tmp/hnd004b-canonical-v14.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -281,9 +281,10 @@ exclusions. Repository formatting now passes. The exact core cargo-hack
 powerset passes all 384 combinations, and the macros and diagnostics
 powersets pass. The backend command was also started exactly as CI specifies
 and reached the dependency-heavy CUDA combinations without a failure before
-being stopped at 20 of 8,212 combinations; the literal backend and facade
-matrices remain impractical to complete locally. The facade's full feature
-combination was checked after the stale ignored CUDA fixtures were moved
+being stopped at 20 of 8,212 combinations; the full backend command is now
+running locally against that matrix and has reached 208 combinations without
+a failure. The facade matrix remains pending after that long-running job. The
+facade's representative feature combination was checked after the stale ignored CUDA fixtures were moved
 behind the explicit `hardware-tests` feature, and all three hardware fixtures
 compile with that feature. Those fixtures now validate NCCL plan and
 communicator setup only; they make no unsupported CUDA kernel-parity claim.
