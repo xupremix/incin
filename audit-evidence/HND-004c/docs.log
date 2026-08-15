@@ -1,0 +1,7 @@
+HND-004c documentation validation
+
+mdbook build docs/book: PASS
+cargo test -p incin --features 'target-api backend-authoring' --doc: PASS
+48 passed, 0 failed, 7 ignored; compile-fail doctest 1 passed.
+cargo test -p incin-backends --test generated_docs: PASS
+4 passed, 0 failed.

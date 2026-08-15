@@ -1,0 +1,71 @@
+info: running `cargo check --all-targets --no-default-features` on incin-macros (1/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.20s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,nightly,std` on incin-macros (2/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.28s
+
+info: running `cargo check --all-targets --no-default-features --features default` on incin-macros (3/12)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 10.20s
+
+info: running `cargo check --all-targets --no-default-features --features distributed` on incin-macros (4/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 11.09s
+
+info: running `cargo check --all-targets --no-default-features --features default,distributed` on incin-macros (5/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 11.27s
+
+info: running `cargo check --all-targets --no-default-features --features nightly` on incin-macros (6/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 11.97s
+
+info: running `cargo check --all-targets --no-default-features --features default,nightly` on incin-macros (7/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 12.01s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,nightly` on incin-macros (8/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.47s
+
+info: running `cargo check --all-targets --no-default-features --features default,distributed,nightly` on incin-macros (9/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 11.91s
+
+info: running `cargo check --all-targets --no-default-features --features std` on incin-macros (10/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.41s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,std` on incin-macros (11/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.41s
+
+info: running `cargo check --all-targets --no-default-features --features nightly,std` on incin-macros (12/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.40s

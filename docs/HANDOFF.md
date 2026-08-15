@@ -244,11 +244,11 @@ Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
 ## Validation checkpoint
 
-The latest reproducible artifact validation is regenerated at the HND-004b
+The latest reproducible artifact validation is regenerated at the HND-004c
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-canonical-v17.zip # passed
+tools/export-snapshot.sh /tmp/hnd004c-canonical-v18.zip # pending final export
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -269,23 +269,18 @@ cargo test -p incin --features 'target-api backend-authoring' --doc
 
 The Cargo command is intentional: standalone `mdbook test` does not receive
 Cargo's dependency metadata and cannot resolve the facade's workspace crates.
-The HND-004b executable proof includes the CPU Transformer composition in
+The HND-004c executable proof includes the CPU Transformer composition in
 `crates/incin/tests/transformer_block.rs`, the six-fixture clean/incremental
 compile benchmark in `tools/bench-compile.sh`, lazy zero-worker data loading,
 and dependency checks
-inside exported snapshots. The normal workspace suite, mdBook build, docs
-drift gate, budget gate, and export gates pass. Remaining caveats are
-explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
-including unavailable accelerator hardware and Miri's numerical-test
-exclusions. Repository formatting now passes. The exact core cargo-hack
-powerset passes all 384 combinations, and the macros and diagnostics
-powersets pass. The backend and facade cargo-hack matrices were attempted
-with the exact CI feature sets. The backend matrix was partitioned into four
-disjoint cargo-hack runs, and the facade matrix was started independently;
-the attempts exhausted the available `/tmp` filesystem while compiling
-isolated targets (`No space left on device`) before terminal completion, so
-neither matrix is claimed as passed. The exact core, macros, and diagnostics
-powerset results remain complete. Soundness validation is complete for the
+inside exported snapshots. Remaining caveats are explicitly recorded in
+`docs/PROTOTYPING.md`, `docs/PROJECT_STATUS.md`, and
+`audit-evidence/HND-004c/summary.md`, including unavailable accelerator
+hardware and resource-bounded feature matrices. Repository formatting passes.
+The exact macro and diagnostics cargo-hack powersets pass. The core and
+facade matrices are recorded as incomplete because their current exact
+combination counts are resource-prohibitive here; neither is claimed as
+passed. Soundness validation is complete for the
 supported local targets: Miri passed 138 core tests and 324 backend tests
 with three ignored numerical tests, and the baseline and AVX2 ASan runs
 passed. The facade's representative feature combination was checked after

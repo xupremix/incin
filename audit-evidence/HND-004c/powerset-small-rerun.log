@@ -1,0 +1,45 @@
+info: running `cargo check --all-targets --no-default-features` on incin-macros (1/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.25s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,nightly,std` on incin-macros (2/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+error[E0405]: cannot find trait `VariableBackend` in this scope
+  --> crates/incin-macros/tests/distributed_macro_suite.rs:16:48
+   |
+16 | pub struct DistributedTransformer<B: Backend + VariableBackend> {
+   |                                                ^^^^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0405`.
+error: could not compile `incin-macros` (test "distributed_macro_suite") due to 1 previous error
+error: process didn't exit successfully: `/home/xupremix/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo check --all-targets --manifest-path crates/incin-macros/Cargo.toml --no-default-features --features distributed,nightly,std` (exit status: 101)
+macros_exit=1
+info: running `cargo check --all-targets --no-default-features` on incin-diagnostics (1/3)
+warning: variable does not need to be mutable
+  --> crates/incin-diagnostics/src/lib.rs:39:9
+   |
+39 |     let mut hints = Vec::new();
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/incin-diagnostics/src/lib.rs:40:9
+   |
+40 |     let mut file_lines = Vec::new();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: `incin-diagnostics` (lib) generated 2 warnings (run `cargo fix --lib -p incin-diagnostics` to apply 2 suggestions)
+warning: `incin-diagnostics` (lib test) generated 2 warnings (2 duplicates)
+    Finished `dev` profile [unoptimized] target(s) in 0.09s
+
+info: running `cargo check --all-targets --no-default-features --features std` on incin-diagnostics (2/3)
+    Finished `dev` profile [unoptimized] target(s) in 0.09s
+
+info: running `cargo check --all-targets --no-default-features --features default` on incin-diagnostics (3/3)
+    Finished `dev` profile [unoptimized] target(s) in 0.10s
+diagnostics_exit=0

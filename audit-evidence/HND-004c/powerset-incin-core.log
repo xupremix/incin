@@ -1,0 +1,109 @@
+info: running `cargo check --all-targets --all-features` on incin-core (1/769)
+    Checking zerocopy v0.8.31
+    Checking serde v1.0.228
+    Checking smallvec v1.15.2
+    Checking thiserror v1.0.69
+    Checking bytemuck v1.25.0
+    Checking byteorder v1.5.0
+    Checking serde_json v1.0.150
+    Checking thiserror v2.0.18
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking bytes v1.12.0
+    Checking anyhow v1.0.103
+    Checking rustix v1.1.4
+    Checking getrandom v0.4.3
+    Checking fastrand v2.4.1
+    Checking naga v22.1.0
+    Checking cobs v0.3.0
+    Checking hash32 v0.2.1
+    Checking parking_lot_core v0.9.12
+    Checking parking_lot v0.12.5
+    Checking heapless v0.7.17
+    Checking prost v0.14.4
+    Checking safetensors v0.4.5
+    Checking trybuild v1.0.117
+    Checking postcard v1.1.3
+    Checking tempfile v3.27.0
+    Checking ppv-lite86 v0.2.21
+    Checking half v2.7.1
+    Checking ahash v0.8.12
+    Checking hashbrown v0.14.5
+    Checking digit-layout v0.3.1
+    Checking rand_chacha v0.3.1
+    Checking ggml-quants v0.1.0
+    Checking rand v0.8.6
+    Checking rand_distr v0.4.3
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+    Checking wgpu-hal v22.0.0
+    Checking wgpu-core v22.1.0
+    Checking wgpu v22.1.0
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: `incin-core` (lib test) generated 5 warnings (5 duplicates)
+    Finished `dev` profile [unoptimized] target(s) in 21.69s
+
+info: running `cargo check --all-targets --no-default-features` on incin-core (2/769)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 17.20s
+
+info: running `cargo check --all-targets --no-default-features --features compiled` on incin-core (3/769)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^

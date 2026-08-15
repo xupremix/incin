@@ -1,0 +1,24 @@
+info: running `cargo check --all-targets --no-default-features` on incin-macros (1/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `dev` profile [unoptimized] target(s) in 0.23s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,nightly,std` on incin-macros (2/12)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+error[E0433]: cannot find `backend_authoring` in `incin`
+   --> crates/incin-macros/tests/distributed_macro_suite.rs:16:55
+    |
+ 16 | pub struct DistributedTransformer<B: Backend + incin::backend_authoring::VariableBackend> {
+    |                                                       ^^^^^^^^^^^^^^^^^ could not find `backend_authoring` in `incin`
+    |
+note: found an item that was configured out
+   --> crates/incin/src/lib.rs:284:9
+    |
+282 | #[cfg(feature = "backend-authoring")]
+    |       ----------------------------- the item is gated behind the `backend-authoring` feature
+283 | /// Contracts and extension traits for backend authors.
+284 | pub mod backend_authoring {
+    |         ^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `incin-macros` (test "distributed_macro_suite") due to 1 previous error
+error: process didn't exit successfully: `/home/xupremix/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo check --all-targets --manifest-path crates/incin-macros/Cargo.toml --no-default-features --features distributed,nightly,std` (exit status: 101)

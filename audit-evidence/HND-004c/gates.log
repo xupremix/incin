@@ -1,0 +1,19 @@
+fmt_exit=0
+ledger ok: 101 tasks, 101 complete
+ledger_exit=0
+budgets ok: 15 runtime, 1 memory, 1 cache, 24 artifacts, 5 feature crates, 50 features
+budgets_exit=0
+audit-shapes ok: inventory matches shape-proof-inventory.md
+shape_exit=0
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+
+distributed_macro_exit=0
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+generated_docs_exit=0

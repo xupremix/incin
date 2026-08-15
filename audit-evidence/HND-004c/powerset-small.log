@@ -1,0 +1,97 @@
+info: running `cargo check --all-targets --no-default-features` on incin-macros (1/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking proc-macro2 v1.0.106
+    Checking onnx-pb v0.1.4
+    Checking tower-http v0.6.11
+    Checking reqwest v0.12.28
+    Checking quote v1.0.46
+    Checking syn v2.0.118
+    Checking hf-hub v0.5.0
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 11.71s
+
+info: running `cargo check --all-targets --no-default-features --features distributed,nightly,std` on incin-macros (2/12)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+error[E0277]: the trait bound `B: VariableBackend` is not satisfied
+   --> crates/incin-macros/tests/distributed_macro_suite.rs:18:12
+    |
+ 18 |     embed: Linear<s![512, 1024], B>,
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `VariableBackend` is not implemented for `B`
+    |
+note: required by a bound in `incin::nn::Linear`
+   --> crates/incin-core/src/nn/linear.rs:255:8
+    |
+253 | pub struct Linear<
+    |            ------ required by a bound in this struct
+254 |     S: LinearShape,
+255 |     B: crate::tensor::backend::VariableBackend,
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Linear`
+help: consider further restricting type parameter `B` with trait `VariableBackend`
+    |
+ 16 | pub struct DistributedTransformer<B: Backend + incin::VariableBackend> {
+    |                                              ++++++++++++++++++++++++
+
+error[E0599]: no method named `parameters` found for struct `DistributedTransformer<B>` in the current scope
+  --> crates/incin-macros/tests/distributed_macro_suite.rs:43:22
+   |
+16 | pub struct DistributedTransformer<B: Backend> {
+   | --------------------------------------------- method `parameters` not found for this struct
+...
+43 |     assert_eq!(model.parameters().len(), 4);
+   |                      ^^^^^^^^^^
+   |
+help: there is a method `visit_parameters` with a similar name, but with different arguments
+  --> crates/incin-core/src/nn/module.rs:33:5
+   |
+33 | /     fn visit_parameters<V: ParameterVisitor<B>>(
+34 | |         &self,
+35 | |         path: &crate::nn::StatePath,
+36 | |         visitor: &mut V,
+37 | |     ) -> Result<()>;
+   | |____________________^
+
+Some errors have detailed explanations: E0277, E0599.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `incin-macros` (test "distributed_macro_suite") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: process didn't exit successfully: `/home/xupremix/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo check --all-targets --manifest-path crates/incin-macros/Cargo.toml --no-default-features --features distributed,nightly,std` (exit status: 101)
+macros_exit=1
+info: running `cargo check --all-targets --no-default-features` on incin-diagnostics (1/3)
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+warning: variable does not need to be mutable
+  --> crates/incin-diagnostics/src/lib.rs:39:9
+   |
+39 |     let mut hints = Vec::new();
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/incin-diagnostics/src/lib.rs:40:9
+   |
+40 |     let mut file_lines = Vec::new();
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: `incin-diagnostics` (lib) generated 2 warnings (run `cargo fix --lib -p incin-diagnostics` to apply 2 suggestions)
+warning: `incin-diagnostics` (lib test) generated 2 warnings (2 duplicates)
+    Finished `dev` profile [unoptimized] target(s) in 0.33s
+
+info: running `cargo check --all-targets --no-default-features --features std` on incin-diagnostics (2/3)
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Finished `dev` profile [unoptimized] target(s) in 0.33s
+
+info: running `cargo check --all-targets --no-default-features --features default` on incin-diagnostics (3/3)
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Finished `dev` profile [unoptimized] target(s) in 0.33s
+diagnostics_exit=0

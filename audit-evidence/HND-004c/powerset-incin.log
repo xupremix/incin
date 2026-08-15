@@ -1,0 +1,404 @@
+info: running `cargo check --all-targets --no-default-features` on incin (1/279552)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 1.15s
+
+info: running `cargo check --all-targets --no-default-features --features autotune,backend-authoring,compiled,cpu-blas,default,distributed-nccl,distributed-reference,external-candle,hardware-tests,metal,metal-mps,nightly,target-api,telemetry,test-utils,train,wgpu` on incin (2/279552)
+    Checking stable_deref_trait v1.2.1
+   Compiling num-traits v0.2.19
+    Checking reborrow v0.5.5
+   Compiling paste v1.0.15
+   Compiling syn v2.0.118
+   Compiling seq-macro v0.3.6
+   Compiling pulp v0.21.5
+    Checking mio v1.2.1
+   Compiling dyn-stack-macros v0.1.3
+    Checking raw-cpuid v11.6.0
+    Checking bitflags v1.3.2
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling toml_datetime v0.7.3
+   Compiling zip v1.1.4
+    Checking memmap2 v0.9.9
+   Compiling matrixmultiply v0.3.11
+   Compiling cudarc v0.19.8
+    Checking raw-cpuid v10.7.0
+    Checking libloading v0.9.0
+    Checking rawpointer v0.2.1
+    Checking is-terminal v0.4.17
+   Compiling toml_edit v0.23.7
+    Checking num-integer v0.1.46
+    Checking num-bigint v0.4.6
+    Checking num-iter v0.1.45
+   Compiling proc-macro-crate v3.4.0
+    Checking num-rational v0.4.2
+   Compiling synstructure v0.13.2
+   Compiling prettyplease v0.2.37
+   Compiling zerocopy-derive v0.8.31
+   Compiling bytemuck_derive v1.10.2
+   Compiling serde_derive v1.0.228
+   Compiling displaydoc v0.2.5
+   Compiling zerovec-derive v0.11.2
+   Compiling tokio-macros v2.7.0
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v1.0.69
+   Compiling prost-derive v0.14.4
+   Compiling futures-macro v0.3.32
+   Compiling thiserror-impl v2.0.18
+   Compiling num_enum_derive v0.7.5
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling yoke-derive v0.7.5
+    Checking tokio v1.52.3
+    Checking futures-util v0.3.32
+    Checking num_enum v0.7.5
+    Checking zerofrom v0.1.6
+    Checking thiserror v1.0.69
+    Checking tracing v0.1.44
+    Checking naga v22.1.0
+    Checking zerocopy v0.8.31
+    Checking bytemuck v1.25.0
+    Checking yoke v0.8.1
+    Checking yoke v0.7.5
+    Checking thiserror v2.0.18
+    Checking cobs v0.3.0
+   Compiling prost v0.14.4
+    Checking zerovec v0.11.5
+    Checking zerotrie v0.2.3
+    Checking num-complex v0.4.6
+    Checking dyn-stack v0.13.2
+    Checking dyn-stack v0.10.0
+   Compiling prost-types v0.14.4
+    Checking pulp v0.18.22
+    Checking num v0.4.3
+    Checking tinystr v0.8.2
+    Checking potential_utf v0.1.4
+    Checking icu_collections v2.1.1
+    Checking icu_locale_core v2.1.1
+    Checking serde v1.0.228
+   Compiling prost-build v0.14.4
+    Checking icu_provider v2.1.1
+    Checking ppv-lite86 v0.2.21
+    Checking ahash v0.8.12
+    Checking icu_properties v2.1.2
+    Checking icu_normalizer v2.1.1
+    Checking safetensors v0.4.5
+    Checking heapless v0.7.17
+    Checking serde_urlencoded v0.7.1
+    Checking ureq v3.3.0
+    Checking tinytemplate v1.2.1
+    Checking trybuild v1.0.117
+    Checking hashbrown v0.14.5
+    Checking rand_chacha v0.9.0
+    Checking rand_chacha v0.3.1
+    Checking rand v0.9.2
+    Checking rand v0.8.6
+    Checking futures-executor v0.3.32
+    Checking futures v0.3.32
+    Checking postcard v1.1.3
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking rand_distr v0.5.1
+    Checking rand_distr v0.4.3
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking half v2.7.1
+    Checking url v2.5.8
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking tokio-rustls v0.26.4
+    Checking gemm-common v0.18.2
+    Checking gemm-common v0.17.1
+    Checking digit-layout v0.3.1
+    Checking ciborium-ll v0.2.2
+    Checking ggml-quants v0.1.0
+    Checking ciborium v0.2.2
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.15
+    Checking gemm-f32 v0.17.1
+    Checking gemm-c32 v0.17.1
+    Checking gemm-c64 v0.17.1
+    Checking gemm-f64 v0.17.1
+    Checking gemm-f32 v0.18.2
+    Checking gemm-f64 v0.18.2
+    Checking gemm-c32 v0.18.2
+    Checking gemm-c64 v0.18.2
+    Checking criterion v0.5.1
+    Checking gemm-f16 v0.17.1
+    Checking gemm-f16 v0.18.2
+    Checking wgpu-hal v22.0.0
+    Checking gemm v0.17.1
+    Checking gemm v0.18.2
+    Checking ug v0.4.0
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+    Checking candle-core v0.9.1
+    Checking hyper v1.10.1
+    Checking wgpu-core v22.1.0
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking candle-nn v0.9.1
+    Checking hf-hub v0.5.0
+    Checking wgpu v22.1.0
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused import: `MetalN`
+  --> crates/incin-backends/src/target.rs:90:41
+   |
+90 | use incin_core::tensor::device::{Metal, MetalN};
+   |                                         ^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused imports: `FloatToIntPolicy` and `convert_f64_to_i64`
+ --> crates/incin-backends/src/metal/backend.rs:6:46
+  |
+6 | use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+  |                                              ^^^^^^^^^^^^^^^^          ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+  --> crates/incin-backends/src/metal/backend.rs:10:26
+   |
+10 | use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
+   |                          ^^^              ^^^^^^^^^
+
+warning: unused imports: `DTypeId` and `Q8_0`
+  --> crates/incin-backends/src/metal/backend.rs:13:41
+   |
+13 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+   |                                         ^^^^^^^              ^^^^
+
+warning: unused import: `native_precision`
+  --> crates/incin-backends/src/metal/backend.rs:16:43
+   |
+16 | pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
+   |                                           ^^^^^^^^^^^^^^^^
+
+warning: unused import: `Shape`
+ --> crates/incin-backends/src/metal/executor.rs:6:41
+  |
+6 | use incin_core::shapes::{OperationKind, Shape};
+  |                                         ^^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/external/candle/executor.rs:23:41
+   |
+23 | use incin_core::shapes::{OperationKind, Shape, ShapeBuf, StrideBuf};
+   |                                         ^^^^^
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/external/candle/ops/creation.rs:56:15
+    |
+ 53 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    | ------------------------------------------------------------ associated functions in this implementation
+...
+ 56 |         fill: full;
+    |               ^^^^
+ 57 |         sequence: arange, linspace;
+    |                   ^^^^^^  ^^^^^^^^
+...
+101 |     fn var_zeros<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+...
+113 |     fn var_ones<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+126 |     fn var_rand<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+139 |     fn var_randn<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `crate::unsupported::unsupported_creation_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: associated functions `quantize`, `dequantize`, and `quantized_matmul` are never used
+  --> crates/incin-backends/src/external/candle/ops/quant.rs:8:8
+   |
+ 6 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+ 7 |     /// Not supported by candle; always returns `UnsupportedBackendOperation`.
+ 8 |     fn quantize<
+   |        ^^^^^^^^
+...
+20 |     fn dequantize<
+   |        ^^^^^^^^^^
+...
+32 |     fn quantized_matmul<Q: incin_core::tensor::dtype::QuantDType>(
+   |        ^^^^^^^^^^^^^^^^
+
+warning: associated functions `prod_all`, `prod_dim`, and `cumsum` are never used
+  --> crates/incin-backends/src/external/candle/ops/reduce.rs:10:14
+   |
+ 7 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+...
+10 |         all: prod_all;
+   |              ^^^^^^^^
+11 |         dim: prod_dim, cumsum;
+   |              ^^^^^^^^  ^^^^^^
+   |
+   = note: this warning originates in the macro `crate::unsupported::unsupported_reduction_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/unsupported.rs:173:12
+    |
+173 |           fn where_cond<K: DType>(
+    |              ^^^^^^^^^^
+...
+182 |           fn scatter<K: DType, KInt: DType>(
+    |              ^^^^^^^
+...
+192 |           fn masked_fill<K: DType>(
+    |              ^^^^^^^^^^^
+...
+201 |           fn pad<K: DType>(
+    |              ^^^
+...
+210 |           fn repeat<K: DType>(
+    |              ^^^^^^
+...
+218 |           fn lerp<K: DType>(
+    |              ^^^^
+...
+227 |           fn addmm<K: DType>(
+    |              ^^^^^
+...
+238 |           fn scaled_dot_product_attention<K: DType>(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+251 |           fn unfold<K: DType>(
+    |              ^^^^^^
+...
+261 |           fn group_norm<K: DType>(
+    |              ^^^^^^^^^^
+...
+306 |           fn logical_not(
+    |              ^^^^^^^^^^^
+...
+312 |       (@op gather) => { $crate::unsupported::unsupported_tensor_ops!(@indexed gather); };
+    |                                                                               ^^^^^^
+313 |       (@op index_select) => { $crate::unsupported::unsupported_tensor_ops!(@indexed index_select); };
+    |                                                                                     ^^^^^^^^^^^^
+314 |       (@op unsqueeze) => { $crate::unsupported::unsupported_tensor_ops!(@dim unsqueeze); };
+    |                                                                              ^^^^^^^^^
+315 |       (@op pixel_shuffle) => { $crate::unsupported::unsupported_tensor_ops!(@dim pixel_shuffle); };
+    |                                                                                  ^^^^^^^^^^^^^
+316 |       (@op triu) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal triu); };
+    |                                                                              ^^^^
+317 |       (@op tril) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal tril); };
+    |                                                                              ^^^^
+318 |       (@op diag) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal diag); };
+    |                                                                              ^^^^
+319 |       (@op sub_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar sub_scalar); };
+    |                                                                                  ^^^^^^^^^^
+320 |       (@op div_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar div_scalar); };
+    |                                                                                  ^^^^^^^^^^
+321 |       (@op instance_norm) => { $crate::unsupported::unsupported_tensor_ops!(@scalar instance_norm); };
+    |                                                                                     ^^^^^^^^^^^^^
+322 |       (@op cmp_eq) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_eq); };
+    |                                                                           ^^^^^^
+323 |       (@op cmp_ne) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ne); };
+    |                                                                           ^^^^^^
+324 |       (@op cmp_lt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_lt); };
+    |                                                                           ^^^^^^
+325 |       (@op cmp_le) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_le); };
+    |                                                                           ^^^^^^
+326 |       (@op cmp_gt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_gt); };
+    |                                                                           ^^^^^^
+327 |       (@op cmp_ge) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ge); };
+    |                                                                           ^^^^^^
+328 |       (@op logical_and) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_and); };
+    |                                                                                           ^^^^^^^^^^^
+329 |       (@op logical_or) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_or); };
+    |                                                                                          ^^^^^^^^^^
+330 |       (@op maximum) => { $crate::unsupported::unsupported_tensor_ops!(@binary maximum); };
+    |                                                                               ^^^^^^^
+331 |       (@op minimum) => { $crate::unsupported::unsupported_tensor_ops!(@binary minimum); };
+    |                                                                               ^^^^^^^
+332 |       (@op abs_diff) => { $crate::unsupported::unsupported_tensor_ops!(@binary abs_diff); };
+    |                                                                                ^^^^^^^^
+333 |       (@op bmm) => { $crate::unsupported::unsupported_tensor_ops!(@binary bmm); };
+    |                                                                           ^^^
+    |
+   ::: crates/incin-backends/src/external/candle/ops/tensor.rs:16:1
+    |
+ 16 |   impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    |   ------------------------------------------------------------ associated functions in this implementation
+...
+ 20 | /     crate::unsupported::unsupported_tensor_ops! {
+ 21 | |         where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+ 22 | |         repeat, pad, triu, tril, diag,
+ 23 | |         cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
+...   |
+ 27 | |         unfold, pixel_shuffle, group_norm, instance_norm,
+ 28 | |     }
+    | |_____- in this macro invocation
+    |
+    = note: this warning originates in the macro `$crate::unsupported::unsupported_tensor_ops` which comes from the expansion of the macro `crate::unsupported::unsupported_tensor_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `incin-backends` (lib) generated 14 warnings (run `cargo fix --lib -p incin-backends` to apply 10 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 28.79s
+
+info: running `cargo check --all-targets --no-default-features --features autotune` on incin (3/279552)
+    Checking rand_distr v0.5.1
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling cudarc v0.19.8
+    Checking half v2.7.1
+    Checking digit-layout v0.3.1
+    Checking ciborium-ll v0.2.2
+    Checking ggml-quants v0.1.0
+    Checking ciborium v0.2.2
+    Checking criterion v0.5.1
