@@ -20,7 +20,9 @@ use crate::dist::mesh::{Data, DeviceMesh, MeshSpec, Pipeline, TensorParallel};
 use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
-use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn, OperationKind, Shape};
+use crate::shapes::{Dyn, Shape};
+use crate::shapes::error::OperationKind;
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::ShapeError;
 
 /// Exactly two pipeline stages and no data or tensor partitioning.

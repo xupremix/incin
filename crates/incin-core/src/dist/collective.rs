@@ -7,7 +7,8 @@
 
 use crate::dist::placement::{Max, Mean, Min, PartialReduction, Prod, Sum};
 use crate::exec::ReduceOp;
-use crate::prelude::{DType, DTypeId, Dyn};
+use crate::shapes::Dyn;
+use crate::tensor::dtype::{DType, DTypeId};
 
 /// Dtypes with scalar collective semantics.
 ///

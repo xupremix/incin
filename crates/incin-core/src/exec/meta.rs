@@ -7,7 +7,8 @@
 
 use core::fmt;
 
-use crate::prelude::{ConstDType, DTypeDescriptor, DTypeId, DeviceId};
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{ConstDType, DTypeDescriptor, DTypeId};
 use crate::shapes::{OperationKind, ShapeBuf, ShapeError, StrideBuf};
 
 /// The shared layout vocabulary used by tensor metadata, capability queries,

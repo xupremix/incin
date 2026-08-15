@@ -22,7 +22,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use typenum::{U0, U1, U2, Unsigned};
 
 use crate::dist::mesh::ValidMesh;
-use crate::prelude::Dyn;
+use crate::shapes::Dyn;
 
 #[cfg(feature = "std")]
 use std::io::{Read, Write};

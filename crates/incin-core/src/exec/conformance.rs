@@ -4,7 +4,7 @@
 //! execution; later backends consume the same cases rather than defining their
 //! own semantic expectations.
 
-use crate::prelude::OperationKind;
+use crate::shapes::error::OperationKind;
 
 /// Semantic edge represented by a vector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

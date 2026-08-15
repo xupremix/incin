@@ -17,7 +17,8 @@ use crate::dist::placement::{Mean, Partial, PlacementKind, Replicated};
 use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
-use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn};
+use crate::shapes::Dyn;
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 
 /// Exactly two data replicas and no tensor or pipeline partitioning.
 pub type TwoRankDataParallel = MeshSpec<Data<U2>, TensorParallel<U1>, Pipeline<U1>>;

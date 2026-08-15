@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use crate::dist::collective::CollectiveReductionDType;
 use crate::dist::data_parallel::DataParallelDType;
-use crate::prelude::{BuiltinDType, ConstDType, DTypeId};
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::OperationKind;
 
 /// Stage of Zero Redundancy Optimizer (ZeRO) / FSDP partitioning.

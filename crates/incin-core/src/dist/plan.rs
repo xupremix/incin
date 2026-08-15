@@ -28,7 +28,9 @@ use crate::dist::rule::{
     DistributedError, LegalTransition, PlacementTransition, ShardDivisible, ShardRemainderPolicy,
 };
 use crate::exec::ReduceOp;
-use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn, OperationKind};
+use crate::shapes::Dyn;
+use crate::shapes::error::OperationKind;
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::ShapeError;
 
 /// Monotonic position of a collective in one plan.

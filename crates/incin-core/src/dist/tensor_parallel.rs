@@ -18,7 +18,8 @@ use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
 use crate::dist::rule::ShardDivisible;
-use crate::prelude::{BuiltinDType, ConstDType, DTypeId, Dyn};
+use crate::shapes::Dyn;
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 
 /// Exactly two tensor-parallel ranks and no data or pipeline partitioning.
 pub type TwoRankTensorParallel = MeshSpec<Data<U1>, TensorParallel<U2>, Pipeline<U1>>;
