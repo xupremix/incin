@@ -1,5 +1,7 @@
 use hf_hub::api::sync::Api;
-use incin_core::prelude::{load_safetensors_snapshot, Result, StateSnapshot};
+use incin_core::error::Result;
+use incin_core::nn::save::load_safetensors_snapshot;
+use incin_core::nn::state::StateSnapshot;
 use std::path::PathBuf;
 
 /// Helper to ergonomically download and manage weights from the HuggingFace Hub.

@@ -1,4 +1,5 @@
 use crate::dataset::Dataset;
+use incin_core::error::{Error, ErrorMessage, Result as CoreResult};
 use rand::seq::SliceRandom;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -48,7 +49,7 @@ impl core::fmt::Display for DataError {
 }
 
 /// A batch result returned by [`DataLoaderIter`].
-pub type BatchResult<T> = Result<T, DataError>;
+pub type BatchResult<T> = core::result::Result<T, DataError>;
 
 /// Collate.
 pub trait Collate<T>: Send + Sync {
@@ -100,11 +101,11 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// Sets the batch size.
-    pub fn batch_size(mut self, batch_size: usize) -> incin_core::prelude::Result<Self> {
+    pub fn batch_size(mut self, batch_size: usize) -> CoreResult<Self> {
         self.batch_size = NonZeroUsize::new(batch_size).ok_or_else(|| {
-            incin_core::prelude::Error::InvalidModuleState {
+            Error::InvalidModuleState {
                 operation: "data_loader_builder",
-                reason: incin_core::prelude::ErrorMessage::new(
+                reason: ErrorMessage::new(
                     "batch size must be non-zero",
                 ),
             }
@@ -120,11 +121,11 @@ where
     }
 
     /// Sets the bounded worker prefetch capacity.
-    pub fn prefetch(mut self, prefetch: usize) -> incin_core::prelude::Result<Self> {
+    pub fn prefetch(mut self, prefetch: usize) -> CoreResult<Self> {
         self.prefetch = NonZeroUsize::new(prefetch).ok_or_else(|| {
-            incin_core::prelude::Error::InvalidModuleState {
+            Error::InvalidModuleState {
                 operation: "data_loader_builder",
-                reason: incin_core::prelude::ErrorMessage::new(
+                reason: ErrorMessage::new(
                     "prefetch capacity must be non-zero",
                 ),
             }
@@ -191,11 +192,11 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// New.
-    pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> incin_core::prelude::Result<Self> {
+    pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> CoreResult<Self> {
         if batch_size == 0 {
-            return Err(incin_core::prelude::Error::InvalidModuleState {
+            return Err(Error::InvalidModuleState {
                 operation: "data_loader_new",
-                reason: incin_core::prelude::ErrorMessage::new("batch size must be non-zero"),
+                reason: ErrorMessage::new("batch size must be non-zero"),
             });
         }
         Ok(Self {
@@ -627,7 +628,7 @@ mod tests {
         let result = DataLoader::new(RangeDataset(4), VecCollate, 0);
         assert!(matches!(
             result,
-            Err(incin_core::prelude::Error::InvalidModuleState {
+            Err(Error::InvalidModuleState {
                 operation: "data_loader_new",
                 ..
             })

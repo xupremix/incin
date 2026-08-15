@@ -17,6 +17,13 @@ mod operation_catalog;
 pub mod compiled;
 pub mod dist;
 pub mod distributions;
+/// Structured errors returned by core and its extension crates.
+pub mod error {
+    pub use crate::err::{
+        BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
+        NonFiniteSite, Result, convert_f64_to_i64,
+    };
+}
 pub mod exec;
 pub mod graph;
 mod graph_recording;
