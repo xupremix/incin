@@ -280,11 +280,8 @@ fn test_state_extraction_failure_propagates() {
 }
 
 #[test]
-/// `state_dict`'s prefix convention differs from `named_parameters`'s (the
-/// caller must already include a trailing `.`, unlike `named_parameters`
-/// where the `#[module]`-generated body appends it), so `Sequential`'s flat
-/// numbering needs its own, separately-verified test even though it shares
-/// the same `flat_width` mechanism.
+/// Sequential state paths use flat positional numbering independent of the
+/// right-nested Rust representation used by `seq!`.
 fn test_sequential_state_dict_flat_keys_and_round_trip() -> Result<()> {
     let seq = seq!(
         Linear::<s![10, 5], CpuBackendImpl>::build(())?,
@@ -297,7 +294,7 @@ fn test_sequential_state_dict_flat_keys_and_round_trip() -> Result<()> {
     keys.sort_unstable();
     assert_eq!(
         keys,
-        vec!["0.bias", "0.weight", "1.1.bias", "1.1.weight"],
+        vec!["0.bias", "0.weight", "2.bias", "2.weight"],
         "expected stable sequential state paths"
     );
 

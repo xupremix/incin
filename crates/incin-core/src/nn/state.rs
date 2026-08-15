@@ -139,6 +139,19 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()>;
+
+    /// Visits this subtree at a flat positional index under `parent`.
+    fn visit_state_flat<V: StateVisitor<B>>(
+        &self,
+        parent: &StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.visit_state(&parent.index(base_index), visitor)
+    }
 }
 
 /// Receives mutable typed state leaves while restoring a snapshot.
@@ -184,6 +197,19 @@ pub trait VisitStateMut<B: crate::tensor::backend::VariableBackend> {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()>;
+
+    /// Visits this subtree at a flat positional index under `parent`.
+    fn visit_state_mut_flat<V: StateMutVisitor<B>>(
+        &mut self,
+        parent: &StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.visit_state_mut(&parent.index(base_index), visitor)
+    }
 }
 
 /// Collects typed leaves into the durable, backend-neutral snapshot format.

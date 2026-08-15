@@ -110,6 +110,19 @@ pub trait VisitParameters<B: VariableBackend> {
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> Result<()>;
+
+    /// Visits this subtree at a flat positional index under `parent`.
+    fn visit_parameters_flat<V: ParameterVisitor<B>>(
+        &self,
+        parent: &crate::nn::StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.visit_parameters(&parent.index(base_index), visitor)
+    }
 }
 
 /// Recursively switches a module (and every submodule reachable through
@@ -354,8 +367,18 @@ where
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.0.visit_state(&path.index(0), visitor)?;
-        self.1.visit_state(&path.index(L1::flat_width()), visitor)
+        self.visit_state_flat(path, 0, visitor)
+    }
+
+    fn visit_state_flat<V: crate::nn::StateVisitor<B>>(
+        &self,
+        parent: &crate::nn::StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_state_flat(parent, base_index, visitor)?;
+        self.1
+            .visit_state_flat(parent, base_index + L1::flat_width(), visitor)
     }
 }
 
@@ -374,9 +397,18 @@ where
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.0.visit_state_mut(&path.index(0), visitor)?;
+        self.visit_state_mut_flat(path, 0, visitor)
+    }
+
+    fn visit_state_mut_flat<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        parent: &crate::nn::StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_state_mut_flat(parent, base_index, visitor)?;
         self.1
-            .visit_state_mut(&path.index(L1::flat_width()), visitor)
+            .visit_state_mut_flat(parent, base_index + L1::flat_width(), visitor)
     }
 }
 
@@ -395,9 +427,18 @@ where
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.0.visit_parameters(&path.index(0), visitor)?;
+        self.visit_parameters_flat(path, 0, visitor)
+    }
+
+    fn visit_parameters_flat<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        parent: &crate::nn::StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.0.visit_parameters_flat(parent, base_index, visitor)?;
         self.1
-            .visit_parameters(&path.index(L1::flat_width()), visitor)
+            .visit_parameters_flat(parent, base_index + L1::flat_width(), visitor)
     }
 }
 
