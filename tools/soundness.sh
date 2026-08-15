@@ -33,7 +33,13 @@ TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 # violation in a dependency we do not control. Tree Borrows accepts it and
 # still rejects the aliasing mistakes this gate exists to catch. If rayon ever
 # ships a crossbeam-epoch that satisfies Stacked Borrows, drop the flag.
-MIRIFLAGS_COMMON="-Zmiri-tree-borrows -Zmiri-disable-isolation"
+# The core test-only DummyBackend has a deliberately shape-only storage type
+# (`Vec<usize>`), while StorageBackend::metadata returns a borrowed TensorMeta.
+# It therefore uses Box::leak to manufacture the borrowed view. Ignore only
+# those process-lifetime fixture allocations so Miri can still check aliasing
+# and undefined behavior in the full test run. The real CPU backend remains
+# leak-checked by the ASan backend leg below.
+MIRIFLAGS_COMMON="-Zmiri-tree-borrows -Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
 run_miri() {
     step "Miri: incin-core (interpreter, Tree Borrows)"
@@ -63,6 +69,9 @@ run_miri() {
 # Excluding them costs no signal: they assert on compiler diagnostics, and
 # never execute a kernel.
 run_asan() {
+    # The core DummyBackend has the same intentional process-lifetime metadata
+    # fixture allocation described above. Keep leak detection enabled for the
+    # real backend target, but disable it for the core fixture target.
     export ASAN_OPTIONS=detect_leaks=1
 
     step "AddressSanitizer + LeakSanitizer (baseline target features)"
@@ -70,7 +79,7 @@ run_asan() {
         cargo +nightly test -p incin-backends --no-default-features \
         --features std,cpu --all-targets --target "$TARGET" \
         || fail "asan: incin-backends"
-    CARGO_TARGET_DIR=target/asan RUSTFLAGS="-Zsanitizer=address" \
+    ASAN_OPTIONS=detect_leaks=0 CARGO_TARGET_DIR=target/asan RUSTFLAGS="-Zsanitizer=address" \
         cargo +nightly test -p incin-core --no-default-features \
         --features std --lib --target "$TARGET" \
         || fail "asan: incin-core"

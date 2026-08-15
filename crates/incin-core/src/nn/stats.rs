@@ -181,6 +181,10 @@ mod tests {
     // crate-root entry the absolute path resolves against; a `use crate as
     // incin` alias, which is what stood here before `CI-005`, does not.
     use super::*;
+    use crate::backend_authoring::{Backend, VariableBackend};
+    use crate::nn::{Linear, NamedLayers, ReLU, Sequential};
+    use crate::tensor::device::Cpu;
+    use incin_macros::{module, s};
 
     #[test]
     fn layer_stats_add_sums_both_fields() {
@@ -227,7 +231,7 @@ mod tests {
     // exactly here is doubly-confirming: both this implementation and the
     // doc's hand math agree.
     #[module(internal)]
-    struct TestMlp<Bk: Backend> {
+    struct TestMlp<Bk: Backend + VariableBackend> {
         fc1: Linear<s![@ 784, 128], Bk>,
         fc2: Linear<s![@ 128, 10], Bk>,
     }
