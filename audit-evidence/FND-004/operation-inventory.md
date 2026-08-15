@@ -6,7 +6,7 @@ Each row is one exact executable identity. Families classify rows and never impl
 
 Total exact operations: 174
 
-| Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Legacy source |
+| Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | Catalog source mapping |
 |---|---|---|---|---|---|---|---|
 | `tensor_from_data` | `Storage` | `Creation` | `Descriptor<op::TensorFromData>` | `DataAttributes` | 0-0 | 1-1 | `TensorArgsData` |
 | `tensor_from_bytes` | `Storage` | `Creation` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | 0-0 | 1-1 | `Tensor::from_bytes` |
