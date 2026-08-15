@@ -259,9 +259,17 @@ not an alternate snapshot workflow.
 
 The export gate validates the tracked source set, both distributed source
 trees, the structural gates inside the unpacked snapshot, and the minimal core
-build. Broader HND-004 documentation, executable-example, prototype, and
-benchmark work remains tracked separately until its acceptance requirements
-are proven.
+build. The current Book proof path is also:
+
+```text
+mdbook build docs/book
+cargo test -p incin --features 'target-api backend-authoring' --doc
+```
+
+The Cargo command is intentional: standalone `mdbook test` does not receive
+Cargo's dependency metadata and cannot resolve the facade's workspace crates.
+Broader HND-004 executable-example, prototype, and benchmark work remains
+tracked separately until its acceptance requirements are proven.
 
 ## First 30 minutes
 
