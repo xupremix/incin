@@ -47,6 +47,6 @@ history. Their useful current coverage exists in capability registration tests,
 backend unit tests, core autograd tests, and current canonical dispatch tests.
 Current CI and ledger references no longer name the deleted test binaries.
 
-The canonical export is produced only after the final documentation commit
-with `tools/export-snapshot.sh`; its size and SHA-256 are recorded in the final
-handoff section and in the export log.
+The canonical export passed after the final documentation commit with
+`tools/export-snapshot.sh`; its size and SHA-256 are reported with the final
+handoff.
