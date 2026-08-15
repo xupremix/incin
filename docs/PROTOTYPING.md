@@ -27,9 +27,11 @@ and a typed state snapshot round-trip. A companion test and the
 and `compile_fixture_transformer_dyn.rs` examples cover static, partially
 dynamic, and runtime-heavy shape forms.
 
-The compile baseline in `docs/benchmarks/compile-2026-08-15.md` records clean
-and incremental checks for this proof alongside tiny tensor, MLP, and CNN
-fixtures. The test observes finite output and nonzero gradients for the query,
+The compile baseline in `docs/benchmarks/compile-2026-08-15.md` records the
+script's one-clean-before-sequential-cases sample plus its incremental check
+for this proof alongside tiny tensor, MLP, and CNN fixtures. Use
+`CLEAN_EACH=1 tools/bench-compile.sh` when each case must start from a clean
+`incin` package build. The test observes finite output and nonzero gradients for the query,
 key, value, output, and both feed-forward projection groups.
 
 This is an executable composition proof, not a claim of a stable public

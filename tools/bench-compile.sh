@@ -9,7 +9,7 @@ printf 'rustc\t%s\n' "$(rustc -Vv | sed -n '1p')"
 printf 'cargo\t%s\n' "$(cargo -V)"
 printf 'host\t%s\n' "$(uname -srmo)"
 
-if [[ "${CLEAN:-0}" == 1 ]]; then
+if [[ "${CLEAN:-0}" == 1 && "${CLEAN_EACH:-0}" != 1 ]]; then
     cargo clean -p incin
 fi
 
@@ -17,6 +17,9 @@ run_case() {
     local name="$1"
     shift
     local start end
+    if [[ "${CLEAN_EACH:-0}" == 1 ]]; then
+        cargo clean -p incin >/tmp/incin-compile-bench-clean.log 2>&1
+    fi
     start="$(date +%s%N)"
     if "$@" >/tmp/incin-compile-bench.log 2>&1; then
         end="$(date +%s%N)"

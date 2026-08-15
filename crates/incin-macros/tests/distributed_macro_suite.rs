@@ -13,7 +13,7 @@ type ClusterPipe = placement![PipelineStage(1) on ClusterMesh];
 
 #[module]
 #[allow(dead_code)]
-pub struct DistributedTransformer<B: Backend> {
+pub struct DistributedTransformer<B: Backend + incin_core::backend_authoring::VariableBackend> {
     #[parallel(mesh = ClusterMesh, stage = 0)]
     embed: Linear<s![512, 1024], B>,
 
@@ -40,5 +40,6 @@ fn test_distributed_macro_suite_projections() {
         embed: Linear::build(()).unwrap(),
         proj: Linear::build(()).unwrap(),
     };
-    assert_eq!(model.parameters().len(), 4);
+    let parameters = ParameterGroup::<DefaultBackend, f32>::from_module(&model).unwrap();
+    assert_eq!(parameters.len(), 4);
 }
