@@ -8,8 +8,11 @@ dim!(Batch, Seq, Feature);
 fn main() {
     let _dev = DeviceId::cpu();
 
+    #[allow(clippy::type_complexity)]
     let t1: Tensor<s![Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
+    #[allow(clippy::type_complexity)]
     let _t2: Tensor<s![Batch, 20]> = Tensor::zeros((32usize, ())).unwrap();
+    #[allow(clippy::type_complexity)]
     let t3: Tensor<s![Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
 
     // Should compile

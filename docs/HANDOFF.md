@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-canonical-v9.zip # passed
+tools/export-snapshot.sh /tmp/hnd004b-canonical-v10.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -281,10 +281,10 @@ exclusions. Repository formatting now passes. Representative backend feature
 combinations pass; after excluding the real `external-candle` feature, the
 literal cargo-hack matrix expands to 8,212 backend and 36,608 facade
 combinations and remains impractical to complete locally. The smaller macros
-and diagnostics powersets pass. Ordinary workspace Clippy
-exits successfully with warnings, while the strict no-default CPU CI
-configuration remains red on the broader existing baseline, including unused
-imports, type complexity, and argument-count warnings under `-D warnings`.
+and diagnostics powersets pass. Ordinary workspace Clippy and the strict
+no-default CPU CI configuration both exit successfully with `-D warnings`
+across all targets. The literal backend and facade powersets remain
+impractical to complete locally, as noted above.
 
 ## First 30 minutes
 

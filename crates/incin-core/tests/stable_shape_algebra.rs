@@ -41,6 +41,7 @@ fn test_const_dim_and_extent_classification() {
 #[test]
 fn repeat_rejects_a_repeat_vector_with_the_wrong_rank() {
     type B = incin_core::test_utils::DummyBackend<Cpu>;
+    #[allow(clippy::type_complexity)]
     let tensor: Tensor<s![2, 3], B> = Tensor::ones(()).unwrap();
 
     assert!(matches!(

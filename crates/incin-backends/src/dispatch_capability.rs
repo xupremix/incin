@@ -1,6 +1,5 @@
 use crate::dispatch::DispatchBackend;
-use incin_core::backend_authoring::Backend;
-use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
+#[cfg(not(feature = "cpu"))]
 use incin_core::error::Error;
 use incin_core::exec::{Capabilities, PrecisionCapabilities, PrecisionRequest, ResolvedPrecision};
 use incin_core::tensor::device::Device;

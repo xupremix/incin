@@ -414,10 +414,9 @@ pub(crate) fn var_randn_with_total(
 mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
+    use incin_core::backend_authoring::StorageTransfer;
     use incin_core::backend_authoring::VariableBackend;
-    use incin_core::backend_authoring::{Backend, StorageTransfer};
     use incin_core::error::{ConversionFailure, Error};
-    use incin_core::shapes::Dyn;
     use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.

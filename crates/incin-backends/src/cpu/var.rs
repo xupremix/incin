@@ -20,6 +20,7 @@ use incin_core::error::Result;
 
 #[cfg(feature = "test-utils")]
 use incin_core::error::{BackendError, Error};
+#[cfg(feature = "test-utils")]
 use incin_core::shapes::error::OperationKind;
 
 use crate::cpu::storage::CpuStorage;

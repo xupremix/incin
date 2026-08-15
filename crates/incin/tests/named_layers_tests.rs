@@ -8,6 +8,7 @@ type B = incin::DefaultBackend;
 #[module(no_stats, no_parameters, no_state, no_train_mode, no_to_device)]
 /// Sub module.
 struct SubModule {
+    #[allow(clippy::type_complexity)]
     fc: Linear<s![100, 50], B>,
     act: ReLU,
 }
@@ -23,6 +24,7 @@ struct SubModule {
 /// Test mlp.
 struct TestMLP {
     sub: SubModule,
+    #[allow(clippy::type_complexity)]
     fc_out: Linear<s![50, 10], B>,
 }
 

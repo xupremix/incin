@@ -1051,6 +1051,7 @@ mod tests {
     use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
+    #[allow(dead_code)]
     type TestBackend = CpuBackendImpl<Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which

@@ -514,6 +514,7 @@ where
     (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
     /// Allocates storage of the given shape/dtype/device and fills it according to `init`.
+    #[allow(clippy::type_complexity)]
     pub fn new_init_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
@@ -546,6 +547,7 @@ where
     }
 
     /// Allocates storage of the given shape/dtype/device, filled with zero.
+    #[allow(clippy::type_complexity)]
     pub fn zeros_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
@@ -577,6 +579,7 @@ where
     }
 
     /// Allocates storage of the given shape/dtype/device, filled with standard normal samples.
+    #[allow(clippy::type_complexity)]
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
@@ -604,6 +607,7 @@ where
     }
 
     /// Allocates storage of the given shape/dtype/device, filled with one.
+    #[allow(clippy::type_complexity)]
     pub fn ones_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
@@ -956,6 +960,7 @@ impl<
 where
     (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
+    #[allow(clippy::type_complexity)]
     pub fn new_init_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
@@ -985,6 +990,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn zeros_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
@@ -1013,6 +1019,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn ones_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {

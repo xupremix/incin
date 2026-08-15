@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 extern crate alloc;
 
 use incin::prelude::*;

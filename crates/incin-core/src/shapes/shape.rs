@@ -1106,7 +1106,11 @@ mod tests {
     fn checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges() {
         let mut limits = ResourceLimits::trusted_local_large_model();
         limits.max_rank = 8;
-        limits.max_dimension = u64::MAX;
+        // Keep the local reusable for the following checks under non-strict lints.
+        #[allow(unused_assignments)]
+        {
+            limits.max_dimension = u64::MAX;
+        }
         limits.max_tensor_bytes = u64::MAX;
 
         assert_eq!(
@@ -1145,7 +1149,5 @@ mod tests {
                 ..
             })
         ));
-
-        limits.max_dimension = u64::MAX;
     }
 }

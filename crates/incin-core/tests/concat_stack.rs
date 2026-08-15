@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 extern crate incin_core as incin;
 
 use incin_core::prelude::Cpu;

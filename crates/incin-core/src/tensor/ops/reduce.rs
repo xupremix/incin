@@ -81,6 +81,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     Tensor<S, B, K, G, P>
 {
     /// Sums over a compile-time structural axis cursor.
+    #[allow(clippy::type_complexity)]
     pub fn sum<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
     where
         C: StaticCursor,
@@ -137,6 +138,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Sums over a compile-time structural axis cursor while retaining it.
+    #[allow(clippy::type_complexity)]
     pub fn sum_keepdim<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
     where
         C: StaticCursor,
@@ -547,6 +549,7 @@ where
 
     /// Computes the top `k` elements of the tensor along the given dimension.
     /// Returns a tuple of `(values, indices)`.
+    #[allow(clippy::type_complexity)]
     pub fn topk(
         &self,
         k: usize,

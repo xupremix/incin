@@ -155,6 +155,7 @@ impl fmt::Display for ReduceOp {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AxisMask(u64);
 
+#[allow(dead_code)]
 impl AxisMask {
     /// The number of axes a mask can address inline (64).
     pub const MAX_AXES: usize = u64::BITS as usize;

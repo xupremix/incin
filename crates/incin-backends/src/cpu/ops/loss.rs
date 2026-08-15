@@ -24,10 +24,10 @@
 //! correct backward by composition with zero new tape entries of their own,
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
+#[cfg(test)]
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
-use incin_core::backend_authoring::StorageBackend;
-use incin_core::error::{BackendError, ConversionFailure, Error, Result};
+use incin_core::error::{ConversionFailure, Error, Result};
 use incin_core::shapes::error::OperationKind;
 use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeBuf, ShapeError};
 use incin_core::tensor::device::Device;
@@ -184,6 +184,7 @@ mod tests {
     use crate::cpu::tape;
 
     /// `B`.
+    #[allow(dead_code)]
     type B = CpuBackendImpl<incin_core::tensor::device::Cpu>;
 
     /// `matrix`.

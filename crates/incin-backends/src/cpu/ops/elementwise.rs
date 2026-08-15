@@ -10,9 +10,9 @@
 //! whose backward closure calls `tape::unbroadcast` on the ORIGINAL
 //! (pre-broadcast) operand shapes.
 
-use incin_core::error::{Error, Result};
+use incin_core::error::Result;
 use incin_core::tensor::device::Device;
-use incin_core::tensor::dtype::{DType, FloatDType};
+use incin_core::tensor::dtype::DType;
 
 use crate::cpu::ops::elementwise_kernel::{self, BinaryOp, UnaryOp};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -833,6 +833,7 @@ pub(crate) fn div_storage_with_shape(
 /// Called by both `::softmax` (as `exp(log_softmax(x, dim))`) and
 /// `cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
 /// numerically-stable kernel is shared rather than duplicated.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn log_softmax<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     dim: usize,

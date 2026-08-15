@@ -12,9 +12,7 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{
-    Backend, Execute, ExecutionRequest, HostInterop, StorageBackend,
-};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, HostInterop, StorageBackend};
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
@@ -24,7 +22,7 @@ use incin_core::exec::{
     UnsupportedReason,
 };
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::device::{Cpu, Device, DeviceKind};
+use incin_core::tensor::device::{Device, DeviceKind};
 use incin_core::tensor::dtype::{ConstDType, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
@@ -66,7 +64,6 @@ use crate::descriptor_bind::{invalid, kernel_error};
 /// the backend cannot leave this file naming one that no longer exists. The type
 /// parameters are arbitrary: `CpuBackendImpl` reports the same name for every
 /// instantiation, and the free helpers below have no `Self` to ask.
-
 /// Recover CPU storage from a checked handle.
 ///
 /// The handle already carries validated metadata, so the only thing left to

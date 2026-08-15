@@ -36,6 +36,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 /// When `bias` is `None`, a zero-filled buffer of the same shape as `weight`
 /// is substituted (matching `CandleBackend::layer_norm`'s `zeros_like`
 /// default-fallback convention, confirmed by direct code read).
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     weight: &CpuStorage,
@@ -91,6 +92,7 @@ pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
 ///   - absent `bias`         → zeros shaped `[1, C, 1, ...]`
 ///
 /// Formula: `((t - rm) / sqrt(rv + eps)) * weight + bias`, all broadcast.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
@@ -193,6 +195,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
 /// which the execution contract does not currently carry. A caller that
 /// trains with this and then evaluates with inference mode is therefore
 /// reading whatever running statistics it supplied, unchanged.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,

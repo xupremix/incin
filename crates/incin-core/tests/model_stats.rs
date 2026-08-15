@@ -11,7 +11,9 @@ type TestBackend = DummyBackend<Cpu>;
 
 #[module]
 struct Mlp<B: Backend + VariableBackend> {
+    #[allow(clippy::type_complexity)]
     fc1: Linear<s![784, 128], B>,
+    #[allow(clippy::type_complexity)]
     fc2: Linear<s![128, 10], B>,
 }
 

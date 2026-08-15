@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use incin::prelude::*;
 
 fn main() -> Result<()> {

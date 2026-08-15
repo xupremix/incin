@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use incin::VariableBackend;
 use incin::optim::ParameterGroup;
 use incin::prelude::*;

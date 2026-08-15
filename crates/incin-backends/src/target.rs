@@ -674,6 +674,7 @@ pub trait TargetExt: TensorTarget + Sized {
     /// # Errors
     ///
     /// Propagates shape resolution and backend allocation failure.
+    #[allow(clippy::type_complexity)]
     fn state_tensor<Sp: ShapeSpec>(
         &self,
         spec: Sp,
@@ -789,6 +790,7 @@ pub trait TargetExt: TensorTarget + Sized {
     /// # Errors
     ///
     /// Propagates shape resolution and backend allocation failure.
+    #[allow(clippy::type_complexity)]
     fn parameter<Sp: ShapeSpec>(
         &self,
         spec: Sp,

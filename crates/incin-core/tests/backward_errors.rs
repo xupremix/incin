@@ -36,6 +36,7 @@ type B = CpuBackendImpl;
 /// while the forward value is whatever it is. That is the case worth catching:
 /// a loss that still looks like a number, produced by an operation whose
 /// derivative did not.
+#[allow(clippy::type_complexity)]
 fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
     let zero = Tensor::<s![2, 2], B, f32, Grad>::zeros(()).unwrap();
@@ -43,6 +44,7 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
     (a.div(&zero).unwrap(), numerator)
 }
 
+#[allow(clippy::type_complexity)]
 fn seeded_backward(
     loss: &Tensor<s![2, 2], B, f32, Grad>,
 ) -> Result<incin_core::optim::Gradients<<B as AutogradBackend>::Grads>> {
@@ -184,6 +186,7 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
 }
 
 /// `t`'s accumulated gradient, as `f32`s.
+#[allow(clippy::type_complexity)]
 fn gradient_of(
     t: &Tensor<s![2, 2], B, f32, Grad>,
     grads: &incin_core::optim::Gradients<<B as AutogradBackend>::Grads>,

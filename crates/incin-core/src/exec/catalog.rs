@@ -569,6 +569,7 @@ const fn profile_semantics(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 const fn entry(
     operation: OperationKind,
     name: &'static str,

@@ -373,6 +373,7 @@ where
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<K>>,
 {
     /// Functional `max_pool2d` operation.
+    #[allow(clippy::type_complexity)]
     pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
         &self,
     ) -> Result<
@@ -1016,6 +1017,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Transposes two compile-time structural axis cursors.
+    #[allow(clippy::type_complexity)]
     pub fn transpose<L, R>(&self) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
     where
         L: StaticCursor,
@@ -1094,6 +1096,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Flattens a range selected by structural cursors.
+    #[allow(clippy::type_complexity)]
     pub fn flatten<Start, End>(
         &self,
     ) -> Result<Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>>
@@ -1309,6 +1312,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Structurally concatenates along a cursor axis, preserving the exact
     /// recursive shape output at arbitrary rank.
+    #[allow(clippy::type_complexity)]
     pub fn concat<S2, Axis>(
         &self,
         other: &Tensor<S2, B, K, G>,

@@ -325,6 +325,7 @@ impl<'a, M: ValidMesh> CollectivePlanBuilder<'a, M> {
     }
 
     /// Append the runtime-selected counterpart of [`push_static`](Self::push_static).
+    #[allow(clippy::too_many_arguments)]
     pub fn push_dyn(
         &mut self,
         axis: MeshAxis,

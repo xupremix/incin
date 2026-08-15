@@ -409,7 +409,7 @@ fn commit_parameter_updates<B: VariableBackend, K: DType>(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
     operation: &'static str,
     tensor: &B::Storage<K>,

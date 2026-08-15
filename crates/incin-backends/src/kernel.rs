@@ -163,6 +163,7 @@ impl KernelKey {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn cuda_with_signature(
         _policy_family: OperationKind,
         family: KernelFamily,
@@ -550,7 +551,7 @@ impl CudaPackedSpec {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 fn render_cuda_packed(
     family: &str,
     op_name: &str,

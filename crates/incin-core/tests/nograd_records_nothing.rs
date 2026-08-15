@@ -68,6 +68,7 @@ fn combining_two_modes_takes_the_stricter_one() {
 
 #[test]
 fn detach_and_require_grad_mint_fresh_tape_identities() {
+    #[allow(clippy::type_complexity)]
     let tensor: Tensor<s![2], B, f32, Grad> = Tensor::from_slice(&[1.0, 2.0], ()).unwrap();
     let original_id = tensor.inner().id();
 
@@ -201,6 +202,7 @@ fn one_threads_no_grad_scope_is_invisible_to_another() {
 /// Deliberately more than one operation and more than one family: an
 /// elementwise binary op, a scalar op, a shape op, and a reduction. A gate
 /// installed on one family and forgotten on another passes a one-op test.
+#[allow(clippy::type_complexity)]
 fn chain<G: RequiresGrad>(
     a: &Tensor<s![2, 3], B, f32, G>,
     b: &Tensor<s![2, 3], B, f32, G>,
@@ -236,6 +238,7 @@ fn nograd_operands() -> Operands<NoGrad> {
 /// witnessed constructor is the supported way to say "same storage, this grad
 /// field" and keeps the chain's shape the same as every other case here.
 fn dyn_operands(requires_grad: bool) -> Operands<Dyn> {
+    #[allow(clippy::type_complexity)]
     let retag = |t: Tensor<s![2, 3], B, f32, NoGrad>| {
         Tensor::<s![2, 3], B, f32, Dyn>::try_from_storage(
             t.into_inner(),

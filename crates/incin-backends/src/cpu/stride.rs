@@ -113,18 +113,12 @@ mod tests {
 
     #[test]
     fn numel_for_a_static_shape_reads_the_type_level_constant() {
-        use incin_core::shapes::shape::{DimCons, Nil};
-        use incin_core::typenum::{U2, U3};
-
         let shape = [2usize, 3usize];
-        type S23 = DimCons<U2, DimCons<U3, Nil>>;
         assert_eq!(numel_for_evidence(&shape, Some(6)).unwrap(), 6);
     }
 
     #[test]
     fn numel_for_a_dynamic_shape_matches_checked_numel() {
-        use incin_core::shapes::dynamic::Dyn;
-
         let shape = [2usize, 3usize, 4usize];
         assert_eq!(
             numel_for_evidence(&shape, None).unwrap(),

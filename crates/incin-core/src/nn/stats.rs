@@ -236,7 +236,9 @@ mod tests {
     // doc's hand math agree.
     #[module(internal)]
     struct TestMlp<Bk: Backend + VariableBackend> {
+        #[allow(clippy::type_complexity)]
         fc1: Linear<s![@ 784, 128], Bk>,
+        #[allow(clippy::type_complexity)]
         fc2: Linear<s![@ 128, 10], Bk>,
     }
 

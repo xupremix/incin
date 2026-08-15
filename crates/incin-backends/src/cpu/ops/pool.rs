@@ -447,6 +447,7 @@ mod tests {
     use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
+    #[allow(dead_code)]
     type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `tensor`.

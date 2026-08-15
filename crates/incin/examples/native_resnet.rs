@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use incin::backend_authoring::{Execute, SupportsDType, VariableBackend, operations::op};
 use incin::prelude::*;
 use incin_core::nn::param::ParameterInit;

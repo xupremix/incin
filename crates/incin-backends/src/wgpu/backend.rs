@@ -1,9 +1,9 @@
-pub(crate) use crate::wgpu::capability::{native_precision, validate_wgpu_dtype};
+pub(crate) use crate::wgpu::capability::validate_wgpu_dtype;
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
 use incin_core::error::{BackendError, Error, Result};
-use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+use incin_core::shapes::{OperationKind, ShapeError, StrideBuf};
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Wgpu};
 use incin_core::tensor::dtype::{
     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
@@ -2788,6 +2788,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 /// Gather a `[B, Cin, H, W]` buffer (row-major) into a
 /// `[B, H_out*W_out, Cin*Kh*Kw]` column matrix. Out-of-bounds positions
 /// (i.e. positions in the padded region) contribute 0.0.
+#[allow(clippy::too_many_arguments)]
 pub fn im2col_2d_cpu(
     input: &[f32],
     b: usize,
@@ -2840,6 +2841,7 @@ pub fn im2col_2d_cpu(
 
 /// Scatter-ADD a `[B, H_out*W_out, Cin*Kh*Kw]` gradient back into a
 /// zero-initialized `[B, Cin, H, W]` buffer.
+#[allow(clippy::too_many_arguments)]
 pub fn col2im_2d_cpu(
     cols_grad: &[f32],
     b: usize,
@@ -4030,6 +4032,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `conv_transpose2d`.
+    #[allow(clippy::too_many_arguments)]
     pub fn conv_transpose2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,

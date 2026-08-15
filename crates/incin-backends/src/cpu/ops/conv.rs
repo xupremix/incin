@@ -410,6 +410,7 @@ fn col2im_2d(
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
 /// broadcast-added via the canonical storage helper (so
 /// `grad_bias` is free via composition, per this file's module doc).
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
@@ -565,6 +566,7 @@ pub(crate) fn conv2d_impl<D: incin_core::tensor::device::Device, K: DType>(
 /// single extent for both. Nothing about the algorithm needed them equal: the
 /// row and column extents are used in separate expressions throughout, and
 /// making them separate parameters is the whole of the change.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
@@ -732,6 +734,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
 /// confirmed behavior, which likewise ignores `groups`); a `groups != 1`
 /// call returns a typed `Error::ShapeMismatch` rather than silently ignoring
 /// the parameter or asserting via `debug_assert_eq!`.
+#[allow(clippy::extra_unused_type_parameters, clippy::too_many_arguments)]
 pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
@@ -985,6 +988,7 @@ mod tests {
     use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
+    #[allow(dead_code)]
     type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `tensor`.

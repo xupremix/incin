@@ -1,6 +1,7 @@
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
+#[cfg(test)]
 use incin_core::tensor::dtype::DTypeId;
 
 extern crate alloc;
@@ -245,7 +246,6 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::tensor::dtype::Q8_0;
 
     #[test]
     /// `test_quantize_dequantize_fidelity`.

@@ -221,6 +221,7 @@ pub struct CapabilityRule {
 
 impl CapabilityRule {
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         operation: OperationKind,
         dtypes: &'static [DTypeDescriptor],

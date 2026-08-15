@@ -192,6 +192,7 @@ impl<D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<D>
 /// shape-only bookkeeping for `DummyBackend` (a test-only stand-in with
 /// no real storage), so a saturated/degenerate size is the appropriate
 /// "can't compute a real answer" response, not an error.
+#[allow(dead_code)]
 fn conv_out_size(
     len: usize,
     kernel_size: usize,
@@ -209,6 +210,7 @@ fn conv_out_size(
 /// Output spatial size for `conv_transpose2d` shape math:
 /// `(in - 1) * stride - 2*pad + dilation*(kernel-1) + output_padding + 1`.
 /// Same saturating-arithmetic rationale as `conv_out_size`.
+#[allow(dead_code)]
 fn conv_transpose_out_size(
     len: usize,
     kernel_size: usize,
@@ -267,6 +269,7 @@ impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<New
 /// stand-in whose shape arithmetic disagrees with every real backend's is
 /// not a stand-in, and this crate's own documented examples of
 /// `broadcast_add` were the first thing to run into it.
+#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns the two operands' broadcast shape.
     pub fn add<K: DType>(
@@ -314,6 +317,7 @@ macro_rules! shape_preserving_float_ops {
             binary: $($binary:ident),* $(,)?;
         ) => {
             $(
+                #[allow(dead_code)]
                 fn $unary<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                 ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -321,6 +325,7 @@ macro_rules! shape_preserving_float_ops {
                 }
             )*
             $(
+                #[allow(dead_code)]
                 fn $exponent<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                     _exponent: f64,
@@ -329,6 +334,7 @@ macro_rules! shape_preserving_float_ops {
                 }
             )*
             $(
+                #[allow(dead_code)]
                 fn $bounds<K: DType>(
                     t: &<Self as StorageBackend>::Storage<K>,
                     _min: f64,
@@ -338,6 +344,7 @@ macro_rules! shape_preserving_float_ops {
                 }
             )*
             $(
+                #[allow(dead_code)]
                 fn $binary<K: DType>(
                     lhs: &<Self as StorageBackend>::Storage<K>,
                     _rhs: &<Self as StorageBackend>::Storage<K>,
@@ -350,6 +357,7 @@ macro_rules! shape_preserving_float_ops {
 
 /// Every activation and scalar op is shape-preserving, so each is a
 /// plain clone of the input shape.
+#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns `t`'s shape unchanged.
     pub fn add_scalar_float<K: DType>(
@@ -465,6 +473,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
 /// reductions either remove `dim` or clamp it to size 1 (`_keepdim`),
 /// exactly like a real reduction's shape effect --- again with no real
 /// values behind either result.
+#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Collapses to an empty (scalar) shape.
     pub fn sum_all<K: DType>(
@@ -733,6 +742,7 @@ macro_rules! unmodeled_tensor_ops {
 /// dim, transpose's swap, flatten's dimension collapse, etc.) since
 /// shape *is* everything this stand-in's storage represents --- but
 /// still no element values exist behind any of it.
+#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     shape_preserving_tensor_ops! {
         unary: ;
@@ -741,54 +751,63 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
         binary: maximum, minimum, abs_diff;
     }
 
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_eq<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_ne<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_lt<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_le<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_gt<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg, clippy::extra_unused_type_parameters)]
     pub fn cmp_ge<K: DType>(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg)]
     pub fn logical_and(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg)]
     pub fn logical_or(
         lhs: &alloc::vec::Vec<usize>,
         _rhs: &alloc::vec::Vec<usize>,
     ) -> Result<alloc::vec::Vec<usize>> {
         Ok(lhs.clone())
     }
+    #[allow(clippy::ptr_arg)]
     pub fn logical_not(t: &alloc::vec::Vec<usize>) -> Result<alloc::vec::Vec<usize>> {
         Ok(t.clone())
     }
@@ -1123,6 +1142,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
 /// compute their real output spatial size via `conv_out_size`/
 /// `conv_transpose_out_size` (the saturating helpers above) so tests
 /// can assert on shape correctness even though no data is computed.
+#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns `t`'s shape unchanged.
     pub fn layer_norm<K: DType>(
@@ -1202,6 +1222,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Computes the real output shape: channel dim from `w[1]`
     /// (transposed conv's weight layout), spatial dims via
     /// `conv_transpose_out_size`.
+    #[allow(clippy::too_many_arguments)]
     pub fn conv_transpose2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,

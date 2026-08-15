@@ -1,6 +1,6 @@
 use crate::backend_authoring::TensorBackend;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::op;
 use crate::nn::module::Module;
 use crate::nn::module::ShapeInfo;
 use crate::nn::param::{Frozen, Param, TrainState, Trainable};
@@ -16,8 +16,6 @@ use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use alloc::string::String;
-
-type LinearMatMulDescriptor = Descriptor<op::MatMulExact>;
 
 /// A shape marker trait specifying the input and output features of a [`Linear`] layer.
 ///

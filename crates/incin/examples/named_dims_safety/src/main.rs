@@ -6,6 +6,8 @@
 //! for a while and silently produces wrong numbers instead.
 //!
 //! Run with `cargo run -p named_dims_safety`.
+#![allow(clippy::type_complexity)]
+
 use incin::prelude::*;
 
 dim!(Batch, Seq, Feature);

@@ -1,8 +1,7 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
 use incin_core::backend_authoring::{
-    Backend, HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo,
-    VariableBackend,
+    HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo, VariableBackend,
 };
 use incin_core::error::{Error, Result};
 #[cfg(test)]
@@ -32,7 +31,6 @@ macro_rules! impl_transfer {
             where
                 Self::Output: SupportsDType<K>,
             {
-                use incin_core::backend_authoring::SupportsDType;
                 let expected_descriptor = K::descriptor(dtype);
                 let source_dtype = Self::storage_dtype::<K>(storage).ok_or(
                     Error::UnsupportedBackendOperation {
@@ -78,7 +76,6 @@ macro_rules! impl_transfer {
             where
                 Self::Output: SupportsDType<K>,
             {
-                use incin_core::backend_authoring::SupportsDType;
                 let source = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
                 let expected_descriptor = K::descriptor(dtype);
                 if let Some(got) = Self::storage_dtype::<K>(&source)
@@ -110,6 +107,7 @@ impl_transfer!(crate::dispatch::DispatchBackend<D>);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use incin_core::backend_authoring::Backend;
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
     use incin_core::error::BackendError;
     use incin_core::error::Error;

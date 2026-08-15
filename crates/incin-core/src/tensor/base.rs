@@ -10,12 +10,16 @@ use crate::exec::catalog::{
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
-use crate::shapes::{Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue};
+#[cfg(feature = "distributed")]
+use crate::shapes::Dyn;
+use crate::shapes::{DynShape, Nil, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::ArgInto;
 use crate::tensor::device::{Device, DeviceId};
+#[cfg(feature = "distributed")]
+use crate::tensor::dtype::DTypeDescriptor;
 use crate::tensor::dtype::PlainDType;
-use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType};
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeId, FloatDType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use alloc::string::ToString;
 use core::marker::PhantomData;
@@ -99,7 +103,6 @@ fn validate_gradient_dtype<B: Backend, K: DType, G: RequiresGrad>(
 #[derive(Clone, Copy)]
 enum ConstructionWitness {
     StorageValidated,
-    MetadataPreserved,
 }
 
 /// Failure while joining a distributed proof to one rank's physical storage.
@@ -1073,6 +1076,7 @@ impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<Nil, B, K
 
 impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, NoGrad, P> {
     /// Moves this tensor to the specified device as a detached tensor.
+    #[allow(clippy::type_complexity)]
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,
@@ -1098,6 +1102,7 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
     ///
     /// A storage transfer does not carry the source backend tape, so retaining
     /// `Grad` here would falsely promise a connected graph.
+    #[allow(clippy::type_complexity)]
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,

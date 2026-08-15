@@ -295,6 +295,7 @@ pub(crate) fn dispatch_im2col(
 /// Fused GPU AdamW.
 /// param, grad, m, v must all be length-N f32 buffers.
 /// meta: [N, lr_bits, beta1_bits, beta2_bits, eps_bits, wd_bits, bc1_bits, bc2_bits]
+#[allow(dead_code)]
 pub(crate) fn dispatch_adamw(
     param: &WgpuBuffer,
     grad: &WgpuBuffer,
@@ -562,7 +563,7 @@ pub(crate) fn dispatch_embedding(
     Ok(())
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub(crate) fn dispatch_layer_norm(
     inp: &WgpuBuffer,
     gamma: &WgpuBuffer,
@@ -608,7 +609,7 @@ pub(crate) fn dispatch_layer_norm(
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "LayerNorm");
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub(crate) fn dispatch_batch_norm(
     inp: &WgpuBuffer,
     gamma: &WgpuBuffer,
@@ -676,6 +677,7 @@ pub(crate) fn dispatch_batch_norm(
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BatchNorm");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn dispatch_pool2d(
     inp: &WgpuBuffer,
     out: &Arc<WgpuBuffer>,

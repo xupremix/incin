@@ -13,6 +13,7 @@ pub trait TensorArgs<S: Shape, K: DType, D: Device, G: RequiresGrad> {
     /// The bundled constructor argument type combining all four parameters' `Arg`s.
     type Args;
     /// Splits the bundled arguments into validated shape storage and fields.
+    #[allow(clippy::type_complexity)]
     fn construct(
         args: Self::Args,
     ) -> core::result::Result<

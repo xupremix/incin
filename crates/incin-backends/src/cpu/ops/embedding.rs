@@ -143,6 +143,7 @@ mod tests {
     use incin_core::tensor::device::Cpu;
 
     /// `B`.
+    #[allow(dead_code)]
     type B = CpuBackendImpl<Cpu>;
 
     /// The learnable weight matrix parameter.

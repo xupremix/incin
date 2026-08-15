@@ -142,15 +142,6 @@ pub enum DistributedContextState {
 }
 
 impl DistributedContextState {
-    const fn encode(self) -> u8 {
-        match self {
-            Self::Active => STATE_ACTIVE,
-            Self::ShuttingDown => STATE_SHUTTING_DOWN,
-            Self::Shutdown => STATE_SHUTDOWN,
-            Self::Failed => STATE_FAILED,
-        }
-    }
-
     const fn decode(value: u8) -> Self {
         match value {
             STATE_ACTIVE => Self::Active,

@@ -469,7 +469,6 @@ macro_rules! static_op {
 }
 
 static_op! {
-    static_mul checked_mul
     static_add checked_add
     static_sub checked_sub
 }

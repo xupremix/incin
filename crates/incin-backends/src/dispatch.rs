@@ -1,10 +1,10 @@
 //! Runtime backend selection used by `IncinBackend<_, Dyn>`.
 
 use alloc::{string::String, vec::Vec};
+use incin_core::backend_authoring::SupportsDType;
 use incin_core::backend_authoring::*;
-use incin_core::backend_authoring::{StorageBackend, SupportsDType};
 use incin_core::error::{BackendError, Error, Result};
-use incin_core::shapes::{Dyn, OperationKind, ShapeBuf};
+use incin_core::shapes::{Dyn, OperationKind};
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
 use incin_core::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType, bf16, f16};
 
@@ -235,6 +235,7 @@ operand_accessors! {
 /// `req` and `opt` name the remaining required and optional tensor operands;
 /// each is checked against the routed backend, so a mixed-device call fails
 /// with a device mismatch instead of reaching a kernel.
+#[allow(unused_macros)]
 macro_rules! dispatch_same_device {
     (
         $primary:expr, $method:ident::<$($generic:ty),*>,
@@ -1316,6 +1317,7 @@ impl<D: Device> DispatchBackend<D> {
             other => Err(unavailable(other)),
         }
     }
+    #[allow(dead_code, clippy::extra_unused_type_parameters)]
     fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -1323,6 +1325,7 @@ impl<D: Device> DispatchBackend<D> {
     ) -> Result<DispatchVar> {
         create_var_dispatch!(var_zeros_with_total, var_zeros, shape, dtype, device)
     }
+    #[allow(dead_code, clippy::extra_unused_type_parameters)]
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -1330,6 +1333,7 @@ impl<D: Device> DispatchBackend<D> {
     ) -> Result<DispatchVar> {
         create_var_dispatch!(var_ones_with_total, var_ones, shape, dtype, device)
     }
+    #[allow(dead_code, clippy::extra_unused_type_parameters)]
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -1337,6 +1341,7 @@ impl<D: Device> DispatchBackend<D> {
     ) -> Result<DispatchVar> {
         create_var_dispatch!(var_rand_with_total, var_rand, shape, dtype, device)
     }
+    #[allow(dead_code, clippy::extra_unused_type_parameters)]
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -2380,6 +2385,7 @@ impl<D: Device> DispatchBackend<D> {
             args = [stride, padding, dilation, groups]
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn conv_transpose2d<K: DType>(
         t: &DispatchStorage,
         w: &DispatchStorage,
@@ -2462,6 +2468,7 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for DispatchBacke
         }
     }
 
+    #[allow(unreachable_patterns)]
     fn backward_with<K: DType>(
         loss: &Self::Storage<K>,
         seed: &Self::Storage<K>,

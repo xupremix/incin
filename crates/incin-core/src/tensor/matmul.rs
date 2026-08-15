@@ -117,28 +117,6 @@ fn checked_contraction(lhs_k: usize, rhs_k: usize) -> core::result::Result<(), S
     }
 }
 
-/// Check that a batch axis agrees between the two operands.
-///
-/// The same obligation the contraction check discharges, one axis over. A
-/// batch axis typed the same on both sides is only proved equal when that type
-/// is a `typenum`; a `dim!` name carries a runtime size and may differ. The
-/// output takes its batch axes from the left operand, so a disagreement would
-/// otherwise be resolved silently in the left's favour.
-#[inline]
-fn checked_batch(axis: usize, lhs: usize, rhs: usize) -> core::result::Result<(), ShapeError> {
-    if lhs == rhs {
-        Ok(())
-    } else {
-        Err(ShapeError::DimensionMismatch {
-            operation: OperationKind::MatMul,
-            axis: Axis::Index(axis),
-            lhs,
-            rhs,
-            constraint: DimensionConstraint::Equal,
-        })
-    }
-}
-
 /// Two contraction axes that may be multiplied against each other.
 ///
 /// Matrix multiplication requires the left operand's trailing axis and the
@@ -339,6 +317,7 @@ impl MatMulShape<Dyn> for Dyn {
 impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Tensor<S1, B, K, G1> {
     /// Batched matrix multiplication over the trailing two dimensions,
     /// with the output shape checked at compile time via `MatMulShape`.
+    #[allow(clippy::type_complexity)]
     pub fn matmul<S2, G2>(
         &self,
         rhs: &Tensor<S2, B, K, G2>,

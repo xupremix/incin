@@ -1,4 +1,5 @@
 #![cfg(feature = "cpu")]
+#![allow(clippy::type_complexity)]
 
 use incin::prelude::*;
 use incin::{DynShape, Shape, VariableBackend};
