@@ -1,12 +1,19 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
-use incin_core::prelude::{Backend, DType, Device, HostInterop, StorageBackend, VariableBackend};
+use incin_core::backend_authoring::{Backend, HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo, VariableBackend};
+use incin_core::error::{Error, Result};
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::DType;
 #[cfg(test)]
-use incin_core::prelude::{Cpu, Dyn, ShapeBuf};
+use incin_core::shapes::buf::ShapeBuf;
+#[cfg(test)]
+use incin_core::shapes::dynamic::Dyn;
+#[cfg(test)]
+use incin_core::tensor::device::Cpu;
 
 macro_rules! impl_transfer {
     ($source:ty) => {
-        impl<D: Device, NewD: Device> incin_core::prelude::StorageTransfer<NewD> for $source
+        impl<D: Device, NewD: Device> StorageTransfer<NewD> for $source
         where
             crate::target::Native: crate::target::EngineOn<NewD>,
             $source: HostInterop,
@@ -18,13 +25,13 @@ macro_rules! impl_transfer {
                 storage: &Self::Storage<K>,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> incin_core::prelude::Result<
+            ) -> Result<
                 <Self::Output as incin_core::backend_authoring::StorageBackend>::Storage<K>,
             >
             where
-                Self::Output: incin_core::prelude::SupportsDType<K>,
+                Self::Output: SupportsDType<K>,
             {
-                use incin_core::prelude::{Error, SupportsDType};
+                use incin_core::backend_authoring::SupportsDType;
                 let expected_descriptor = K::descriptor(dtype);
                 let source_dtype = Self::storage_dtype::<K>(storage).ok_or(
                     Error::UnsupportedBackendOperation {
@@ -57,7 +64,7 @@ macro_rules! impl_transfer {
 
         }
 
-        impl<D: Device, NewD: Device> incin_core::prelude::TransferTo<NewD> for $source
+        impl<D: Device, NewD: Device> TransferTo<NewD> for $source
         where
             crate::target::Native: crate::target::EngineOn<NewD>,
             $source: HostInterop,
@@ -67,17 +74,17 @@ macro_rules! impl_transfer {
                 variable: &Self::Var<K>,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> incin_core::prelude::Result<<Self::Output as VariableBackend>::Var<K>>
+            ) -> Result<<Self::Output as VariableBackend>::Var<K>>
             where
-                Self::Output: incin_core::prelude::SupportsDType<K>,
+                Self::Output: SupportsDType<K>,
             {
-                use incin_core::prelude::SupportsDType;
+                use incin_core::backend_authoring::SupportsDType;
                 let source = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
                 let expected_descriptor = K::descriptor(dtype);
                 if let Some(got) = Self::storage_dtype::<K>(&source)
                     && got != expected_descriptor
                 {
-                    return Err(incin_core::prelude::Error::DTypeStorageMismatch {
+                    return Err(Error::DTypeStorageMismatch {
                         expected: expected_descriptor,
                         got,
                     });
