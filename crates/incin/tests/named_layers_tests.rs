@@ -1,6 +1,7 @@
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;
+use incin::nn::NamedLayers;
 /// B.
 type B = incin::DefaultBackend;
 

@@ -11,7 +11,7 @@ extern crate incin_core as incin;
 
 use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::operations::ShapeAttributes;
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, HostInterop};
 use incin_core::exec::catalog::{
     AttributeContract, AxisAttributes, Conv2dAttributes, Pool2dAttributes,
 };

@@ -69,6 +69,9 @@ telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
 test-utils = ["incin-core/test-utils", "incin-backends/test-utils"]
 # Extension contracts for backend authors.
 backend-authoring = []
+# Historical direct-operation parity tests. These target the removed static
+# operation-family API and are excluded from the active canonical suite.
+legacy-operation-api-tests = ["incin-backends/legacy-operation-api-tests"]
 # Curated preview types for compiled execution.
 compiled = ["incin-core/compiled", "incin-backends/compiled"]
 

@@ -1,7 +1,7 @@
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;
-use incin::{DynShape, Shape};
+use incin::{DynShape, Shape, VariableBackend};
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;

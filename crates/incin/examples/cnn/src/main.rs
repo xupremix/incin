@@ -5,7 +5,7 @@ use incin::prelude::*;
 /// Features.
 type Features = Sequential<Conv2d<s![dyn, dyn, 3, 1, 0, 1]>, ReLU>;
 
-#[module]
+#[module(no_shape_info)]
 /// Simple cnn.
 pub struct SimpleCNN {
     features: Features,

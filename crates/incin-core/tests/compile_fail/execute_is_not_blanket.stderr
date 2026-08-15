@@ -10,17 +10,17 @@ help: the trait `Execute<incin_core::exec::op::Add>` is not implemented for `Sto
  8 | struct StorageOnly;
    | ^^^^^^^^^^^^^^^^^^
 help: the following other types implement trait `Execute<O>`
-  --> src/tensor/backend.rs
-   |
-   | /     impl<D: Device + Clone + 'static, O: crate::exec::catalog::Operation> Execute<O>
-   | |         for DummyBackend<D>
-   | |___________________________^ `DummyBackend<D>`
-   |
-  ::: src/tensor/tracing.rs
+  --> src/tensor/tracing.rs
    |
    | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
    | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
    | |____________________________________________________________^ `TracingBackend<B>`
+   |
+  ::: src/tensor/backend/dummy.rs
+   |
+   | /     impl<D: Device + Clone + 'static, O: crate::exec::catalog::Operation> Execute<O>
+   | |         for DummyBackend<D>
+   | |___________________________^ `DummyBackend<D>`
 note: required by a bound in `requires_broadcast`
   --> tests/compile_fail/execute_is_not_blanket.rs:20:26
    |

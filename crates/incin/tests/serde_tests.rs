@@ -1,6 +1,7 @@
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;
+use incin::{StateVisitor, VariableBackend, VisitState};
 use incin::state::{collect_state, load_state};
 extern crate alloc;
 

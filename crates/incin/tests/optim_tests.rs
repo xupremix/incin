@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use incin::prelude::*;
 use incin::optim::ParameterGroup;
 use incin::{Adam, AdamW, SGD};
-use incin::backend_authoring::HostInterop;
+use incin::backend_authoring::{HostInterop, VariableBackend};
 use incin::backend_authoring::AutogradBackend;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.

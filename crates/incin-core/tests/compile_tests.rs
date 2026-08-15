@@ -80,11 +80,6 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("shape_trait_is_sealed", "E0277"),
         ("dim_trait_is_sealed", "E0277"),
         ("concrete_static_extent_is_sealed", "E0277"),
-        // `EXE-009`: an operation family with no unsupported default, so a
-        // backend that omits a method fails to compile instead of answering
-        // the call with an error at run time.
-        ("module_ops_has_no_unsupported_default", "E0046"),
-        ("tensor_ops_has_no_unsupported_default", "E0046"),
         // Macros, which emit their own diagnostics and carry no error code.
         ("macro_idx_invalid", "expected `..=`"),
         (

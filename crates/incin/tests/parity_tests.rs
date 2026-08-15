@@ -1,4 +1,8 @@
-#![cfg(all(feature = "wgpu", feature = "cpu"))]
+#![cfg(all(
+    feature = "wgpu",
+    feature = "cpu",
+    feature = "legacy-operation-api-tests"
+))]
 
 //! Cross-backend numerical parity tests.
 //!

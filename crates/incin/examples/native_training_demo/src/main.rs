@@ -6,7 +6,7 @@
 #[macro_use]
 extern crate alloc;
 
-use incin::backend_authoring::{SupportsDType, VariableBackend};
+use incin::backend_authoring::{AutogradBackend, SupportsDType, VariableBackend};
 use incin::optim::OptimizerBackend;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
@@ -21,7 +21,7 @@ type NB = CpuBackendImpl;
 // ── Model ────────────────────────────────────────────────────────────────────
 
 /// A small CNN classifier: conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear.
-#[module]
+#[module(no_shape_info)]
 pub struct SimpleCnn<B: VariableBackend> {
     pub conv1: incin_core::prelude::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B, incin_core::prelude::False>,
     pub bn1: incin::BatchNorm2d<s![dyn], B>,
@@ -56,6 +56,7 @@ where
 
 impl<
     B: VariableBackend
+        + AutogradBackend
         + Execute<op::TransposeExact>
         + Execute<op::ReshapeExact>
         + incin_core::backend_authoring::Execute<op::MatMulExact>
@@ -127,9 +128,11 @@ fn train<B>(
     n_samples: usize,
     n_epochs: usize,
     lr: f64,
-) -> (Vec<f32>, std::time::Duration)
+) -> Result<(Vec<f32>, std::time::Duration)>
 where
     B: VariableBackend
+        + AutogradBackend
+        + incin_core::backend_authoring::HostInterop
         + SupportsDType<f32>
         + SupportsDType<u32>
         + ParameterInit<f32>
@@ -191,7 +194,7 @@ where
     }
 
     let elapsed = start.elapsed();
-    (losses, elapsed)
+    Ok((losses, elapsed))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -204,7 +207,7 @@ fn main() -> anyhow::Result<()> {
          on {n_samples} synthetic 8x8 samples for {n_epochs} epochs (lr={lr})"
     );
 
-    let (native_losses, native_elapsed) = train::<NB>(&images, &labels, n_samples, n_epochs, lr);
+    let (native_losses, native_elapsed) = train::<NB>(&images, &labels, n_samples, n_epochs, lr)?;
 
     println!();
     for (i, nl) in native_losses.iter().enumerate().take(n_epochs) {

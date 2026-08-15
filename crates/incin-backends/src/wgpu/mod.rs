@@ -24,5 +24,7 @@ pub use backend::{WgpuBackendImpl, WgpuGrads, WgpuVar};
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
 
-/// `tests`.
+/// Historical direct-backend tests retained as migration evidence. The active
+/// suite exercises the canonical dispatch surface instead.
+#[cfg(feature = "legacy-operation-api-tests")]
 mod tests;

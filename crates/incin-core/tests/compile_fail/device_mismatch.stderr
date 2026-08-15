@@ -6,8 +6,8 @@ error[E0308]: mismatched types
    |                |
    |                arguments to this method are incorrect
    |
-   = note: expected reference `&incin_core::prelude::Tensor<incin_core::prelude::Dyn, DummyBackend<incin_core::prelude::Cpu>, f32, _, incin_core::dist::Local>`
-              found reference `&incin_core::prelude::Tensor<incin_core::prelude::Dyn, DummyBackend<MockGpu>, f32, incin_core::prelude::Grad, incin_core::dist::Local>`
+   = note: expected reference `&incin_core::prelude::Tensor<incin_core::shapes::Dyn, DummyBackend<incin_core::prelude::Cpu>, f32, _, incin_core::dist::Local>`
+              found reference `&incin_core::prelude::Tensor<incin_core::shapes::Dyn, DummyBackend<MockGpu>, f32, incin_core::prelude::Grad, incin_core::dist::Local>`
 note: method defined here
   --> src/tensor/ops/binary.rs
    |
