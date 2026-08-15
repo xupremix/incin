@@ -218,15 +218,13 @@ skip to §7 if you just want to allocate tensors on a specific device.
 
 ### Why it exists
 
-The old family adapters let *any* implementation answer for an operation:
-`Backend: TensorOps<Self>` said "this backend has some `matmul`", not "this
-backend has *this exact, validated* `matmul`, refusing anything it cannot
-prove". Two consequences: a backend cannot be asked "do you support `matmul`
-on `f16` at rank 3?" without running it and seeing what happens, and there is
-no single point where "here is the operation" and "here is the metadata
-proving it is well-formed" travel together, sealed, into the kernel. The
-canonical path is now the ordinary tensor execution architecture. The family
-traits are historical context only and are absent from production source.
+The current path keeps an operation identity and its validated metadata
+together. A backend is queried for the exact operation, dtype, layout, rank,
+training mode, and math mode before execution, so unsupported combinations
+produce a typed result instead of being discovered only after a kernel call.
+The former operation-family design is historical context only; it is absent
+from production source. The canonical path is the ordinary tensor execution
+architecture described below.
 
 ### The pieces, in the order data flows through them
 
@@ -275,25 +273,13 @@ traits are historical context only and are absent from production source.
 
 ### What has an executor today, and what does not
 
-`Execute` cannot carry every operation. Sixteen sit at a non-backend
-`ExecutionSite` (`Mutation` — writes through an operand, e.g.
-`Tensor::add_`; `DeviceTransfer` — produces storage on another backend;
-`GraphState` — acts on autograd state, e.g. `backward`) and are excluded from
-"migrated" counts rather than counted as unwritten. Of the 161 operations
-`Execute` *can* carry, the CPU backend implements 156; the remaining 5 are
-each blocked by a stated, specific gap in the descriptor contract (not
-laziness) — `audit-evidence/FND-005/cpu-migration-status.md` is the
-machine-checked, regenerated-on-drift account of exactly which and why.
-`embedding` and `cross_entropy_loss` were the last two of that kind: their
-operands admit different dtypes by construction, and the fix was not a
-`CapabilityRule` struct change but a row stating the honest *union* of both
-operands' dtypes (`INDEX_AND_F32_DTYPES` in
-`crates/incin-backends/src/capability.rs`) — the same technique
-`descriptor_min_rank` already used for rank — relying on the descriptor's own
-per-operand contract, which runs first, to reject the wrong combination
-before any capability query does, and on an executor-side `f32_only` check
-for whichever operand the union cannot pin down alone. That blocker is now
-closed; none of the remaining 5 is waiting on a dtype set.
+`Execute` cannot carry every operation. Some operations intentionally remain
+at non-backend `ExecutionSite`s such as mutation, device transfer, or graph
+state handling. They are modeled explicitly rather than counted as missing
+kernel implementations. The supported backend subset and its boundaries are
+generated in `docs/capabilities.md` and recorded in the machine-checked
+`audit-evidence/FND-005/cpu-migration-status.md`; those artifacts are the
+authoritative support inventory and are regenerated when the source changes.
 
 Backend-executable operations in the stable tensor surface now use this path.
 The legacy operation-family architecture has been removed from production

@@ -1,9 +1,8 @@
 # Frozen foundations
 
 The parts of the tree that carry the most weight, are finished, and are not
-supposed to be rewritten again. Everything in this file is load-bearing for the
-remaining FND-005 work, and every entry names the mechanism that keeps it true
-rather than asking anyone to remember it.
+supposed to be rewritten casually. Every entry names the mechanism that keeps
+it true rather than asking anyone to remember it.
 
 Read this before proposing a change to any file listed here. A change to a
 frozen foundation is not forbidden, but it is a change to a contract several
@@ -36,19 +35,19 @@ The shape of that table is the point. Each row is a decision made once and then
 made unrepeatable, so the cost of migrating operation number 118 is the same as
 the cost of migrating number 5 was, rather than growing with the count.
 
-## What is deliberately not frozen
+## What remains intentionally experimental
 
-These are the surfaces the remaining work changes. Nothing here should be
-treated as settled.
+These are current boundaries, not unfinished descriptor migration work. They
+may change in a later focused design effort, but they do not introduce a
+second stable execution path.
 
 | Surface | Why it still moves |
 |---|---|
-| The per-operation executor bodies in `cpu/canonical.rs` | 158 of 158 backend-executable operations migrated. Sixteen catalog entries remain at execution sites that `Execute` cannot carry and are tracked separately |
-| The legacy core operation-family traits | Removed from production source. Backend-local ordinary helpers and explicit execution sites remain where an operation cannot be represented by `Execute<O>` |
-| The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
-| `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot state the tight per-operand pair directly, and no longer needs to: `INDEX_AND_F32_DTYPES` states the *union* the row can honestly claim, the same trick `descriptor_min_rank` already used for rank, and the descriptor's own per-operand contract (already `TypedContract`/hand-cased in `validate`, not something this added) rejects the wrong combination before any capability query runs. Both operations that needed it — `embedding` and `cross_entropy_loss` — are migrated on that technique, so no struct change to `CapabilityRule` was needed or made |
-| `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
-| `Execute`'s reachable sites | Sixteen operations have an `ExecutionSite` the trait cannot carry: they mutate through an operand, produce storage on another backend, or act on autograd state. `ExecutionSite::blocking_reason` states which |
+| Experimental graph, compiled, distributed, import, and tooling APIs | Their dedicated documentation defines the supported subset and limitations; they are not part of the stable tensor execution contract |
+| True in-place mutation and aliasing semantics | Ownership, views, allocation identity, and autograd versioning require a separate focused design |
+| Richer training contexts and custom automatic differentiation extensions | Train-mode evolution, custom VJP/JVP/batching, and higher-order AD remain future architecture |
+| Backend resource/session abstractions | Backend identity and capability contracts remain intentionally small until a concrete backend requires a larger resource model |
+| Ragged, sparse, and fully mature distributed runtime support | These are future capabilities, not gaps in the canonical descriptor path |
 
 ## Historical migration notes
 
@@ -85,8 +84,7 @@ executor enforcing whichever operand the union cannot pin down alone. No
    actually uses. This is the step that ends the dual architecture. It is no
    longer blocked by migration coverage: the remaining executable gaps are
    explicit and the stable data constructors use canonical dispatch.
-5. **Delete the broad family rows and the grouped `Execute<MatMulSpec>`
-   adapters**, then delete the compatibility adapter in `cpu::canonical` and the
-   `the_migration_is_recorded_as_incomplete` test, which is written to fail once
-   the catalog is fully migrated so that the completion claim has to be a
-   deliberate edit.
+5. **Completed: delete the broad family rows and grouped adapters.** The
+   compatibility adapter and migration-incomplete guard were removed when the
+   descriptor/`Execute<O>` path became canonical. This historical step is
+   recorded here to explain the dependency order, not as remaining work.
