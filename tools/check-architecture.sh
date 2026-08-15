@@ -19,6 +19,10 @@ check_absent "internal wildcard preludes" \
     '^[[:space:]]*use[[:space:]]+(crate|incin_core)::prelude::\*;' \
     crates/incin-core/src crates/incin-backends/src crates/incin-data/src \
     --glob '*.rs' --glob '!**/tests.rs'
+check_absent "named public-prelude dependencies" \
+    '(^|[^[:alnum:]_])(crate|incin_core)::prelude::[A-Za-z_][A-Za-z0-9_]*' \
+    crates/incin-core/src crates/incin-backends/src crates/incin-data/src crates/incin/src \
+    --glob '*.rs' --glob '!**/tests.rs'
 check_absent "tensor depends upward on nn" \
     'crate::nn::|incin_core::nn::' \
     crates/incin-core/src/tensor

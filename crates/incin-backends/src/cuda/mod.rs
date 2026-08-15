@@ -35,8 +35,8 @@ pub(crate) fn checked_i32(
     expression: &'static str,
 ) -> incin_core::error::Result<i32> {
     i32::try_from(value).map_err(|_| {
-        incin_core::prelude::ShapeError::ArithmeticOverflow {
-            operation: incin_core::prelude::OperationKind::Storage,
+        incin_core::shapes::ShapeError::ArithmeticOverflow {
+            operation: incin_core::shapes::OperationKind::Storage,
             expression,
         }
         .into()

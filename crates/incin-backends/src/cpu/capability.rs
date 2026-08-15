@@ -1,7 +1,7 @@
 use super::CpuBackendImpl;
 use incin_core::backend_authoring::StorageBackend;
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::prelude::{Cpu, Device};
+use incin_core::tensor::device::{Cpu, Device};
 
 impl<D: Device> Capabilities for CpuBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {

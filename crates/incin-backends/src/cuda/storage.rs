@@ -1,10 +1,13 @@
 use alloc::sync::Arc;
 use core::ops::Deref;
 
+use incin_core::error::{Error, Result};
 use incin_core::exec::{Alignment, TensorMeta};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::DTypeDescriptor;
 #[cfg(test)]
 use incin_core::tensor::dtype::DTypeId;
-use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 /// Byte alignment every CUDA device allocation satisfies.
 ///

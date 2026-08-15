@@ -17,7 +17,9 @@ pub(crate) mod reduce;
 pub(crate) mod shape;
 
 use alloc::sync::Arc;
-use incin_core::prelude::{DTypeDescriptor, Error, OperationKind, Result};
+use incin_core::error::{Error, Result};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::dtype::DTypeDescriptor;
 
 /// Allocate a zeroed device buffer sized for `elements` values of `dtype`.
 ///

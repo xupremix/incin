@@ -44,9 +44,9 @@
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use incin_core::error::Error;
-use incin_core::prelude::{
-    DType, DTypeId, DTypeDescriptor, OperationKind, Result, ShapeError,
-};
+use incin_core::error::Result;
+use incin_core::shapes::{OperationKind, ShapeError};
+use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 use crate::cpu::ops::elementwise::increment_index;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

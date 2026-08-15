@@ -300,8 +300,9 @@ mod tests {
         let bias = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
-            .unwrap();
+        let out =
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
+                .unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let vals = f32_vec(&out);
 
@@ -343,8 +344,9 @@ mod tests {
         let bias = vec1(vec![1.0f32, 1.0, 1.0]);
         let eps = 1e-5f32;
 
-        let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
-            .unwrap();
+        let out =
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
+                .unwrap();
         let vals = f32_vec(&out);
 
         let mean = 2.0f32;
@@ -372,11 +374,16 @@ mod tests {
         let bias_zeros = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let with_explicit_zero =
-            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias_zeros), eps)
-                .unwrap();
+        let with_explicit_zero = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+            &t,
+            &weight,
+            Some(&bias_zeros),
+            eps,
+        )
+        .unwrap();
         let with_none_bias =
-            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, None, eps).unwrap();
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, None, eps)
+                .unwrap();
 
         let a = f32_vec(&with_explicit_zero);
         let b = f32_vec(&with_none_bias);
@@ -435,8 +442,9 @@ mod tests {
         let bias = vec1(vec![0.0f32; 4]);
         let eps = 1e-5f32;
 
-        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
-            .unwrap();
+        let out =
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
+                .unwrap();
         assert_eq!(out.shape, vec![2, 2, 4]);
         let vals = f32_vec(&out);
 
@@ -585,9 +593,10 @@ mod tests {
             0.0,
         )
         .unwrap();
-        let with_none =
-            batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, None, None, None, None, eps, 0.0)
-                .unwrap();
+        let with_none = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+            &t, None, None, None, None, eps, 0.0,
+        )
+        .unwrap();
 
         let a = f32_vec(&with_explicit);
         let b = f32_vec(&with_none);

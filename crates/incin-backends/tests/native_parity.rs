@@ -67,7 +67,7 @@ where
 /// 0) outputs are read via `float_to_scalar` instead.
 fn read_flat<B>(t: &B::Storage<f32>) -> Vec<f64>
 where
-    B: Backend + <B> + <B>,
+    B: Backend + HostInterop,
 {
     let shape = B::shape::<f32>(t);
     let total: usize = shape.iter().product::<usize>().max(1);

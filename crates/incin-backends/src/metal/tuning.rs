@@ -21,7 +21,9 @@ use crate::tuning::{
     claim_tuning, select_fastest,
 };
 use alloc::vec::Vec;
-use incin_core::prelude::{DTypeId, DeviceKind, Error, Result};
+use incin_core::error::{Error, Result};
+use incin_core::tensor::device::DeviceKind;
+use incin_core::tensor::dtype::DTypeId;
 
 // ---------------------------------------------------------------------------
 // Metal Launch Candidate & Storage Mode

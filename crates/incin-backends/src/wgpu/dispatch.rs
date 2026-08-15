@@ -3,7 +3,9 @@ use wgpu::ComputePipeline;
 
 use crate::wgpu::device::get_device_state;
 use crate::wgpu::pipeline::get_or_create_pipeline;
-use incin_core::prelude::{DTypeId, OperationKind, Result, ShapeError};
+use incin_core::error::Result;
+use incin_core::shapes::{OperationKind, ShapeError};
+use incin_core::tensor::dtype::DTypeId;
 
 use crate::wgpu::storage::WgpuBuffer;
 

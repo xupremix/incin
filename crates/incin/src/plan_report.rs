@@ -1,7 +1,7 @@
 //! `cargo incin plan` — plan report generator (`UX-005`).
 
 use crate::train::{HostMachine, Machine, Trainer};
-use incin_core::prelude::{DevicePreference, DeviceSet};
+use incin_core::tensor::device::{DevicePreference, DeviceSet};
 
 pub const EXIT_OK: i32 = 0;
 pub const EXIT_USAGE: i32 = 2;

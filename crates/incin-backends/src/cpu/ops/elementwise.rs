@@ -811,7 +811,6 @@ pub(crate) fn div_storage_with_shape(
     Ok(out)
 }
 
-
 // ---------------------------------------------------------------------------
 // Shared log-softmax kernel (D-02)
 // ---------------------------------------------------------------------------
@@ -959,7 +958,6 @@ mod tests {
             other => panic!("expected CpuBuffer::F64, got {other:?}"),
         }
     }
-
 
     #[test]
     /// `add_broadcasts_forward_correctly`.
@@ -1396,7 +1394,7 @@ mod tests {
     /// `softmax_forward_uniform_on_all_zero_logits`.
     fn softmax_forward_uniform_on_all_zero_logits() {
         let t = vector(vec![0.0, 0.0, 0.0]);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         for v in &vals {
@@ -1429,7 +1427,7 @@ mod tests {
         // Proves both forward AND backward are numerically stable under the
         // composition, not just forward (Test 3's finite-forward twin).
         let t = vector(vec![1000.0, 1000.0, 1000.0]);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 0).unwrap();
 
         let grads = tape::backward(&out).unwrap();
         let t_grad = grads.get(t.id).unwrap();
@@ -1489,7 +1487,7 @@ mod tests {
         //
         // Spot-check: vector [0.5, -1.0, 2.0] forward correctness.
         let t = vector(vec![0.5f32, -1.0, 2.0]);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
         let sum: f32 = vals.iter().sum();
         assert!((sum - 1.0).abs() < 1e-5, "softmax sum should be 1: {sum}");

@@ -108,27 +108,39 @@ mod target_api_book_docs {}
 extern crate alloc;
 
 pub use incin_backends::IncinBackend;
+pub use incin_core::autograd::Gradients;
+pub use incin_core::backend_authoring::{Backend, VariableBackend};
+pub use incin_core::error::{
+    BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
+    NonFiniteSite, Result, convert_f64_to_i64,
+};
+pub use incin_core::nn::module::Module;
+pub use incin_core::nn::param::{Buffer, TrainState};
+pub use incin_core::nn::state::{
+    StateMutVisitor, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
+    VisitStateMut,
+};
 pub use incin_core::optim::{
     Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, OptimizerBackend, SGD,
 };
 #[cfg(feature = "std")]
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
-pub use incin_core::prelude::{
-    Backend, BackendError, BackwardError, BoolDType, BuiltinDType, ConstDType, ConversionFailure,
-    Buffer, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
-    DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
-    FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PlainDType, Q8_0,
-    QuantDType, RequiresGrad, Result, Shape, StatePath, StateRole,
-    StateSnapshot, StateValue, StateMutVisitor, StateVisitor, TrainState, VisitState, VisitStateMut, TensorElement, VariableBackend, bf16,
-    convert_f64_to_i64, f16,
+pub use incin_core::shapes::{Dyn, DynShape, Shape};
+pub use incin_core::tensor::device::{
+    Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
 };
+pub use incin_core::tensor::dtype::{
+    BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
+    FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
+};
+pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
 
 #[cfg(feature = "cuda")]
-pub use incin_core::prelude::{Cuda, CudaN};
+pub use incin_core::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "metal")]
-pub use incin_core::prelude::{Metal, MetalN};
+pub use incin_core::tensor::device::{Metal, MetalN};
 #[cfg(feature = "wgpu")]
-pub use incin_core::prelude::{Wgpu, WgpuN};
+pub use incin_core::tensor::device::{Wgpu, WgpuN};
 
 pub use incin_core::dim;
 pub use incin_macros::module;
@@ -136,11 +148,13 @@ pub use incin_macros::module;
 /// Expert type-level and physical-layout contracts that are not part of the
 /// ordinary user prelude.
 pub mod types {
-    pub use incin_core::prelude::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
+    pub use incin_core::shapes::{
+        ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape,
+    };
 
     /// Physical storage encoding used by dtype descriptors and serializers.
     pub mod dtype {
-        pub use incin_core::prelude::StorageEncoding;
+        pub use incin_core::tensor::dtype::StorageEncoding;
     }
 }
 
@@ -150,15 +164,17 @@ pub mod types {
 /// consumer crate. Its contents are not part of the stable end-user facade.
 #[doc(hidden)]
 pub mod __macro_support {
+    pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
+    pub use incin_core::backend_authoring::Backend;
+    pub use incin_core::backend_authoring::{
+        StorageTransfer, SupportsDType, TransferTo, VariableBackend,
+    };
     pub use incin_core::error::Result;
+    pub use incin_core::nn::{ComputeStats, LayerStats};
     pub use incin_core::nn::{
         LayerNode, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor, StatePath,
         StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
     };
-    pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
-    pub use incin_core::backend_authoring::{StorageTransfer, SupportsDType, TransferTo, VariableBackend};
-    pub use incin_core::nn::{ComputeStats, LayerStats};
-    pub use incin_core::backend_authoring::Backend;
     pub use incin_core::tensor::device::Device;
     pub use incin_core::tensor::transfer::ToDevice;
 }
@@ -267,12 +283,13 @@ pub mod experimental {
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
-        Alignment, AttributeContract, AutogradBackend, Backend, Capabilities, CapabilityQuery, CapabilityRegistry,
-        DescriptorError, Execute, ExecuteOutput, ExecutionContext, ExecutionDescriptor,
-        ExecutionRequest, LogicalTensorMeta, LossScaling, Operation, OperationIdentity,
-        OperationKey, PrecisionSpec, RuntimePrecisionPolicy, ShapeBuf, StorageBackend,
-        StorageOutput, StorageTransfer, SupportLevel, SupportsDType, TensorBackend, TensorMeta, TransferBackend,
-        TransferTo, VariableTransfer, UnsupportedReason, Validated, VariableBackend, HostInterop, HostReadback,
+        Alignment, AttributeContract, AutogradBackend, Backend, Capabilities, CapabilityQuery,
+        CapabilityRegistry, DescriptorError, Execute, ExecuteOutput, ExecutionContext,
+        ExecutionDescriptor, ExecutionRequest, HostInterop, HostReadback, LogicalTensorMeta,
+        LossScaling, Operation, OperationIdentity, OperationKey, PrecisionSpec,
+        RuntimePrecisionPolicy, ShapeBuf, StorageBackend, StorageOutput, StorageTransfer,
+        SupportLevel, SupportsDType, TensorBackend, TensorMeta, TransferBackend, TransferTo,
+        UnsupportedReason, Validated, VariableBackend, VariableTransfer,
     };
     pub use incin_core::backend_authoring::{
         execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,
@@ -328,14 +345,15 @@ pub mod nn {
         EmbeddingShape, False, Flatten, GELU, Init, L1Loss, L1ReductionShape, L1Shape, LSTM,
         LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
-        OptionalField, Param, ParameterVisitor, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
-        ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, Sum, Swish, Tanh,
-        TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
-        format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
+        OptionalField, Param, ParameterVisitor, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU,
+        Reduction, ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, Sum, Swish, Tanh,
+        TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
+        format_layer_summary, format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm,
+        rnn, sum_stats,
     };
-    pub use incin_core::tensor::transfer::ToDevice;
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
+    pub use incin_core::tensor::transfer::ToDevice;
 }
 
 /// Optimization algorithms, loss functions, and learning rate schedulers.
@@ -388,7 +406,10 @@ pub mod doctor;
 
 /// Model checkpoint artifacts and transactional state loading.
 pub mod state {
-    pub use incin_core::prelude::{collect_state, load_state, StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState, VisitStateMut};
+    pub use incin_core::nn::state::{
+        StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue,
+        StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
+    };
 }
 
 // Enabling an accelerator must never silently change application behavior.
@@ -396,13 +417,13 @@ pub mod state {
 // get the one enabled device family.
 #[cfg(feature = "cpu")]
 /// Default device used by the standard installation.
-pub type DefaultDevice = incin_core::prelude::Cpu;
+pub type DefaultDevice = incin_core::tensor::device::Cpu;
 #[cfg(all(not(feature = "cpu"), feature = "wgpu"))]
 /// Default device for a WGPU-only build.
-pub type DefaultDevice = crate::prelude::Wgpu;
+pub type DefaultDevice = crate::tensor::device::Wgpu;
 #[cfg(all(not(feature = "cpu"), not(feature = "wgpu"), feature = "cuda"))]
 /// Default device for a CUDA-only build.
-pub type DefaultDevice = crate::prelude::Cuda;
+pub type DefaultDevice = crate::tensor::device::Cuda;
 
 #[cfg(feature = "train")]
 mod plan_report;
@@ -416,7 +437,7 @@ mod train;
 mod tune_report;
 
 #[cfg(feature = "cpu")]
-pub type DefaultBackend = incin_backends::IncinBackend<incin_core::prelude::Cpu>;
+pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
 // (the previous approach) doesn't implement `Backend`, so every type alias
@@ -433,9 +454,9 @@ pub type Tensor<
     S,
     B = DefaultBackend,
     K = f32,
-    G = incin_core::prelude::NoGrad,
+    G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::prelude::Tensor<S, B, K, G, P>;
+> = incin_core::tensor::base::Tensor<S, B, K, G, P>;
 
 #[cfg(not(feature = "cpu"))]
 /// Tensor.
@@ -443,9 +464,9 @@ pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
     K = f32,
-    G = incin_core::prelude::NoGrad,
+    G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::prelude::Tensor<S, B, K, G, P>;
+> = incin_core::tensor::base::Tensor<S, B, K, G, P>;
 
 // Neural Network Layer Aliases
 //
@@ -455,75 +476,73 @@ pub type Tensor<
 // `Tensor` above and `DefaultBackend` itself.
 #[cfg(feature = "cpu")]
 /// Linear.
-pub type Linear<S, B = DefaultBackend> = incin_core::prelude::Linear<S, B>;
+pub type Linear<S, B = DefaultBackend> = incin_core::nn::Linear<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Linear.
-pub type Linear<S, B> = incin_core::prelude::Linear<S, B>;
+pub type Linear<S, B> = incin_core::nn::Linear<S, B>;
 
 #[cfg(feature = "cpu")]
 /// Conv1d.
-pub type Conv1d<S, B = DefaultBackend> = incin_core::prelude::Conv1d<S, B>;
+pub type Conv1d<S, B = DefaultBackend> = incin_core::nn::Conv1d<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Conv1d.
-pub type Conv1d<S, B> = incin_core::prelude::Conv1d<S, B>;
+pub type Conv1d<S, B> = incin_core::nn::Conv1d<S, B>;
 
 #[cfg(feature = "cpu")]
 /// Conv2d.
-pub type Conv2d<S, B = DefaultBackend> = incin_core::prelude::Conv2d<S, B>;
+pub type Conv2d<S, B = DefaultBackend> = incin_core::nn::Conv2d<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Conv2d.
-pub type Conv2d<S, B> = incin_core::prelude::Conv2d<S, B>;
+pub type Conv2d<S, B> = incin_core::nn::Conv2d<S, B>;
 
 #[cfg(feature = "cpu")]
 /// Batch norm2d.
-pub type BatchNorm2d<C, B = DefaultBackend> = incin_core::prelude::BatchNorm2d<C, B>;
+pub type BatchNorm2d<C, B = DefaultBackend> = incin_core::nn::BatchNorm2d<C, B>;
 #[cfg(not(feature = "cpu"))]
 /// Batch norm2d.
-pub type BatchNorm2d<C, B> = incin_core::prelude::BatchNorm2d<C, B>;
+pub type BatchNorm2d<C, B> = incin_core::nn::BatchNorm2d<C, B>;
 
 #[cfg(feature = "cpu")]
 /// Layer norm.
-pub type LayerNorm<C, B = DefaultBackend> = incin_core::prelude::LayerNorm<C, B>;
+pub type LayerNorm<C, B = DefaultBackend> = incin_core::nn::LayerNorm<C, B>;
 #[cfg(not(feature = "cpu"))]
 /// Layer norm.
-pub type LayerNorm<C, B> = incin_core::prelude::LayerNorm<C, B>;
+pub type LayerNorm<C, B> = incin_core::nn::LayerNorm<C, B>;
 
 /// Avg pool2d.
-pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> =
-    incin_core::prelude::AvgPool2d<K, S, P, D>;
+pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> = incin_core::nn::AvgPool2d<K, S, P, D>;
 /// Max pool2d.
-pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> =
-    incin_core::prelude::MaxPool2d<K, S, P, D>;
+pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> = incin_core::nn::MaxPool2d<K, S, P, D>;
 /// Sequential.
-pub type Sequential<L1, L2> = incin_core::prelude::Sequential<L1, L2>;
+pub type Sequential<L1, L2> = incin_core::nn::Sequential<L1, L2>;
 
 #[cfg(feature = "cpu")]
 /// Param.
-pub type Param<T, B = DefaultBackend> = incin_core::prelude::Param<T, B>;
+pub type Param<T, B = DefaultBackend> = incin_core::nn::Param<T, B>;
 #[cfg(not(feature = "cpu"))]
 /// Param.
-pub type Param<T, B> = incin_core::prelude::Param<T, B>;
+pub type Param<T, B> = incin_core::nn::Param<T, B>;
 
 #[cfg(feature = "cpu")]
 /// Rnncell.
-pub type RNNCell<S, B = DefaultBackend> = incin_core::prelude::RNNCell<S, B>;
+pub type RNNCell<S, B = DefaultBackend> = incin_core::nn::RNNCell<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Rnncell.
-pub type RNNCell<S, B> = incin_core::prelude::RNNCell<S, B>;
+pub type RNNCell<S, B> = incin_core::nn::RNNCell<S, B>;
 
 #[cfg(feature = "cpu")]
 /// Rnn.
-pub type RNN<S, B = DefaultBackend> = incin_core::prelude::RNN<S, B>;
+pub type RNN<S, B = DefaultBackend> = incin_core::nn::RNN<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Rnn.
-pub type RNN<S, B> = incin_core::prelude::RNN<S, B>;
+pub type RNN<S, B> = incin_core::nn::RNN<S, B>;
 
 #[cfg(feature = "cpu")]
 /// Embedding.
-pub type Embedding<S, B = DefaultBackend> = incin_core::prelude::Embedding<S, B>;
+pub type Embedding<S, B = DefaultBackend> = incin_core::nn::Embedding<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Embedding.
-pub type Embedding<S, B> = incin_core::prelude::Embedding<S, B>;
+pub type Embedding<S, B> = incin_core::nn::Embedding<S, B>;
 
 /// Macros.
 pub mod macros {
@@ -537,32 +556,49 @@ pub mod macros {
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
     pub use super::Tensor;
-    pub use incin_core::tensor::transfer::ToDevice;
-    pub use incin_core::prelude::{
-        AxisIdentity, AxisSchema, Backend, BackendError, BackwardError, BoolDType, BuiltinDType,
-        ConstDType, ConstDevice, ConstDim, ConversionFailure, Cpu, DType, DTypeDescriptor, DTypeId,
-        DTypeKey, DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet,
-        DeviceSetError, Dim, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
-        FloatToIntPolicy, Grad, Here, InferDim, IntDType, MatMulShape, Module, NamedAxisLookup,
-        NamedAxisSelector, NamedDim, Next, NoGrad, NonFiniteSite, PlainDType, Q8_0,
-        QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape, ShapeArgs, ShapeInfo, ShapeSpec,
-        ShapeValue, ComputeStats,
-        Slice, StatePath, StateRole, StateSnapshot, StateValue, StateMutVisitor, StateVisitor, VisitState, VisitStateMut,
-        TensorElement, VariableBackend, bf16, convert_f64_to_i64, f16,
+    pub use incin_core::SeqTy;
+    pub use incin_core::backend_authoring::{Backend, VariableBackend};
+    pub use incin_core::error::{
+        BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
+        NonFiniteSite, Result, convert_f64_to_i64,
     };
+    pub use incin_core::nn::module::{Module, ShapeInfo};
+    pub use incin_core::nn::state::{
+        StateMutVisitor, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
+        VisitStateMut,
+    };
+    pub use incin_core::nn::stats::ComputeStats;
+    pub use incin_core::shapes::{
+        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, Here, InferDim,
+        NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Ranked, Shape, ShapeArgs, ShapeSpec,
+        ShapeValue, Slice,
+    };
+    pub use incin_core::tensor::device::{
+        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+    };
+    pub use incin_core::tensor::dtype::{
+        BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
+        FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
+    };
+    pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
+    pub use incin_core::tensor::matmul::MatMulShape;
+    pub use incin_core::tensor::transfer::ToDevice;
 
-    pub use incin_core::prelude::{
-        AppendDim, At, Axis, AxisSelector, AxisSet, BroadcastDim, BroadcastExtent, BroadcastShape,
-        ConcatShape, FromEnd, ReduceAt, ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar,
-        StackShape, SwapAt, TryReshape,
+    pub use incin_core::exec::AxisSet;
+    pub use incin_core::shapes::broadcast::BroadcastDim;
+    pub use incin_core::shapes::concat::ConcatShape;
+    pub use incin_core::shapes::stack::StackShape;
+    pub use incin_core::shapes::{
+        AppendDim, At, Axis, AxisSelector, BroadcastExtent, BroadcastShape, FromEnd, ReduceAt,
+        ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar, SwapAt, TryReshape,
     };
 
     #[cfg(feature = "cuda")]
-    pub use incin_core::prelude::{Cuda, CudaN};
+    pub use incin_core::tensor::device::{Cuda, CudaN};
     #[cfg(feature = "metal")]
-    pub use incin_core::prelude::{Metal, MetalN};
+    pub use incin_core::tensor::device::{Metal, MetalN};
     #[cfg(feature = "wgpu")]
-    pub use incin_core::prelude::{Wgpu, WgpuN};
+    pub use incin_core::tensor::device::{Wgpu, WgpuN};
 
     #[cfg(feature = "cpu")]
     pub use super::DefaultBackend;
@@ -605,12 +641,14 @@ pub mod prelude {
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
-        module::{LayerNode, NamedLayers, ParameterVisitor, Sequential, TrainMode, VisitParameters},
+        module::{
+            LayerNode, NamedLayers, ParameterVisitor, Sequential, TrainMode, VisitParameters,
+        },
         rms_norm::RMSNorm,
     };
 
     #[cfg(feature = "std")]
-    pub use incin_core::prelude::{Format, ModelExt};
+    pub use incin_core::serialization::{Format, ModelExt};
 
     pub use incin_core::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,

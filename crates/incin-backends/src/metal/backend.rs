@@ -3,17 +3,19 @@
 use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
+use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
-use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
-use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
 use incin_core::shapes::error::OperationKind;
+use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Metal};
-use incin_core::tensor::dtype::{ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType};
+use incin_core::tensor::dtype::{
+    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+};
 
+pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
-pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
 
 /// Metal compute backend implementation for Incin.
 #[derive(Clone)]
@@ -89,8 +91,6 @@ impl<D: Device> Backend for MetalBackendImpl<D> {
 
     // `host_format_display`/`host_format_debug` use `HostInterop`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-
 }
 
 impl<D: Device> incin_core::backend_authoring::HostReadback for MetalBackendImpl<D> {
@@ -116,26 +116,26 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for MetalBackendImpl
 
 impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<D> {
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
-            t.as_bytes().map(<[u8]>::to_vec)
-        }
+        t.as_bytes().map(<[u8]>::to_vec)
+    }
     fn from_bytes<K: DType>(
-            bytes: &[u8],
-            shape: &[usize],
-            dtype: DTypeDescriptor,
-            device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
-            validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
-            let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-            let numel = num_elements(shape)?;
-            let meta =
-                TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), numel)?;
-            MetalStorage::from_bytes(
-                bytes.to_vec(),
-                meta,
-                MetalStorageMode::Shared,
-                device.ordinal(),
-            )
-        }
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
+        let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
+        let numel = num_elements(shape)?;
+        let meta =
+            TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), numel)?;
+        MetalStorage::from_bytes(
+            bytes.to_vec(),
+            meta,
+            MetalStorageMode::Shared,
+            device.ordinal(),
+        )
+    }
 }
 
 // ─── Concrete creation helpers ──────────────────────────────────────────────
@@ -652,7 +652,7 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
             .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let rhs_batch: usize =
         incin_core::shapes::ShapeBuf::from_slice(&(rhs_dims[..rhs_dims.len() - 2]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let batch = lhs_batch.max(rhs_batch).max(1);
 
     let mut out_shape = if lhs_batch >= rhs_batch && lhs_dims.len() > 2 {
@@ -666,7 +666,7 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
     out_shape.push(n);
 
     let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let mut out_data = vec![0.0f32; out_numel];
 
     let a_bytes = lhs.as_bytes()?;
@@ -711,7 +711,7 @@ fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage
         .shape()
         .checked_numel(OperationKind::Storage)?;
     let new_numel: usize = incin_core::shapes::ShapeBuf::from_slice(shape)
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     if numel != new_numel {
         return Err(Error::ShapeMismatch {
             op: "reshape",
@@ -750,7 +750,7 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
     out_dims.swap(dim0, dim1);
 
     let numel: usize = incin_core::shapes::ShapeBuf::from_slice(&out_dims)
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let bytes = storage.as_bytes()?;
     let in_slice: &[f32] = bytemuck::cast_slice(bytes);
     let mut out_data = vec![0.0f32; numel];
@@ -1493,7 +1493,7 @@ impl<D: Device> MetalBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
         let total: usize = incin_core::shapes::ShapeBuf::from_slice(dims)
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let sum = Self::sum_all::<K>(t)?;
         scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
     }
@@ -2464,16 +2464,16 @@ impl<D: Device> MetalBackendImpl<D> {
         let mut out_dims = dims.to_vec();
         out_dims[dim] = len;
         let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_dims))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let mut out_data = Vec::with_capacity(out_numel);
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);
 
         let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[..dim]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[dim + 1..]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
 
         for o in 0..outer {
             for i in start..start + len {
@@ -2510,9 +2510,8 @@ impl<D: Device> MetalBackendImpl<D> {
                 let mut fg_data: Vec<f32> = bytemuck::cast_slice(fg_bytes).to_vec();
                 let g_outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(t_dims[..dim]))
                     .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
-                let g_inner: usize =
-                    incin_core::shapes::ShapeBuf::from_slice(&(t_dims[dim + 1..]))
-                        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
+                let g_inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(t_dims[dim + 1..]))
+                    .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
                 for o in 0..g_outer {
                     for i in 0..len {
                         let src_start = o * len * g_inner + i * g_inner;
@@ -2557,7 +2556,7 @@ impl<D: Device> MetalBackendImpl<D> {
         let mut new_dims = Vec::new();
         new_dims.extend_from_slice(&dims[..start_dim]);
         let folded: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[start_dim..=end_dim]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         new_dims.push(folded);
         new_dims.extend_from_slice(&dims[end_dim + 1..]);
         Self::reshape::<K>(t, &new_dims)
@@ -2627,11 +2626,11 @@ impl<D: Device> MetalBackendImpl<D> {
         out_dims[dim] = total_concat_len;
 
         let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(first_dims[..dim]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(first_dims[dim + 1..]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_dims))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
         let mut out_data = Vec::with_capacity(out_numel);
 
         for o in 0..outer {
@@ -2678,9 +2677,8 @@ impl<D: Device> MetalBackendImpl<D> {
                 for &len in &slice_lens {
                     let mut sub_dims = out_dims.clone();
                     sub_dims[dim] = len;
-                    let sub_numel: usize =
-                        incin_core::shapes::ShapeBuf::from_slice(&(sub_dims))
-                            .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
+                    let sub_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(sub_dims))
+                        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
                     let mut sub_data = Vec::with_capacity(sub_numel);
 
                     let g_bytes = grad_out.as_bytes()?;
@@ -2755,7 +2753,7 @@ impl<D: Device> MetalBackendImpl<D> {
         let dims = t.metadata().shape().dims();
         let last_dim = dims[dims.len() - 1];
         let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[..dims.len() - 1]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);
@@ -2817,7 +2815,7 @@ impl<D: Device> MetalBackendImpl<D> {
         let batch = dims[0];
         let channels = dims[1];
         let spatial: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[2..]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);
@@ -2984,28 +2982,26 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-
-
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for MetalBackendImpl<D> {
     type Grads = MetalGrads;
 
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-            crate::metal::tape::backward(loss)
-        }
+        crate::metal::tape::backward(loss)
+    }
 
     fn backward_with<K: DType>(
-            loss: &Self::Storage<K>,
-            seed: &Self::Storage<K>,
-        ) -> Result<Self::Grads> {
-            crate::metal::tape::backward_with(loss, seed)
-        }
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        crate::metal::tape::backward_with(loss, seed)
+    }
 
     fn get_grad<K: DType>(
-            t: &Self::Storage<K>,
-            grads: &Self::Grads,
-        ) -> Result<Option<Self::Storage<K>>> {
-            Ok(grads.get(t.id()).cloned())
-        }
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        Ok(grads.get(t.id()).cloned())
+    }
 }
 impl<D: Device> VariableBackend for MetalBackendImpl<D> {
     type Var<K: DType> = MetalVar;

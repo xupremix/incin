@@ -6,8 +6,10 @@
 //! is not a CPU-only construction.
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::error::BackendError;
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
+use incin_core::shapes::{OperationKind, Shape};
+use incin_core::tensor::device::{Device, DeviceKind};
 
 use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
@@ -246,29 +248,14 @@ macro_rules! impl_cuda_reduction_dim {
 }
 
 impl_cuda_reduction_all![
-    (
-        SumAll,
-        CudaBackendImpl::<D>::sum_all::<f32>
-    ),
-    (
-        MeanAll,
-        CudaBackendImpl::<D>::mean_all::<f32>
-    ),
-    (
-        MaxAll,
-        CudaBackendImpl::<D>::max_all::<f32>
-    ),
-    (
-        MinAll,
-        CudaBackendImpl::<D>::min_all::<f32>
-    ),
+    (SumAll, CudaBackendImpl::<D>::sum_all::<f32>),
+    (MeanAll, CudaBackendImpl::<D>::mean_all::<f32>),
+    (MaxAll, CudaBackendImpl::<D>::max_all::<f32>),
+    (MinAll, CudaBackendImpl::<D>::min_all::<f32>),
 ];
 
 impl_cuda_reduction_dim![
-    (
-        SumDim,
-        CudaBackendImpl::<D>::sum_dim::<f32>
-    ),
+    (SumDim, CudaBackendImpl::<D>::sum_dim::<f32>),
     (SumKeepDim, |input, axis| {
         CudaBackendImpl::<D>::sum_keepdim::<f32>(input, axis)
     }),
@@ -278,17 +265,11 @@ impl_cuda_reduction_dim![
     (MeanKeepDim, |input, axis| {
         CudaBackendImpl::<D>::mean_keepdim::<f32>(input, axis)
     }),
-    (
-        MaxDim,
-        CudaBackendImpl::<D>::max_dim::<f32>
-    ),
+    (MaxDim, CudaBackendImpl::<D>::max_dim::<f32>),
     (MaxKeepDim, |input, axis| {
         CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)
     }),
-    (
-        MinDim,
-        CudaBackendImpl::<D>::min_dim::<f32>
-    ),
+    (MinDim, CudaBackendImpl::<D>::min_dim::<f32>),
     (MinKeepDim, |input, axis| {
         CudaBackendImpl::<D>::min_keepdim::<f32>(input, axis)
     }),

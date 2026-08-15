@@ -3,7 +3,7 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use incin_core::error::Result;
-use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
+use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
 
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
 /// expects: `[op_mode, rank, n_elements, out_shape(6), inp_shape(6), aux(6)]`,
@@ -113,9 +113,9 @@ fn launch_shape_op(
     let launch_n_u32 = crate::cuda::checked_u32(launch_n, "CUDA shape-op grid dimension")?;
     let params = prepare_shape_params(op_mode, launch_n_u32, &out_shape, &t.shape, aux)?;
     let params_u8: &[u8] = bytemuck::cast_slice(&params);
-    let params_dev = stream.clone_htod(params_u8).map_err(|e| {
-        incin_core::error::Error::Msg(format!("shape params upload failed: {e:?}"))
-    })?;
+    let params_dev = stream
+        .clone_htod(params_u8)
+        .map_err(|e| incin_core::error::Error::Msg(format!("shape params upload failed: {e:?}")))?;
 
     let mut out_b = CudaBuffer {
         len: n_elements,
@@ -155,9 +155,7 @@ fn launch_shape_op(
             .arg(&mut out_f32)
             .arg(&params_f32)
             .launch(cfg)
-            .map_err(|e| {
-                incin_core::error::Error::Msg(format!("shape_op launch failed: {e:?}"))
-            })?;
+            .map_err(|e| incin_core::error::Error::Msg(format!("shape_op launch failed: {e:?}")))?;
     }
 
     let strides = crate::layout::contiguous_strides(&out_shape);
@@ -277,7 +275,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     };
 
     let outer_size: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape[0..dim]))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let inner_size: usize = if dim + 1 < out_shape.len() {
         ShapeBuf::from_slice(&out_shape[dim + 1..]).checked_numel(OperationKind::Concat)?
     } else {

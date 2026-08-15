@@ -17,10 +17,10 @@ pub use incin_core::backend_authoring::{
     SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, execute,
     execute_shaped, execute_shaped_with_payload, execute_with_payload,
 };
-pub use incin_core::prelude::{
-    BackendError, ConversionFailure, Cpu, Device, DeviceId, DeviceKind, DType, DTypeDescriptor,
-    DTypeId, Error, ErrorMessage, FloatDType, OperationKind, QuantDType, Result,
-};
+pub use incin_core::error::{BackendError, ConversionFailure, Error, ErrorMessage, Result};
+pub use incin_core::shapes::OperationKind;
+pub use incin_core::tensor::device::{Cpu, Device, DeviceId, DeviceKind};
+pub use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId, FloatDType, QuantDType};
 
 mod canonical;
 mod capability;
@@ -185,156 +185,152 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for CpuBackendImpl<D
 }
 
 impl<D: Device> incin_core::backend_authoring::Backend for CpuBackendImpl<D> {
-
     /// `InnerBackend`.
     type InnerBackend = Self;
     // `host_format_display`/`host_format_debug` use `HostInterop`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-
-
 }
 
 impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D> {
     /// `to_bytes`.
-        fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-            let t: &storage::CpuStorage = t;
-            let t_contig = t.contiguous()?;
-            let num_elements = stride::checked_numel(&t_contig.shape)?;
-            let offset = t_contig.offset_elements;
-            match &*t_contig.buffer {
-                storage::CpuBuffer::F32(v) => {
-                    Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
-                }
-                storage::CpuBuffer::F64(v) => {
-                    Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
-                }
-                storage::CpuBuffer::U8(v) => Ok(v[offset..offset + num_elements].to_vec()),
-                storage::CpuBuffer::Bool(v) => Ok(v[offset..offset + num_elements].to_vec()),
-                storage::CpuBuffer::U32(v) => {
-                    Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
-                }
-                storage::CpuBuffer::I64(v) => {
-                    Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
-                }
-                storage::CpuBuffer::F16(v) => Ok(v[offset..offset + num_elements]
-                    .iter()
-                    .flat_map(|value| value.to_bits().to_ne_bytes())
-                    .collect()),
-                storage::CpuBuffer::BF16(v) => Ok(v[offset..offset + num_elements]
-                    .iter()
-                    .flat_map(|value| value.to_bits().to_ne_bytes())
-                    .collect()),
-                storage::CpuBuffer::Q8_0(v) => Ok(v
-                    .iter()
-                    .flat_map(|block| {
-                        block
-                            .d
-                            .to_bits()
-                            .to_ne_bytes()
-                            .into_iter()
-                            .chain(block.qs.iter().map(|value| *value as u8))
-                    })
-                    .collect()),
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+        let t: &storage::CpuStorage = t;
+        let t_contig = t.contiguous()?;
+        let num_elements = stride::checked_numel(&t_contig.shape)?;
+        let offset = t_contig.offset_elements;
+        match &*t_contig.buffer {
+            storage::CpuBuffer::F32(v) => {
+                Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
             }
-        }
-    /// `from_bytes`.
-        fn from_bytes<K: DType>(
-            bytes: &[u8],
-            shape: &[usize],
-            dtype: DTypeDescriptor,
-            device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
-            if device.kind() != DeviceKind::Cpu || device.ordinal() != 0 {
-                return Err(Error::DeviceInitializationError {
-                    expected: "cpu:0".into(),
-                    got: alloc::format!("{:?}:{}", device.kind(), device.ordinal()),
-                });
+            storage::CpuBuffer::F64(v) => {
+                Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
             }
-            let elements = shape.iter().try_fold(1usize, |count, dim| {
-                count.checked_mul(*dim).ok_or(Error::InvalidByteLength {
-                    expected: usize::MAX,
-                    got: bytes.len(),
+            storage::CpuBuffer::U8(v) => Ok(v[offset..offset + num_elements].to_vec()),
+            storage::CpuBuffer::Bool(v) => Ok(v[offset..offset + num_elements].to_vec()),
+            storage::CpuBuffer::U32(v) => {
+                Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
+            }
+            storage::CpuBuffer::I64(v) => {
+                Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())
+            }
+            storage::CpuBuffer::F16(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .flat_map(|value| value.to_bits().to_ne_bytes())
+                .collect()),
+            storage::CpuBuffer::BF16(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .flat_map(|value| value.to_bits().to_ne_bytes())
+                .collect()),
+            storage::CpuBuffer::Q8_0(v) => Ok(v
+                .iter()
+                .flat_map(|block| {
+                    block
+                        .d
+                        .to_bits()
+                        .to_ne_bytes()
+                        .into_iter()
+                        .chain(block.qs.iter().map(|value| *value as u8))
                 })
-            })?;
-            let expected =
-                dtype.size_bytes(elements, incin_core::shapes::error::OperationKind::Storage)?;
-            if bytes.len() != expected {
-                return Err(Error::InvalidByteLength {
-                    expected,
-                    got: bytes.len(),
+                .collect()),
+        }
+    }
+    /// `from_bytes`.
+    fn from_bytes<K: DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        if device.kind() != DeviceKind::Cpu || device.ordinal() != 0 {
+            return Err(Error::DeviceInitializationError {
+                expected: "cpu:0".into(),
+                got: alloc::format!("{:?}:{}", device.kind(), device.ordinal()),
+            });
+        }
+        let elements = shape.iter().try_fold(1usize, |count, dim| {
+            count.checked_mul(*dim).ok_or(Error::InvalidByteLength {
+                expected: usize::MAX,
+                got: bytes.len(),
+            })
+        })?;
+        let expected =
+            dtype.size_bytes(elements, incin_core::shapes::error::OperationKind::Storage)?;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
+        }
+
+        macro_rules! decode {
+            ($ty:ty, $size:literal, $variant:ident) => {{
+                let values = bytes
+                    .chunks_exact($size)
+                    .map(|chunk| {
+                        <$ty>::from_ne_bytes(chunk.try_into().expect("checked chunk size"))
+                    })
+                    .collect();
+                storage::CpuBuffer::$variant(values)
+            }};
+        }
+
+        let builtin_id = dtype.builtin_id().ok_or_else(|| Error::UnsupportedDType {
+            dtype,
+            backend: "Cpu",
+            op: "storage",
+        })?;
+
+        let buffer = match builtin_id {
+            DTypeId::F32 => decode!(f32, 4, F32),
+            DTypeId::F64 => decode!(f64, 8, F64),
+            DTypeId::U8 => storage::CpuBuffer::U8(bytes.to_vec()),
+            DTypeId::U32 => decode!(u32, 4, U32),
+            DTypeId::I64 => decode!(i64, 8, I64),
+            DTypeId::F16 => storage::CpuBuffer::F16(
+                bytes
+                    .chunks_exact(2)
+                    .map(|chunk| half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
+                    .collect(),
+            ),
+            DTypeId::BF16 => storage::CpuBuffer::BF16(
+                bytes
+                    .chunks_exact(2)
+                    .map(|chunk| half::bf16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
+                    .collect(),
+            ),
+            DTypeId::Q8_0 => storage::CpuBuffer::Q8_0(
+                bytes
+                    .chunks_exact(34)
+                    .map(|chunk| {
+                        let mut qs = [0i8; 32];
+                        for (dst, src) in qs.iter_mut().zip(&chunk[2..]) {
+                            *dst = *src as i8;
+                        }
+                        storage::BlockQ8_0 {
+                            d: half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])),
+                            qs,
+                        }
+                    })
+                    .collect(),
+            ),
+            DTypeId::Bool => {
+                if bytes.iter().any(|&b| b > 1) {
+                    return Err(Error::Msg(
+                        "invalid boolean byte representation: bytes must be 0 or 1".into(),
+                    ));
+                }
+                storage::CpuBuffer::Bool(bytes.to_vec())
+            }
+            _ => {
+                return Err(Error::UnsupportedDType {
+                    dtype,
+                    backend: "Cpu",
+                    op: "from_bytes",
                 });
             }
-
-            macro_rules! decode {
-                ($ty:ty, $size:literal, $variant:ident) => {{
-                    let values = bytes
-                        .chunks_exact($size)
-                        .map(|chunk| {
-                            <$ty>::from_ne_bytes(chunk.try_into().expect("checked chunk size"))
-                        })
-                        .collect();
-                    storage::CpuBuffer::$variant(values)
-                }};
-            }
-
-            let builtin_id = dtype.builtin_id().ok_or_else(|| Error::UnsupportedDType {
-                dtype,
-                backend: "Cpu",
-                op: "storage",
-            })?;
-
-            let buffer = match builtin_id {
-                DTypeId::F32 => decode!(f32, 4, F32),
-                DTypeId::F64 => decode!(f64, 8, F64),
-                DTypeId::U8 => storage::CpuBuffer::U8(bytes.to_vec()),
-                DTypeId::U32 => decode!(u32, 4, U32),
-                DTypeId::I64 => decode!(i64, 8, I64),
-                DTypeId::F16 => storage::CpuBuffer::F16(
-                    bytes
-                        .chunks_exact(2)
-                        .map(|chunk| half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
-                        .collect(),
-                ),
-                DTypeId::BF16 => storage::CpuBuffer::BF16(
-                    bytes
-                        .chunks_exact(2)
-                        .map(|chunk| half::bf16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
-                        .collect(),
-                ),
-                DTypeId::Q8_0 => storage::CpuBuffer::Q8_0(
-                    bytes
-                        .chunks_exact(34)
-                        .map(|chunk| {
-                            let mut qs = [0i8; 32];
-                            for (dst, src) in qs.iter_mut().zip(&chunk[2..]) {
-                                *dst = *src as i8;
-                            }
-                            storage::BlockQ8_0 {
-                                d: half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])),
-                                qs,
-                            }
-                        })
-                        .collect(),
-                ),
-                DTypeId::Bool => {
-                    if bytes.iter().any(|&b| b > 1) {
-                        return Err(Error::Msg(
-                            "invalid boolean byte representation: bytes must be 0 or 1".into(),
-                        ));
-                    }
-                    storage::CpuBuffer::Bool(bytes.to_vec())
-                }
-                _ => {
-                    return Err(Error::UnsupportedDType {
-                        dtype,
-                        backend: "Cpu",
-                        op: "from_bytes",
-                    });
-                }
-            };
-            Ok(storage::CpuStorage::from_contiguous(buffer, shape.to_vec()))
-        }
+        };
+        Ok(storage::CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    }
 }
 
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImpl<D> {
@@ -358,7 +354,6 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImp
         Ok(grads.get(t.id).cloned())
     }
 }
-
 
 impl<D: Device> incin_core::backend_authoring::VariableBackend for CpuBackendImpl<D> {
     type Var<K: DType> = var::CpuVar;

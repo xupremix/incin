@@ -38,6 +38,11 @@ pub(crate) mod onnx_exporter;
 pub(crate) mod onnx_pb;
 pub mod optim;
 pub(crate) mod serialize;
+#[cfg(feature = "std")]
+/// Named serialization surface for applications that do not use the prelude.
+pub mod serialization {
+    pub use crate::serialize::{Format, ModelExt};
+}
 pub mod shapes;
 
 pub mod tensor;

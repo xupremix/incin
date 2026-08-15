@@ -17,9 +17,10 @@ use core::{
     marker::PhantomData,
 };
 #[cfg(feature = "cuda")]
-use incin_core::prelude::{Cuda, CudaN};
+use incin_core::tensor::device::{Cuda, CudaN};
 use incin_core::{
-    prelude::{Cpu, DeviceKind, Dyn},
+    shapes::Dyn,
+    tensor::device::{Cpu, DeviceKind},
     typenum::{NonZero, Unsigned},
 };
 

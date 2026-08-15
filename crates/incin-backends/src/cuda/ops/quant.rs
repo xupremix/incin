@@ -3,7 +3,7 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::quant::BlockQ8_0;
 use alloc::sync::Arc;
 use incin_core::error::Result;
-use incin_core::prelude::{OperationKind, ShapeBuf};
+use incin_core::shapes::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
@@ -112,7 +112,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
     if n % 32 != 0 {
-        return Err(incin_core::prelude::Error::Msg(alloc::format!(
+        return Err(incin_core::error::Error::Msg(alloc::format!(
             "dequantize requires length multiple of 32, got {}",
             n
         )));
@@ -160,7 +160,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
             .arg(&num_blocks_i32)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(alloc::format!(
+                incin_core::error::Error::Msg(alloc::format!(
                     "dequantize_q8_0 launch failed: {:?}",
                     e
                 ))

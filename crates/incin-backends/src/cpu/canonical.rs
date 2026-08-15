@@ -12,7 +12,10 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{Backend, Execute, ExecutionRequest, HostInterop, StorageBackend};
+use incin_core::backend_authoring::{
+    Backend, Execute, ExecutionRequest, HostInterop, StorageBackend,
+};
+use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
 };
@@ -20,7 +23,6 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, MathMode, SupportLevel, TensorHandle,
     UnsupportedReason,
 };
-use incin_core::error::BackendError;
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::{Cpu, Device, DeviceKind};
 use incin_core::tensor::dtype::{ConstDType, DTypeId};
@@ -29,7 +31,6 @@ use incin_core::tensor::reduction::Reduction;
 use super::CpuBackendImpl;
 use super::capability::CPU_NAME;
 use super::ops::conv::{conv_transpose2d_impl, conv1d_impl};
-use super::ops::embedding::embedding_impl;
 use super::ops::elementwise::{
     canonical_abs, canonical_acos, canonical_acosh, canonical_add_scalar, canonical_asin,
     canonical_asinh, canonical_atan, canonical_atan2, canonical_atanh, canonical_clamp,
@@ -39,25 +40,22 @@ use super::ops::elementwise::{
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
     canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
 };
+use super::ops::embedding::embedding_impl;
+use super::ops::loss::{
+    bce_with_logits_loss_storage, cross_entropy_loss_storage, l1_loss_storage, mse_loss_storage,
+};
 use super::ops::norm::{batch_norm_impl, layer_norm_impl};
 use super::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
-use super::ops::loss::{
-    bce_with_logits_loss_storage, cross_entropy_loss_storage, l1_loss_storage,
-    mse_loss_storage,
-};
 use super::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
 use super::ops::shape_ops::{
-    broadcast_left_storage, diag_storage, div_scalar_storage, flatten_storage, float_to_scalar_storage,
-    float_to_vec1_storage, group_norm_storage, instance_norm_storage, int_to_scalar_storage,
-    addmm_storage, concat_storage, gather_storage, index_select_storage, int_to_vec1_storage,
-    lerp_storage,
-    masked_fill_storage, narrow_storage, pad_storage, repeat_storage, scatter_storage,
-    slice_storage,
-    squeeze_storage, sub_scalar_storage, tensor_to_dtype_storage, transpose_storage,
-    pixel_shuffle_storage, stack_storage, unfold_storage,
-    scaled_dot_product_attention_storage,
+    addmm_storage, broadcast_left_storage, concat_storage, diag_storage, div_scalar_storage,
+    flatten_storage, float_to_scalar_storage, float_to_vec1_storage, gather_storage,
+    group_norm_storage, index_select_storage, instance_norm_storage, int_to_scalar_storage,
+    int_to_vec1_storage, lerp_storage, masked_fill_storage, narrow_storage, pad_storage,
+    pixel_shuffle_storage, repeat_storage, scaled_dot_product_attention_storage, scatter_storage,
+    slice_storage, squeeze_storage, stack_storage, sub_scalar_storage, tensor_to_dtype_storage,
+    transpose_storage, tril_storage, triu_storage, unfold_storage, unsqueeze_storage,
     where_storage,
-    tril_storage, triu_storage, unsqueeze_storage,
 };
 use super::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1914,7 +1912,7 @@ impl<D: Device> Execute<op::WhereCond> for CpuBackendImpl<D> {
             admitted(self, operation, storage, training_mode(request.context))?;
         }
         where_storage(mask, on_true, on_false)
-        .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1935,7 +1933,7 @@ impl<D: Device> Execute<op::MaskedFill> for CpuBackendImpl<D> {
         )?;
         let value = request.operation.descriptor().attributes().value;
         masked_fill_storage(input, mask, value)
-        .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -1955,8 +1953,7 @@ impl<D: Device> Execute<op::Lerp> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let weight = request.operation.descriptor().attributes().weight;
-        lerp_storage(start, end, weight)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        lerp_storage(start, end, weight).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2023,8 +2020,7 @@ impl<D: Device> Execute<op::ConcatExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        concat_storage(&operands, axis)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        concat_storage(&operands, axis).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2044,8 +2040,7 @@ impl<D: Device> Execute<op::StackExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let axis = request.operation.descriptor().attributes().axis;
-        stack_storage(&operands, axis)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        stack_storage(&operands, axis).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2065,8 +2060,7 @@ impl<D: Device> Execute<op::SliceExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let ranges = &request.operation.descriptor().attributes().ranges;
-        slice_storage(input, ranges)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        slice_storage(input, ranges).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2090,7 +2084,10 @@ macro_rules! indexing_executors {
     )*};
 }
 
-indexing_executors![(Gather, gather_storage), (IndexSelect, index_select_storage)];
+indexing_executors![
+    (Gather, gather_storage),
+    (IndexSelect, index_select_storage)
+];
 
 /// Write `src` into the operand at the indexed positions.
 ///
@@ -2140,8 +2137,7 @@ impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let repeats = &request.operation.descriptor().attributes().repeats;
-        repeat_storage(input, repeats)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        repeat_storage(input, repeats).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2183,7 +2179,7 @@ impl<D: Device> Execute<op::Unfold> for CpuBackendImpl<D> {
         )?;
         let attributes = request.operation.descriptor().attributes();
         unfold_storage(input, attributes.axis, attributes.size, attributes.step)
-        .map_err(|error| kernel_error(CPU_NAME, operation, error))
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2473,7 +2469,11 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
             admitted(self, operation, mask, training_mode(request.context))?;
         }
         scaled_dot_product_attention_storage::<D>(
-            bound[0], bound[1], bound[2], mask, attributes.scale,
+            bound[0],
+            bound[1],
+            bound[2],
+            mask,
+            attributes.scale,
         )
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
@@ -2543,8 +2543,7 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        quantize_storage(input)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2574,8 +2573,7 @@ impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        dequantize_storage(input)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        dequantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2599,8 +2597,7 @@ impl<D: Device> Execute<op::QuantizedMatMul> for CpuBackendImpl<D> {
             operation,
             training_mode(request.context),
         )?;
-        quantized_matmul_storage(lhs, rhs)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        quantized_matmul_storage(lhs, rhs).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -2858,7 +2855,7 @@ trait VarianceAxis<D: Device> {
     fn sum_along_axis_keeping_it(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage>;
+    ) -> incin_core::error::Result<CpuStorage>;
 }
 
 impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
@@ -2900,7 +2897,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn sum_along_axis_keeping_it(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage> {
+    ) -> incin_core::error::Result<CpuStorage> {
         crate::cpu::ops::reduce::sum_keepdim(input, attributes.axis)
     }
 }
@@ -3105,6 +3102,7 @@ mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
+    use incin_core::dist::Local;
     use incin_core::exec::GradMode;
     use incin_core::exec::catalog::{
         ArangeAttributes, AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes,
@@ -3114,7 +3112,7 @@ mod tests {
         SplitAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
-    use incin_core::prelude::{Cpu, DeviceId, Local};
+    use incin_core::tensor::device::{Cpu, DeviceId};
 
     type TestBackend = CpuBackendImpl<Cpu>;
 
@@ -3317,10 +3315,10 @@ mod tests {
             .expect("rhs receives a gradient")
             .clone();
 
-        let helper_product = crate::cpu::ops::elementwise::mul_storage(&lhs, &rhs)
-            .expect("helper mul executes");
-        let helper_scalar = crate::cpu::ops::reduce::sum_all(&helper_product)
-            .expect("helper sum_all executes");
+        let helper_product =
+            crate::cpu::ops::elementwise::mul_storage(&lhs, &rhs).expect("helper mul executes");
+        let helper_scalar =
+            crate::cpu::ops::reduce::sum_all(&helper_product).expect("helper sum_all executes");
         let helper = tape::backward(&helper_scalar).expect("backward succeeds");
         let helper_lhs = helper.get(lhs.id).expect("lhs receives a gradient");
         let helper_rhs = helper.get(rhs.id).expect("rhs receives a gradient");

@@ -4,12 +4,14 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
+use incin_core::error::{Error, Result};
 pub use incin_core::exec::TensorId;
 use incin_core::exec::{Alignment, TapeStorage, TensorMeta};
+use incin_core::shapes::{OperationKind, ShapeBuf};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::DTypeDescriptor;
 #[cfg(test)]
 use incin_core::tensor::dtype::DTypeId;
-use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, Result};
-use incin_core::shapes::{OperationKind, ShapeBuf};
 
 /// Storage access mode for Metal buffers on Apple Silicon and macOS.
 #[derive(

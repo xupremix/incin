@@ -1,8 +1,9 @@
 use core::cell::RefCell;
 
+use incin_core::error::{Error, Result};
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage};
-use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+use incin_core::shapes::{OperationKind, ShapeBuf};
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
 

@@ -29,9 +29,11 @@ use incin_core::dist::{
     validate_tensor_parallel_dtype,
 };
 use incin_core::exec::ReduceOp;
-use incin_core::prelude::{
-    DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor,
-};
+use incin_core::shapes::{OperationKind, Shape};
+use incin_core::tensor::base::Tensor;
+use incin_core::tensor::device::{Device, DeviceId};
+use incin_core::tensor::dtype::{DType, DTypeId};
+use incin_core::tensor::grad::RequiresGrad;
 
 use crate::cuda::backend::CudaBackendImpl;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
@@ -1217,26 +1219,18 @@ where
             let mut rank_major = Vec::with_capacity(local_shape.len() + 1);
             rank_major.push(WORLD);
             rank_major.extend_from_slice(local_shape);
-            let mut storage = CudaBackendImpl::<D>::reshape::<K>(
-                flat,
-                &rank_major,
-            )
-            .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
-            for position in 0..tensor_axis {
-                storage = CudaBackendImpl::<D>::transpose::<K>(
-                    &storage,
-                    position,
-                    position + 1,
-                )
+            let mut storage = CudaBackendImpl::<D>::reshape::<K>(flat, &rank_major)
                 .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
+            for position in 0..tensor_axis {
+                storage = CudaBackendImpl::<D>::transpose::<K>(&storage, position, position + 1)
+                    .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
             }
             storage
         }
         TensorParallelCollective::RowOutputSum => flat.clone(),
     };
-    storage =
-        CudaBackendImpl::<D>::reshape::<K>(&storage, global_shape)
-            .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
+    storage = CudaBackendImpl::<D>::reshape::<K>(&storage, global_shape)
+        .map_err(|error| NcclTransportError::InvalidBuffer(error.to_string()))?;
     Ok(storage)
 }
 
@@ -2943,12 +2937,11 @@ mod tests {
         let static_bytes = B::to_bytes::<f32>(&static_output).unwrap();
         assert_eq!(bytemuck::cast_slice::<u8, f32>(&static_bytes), expected);
 
-        let dyn_input =
-            Tensor::<incin_core::shapes::Dyn, B, incin_core::shapes::Dyn>::from_bytes(
-                bytemuck::cast_slice(&rank_major),
-                (vec![12], DTypeId::F32),
-            )
-            .unwrap();
+        let dyn_input = Tensor::<incin_core::shapes::Dyn, B, incin_core::shapes::Dyn>::from_bytes(
+            bytemuck::cast_slice(&rank_major),
+            (vec![12], DTypeId::F32),
+        )
+        .unwrap();
         let dyn_output = reassemble_tensor_parallel_storage::<D, incin_core::shapes::Dyn>(
             dyn_input.inner(),
             collective,

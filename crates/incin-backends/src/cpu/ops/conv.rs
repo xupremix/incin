@@ -41,8 +41,8 @@
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
 use incin_core::error::{BackwardError, Error, Result};
-use incin_core::shapes::{ShapeBuf, ShapeError};
 use incin_core::shapes::error::OperationKind;
+use incin_core::shapes::{ShapeBuf, ShapeError};
 use incin_core::tensor::dtype::DType;
 
 use crate::cpu::ops::elementwise::add_storage;
@@ -959,7 +959,7 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
             increment_index(&mut multi_idx, &part.shape);
         }
         offset = offset.checked_add(part.shape[dim]).ok_or(
-            incin_core::prelude::ShapeError::ArithmeticOverflow {
+            incin_core::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::Concat,
                 expression: "cumulative convolution gradient group offset",
             },

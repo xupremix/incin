@@ -15,13 +15,14 @@
 //! template needs to document.
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::error::{BackendError, Result};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
     TensorMeta, UnsupportedReason,
 };
-use incin_core::prelude::{
-    BackendError, DType, Device, OperationKind, Result, Shape, ShapeBuf, StrideBuf,
-};
+use incin_core::shapes::{OperationKind, Shape, ShapeBuf, StrideBuf};
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::DType;
 
 use super::CandleBackend;
 use super::convert::{from_candle_device, from_candle_dtype};

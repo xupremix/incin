@@ -1,9 +1,11 @@
 use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
-use incin_core::prelude::{
-    BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
-    Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Cuda,
+use incin_core::error::{BackendError, Error, Result};
+use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+use incin_core::tensor::device::{Cuda, Device, DeviceId, DeviceKind};
+use incin_core::tensor::dtype::{
+    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
 };
 
 pub(crate) use crate::cuda::capability::{
@@ -2077,7 +2079,10 @@ impl<D: Device> CudaBackendImpl<D> {
     /// the winner" are the same number, so this needs no special-casing
     /// versus the `Some(d)` path, matching CPU's `argmax`/`argmin` semantics
     /// (flat index for `None`, per-axis coordinate for `Some(d)`) exactly.
-    pub fn argmax<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+    pub fn argmax<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        dim: Option<usize>,
+    ) -> Result<CudaStorage> {
         let (target, axis) = match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -2101,7 +2106,10 @@ impl<D: Device> CudaBackendImpl<D> {
         crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
     }
 
-    pub fn argmin<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+    pub fn argmin<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        dim: Option<usize>,
+    ) -> Result<CudaStorage> {
         let (target, axis) = match dim {
             Some(d) => {
                 if d >= t.shape.len() {
@@ -2169,7 +2177,9 @@ impl<D: Device> CudaBackendImpl<D> {
         lhs: &CudaStorage,
         rhs: &CudaStorage,
     ) -> Result<CudaStorage> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<incin_core::tensor::dtype::Q8_0>() {
+        if core::any::TypeId::of::<Q>()
+            != core::any::TypeId::of::<incin_core::tensor::dtype::Q8_0>()
+        {
             return Err(Error::UnsupportedBackendOperation {
                 op: "quantized_matmul",
                 backend: "Cuda (only Q8_0 supported)",
@@ -2332,7 +2342,11 @@ pub fn im2col_1d_tape(
 /// backward (`scatter_into_zeros` at `region_start = [0,0,0,0]`) reused as a
 /// forward op, so its own backward is the matching two-axis narrow back down
 /// to the original `H`/`W`.
-pub fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Result<CudaStorage> {
+pub fn pad_trailing_zeros_2d_tape(
+    t: &CudaStorage,
+    pad_h: usize,
+    pad_w: usize,
+) -> Result<CudaStorage> {
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let target_shape = vec![b, c, h + pad_h, w + pad_w];
     let out = crate::cuda::ops::shape::scatter_into_zeros(&target_shape, &[0, 0, 0, 0], t)?;
@@ -2350,7 +2364,12 @@ pub fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -
 }
 
 /// Matches `cpu/ops/conv.rs::validate_groups` exactly.
-pub fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> Result<()> {
+pub fn validate_conv_groups(
+    op: &'static str,
+    cin: usize,
+    cout: usize,
+    groups: usize,
+) -> Result<()> {
     if groups == 0 || !cin.is_multiple_of(groups) || !cout.is_multiple_of(groups) {
         return Err(Error::ShapeMismatch {
             op,
@@ -2554,8 +2573,7 @@ impl<D: Device> CudaBackendImpl<D> {
             let input_g = Self::narrow::<K>(t, 1, g * cin_g, cin_g)?;
             let weight_g = Self::narrow::<K>(w, 0, g * cout_g, cout_g)?;
             let cols = im2col_1d_tape(&input_g, k, stride, padding, dilation)?;
-            let weight_mat =
-                Self::reshape::<K>(&weight_g, &[cout_g, cin_g * k])?;
+            let weight_mat = Self::reshape::<K>(&weight_g, &[cout_g, cin_g * k])?;
 
             let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
             for bi in 0..batch {
@@ -2629,16 +2647,14 @@ impl<D: Device> CudaBackendImpl<D> {
             let input_g = Self::narrow::<K>(t, 1, g * cin_g, cin_g)?;
             let weight_g = Self::narrow::<K>(w, 0, g * cout_g, cout_g)?;
             let cols = im2col_2d_tape(&input_g, kh, kw, stride, padding, dilation)?;
-            let weight_mat =
-                Self::reshape::<K>(&weight_g, &[cout_g, cin_g * kh * kw])?;
+            let weight_mat = Self::reshape::<K>(&weight_g, &[cout_g, cin_g * kh * kw])?;
 
             let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
             for bi in 0..batch {
                 let cols_b = Self::narrow::<K>(&cols, 0, bi, 1)?;
                 let cols_b = Self::squeeze::<K>(&cols_b, 0)?;
                 let out_b = Self::matmul::<K>(&weight_mat, &cols_b)?;
-                let out_b =
-                    Self::reshape::<K>(&out_b, &[1, cout_g, h_out * w_out])?;
+                let out_b = Self::reshape::<K>(&out_b, &[1, cout_g, h_out * w_out])?;
                 batch_outs.push(out_b);
             }
             let group_out = if batch == 1 {
@@ -2655,8 +2671,7 @@ impl<D: Device> CudaBackendImpl<D> {
             let refs: Vec<&CudaStorage> = group_outputs.iter().collect();
             Self::concat::<K>(&refs, 1)?
         };
-        let conv_out =
-            Self::reshape::<K>(&conv_out, &[batch, cout, h_out, w_out])?;
+        let conv_out = Self::reshape::<K>(&conv_out, &[batch, cout, h_out, w_out])?;
 
         match bias {
             Some(bv) => {
@@ -2735,8 +2750,7 @@ impl<D: Device> CudaBackendImpl<D> {
             let input_b = Self::narrow::<K>(&input_flat, 0, bi, 1)?;
             let input_b = Self::squeeze::<K>(&input_b, 0)?;
             let cols_b = Self::matmul::<K>(&weight_mat_t, &input_b)?;
-            let cols_b =
-                Self::reshape::<K>(&cols_b, &[1, cout * kh * kw, h * wid])?;
+            let cols_b = Self::reshape::<K>(&cols_b, &[1, cout * kh * kw, h * wid])?;
             batch_cols.push(cols_b);
         }
         let cols = if batch == 1 {
@@ -2805,7 +2819,7 @@ impl<D: Device> CudaBackendImpl<D> {
     pub fn bce_with_logits_loss<K: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<CudaStorage> {
         let max_x_0 = Self::relu::<K>(pred)?;
         let x_times_target = Self::mul::<K>(pred, target)?;
@@ -2826,7 +2840,7 @@ impl<D: Device> CudaBackendImpl<D> {
     pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<CudaStorage> {
         let classes = if pred.shape.len() > 1 {
             pred.shape[1]
@@ -2862,13 +2876,10 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CudaBackendImp
 impl incin_core::backend_authoring::StorageOutput for CudaStorage {}
 
 impl<D: Device> Backend for CudaBackendImpl<D> {
-
     type InnerBackend = Self;
 
     // `host_format_display`/`host_format_debug` use `HostInterop`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-
 }
 
 impl<D: Device> incin_core::backend_authoring::HostReadback for CudaBackendImpl<D> {
@@ -2898,57 +2909,57 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for CudaBackendImpl<
 
 impl<D: Device> incin_core::backend_authoring::HostInterop for CudaBackendImpl<D> {
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-            let t: &CudaStorage = t;
-            let bytes = t
-                .buffer
-                .device
-                .default_stream()
-                .clone_dtoh(&*t.buffer.data)
-                .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))?;
-            let expected = checked_storage_byte_len(t.buffer.len, t.buffer.dtype)?;
-            if bytes.len() != expected {
-                return Err(Error::InvalidByteLength {
-                    expected,
-                    got: bytes.len(),
-                });
-            }
-            Ok(bytes)
+        let t: &CudaStorage = t;
+        let bytes = t
+            .buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*t.buffer.data)
+            .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))?;
+        let expected = checked_storage_byte_len(t.buffer.len, t.buffer.dtype)?;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
         }
+        Ok(bytes)
+    }
     fn from_bytes<K: DType>(
-            bytes: &[u8],
-            shape: &[usize],
-            dtype: DTypeDescriptor,
-            device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
-            validate_cuda_storage(dtype, device, "from_bytes")?;
-            let numel = checked_numel(shape)?;
-            let expected = checked_storage_byte_len(numel, dtype)?;
-            if bytes.len() != expected {
-                return Err(Error::InvalidByteLength {
-                    expected,
-                    got: bytes.len(),
-                });
-            }
-            let context =
-                crate::cuda::gpu::cuda_cache::try_get_cuda_device(device.ordinal()).map_err(|_| {
-                    Error::InvalidDeviceOrdinal {
-                        backend: "Cuda",
-                        ordinal: device.ordinal(),
-                    }
-                })?;
-            let data = context
-                .default_stream()
-                .clone_htod(bytes)
-                .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
-            let buffer = crate::cuda::storage::CudaBuffer {
-                len: numel,
-                dtype,
-                data: Arc::new(data),
-                device: context,
-                device_id: device.ordinal(),
-            };
-            Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        validate_cuda_storage(dtype, device, "from_bytes")?;
+        let numel = checked_numel(shape)?;
+        let expected = checked_storage_byte_len(numel, dtype)?;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
         }
+        let context =
+            crate::cuda::gpu::cuda_cache::try_get_cuda_device(device.ordinal()).map_err(|_| {
+                Error::InvalidDeviceOrdinal {
+                    backend: "Cuda",
+                    ordinal: device.ordinal(),
+                }
+            })?;
+        let data = context
+            .default_stream()
+            .clone_htod(bytes)
+            .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
+        let buffer = crate::cuda::storage::CudaBuffer {
+            len: numel,
+            dtype,
+            data: Arc::new(data),
+            device: context,
+            device_id: device.ordinal(),
+        };
+        Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+    }
 }
 
 fn validate_cuda(dtype: DTypeDescriptor, device: &DeviceId, op: &'static str) -> Result<()> {
@@ -3275,7 +3286,7 @@ fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<Cu
     let mut base_shape = shape.clone();
     base_shape[dim] = 1;
     let n_slices: usize = incin_core::shapes::ShapeBuf::from_slice(&(base_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let mut out = vec![0u32; ShapeBuf::from_slice(&shape).checked_numel(OperationKind::Storage)?];
 
     for i in 0..n_slices {
@@ -3581,8 +3592,7 @@ mod tests {
     fn max_pool2d_computes_correct_output_shape() {
         // N=1,C=1,H=4,W=4, kernel=2, stride=2 -> 2x2 output
         let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
-        let out =
-            B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        let out = B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
     }
 
@@ -3591,8 +3601,7 @@ mod tests {
     fn max_pool2d_backward_zero_pads_to_input_shape() {
         let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
         let t_id = t.id;
-        let out =
-            B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        let out = B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads
             .get(t_id)
@@ -3725,8 +3734,7 @@ mod tests {
         // `conv_transpose2d_forward_hand_computed_basic` fixture shape.
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
-        let out =
-            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+        let out = B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3, 3]);
     }
 
@@ -3735,8 +3743,7 @@ mod tests {
     fn conv_transpose2d_output_padding_appends_trailing_rows_and_cols() {
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
-        let out =
-            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
+        let out = B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 4, 4]);
     }
 
@@ -3746,8 +3753,7 @@ mod tests {
         let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let (t_id, w_id) = (t.id, w.id);
-        let out =
-            B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+        let out = B::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 2, 2]);
         assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
@@ -3790,8 +3796,7 @@ mod tests {
     fn bce_with_logits_loss_default_impl_resolves_and_runs_on_cuda() {
         let pred = cuda_f32(&[2, 2], vec![0.0, 1.0, -1.0, 2.0]);
         let target = cuda_f32(&[2, 2], vec![0.0, 1.0, 1.0, 0.0]);
-        let out = B::bce_with_logits_loss::<f32>(&pred, &target, Reduction::None)
-            .unwrap();
+        let out = B::bce_with_logits_loss::<f32>(&pred, &target, Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
     }
 
@@ -3966,13 +3971,9 @@ mod tests {
         // lhs [2, 32] @ rhs [4, 32]^T -> [2, 4], K=32 is one Q8_0 block.
         let lhs_f32 = cuda_f32(&[2, 32], (0..64).map(|i| i as f32 * 0.01).collect());
         let rhs_f32 = cuda_f32(&[4, 32], (0..128).map(|i| i as f32 * 0.01).collect());
-        let lhs_q =
-            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
-        let rhs_q =
-            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
-        let out =
-            B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q)
-                .unwrap();
+        let lhs_q = B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
+        let rhs_q = B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
+        let out = B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q).unwrap();
         assert_eq!(out.shape, vec![2, 4]);
     }
 
@@ -3981,16 +3982,10 @@ mod tests {
     fn quantized_matmul_rejects_non_multiple_of_32_k() {
         let lhs_f32 = cuda_f32(&[2, 16], vec![0.0; 32]);
         let rhs_f32 = cuda_f32(&[4, 16], vec![0.0; 64]);
-        let lhs_q =
-            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
-        let rhs_q =
-            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
-        assert!(
-            B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q)
-                .is_err()
-        );
+        let lhs_q = B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
+        let rhs_q = B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
+        assert!(B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q).is_err());
     }
-
 
     // The tests below cover the methods added in this pass: `unsqueeze`,
     // the host-readback conversions, `addmm`/`bmm`/
@@ -4016,10 +4011,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_float_to_scalar() {
         let t = cuda_f32(&[1], vec![3.5]);
-        assert_eq!(
-            B::float_to_scalar::<f32>(&t).unwrap(),
-            3.5
-        );
+        assert_eq!(B::float_to_scalar::<f32>(&t).unwrap(), 3.5);
     }
 
     #[test]
@@ -4043,10 +4035,7 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_float_to_vec1() {
         let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
-        assert_eq!(
-            B::float_to_vec1::<f32>(&t).unwrap(),
-            vec![1.0, 2.0, 3.0]
-        );
+        assert_eq!(B::float_to_vec1::<f32>(&t).unwrap(), vec![1.0, 2.0, 3.0]);
     }
 
     #[test]
@@ -4085,8 +4074,7 @@ mod tests {
         let q = cuda_f32(&[1, 2], vec![0.0, 0.0]);
         let k = cuda_f32(&[3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
         let v = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out = B::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
-            .unwrap();
+        let out = B::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
         assert_eq!(out.shape, vec![1, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 4.0]);
     }
@@ -4318,8 +4306,7 @@ mod tests {
         let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
         let t = cuda_f32(&[2, 4, 1, 2], data);
 
-        let out = download_f32_host(&B::group_norm::<f32>(&t, 2, 1e-5).unwrap())
-            .unwrap();
+        let out = download_f32_host(&B::group_norm::<f32>(&t, 2, 1e-5).unwrap()).unwrap();
 
         assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
         let inv_std = 1.0 / (1.25f64 + 1e-5).sqrt();
@@ -4347,8 +4334,7 @@ mod tests {
     fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
         let t = cuda_f32(&[2, 2, 2], vec![1.0, 1.0, 5.0, 7.0, 2.0, 2.0, 9.0, 3.0]);
 
-        let out = download_f32_host(&B::instance_norm::<f32>(&t, 1e-5).unwrap())
-            .unwrap();
+        let out = download_f32_host(&B::instance_norm::<f32>(&t, 1e-5).unwrap()).unwrap();
 
         for flat in [0, 1, 4, 5] {
             assert!(
@@ -4449,41 +4435,23 @@ mod tests {
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_full() {
-        let out = B::full::<f32>(
-            3.5,
-            &[2, 2],
-            DTypeId::F32.into(),
-            &DeviceId::cuda(0),
-        )
-        .unwrap();
+        let out = B::full::<f32>(3.5, &[2, 2], DTypeId::F32.into(), &DeviceId::cuda(0)).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.5, 3.5, 3.5, 3.5]);
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_arange() {
-        let out = B::arange::<f32>(
-            1.0,
-            2.0,
-            &[4],
-            DTypeId::F32.into(),
-            &DeviceId::cuda(0),
-        )
-        .unwrap();
+        let out =
+            B::arange::<f32>(1.0, 2.0, &[4], DTypeId::F32.into(), &DeviceId::cuda(0)).unwrap();
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 3.0, 5.0, 7.0]);
     }
 
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn test_linspace() {
-        let out = B::linspace::<f32>(
-            0.0,
-            10.0,
-            &[5],
-            DTypeId::F32.into(),
-            &DeviceId::cuda(0),
-        )
-        .unwrap();
+        let out =
+            B::linspace::<f32>(0.0, 10.0, &[5], DTypeId::F32.into(), &DeviceId::cuda(0)).unwrap();
         assert_eq!(
             download_f32_host(&out).unwrap(),
             vec![0.0, 2.5, 5.0, 7.5, 10.0]
@@ -4520,32 +4488,30 @@ mod tests {
     }
 }
 
-
-
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendImpl<D> {
     type Grads = CudaGrads;
 
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-            let loss: &CudaStorage = loss;
-            crate::cuda::tape::backward(loss)
-        }
+        let loss: &CudaStorage = loss;
+        crate::cuda::tape::backward(loss)
+    }
 
     fn backward_with<K: DType>(
-            loss: &Self::Storage<K>,
-            seed: &Self::Storage<K>,
-        ) -> Result<Self::Grads> {
-            let loss: &CudaStorage = loss;
-            let seed: &CudaStorage = seed;
-            crate::cuda::tape::backward_with(loss, seed)
-        }
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        let loss: &CudaStorage = loss;
+        let seed: &CudaStorage = seed;
+        crate::cuda::tape::backward_with(loss, seed)
+    }
 
     fn get_grad<K: DType>(
-            t: &Self::Storage<K>,
-            grads: &Self::Grads,
-        ) -> Result<Option<Self::Storage<K>>> {
-            let t: &CudaStorage = t;
-            Ok(grads.get(t.id).cloned())
-        }
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        let t: &CudaStorage = t;
+        Ok(grads.get(t.id).cloned())
+    }
 }
 impl<D: Device> VariableBackend for CudaBackendImpl<D> {
     type Var<K: DType> = CudaVar;

@@ -1,15 +1,18 @@
 //! Device-to-backend selection for the unified `IncinBackend` facade.
 
-use incin_core::backend_authoring::{Backend, HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo, VariableBackend};
+use incin_core::backend_authoring::{
+    Backend, HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo,
+    VariableBackend,
+};
 use incin_core::error::{Error, Result};
-use incin_core::tensor::device::Device;
-use incin_core::tensor::dtype::DType;
 #[cfg(test)]
 use incin_core::shapes::buf::ShapeBuf;
 #[cfg(test)]
 use incin_core::shapes::dynamic::Dyn;
 #[cfg(test)]
 use incin_core::tensor::device::Cpu;
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::DType;
 
 macro_rules! impl_transfer {
     ($source:ty) => {
@@ -25,9 +28,7 @@ macro_rules! impl_transfer {
                 storage: &Self::Storage<K>,
                 dtype: &K::Field,
                 device: &NewD::Field,
-            ) -> Result<
-                <Self::Output as incin_core::backend_authoring::StorageBackend>::Storage<K>,
-            >
+            ) -> Result<<Self::Output as incin_core::backend_authoring::StorageBackend>::Storage<K>>
             where
                 Self::Output: SupportsDType<K>,
             {
@@ -61,7 +62,6 @@ macro_rules! impl_transfer {
                     &destination,
                 )
             }
-
         }
 
         impl<D: Device, NewD: Device> TransferTo<NewD> for $source
@@ -89,9 +89,8 @@ macro_rules! impl_transfer {
                         got,
                     });
                 }
-                let storage = <Self as StorageTransfer<NewD>>::transfer_storage(
-                    &source, dtype, device,
-                )?;
+                let storage =
+                    <Self as StorageTransfer<NewD>>::transfer_storage(&source, dtype, device)?;
                 <Self::Output as VariableBackend>::var_from_tensor(&storage)
             }
         }
@@ -111,15 +110,19 @@ impl_transfer!(crate::dispatch::DispatchBackend<D>);
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "cpu")]
-    use incin_core::exec::DescriptorError;
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
     use incin_core::error::BackendError;
+    use incin_core::error::Error;
     #[cfg(feature = "cpu")]
-    use incin_core::prelude::{
-        DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind, RequiresGrad, Tensor,
-        ToDevice,
-    };
+    use incin_core::exec::DescriptorError;
+    use incin_core::nn::{LayerNorm, Linear};
+    use incin_core::shapes::OperationKind;
+    use incin_core::tensor::base::Tensor;
+    use incin_core::tensor::device::DeviceId;
+    #[cfg(feature = "cpu")]
+    use incin_core::tensor::dtype::DTypeId;
+    use incin_core::tensor::grad::{Grad, RequiresGrad};
+    use incin_core::tensor::transfer::ToDevice;
     #[cfg(feature = "cpu")]
     type Linear23 = incin_core::shapes::shape::DimCons<
         incin_core::typenum::U2,
@@ -246,12 +249,11 @@ mod tests {
         let tensor =
             Tensor::<Dyn, B, Dyn, Grad>::ones(([1], DTypeId::F32.descriptor(), DeviceId::cpu()))
                 .unwrap();
-        let transferred =
-            <Tensor<Dyn, B, Dyn, Grad> as incin_core::tensor::transfer::ToDevice<B, Dyn>>::to_device(
-                tensor,
-                &DeviceId::cpu(),
-            )
-            .unwrap();
+        let transferred = <Tensor<Dyn, B, Dyn, Grad> as incin_core::tensor::transfer::ToDevice<
+            B,
+            Dyn,
+        >>::to_device(tensor, &DeviceId::cpu())
+        .unwrap();
         fn assert_detached(_: &Tensor<Dyn, B, Dyn, incin_core::tensor::grad::NoGrad>) {}
         assert_detached(&transferred);
     }
@@ -278,12 +280,11 @@ mod tests {
         type Source = crate::IncinBackend<Cpu>;
         type Target = crate::IncinBackend<Dyn>;
         let tensor = Tensor::<Dyn, Source>::from_slice(&[1.0f32, 2.0, 3.0], [3]).unwrap();
-        let transferred =
-            <Tensor<Dyn, Source> as incin_core::tensor::transfer::ToDevice<Source, Dyn>>::to_device(
-                tensor,
-                &DeviceId::cpu(),
-            )
-            .unwrap();
+        let transferred = <Tensor<Dyn, Source> as incin_core::tensor::transfer::ToDevice<
+            Source,
+            Dyn,
+        >>::to_device(tensor, &DeviceId::cpu())
+        .unwrap();
         fn assert_target(_: &Tensor<Dyn, Target>) {}
         assert_target(&transferred);
         assert!(matches!(

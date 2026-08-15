@@ -2,7 +2,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::Result;
-use incin_core::prelude::{OperationKind, ShapeBuf};
+use incin_core::shapes::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
 const EMBEDDING_SRC: &str = include_str!("kernels/embedding.cu");

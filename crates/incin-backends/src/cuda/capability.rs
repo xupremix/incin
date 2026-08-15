@@ -1,8 +1,9 @@
-use incin_core::backend_authoring::*;
-use incin_core::prelude::{
-    DType, DTypeDescriptor, DTypeId, Device, DeviceId, Dyn, Error, OperationKind, Result,
-};
 use half::{bf16, f16};
+use incin_core::backend_authoring::*;
+use incin_core::error::{Error, Result};
+use incin_core::shapes::{Dyn, OperationKind};
+use incin_core::tensor::device::{Device, DeviceId};
+use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 macro_rules! impl_cuda_storage_dtype {
     ($($dtype:ty),+ $(,)?) => {

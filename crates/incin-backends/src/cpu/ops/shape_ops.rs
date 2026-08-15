@@ -1,9 +1,9 @@
 //! CPU tensor and shape operation helpers.
 
-use incin_core::prelude::{
-    BackendError, DTypeDescriptor, DTypeId, Device, Error, OperationKind, Result,
-    ShapeBuf, ShapeError,
-};
+use incin_core::error::{BackendError, Error, Result};
+use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 use crate::cpu::ops::elementwise::{
     add_storage, canonical_mul_scalar, canonical_softmax, elementwise_unary,
@@ -67,10 +67,7 @@ pub(crate) fn narrow_storage(
     Ok(out)
 }
 
-pub(crate) fn slice_storage(
-    t: &CpuStorage,
-    ranges: &[(usize, usize)],
-) -> Result<CpuStorage> {
+pub(crate) fn slice_storage(t: &CpuStorage, ranges: &[(usize, usize)]) -> Result<CpuStorage> {
     let mut out = t.clone();
     for (dim, &(start, end)) in ranges.iter().enumerate() {
         out = narrow_storage(&out, dim, start, end - start)?;
@@ -121,7 +118,10 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
             op: "concat",
             expected: tensors[0].shape.to_vec(),
             got: vec![dim],
-            msg: format!("concat dim {dim} out of range for rank-{rank} shape {:?}", tensors[0].shape),
+            msg: format!(
+                "concat dim {dim} out of range for rank-{rank} shape {:?}",
+                tensors[0].shape
+            ),
         });
     }
     for tensor in tensors.iter().skip(1) {
@@ -136,11 +136,8 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
                 ),
             });
         }
-        for (axis, (&expected, &actual)) in tensors[0]
-            .shape
-            .iter()
-            .zip(tensor.shape.iter())
-            .enumerate()
+        for (axis, (&expected, &actual)) in
+            tensors[0].shape.iter().zip(tensor.shape.iter()).enumerate()
         {
             if axis != dim && expected != actual {
                 return Err(Error::ShapeMismatch {
@@ -157,10 +154,12 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
 
     let mut out_shape = tensors[0].shape.to_vec();
     out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
-        total.checked_add(tensor.shape[dim]).ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::Concat,
-            expression: "sum of concatenated axis dimensions",
-        })
+        total
+            .checked_add(tensor.shape[dim])
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "sum of concatenated axis dimensions",
+            })
     })?;
     let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
     let total = crate::cpu::stride::checked_numel(&out_shape)?;
@@ -169,16 +168,22 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
     let mut running = 0usize;
     for tensor in tensors {
         offsets.push(running);
-        running = running.checked_add(tensor.shape[dim]).ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::Concat,
-            expression: "cumulative concatenation offset",
-        })?;
+        running = running
+            .checked_add(tensor.shape[dim])
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "cumulative concatenation offset",
+            })?;
         let value_count = crate::cpu::stride::checked_numel(&tensor.shape)?;
         let mut index = vec![0usize; rank];
         for _ in 0..value_count {
             let mut flat_dest = 0usize;
             for (axis, &coordinate) in index.iter().enumerate() {
-                let destination = if axis == dim { coordinate + offsets.last().copied().unwrap_or(0) } else { coordinate };
+                let destination = if axis == dim {
+                    coordinate + offsets.last().copied().unwrap_or(0)
+                } else {
+                    coordinate
+                };
                 flat_dest += destination * out_strides[axis];
             }
             out[flat_dest] = tensor.get(&index);
@@ -188,7 +193,10 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
     let output = CpuStorage::from_contiguous(tensors[0].buffer.from_f64_values(out)?, out_shape);
     let output_id = output.id;
     let input_ids = tensors.iter().map(|tensor| tensor.id).collect();
-    let input_dim_sizes = tensors.iter().map(|tensor| tensor.shape[dim]).collect::<Vec<_>>();
+    let input_dim_sizes = tensors
+        .iter()
+        .map(|tensor| tensor.shape[dim])
+        .collect::<Vec<_>>();
     tape::push(TapeEntry {
         output_id,
         input_ids,
@@ -280,10 +288,7 @@ pub(crate) fn unfold_storage(
     ))
 }
 
-pub(crate) fn pixel_shuffle_storage(
-    t: &CpuStorage,
-    upscale_factor: usize,
-) -> Result<CpuStorage> {
+pub(crate) fn pixel_shuffle_storage(t: &CpuStorage, upscale_factor: usize) -> Result<CpuStorage> {
     if t.shape.len() != 4 {
         return Err(Error::Msg(
             "pixel_shuffle expects 4D tensor (N, C, H, W)".into(),
@@ -424,7 +429,11 @@ pub(crate) fn masked_fill_storage(
     let mut out = Vec::with_capacity(total);
     let mut idx = vec![0usize; t.shape.len()];
     for _ in 0..total {
-        out.push(if mask.get_bool(&idx) { value } else { t.get(&idx) });
+        out.push(if mask.get_bool(&idx) {
+            value
+        } else {
+            t.get(&idx)
+        });
         if !t.shape.is_empty() {
             crate::cpu::storage::increment_index(&mut idx, &t.shape);
         }
@@ -539,12 +548,8 @@ pub(crate) fn where_storage(
             crate::cpu::storage::increment_index(&mut idx, &out_shape);
         }
     }
-    let out_storage = CpuStorage::from_contiguous(
-        on_true.buffer.from_f64_values(out)?,
-        out_shape,
-    );
-    let (mask_cap, on_true_cap, on_false_cap) =
-        (mask.clone(), on_true.clone(), on_false.clone());
+    let out_storage = CpuStorage::from_contiguous(on_true.buffer.from_f64_values(out)?, out_shape);
+    let (mask_cap, on_true_cap, on_false_cap) = (mask.clone(), on_true.clone(), on_false.clone());
     let (true_id, false_id, out_id) = (on_true.id, on_false.id, out_storage.id);
     tape::push(TapeEntry {
         output_id: out_id,
@@ -657,11 +662,7 @@ pub(crate) fn tensor_to_dtype_storage(
     Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
 }
 
-pub(crate) fn gather_storage(
-    t: &CpuStorage,
-    dim: usize,
-    index: &CpuStorage,
-) -> Result<CpuStorage> {
+pub(crate) fn gather_storage(t: &CpuStorage, dim: usize, index: &CpuStorage) -> Result<CpuStorage> {
     let out_shape = index.shape.to_vec();
     let total = crate::cpu::stride::checked_numel(&out_shape)?;
     let mut out = Vec::with_capacity(total);
@@ -733,7 +734,10 @@ pub(crate) fn index_select_storage(
             crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
         }
     }
-    Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape))
+    Ok(CpuStorage::from_contiguous(
+        t.buffer.from_f64_values(out)?,
+        out_shape,
+    ))
 }
 
 pub(crate) fn scatter_storage(
@@ -875,7 +879,10 @@ pub(crate) fn elementwise_float_binary(
             crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
         }
     }
-    Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out)?, lhs.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(
+        lhs.buffer.from_f64_values(out)?,
+        lhs.shape.to_vec(),
+    ))
 }
 
 pub(crate) fn logical_not_storage(t: &CpuStorage) -> Result<CpuStorage> {
@@ -888,7 +895,10 @@ pub(crate) fn logical_not_storage(t: &CpuStorage) -> Result<CpuStorage> {
             crate::cpu::storage::increment_index(&mut idx, &t.shape);
         }
     }
-    Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), t.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::Bool(out),
+        t.shape.to_vec(),
+    ))
 }
 
 pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
@@ -1719,7 +1729,10 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(out.dtype, incin_core::tensor::dtype::DTypeId::F64.descriptor());
+        assert_eq!(
+            out.dtype,
+            incin_core::tensor::dtype::DTypeId::F64.descriptor()
+        );
         assert_eq!(out.shape, vec![2, 2]);
     }
 }

@@ -1,11 +1,13 @@
+pub(crate) use crate::wgpu::capability::{native_precision, validate_wgpu_dtype};
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::backend_authoring::*;
-use incin_core::prelude::{
-    BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
-    Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Wgpu,
+use incin_core::error::{BackendError, Error, Result};
+use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Wgpu};
+use incin_core::tensor::dtype::{
+    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
 };
-pub(crate) use crate::wgpu::capability::{native_precision, validate_wgpu_dtype};
 
 /// WebGPU compute backend implementation for Incin.
 #[derive(Clone)]
@@ -145,15 +147,12 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for WgpuBackendImp
 impl incin_core::backend_authoring::StorageOutput for WgpuStorage {}
 
 impl<D: Device> Backend for WgpuBackendImpl<D> {
-
     /// `Grads`.
     /// `InnerBackend`.
     type InnerBackend = Self;
 
     // `host_format_display`/`host_format_debug` use `HostInterop`'s default,
     // which reads real values back through `float_to_vec1`/`int_to_vec1`.
-
-
 }
 
 impl<D: Device> incin_core::backend_authoring::HostReadback for WgpuBackendImpl<D> {
@@ -181,33 +180,33 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for WgpuBackendImpl<
 
 impl<D: Device> incin_core::backend_authoring::HostInterop for WgpuBackendImpl<D> {
     /// `to_bytes`.
-        fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
-            let t: &WgpuStorage = t;
-            t.buffer.to_vec::<u8>()
-        }
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
+        let t: &WgpuStorage = t;
+        t.buffer.to_vec::<u8>()
+    }
     /// `from_bytes`.
-        fn from_bytes<K: DType>(
-            bytes: &[u8],
-            shape: &[usize],
-            dtype: DTypeDescriptor,
-            device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
-            validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
-            let expected = num_elements(shape)?
-                .checked_mul(core::mem::size_of::<f32>())
-                .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
-                    operation: OperationKind::Storage,
-                    expression: "WGPU element count * element byte width",
-                })?;
-            if bytes.len() != expected {
-                return Err(Error::InvalidByteLength {
-                    expected,
-                    got: bytes.len(),
-                });
-            }
-            let buffer = WgpuBuffer::try_from_slice(bytes)?;
-            Ok(WgpuStorage::new(buffer, shape.to_vec()))
+    fn from_bytes<K: DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
+        let expected = num_elements(shape)?
+            .checked_mul(core::mem::size_of::<f32>())
+            .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "WGPU element count * element byte width",
+            })?;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
         }
+        let buffer = WgpuBuffer::try_from_slice(bytes)?;
+        Ok(WgpuStorage::new(buffer, shape.to_vec()))
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2074,11 +2073,11 @@ impl<D: Device> WgpuBackendImpl<D> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         data.into_iter()
             .map(|value| {
-                incin_core::prelude::convert_f64_to_i64(
+                incin_core::error::convert_f64_to_i64(
                     "int_to_vec1",
                     t.dtype,
                     f64::from(value),
-                    incin_core::prelude::FloatToIntPolicy::Exact,
+                    incin_core::error::FloatToIntPolicy::Exact,
                 )
             })
             .collect()
@@ -2174,7 +2173,7 @@ pub fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, us
         .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let axis = shape[dim];
     let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[dim + 1..]))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     Ok((outer, axis, inner))
 }
 
@@ -2891,7 +2890,14 @@ pub fn col2im_2d_cpu(
 
 /// Batched matrix multiply on CPU: lhs `[B, M, K]` × rhs `[B, K, N]` → `[B, M, N]`.
 /// Used inside conv backward closures.
-pub fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Result<Vec<f32>> {
+pub fn cpu_bmm(
+    lhs: &[f32],
+    rhs: &[f32],
+    b: usize,
+    m: usize,
+    k: usize,
+    n: usize,
+) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::MatMul)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -4385,22 +4391,22 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for WgpuBackendIm
     type Grads = WgpuGrads;
 
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-            crate::wgpu::tape::backward(loss)
-        }
+        crate::wgpu::tape::backward(loss)
+    }
 
     fn backward_with<K: DType>(
-            loss: &Self::Storage<K>,
-            seed: &Self::Storage<K>,
-        ) -> Result<Self::Grads> {
-            crate::wgpu::tape::backward_with(loss, seed)
-        }
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        crate::wgpu::tape::backward_with(loss, seed)
+    }
 
     fn get_grad<K: DType>(
-            t: &Self::Storage<K>,
-            grads: &Self::Grads,
-        ) -> Result<Option<Self::Storage<K>>> {
-            Ok(grads.get(t.id).cloned())
-        }
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        Ok(grads.get(t.id).cloned())
+    }
 }
 impl<D: Device> VariableBackend for WgpuBackendImpl<D> {
     /// `Var<K>`.

@@ -26,7 +26,9 @@
 //! whenever `input_size` doesn't evenly divide `output_size` (Pitfall 6 /
 //! T-04-15's sibling correctness concern for adaptive's own window sizing).
 
-use incin_core::prelude::{DType, OperationKind, Result, ShapeBuf, ShapeError};
+use incin_core::error::Result;
+use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
+use incin_core::tensor::dtype::DType;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage, increment_index};
 use crate::cpu::tape::{self, TapeEntry};

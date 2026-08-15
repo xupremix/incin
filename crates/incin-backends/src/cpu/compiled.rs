@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, HostInterop};
 use incin_core::compiled::CompiledPlan;
+use incin_core::error::{Error, Result};
 use incin_core::exec::catalog::{CanonicalOperation, CapturedDescriptor, Descriptor, op};
 use incin_core::exec::{ExecutionContext, OperationIdentity, TensorHandle};
-use incin_core::error::{Error, Result};
 use incin_core::shapes::Dyn;
 use incin_core::tensor::device::Cpu;
 
@@ -364,13 +364,13 @@ impl CpuCompiledInvocation {
 macro_rules! dispatch_cpu_operation {
     ($($kind:ident => $descriptor:ty,)*) => {
         fn dispatch_cpu_operation(
-            operation: incin_core::prelude::OperationKind,
+            operation: incin_core::shapes::OperationKind,
             context: &ExecutionContext<CpuBackendImpl<Cpu>>,
             payload: &incin_core::graph::DescriptorPayload,
             inputs: &[&CpuStorage],
         ) -> Result<CpuStorage> {
             match operation {
-                $(incin_core::prelude::OperationKind::$kind => {
+                $(incin_core::shapes::OperationKind::$kind => {
                     execute::<$descriptor>(context, payload, inputs)
                 })*
                 _ => Err(Error::Msg(format!(

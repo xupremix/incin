@@ -8,8 +8,10 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::error::Result;
 use incin_core::shapes::error::OperationKind;
-use incin_core::prelude::{DTypeDescriptor, DTypeId, Result, ShapeBuf, ShapeError};
+use incin_core::shapes::{ShapeBuf, ShapeError};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 /// `[N, C, H, W]`-style output spatial size, matching
 /// Uses checked arithmetic and rejects invalid zero parameters.
@@ -201,7 +203,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     let out_total: usize = incin_core::shapes::ShapeBuf::from_slice(&grad_out.shape)
         .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let in_total: usize = incin_core::shapes::ShapeBuf::from_slice(input_shape)
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
 
     let cfg = launch_cfg(out_total)?;
@@ -222,9 +224,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
             .arg(&out_total)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::error::Error::Msg(format!(
-                    "scatter_pool_grad_2d launch failed: {e:?}"
-                ))
+                incin_core::error::Error::Msg(format!("scatter_pool_grad_2d launch failed: {e:?}"))
             })?;
     }
 
@@ -394,7 +394,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
             .arg(&ow)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!(
+                incin_core::error::Error::Msg(format!(
                     "adaptive_avg_pool2d_forward launch failed: {e:?}"
                 ))
             })?;
@@ -449,7 +449,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
             .arg(&ow)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!(
+                incin_core::error::Error::Msg(format!(
                     "adaptive_avg_pool2d_backward launch failed: {e:?}"
                 ))
             })?;

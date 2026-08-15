@@ -43,9 +43,11 @@
 //! pretend it can execute one: [`Trainer::fit`] on a multi-device plan is an
 //! explicit [`TrainError::CollectivesUnavailable`], not a silent single-GPU run.
 
-use incin_core::optim::Optimizer;
+use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::prelude::{Backend, DeviceId, DeviceKind, DevicePreference, DeviceSet, Tensor};
+use incin_core::optim::Optimizer;
+use incin_core::tensor::base::Tensor;
+use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
 
 /// The devices a [`DevicePreference::Fastest`] resolution tries, most capable
 /// first.
@@ -295,7 +297,7 @@ impl std::error::Error for TrainError {}
 fn at<T>(
     epoch: usize,
     batch: usize,
-    result: incin_core::prelude::Result<T>,
+    result: incin_core::error::Result<T>,
 ) -> Result<T, TrainError> {
     result.map_err(|error| TrainError::Step {
         epoch,
@@ -588,8 +590,8 @@ impl Trainer {
         F: FnMut(
             &mut M,
             Batch,
-        ) -> incin_core::prelude::Result<
-            Tensor<incin_core::shapes::Nil, B, f32, incin_core::prelude::Grad>,
+        ) -> incin_core::error::Result<
+            Tensor<incin_core::shapes::Nil, B, f32, incin_core::tensor::grad::Grad>,
         >,
     {
         if self.plan.is_multi_device() {

@@ -1,10 +1,13 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
+use incin_core::error::{Error, Result};
 use incin_core::exec::LayoutClass;
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::DTypeDescriptor;
 #[cfg(test)]
 use incin_core::tensor::dtype::DTypeId;
-use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 fn validate_kernel_abi(
     kernel: &crate::kernel::RenderedKernel,

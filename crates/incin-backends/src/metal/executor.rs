@@ -1,8 +1,10 @@
 //! Descriptor execution for the Metal backend.
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
+use incin_core::error::BackendError;
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind, Shape};
+use incin_core::shapes::{OperationKind, Shape};
+use incin_core::tensor::device::{Device, DeviceKind};
 
 use super::backend::MetalBackendImpl;
 use super::storage::MetalStorage;
@@ -231,14 +233,8 @@ macro_rules! impl_metal_reduction_dim {
 }
 
 impl_metal_reduction_all![
-    (
-        SumAll,
-        MetalBackendImpl::<D>::sum_all::<f32>
-    ),
-    (
-        MeanAll,
-        MetalBackendImpl::<D>::mean_all::<f32>
-    ),
+    (SumAll, MetalBackendImpl::<D>::sum_all::<f32>),
+    (MeanAll, MetalBackendImpl::<D>::mean_all::<f32>),
 ];
 
 impl_metal_reduction_dim![

@@ -199,7 +199,7 @@ pub(crate) fn randn_with_total(
     };
 
     let final_buffer = match device.kind() {
-        incin_core::prelude::DeviceKind::Cpu => buffer,
+        incin_core::tensor::device::DeviceKind::Cpu => buffer,
 
         _ => {
             return Err(Error::DeviceInitializationError {
@@ -299,7 +299,7 @@ pub(crate) fn linspace_with_total(
     dtype: DTypeDescriptor,
     device: &DeviceId,
 ) -> Result<CpuStorage> {
-    if device.kind() != incin_core::prelude::DeviceKind::Cpu {
+    if device.kind() != incin_core::tensor::device::DeviceKind::Cpu {
         return Err(Error::DeviceInitializationError {
             expected: "cpu".into(),
             got: alloc::format!("{:?}", device.kind()),
@@ -415,9 +415,10 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use incin_core::backend_authoring::VariableBackend;
-    use incin_core::prelude::{
-        Backend, ConversionFailure, Cpu, Dyn, Error, StorageTransfer,
-    };
+    use incin_core::backend_authoring::{Backend, StorageTransfer};
+    use incin_core::error::{ConversionFailure, Error};
+    use incin_core::shapes::Dyn;
+    use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;
@@ -524,8 +525,7 @@ mod tests {
     #[test]
     /// `var_zeros_wraps_equivalent_zeros_result`.
     fn var_zeros_wraps_equivalent_zeros_result() {
-        let var =
-            var_zeros_with_total(4, &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
+        let var = var_zeros_with_total(4, &[2, 2], DTypeId::F32.descriptor(), &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
         assert_eq!(t.shape, vec![2, 2]);
         assert!(f32_vec(&t).iter().all(|&v| v == 0.0));

@@ -33,13 +33,16 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::{format, vec};
 
+use incin_core::backend_authoring::StorageBackend;
 use incin_core::backend_authoring::operations::{NoAttributes, ShapeAttributes};
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
+use incin_core::dist::Local;
 use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, ExecutionDescriptor, LayoutClass,
     LogicalTensorMeta, MathMode, SupportLevel, TensorHandle, Validated,
 };
-use incin_core::prelude::{DTypeId, Local, OperationKind, ShapeBuf, StorageBackend};
+use incin_core::shapes::{OperationKind, ShapeBuf};
+use incin_core::tensor::dtype::DTypeId;
 
 // ============================================================================
 // Numerical tolerance profiles

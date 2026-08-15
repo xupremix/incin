@@ -1,7 +1,7 @@
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
-use incin_core::prelude::{
-        DTypeId, Error, OperationKind, Result, ShapeBuf,
-    };
+use incin_core::error::{Error, Result};
+use incin_core::shapes::{OperationKind, ShapeBuf};
+use incin_core::tensor::dtype::DTypeId;
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -66,10 +66,7 @@ pub(crate) fn dequantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
     ))
 }
 
-pub(crate) fn quantized_matmul_storage(
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
-) -> Result<CpuStorage> {
+pub(crate) fn quantized_matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let lhs_data = match &*lhs.buffer {
         CpuBuffer::Q8_0(v) => v,
         _ => {
@@ -105,7 +102,8 @@ pub(crate) fn quantized_matmul_storage(
     if k != k2 {
         return Err(Error::Msg(alloc::format!(
             "quantized_matmul K mismatch: {} != {}",
-            k, k2
+            k,
+            k2
         )));
     }
     if !k.is_multiple_of(32) {

@@ -16,7 +16,7 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use incin_core::error::Result;
-use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
+use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
 
 /// `L_out`/`H_out`/`W_out` output-size formula, matching
 /// Uses checked arithmetic and rejects invalid zero parameters.
@@ -317,8 +317,8 @@ pub(crate) fn launch_im2col_1d(
     let (b, c, l) = (t.shape[0], t.shape[1], t.shape[2]);
     let l_out = out_size(l, k, stride, padding, dilation)?;
     let out_shape: Vec<usize> = alloc::vec![b, c * k, l_out];
-    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let out_total: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     let thread_total = ShapeBuf::from_slice(&[b, c, l_out]).checked_numel(OperationKind::Conv1d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;

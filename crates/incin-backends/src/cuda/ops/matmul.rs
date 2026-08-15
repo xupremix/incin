@@ -8,7 +8,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::Result;
-use incin_core::prelude::{OperationKind, ShapeBuf};
+use incin_core::shapes::{OperationKind, ShapeBuf};
 
 const BM: u32 = 128;
 const BN: u32 = 128;

@@ -1,7 +1,8 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::error::{Error, Result};
 use incin_core::exec::PrecisionRequest;
-use incin_core::prelude::{Error, OperationKind, Result};
+use incin_core::shapes::OperationKind;
 
 fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
     i32::try_from(value).map_err(|_| {

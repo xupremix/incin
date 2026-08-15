@@ -34,7 +34,8 @@ mod tests {
     use super::*;
 
     use candle_core as candle;
-    use incin_core::prelude::{DTypeId, DeviceId};
+    use incin_core::tensor::device::DeviceId;
+    use incin_core::tensor::dtype::DTypeId;
     #[test]
     /// Checks that `to_candle_dtype` maps `F32` and `I64` to the
     /// corresponding candle dtypes.

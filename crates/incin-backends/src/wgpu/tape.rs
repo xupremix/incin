@@ -1,9 +1,11 @@
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
+use incin_core::error::Result;
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage};
-use incin_core::prelude::{DTypeId, OperationKind, Result};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::dtype::DTypeId;
 
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{TensorId, WgpuBuffer, WgpuStorage};

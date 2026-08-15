@@ -28,7 +28,8 @@
 //! `ops/shape_ops.rs`'s single `` impl block calls into
 //! `matmul_impl`/`batched_matmul_impl` for its `matmul` method.
 
-use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+use incin_core::error::{Error, Result};
+use incin_core::shapes::{OperationKind, ShapeBuf};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;

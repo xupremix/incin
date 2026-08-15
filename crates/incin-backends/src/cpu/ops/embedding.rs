@@ -13,9 +13,11 @@
 //! accumulate-not-overwrite requirement, done inside ONE backward closure
 //! rather than via multiple `TapeEntry` pushes.
 
+use incin_core::error::BackwardError;
 use incin_core::error::Error;
-use incin_core::prelude::{BackwardError, OperationKind};
-use incin_core::prelude::{DType, Result};
+use incin_core::error::Result;
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::dtype::DType;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};

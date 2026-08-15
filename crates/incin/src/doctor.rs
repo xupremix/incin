@@ -27,7 +27,9 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use incin_core::exec::{Capabilities, CapabilityQuery, LayoutClass, MathMode, SupportLevel};
-use incin_core::prelude::{DTypeId, DeviceId, DeviceKind, OperationKind};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::device::{DeviceId, DeviceKind};
+use incin_core::tensor::dtype::DTypeId;
 use serde::Serialize;
 
 /// Version of the JSON document this module emits.
