@@ -17,7 +17,11 @@ use core::fmt;
 use core::marker::PhantomData;
 
 use crate::exec::OperationIdentity;
-use crate::prelude::{DTypeDescriptor, DTypeId, DeviceId, OperationKind, ShapeBuf};
+use crate::shapes::{Shape, ShapeBuf, ShapeError};
+use crate::shapes::error::OperationKind;
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::shapes::Dyn;
 
 /// Broad classification only. A family is never a capability identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -802,7 +806,7 @@ macro_rules! define_catalog {
                     ValidatedInvocation::<Self>::infer_runtime(attributes, inputs)
                 }
 
-                fn infer_invocation_typed<S: crate::prelude::Shape>(
+                fn infer_invocation_typed<S: crate::shapes::Shape>(
                     attributes: Self::Attributes,
                     inputs: Vec<LogicalTensorMeta>,
                     expected: &crate::shapes::ShapeValue<S>,
@@ -979,7 +983,7 @@ pub trait Operation: Clone + fmt::Debug + 'static {
     }
 
     /// Shape-specialized form of [`Self::infer_invocation`].
-    fn infer_invocation_typed<S: crate::prelude::Shape>(
+    fn infer_invocation_typed<S: crate::shapes::Shape>(
         attributes: Self::Attributes,
         inputs: Vec<LogicalTensorMeta>,
         expected: &crate::shapes::ShapeValue<S>,
@@ -1368,7 +1372,7 @@ pub enum DescriptorError {
         attribute: &'static str,
         reason: &'static str,
     },
-    Shape(crate::prelude::ShapeError),
+    Shape(crate::shapes::ShapeError),
     MetadataMismatch {
         operation: OperationKind,
         output: usize,
@@ -1398,8 +1402,8 @@ pub enum DescriptorError {
     },
 }
 
-impl From<crate::prelude::ShapeError> for DescriptorError {
-    fn from(error: crate::prelude::ShapeError) -> Self {
+impl From<crate::shapes::ShapeError> for DescriptorError {
+    fn from(error: crate::shapes::ShapeError) -> Self {
         Self::Shape(error)
     }
 }
@@ -1710,7 +1714,7 @@ fn validate_unbiased_domain(
 }
 
 fn validate_shape(operation: OperationKind, shape: &[usize]) -> Result<(), DescriptorError> {
-    crate::prelude::ShapeBuf::from_slice(shape).checked_numel(operation)?;
+    crate::shapes::ShapeBuf::from_slice(shape).checked_numel(operation)?;
     Ok(())
 }
 
@@ -1923,9 +1927,9 @@ impl AttributeContract for ShapeAttributes {
         if let Some(input) = first_shape(inputs) {
             if operation == OperationKind::ReshapeExact {
                 let source =
-                    crate::prelude::ShapeBuf::from_slice(input).checked_numel(operation)?;
+                    crate::shapes::ShapeBuf::from_slice(input).checked_numel(operation)?;
                 let target =
-                    crate::prelude::ShapeBuf::from_slice(&self.shape).checked_numel(operation)?;
+                    crate::shapes::ShapeBuf::from_slice(&self.shape).checked_numel(operation)?;
                 if source != target {
                     return Err(invalid(
                         operation,
@@ -3496,7 +3500,7 @@ fn inferred_shape<A: AttributeContract>(
             ) {
                 (Some(source), Some(indices), Some(axis)) => {
                     let count =
-                        crate::prelude::ShapeBuf::from_slice(indices).checked_numel(operation)?;
+                        crate::shapes::ShapeBuf::from_slice(indices).checked_numel(operation)?;
                     let mut output = source.to_vec();
                     output[axis] = count;
                     Some(Some(output))
@@ -4057,7 +4061,7 @@ impl<O: Operation> ValidatedInvocation<O> {
         })
     }
 
-    pub(crate) fn infer_custom_typed<S: crate::prelude::Shape>(
+    pub(crate) fn infer_custom_typed<S: crate::shapes::Shape>(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
         expected: &crate::shapes::ShapeValue<S>,
@@ -4585,7 +4589,7 @@ mod tests {
             device: None,
         };
         let expected =
-            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(ShapeBuf::from_slice(&[
+            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[
                 2, 3,
             ]))
             .unwrap();
@@ -4602,7 +4606,7 @@ mod tests {
         );
         assert_eq!(
             invocation.validated().proof_level(),
-            crate::exec::ProofLevel::of::<crate::prelude::Dyn>()
+            crate::exec::ProofLevel::of::<crate::shapes::Dyn>()
         );
     }
 
@@ -4659,7 +4663,7 @@ mod tests {
     #[test]
     fn custom_typed_proof_requires_one_concrete_output() {
         let expected =
-            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(ShapeBuf::from_slice(&[
+            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[
                 2, 3,
             ]))
             .unwrap();
