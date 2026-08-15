@@ -20,9 +20,19 @@ use crate::{
 /// Durable, hierarchical state name.  This is a serialization path, not a
 /// parameter/runtime-variable identity or alias identifier.
 #[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize,
 )]
 pub struct StatePath(String);
+
+impl<'de> serde::Deserialize<'de> for StatePath {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::new(raw).map_err(|error| serde::de::Error::custom(error.to_string()))
+    }
+}
 
 impl StatePath {
     /// The root path.
@@ -389,12 +399,31 @@ where
 }
 
 /// One owned, exact-dtype state value.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct StateValue {
     shape: ShapeBuf,
     dtype: DTypeDescriptor,
     bytes: Vec<u8>,
     role: StateRole,
+}
+
+#[derive(serde::Deserialize)]
+struct StateValueWire {
+    shape: ShapeBuf,
+    dtype: DTypeDescriptor,
+    bytes: Vec<u8>,
+    role: StateRole,
+}
+
+impl<'de> serde::Deserialize<'de> for StateValue {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = <StateValueWire as serde::Deserialize>::deserialize(deserializer)?;
+        Self::new(wire.shape, wire.dtype, wire.bytes, wire.role)
+            .map_err(|error| serde::de::Error::custom(error.to_string()))
+    }
 }
 
 impl StateValue {
@@ -459,8 +488,40 @@ impl StateValue {
 }
 
 /// An owned collection of heterogeneous model state.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 pub struct StateSnapshot(BTreeMap<StatePath, StateValue>);
+
+impl<'de> serde::Deserialize<'de> for StateSnapshot {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SnapshotVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SnapshotVisitor {
+            type Value = StateSnapshot;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a map of unique state paths to state values")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> core::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut snapshot = StateSnapshot::new();
+                while let Some((path, value)) = map.next_entry()? {
+                    snapshot
+                        .insert(path, value)
+                        .map_err(|error| serde::de::Error::custom(error.to_string()))?;
+                }
+                Ok(snapshot)
+            }
+        }
+
+        deserializer.deserialize_map(SnapshotVisitor)
+    }
+}
 
 impl StateSnapshot {
     /// Creates an empty snapshot.
@@ -585,5 +646,28 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn wire_deserialization_revalidates_paths_and_payload_lengths() {
+        let invalid_path = postcard::to_allocvec(&"layer..weight".to_string()).unwrap();
+        assert!(postcard::from_bytes::<StatePath>(&invalid_path).is_err());
+
+        #[derive(serde::Serialize)]
+        struct Wire {
+            shape: ShapeBuf,
+            dtype: crate::tensor::dtype::DTypeDescriptor,
+            bytes: Vec<u8>,
+            role: StateRole,
+        }
+
+        let invalid_value = postcard::to_allocvec(&Wire {
+            shape: ShapeBuf::from_slice(&[2]),
+            dtype: DTypeId::F32.descriptor(),
+            bytes: vec![0; 3],
+            role: StateRole::Parameter,
+        })
+        .unwrap();
+        assert!(postcard::from_bytes::<StateValue>(&invalid_value).is_err());
     }
 }

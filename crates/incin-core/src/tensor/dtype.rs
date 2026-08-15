@@ -145,11 +145,41 @@ pub enum DTypeKind {
 /// `StorageEncoding` is the single authoritative source of storage arithmetic.
 /// Do not compute `numel * element_size` anywhere outside of this type; use
 /// [`size_bytes`](Self::size_bytes) instead.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct StorageEncoding {
     logical_elements_per_block: usize,
     bytes_per_block: usize,
     alignment: usize,
+}
+
+impl<'de> serde::Deserialize<'de> for StorageEncoding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Wire {
+            logical_elements_per_block: usize,
+            bytes_per_block: usize,
+            alignment: usize,
+        }
+
+        let wire = <Wire as serde::Deserialize>::deserialize(deserializer)?;
+        if wire.logical_elements_per_block == 0
+            || wire.bytes_per_block == 0
+            || wire.alignment == 0
+            || !wire.alignment.is_power_of_two()
+        {
+            return Err(serde::de::Error::custom(
+                "invalid storage encoding: block and alignment fields must be non-zero, and alignment must be a power of two",
+            ));
+        }
+        Ok(Self {
+            logical_elements_per_block: wire.logical_elements_per_block,
+            bytes_per_block: wire.bytes_per_block,
+            alignment: wire.alignment,
+        })
+    }
 }
 
 impl StorageEncoding {
@@ -289,12 +319,45 @@ impl StorageEncoding {
 /// [`DTypeId`] as their built-in runtime vocabulary. Migrating them to
 /// arbitrary descriptors will happen in a future phase. This boundary is
 /// intentional and documented.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct DTypeDescriptor {
     key: DTypeKey,
     kind: DTypeKind,
     encoding: StorageEncoding,
     builtin: Option<DTypeId>,
+}
+
+impl<'de> serde::Deserialize<'de> for DTypeDescriptor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Wire {
+            key: DTypeKey,
+            kind: DTypeKind,
+            encoding: StorageEncoding,
+            builtin: Option<DTypeId>,
+        }
+
+        let wire = <Wire as serde::Deserialize>::deserialize(deserializer)?;
+        let descriptor = match wire.builtin {
+            Some(id) => {
+                let expected = id.descriptor();
+                if expected.key() != wire.key
+                    || expected.kind() != wire.kind
+                    || expected.encoding() != wire.encoding
+                {
+                    return Err(serde::de::Error::custom(
+                        "dtype descriptor builtin identity does not match its fields",
+                    ));
+                }
+                Self::builtin(id, wire.key, wire.kind, wire.encoding)
+            }
+            None => Self::new(wire.key, wire.kind, wire.encoding),
+        };
+        Ok(descriptor)
+    }
 }
 
 impl DTypeDescriptor {
