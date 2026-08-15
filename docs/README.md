@@ -4,14 +4,14 @@ Four kinds of document live here, and the difference matters when they
 disagree.
 
 **Guide.** Narrative, not binding. Explains how the pieces fit and the
-idiomatic way to use each one; every code example in it is checked to compile
-and run against the current tree. Read it first if you are new to the
-codebase.
+idiomatic way to use each one. Rust examples are checked where they are
+included in doctests or executable fixtures; prose snippets are not promised
+to be automatically executed. Read it first if you are new to the codebase.
 
 | Document | Covers |
 |---|---|
 | [GUIDE.md](GUIDE.md) | the crate map, the type-level shape system, tensor creation, the operation surface, the canonical execution architecture, the target API, backend authoring, autograd, modules, errors, feature flags, and the idioms the rest of this tree assumes. Concept-oriented: "how does the shape-proof system work" |
-| [book/src/](book/src/SUMMARY.md) | the full user-facing book, 23 chapters. Task-oriented for the core path (tensors, autograd, building models, training, data loading, saving/loading, backends) — "how do I train a model" — plus an exhaustive reference section: every macro, every feature flag, the invariant/proof types, backend authoring, and the experimental surfaces. Every code block is checked to compile (and where practical, to run and produce the stated result) against the current tree. An mdBook source tree; read the chapters directly, build with `mdbook build docs/book`, or generate a single self-contained HTML file with `python3 docs/book/make_single_page.py` |
+| [book/src/](book/src/SUMMARY.md) | the full user-facing book, now 24 chapters. Task-oriented chapters cover the core path (tensors, autograd, building models, training, data loading, saving/loading, backends) and the reference section covers macros, feature flags, invariant/proof types, backend authoring, and experimental surfaces. Rust snippets are compiled where they are wired into doctests or fixtures; `mdbook build docs/book` checks the Markdown book itself. Generate a single self-contained HTML file with `python3 docs/book/make_single_page.py` |
 
 **Generated.** Written by a test from the Rust source and re-checked on every
 run. If one of these is wrong, the source is wrong. Never edit them by hand.

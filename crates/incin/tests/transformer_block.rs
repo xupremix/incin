@@ -1,8 +1,11 @@
 #![cfg(feature = "cpu")]
 
+use incin::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
+use incin::optim::ParameterGroup;
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
 use incin::AdamW;
+use std::collections::BTreeMap;
 
 type Cpu = incin_backends::cpu::CpuBackendImpl;
 type Input = Tensor<Dyn, Cpu, f32, Grad>;
@@ -13,7 +16,8 @@ type LinearLayer = Linear<Dyn, Cpu>;
 /// The four rows are tokens and the eight columns are the model dimension.
 /// Keeping the proof single-headed makes the attention dataflow explicit while
 /// still exercising the same matmul, transpose, softmax, residual, and MLP
-/// contracts used by a larger block.
+/// contracts used by a larger block. It deliberately leaves masking,
+/// normalization, dropout, and multi-head packing to a later composition layer.
 #[module(no_stats)]
 struct TransformerBlock {
     query: LinearLayer,
@@ -45,7 +49,9 @@ impl Module<Input> for TransformerBlock {
         let query = self.query.forward(input.clone())?;
         let key = self.key.forward(input.clone())?;
         let value = self.value.forward(input.clone())?;
-        let scores = query.matmul(&key.transpose_runtime(0, 1)?)?;
+        let scores = query
+            .matmul(&key.transpose_runtime(0, 1)?)?
+            .mul_scalar(1.0 / (8.0_f32).sqrt())?;
         let attention = scores.softmax(1)?;
         let attended = attention.matmul(&value)?;
         let attention_residual = input.add(&self.projection.forward(attended)?)?;
@@ -59,19 +65,66 @@ impl Module<Input> for TransformerBlock {
 }
 
 #[test]
+fn static_attention_shapes_compile_and_run() -> Result<()> {
+    let query = Tensor::<s![4, 8], Cpu>::ones(())?;
+    let key = Tensor::<s![8, 4], Cpu>::ones(())?;
+    let value = Tensor::<s![4, 8], Cpu>::ones(())?;
+    let scores = query.matmul(&key)?;
+    let output = scores.softmax(1)?.matmul(&value)?;
+    assert_eq!(output.dims().dims(), &[4, 8]);
+    Ok(())
+}
+
+#[test]
 fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
     let model = TransformerBlock::build()?;
-    let input = Tensor::<Dyn, Cpu>::from_slice(
-        &(0..32).map(|value| value as f32 / 32.0).collect::<Vec<_>>(),
-        vec![4, 8],
-    )?
-    .require_grad();
+    let input_values = (0..32).map(|value| value as f32 / 32.0).collect::<Vec<_>>();
+    let input = Tensor::<Dyn, Cpu>::from_slice(&input_values, vec![4, 8])?.require_grad();
+    let restore_input = input.clone();
     let target = Tensor::<Dyn, Cpu>::zeros(vec![4, 8])?;
 
     let output = model.forward(input)?;
     assert_eq!(output.dims().dims(), &[4, 8]);
+    let output_bytes = Cpu::to_bytes::<f32>(output.inner())?;
+    assert!(output_bytes
+        .chunks_exact(core::mem::size_of::<f32>())
+        .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
+        .all(f32::is_finite));
     let loss = output.mse_loss(&target)?;
     let grads = loss.backward()?;
+
+    let parameters = ParameterGroup::<Cpu, f32>::from_module(&model)?;
+    let gradients: BTreeMap<_, _> = parameters
+        .iter()
+        .map(|(name, variable)| {
+            let parameter = Cpu::var_as_tensor::<f32>(variable)?;
+            let storage = Cpu::get_grad::<f32>(&parameter, grads.as_backend())?
+                .ok_or_else(|| Error::Msg(format!("missing gradient for {name}")))?;
+            let bytes = Cpu::to_bytes::<f32>(&storage)?;
+            let values = bytes
+                .chunks_exact(core::mem::size_of::<f32>())
+                .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
+                .collect::<Vec<_>>();
+            Ok((name.clone(), values))
+        })
+        .collect::<Result<_>>()?;
+    for prefix in [
+        "query",
+        "key",
+        "value",
+        "projection",
+        "feed_forward_in",
+        "feed_forward_out",
+    ] {
+        let values = gradients
+            .iter()
+            .filter(|(name, _)| name.starts_with(prefix))
+            .flat_map(|(_, values)| values.iter())
+            .collect::<Vec<_>>();
+        assert!(!values.is_empty(), "no gradients reached {prefix}");
+        assert!(values.iter().all(|value| value.is_finite()));
+        assert!(values.iter().any(|value| **value != 0.0));
+    }
 
     let mut optimizer = AdamW::<Cpu>::from_module(&model, 1e-2)?;
     optimizer.step(&grads)?;
@@ -82,5 +135,11 @@ fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
     let mut restored = TransformerBlock::build()?;
     load_state::<Cpu, _>(&mut restored, &snapshot)?;
     assert_eq!(collect_state::<Cpu, _>(&restored)?, snapshot);
+    let expected = model.forward(restore_input.clone())?;
+    let actual = restored.forward(restore_input)?;
+    assert_eq!(
+        Cpu::to_bytes::<f32>(expected.inner())?,
+        Cpu::to_bytes::<f32>(actual.inner())?
+    );
     Ok(())
 }

@@ -5,6 +5,14 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
 printf 'case\tseconds\tstatus\n'
+printf 'rustc\t%s\n' "$(rustc -Vv | sed -n '1p')"
+printf 'cargo\t%s\n' "$(cargo -V)"
+printf 'host\t%s\n' "$(uname -srmo)"
+
+if [[ "${CLEAN:-0}" == 1 ]]; then
+    cargo clean -p incin
+fi
+
 run_case() {
     local name="$1"
     shift
@@ -21,7 +29,14 @@ run_case() {
     fi
 }
 
-run_case default-lib cargo check -p incin --lib
-run_case examples cargo check -p incin --examples
-run_case book-feature-surface cargo check -p incin --lib --features 'target-api backend-authoring'
+run_case tiny cargo check -p incin --example compile_fixture_tiny
+run_case mlp cargo check -p incin --example compile_fixture_mlp
+run_case cnn cargo check -p incin --example compile_fixture_cnn
+run_case transformer-static cargo check -p incin --example compile_fixture_transformer_static
+run_case transformer-mixed cargo check -p incin --example compile_fixture_transformer_mixed
+run_case transformer-dyn cargo check -p incin --example compile_fixture_transformer_dyn
 run_case transformer-proof cargo test -p incin --test transformer_block --no-run
+
+# The second invocation measures the practical incremental path for the same
+# representative portfolio without rebuilding the dependency graph.
+run_case incremental-portfolio cargo check -p incin --examples

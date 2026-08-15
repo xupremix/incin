@@ -19,6 +19,7 @@
 
 - [Layers and `#[module]`](./building_models.md)
 - [Sequential models](./sequential.md)
+- [A small Transformer-style block](./transformer.md)
 
 # Training
 
