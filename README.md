@@ -248,11 +248,10 @@ cargo install --path crates/incin-lsp --bin incin-lsp
 - **Growth & architecture plans** (`docs/growth/`): task-by-task execution
   plans for adoption-facing features — named dimensions, this CLI/IDE
   tooling, deployment, and more — each with its own dated status ledger.
-- **The Book ("Incinnomicon"):** planned, not yet built. See
-  `docs/growth/07-the-book.md` for the full chapter outline; it will ship as
-  an mdBook at `docs/book/`, built with `mdbook build docs/book`, deployed to
-  GitHub Pages. Until it lands, this README, the growth docs, and
-  `crates/incin/examples/` are the best starting points.
+- **The Book ("Incinnomicon"):** the current user guide lives in
+  [`docs/book/src/SUMMARY.md`](docs/book/src/SUMMARY.md). Build it locally with
+  `mdbook build docs/book`; the older roadmap in `docs/growth/07-the-book.md`
+  is historical and is not the source of current documentation status.
 
 ## License
 

@@ -1,5 +1,11 @@
 # 07 — The Incin Book ("The Incinnomicon")
 
+> **Historical plan.** The mdBook described here now exists under
+> `docs/book/`. For current chapter status and user guidance, use
+> `docs/book/src/SUMMARY.md`, `docs/README.md`, and the repository README.
+> The task list below records the original adoption plan; it is not a claim
+> that the Book is absent.
+
 > **Depends on:** the features it documents (`01`–`06`) — write each chapter as
 > its feature lands, never speculatively ahead. **Effort:** ongoing. **Priority:**
 > the long-tail adoption engine — a great book is why people *stay*.
@@ -29,13 +35,13 @@ example-first, unafraid of the hard parts, but always motivating *why* before
   `docs/book/README.md`.
 - Deploy to GitHub Pages (or docs.rs sidecar) on release.
 
-## Installing / reading the book (status: **not yet built** — see task list below)
+## Installing / reading the book (historical rollout plan)
 
 This section is written in advance so whoever scaffolds `07.1` implements the
 access path the rest of this plan already assumes, rather than inventing one
-ad hoc. Nothing below is live yet — `docs/book/` does not exist in this repo
-today (check `docs/growth/README.md`'s status ledger for the current state
-before pointing anyone at a URL).
+ad hoc. The rollout notes below predate the current `docs/book/` source tree.
+They are kept as historical planning context rather than current availability
+claims.
 
 Once `07.1` lands:
 - **Read it online:** a GitHub Pages URL, published by CI on merge to the

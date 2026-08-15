@@ -92,6 +92,12 @@ validation and metadata, implement the canonical `Execute<Op>` path in the
 backend, and add focused shape/error/CPU tests. Update generated operation
 documents through their generator; do not hand-edit generated tables.
 
+For a backend implementation, add the capability declaration and matching
+`Execute<Op>` implementation in `incin-backends`, then run the focused backend
+test and generated capability-document test. Backend authors should depend on
+the named `backend_authoring` surface; they should not import the facade
+prelude or private tensor-backend modules.
+
 ## Debugging an operation
 
 Start with the descriptor and its validation evidence, then inspect dispatch,
@@ -183,12 +189,23 @@ Treat `graphify-out/`, build output, and generated documentation as derived
 artifacts. Historical design notes belong under clearly labelled history or
 status paths and must not be presented as current API guidance.
 
+The long-form remediation and growth plans under `docs/plan/` and
+`docs/growth/` are historical or active planning records as indicated by their
+own status headers. They do not override the source, tests, or current
+contracts in `docs/`.
+
 ## Unresolved architecture
 
 The legacy operation-family adapters have been removed. Remaining backend
 decomposition is a maintainability follow-up: large files are tracked by the
 large-file inventory and must be split by storage, capability, and executor
 responsibility when each extraction can be validated independently.
+Experimental graph, compiled, distributed, import, and tooling APIs are
+explicitly unstable. Future architecture remains open for placement algebra,
+ragged and sparse tensors, true physical mutation/aliasing, richer training
+contexts, semantic dtype identity, backend resource sessions, custom-op
+VJP/JVP/batching, higher-order AD, compiled execution, and distributed runtime
+maturity. These are future work, not missing requirements of the stable core.
 
 ## Large-file inventory
 
@@ -226,10 +243,11 @@ Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
 ## Validation checkpoint
 
-The latest reproducible artifact validation was run from commit `289dfbd`:
+The latest reproducible artifact validation was run from the current handoff
+commit:
 
 ```text
-tools/export-snapshot.sh /tmp/incin-hnd002-current.zip            # passed
+tools/export-snapshot.sh /tmp/hnd004-final.zip                   # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -239,9 +257,11 @@ ran `cargo check -p incin-core --no-default-features` there. The ZIP is the
 artifact result; `tools/check-package.sh` remains an internal component check,
 not an alternate snapshot workflow.
 
-This is not the final HND-002 gate: the legacy backend operation-family
-removal, full capability extraction, and final public API allowlist remain
-open in the unresolved architecture section.
+The export gate validates the tracked source set, both distributed source
+trees, the structural gates inside the unpacked snapshot, and the minimal core
+build. Broader HND-004 documentation, executable-example, prototype, and
+benchmark work remains tracked separately until its acceptance requirements
+are proven.
 
 ## First 30 minutes
 
