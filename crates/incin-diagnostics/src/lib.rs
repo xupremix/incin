@@ -179,8 +179,8 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 }
 
 /// Rewrites a rust-analyzer inlay-hint (or hover) label for a Incin tensor
-/// type into a compact shape form: `Tensor<(U2, U3), CpuBackendImpl<f32,
-/// Cpu>>` becomes `Tensor<[2, 3], CpuBackendImpl<Cpu>>` — or, with
+/// type into a compact shape form: `Tensor<(U2, U3), CpuBackendImpl<Cpu>>`
+/// becomes `Tensor<[2, 3], CpuBackendImpl<Cpu>>` — or, with
 /// `shorten_backend: true`, `Tensor<[2, 3]>`.
 ///
 /// Falls back to a generic, whole-label typenum-to-decimal rewrite (the same

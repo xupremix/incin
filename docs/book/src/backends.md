@@ -1,7 +1,7 @@
 # CPU, and what actually runs on GPU today
 
 The backend is a type parameter (`B` in `Tensor<S, B, ...>`), not a runtime
-switch — `CpuBackendImpl<f32, Cpu>` and `CudaBackendImpl<f32, Cuda>` are
+switch — `CpuBackendImpl<Cpu>` and `CudaBackendImpl<Cuda>` are
 different types, and which one you use is fixed at compile time by which
 type you wrote.
 
@@ -10,7 +10,7 @@ use incin::prelude::*;
 
 type OnCpu = IncinBackend<Cpu>;
 #[cfg(feature = "cuda")]
-type OnCuda = IncinBackend<f32, Cuda>;
+type OnCuda = IncinBackend<Cuda>;
 
 let x = Tensor::<s![2, 3], OnCpu>::zeros(())?;
 # Ok::<(), incin::Error>(())
@@ -43,16 +43,15 @@ the fix is writing the kernel, not finding the right incantation.
 ```rust,no_run
 use incin::prelude::*;
 
-// DefaultBackend / DefaultDevice track whichever accelerator feature is on,
-// falling back through cpu -> wgpu -> cuda in that priority order, and
-// never silently substituting one for another: enabling wgpu without cpu
-// gives you a wgpu-only build, not a build that quietly prefers cpu anyway.
+// DefaultDevice is selected independently: CPU wins when enabled, otherwise
+// WGPU, then CUDA. DefaultBackend exists only when CPU is enabled and is
+// always IncinBackend<Cpu>; it has no accelerator fallback.
 let x = Tensor::<s![2, 3], DefaultBackend>::zeros(())?;
 # Ok::<(), incin::Error>(())
 ```
 
 For an explicit choice regardless of what's enabled, name the backend and
-device directly: `IncinBackend<f32, Cpu>`, `IncinBackend<f32, Cuda>`, and so
+device directly: `IncinBackend<Cpu>`, `IncinBackend<Cuda>`, and so
 on, gated behind the matching Cargo feature (`cpu`, `cuda`, `wgpu`, `metal`).
 
 ## `cargo incin doctor`

@@ -64,7 +64,7 @@ one program, and the two rows in the Quick Start example in
 `crates/incin/src/lib.rs` show both.
 
 **The backend is a type parameter, not a runtime switch.** `Tensor<S, B, ...>`
-carries its backend in `B`. `CpuBackendImpl<T, D>`, `CudaBackendImpl<T, D>`,
+carries its backend in `B`. `CpuBackendImpl<D>`, `CudaBackendImpl<D>`,
 and so on each implement the traits `Tensor` needs; which one a given tensor
 uses is fixed at compile time by which `B` you wrote, not decided by a global
 "current device". There is deliberately no such global — see
@@ -185,9 +185,9 @@ Dtype comes from `K`. `Dyn` as the dtype parameter (`Tensor<S, B, Dyn>`) keeps
 the element type itself as a runtime tag rather than a compile-time one —
 different question from `S = Dyn`, and the two compose independently.
 
-Device comes from `B`: `Tensor<S, CpuBackendImpl<f32, Cpu>>` vs `Tensor<S,
-CudaBackendImpl<f32, Cuda>>`, or the `incin::Tensor` alias's default,
-`DefaultBackend = IncinBackend<f32, Cpu>` — present only when the `cpu`
+Device comes from `B`: `Tensor<S, CpuBackendImpl<Cpu>>` vs `Tensor<S,
+CudaBackendImpl<Cuda>>`, or the `incin::Tensor` alias's default,
+`DefaultBackend = IncinBackend<Cpu>` — present only when the `cpu`
 feature is on, and *not* substituted by anything else when it is off: every
 alias in `crates/incin/src/lib.rs` that defaults `B` to it is declared twice,
 once with the default and once (behind `#[cfg(not(feature = "cpu"))]`)
@@ -387,7 +387,7 @@ allocation.
 ```rust
 use incin::prelude::*;
 
-type Backend = IncinBackend<f32, Cpu>;
+type Backend = IncinBackend<Cpu>;
 
 #[module]
 pub struct MLP {
