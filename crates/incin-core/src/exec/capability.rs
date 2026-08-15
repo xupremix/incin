@@ -5,7 +5,8 @@ use core::fmt;
 
 use crate::exec::catalog::OperationKey;
 use crate::exec::{LayoutClass, MathMode};
-use crate::prelude::{DTypeDescriptor, OperationKind};
+use crate::shapes::error::OperationKind;
+use crate::tensor::dtype::DTypeDescriptor;
 
 /// The identity of one operation in the unified execution universe.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -377,7 +378,7 @@ impl Capabilities for CapabilityRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::DTypeId;
+    use crate::tensor::dtype::DTypeId;
 
     const F32_DESC: DTypeDescriptor = DTypeId::F32.descriptor();
     const F32: &[DTypeDescriptor] = &[F32_DESC];

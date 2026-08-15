@@ -292,7 +292,7 @@ macro_rules! impl_stateless_state_visitors {
                 &self,
                 _: &crate::nn::StatePath,
                 _: &mut V,
-            ) -> crate::prelude::Result<()> { Ok(()) }
+            ) -> crate::err::Result<()> { Ok(()) }
         }
 
         impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B> for $t {
@@ -300,7 +300,7 @@ macro_rules! impl_stateless_state_visitors {
                 &mut self,
                 _: &crate::nn::StatePath,
                 _: &mut V,
-            ) -> crate::prelude::Result<()> { Ok(()) }
+            ) -> crate::err::Result<()> { Ok(()) }
         }
 
         impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> for $t {
@@ -308,7 +308,7 @@ macro_rules! impl_stateless_state_visitors {
                 &self,
                 _: &crate::nn::StatePath,
                 _: &mut V,
-            ) -> crate::prelude::Result<()> { Ok(()) }
+            ) -> crate::err::Result<()> { Ok(()) }
         }
     )+ };
 }

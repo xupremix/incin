@@ -1,4 +1,4 @@
-use crate::prelude::Dyn;
+use crate::shapes::Dyn;
 use crate::shapes::error::{OperationKind, ShapeError};
 
 use core::{fmt::Debug, marker::PhantomData};

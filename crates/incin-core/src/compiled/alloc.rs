@@ -288,7 +288,7 @@ impl AllocationPlanner {
             let slot = BufferSlot::new(next_slot);
             next_slot = next_slot
                 .checked_add(1)
-                .ok_or_else(|| crate::prelude::Error::Msg("buffer-slot index overflowed".into()))?;
+                .ok_or_else(|| crate::err::Error::Msg("buffer-slot index overflowed".into()))?;
             assignments.insert(input, slot);
             currently_live.insert(input);
         }
@@ -322,7 +322,7 @@ impl AllocationPlanner {
                     } else {
                         let s = BufferSlot::new(next_slot);
                         next_slot = next_slot.checked_add(1).ok_or_else(|| {
-                            crate::prelude::Error::Msg("buffer-slot index overflowed".into())
+                            crate::err::Error::Msg("buffer-slot index overflowed".into())
                         })?;
                         s
                     };

@@ -280,7 +280,7 @@ pub fn execute_shaped<O, B, S>(
 where
     O: Operation,
     B: Execute<O> + Capabilities,
-    S: crate::prelude::Shape,
+    S: crate::shapes::Shape,
 {
     execute_shaped_with_payload(context, attributes, inputs, expected, None)
 }
@@ -296,7 +296,7 @@ pub fn execute_shaped_with_payload<O, B, S>(
 where
     O: Operation,
     B: Execute<O> + Capabilities,
-    S: crate::prelude::Shape,
+    S: crate::shapes::Shape,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()

@@ -476,9 +476,9 @@ impl Distribution<f32> for Gumbel<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::Dyn;
+    use crate::shapes::Dyn;
     use crate::distributions::TensorDistributionExt;
-    type B = crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>;
+    type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
 
     #[test]
     fn test_uniform_sampling() {

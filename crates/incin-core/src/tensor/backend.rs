@@ -1,6 +1,8 @@
 use crate::err::BackendError;
 use crate::exec::capability::Capabilities;
-use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, convert_f64_to_i64};
+use crate::err::{FloatToIntPolicy, Result, convert_f64_to_i64};
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::DTypeId;
 use crate::exec::TensorMeta;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 
@@ -78,7 +80,7 @@ impl From<i64> for ScalarValue {
 #[cfg(test)]
 mod scalar_value_tests {
     use super::*;
-    use crate::prelude::{ConversionFailure, Error};
+    use crate::err::{ConversionFailure, Error};
 
     #[test]
     fn float_to_integer_requires_an_explicit_checked_policy() {
