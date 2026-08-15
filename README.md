@@ -27,7 +27,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `std` | yes | Enables standard-library functionality, serialization, and filesystem APIs. |
 | `nightly` | no | Enables nightly-only APIs in the core and macro crates. |
 | `cpu` | yes | Enables the built-in CPU backend. This is the only default backend. |
-| `target-api` | no | Opt-in application allocation-target surface (`Cpu.zeros(...)`). The constructor form is the stable default-build API and remains available for explicit backend typing. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`. |
+| `target-api` | no | **Experimental.** Device values as user-facing allocation targets. Additive: it adds a construction surface and removes none. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`. |
 | `cpu-blas` | no | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
 | `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
 | `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
@@ -42,6 +42,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
 | `test-utils` | no | Test-only backends and test utilities. |
 | `backend-authoring` | no | Extension contracts for backend authors. |
+| `legacy-operation-api-tests` | no | Historical direct-operation parity tests. These target the removed static operation-family API and are excluded from the active canonical suite. |
 | `compiled` | no | Curated preview types for compiled execution. |
 <!-- END GENERATED: facade-features -->
 
@@ -64,7 +65,7 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
+- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, `test-utils`, and `legacy-operation-api-tests`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `test-utils`, and `compiled`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.

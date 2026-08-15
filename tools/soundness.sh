@@ -41,6 +41,20 @@ TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 # leak-checked by the ASan backend leg below.
 MIRIFLAGS_COMMON="-Zmiri-tree-borrows -Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
+# Miri's software floating-point implementation is not a suitable oracle for
+# the backend's finite-difference tolerances: five numerical tests fail only
+# because interpreted `exp`/transcendental results differ in the last few
+# digits (or amplify that difference through a gradcheck). Keep those tests in
+# the ordinary and ASan suites, while excluding only these exact numerical
+# cases from the aliasing/UB run below.
+MIRI_BACKEND_NUMERIC_SKIPS=(
+    --skip cpu::ops::elementwise::tests::softmax_gradcheck
+    --skip cpu::ops::elementwise::tests::swish_forward_and_gradcheck
+    --skip cpu::ops::elementwise::tests::tanh_gradcheck
+    --skip cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute
+    --skip cpu::ops::loss::tests::cross_entropy_loss_gradcheck
+)
+
 run_miri() {
     step "Miri: incin-core (interpreter, Tree Borrows)"
     MIRIFLAGS="$MIRIFLAGS_COMMON" cargo +nightly miri test \
@@ -51,6 +65,7 @@ run_miri() {
     step "Miri: incin-backends CPU (interpreter, Tree Borrows)"
     MIRIFLAGS="$MIRIFLAGS_COMMON" cargo +nightly miri test \
         -p incin-backends --no-default-features --features std,cpu --lib \
+        "${MIRI_BACKEND_NUMERIC_SKIPS[@]}" \
         || fail "miri: incin-backends"
     success "miri: incin-backends"
 }

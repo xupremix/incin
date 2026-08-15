@@ -405,6 +405,14 @@ enables = []
 name = "test-utils"
 enables = ["incin-core/test-utils"]
 
+[[feature_crate.feature]]
+name = "compiled"
+enables = ["std", "cpu", "incin-core/compiled"]
+
+[[feature_crate.feature]]
+name = "legacy-operation-api-tests"
+enables = []
+
 [[feature_crate]]
 package = "incin"
 manifest = "crates/incin/Cargo.toml"
@@ -477,7 +485,7 @@ enables = []
 
 [[feature_crate.feature]]
 name = "compiled"
-enables = ["incin-core/compiled"]
+enables = ["incin-core/compiled", "incin-backends/compiled"]
 
 [[feature_crate.feature]]
 name = "target-api"
@@ -486,3 +494,7 @@ enables = ["incin-backends/target-api"]
 [[feature_crate.feature]]
 name = "test-utils"
 enables = ["incin-core/test-utils", "incin-backends/test-utils"]
+
+[[feature_crate.feature]]
+name = "legacy-operation-api-tests"
+enables = ["incin-backends/legacy-operation-api-tests"]
