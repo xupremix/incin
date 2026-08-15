@@ -366,24 +366,24 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
             .get_mut(&output_id)
             .ok_or_else(|| Error::Msg(format!("missing metadata for value {output_id}")))?;
         let shape = match node.operation {
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Relu) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Relu) => {
                 inputs.first().cloned()
             }
             OperationIdentity::Builtin(
-                crate::prelude::OperationKind::Abs
-                | crate::prelude::OperationKind::Exp
-                | crate::prelude::OperationKind::Neg
-                | crate::prelude::OperationKind::Sqrt
-                | crate::prelude::OperationKind::Log
-                | crate::prelude::OperationKind::Tanh
-                | crate::prelude::OperationKind::Sigmoid
-                | crate::prelude::OperationKind::Gelu
-                | crate::prelude::OperationKind::Elu
-                | crate::prelude::OperationKind::Mish
-                | crate::prelude::OperationKind::Swish
-                | crate::prelude::OperationKind::LogicalNot,
+                crate::shapes::error::OperationKind::Abs
+                | crate::shapes::error::OperationKind::Exp
+                | crate::shapes::error::OperationKind::Neg
+                | crate::shapes::error::OperationKind::Sqrt
+                | crate::shapes::error::OperationKind::Log
+                | crate::shapes::error::OperationKind::Tanh
+                | crate::shapes::error::OperationKind::Sigmoid
+                | crate::shapes::error::OperationKind::Gelu
+                | crate::shapes::error::OperationKind::Elu
+                | crate::shapes::error::OperationKind::Mish
+                | crate::shapes::error::OperationKind::Swish
+                | crate::shapes::error::OperationKind::LogicalNot,
             ) => inputs.first().cloned(),
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Softmax) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Softmax) => {
                 #[cfg(feature = "std")]
                 {
                     let _axis = node_attribute_axis(node)?;
@@ -395,25 +395,25 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 }
             }
             OperationIdentity::Builtin(
-                crate::prelude::OperationKind::AddScalar
-                | crate::prelude::OperationKind::SubScalar
-                | crate::prelude::OperationKind::MulScalar
-                | crate::prelude::OperationKind::DivScalar,
+                crate::shapes::error::OperationKind::AddScalar
+                | crate::shapes::error::OperationKind::SubScalar
+                | crate::shapes::error::OperationKind::MulScalar
+                | crate::shapes::error::OperationKind::DivScalar,
             ) => inputs.first().cloned(),
             OperationIdentity::Builtin(
-                crate::prelude::OperationKind::Add
-                | crate::prelude::OperationKind::Sub
-                | crate::prelude::OperationKind::Mul
-                | crate::prelude::OperationKind::Div,
+                crate::shapes::error::OperationKind::Add
+                | crate::shapes::error::OperationKind::Sub
+                | crate::shapes::error::OperationKind::Mul
+                | crate::shapes::error::OperationKind::Div,
             ) => inputs
                 .first()
                 .zip(inputs.get(1))
                 .map(|(lhs, rhs)| broadcast_shapes(lhs, rhs)),
-            OperationIdentity::Builtin(crate::prelude::OperationKind::MatMulExact) => inputs
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::MatMulExact) => inputs
                 .first()
                 .zip(inputs.get(1))
                 .and_then(|(lhs, rhs)| matmul_shape(lhs, rhs)),
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Linear) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Linear) => {
                 #[cfg(feature = "std")]
                 {
                     let _descriptor = decode_descriptor::<op::Linear>(node)?;
@@ -427,14 +427,14 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Addmm) => inputs
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Addmm) => inputs
                 .first()
                 .zip(inputs.get(1))
                 .zip(inputs.get(2))
                 .and_then(|((addend, lhs), rhs)| {
                     matmul_shape(lhs, rhs).map(|product| broadcast_shapes(addend, &product))
                 }),
-            OperationIdentity::Builtin(crate::prelude::OperationKind::ReshapeExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::ReshapeExact) => {
                 #[cfg(feature = "std")]
                 {
                     let descriptor = decode_descriptor::<op::ReshapeExact>(node)?;
@@ -445,7 +445,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::TransposeExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::TransposeExact) => {
                 #[cfg(feature = "std")]
                 {
                     let descriptor = decode_descriptor::<op::TransposeExact>(node)?;
@@ -461,7 +461,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::Narrow) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::Narrow) => {
                 #[cfg(feature = "std")]
                 {
                     let descriptor = decode_descriptor::<op::Narrow>(node)?;
@@ -479,7 +479,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::FlattenExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::FlattenExact) => {
                 #[cfg(feature = "std")]
                 {
                     let descriptor = decode_descriptor::<op::FlattenExact>(node)?;
@@ -493,7 +493,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::SliceExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::SliceExact) => {
                 #[cfg(feature = "std")]
                 {
                     let descriptor = decode_descriptor::<op::SliceExact>(node)?;
@@ -517,7 +517,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::SqueezeExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::SqueezeExact) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = decode_descriptor::<op::SqueezeExact>(node)?
@@ -535,7 +535,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::UnsqueezeExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::UnsqueezeExact) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = decode_descriptor::<op::UnsqueezeExact>(node)?
@@ -553,7 +553,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::SumDim) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::SumDim) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = node_attribute_axis_or_sum_descriptor(node)?;
@@ -565,9 +565,9 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 }
             }
             OperationIdentity::Builtin(
-                crate::prelude::OperationKind::MeanDim
-                | crate::prelude::OperationKind::MaxDim
-                | crate::prelude::OperationKind::MinDim,
+                crate::shapes::error::OperationKind::MeanDim
+                | crate::shapes::error::OperationKind::MaxDim
+                | crate::shapes::error::OperationKind::MinDim,
             ) => {
                 #[cfg(feature = "std")]
                 {
@@ -580,9 +580,9 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                 }
             }
             OperationIdentity::Builtin(
-                crate::prelude::OperationKind::MeanKeepDim
-                | crate::prelude::OperationKind::MaxKeepDim
-                | crate::prelude::OperationKind::MinKeepDim,
+                crate::shapes::error::OperationKind::MeanKeepDim
+                | crate::shapes::error::OperationKind::MaxKeepDim
+                | crate::shapes::error::OperationKind::MinKeepDim,
             ) => {
                 #[cfg(feature = "std")]
                 {
@@ -594,7 +594,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::SumKeepDim) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::SumKeepDim) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = node_attribute_axis(node)?;
@@ -605,7 +605,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::ConcatExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::ConcatExact) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = decode_descriptor::<op::ConcatExact>(node)?
@@ -629,7 +629,7 @@ fn propagate_symbolic_outputs(graph: &mut CapturedGraph) -> Result<()> {
                     None
                 }
             }
-            OperationIdentity::Builtin(crate::prelude::OperationKind::StackExact) => {
+            OperationIdentity::Builtin(crate::shapes::error::OperationKind::StackExact) => {
                 #[cfg(feature = "std")]
                 {
                     let axis = decode_descriptor::<op::StackExact>(node)?.attributes().axis;
