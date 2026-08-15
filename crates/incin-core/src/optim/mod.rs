@@ -73,6 +73,11 @@ impl<B: VariableBackend, K: ConstDType> ParameterGroup<B, K> {
         self.params.is_empty()
     }
 
+    /// Iterates over the collected variables in canonical path order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &B::Var<K>)> {
+        self.params.iter()
+    }
+
     fn into_map(self) -> alloc::collections::BTreeMap<String, B::Var<K>> {
         self.params
     }
@@ -511,6 +516,15 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
     {
         Self::new(group.into_map(), lr)
     }
+
+    /// Collects a module's trainable parameters and creates the optimizer.
+    pub fn from_module<M>(module: &M, lr: f64) -> Result<Self>
+    where
+        M: VisitParameters<B>,
+        K: ConstDType,
+    {
+        Ok(Self::from_group(ParameterGroup::from_module(module)?, lr))
+    }
 }
 
 impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B, K> {
@@ -600,6 +614,15 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         K: ConstDType,
     {
         Self::new(group.into_map(), lr)
+    }
+
+    /// Collects a module's trainable parameters and creates the optimizer.
+    pub fn from_module<M>(module: &M, lr: f64) -> Result<Self>
+    where
+        M: VisitParameters<B>,
+        K: ConstDType,
+    {
+        Ok(Self::from_group(ParameterGroup::from_module(module)?, lr))
     }
 
     /// Gets the current step counter.
@@ -783,6 +806,15 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         K: ConstDType,
     {
         Self::new(group.into_map(), lr)
+    }
+
+    /// Collects a module's trainable parameters and creates the optimizer.
+    pub fn from_module<M>(module: &M, lr: f64) -> Result<Self>
+    where
+        M: VisitParameters<B>,
+        K: ConstDType,
+    {
+        Ok(Self::from_group(ParameterGroup::from_module(module)?, lr))
     }
 
     /// Gets the current step counter.

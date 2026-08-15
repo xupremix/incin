@@ -3,7 +3,7 @@ use crate::exec::catalog::{AdaptivePool2dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::{Module, Parameters, TrainMode};
+use crate::nn::{Module, TrainMode};
 use crate::prelude::{Backend, Device, DType, DynShape, Error, Result, Shape, Tensor};
 use alloc::string::String;
 use crate::tensor::backend::Execute;
@@ -28,16 +28,6 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
         Self {
             _phantom: core::marker::PhantomData,
         }
-    }
-}
-
-impl<HOut: Unsigned, WOut: Unsigned, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for AdaptiveAvgPool2d<HOut, WOut> {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
     }
 }
 

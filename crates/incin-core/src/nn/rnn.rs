@@ -2,7 +2,7 @@ use crate::exec::catalog::{Descriptor, op};
 use crate::nn::init::Init;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
-use crate::nn::{Linear, Module, Parameters};
+use crate::nn::{Linear, Module, VisitParameters};
 use crate::prelude::{AppendDim, Backend, ConstDType, Device, DType, Dim, Dyn, DynShape, Error, Grad, GradJoin, JoinedGrad, LinearShape, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
 use alloc::string::String;
 use crate::shapes::shape::{DimCons, Nil};
@@ -339,19 +339,18 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B, K> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
+> VisitParameters<B> for RNNCell<S, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<S::IhShape, B, BiasIh, K, Train>: Parameters<B, K>,
-    Linear<S::HhShape, B, BiasHh, K, Train>: Parameters<B, K>,
+    Linear<S::IhShape, B, BiasIh, K, Train>: VisitParameters<B>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: VisitParameters<B>,
 {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
         &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.wi.named_parameters(&format!("{}wi.", prefix), map);
-        self.wh.named_parameters(&format!("{}wh.", prefix), map);
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.wi.visit_parameters(&path.child("wi"), visitor)?;
+        self.wh.visit_parameters(&path.child("wh"), visitor)
     }
 }
 
@@ -499,17 +498,16 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Parameters<B, K> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
+> VisitParameters<B> for RNN<S, B, BiasIh, BiasHh, K, Train, G>
 where
-    RNNCell<S, B, BiasIh, BiasHh, K, Train>: Parameters<B, K>,
+    RNNCell<S, B, BiasIh, BiasHh, K, Train>: VisitParameters<B>,
 {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
         &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.cell.named_parameters(&format!("{}cell.", prefix), map);
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.cell.visit_parameters(&path.child("cell"), visitor)
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::nn::module::{Module, Parameters, ShapeInfo, TrainMode};
+use crate::nn::module::{Module, ShapeInfo, TrainMode};
 use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
@@ -25,16 +25,6 @@ macro_rules! impl_stateless_shape_info {
 }
 
 impl_stateless_shape_info!(ReLU);
-
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for ReLU {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
 
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
@@ -73,16 +63,6 @@ pub struct GELU;
 
 impl_stateless_shape_info!(GELU);
 
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for GELU {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
-
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
@@ -113,16 +93,6 @@ pub struct Swish;
 
 impl_stateless_shape_info!(Swish);
 
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Swish {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
-
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
@@ -152,16 +122,6 @@ where
 pub struct Mish;
 
 impl_stateless_shape_info!(Mish);
-
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Mish {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
 
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
@@ -194,16 +154,6 @@ where
 pub struct ELU;
 
 impl_stateless_shape_info!(ELU);
-
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for ELU {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
 
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
@@ -251,16 +201,6 @@ impl Softmax {
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Softmax {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
-
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
@@ -294,16 +234,6 @@ pub struct Sigmoid;
 
 impl_stateless_shape_info!(Sigmoid);
 
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Sigmoid {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
-
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
@@ -332,16 +262,6 @@ where
 pub struct Tanh;
 
 impl_stateless_shape_info!(Tanh);
-
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Tanh {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
 
 /// Stateless — no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers

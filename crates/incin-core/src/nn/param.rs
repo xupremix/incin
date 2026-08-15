@@ -14,7 +14,6 @@ use crate::tensor::backend::{Backend, HostInterop, StorageBackend, SupportsDType
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
-use crate::nn::module::Parameters;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
@@ -706,18 +705,6 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend + SupportsDType<K> + c
     }
 }
 
-impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Parameters<B, K> for Param<S, B, K, Train> {
-    fn named_parameters(
-        &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        if Train::TRAINABLE {
-            map.insert(prefix.to_string(), self.inner.clone());
-        }
-    }
-}
-
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
     crate::nn::VisitParameters<B> for Param<S, B, K, Train>
 {
@@ -1061,15 +1048,6 @@ where
             operation: "snapshot buffer",
             reason: ErrorMessage::new(format!("{path}: {error}")),
         })
-    }
-}
-
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Buffer<S, B, K> {
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
     }
 }
 

@@ -1,86 +1,6 @@
 use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, Result, Shape, Tensor, ToDevice, VariableBackend};
-use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-
-/// A trait implemented by all Neural Network modules.
-/// Usually automatically derived via `#[incin::module]`.
-pub trait Parameters<B: VariableBackend, K: DType> {
-    /// Recursively extract all trainable parameters from this module into a named map.
-    fn named_parameters(
-        &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    );
-
-    /// Helper to retrieve all parameters as a new map.
-    fn parameters(&self) -> alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>> {
-        let mut map = alloc::collections::BTreeMap::new();
-        self.named_parameters("", &mut map);
-        map
-    }
-
-    /// Number of flat positional slots this module occupies when nested
-    /// inside a [`Sequential`] chain — `1` for any ordinary layer (this
-    /// default, and every existing layer type inherits it automatically
-    /// since `Parameters` is already implemented everywhere — no per-type
-    /// opt-in needed, unlike `TrainMode`'s default-no-op design). Overridden
-    /// only by [`Sequential`]'s own impl, which sums its two children's
-    /// widths.
-    ///
-    /// `seq!(a, b, c)` builds the right-nested value
-    /// `Sequential(a, Sequential(b, c))`, so a naive recursive
-    /// `named_parameters` (literally prepending `"0."`/`"1."` at each level)
-    /// produces keys that encode that nesting structure —
-    /// `0.weight, 1.0.weight, 1.1.weight` — rather than PyTorch
-    /// `nn.Sequential`'s flat `0.weight, 1.weight, 2.weight`. `flat_width`
-    /// plus [`named_parameters_flat`](Self::named_parameters_flat) is the
-    /// mechanism that fixes this: each level needs to know how many flat
-    /// positional slots its *left* child consumed before it can correctly
-    /// number its *right* child's first slot, and that width has to be
-    /// known independent of how many parameters (if any) each layer
-    /// actually has — a parameter-less layer like `ReLU` still occupies
-    /// exactly one position, exactly like PyTorch reserves index `1` for a
-    /// parameter-less middle layer in `nn.Sequential(Linear(3,3), ReLU(),
-    /// Linear(3,3))`'s state dict (keys `0.weight/0.bias`, nothing at index
-    /// `1`, then `2.weight/2.bias`).
-    fn flat_width() -> usize
-    where
-        Self: Sized,
-    {
-        1
-    }
-
-    /// Collects named parameters using FLAT positional numbering relative
-    /// to `base_index` (PyTorch `nn.Sequential` semantics), unlike
-    /// `named_parameters`'s own literal prefix-string recursion. Default:
-    /// treat `self` as one flat slot at `base_index`, delegating to
-    /// `named_parameters`. [`Sequential`] overrides this to recurse with the
-    /// correct running offset instead — see `flat_width`'s doc for why this
-    /// exists.
-    fn named_parameters_flat(
-        &self,
-        outer_prefix: &str,
-        base_index: usize,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) where
-        Self: Sized,
-    {
-        // `named_parameters`'s own `#[module]`-generated body ALREADY
-        // appends a trailing `.` to a non-empty incoming prefix before
-        // using it (`let prefix = if prefix.is_empty() { .. } else {
-        // format!("{}.", prefix) }`) — passing an already-dotted prefix
-        // here would double it up (`"0..weight"` instead of `"0.weight"`),
-        // a real bug caught by `test_sequential_state_dict_keys_are_flat_like_pytorch`
-        // actually asserting on key *strings* rather than just a count.
-        let joined = if outer_prefix.is_empty() {
-            format!("{base_index}")
-        } else {
-            format!("{outer_prefix}.{base_index}")
-        };
-        self.named_parameters(&joined, map);
-    }
-}
 
 /// Receives trainable parameter leaves without exposing backend handle maps.
 pub trait ParameterVisitor<B: VariableBackend> {
@@ -127,7 +47,7 @@ pub trait VisitParameters<B: VariableBackend> {
 
 /// Recursively switches a module (and every submodule reachable through
 /// `#[module]`-derived fields) between training and evaluation behavior —
-/// `#[module]` auto-implements this exactly like it does `Parameters`/
+/// `#[module]` auto-implements this for derived modules.
 /// typed state visitors, walking every field and delegating to its `TrainMode`
 /// implementation, so calling `.eval()` on a top-level model
 /// propagates all the way down to every nested [`crate::nn::dropout::Dropout`]
@@ -301,45 +221,7 @@ where
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend, L1, L2, K: DType> Parameters<B, K> for Sequential<L1, L2>
-where
-    L1: Parameters<B, K>,
-    L2: Parameters<B, K>,
-{
-    /// Entry point: flat-numbers from index `0`, matching PyTorch
-    /// `nn.Sequential`'s state-dict key scheme — see `flat_width`'s doc.
-    fn named_parameters(
-        &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.named_parameters_flat(prefix, 0, map);
-    }
-
-    /// Sums both children's widths — see `flat_width`'s doc.
-    fn flat_width() -> usize {
-        L1::flat_width() + L2::flat_width()
-    }
-
-    /// Recurses with a running index offset: the left child starts at
-    /// `base_index`, the right child starts `L1::flat_width()` positions
-    /// later. Each child's OWN `named_parameters_flat` (its default if it's
-    /// an ordinary layer, or this same override if it's itself a
-    /// `Sequential`) handles turning that starting index into real keys.
-    fn named_parameters_flat(
-        &self,
-        outer_prefix: &str,
-        base_index: usize,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.0.named_parameters_flat(outer_prefix, base_index, map);
-        self.1
-            .named_parameters_flat(outer_prefix, base_index + L1::flat_width(), map);
-    }
-}
-
-// Explicit bounds + direct calls, matching `Parameters`'s own
-// impls for `Sequential` immediately below/above. Every leaf layer with no
+// Explicit bounds + direct calls for every leaf layer with no
 // training-dependent behavior
 // (`Linear`, `ReLU`, `Conv2d`, pooling layers, ...) implements `TrainMode`
 // via its default no-op body specifically so this bound is satisfiable for
@@ -442,33 +324,6 @@ where
     }
 }
 
-// Dummy implementations for primitive/marker types that are often fields in modules.
-macro_rules! impl_dummy_state {
-    ($($t:ty),+) => {
-        $(
-            impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for $t {
-                /// Collects named trainable parameters into `map` under the given `prefix`.
-                fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>) {}
-            }
-
-        )+
-    };
-}
-
-impl_dummy_state!(usize, f32);
-
-impl<T, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for core::marker::PhantomData<T>
-where
-    T: crate::prelude::DType,
-{
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
 impl<T, B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B>
     for core::marker::PhantomData<T>
 where
@@ -480,19 +335,6 @@ where
         _visitor: &mut V,
     ) -> Result<()> {
         Ok(())
-    }
-}
-
-impl<T: Parameters<B, K>, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Option<T> {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        if let Some(v) = self {
-            v.named_parameters(prefix, map);
-        }
     }
 }
 

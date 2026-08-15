@@ -1,4 +1,4 @@
-use crate::nn::{Module, Parameters};
+use crate::nn::Module;
 use crate::err::Result;
 use crate::shapes::{DynShape, Shape};
 use crate::shapes::Dyn;
@@ -22,16 +22,6 @@ impl<Start, End> Flatten<Start, End> {
         Self(PhantomData)
     }
 }
-
-impl<Start, End, B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Flatten<Start, End> {
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-    }
-}
-
 
 /// Runtime-rank models commonly flatten the image axes after a dynamic batch
 /// axis.  Keep that migration path on the same module type while the exact

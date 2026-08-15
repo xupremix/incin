@@ -2,7 +2,7 @@ use crate::exec::catalog::{Descriptor, op};
 use crate::nn::init::Init;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
-use crate::nn::{Linear, Module, Parameters};
+use crate::nn::{Linear, Module, VisitParameters};
 use crate::prelude::{AppendDim, Backend, ConstDType, Device, DType, Dim, Dyn, DynShape, Error, Grad, GradJoin, JoinedGrad, LinearShape, ReplaceLastDim, RequiresGrad, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
 use crate::shapes::shape::{DimCons, Nil};
 use crate::tensor::backend::Execute;
@@ -451,7 +451,7 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// Parameters impl (generic over all BiasIh/BiasHh/K/Train combinations)
+// Parameter visitor (generic over all BiasIh/BiasHh/K/Train combinations)
 // ---------------------------------------------------------------------------
 
 impl<
@@ -462,25 +462,24 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B, K> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+> VisitParameters<B> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<D2<In, Out>, B, BiasIh, K, Train>: Parameters<B, K>,
-    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Parameters<B, K>,
+    Linear<D2<In, Out>, B, BiasIh, K, Train>: VisitParameters<B>,
+    Linear<D2<Out, Out>, B, BiasHh, K, Train>: VisitParameters<B>,
 {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
         &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.wi_i.named_parameters(&format!("{}wi_i.", prefix), map);
-        self.wi_f.named_parameters(&format!("{}wi_f.", prefix), map);
-        self.wi_g.named_parameters(&format!("{}wi_g.", prefix), map);
-        self.wi_o.named_parameters(&format!("{}wi_o.", prefix), map);
-        self.wh_i.named_parameters(&format!("{}wh_i.", prefix), map);
-        self.wh_f.named_parameters(&format!("{}wh_f.", prefix), map);
-        self.wh_g.named_parameters(&format!("{}wh_g.", prefix), map);
-        self.wh_o.named_parameters(&format!("{}wh_o.", prefix), map);
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.wi_i.visit_parameters(&path.child("wi_i"), visitor)?;
+        self.wi_f.visit_parameters(&path.child("wi_f"), visitor)?;
+        self.wi_g.visit_parameters(&path.child("wi_g"), visitor)?;
+        self.wi_o.visit_parameters(&path.child("wi_o"), visitor)?;
+        self.wh_i.visit_parameters(&path.child("wh_i"), visitor)?;
+        self.wh_f.visit_parameters(&path.child("wh_f"), visitor)?;
+        self.wh_g.visit_parameters(&path.child("wh_g"), visitor)?;
+        self.wh_o.visit_parameters(&path.child("wh_o"), visitor)
     }
 }
 
@@ -636,17 +635,16 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-> Parameters<B, K> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+> VisitParameters<B> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Parameters<B, K>,
+    LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: VisitParameters<B>,
 {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
         &self,
-        prefix: &str,
-        map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        self.cell.named_parameters(&format!("{}cell.", prefix), map);
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> crate::prelude::Result<()> {
+        self.cell.visit_parameters(&path.child("cell"), visitor)
     }
 }
 

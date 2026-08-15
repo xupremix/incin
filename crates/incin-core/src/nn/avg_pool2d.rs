@@ -5,7 +5,7 @@ use crate::exec::catalog::{AvgPool2dAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::{Module, Parameters, TrainMode};
+use crate::nn::{Module, TrainMode};
 use crate::prelude::{Backend, Device, DType, DynShape, Error, Result, Shape, Tensor};
 use alloc::string::String;
 use crate::shapes::ShapeValue;
@@ -25,18 +25,6 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {
         Ok(Self {
             _phantom: core::marker::PhantomData,
         })
-    }
-}
-
-impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: crate::tensor::backend::VariableBackend, DTypeK: DType> Parameters<B, DTypeK>
-    for AvgPool2d<K, S, P, D>
-{
-    /// Collects named trainable parameters into `map` under the given `prefix`.
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<DTypeK>>,
-    ) {
     }
 }
 

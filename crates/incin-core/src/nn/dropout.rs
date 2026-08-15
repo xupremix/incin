@@ -4,7 +4,7 @@ use crate::exec::catalog::{Descriptor, DropoutAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::{Module, Parameters, TrainMode};
+use crate::nn::{Module, TrainMode};
 use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
@@ -40,16 +40,6 @@ impl Dropout {
             p,
             is_training: true,
         }
-    }
-}
-
-impl<B: crate::tensor::backend::VariableBackend, K: DType> Parameters<B, K> for Dropout {
-    fn named_parameters(
-        &self,
-        _prefix: &str,
-        _map: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
-    ) {
-        // No learnable parameters.
     }
 }
 

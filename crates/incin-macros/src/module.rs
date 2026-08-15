@@ -309,7 +309,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
-    let mut param_calls = Vec::new();
     let mut visit_state_calls = Vec::new();
     let mut visit_state_mut_calls = Vec::new();
     let mut visit_parameter_calls = Vec::new();
@@ -356,10 +355,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     state_dict_field_types.push(field.ty.clone());
 
-                    param_calls.push(quote! {
-                        #k_crate::prelude::Parameters::named_parameters(
-                            &self.#fname, &#format_mac("{}{}", prefix, #fname_str), map);
-                    });
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
@@ -436,10 +431,6 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     state_dict_field_types.push(field.ty.clone());
 
-                    param_calls.push(quote! {
-                        #k_crate::prelude::Parameters::named_parameters(
-                            &self.#idx, &#format_mac("{}{}", prefix, #idx_str), map);
-                    });
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
                         #k_crate::prelude::VisitState::visit_state(
@@ -564,36 +555,10 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let parameters_impl = if no_parameters {
-        quote! {}
-    } else {
-        // Parameter traversal is generic over the leaf dtype even when the
-        // module itself has no dtype parameter. Keep this helper generic
-        // rather than forcing every model struct to carry an unused `K`.
-        let parameter_dtype = input
-            .generics
-            .type_params()
-            .find(|param| param.ident == "K")
-            .map(|param| param.ident.clone());
-        let mut parameters_generics = input.generics.clone();
-        let parameter_dtype = parameter_dtype.unwrap_or_else(|| {
-            parameters_generics
-                .params
-                .push(syn::parse_quote!(__IncinParameterDtype: #k_crate::prelude::DType));
-            syn::parse_quote!(__IncinParameterDtype)
-        });
-        let (parameters_impl_generics, _, parameters_where_clause) =
-            parameters_generics.split_for_impl();
-        quote! {
-            impl #parameters_impl_generics #k_crate::prelude::Parameters<#b_ident, #parameter_dtype> for #name #ty_generics #parameters_where_clause {
-                /// Named parameters.
-                fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::VariableBackend>::Var<#parameter_dtype>>) {
-                    let prefix = if prefix.is_empty() { #macro_support::String::new() } else { #macro_support::format!("{}.", prefix) };
-                    #(#param_calls)*
-                }
-            }
-        }
-    };
+    // Parameter collection is emitted only through the typed visitor below.
+    // Homogeneous optimizer collections belong to the optimizer layer, so
+    // module derives must not recreate a second module traversal API.
+    let parameters_impl = quote! {};
 
     let visit_parameters_impl = if no_parameters {
         quote! {}

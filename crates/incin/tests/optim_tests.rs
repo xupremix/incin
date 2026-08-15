@@ -23,12 +23,13 @@ fn optimizer_parameter_groups_collect_through_typed_state_visitors() {
 fn parameter_bytes(
     linear: &Linear<s![10, 5], CpuBackendImpl>,
 ) -> Result<BTreeMap<String, Vec<u8>>> {
-    linear
-        .parameters()
+    ParameterGroup::<CpuBackendImpl, f32>::from_module(linear)
+        .unwrap()
+        .iter()
         .into_iter()
         .map(|(name, var)| {
             let storage = CpuBackendImpl::var_as_tensor::<f32>(&var)?;
-            Ok((name, CpuBackendImpl::to_bytes::<f32>(&storage)?))
+            Ok((name.clone(), CpuBackendImpl::to_bytes::<f32>(&storage)?))
         })
         .collect()
 }
@@ -65,7 +66,7 @@ fn get_linear_and_grads() -> Result<(
 /// Test sgd.
 fn test_sgd() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim = SGD::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    let mut optim = SGD::<CpuBackendImpl>::from_module(&linear, 0.01)?;
 
     optim.step(&grads)?;
 
@@ -76,7 +77,7 @@ fn test_sgd() -> Result<()> {
 /// Test adam.
 fn test_adam() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut optim = Adam::<CpuBackendImpl>::from_module(&linear, 0.001)?;
 
     optim.step(&grads)?;
 
@@ -87,7 +88,7 @@ fn test_adam() -> Result<()> {
 /// Test adamw.
 fn test_adamw() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut optim = AdamW::<CpuBackendImpl>::from_module(&linear, 0.001)?;
 
     optim.step(&grads)?;
 
@@ -97,7 +98,7 @@ fn test_adamw() -> Result<()> {
 #[test]
 fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    let mut optim1 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
 
     // Step 1
     optim1.step(&grads)?;
@@ -109,7 +110,7 @@ fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
     assert!(!state.is_empty());
 
     // Create a new optimizer instance and load state
-    let mut optim2 = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    let mut optim2 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
     optim2.load_state_dict("", &state)?;
     optim2.set_step_count(optim1.step_count());
 
@@ -124,7 +125,7 @@ fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
 #[test]
 fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    let mut optim1 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
 
     optim1.step(&grads)?;
     assert_eq!(optim1.step_count(), 1);
@@ -133,7 +134,7 @@ fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
     optim1.state_dict("", &mut state)?;
     assert!(!state.is_empty());
 
-    let mut optim2 = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    let mut optim2 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
     optim2.load_state_dict("", &state)?;
     optim2.set_step_count(optim1.step_count());
 
@@ -148,7 +149,7 @@ fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
 fn adam_step_rolls_back_parameters_state_and_counter_on_backend_failure() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let before = parameter_bytes(&linear)?;
-    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut optim = Adam::<CpuBackendImpl>::from_module(&linear, 0.001)?;
     let mut state_before = BTreeMap::new();
     optim.state_dict("", &mut state_before)?;
 
@@ -180,7 +181,7 @@ fn adam_step_rolls_back_parameters_state_and_counter_on_backend_failure() -> Res
 fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let before = parameter_bytes(&linear)?;
-    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut optim = Adam::<CpuBackendImpl>::from_module(&linear, 0.001)?;
     optim.set_step_count(usize::MAX);
 
     assert!(matches!(
@@ -201,7 +202,7 @@ fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
 #[test]
 fn malformed_adam_state_load_is_typed_and_transactional() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
-    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut optim = Adam::<CpuBackendImpl>::from_module(&linear, 0.001)?;
     optim.step(&grads)?;
 
     let mut valid_state = BTreeMap::new();
