@@ -1,0 +1,181 @@
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build, for example v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  create-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
+
+  book:
+    name: Package book
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install mdBook
+        run: cargo install mdbook --locked
+
+      - name: Build book and single-page HTML
+        run: |
+          set -euo pipefail
+          mdbook build docs/book
+          python3 docs/book/make_single_page.py
+
+      - name: Archive book
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          tar -czf "incin-book-${version}.tar.gz" \
+            -C docs/book/book .
+          cp docs/book/book/incin-book.html "incin-book-${version}.html"
+
+      - name: Upload book assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" incin-book-* --clobber
+
+  editors:
+    name: Package editor integrations
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Build VS Code extension
+        working-directory: editors/vscode
+        run: |
+          set -euo pipefail
+          npm ci
+          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
+          npm run compile
+          npx --yes @vscode/vsce@latest package --out "incin-lsp-vscode-${RELEASE_TAG#v}.vsix"
+
+      - name: Archive Neovim and RustRover integrations
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          tar -czf "incin-lsp-nvim-${version}.tar.gz" \
+            -C editors/nvim README.md lua
+          tar -czf "incin-rustrover-${version}.tar.gz" \
+            -C editors/rustrover README.md incin-check.sh
+
+      - name: Upload editor assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            "editors/vscode/incin-lsp-vscode-${RELEASE_TAG#v}.vsix" \
+            incin-lsp-nvim-* \
+            incin-rustrover-* \
+            --clobber
+
+  rust-binaries:
+    name: Build ${{ matrix.target }} binaries
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: aarch64-apple-darwin
+            runs-on: macos-14
+          - target: x86_64-pc-windows-msvc
+            runs-on: windows-latest
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install protobuf compiler on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install protobuf compiler on macOS
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protobuf compiler on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install protoc --no-progress -y
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build LSP and Cargo subcommand
+        run: |
+          cargo build --locked --release -p incin-lsp --bin incin-lsp
+          cargo build --locked --release -p incin --bin cargo-incin
+
+      - name: Package Unix binaries
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          staging="incin-${version}-${{ matrix.target }}"
+          mkdir -p "$staging"
+          cp target/release/incin-lsp "$staging/"
+          cp target/release/cargo-incin "$staging/"
+          tar -czf "$staging.tar.gz" "$staging"
+
+      - name: Package Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $staging = "incin-$version-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $staging | Out-Null
+          Copy-Item target/release/incin-lsp.exe $staging/
+          Copy-Item target/release/cargo-incin.exe $staging/
+          Compress-Archive -Path $staging -DestinationPath "$staging.zip"
+
+      - name: Upload binaries
+        if: runner.os != 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" incin-*.tar.gz --clobber
+
+      - name: Upload Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$env:RELEASE_TAG" incin-*.zip --clobber

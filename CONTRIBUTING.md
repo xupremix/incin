@@ -22,3 +22,9 @@ If you've noticed a bug or have a feature request, make sure to check if there's
 
 ## Code of Conduct
 Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+
+## Releases
+
+Release tags automatically build and upload the book, editor integrations,
+`incin-lsp`, and the `cargo-incin` binary. See [docs/RELEASING.md](docs/RELEASING.md)
+for the asset list and tag procedure.
