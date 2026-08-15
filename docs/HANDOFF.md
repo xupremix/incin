@@ -248,12 +248,12 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-canonical-v10.zip # passed
+tools/export-snapshot.sh /tmp/hnd004b-canonical-v12.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
 set, contained both distributed source trees, unpacked successfully, ran the
-architecture, large-file, and public-API gates inside the unpacked copy, and
+architecture, dependency, large-file, and public-API gates inside the unpacked copy, and
 ran `cargo check -p incin-core --no-default-features` there. The ZIP is the
 artifact result; `tools/check-package.sh` remains an internal component check,
 not an alternate snapshot workflow.

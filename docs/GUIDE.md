@@ -342,11 +342,10 @@ proof token per `docs/INVARIANT_TYPES.md`, constructed only through
 `TensorMeta::try_new`/`contiguous`). A foreign tensor type that carries no
 such metadata can still join the canonical contract by wrapping itself —
 `incin_backends::external::candle::CandleStorage` is the worked example:
-`CandleBackend`'s own `Storage<K>` stays the raw `candle_core::Tensor` (so its
-existing family-trait operations are untouched), while a *separate*
-`Execute<MatMulSpec>`/`Execute<ReshapeSpec>` impl operates on the wrapper.
-Joining the descriptor contract does not require rewriting the adapter that
-already exists.
+The adapter's raw `candle_core::Tensor` remains private to its storage boundary,
+while separate `Execute<MatMulSpec>`/`Execute<ReshapeSpec>` implementations
+operate on the validated wrapper. Joining the descriptor contract does not
+expose or recreate the removed operation-family API.
 
 **Capability declarations** (`crates/incin-backends/src/capability.rs`) are
 grouped by *rule shape*, not by operation family — migrating an operation onto
