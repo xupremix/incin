@@ -23,6 +23,7 @@ type NB = CpuBackendImpl;
 /// A small CNN classifier: conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear.
 #[module(no_shape_info)]
 pub struct SimpleCnn<B: VariableBackend> {
+    #[allow(clippy::type_complexity)]
     pub conv1: incin_core::prelude::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B, incin_core::prelude::False>,
     pub bn1: incin::BatchNorm2d<s![dyn], B>,
     #[module(ignore)]

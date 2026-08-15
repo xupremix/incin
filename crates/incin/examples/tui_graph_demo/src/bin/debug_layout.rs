@@ -58,6 +58,7 @@ where
 }
 
 /// Project.
+#[allow(clippy::too_many_arguments)]
 fn project(
     x: f64,
     y: f64,

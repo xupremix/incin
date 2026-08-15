@@ -2,6 +2,7 @@ extern crate alloc;
 use incin::Tensor;
 use incin::prelude::*;
 
+#[allow(clippy::type_complexity)]
 fn main() -> Result<()> {
     // Tier 3: Fully compile-time CPU (only one CPU, always Tier 3)
     type CpuB = IncinBackend<Cpu>;
