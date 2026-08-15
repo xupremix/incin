@@ -1,7 +1,12 @@
 use crate::backend_authoring::{Descriptor, Execute};
 use crate::exec::Capabilities;
 use crate::nn::{Module, TrainMode};
-use crate::prelude::{Backend, Device, DType, DynShape, Error, Result, Shape, Tensor};
+use crate::backend_authoring::Backend;
+use crate::err::{Error, Result};
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
 use alloc::string::String;
 
 use typenum::Unsigned;

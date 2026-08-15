@@ -1,5 +1,5 @@
 use crate::err::Error;
-use crate::prelude::Result;
+use crate::err::Result;
 
 /// Fan geometry for initialization calculations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

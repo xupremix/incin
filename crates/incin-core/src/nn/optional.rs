@@ -1,4 +1,4 @@
-use crate::prelude::Dyn;
+use crate::shapes::Dyn;
 
 /// Marker trait for optional module parameters (e.g., bias tensors).
 ///

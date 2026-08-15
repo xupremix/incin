@@ -6,7 +6,12 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
-use crate::prelude::{Backend, Device, DType, DynShape, Error, Result, Shape, Tensor};
+use crate::backend_authoring::Backend;
+use crate::err::{Error, Result};
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
 use alloc::string::String;
 use crate::shapes::ShapeValue;
 
