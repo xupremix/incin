@@ -18,10 +18,13 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::NoGrad;
-use crate::prelude::{
-    Backend, DType, Dyn, DynShape, HostInterop, RequiresGrad, Result, Shape, SupportsDType, Tensor, StorageTransfer,
-};
+use crate::backend_authoring::{Backend, HostInterop, StorageTransfer, SupportsDType};
+use crate::err::{Error, Result};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{NoGrad, RequiresGrad};
+use crate::shapes::{Dyn, DynShape, Shape};
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -61,7 +64,7 @@ where
     K: DType,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
-    let target = ShapeValue::<Dyn>::try_new(shape.clone()).map_err(crate::prelude::Error::Shape)?;
+    let target = ShapeValue::<Dyn>::try_new(shape.clone()).map_err(crate::err::Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = ExecutionContext::from_scope(B::default());
     Ok(dispatch::execute_shaped::<op::ReshapeExact, B, Dyn>(
@@ -108,7 +111,7 @@ where
     let mut output_dims = logical_dims.to_vec();
     output_dims[axis] = length;
     let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = ExecutionContext::from_scope(B::default());
     Ok(dispatch::execute_shaped::<op::Narrow, B, Dyn>(
@@ -149,7 +152,7 @@ where
     let mut output_dims = logical_dims.to_vec();
     output_dims.remove(axis);
     let target = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&output_dims))
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = ExecutionContext::from_scope(B::default());
     Ok(dispatch::execute_shaped::<op::SqueezeExact, B, Dyn>(
@@ -201,7 +204,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
@@ -221,7 +224,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get((0, 1..3, ..))?;
@@ -436,7 +439,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape::<s![6]>(((), ())).unwrap();
@@ -448,20 +451,20 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         B: Execute<op::ReshapeExact> + Capabilities,
         <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
-        let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
+        let new_shape_field = S2::resolve(args).map_err(crate::err::Error::Shape)?;
         let validated = <crate::exec::ReshapeRule as crate::exec::ShapeRule<(S, S2)>>::lower(
             &(self.shape_buf_value(), new_shape_field.clone()),
             (),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let new_shape_field = validated.into_descriptor().output_shape().cloned().ok_or(
-            crate::prelude::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
                 operation: OperationKind::Reshape,
                 rank: S2::RANK.unwrap_or(0),
             }),
         )?;
         let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
 
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
@@ -492,7 +495,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
@@ -507,7 +510,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let in_shape_vec = self.shape_buf();
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
         let output_shape = ShapeValue::<T::Output>::try_new(ShapeBuf::from_slice(&out_shape_vec))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -575,7 +578,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             OperationKind::Slice,
             &out_shape_vec,
         )?)
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -606,7 +609,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
@@ -658,7 +661,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
@@ -707,7 +710,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         B: Execute<op::ReshapeExact> + Capabilities,
         <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
-        let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
+        let new_shape_field = S2::resolve(args).map_err(crate::err::Error::Shape)?;
 
         // Runtime boundaries checking
         let source_numel = S::checked_numel(
@@ -732,7 +735,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -769,7 +772,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
     {
-        let new_shape_field = S2::resolve(args).map_err(crate::prelude::Error::Shape)?;
+        let new_shape_field = S2::resolve(args).map_err(crate::err::Error::Shape)?;
         <<S as crate::shapes::broadcast::BroadcastShape<S2>>::Output as Shape>::STATIC_VALID;
         let descriptor = Descriptor::<op::BroadcastAs>::infer_runtime(
             ShapeAttributes {
@@ -782,17 +785,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             }],
         )
         .map_err(|error| {
-            crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error))
+            crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error))
         })?
         .into_descriptor();
         let new_shape_field = descriptor.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
                 operation: OperationKind::Broadcast,
                 rank: 0,
             })
         })?;
         let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad).restrict(|| {
@@ -1026,7 +1029,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_dims.swap(axes[0], axes[1]);
         let output_shape =
             ShapeValue::<<S as SwapAxes<L, R>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
-                .map_err(crate::prelude::Error::Shape)?;
+                .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -1063,7 +1066,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(axes[0], axes[1]);
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_dims))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -1131,7 +1134,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let output_shape = ShapeValue::<<S as FlattenAt<Start, End>>::Output>::try_new(
             ShapeBuf::from_slice(&out_dims),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad).restrict(|| {
@@ -1186,7 +1189,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out.push(product);
         out.extend_from_slice(&dims[end + 1..]);
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad).restrict(|| {
@@ -1277,7 +1280,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             )
         })?;
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = tensors
             .iter()
             .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
@@ -1332,7 +1335,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ShapeValue::<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output>::try_new(
                 ShapeBuf::from_slice(&out_dims),
             )
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
@@ -1417,7 +1420,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 expression: "concat extent",
             })?;
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
@@ -1474,7 +1477,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let mut out_shape = tensors[0].shape_buf().as_ref().to_vec();
         out_shape.insert(dim, tensors.len());
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = tensors
             .iter()
             .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
@@ -1521,7 +1524,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ShapeValue::<<S as crate::shapes::stack::StackShape<Axis>>::Output>::try_new(
                 ShapeBuf::from_slice(&out_dims),
             )
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
@@ -1569,7 +1572,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let mut out_shape = self.shape_buf().as_ref().to_vec();
         out_shape.insert(dim, 2);
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, K, Local>(&other.inner),
@@ -1721,7 +1724,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
         out_shape[dim] = index.shape_buf().as_ref()[0];
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
@@ -1763,7 +1766,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
         out_shape.insert(dim, 1);
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -1814,7 +1817,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 })
             })?;
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -1866,7 +1869,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 })
             })?;
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -1960,17 +1963,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             }],
         )
         .map_err(|error| {
-            crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error))
+            crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error))
         })?
         .into_descriptor();
         let out_shape = descriptor.output_shape().cloned().ok_or_else(|| {
-            crate::prelude::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
+            crate::err::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
                 operation: OperationKind::Diag,
                 rank: self.rank(),
             })
         })?;
         let output_shape =
-            ShapeValue::<Dyn>::try_new(out_shape).map_err(crate::prelude::Error::Shape)?;
+            ShapeValue::<Dyn>::try_new(out_shape).map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -2087,7 +2090,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_shape[dim] = windows;
         out_shape.push(size);
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -2157,7 +2160,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 })?,
         ];
         let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -2252,7 +2255,7 @@ where
     <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
 {
     if tensors.is_empty() {
-        return Err(crate::prelude::Error::ShapeMismatch {
+        return Err(crate::err::Error::ShapeMismatch {
             op: "stack_tensors",
             expected: alloc::vec![],
             got: alloc::vec![],
@@ -2274,7 +2277,7 @@ where
     let mut shape = tensors[0].shape_buf().as_ref().to_vec();
     shape.insert(dim, tensors.len());
     let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&shape))
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
     let inputs = tensors
         .iter()
         .map(|tensor| TensorHandle::from_storage::<B, K, Local>(&tensor.inner))
@@ -2304,7 +2307,7 @@ impl<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    NewD: crate::prelude::Device,
+    NewD: crate::tensor::device::Device,
 > crate::tensor::transfer::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + StorageTransfer<NewD>,
@@ -2350,7 +2353,7 @@ where
         &[h_mask, h_true, h_false],
         &shape_val,
     )
-    .map_err(crate::prelude::Error::from)?;
+    .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         on_true._shape.clone(),
@@ -2388,7 +2391,7 @@ where
         &[h_input, h_mask],
         &shape_val,
     )
-    .map_err(crate::prelude::Error::from)?;
+    .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         input._shape.clone(),
