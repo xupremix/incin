@@ -276,14 +276,14 @@ and dependency checks
 inside exported snapshots. The normal workspace suite, mdBook build, docs
 drift gate, budget gate, and export gates pass. Remaining caveats are
 explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
-including unavailable accelerator hardware, Miri's numerical-test exclusions,
-and the repository's pre-existing formatting drift. Representative backend
-feature combinations pass; the literal cargo-hack backend powerset expands to
-16,420 combinations in this manifest and was stopped as impractical after
-focused combinations passed. Ordinary workspace Clippy exits successfully
-with warnings, while the strict no-default CPU CI configuration remains red
-on the broader pre-existing baseline, including unused imports, type
-complexity, and argument-count warnings under `-D warnings`.
+including unavailable accelerator hardware and Miri's numerical-test
+exclusions. Repository formatting now passes. Representative backend feature
+combinations pass; the literal cargo-hack backend powerset expands to 16,420
+combinations in this manifest and remains impractical to complete locally.
+The smaller macros and diagnostics powersets pass. Ordinary workspace Clippy
+exits successfully with warnings, while the strict no-default CPU CI
+configuration remains red on the broader existing baseline, including unused
+imports, type complexity, and argument-count warnings under `-D warnings`.
 
 ## First 30 minutes
 
