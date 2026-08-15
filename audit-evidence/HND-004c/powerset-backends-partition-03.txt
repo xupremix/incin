@@ -1,0 +1,490 @@
+partition 03 commands: 1945
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling matrixmultiply v0.3.11
+   Compiling cudarc v0.19.8
+    Checking rawpointer v0.2.1
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused import: `incin_core::backend_authoring::Backend`
+    --> crates/incin-backends/src/dist/nccl.rs:2205:9
+     |
+2205 |     use incin_core::backend_authoring::Backend;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: `incin-backends` (lib test) generated 5 warnings (2 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 1m 09s
+    Blocking waiting for file lock on build directory
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused import: `incin_core::backend_authoring::Backend`
+    --> crates/incin-backends/src/dist/nccl.rs:2205:9
+     |
+2205 |     use incin_core::backend_authoring::Backend;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 3 warnings (run `cargo fix --lib -p incin-backends` to apply 3 suggestions)
+warning: `incin-backends` (lib test) generated 5 warnings (2 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 51.54s
+    Blocking waiting for file lock on build directory
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::shapes::buf::ShapeBuf`
+ --> crates/incin-backends/src/backend_kind.rs:8:5
+  |
+8 | use incin_core::shapes::buf::ShapeBuf;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `incin_core::shapes::dynamic::Dyn`
+  --> crates/incin-backends/src/backend_kind.rs:10:5
+   |
+10 | use incin_core::shapes::dynamic::Dyn;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::device::Cpu`
+  --> crates/incin-backends/src/backend_kind.rs:12:5
+   |
+12 | use incin_core::tensor::device::Cpu;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+   --> crates/incin-backends/src/backend_kind.rs:109:9
+    |
+109 |     use super::*;
+    |         ^^^^^^^^
+
+warning: unused import: `incin_core::error::Error`
+   --> crates/incin-backends/src/backend_kind.rs:113:9
+    |
+113 |     use incin_core::error::Error;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `LayerNorm` and `Linear`
+   --> crates/incin-backends/src/backend_kind.rs:116:26
+    |
+116 |     use incin_core::nn::{LayerNorm, Linear};
+    |                          ^^^^^^^^^  ^^^^^^
+
+warning: unused import: `incin_core::shapes::OperationKind`
+   --> crates/incin-backends/src/backend_kind.rs:117:9
+    |
+117 |     use incin_core::shapes::OperationKind;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::base::Tensor`
+   --> crates/incin-backends/src/backend_kind.rs:118:9
+    |
+118 |     use incin_core::tensor::base::Tensor;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::device::DeviceId`
+   --> crates/incin-backends/src/backend_kind.rs:119:9
+    |
+119 |     use incin_core::tensor::device::DeviceId;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Grad` and `RequiresGrad`
+   --> crates/incin-backends/src/backend_kind.rs:122:36
+    |
+122 |     use incin_core::tensor::grad::{Grad, RequiresGrad};
+    |                                    ^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::transfer::ToDevice`
+   --> crates/incin-backends/src/backend_kind.rs:123:9
+    |
+123 |     use incin_core::tensor::transfer::ToDevice;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 2 suggestions)
+warning: `incin-backends` (lib test) generated 18 warnings (6 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 12 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 36.99s
+    Blocking waiting for file lock on build directory
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused import: `incin_core::shapes::buf::ShapeBuf`
+ --> crates/incin-backends/src/backend_kind.rs:8:5
+  |
+8 | use incin_core::shapes::buf::ShapeBuf;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `incin_core::shapes::dynamic::Dyn`
+  --> crates/incin-backends/src/backend_kind.rs:10:5
+   |
+10 | use incin_core::shapes::dynamic::Dyn;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::device::Cpu`
+  --> crates/incin-backends/src/backend_kind.rs:12:5
+   |
+12 | use incin_core::tensor::device::Cpu;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::*`
+   --> crates/incin-backends/src/backend_kind.rs:109:9
+    |
+109 |     use super::*;
+    |         ^^^^^^^^
+
+warning: unused import: `incin_core::error::Error`
+   --> crates/incin-backends/src/backend_kind.rs:113:9
+    |
+113 |     use incin_core::error::Error;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `LayerNorm` and `Linear`
+   --> crates/incin-backends/src/backend_kind.rs:116:26
+    |
+116 |     use incin_core::nn::{LayerNorm, Linear};
+    |                          ^^^^^^^^^  ^^^^^^
+
+warning: unused import: `incin_core::shapes::OperationKind`
+   --> crates/incin-backends/src/backend_kind.rs:117:9
+    |
+117 |     use incin_core::shapes::OperationKind;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::base::Tensor`
+   --> crates/incin-backends/src/backend_kind.rs:118:9
+    |
+118 |     use incin_core::tensor::base::Tensor;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::device::DeviceId`
+   --> crates/incin-backends/src/backend_kind.rs:119:9
+    |
+119 |     use incin_core::tensor::device::DeviceId;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Grad` and `RequiresGrad`
+   --> crates/incin-backends/src/backend_kind.rs:122:36
+    |
+122 |     use incin_core::tensor::grad::{Grad, RequiresGrad};
+    |                                    ^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `incin_core::tensor::transfer::ToDevice`
+   --> crates/incin-backends/src/backend_kind.rs:123:9
+    |
+123 |     use incin_core::tensor::transfer::ToDevice;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+
+warning: unused imports: `AutogradBackend` and `HostInterop`
+    --> crates/incin-backends/src/cuda/backend.rs:3338:41
+     |
+3338 |     use incin_core::backend_authoring::{AutogradBackend, HostInterop};
+     |                                         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `physical_index` is never used
+  --> crates/incin-backends/src/iteration.rs:31:19
+   |
+29 | impl OperandIteration {
+   | --------------------- method in this implementation
+30 |     #[inline]
+31 |     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
+   |                   ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 5 suggestions)
+warning: `incin-backends` (lib test) generated 22 warnings (9 duplicates) (run `cargo fix --lib -p incin-backends --tests` to apply 13 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 31.33s
+    Blocking waiting for file lock on build directory
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 28.45s
+    Blocking waiting for file lock on build directory

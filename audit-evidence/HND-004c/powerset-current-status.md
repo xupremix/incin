@@ -1,6 +1,7 @@
 # Current feature-matrix status
 
-Final source commit under validation: pending the evidence commit below.
+Final source commit under validation: `93d135d` plus the pending evidence
+update below.
 
 ## Completed
 
@@ -15,13 +16,15 @@ Final source commit under validation: pending the evidence commit below.
 
 ## Incomplete and not claimed as passed
 
-- Backend: exact CI command began, but sequential execution was stopped at
-  49/8212 after storage and wall-time inspection. An equivalent fixed-feature
-  partition attempt was also stopped before completion because separate Cargo
-  targets duplicated artifacts. The partial logs record no source compile
-  failure; their interrupted commands exited 130 or 1 from the stop.
+- Backend: the exact current CI command expands to 8,212 generated commands.
+  The generated command list is archived as
+  `powerset-backends-command-list-current.txt`. A shared-target partitioned
+  attempt was stopped during initial compilation after resource and wall-time
+  inspection; the partial logs record no compiler error, but the run is not a
+  pass.
 - Facade: the exact 36,608-combination command was not run after the resource
   assessment. No facade powerset pass is claimed.
 
 The workspace, CPU, docs, clippy, and structural validation results are in
-`final-matrix.log`.
+`final-matrix.log`, `final-checks-current.log`, and
+`final-workspace-current.log`.

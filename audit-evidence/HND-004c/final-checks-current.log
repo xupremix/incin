@@ -1,0 +1,408 @@
+
+===== fmt =====
+$ cargo fmt --all --check
+[exit 0] fmt
+
+===== ledger =====
+$ cargo xtask ledger
+ledger ok: 101 tasks, 101 complete
+[exit 0] ledger
+
+===== transformer =====
+$ cargo test -p incin --test transformer_block --quiet
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[exit 0] transformer
+
+===== docs =====
+$ cargo test --doc --workspace
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+   Compiling incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized] target(s) in 6.04s
+   Doc-tests incin
+
+running 2 tests
+test crates/incin/src/lib.rs - (line 36) - compile ... ok
+test crates/incin/src/lib.rs - (line 16) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 1.24s; merged doctests compilation took 1.23s
+   Doc-tests incin_backends
+
+running 1 test
+test crates/incin-backends/src/detect.rs - detect::detect_device (line 25) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+all doctests ran in 0.92s; merged doctests compilation took 0.60s
+   Doc-tests incin_core
+
+running 32 tests
+test crates/incin-core/src/nn/rnn.rs - nn::rnn::RNN (line 427) - compile ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearShape (line 27) ... ok
+test crates/incin-core/src/dist/mesh.rs - dist::mesh::ValidMesh (line 101) ... ok
+test crates/incin-core/src/tensor/auto_device.rs - tensor::auto_device::best_device (line 124) ... ok
+test crates/incin-core/src/dist/mesh.rs - dist::mesh::MeshSpec (line 78) ... ok
+test crates/incin-core/src/dist/mesh.rs - dist::mesh (line 27) ... ok
+test crates/incin-core/src/shapes/dim.rs - shapes::dim::dim (line 386) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::Module (line 166) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 47) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 58) ... ok
+test crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 627) ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearBuilder (line 161) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::SeqTy (line 662) ... ok
+test crates/incin-core/src/nn/lstm.rs - nn::lstm::LSTMCell (line 289) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::reshape_idx (line 501) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::mse_loss (line 136) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::cross_entropy_loss (line 67) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::SGD (line 485) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::try_narrow (line 615) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::TrainMode (line 84) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::reshape (line 440) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::try_squeeze (line 667) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::AdamW (line 577) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::Adam (line 781) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::get (line 223) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::max_all (line 343) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::min_all (line 357) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::mean_all (line 329) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::slice (line 204) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::sum_all (line 315) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mul_scalar (line 283) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::add_scalar (line 309) ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.62s
+
+all doctests ran in 11.08s; merged doctests compilation took 9.45s
+   Doc-tests incin_data
+
+running 1 test
+test crates/incin-data/src/lib.rs - (line 12) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.63s; merged doctests compilation took 0.62s
+   Doc-tests incin_diagnostics
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin_lsp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin_macros
+
+running 8 tests
+test crates/incin-macros/src/lib.rs - module (line 366) ... ok
+test crates/incin-macros/src/lib.rs - s (line 67) ... ok
+test crates/incin-macros/src/lib.rs - shape (line 179) ... ok
+test crates/incin-macros/src/lib.rs - shape (line 124) ... ok
+test crates/incin-macros/src/lib.rs - idx (line 307) ... ok
+test crates/incin-macros/src/lib.rs - s (line 77) ... ok
+test crates/incin-macros/src/lib.rs - shape (line 160) ... ok
+test crates/incin-macros/src/lib.rs - s (line 57) ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 1.13s; merged doctests compilation took 1.12s
+   Doc-tests incin_telemetry
+
+running 1 test
+test crates/incin-telemetry/src/emitter.rs - emitter::Emitter::to_run_dir (line 140) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.27s; merged doctests compilation took 0.27s
+   Doc-tests incin_viz
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin_viz_plugin_api
+
+running 1 test
+test crates/incin-viz-plugin-api/src/lib.rs - (line 25) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.28s; merged doctests compilation took 0.28s
+[exit 0] docs
+
+===== cargo-doc =====
+$ cargo doc --workspace --no-deps
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+ Documenting incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+ Documenting incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+ Documenting incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+ Documenting incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+ Documenting incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+ Documenting incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+ Documenting incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+ Documenting incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+warning: public documentation for `Validated` links to private item `ShapeEvidence::of`
+  --> crates/incin-core/src/exec/proof.rs:93:29
+   |
+93 | /// constructors here are [`ShapeEvidence::of`], which reads the level off a shape
+   |                             ^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+   = note: `#[warn(rustdoc::private_intra_doc_links)]` on by default
+
+warning: public documentation for `Validated` links to private item `ShapeEvidence::dynamic`
+  --> crates/incin-core/src/exec/proof.rs:95:7
+   |
+95 | /// [`ShapeEvidence::dynamic`], which claims nothing.
+   |       ^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: unresolved link to `super::catalog`
+  |
+  = note: the link appears in this line:
+          
+          Exact operation descriptors live in [`super::catalog`]. This module retains
+                                               ^^^^^^^^^^^^^^^^
+  = note: no item named `catalog` in module `incin_core`
+  = note: `#[warn(rustdoc::broken_intra_doc_links)]` on by default
+
+warning: unresolved link to `AxisMask`
+  |
+  = note: the link appears in this line:
+          
+          [`AxisMask`] representation is only an optimization; axes beyond 63 spill
+           ^^^^^^^^^^
+  = note: no item named `AxisMask` in scope
+  = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+warning: unresolved link to `BestDevice`
+  |
+  = note: the link appears in this line:
+          
+             time by [`BestDevice`] / [`best_device!`](crate::best_device), from the
+                      ^^^^^^^^^^^^
+  = note: no item named `BestDevice` in scope
+  = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+warning: unresolved link to `Dyn`
+  --> crates/incin-core/src/tensor/base.rs:39:51
+   |
+39 | /// * `K`: Element [`DType`], which may also be [`Dyn`] and runtime-checked.
+   |                                                   ^^^ no item named `Dyn` in scope
+   |
+   = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+warning: unresolved link to `Dyn`
+  --> crates/incin-core/src/tensor/base.rs:42:38
+   |
+42 | ///   select a static placement or [`Dyn`] for runtime placement metadata.
+   |                                      ^^^ no item named `Dyn` in scope
+   |
+   = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+warning: unresolved link to `DeviceId`
+  |
+  = note: the link appears in this line:
+          
+          time. The user passes a [`DeviceId`] at construction time and everything
+                                   ^^^^^^^^^^
+  = note: no item named `DeviceId` in scope
+  = help: to escape `[` and `]` characters, add '\' before them like `\[` or `\]`
+
+warning: unresolved link to `incin_backends::quant::BlockQ8_0`
+   --> crates/incin-core/src/tensor/dtype.rs:852:29
+    |
+852 | /// stored as [`BlockQ8_0`](incin_backends::quant::BlockQ8_0) blocks in the
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no item named `incin_backends` in scope
+
+warning: unresolved link to `SeqTy`
+   --> crates/incin-core/src/nn/module.rs:636:7
+    |
+636 | /// [`SeqTy!`], which generates that same nesting from the same
+    |       ^^^^^^ no item named `SeqTy` in scope
+    |
+    = note: `macro_rules` named `SeqTy` exists in this crate, but it is not in scope at this link's location
+
+warning: redundant explicit link target
+    --> crates/incin-core/src/tensor/base.rs:1212:20
+     |
+1212 |     /// [`NoGrad`](crate::tensor::grad::NoGrad) here rather than `Grad`: printing
+     |          --------  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ explicit target is redundant
+     |          |
+     |          because label contains path that resolves to same destination
+     |
+     = note: when a link's destination is not specified,
+             the label is used to resolve intra-doc links
+     = note: `#[warn(rustdoc::redundant_explicit_links)]` on by default
+help: remove explicit link target
+     |
+1212 -     /// [`NoGrad`](crate::tensor::grad::NoGrad) here rather than `Grad`: printing
+1212 +     /// [`NoGrad`] here rather than `Grad`: printing
+     |
+
+ Documenting named_dims_safety v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_dims_safety)
+ Documenting tui_graph_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tui_graph_demo)
+ Documenting named_tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_tensors)
+ Documenting cnn v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/cnn)
+ Documenting matmul v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/matmul)
+ Documenting dataloader v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/dataloader)
+ Documenting tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tensors)
+ Documenting native_training_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/native_training_demo)
+ Documenting backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/backends)
+warning: `incin-core` (lib doc) generated 11 warnings
+    Finished `dev` profile [unoptimized] target(s) in 1m 20s
+   Generated /home/xupremix/Projects/incin/target/doc/backends/index.html and 21 other files
+[exit 0] cargo-doc
+
+===== mdbook =====
+$ mdbook build docs/book
+2026-08-15 21:57:05 [INFO] (mdbook::book): Book building has started
+2026-08-15 21:57:05 [INFO] (mdbook::book): Running the html backend
+[exit 0] mdbook
+
+===== architecture =====
+$ tools/check-architecture.sh
+large-file inventory checks passed (25 files)
+architecture checks passed
+[exit 0] architecture
+
+===== dependencies =====
+$ tools/check-dependencies.sh --check
+Incin core dependency edges (crate::<module> references)
+compiled         -> backend_authoring    1
+compiled         -> err                 9
+compiled         -> exec               46
+compiled         -> graph               7
+compiled         -> resource            2
+compiled         -> shapes             43
+compiled         -> tensor              2
+crate            -> SeqTy               1
+crate            -> compiled            1
+crate            -> dim                 1
+crate            -> dist                1
+crate            -> distributions       2
+crate            -> err                 2
+crate            -> exec                5
+crate            -> graph               1
+crate            -> io                  1
+crate            -> metrics             1
+crate            -> nn                  4
+crate            -> onnx_exporter       1
+crate            -> optim               2
+crate            -> seq                 1
+crate            -> serialize           2
+crate            -> shapes              2
+crate            -> tensor              9
+dist             -> exec                7
+dist             -> shapes             15
+dist             -> tensor              7
+distributions    -> backend_authoring    1
+distributions    -> err                 1
+distributions    -> exec                5
+distributions    -> shapes              6
+distributions    -> tensor             10
+err              -> exec               16
+err              -> shapes              6
+err              -> tensor              9
+exec             -> backend_authoring    1
+exec             -> dim                 1
+exec             -> dist                1
+exec             -> err                 5
+exec             -> graph              13
+exec             -> shapes             80
+exec             -> tensor             17
+graph            -> err                 1
+graph            -> exec               49
+graph            -> shapes              2
+graph            -> tensor              2
+graph_recording  -> graph               1
+io               -> dist                1
+io               -> err                 3
+io               -> exec                3
+io               -> nn                  4
+io               -> resource            7
+io               -> shapes              4
+io               -> tensor              7
+nn               -> SeqTy               3
+nn               -> backend_authoring   19
+nn               -> dist               16
+nn               -> err                51
+nn               -> exec               98
+nn               -> io                  1
+nn               -> seq                 1
+nn               -> serialize           3
+nn               -> shapes            188
+nn               -> tensor            341
+nn               -> test_utils          1
+onnx_exporter    -> compiled            1
+onnx_exporter    -> err                 1
+onnx_exporter    -> exec                2
+onnx_exporter    -> graph               3
+onnx_exporter    -> onnx_pb             1
+onnx_exporter    -> shapes              3
+onnx_exporter    -> tensor              8
+optim            -> autograd            1
+optim            -> dist                1
+optim            -> err                 1
+optim            -> exec                9
+optim            -> nn                  2
+optim            -> shapes              2
+optim            -> tensor             11
+resource         -> err                 1
+serialize        -> err                 1
+serialize        -> nn                  6
+serialize        -> shapes              3
+serialize        -> tensor              9
+shapes           -> __incin_dim_declare    3
+shapes           -> err                25
+shapes           -> resource            4
+shapes           -> typenum             4
+tensor           -> autograd            5
+tensor           -> backend_authoring    6
+tensor           -> best_device         1
+tensor           -> dist               23
+tensor           -> err               189
+tensor           -> exec              191
+tensor           -> graph_recording     2
+tensor           -> resource            1
+tensor           -> shapes            313
+
+dependency check passed
+[exit 0] dependencies
+
+===== large-files =====
+$ tools/check-large-files.sh
+large-file inventory checks passed (25 files)
+[exit 0] large-files
+
+===== public-api =====
+$ tools/check-public-api.sh
+public API checks passed
+[exit 0] public-api
+
+===== package =====
+$ tools/check-package.sh
+package reproducibility check passed
+[exit 0] package
+
+FINAL_STATUS=0

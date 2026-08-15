@@ -7,6 +7,7 @@ HND-004c commits:
 - `7fbf8cc fix: make StatePath construction fallible`
 - `7f1ebb6 docs: align current regression references`
 - `1e98af4 test: align macro coverage with current APIs`
+- `93d135d docs: align current defaults and regression evidence`
 
 Environment: Linux x86_64, `rustc 1.97.1 (8bab26f4f 2026-07-14)`,
 `cargo 1.97.1 (c980f4866 2026-06-30)`, `cargo-hack 0.6.45`.
@@ -41,13 +42,20 @@ Environment: Linux x86_64, `rustc 1.97.1 (8bab26f4f 2026-07-14)`,
 ## Resource-bounded validation
 
 The exact CI core powerset completed all 384 combinations successfully; its
-complete log is `powerset-core-final.log`. The current backend command reports
-8,212 combinations and was stopped at 49 after storage and wall-time
-inspection. A fixed-feature partition attempt was also stopped before
-completion because separate targets duplicated artifacts. The facade command
-reports 36,608 combinations and was not run after that resource assessment.
-Backend and facade final matrices are therefore unavailable, not passed. The
-interrupted logs and exact status are retained beside this file.
+complete log is `powerset-core-final.log`. The current backend command expands
+to 8,212 generated `cargo check` commands. The exact command list is archived
+as `powerset-backends-command-list-current.txt`; a shared-target partitioned
+run was stopped during initial compilation after resource and wall-time
+inspection, with no compiler error observed in the saved output. Its four
+partial logs are `powerset-backends-partition-00.txt` through
+`powerset-backends-partition-03.txt`. This is incomplete validation, not a
+backend powerset pass. The facade command reports 36,608 combinations and was
+not run after the same assessment. Backend and facade final matrices are
+therefore unavailable, not passed.
+
+The current bounded final checks are archived in `final-checks-current.log`
+and `final-workspace-current.log`; both recorded exit status zero. Earlier
+soundness constituent logs remain `miri-backend-final.log` and `asan-final.log`.
 
 ## Audit conclusions
 
