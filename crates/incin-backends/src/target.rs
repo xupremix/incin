@@ -74,14 +74,22 @@ use core::hash::Hash;
 
 use alloc::vec::Vec;
 
-use incin_core::backend_authoring::{SupportsDType, VariableBackend};
+use incin_core::backend_authoring::{Backend, HostInterop, StorageBackend, SupportsDType, VariableBackend};
+use incin_core::error::{Error, Result};
 pub use incin_core::exec::precision;
 pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
-use incin_core::prelude::{
-    Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, Device, DeviceId, Dyn, DynShape,
-    Error, FloatDType, Grad, NoGrad, PlainDType, Result, Shape, StorageBackend, Tensor,
-};
-use incin_core::shapes::{ConstDim, DimCons, Nil, ShapeBuf, ShapeSpec};
+use incin_core::tensor::device::{Cpu, Device, DeviceId};
+use incin_core::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, FloatDType, PlainDType};
+use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
+use incin_core::tensor::base::Tensor;
+use incin_core::shapes::{ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
+use incin_core::shapes::dynamic::Dyn;
+#[cfg(feature = "cuda")]
+use incin_core::tensor::device::{Cuda, CudaN};
+#[cfg(feature = "metal")]
+use incin_core::tensor::device::{Metal, MetalN};
+#[cfg(feature = "wgpu")]
+use incin_core::tensor::device::{Wgpu, WgpuN};
 
 /// A place tensors and parameters can be allocated: a device selector plus the
 /// float dtype generated allocations should use.
@@ -237,7 +245,7 @@ macro_rules! impl_tensor_data {
         $(
             impl<const A: usize> TensorData for [$elem; A]
             where
-                ConstDim<A>: incin_core::prelude::Dim,
+                ConstDim<A>: Dim,
             {
                 type Elem = $elem;
                 type Shape = DimCons<ConstDim<A>, Nil>;
@@ -249,8 +257,8 @@ macro_rules! impl_tensor_data {
 
             impl<const A: usize, const B: usize> TensorData for [[$elem; B]; A]
             where
-                ConstDim<A>: incin_core::prelude::Dim,
-                ConstDim<B>: incin_core::prelude::Dim,
+                ConstDim<A>: Dim,
+                ConstDim<B>: Dim,
             {
                 type Elem = $elem;
                 type Shape = DimCons<ConstDim<A>, DimCons<ConstDim<B>, Nil>>;
@@ -304,7 +312,7 @@ pub trait TargetExt: TensorTarget + Sized {
     /// Propagates backend allocation failure.
     fn tensor<D: TensorData>(&self, data: D) -> Result<TargetTensor<Self, D::Shape, D::Elem>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
+        TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
     {
         let values = data.into_row_major();
         let dims = D::dims();
@@ -330,12 +338,12 @@ pub trait TargetExt: TensorTarget + Sized {
         spec: Sp,
     ) -> Result<TargetTensor<Self, Sp::Shape, K>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
+        TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
     {
         let shape_val = spec.resolve()?;
         let dims = shape_val.dims();
         let shape_buf = incin_core::shapes::shape_buf_from_dims::<Sp::Shape>(
-            incin_core::prelude::OperationKind::Storage,
+            incin_core::shapes::error::OperationKind::Storage,
             &dims,
         )?;
         self.allocate_row_major::<Sp::Shape, K>(&values, dims, shape_buf)
@@ -358,10 +366,10 @@ pub trait TargetExt: TensorTarget + Sized {
         field: ShapeBuf,
     ) -> Result<TargetTensor<Self, S, K>>
     where
-        TargetBackend<Self>: Backend<Device = Self::Device> + incin_core::prelude::HostInterop,
+        TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
     {
         let expected = incin_core::shapes::ShapeBuf::from_slice(&dims)
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
         if expected != values.len() {
             return Err(Error::ShapeMismatch {
                 op: "tensor",
@@ -372,7 +380,7 @@ pub trait TargetExt: TensorTarget + Sized {
         }
         let device = self.device_id()?;
         let bytes = bytemuck::cast_slice(values);
-        let storage = <TargetBackend<Self> as incin_core::prelude::HostInterop>::from_bytes::<K>(
+        let storage = <TargetBackend<Self> as HostInterop>::from_bytes::<K>(
             bytes,
             &dims,
             K::DTYPE.descriptor(),
@@ -383,7 +391,7 @@ pub trait TargetExt: TensorTarget + Sized {
             field,
             <K as DType>::init(()),
             <Self::Device as Device>::init(self.device_arg()),
-            <NoGrad as incin_core::prelude::RequiresGrad>::init(()),
+            <NoGrad as RequiresGrad>::init(()),
         )
     }
 
@@ -570,7 +578,7 @@ pub trait TargetExt: TensorTarget + Sized {
             field,
             self.dtype_field(),
             <Self::Device as Device>::init(self.device_arg()),
-            <NoGrad as incin_core::prelude::RequiresGrad>::init(()),
+            <NoGrad as RequiresGrad>::init(()),
         )
     }
 
@@ -609,7 +617,7 @@ pub trait TargetExt: TensorTarget + Sized {
         spec: Sp,
         build: impl FnOnce(
             Vec<usize>,
-            incin_core::prelude::DTypeDescriptor,
+            DTypeDescriptor,
             DeviceId,
         ) -> <O as incin_core::exec::Operation>::Attributes,
     ) -> Result<TargetTensor<Self, Sp::Shape, Self::Dtype>>
@@ -645,7 +653,7 @@ pub trait TargetExt: TensorTarget + Sized {
         )
         .map_err(Error::from)?;
         let shape_buf = incin_core::shapes::shape_buf_from_dims::<Sp::Shape>(
-            incin_core::prelude::OperationKind::Storage,
+            incin_core::shapes::error::OperationKind::Storage,
             &dims,
         )?;
         Tensor::try_from_storage(
@@ -653,7 +661,7 @@ pub trait TargetExt: TensorTarget + Sized {
             shape_buf,
             dtype_field,
             <Self::Device as Device>::init(self.device_arg()),
-            <NoGrad as incin_core::prelude::RequiresGrad>::init(()),
+            <NoGrad as RequiresGrad>::init(()),
         )
     }
 
@@ -760,7 +768,7 @@ pub trait TargetExt: TensorTarget + Sized {
             )?,
         };
         let shape_buf = incin_core::shapes::shape_buf_from_dims::<Sp::Shape>(
-            incin_core::prelude::OperationKind::Storage,
+            incin_core::shapes::error::OperationKind::Storage,
             &dims,
         )?;
         Tensor::try_from_storage(
@@ -768,7 +776,7 @@ pub trait TargetExt: TensorTarget + Sized {
             shape_buf,
             param_dtype_field,
             <Self::Device as Device>::init(self.device_arg()),
-            <NoGrad as incin_core::prelude::RequiresGrad>::init(()),
+            <NoGrad as RequiresGrad>::init(()),
         )
     }
 
@@ -875,16 +883,16 @@ macro_rules! impl_self_arg_target {
 }
 
 #[cfg(feature = "cpu")]
-impl_unit_arg_target!(incin_core::prelude::Cpu);
+impl_unit_arg_target!(Cpu);
 
 #[cfg(feature = "cuda")]
-impl_self_arg_target!(incin_core::prelude::Cuda);
+impl_self_arg_target!(Cuda);
 
 #[cfg(feature = "wgpu")]
-impl_self_arg_target!(incin_core::prelude::Wgpu);
+impl_self_arg_target!(Wgpu);
 
 #[cfg(feature = "metal")]
-impl_self_arg_target!(incin_core::prelude::Metal);
+impl_self_arg_target!(Metal);
 
 // ============================================================================
 // Layer initialization
@@ -965,7 +973,7 @@ where
         let shape_val = incin_core::shapes::ShapeValue::<Dyn>::try_new(
             incin_core::shapes::ShapeBuf::from_slice(&[in_features, out_features]),
         )
-        .map_err(incin_core::prelude::Error::Shape)?;
+        .map_err(Error::Shape)?;
         crate::nn_target::InitOnTarget::init(incin_core::nn::linear::linear(shape_val), target)
     }
 }
@@ -1021,59 +1029,59 @@ pub type EngineBackend<E, D> = <E as EngineOn<D>>::Backend;
 /// Backend type selected by the `Native` engine on physical device `D`.
 pub type NativeBackend<D> = <Native as EngineOn<D>>::Backend;
 
-impl EngineOn<incin_core::prelude::Dyn> for Native {
-    type Backend = crate::dispatch::DispatchBackend<incin_core::prelude::Dyn>;
+impl EngineOn<Dyn> for Native {
+    type Backend = crate::dispatch::DispatchBackend<Dyn>;
 }
 
 #[cfg(feature = "cpu")]
-impl EngineOn<incin_core::prelude::Cpu> for Native {
-    type Backend = crate::cpu::CpuBackendImpl<incin_core::prelude::Cpu>;
+impl EngineOn<Cpu> for Native {
+    type Backend = crate::cpu::CpuBackendImpl<Cpu>;
 }
 
 #[cfg(feature = "cuda")]
-impl EngineOn<incin_core::prelude::Cuda> for Native {
-    type Backend = crate::cuda::CudaBackendImpl<incin_core::prelude::Cuda>;
+impl EngineOn<Cuda> for Native {
+    type Backend = crate::cuda::CudaBackendImpl<Cuda>;
 }
 
 #[cfg(feature = "cuda")]
 impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<incin_core::prelude::CudaN<O>> for Native
+    EngineOn<CudaN<O>> for Native
 {
-    type Backend = crate::cuda::CudaBackendImpl<incin_core::prelude::CudaN<O>>;
+    type Backend = crate::cuda::CudaBackendImpl<CudaN<O>>;
 }
 
 #[cfg(feature = "wgpu")]
-impl EngineOn<incin_core::prelude::Wgpu> for Native {
-    type Backend = crate::wgpu::WgpuBackendImpl<incin_core::prelude::Wgpu>;
+impl EngineOn<Wgpu> for Native {
+    type Backend = crate::wgpu::WgpuBackendImpl<Wgpu>;
 }
 
 #[cfg(feature = "wgpu")]
 impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<incin_core::prelude::WgpuN<O>> for Native
+    EngineOn<WgpuN<O>> for Native
 {
-    type Backend = crate::wgpu::WgpuBackendImpl<incin_core::prelude::WgpuN<O>>;
+    type Backend = crate::wgpu::WgpuBackendImpl<WgpuN<O>>;
 }
 
 #[cfg(feature = "metal")]
-impl EngineOn<incin_core::prelude::Metal> for Native {
-    type Backend = crate::metal::MetalBackendImpl<incin_core::prelude::Metal>;
+impl EngineOn<Metal> for Native {
+    type Backend = crate::metal::MetalBackendImpl<Metal>;
 }
 
 #[cfg(feature = "external-candle")]
-impl EngineOn<incin_core::prelude::Cpu> for Candle {
-    type Backend = crate::external::candle::CandleBackend<incin_core::prelude::Cpu>;
+impl EngineOn<Cpu> for Candle {
+    type Backend = crate::external::candle::CandleBackend<Cpu>;
 }
 
 #[cfg(all(feature = "external-candle", feature = "cuda"))]
-impl EngineOn<incin_core::prelude::Cuda> for Candle {
-    type Backend = crate::external::candle::CandleBackend<incin_core::prelude::Cuda>;
+impl EngineOn<Cuda> for Candle {
+    type Backend = crate::external::candle::CandleBackend<Cuda>;
 }
 
 #[cfg(all(feature = "external-candle", feature = "cuda"))]
 impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<incin_core::prelude::CudaN<O>> for Candle
+    EngineOn<CudaN<O>> for Candle
 {
-    type Backend = crate::external::candle::CandleBackend<incin_core::prelude::CudaN<O>>;
+    type Backend = crate::external::candle::CandleBackend<CudaN<O>>;
 }
 
 /// An engine-aware, physical-device-placed, precision-configured tensor target.
