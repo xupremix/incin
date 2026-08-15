@@ -1,0 +1,4221 @@
+Supported feature contract matrix
+
+[1m[0;33m=== [FEATURE CONTRACT] core-no-default ===[0m
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused imports: `Error` and `Result`
+ --> crates/incin-core/src/serialize.rs:1:18
+  |
+1 | use crate::err::{Error, Result};
+  |                  ^^^^^  ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `StatePath`, `StateRole`, `StateSnapshot`, and `StateValue`
+ --> crates/incin-core/src/serialize.rs:2:17
+  |
+2 | use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
+  |                 ^^^^^^^^^  ^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `crate::shapes::ShapeBuf`
+ --> crates/incin-core/src/serialize.rs:3:5
+  |
+3 | use crate::shapes::ShapeBuf;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::tensor::backend::Backend`
+ --> crates/incin-core/src/serialize.rs:4:5
+  |
+4 | use crate::tensor::backend::Backend;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `DTypeDescriptor` and `DTypeId`
+ --> crates/incin-core/src/serialize.rs:5:28
+  |
+5 | use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+  |                            ^^^^^^^^^^^^^^^  ^^^^^^^
+
+warning: unused imports: `DeviceId` and `Device`
+ --> crates/incin-core/src/serialize.rs:6:30
+  |
+6 | use crate::tensor::prelude::{Device, DeviceId};
+  |                              ^^^^^^  ^^^^^^^^
+
+warning: unused imports: `collections::BTreeMap`, `string::String`, and `vec::Vec`
+ --> crates/incin-core/src/serialize.rs:7:13
+  |
+7 | use alloc::{collections::BTreeMap, string::String, vec::Vec};
+  |             ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^
+
+warning: `incin-core` (lib) generated 7 warnings (run `cargo fix --lib -p incin-core` to apply 7 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 2.06s
+[0;32m✓ core-no-default[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] core-default ===[0m
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Finished `dev` profile [unoptimized] target(s) in 6.19s
+[0;32m✓ core-default[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] core-compiled-distributed ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 8.04s
+[0;32m✓ core-compiled-distributed[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] core-serialization ===[0m
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Finished `dev` profile [unoptimized] target(s) in 2.42s
+[0;32m✓ core-serialization[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-cpu-minimal ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 0.70s
+[0;32m✓ backend-cpu-minimal[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-default ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 1.83s
+[0;32m✓ backend-default[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-cpu-blas ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 1.86s
+[0;32m✓ backend-cpu-blas[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-cpu-target-api ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 1.92s
+[0;32m✓ backend-cpu-target-api[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-wgpu-compile ===[0m
+    Checking naga v22.1.0
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking wgpu-hal v22.0.0
+    Checking wgpu-core v22.1.0
+    Checking wgpu v22.1.0
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 10.32s
+[0;32m✓ backend-wgpu-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-cuda-compile ===[0m
+    Checking rand_chacha v0.9.0
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking rand v0.9.2
+    Checking rand_distr v0.5.1
+    Checking half v2.7.1
+    Checking digit-layout v0.3.1
+    Checking cudarc v0.19.8
+    Checking ggml-quants v0.1.0
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `physical_index` is never used
+  --> crates/incin-backends/src/iteration.rs:31:19
+   |
+29 | impl OperandIteration {
+   | --------------------- method in this implementation
+30 |     #[inline]
+31 |     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
+   |                   ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 5 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 9.54s
+[0;32m✓ backend-cuda-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-metal-compile ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MetalN`
+  --> crates/incin-backends/src/target.rs:90:41
+   |
+90 | use incin_core::tensor::device::{Metal, MetalN};
+   |                                         ^^^^^^
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FloatToIntPolicy` and `convert_f64_to_i64`
+ --> crates/incin-backends/src/metal/backend.rs:6:46
+  |
+6 | use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+  |                                              ^^^^^^^^^^^^^^^^          ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+  --> crates/incin-backends/src/metal/backend.rs:10:26
+   |
+10 | use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
+   |                          ^^^              ^^^^^^^^^
+
+warning: unused imports: `DTypeId` and `Q8_0`
+  --> crates/incin-backends/src/metal/backend.rs:13:41
+   |
+13 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+   |                                         ^^^^^^^              ^^^^
+
+warning: unused import: `native_precision`
+  --> crates/incin-backends/src/metal/backend.rs:16:43
+   |
+16 | pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
+   |                                           ^^^^^^^^^^^^^^^^
+
+warning: unused import: `Shape`
+ --> crates/incin-backends/src/metal/executor.rs:6:41
+  |
+6 | use incin_core::shapes::{OperationKind, Shape};
+  |                                         ^^^^^
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1193:9
+     |
+1193 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1194:9
+     |
+1194 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1195:9
+     |
+1195 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1231:9
+     |
+1231 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1232:9
+     |
+1232 |         step: f64,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1233:9
+     |
+1233 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1234:9
+     |
+1234 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1276:9
+     |
+1276 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1277:9
+     |
+1277 |         end: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1278:9
+     |
+1278 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1279:9
+     |
+1279 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1322:9
+     |
+1322 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1323:9
+     |
+1323 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1330:9
+     |
+1330 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1331:9
+     |
+1331 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1338:9
+     |
+1338 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1339:9
+     |
+1339 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1346:9
+     |
+1346 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1347:9
+     |
+1347 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1432:9
+     |
+1432 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1458:9
+     |
+1458 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1486:9
+     |
+1486 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `value`
+    --> crates/incin-backends/src/dispatch.rs:1514:9
+     |
+1514 |         value: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 37 warnings (run `cargo fix --lib -p incin-backends` to apply 31 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 8.14s
+[0;32m✓ backend-metal-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-external-candle ===[0m
+    Checking rand_chacha v0.9.0
+    Checking safetensors v0.4.5
+    Checking thiserror v2.0.18
+    Checking memmap2 v0.9.9
+    Checking rand_chacha v0.3.1
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking prost v0.14.4
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking hashbrown v0.14.5
+    Checking cobs v0.3.0
+    Checking rand v0.9.2
+    Checking rand v0.8.6
+    Checking postcard v1.1.3
+    Checking rand_distr v0.5.1
+    Checking rand_distr v0.4.3
+    Checking half v2.7.1
+    Checking gemm-common v0.18.2
+    Checking gemm-common v0.17.1
+    Checking digit-layout v0.3.1
+    Checking ggml-quants v0.1.0
+    Checking gemm-f32 v0.17.1
+    Checking gemm-c32 v0.17.1
+    Checking gemm-f64 v0.17.1
+    Checking gemm-c64 v0.17.1
+    Checking gemm-f32 v0.18.2
+    Checking gemm-f64 v0.18.2
+    Checking gemm-c64 v0.18.2
+    Checking gemm-c32 v0.18.2
+    Checking gemm-f16 v0.17.1
+    Checking gemm-f16 v0.18.2
+    Checking gemm v0.17.1
+    Checking gemm v0.18.2
+    Checking ug v0.4.0
+    Checking candle-core v0.9.1
+    Checking candle-nn v0.9.1
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `impl_data_creation_executors`
+  --> crates/incin-backends/src/descriptor_bind.rs:53:14
+   |
+53 | macro_rules! impl_data_creation_executors {
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/external/candle/executor.rs:23:41
+   |
+23 | use incin_core::shapes::{OperationKind, Shape, ShapeBuf, StrideBuf};
+   |                                         ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `bytes`
+    --> crates/incin-backends/src/dispatch.rs:1116:9
+     |
+1116 |         bytes: &[u8],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_bytes`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1117:9
+     |
+1117 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1118:9
+     |
+1118 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1165:9
+     |
+1165 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1166:9
+     |
+1166 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1172:9
+     |
+1172 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1173:9
+     |
+1173 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1179:9
+     |
+1179 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1180:9
+     |
+1180 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1186:9
+     |
+1186 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1187:9
+     |
+1187 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1193:9
+     |
+1193 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1194:9
+     |
+1194 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1195:9
+     |
+1195 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1231:9
+     |
+1231 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1232:9
+     |
+1232 |         step: f64,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1233:9
+     |
+1233 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1234:9
+     |
+1234 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1276:9
+     |
+1276 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1277:9
+     |
+1277 |         end: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1278:9
+     |
+1278 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1279:9
+     |
+1279 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1322:9
+     |
+1322 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1323:9
+     |
+1323 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1330:9
+     |
+1330 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1331:9
+     |
+1331 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1338:9
+     |
+1338 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1339:9
+     |
+1339 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1346:9
+     |
+1346 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1347:9
+     |
+1347 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1355:51
+     |
+1355 |     pub fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                   ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim1`
+    --> crates/incin-backends/src/dispatch.rs:1360:9
+     |
+1360 |         dim1: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim1`
+
+warning: unused variable: `dim2`
+    --> crates/incin-backends/src/dispatch.rs:1361:9
+     |
+1361 |         dim2: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim2`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1371:56
+     |
+1371 |     pub fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                        ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1376:9
+     |
+1376 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1377:9
+     |
+1377 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `len`
+    --> crates/incin-backends/src/dispatch.rs:1378:9
+     |
+1378 |         len: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_len`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1382:51
+     |
+1382 |     pub fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1385:52
+     |
+1385 |     pub fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1388:53
+     |
+1388 |     pub fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `ranges`
+    --> crates/incin-backends/src/dispatch.rs:1393:9
+     |
+1393 |         ranges: &[(usize, usize)],
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_ranges`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1399:9
+     |
+1399 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1400:9
+     |
+1400 |         end: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1432:9
+     |
+1432 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1458:9
+     |
+1458 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1486:9
+     |
+1486 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `value`
+    --> crates/incin-backends/src/dispatch.rs:1514:9
+     |
+1514 |         value: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1538:53
+     |
+1538 |     pub fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `repeats`
+    --> crates/incin-backends/src/dispatch.rs:1541:50
+     |
+1541 |     pub fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
+     |                                                  ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_repeats`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:1546:9
+     |
+1546 |         padding: &[(usize, usize)],
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1547:9
+     |
+1547 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1551:48
+     |
+1551 |     pub fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1554:48
+     |
+1554 |     pub fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1557:48
+     |
+1557 |     pub fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1562:9
+     |
+1562 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1650:9
+     |
+1650 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1787:54
+     |
+1787 |     pub fn sub_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1790:54
+     |
+1790 |     pub fn div_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1878:9
+     |
+1878 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `size`
+    --> crates/incin-backends/src/dispatch.rs:1879:9
+     |
+1879 |         size: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_size`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1880:9
+     |
+1880 |         step: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `upscale_factor`
+    --> crates/incin-backends/src/dispatch.rs:1886:9
+     |
+1886 |         upscale_factor: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_upscale_factor`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:1892:9
+     |
+1892 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1893:9
+     |
+1893 |         eps: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1897:57
+     |
+1897 |     pub fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
+     |                                                         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1955:51
+     |
+1955 |     pub fn softmax<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1958:60
+     |
+1958 |     pub fn add_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1961:60
+     |
+1961 |     pub fn mul_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `exponent`
+    --> crates/incin-backends/src/dispatch.rs:1964:48
+     |
+1964 |     pub fn powf<K: DType>(t: &DispatchStorage, exponent: f64) -> Result<DispatchStorage> {
+     |                                                ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_exponent`
+
+warning: unused variable: `min`
+    --> crates/incin-backends/src/dispatch.rs:1967:49
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                 ^^^ help: if this is intentional, prefix it with an underscore: `_min`
+
+warning: unused variable: `max`
+    --> crates/incin-backends/src/dispatch.rs:1967:59
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                           ^^^ help: if this is intentional, prefix it with an underscore: `_max`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2049:9
+     |
+2049 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2076:9
+     |
+2076 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2103:9
+     |
+2103 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `descending`
+    --> crates/incin-backends/src/dispatch.rs:2104:9
+     |
+2104 |         descending: bool,
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_descending`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:2134:9
+     |
+2134 |         k: usize,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2135:9
+     |
+2135 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `largest`
+    --> crates/incin-backends/src/dispatch.rs:2136:9
+     |
+2136 |         largest: bool,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_largest`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2188:51
+     |
+2188 |     pub fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2191:55
+     |
+2191 |     pub fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2194:52
+     |
+2194 |     pub fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2197:56
+     |
+2197 |     pub fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                        ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2200:51
+     |
+2200 |     pub fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2203:55
+     |
+2203 |     pub fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2206:51
+     |
+2206 |     pub fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2209:55
+     |
+2209 |     pub fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2215:52
+     |
+2215 |     pub fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2218:50
+     |
+2218 |     pub fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                  ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `weight`
+    --> crates/incin-backends/src/dispatch.rs:2308:9
+     |
+2308 |         weight: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_weight`
+
+warning: unused variable: `bias`
+    --> crates/incin-backends/src/dispatch.rs:2309:9
+     |
+2309 |         bias: Option<&DispatchStorage>,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_bias`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:2310:9
+     |
+2310 |         eps: f32,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2323:9
+     |
+2323 |         w: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2324:9
+     |
+2324 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `rm`
+    --> crates/incin-backends/src/dispatch.rs:2325:9
+     |
+2325 |         rm: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rm`
+
+warning: unused variable: `rv`
+    --> crates/incin-backends/src/dispatch.rs:2326:9
+     |
+2326 |         rv: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rv`
+
+warning: unused variable: `e`
+    --> crates/incin-backends/src/dispatch.rs:2327:9
+     |
+2327 |         e: f32,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `momentum`
+    --> crates/incin-backends/src/dispatch.rs:2328:9
+     |
+2328 |         momentum: f64,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_momentum`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2341:9
+     |
+2341 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2354:9
+     |
+2354 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2355:9
+     |
+2355 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2356:9
+     |
+2356 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2357:9
+     |
+2357 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2358:9
+     |
+2358 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2359:9
+     |
+2359 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2372:9
+     |
+2372 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2373:9
+     |
+2373 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2374:9
+     |
+2374 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2375:9
+     |
+2375 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2376:9
+     |
+2376 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2377:9
+     |
+2377 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2391:9
+     |
+2391 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2392:9
+     |
+2392 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2393:9
+     |
+2393 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2394:9
+     |
+2394 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_padding`
+    --> crates/incin-backends/src/dispatch.rs:2395:9
+     |
+2395 |         output_padding: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2396:9
+     |
+2396 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2397:9
+     |
+2397 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2410:9
+     |
+2410 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2411:9
+     |
+2411 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2412:9
+     |
+2412 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2413:9
+     |
+2413 |         dilation: (usize, usize),
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2426:9
+     |
+2426 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2427:9
+     |
+2427 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2428:9
+     |
+2428 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_size`
+    --> crates/incin-backends/src/dispatch.rs:2441:9
+     |
+2441 |         output_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_size`
+
+warning: unused variable: `target`
+    --> crates/incin-backends/src/dispatch.rs:2590:9
+     |
+2590 |         target: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `reduction`
+    --> crates/incin-backends/src/dispatch.rs:2591:9
+     |
+2591 |         reduction: incin_core::tensor::reduction::Reduction,
+     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_reduction`
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: function `invalid` is never used
+  --> crates/incin-backends/src/descriptor_bind.rs:19:21
+   |
+19 | pub(crate) const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
+   |                     ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `broadcast_shape` is never used
+  --> crates/incin-backends/src/layout.rs:57:15
+   |
+57 | pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/external/candle/ops/creation.rs:56:15
+    |
+ 53 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    | ------------------------------------------------------------ associated functions in this implementation
+...
+ 56 |         fill: full;
+    |               ^^^^
+ 57 |         sequence: arange, linspace;
+    |                   ^^^^^^  ^^^^^^^^
+...
+101 |     fn var_zeros<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+...
+113 |     fn var_ones<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+126 |     fn var_rand<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+139 |     fn var_randn<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+    |
+    = note: this warning originates in the macro `crate::unsupported::unsupported_creation_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: associated functions `quantize`, `dequantize`, and `quantized_matmul` are never used
+  --> crates/incin-backends/src/external/candle/ops/quant.rs:8:8
+   |
+ 6 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+ 7 |     /// Not supported by candle; always returns `UnsupportedBackendOperation`.
+ 8 |     fn quantize<
+   |        ^^^^^^^^
+...
+20 |     fn dequantize<
+   |        ^^^^^^^^^^
+...
+32 |     fn quantized_matmul<Q: incin_core::tensor::dtype::QuantDType>(
+   |        ^^^^^^^^^^^^^^^^
+
+warning: associated functions `prod_all`, `prod_dim`, and `cumsum` are never used
+  --> crates/incin-backends/src/external/candle/ops/reduce.rs:10:14
+   |
+ 7 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+...
+10 |         all: prod_all;
+   |              ^^^^^^^^
+11 |         dim: prod_dim, cumsum;
+   |              ^^^^^^^^  ^^^^^^
+   |
+   = note: this warning originates in the macro `crate::unsupported::unsupported_reduction_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/unsupported.rs:173:12
+    |
+173 |           fn where_cond<K: DType>(
+    |              ^^^^^^^^^^
+...
+182 |           fn scatter<K: DType, KInt: DType>(
+    |              ^^^^^^^
+...
+192 |           fn masked_fill<K: DType>(
+    |              ^^^^^^^^^^^
+...
+201 |           fn pad<K: DType>(
+    |              ^^^
+...
+210 |           fn repeat<K: DType>(
+    |              ^^^^^^
+...
+218 |           fn lerp<K: DType>(
+    |              ^^^^
+...
+227 |           fn addmm<K: DType>(
+    |              ^^^^^
+...
+238 |           fn scaled_dot_product_attention<K: DType>(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+251 |           fn unfold<K: DType>(
+    |              ^^^^^^
+...
+261 |           fn group_norm<K: DType>(
+    |              ^^^^^^^^^^
+...
+306 |           fn logical_not(
+    |              ^^^^^^^^^^^
+...
+312 |       (@op gather) => { $crate::unsupported::unsupported_tensor_ops!(@indexed gather); };
+    |                                                                               ^^^^^^
+313 |       (@op index_select) => { $crate::unsupported::unsupported_tensor_ops!(@indexed index_select); };
+    |                                                                                     ^^^^^^^^^^^^
+314 |       (@op unsqueeze) => { $crate::unsupported::unsupported_tensor_ops!(@dim unsqueeze); };
+    |                                                                              ^^^^^^^^^
+315 |       (@op pixel_shuffle) => { $crate::unsupported::unsupported_tensor_ops!(@dim pixel_shuffle); };
+    |                                                                                  ^^^^^^^^^^^^^
+316 |       (@op triu) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal triu); };
+    |                                                                              ^^^^
+317 |       (@op tril) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal tril); };
+    |                                                                              ^^^^
+318 |       (@op diag) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal diag); };
+    |                                                                              ^^^^
+319 |       (@op sub_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar sub_scalar); };
+    |                                                                                  ^^^^^^^^^^
+320 |       (@op div_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar div_scalar); };
+    |                                                                                  ^^^^^^^^^^
+321 |       (@op instance_norm) => { $crate::unsupported::unsupported_tensor_ops!(@scalar instance_norm); };
+    |                                                                                     ^^^^^^^^^^^^^
+322 |       (@op cmp_eq) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_eq); };
+    |                                                                           ^^^^^^
+323 |       (@op cmp_ne) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ne); };
+    |                                                                           ^^^^^^
+324 |       (@op cmp_lt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_lt); };
+    |                                                                           ^^^^^^
+325 |       (@op cmp_le) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_le); };
+    |                                                                           ^^^^^^
+326 |       (@op cmp_gt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_gt); };
+    |                                                                           ^^^^^^
+327 |       (@op cmp_ge) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ge); };
+    |                                                                           ^^^^^^
+328 |       (@op logical_and) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_and); };
+    |                                                                                           ^^^^^^^^^^^
+329 |       (@op logical_or) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_or); };
+    |                                                                                          ^^^^^^^^^^
+330 |       (@op maximum) => { $crate::unsupported::unsupported_tensor_ops!(@binary maximum); };
+    |                                                                               ^^^^^^^
+331 |       (@op minimum) => { $crate::unsupported::unsupported_tensor_ops!(@binary minimum); };
+    |                                                                               ^^^^^^^
+332 |       (@op abs_diff) => { $crate::unsupported::unsupported_tensor_ops!(@binary abs_diff); };
+    |                                                                                ^^^^^^^^
+333 |       (@op bmm) => { $crate::unsupported::unsupported_tensor_ops!(@binary bmm); };
+    |                                                                           ^^^
+    |
+   ::: crates/incin-backends/src/external/candle/ops/tensor.rs:16:1
+    |
+ 16 |   impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    |   ------------------------------------------------------------ associated functions in this implementation
+...
+ 20 | /     crate::unsupported::unsupported_tensor_ops! {
+ 21 | |         where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+ 22 | |         repeat, pad, triu, tril, diag,
+ 23 | |         cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
+...   |
+ 27 | |         unfold, pixel_shuffle, group_norm, instance_norm,
+ 28 | |     }
+    | |_____- in this macro invocation
+    |
+    = note: this warning originates in the macro `$crate::unsupported::unsupported_tensor_ops` which comes from the expansion of the macro `crate::unsupported::unsupported_tensor_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `incin-backends` (lib) generated 145 warnings (run `cargo fix --lib -p incin-backends` to apply 129 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 9.82s
+[0;32m✓ backend-external-candle[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-telemetry ===[0m
+    Checking rand_chacha v0.3.1
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking rand v0.8.6
+    Checking rand_distr v0.4.3
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 2.64s
+[0;32m✓ backend-telemetry[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-distributed-reference ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 9.74s
+[0;32m✓ backend-distributed-reference[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-distributed-nccl-compile ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking cudarc v0.19.8
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `physical_index` is never used
+  --> crates/incin-backends/src/iteration.rs:31:19
+   |
+29 | impl OperandIteration {
+   | --------------------- method in this implementation
+30 |     #[inline]
+31 |     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
+   |                   ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 5 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 10.20s
+[0;32m✓ backend-distributed-nccl-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] backend-cpu-wgpu-telemetry ===[0m
+    Checking parking_lot_core v0.9.12
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking parking_lot v0.12.5
+    Checking wgpu-hal v22.0.0
+    Checking wgpu-core v22.1.0
+    Checking wgpu v22.1.0
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized] target(s) in 10.36s
+[0;32m✓ backend-cpu-wgpu-telemetry[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-default ===[0m
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 4.75s
+[0;32m✓ facade-default[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-std-no-backend ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `bytes`
+    --> crates/incin-backends/src/dispatch.rs:1116:9
+     |
+1116 |         bytes: &[u8],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_bytes`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1117:9
+     |
+1117 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1118:9
+     |
+1118 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1165:9
+     |
+1165 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1166:9
+     |
+1166 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1172:9
+     |
+1172 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1173:9
+     |
+1173 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1179:9
+     |
+1179 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1180:9
+     |
+1180 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1186:9
+     |
+1186 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1187:9
+     |
+1187 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1193:9
+     |
+1193 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1194:9
+     |
+1194 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1195:9
+     |
+1195 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1231:9
+     |
+1231 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1232:9
+     |
+1232 |         step: f64,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1233:9
+     |
+1233 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1234:9
+     |
+1234 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1276:9
+     |
+1276 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1277:9
+     |
+1277 |         end: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1278:9
+     |
+1278 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1279:9
+     |
+1279 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1322:9
+     |
+1322 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1323:9
+     |
+1323 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1330:9
+     |
+1330 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1331:9
+     |
+1331 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1338:9
+     |
+1338 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1339:9
+     |
+1339 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1346:9
+     |
+1346 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1347:9
+     |
+1347 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1355:51
+     |
+1355 |     pub fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                   ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim1`
+    --> crates/incin-backends/src/dispatch.rs:1360:9
+     |
+1360 |         dim1: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim1`
+
+warning: unused variable: `dim2`
+    --> crates/incin-backends/src/dispatch.rs:1361:9
+     |
+1361 |         dim2: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim2`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1371:56
+     |
+1371 |     pub fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                        ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1376:9
+     |
+1376 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1377:9
+     |
+1377 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `len`
+    --> crates/incin-backends/src/dispatch.rs:1378:9
+     |
+1378 |         len: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_len`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1382:51
+     |
+1382 |     pub fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1385:52
+     |
+1385 |     pub fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1388:53
+     |
+1388 |     pub fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `ranges`
+    --> crates/incin-backends/src/dispatch.rs:1393:9
+     |
+1393 |         ranges: &[(usize, usize)],
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_ranges`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1399:9
+     |
+1399 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1400:9
+     |
+1400 |         end: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1432:9
+     |
+1432 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1458:9
+     |
+1458 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1486:9
+     |
+1486 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `value`
+    --> crates/incin-backends/src/dispatch.rs:1514:9
+     |
+1514 |         value: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1538:53
+     |
+1538 |     pub fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `repeats`
+    --> crates/incin-backends/src/dispatch.rs:1541:50
+     |
+1541 |     pub fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
+     |                                                  ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_repeats`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:1546:9
+     |
+1546 |         padding: &[(usize, usize)],
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1547:9
+     |
+1547 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1551:48
+     |
+1551 |     pub fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1554:48
+     |
+1554 |     pub fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1557:48
+     |
+1557 |     pub fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1562:9
+     |
+1562 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1650:9
+     |
+1650 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1787:54
+     |
+1787 |     pub fn sub_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1790:54
+     |
+1790 |     pub fn div_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1878:9
+     |
+1878 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `size`
+    --> crates/incin-backends/src/dispatch.rs:1879:9
+     |
+1879 |         size: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_size`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1880:9
+     |
+1880 |         step: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `upscale_factor`
+    --> crates/incin-backends/src/dispatch.rs:1886:9
+     |
+1886 |         upscale_factor: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_upscale_factor`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:1892:9
+     |
+1892 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1893:9
+     |
+1893 |         eps: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1897:57
+     |
+1897 |     pub fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
+     |                                                         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1955:51
+     |
+1955 |     pub fn softmax<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1958:60
+     |
+1958 |     pub fn add_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1961:60
+     |
+1961 |     pub fn mul_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `exponent`
+    --> crates/incin-backends/src/dispatch.rs:1964:48
+     |
+1964 |     pub fn powf<K: DType>(t: &DispatchStorage, exponent: f64) -> Result<DispatchStorage> {
+     |                                                ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_exponent`
+
+warning: unused variable: `min`
+    --> crates/incin-backends/src/dispatch.rs:1967:49
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                 ^^^ help: if this is intentional, prefix it with an underscore: `_min`
+
+warning: unused variable: `max`
+    --> crates/incin-backends/src/dispatch.rs:1967:59
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                           ^^^ help: if this is intentional, prefix it with an underscore: `_max`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2049:9
+     |
+2049 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2076:9
+     |
+2076 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2103:9
+     |
+2103 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `descending`
+    --> crates/incin-backends/src/dispatch.rs:2104:9
+     |
+2104 |         descending: bool,
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_descending`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:2134:9
+     |
+2134 |         k: usize,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2135:9
+     |
+2135 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `largest`
+    --> crates/incin-backends/src/dispatch.rs:2136:9
+     |
+2136 |         largest: bool,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_largest`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2188:51
+     |
+2188 |     pub fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2191:55
+     |
+2191 |     pub fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2194:52
+     |
+2194 |     pub fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2197:56
+     |
+2197 |     pub fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                        ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2200:51
+     |
+2200 |     pub fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2203:55
+     |
+2203 |     pub fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2206:51
+     |
+2206 |     pub fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2209:55
+     |
+2209 |     pub fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2215:52
+     |
+2215 |     pub fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2218:50
+     |
+2218 |     pub fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                  ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `weight`
+    --> crates/incin-backends/src/dispatch.rs:2308:9
+     |
+2308 |         weight: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_weight`
+
+warning: unused variable: `bias`
+    --> crates/incin-backends/src/dispatch.rs:2309:9
+     |
+2309 |         bias: Option<&DispatchStorage>,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_bias`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:2310:9
+     |
+2310 |         eps: f32,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2323:9
+     |
+2323 |         w: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2324:9
+     |
+2324 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `rm`
+    --> crates/incin-backends/src/dispatch.rs:2325:9
+     |
+2325 |         rm: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rm`
+
+warning: unused variable: `rv`
+    --> crates/incin-backends/src/dispatch.rs:2326:9
+     |
+2326 |         rv: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rv`
+
+warning: unused variable: `e`
+    --> crates/incin-backends/src/dispatch.rs:2327:9
+     |
+2327 |         e: f32,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `momentum`
+    --> crates/incin-backends/src/dispatch.rs:2328:9
+     |
+2328 |         momentum: f64,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_momentum`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2341:9
+     |
+2341 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2354:9
+     |
+2354 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2355:9
+     |
+2355 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2356:9
+     |
+2356 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2357:9
+     |
+2357 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2358:9
+     |
+2358 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2359:9
+     |
+2359 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2372:9
+     |
+2372 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2373:9
+     |
+2373 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2374:9
+     |
+2374 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2375:9
+     |
+2375 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2376:9
+     |
+2376 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2377:9
+     |
+2377 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2391:9
+     |
+2391 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2392:9
+     |
+2392 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2393:9
+     |
+2393 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2394:9
+     |
+2394 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_padding`
+    --> crates/incin-backends/src/dispatch.rs:2395:9
+     |
+2395 |         output_padding: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2396:9
+     |
+2396 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2397:9
+     |
+2397 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2410:9
+     |
+2410 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2411:9
+     |
+2411 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2412:9
+     |
+2412 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2413:9
+     |
+2413 |         dilation: (usize, usize),
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2426:9
+     |
+2426 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2427:9
+     |
+2427 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2428:9
+     |
+2428 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_size`
+    --> crates/incin-backends/src/dispatch.rs:2441:9
+     |
+2441 |         output_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_size`
+
+warning: unused variable: `target`
+    --> crates/incin-backends/src/dispatch.rs:2590:9
+     |
+2590 |         target: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `reduction`
+    --> crates/incin-backends/src/dispatch.rs:2591:9
+     |
+2591 |         reduction: incin_core::tensor::reduction::Reduction,
+     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_reduction`
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `broadcast_shape` is never used
+  --> crates/incin-backends/src/layout.rs:57:15
+   |
+57 | pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 139 warnings (run `cargo fix --lib -p incin-backends` to apply 129 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 0.93s
+[0;32m✓ facade-std-no-backend[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-target-api ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 2.28s
+[0;32m✓ facade-target-api[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-training ===[0m
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 0.59s
+[0;32m✓ facade-training[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-compiled ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 10.09s
+[0;32m✓ facade-compiled[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-telemetry ===[0m
+    Checking tokio v1.52.3
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking tokio-util v0.7.18
+    Checking tokio-rustls v0.26.4
+    Checking tower v0.5.3
+    Checking h2 v0.4.15
+    Checking tower-http v0.6.11
+    Checking hyper v1.10.1
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking hf-hub v0.5.0
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 8.29s
+[0;32m✓ facade-telemetry[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-backend-authoring ===[0m
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 0.52s
+[0;32m✓ facade-backend-authoring[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-wgpu-compile ===[0m
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 2 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 8.45s
+[0;32m✓ facade-wgpu-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-cuda-compile ===[0m
+    Checking rand_distr v0.5.1
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking half v2.7.1
+    Checking digit-layout v0.3.1
+    Checking cudarc v0.19.8
+    Checking ggml-quants v0.1.0
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `physical_index` is never used
+  --> crates/incin-backends/src/iteration.rs:31:19
+   |
+29 | impl OperandIteration {
+   | --------------------- method in this implementation
+30 |     #[inline]
+31 |     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
+   |                   ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 5 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 9.45s
+[0;32m✓ facade-cuda-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-metal-compile ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MetalN`
+  --> crates/incin-backends/src/target.rs:90:41
+   |
+90 | use incin_core::tensor::device::{Metal, MetalN};
+   |                                         ^^^^^^
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FloatToIntPolicy` and `convert_f64_to_i64`
+ --> crates/incin-backends/src/metal/backend.rs:6:46
+  |
+6 | use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+  |                                              ^^^^^^^^^^^^^^^^          ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+  --> crates/incin-backends/src/metal/backend.rs:10:26
+   |
+10 | use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
+   |                          ^^^              ^^^^^^^^^
+
+warning: unused imports: `DTypeId` and `Q8_0`
+  --> crates/incin-backends/src/metal/backend.rs:13:41
+   |
+13 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+   |                                         ^^^^^^^              ^^^^
+
+warning: unused import: `native_precision`
+  --> crates/incin-backends/src/metal/backend.rs:16:43
+   |
+16 | pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
+   |                                           ^^^^^^^^^^^^^^^^
+
+warning: unused import: `Shape`
+ --> crates/incin-backends/src/metal/executor.rs:6:41
+  |
+6 | use incin_core::shapes::{OperationKind, Shape};
+  |                                         ^^^^^
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1193:9
+     |
+1193 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1194:9
+     |
+1194 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1195:9
+     |
+1195 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1231:9
+     |
+1231 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1232:9
+     |
+1232 |         step: f64,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1233:9
+     |
+1233 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1234:9
+     |
+1234 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1276:9
+     |
+1276 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1277:9
+     |
+1277 |         end: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1278:9
+     |
+1278 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1279:9
+     |
+1279 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1322:9
+     |
+1322 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1323:9
+     |
+1323 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1330:9
+     |
+1330 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1331:9
+     |
+1331 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1338:9
+     |
+1338 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1339:9
+     |
+1339 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1346:9
+     |
+1346 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1347:9
+     |
+1347 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1432:9
+     |
+1432 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1458:9
+     |
+1458 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1486:9
+     |
+1486 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `value`
+    --> crates/incin-backends/src/dispatch.rs:1514:9
+     |
+1514 |         value: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 37 warnings (run `cargo fix --lib -p incin-backends` to apply 31 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 8.56s
+[0;32m✓ facade-metal-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-external-candle ===[0m
+    Checking tokio v1.52.3
+    Checking icu_normalizer v2.1.1
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking rand v0.8.6
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking ug v0.4.0
+    Checking ureq v3.3.0
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking rand_distr v0.4.3
+    Checking url v2.5.8
+    Checking candle-core v0.9.1
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking tokio-rustls v0.26.4
+    Checking candle-nn v0.9.1
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.15
+    Checking hyper v1.10.1
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking hf-hub v0.5.0
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `impl_data_creation_executors`
+  --> crates/incin-backends/src/descriptor_bind.rs:53:14
+   |
+53 | macro_rules! impl_data_creation_executors {
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/external/candle/executor.rs:23:41
+   |
+23 | use incin_core::shapes::{OperationKind, Shape, ShapeBuf, StrideBuf};
+   |                                         ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `bytes`
+    --> crates/incin-backends/src/dispatch.rs:1116:9
+     |
+1116 |         bytes: &[u8],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_bytes`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1117:9
+     |
+1117 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1118:9
+     |
+1118 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1165:9
+     |
+1165 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1166:9
+     |
+1166 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1172:9
+     |
+1172 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1173:9
+     |
+1173 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1179:9
+     |
+1179 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1180:9
+     |
+1180 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1186:9
+     |
+1186 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1187:9
+     |
+1187 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1193:9
+     |
+1193 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1194:9
+     |
+1194 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1195:9
+     |
+1195 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1231:9
+     |
+1231 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1232:9
+     |
+1232 |         step: f64,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1233:9
+     |
+1233 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1234:9
+     |
+1234 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1276:9
+     |
+1276 |         start: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1277:9
+     |
+1277 |         end: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1278:9
+     |
+1278 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1279:9
+     |
+1279 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1322:9
+     |
+1322 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1323:9
+     |
+1323 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1330:9
+     |
+1330 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1331:9
+     |
+1331 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1338:9
+     |
+1338 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1339:9
+     |
+1339 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1346:9
+     |
+1346 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1347:9
+     |
+1347 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1355:51
+     |
+1355 |     pub fn reshape<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                   ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim1`
+    --> crates/incin-backends/src/dispatch.rs:1360:9
+     |
+1360 |         dim1: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim1`
+
+warning: unused variable: `dim2`
+    --> crates/incin-backends/src/dispatch.rs:1361:9
+     |
+1361 |         dim2: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_dim2`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1371:56
+     |
+1371 |     pub fn broadcast_as<K: DType>(t: &DispatchStorage, shape: &[usize]) -> Result<DispatchStorage> {
+     |                                                        ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1376:9
+     |
+1376 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1377:9
+     |
+1377 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `len`
+    --> crates/incin-backends/src/dispatch.rs:1378:9
+     |
+1378 |         len: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_len`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1382:51
+     |
+1382 |     pub fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1385:52
+     |
+1385 |     pub fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1388:53
+     |
+1388 |     pub fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `ranges`
+    --> crates/incin-backends/src/dispatch.rs:1393:9
+     |
+1393 |         ranges: &[(usize, usize)],
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_ranges`
+
+warning: unused variable: `start`
+    --> crates/incin-backends/src/dispatch.rs:1399:9
+     |
+1399 |         start: usize,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `end`
+    --> crates/incin-backends/src/dispatch.rs:1400:9
+     |
+1400 |         end: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1432:9
+     |
+1432 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1458:9
+     |
+1458 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1486:9
+     |
+1486 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `value`
+    --> crates/incin-backends/src/dispatch.rs:1514:9
+     |
+1514 |         value: f64,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1538:53
+     |
+1538 |     pub fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                     ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `repeats`
+    --> crates/incin-backends/src/dispatch.rs:1541:50
+     |
+1541 |     pub fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
+     |                                                  ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_repeats`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:1546:9
+     |
+1546 |         padding: &[(usize, usize)],
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1547:9
+     |
+1547 |         val: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1551:48
+     |
+1551 |     pub fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1554:48
+     |
+1554 |     pub fn tril<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:1557:48
+     |
+1557 |     pub fn diag<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
+     |                                                ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `shape`
+    --> crates/incin-backends/src/dispatch.rs:1562:9
+     |
+1562 |         shape: &[usize],
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `dtype`
+    --> crates/incin-backends/src/dispatch.rs:1650:9
+     |
+1650 |         dtype: DTypeDescriptor,
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_dtype`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1787:54
+     |
+1787 |     pub fn sub_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `val`
+    --> crates/incin-backends/src/dispatch.rs:1790:54
+     |
+1790 |     pub fn div_scalar<K: DType>(t: &DispatchStorage, val: f64) -> Result<DispatchStorage> {
+     |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1878:9
+     |
+1878 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `size`
+    --> crates/incin-backends/src/dispatch.rs:1879:9
+     |
+1879 |         size: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_size`
+
+warning: unused variable: `step`
+    --> crates/incin-backends/src/dispatch.rs:1880:9
+     |
+1880 |         step: usize,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_step`
+
+warning: unused variable: `upscale_factor`
+    --> crates/incin-backends/src/dispatch.rs:1886:9
+     |
+1886 |         upscale_factor: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_upscale_factor`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:1892:9
+     |
+1892 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1893:9
+     |
+1893 |         eps: f64,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:1897:57
+     |
+1897 |     pub fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
+     |                                                         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:1955:51
+     |
+1955 |     pub fn softmax<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1958:60
+     |
+1958 |     pub fn add_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `scalar`
+    --> crates/incin-backends/src/dispatch.rs:1961:60
+     |
+1961 |     pub fn mul_scalar_float<K: DType>(t: &DispatchStorage, scalar: f64) -> Result<DispatchStorage> {
+     |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_scalar`
+
+warning: unused variable: `exponent`
+    --> crates/incin-backends/src/dispatch.rs:1964:48
+     |
+1964 |     pub fn powf<K: DType>(t: &DispatchStorage, exponent: f64) -> Result<DispatchStorage> {
+     |                                                ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_exponent`
+
+warning: unused variable: `min`
+    --> crates/incin-backends/src/dispatch.rs:1967:49
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                 ^^^ help: if this is intentional, prefix it with an underscore: `_min`
+
+warning: unused variable: `max`
+    --> crates/incin-backends/src/dispatch.rs:1967:59
+     |
+1967 |     pub fn clamp<K: DType>(t: &DispatchStorage, min: f64, max: f64) -> Result<DispatchStorage> {
+     |                                                           ^^^ help: if this is intentional, prefix it with an underscore: `_max`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2049:9
+     |
+2049 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2076:9
+     |
+2076 |         dim: Option<usize>,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2103:9
+     |
+2103 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `descending`
+    --> crates/incin-backends/src/dispatch.rs:2104:9
+     |
+2104 |         descending: bool,
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_descending`
+
+warning: unused variable: `k`
+    --> crates/incin-backends/src/dispatch.rs:2134:9
+     |
+2134 |         k: usize,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_k`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2135:9
+     |
+2135 |         dim: usize,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `largest`
+    --> crates/incin-backends/src/dispatch.rs:2136:9
+     |
+2136 |         largest: bool,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_largest`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2188:51
+     |
+2188 |     pub fn sum_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2191:55
+     |
+2191 |     pub fn sum_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2194:52
+     |
+2194 |     pub fn mean_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2197:56
+     |
+2197 |     pub fn mean_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                        ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2200:51
+     |
+2200 |     pub fn max_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2203:55
+     |
+2203 |     pub fn max_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2206:51
+     |
+2206 |     pub fn min_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                   ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2209:55
+     |
+2209 |     pub fn min_keepdim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                       ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2215:52
+     |
+2215 |     pub fn prod_dim<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                    ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `dim`
+    --> crates/incin-backends/src/dispatch.rs:2218:50
+     |
+2218 |     pub fn cumsum<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
+     |                                                  ^^^ help: if this is intentional, prefix it with an underscore: `_dim`
+
+warning: unused variable: `weight`
+    --> crates/incin-backends/src/dispatch.rs:2308:9
+     |
+2308 |         weight: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_weight`
+
+warning: unused variable: `bias`
+    --> crates/incin-backends/src/dispatch.rs:2309:9
+     |
+2309 |         bias: Option<&DispatchStorage>,
+     |         ^^^^ help: if this is intentional, prefix it with an underscore: `_bias`
+
+warning: unused variable: `eps`
+    --> crates/incin-backends/src/dispatch.rs:2310:9
+     |
+2310 |         eps: f32,
+     |         ^^^ help: if this is intentional, prefix it with an underscore: `_eps`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2323:9
+     |
+2323 |         w: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2324:9
+     |
+2324 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `rm`
+    --> crates/incin-backends/src/dispatch.rs:2325:9
+     |
+2325 |         rm: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rm`
+
+warning: unused variable: `rv`
+    --> crates/incin-backends/src/dispatch.rs:2326:9
+     |
+2326 |         rv: Option<&DispatchStorage>,
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_rv`
+
+warning: unused variable: `e`
+    --> crates/incin-backends/src/dispatch.rs:2327:9
+     |
+2327 |         e: f32,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `momentum`
+    --> crates/incin-backends/src/dispatch.rs:2328:9
+     |
+2328 |         momentum: f64,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_momentum`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2341:9
+     |
+2341 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2354:9
+     |
+2354 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2355:9
+     |
+2355 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2356:9
+     |
+2356 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2357:9
+     |
+2357 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2358:9
+     |
+2358 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2359:9
+     |
+2359 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2372:9
+     |
+2372 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2373:9
+     |
+2373 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2374:9
+     |
+2374 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2375:9
+     |
+2375 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2376:9
+     |
+2376 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2377:9
+     |
+2377 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `w`
+    --> crates/incin-backends/src/dispatch.rs:2391:9
+     |
+2391 |         w: &DispatchStorage,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_w`
+
+warning: unused variable: `b`
+    --> crates/incin-backends/src/dispatch.rs:2392:9
+     |
+2392 |         b: Option<&DispatchStorage>,
+     |         ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2393:9
+     |
+2393 |         stride: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2394:9
+     |
+2394 |         padding: usize,
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_padding`
+    --> crates/incin-backends/src/dispatch.rs:2395:9
+     |
+2395 |         output_padding: usize,
+     |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2396:9
+     |
+2396 |         dilation: usize,
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `groups`
+    --> crates/incin-backends/src/dispatch.rs:2397:9
+     |
+2397 |         groups: usize,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_groups`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2410:9
+     |
+2410 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2411:9
+     |
+2411 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2412:9
+     |
+2412 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `dilation`
+    --> crates/incin-backends/src/dispatch.rs:2413:9
+     |
+2413 |         dilation: (usize, usize),
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dilation`
+
+warning: unused variable: `kernel_size`
+    --> crates/incin-backends/src/dispatch.rs:2426:9
+     |
+2426 |         kernel_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kernel_size`
+
+warning: unused variable: `stride`
+    --> crates/incin-backends/src/dispatch.rs:2427:9
+     |
+2427 |         stride: (usize, usize),
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stride`
+
+warning: unused variable: `padding`
+    --> crates/incin-backends/src/dispatch.rs:2428:9
+     |
+2428 |         padding: (usize, usize),
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_padding`
+
+warning: unused variable: `output_size`
+    --> crates/incin-backends/src/dispatch.rs:2441:9
+     |
+2441 |         output_size: (usize, usize),
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_output_size`
+
+warning: unused variable: `target`
+    --> crates/incin-backends/src/dispatch.rs:2590:9
+     |
+2590 |         target: &DispatchStorage,
+     |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+
+warning: unused variable: `reduction`
+    --> crates/incin-backends/src/dispatch.rs:2591:9
+     |
+2591 |         reduction: incin_core::tensor::reduction::Reduction,
+     |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_reduction`
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: function `invalid` is never used
+  --> crates/incin-backends/src/descriptor_bind.rs:19:21
+   |
+19 | pub(crate) const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
+   |                     ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `checked_contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:33:15
+   |
+33 | pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `contiguous_strides` is never used
+  --> crates/incin-backends/src/layout.rs:46:15
+   |
+46 | pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `broadcast_shape` is never used
+  --> crates/incin-backends/src/layout.rs:57:15
+   |
+57 | pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
+   |               ^^^^^^^^^^^^^^^
+
+warning: function `increment_index` is never used
+  --> crates/incin-backends/src/layout.rs:68:15
+   |
+68 | pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
+   |               ^^^^^^^^^^^^^^^
+
+warning: struct `BlockQ8_0` is never constructed
+  --> crates/incin-backends/src/quant.rs:17:12
+   |
+17 | pub struct BlockQ8_0 {
+   |            ^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/external/candle/ops/creation.rs:56:15
+    |
+ 53 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    | ------------------------------------------------------------ associated functions in this implementation
+...
+ 56 |         fill: full;
+    |               ^^^^
+ 57 |         sequence: arange, linspace;
+    |                   ^^^^^^  ^^^^^^^^
+...
+101 |     fn var_zeros<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+...
+113 |     fn var_ones<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+126 |     fn var_rand<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^
+...
+139 |     fn var_randn<K: incin_core::tensor::dtype::DType>(
+    |        ^^^^^^^^^
+    |
+    = note: this warning originates in the macro `crate::unsupported::unsupported_creation_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: associated functions `quantize`, `dequantize`, and `quantized_matmul` are never used
+  --> crates/incin-backends/src/external/candle/ops/quant.rs:8:8
+   |
+ 6 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+ 7 |     /// Not supported by candle; always returns `UnsupportedBackendOperation`.
+ 8 |     fn quantize<
+   |        ^^^^^^^^
+...
+20 |     fn dequantize<
+   |        ^^^^^^^^^^
+...
+32 |     fn quantized_matmul<Q: incin_core::tensor::dtype::QuantDType>(
+   |        ^^^^^^^^^^^^^^^^
+
+warning: associated functions `prod_all`, `prod_dim`, and `cumsum` are never used
+  --> crates/incin-backends/src/external/candle/ops/reduce.rs:10:14
+   |
+ 7 | impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+   | ------------------------------------------------------------ associated functions in this implementation
+...
+10 |         all: prod_all;
+   |              ^^^^^^^^
+11 |         dim: prod_dim, cumsum;
+   |              ^^^^^^^^  ^^^^^^
+   |
+   = note: this warning originates in the macro `crate::unsupported::unsupported_reduction_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: multiple associated functions are never used
+   --> crates/incin-backends/src/unsupported.rs:173:12
+    |
+173 |           fn where_cond<K: DType>(
+    |              ^^^^^^^^^^
+...
+182 |           fn scatter<K: DType, KInt: DType>(
+    |              ^^^^^^^
+...
+192 |           fn masked_fill<K: DType>(
+    |              ^^^^^^^^^^^
+...
+201 |           fn pad<K: DType>(
+    |              ^^^
+...
+210 |           fn repeat<K: DType>(
+    |              ^^^^^^
+...
+218 |           fn lerp<K: DType>(
+    |              ^^^^
+...
+227 |           fn addmm<K: DType>(
+    |              ^^^^^
+...
+238 |           fn scaled_dot_product_attention<K: DType>(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+251 |           fn unfold<K: DType>(
+    |              ^^^^^^
+...
+261 |           fn group_norm<K: DType>(
+    |              ^^^^^^^^^^
+...
+306 |           fn logical_not(
+    |              ^^^^^^^^^^^
+...
+312 |       (@op gather) => { $crate::unsupported::unsupported_tensor_ops!(@indexed gather); };
+    |                                                                               ^^^^^^
+313 |       (@op index_select) => { $crate::unsupported::unsupported_tensor_ops!(@indexed index_select); };
+    |                                                                                     ^^^^^^^^^^^^
+314 |       (@op unsqueeze) => { $crate::unsupported::unsupported_tensor_ops!(@dim unsqueeze); };
+    |                                                                              ^^^^^^^^^
+315 |       (@op pixel_shuffle) => { $crate::unsupported::unsupported_tensor_ops!(@dim pixel_shuffle); };
+    |                                                                                  ^^^^^^^^^^^^^
+316 |       (@op triu) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal triu); };
+    |                                                                              ^^^^
+317 |       (@op tril) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal tril); };
+    |                                                                              ^^^^
+318 |       (@op diag) => { $crate::unsupported::unsupported_tensor_ops!(@diagonal diag); };
+    |                                                                              ^^^^
+319 |       (@op sub_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar sub_scalar); };
+    |                                                                                  ^^^^^^^^^^
+320 |       (@op div_scalar) => { $crate::unsupported::unsupported_tensor_ops!(@scalar div_scalar); };
+    |                                                                                  ^^^^^^^^^^
+321 |       (@op instance_norm) => { $crate::unsupported::unsupported_tensor_ops!(@scalar instance_norm); };
+    |                                                                                     ^^^^^^^^^^^^^
+322 |       (@op cmp_eq) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_eq); };
+    |                                                                           ^^^^^^
+323 |       (@op cmp_ne) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ne); };
+    |                                                                           ^^^^^^
+324 |       (@op cmp_lt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_lt); };
+    |                                                                           ^^^^^^
+325 |       (@op cmp_le) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_le); };
+    |                                                                           ^^^^^^
+326 |       (@op cmp_gt) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_gt); };
+    |                                                                           ^^^^^^
+327 |       (@op cmp_ge) => { $crate::unsupported::unsupported_tensor_ops!(@cmp cmp_ge); };
+    |                                                                           ^^^^^^
+328 |       (@op logical_and) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_and); };
+    |                                                                                           ^^^^^^^^^^^
+329 |       (@op logical_or) => { $crate::unsupported::unsupported_tensor_ops!(@logical_binary logical_or); };
+    |                                                                                          ^^^^^^^^^^
+330 |       (@op maximum) => { $crate::unsupported::unsupported_tensor_ops!(@binary maximum); };
+    |                                                                               ^^^^^^^
+331 |       (@op minimum) => { $crate::unsupported::unsupported_tensor_ops!(@binary minimum); };
+    |                                                                               ^^^^^^^
+332 |       (@op abs_diff) => { $crate::unsupported::unsupported_tensor_ops!(@binary abs_diff); };
+    |                                                                                ^^^^^^^^
+333 |       (@op bmm) => { $crate::unsupported::unsupported_tensor_ops!(@binary bmm); };
+    |                                                                           ^^^
+    |
+   ::: crates/incin-backends/src/external/candle/ops/tensor.rs:16:1
+    |
+ 16 |   impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
+    |   ------------------------------------------------------------ associated functions in this implementation
+...
+ 20 | /     crate::unsupported::unsupported_tensor_ops! {
+ 21 | |         where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+ 22 | |         repeat, pad, triu, tril, diag,
+ 23 | |         cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
+...   |
+ 27 | |         unfold, pixel_shuffle, group_norm, instance_norm,
+ 28 | |     }
+    | |_____- in this macro invocation
+    |
+    = note: this warning originates in the macro `$crate::unsupported::unsupported_tensor_ops` which comes from the expansion of the macro `crate::unsupported::unsupported_tensor_ops` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `incin-backends` (lib) generated 145 warnings (run `cargo fix --lib -p incin-backends` to apply 129 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 10.78s
+[0;32m✓ facade-external-candle[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-distributed-reference ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 10.03s
+[0;32m✓ facade-distributed-reference[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-distributed-nccl-compile ===[0m
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking cudarc v0.19.8
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unused macro definition: `cpu_unary_call`
+   --> crates/incin-backends/src/dispatch.rs:326:14
+    |
+326 | macro_rules! cpu_unary_call {
+    |              ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_macros)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `cpu_reduction_call`
+   --> crates/incin-backends/src/dispatch.rs:500:14
+    |
+500 | macro_rules! cpu_reduction_call {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_shape_call`
+   --> crates/incin-backends/src/dispatch.rs:568:14
+    |
+568 | macro_rules! cpu_shape_call {
+    |              ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `cpu_binary_call`
+   --> crates/incin-backends/src/dispatch.rs:711:14
+    |
+711 | macro_rules! cpu_binary_call {
+    |              ^^^^^^^^^^^^^^^
+
+warning: unused import: `Cpu`
+  --> crates/incin-backends/src/target.rs:86:34
+   |
+86 | use incin_core::tensor::device::{Cpu, Device, DeviceId};
+   |                                  ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused macro definition: `impl_unit_arg_target`
+   --> crates/incin-backends/src/target.rs:842:14
+    |
+842 | macro_rules! impl_unit_arg_target {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Dyn` and `StrideBuf`
+ --> crates/incin-backends/src/cuda/backend.rs:5:26
+  |
+5 | use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+  |                          ^^^                             ^^^^^^^^^
+
+warning: unused import: `Q8_0`
+ --> crates/incin-backends/src/cuda/backend.rs:8:62
+  |
+8 |     ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+  |                                                              ^^^^
+
+warning: unused import: `Shape`
+  --> crates/incin-backends/src/cuda/executor.rs:11:41
+   |
+11 | use incin_core::shapes::{OperationKind, Shape};
+   |                                         ^^^^^
+
+warning: unused variable: `request`
+  --> crates/incin-backends/src/dispatch_capability.rs:10:9
+   |
+10 |         request: &PrecisionRequest,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `physical_index` is never used
+  --> crates/incin-backends/src/iteration.rs:31:19
+   |
+29 | impl OperandIteration {
+   | --------------------- method in this implementation
+30 |     #[inline]
+31 |     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
+   |                   ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 11 warnings (run `cargo fix --lib -p incin-backends` to apply 5 suggestions)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 10.57s
+[0;32m✓ facade-distributed-nccl-compile[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-target-telemetry ===[0m
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 2.43s
+[0;32m✓ facade-target-telemetry[0m
+
+[1m[0;33m=== [FEATURE CONTRACT] facade-compiled-telemetry ===[0m
+warning: unused import: `alloc::vec`
+ --> crates/incin-core/src/compiled/artifact.rs:5:5
+  |
+5 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `CapturedNode`
+ --> crates/incin-core/src/compiled/fusion.rs:5:47
+  |
+5 | use crate::compiled::capture::{CapturedGraph, CapturedNode};
+  |                                               ^^^^^^^^^^^^
+
+warning: unused import: `alloc::string::String`
+ --> crates/incin-core/src/compiled/plan.rs:4:5
+  |
+4 | use alloc::string::String;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SymbolEnvironment`
+  --> crates/incin-core/src/compiled/plan.rs:12:57
+   |
+12 |     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+   |                                                         ^^^^^^^^^^^^^^^^^
+
+warning: function `export_captured_to_onnx` is never used
+   --> crates/incin-core/src/onnx_exporter.rs:116:8
+    |
+116 | pub fn export_captured_to_onnx(graph: &CapturedGraph, path: &Path) -> anyhow::Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-core` (lib) generated 5 warnings (run `cargo fix --lib -p incin-core` to apply 4 suggestions)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized] target(s) in 2.60s
+[0;32m✓ facade-compiled-telemetry[0m
+
+[1m[0;32m=== Supported feature contract matrix: PASS ===[0m

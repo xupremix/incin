@@ -1,0 +1,2077 @@
+### cargo fmt
+### core tests
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 9.33s
+     Running unittests src/lib.rs (target/debug/deps/incin_core-e348a5117128e397)
+
+running 139 tests
+test distributions::tests::test_exponential_sampling ... ok
+test distributions::tests::test_comptime_known_device_sampling ... ok
+test distributions::tests::test_custom_distribution ... ok
+test distributions::tests::test_bernoulli_sampling ... ok
+test distributions::tests::test_gumbel_sampling ... ok
+test distributions::tests::test_normal_sampling ... ok
+test err::tests::error_message_is_bounded_at_a_utf8_boundary ... ok
+test distributions::tests::test_uniform_sampling ... ok
+test err::tests::exact_float_to_integer_conversion_rejects_lossy_values ... ok
+test err::tests::lossy_float_to_integer_conversion_requires_an_explicit_policy ... ok
+test err::tests::test_error_formatting ... ok
+test exec::capability::tests::families_never_imply_exact_support ... ok
+test exec::capability::tests::rejection_identifies_the_first_unsatisfied_constraint ... ok
+test exec::catalog::tests::a_comparison_returns_boolean_dtype ... ok
+test exec::catalog::tests::an_unbiased_estimate_rejects_a_single_element_domain ... ok
+test exec::catalog::tests::batch_norm_state_is_rank_one_against_a_ranked_activation ... ok
+test exec::catalog::tests::conv1d_and_transposed_convolution_bias_use_the_same_role_contract ... ok
+test exec::catalog::tests::coverage_is_derived_from_catalog_rows ... ok
+test exec::catalog::tests::convolution_bias_is_validated_by_role_not_by_the_activation_window ... ok
+test exec::catalog::tests::custom_operation_keeps_static_shape_proof ... ok
+test exec::catalog::tests::cross_entropy_logits_and_targets_have_separate_rank_contracts ... ok
+test exec::catalog::tests::custom_typed_proof_requires_one_concrete_output ... ok
+test exec::catalog::tests::data_creation_rejects_non_exact_payload_byte_length ... ok
+test exec::catalog::tests::data_dependent_output_shapes_are_not_inferred_from_metadata ... ok
+test exec::catalog::tests::empty_domain_behaviour_splits_within_the_reduction_family ... ok
+test exec::catalog::tests::embedding_indices_and_weight_have_separate_rank_contracts ... ok
+test exec::catalog::tests::every_mutating_and_autograd_operation_is_classified_by_its_profile ... ok
+test exec::catalog::tests::every_tensor_returning_row_declares_an_inference_source ... ok
+test exec::catalog::tests::every_typed_output_rule_is_fail_closed_or_exactly_inferred ... ok
+test exec::catalog::tests::attribute_bearing_descriptor_round_trips_without_storage ... ok
+test exec::catalog::tests::frontend_shape_evidence_reaches_the_validated_descriptor ... ok
+test exec::catalog::tests::index_producing_operations_reject_a_non_integer_index_dtype ... ok
+test exec::catalog::tests::inferred_metadata_cannot_be_fabricated ... ok
+test exec::catalog::tests::identities_and_names_occur_exactly_once ... ok
+test exec::catalog::tests::known_inputs_never_skip_output_shape_verification ... ok
+test exec::catalog::tests::linear_weight_and_bias_have_separate_rank_contracts ... ok
+test exec::catalog::tests::logical_ops_require_boolean_inputs ... ok
+test exec::catalog::tests::multi_output_shapes_and_counts_are_inferred_exactly ... ok
+test exec::catalog::tests::operation_key_persistence_accepts_runtime_owned_identity ... ok
+test exec::catalog::tests::operation_key_round_trips_through_persistence ... ok
+test exec::catalog::tests::optimizer_gradient_and_state_are_validated_against_the_parameter ... ok
+test exec::catalog::tests::recurrent_and_empty_reduction_contracts_are_storage_free ... ok
+test exec::catalog::tests::the_execution_site_agrees_with_the_arity_and_output_rules ... ok
+test exec::catalog::tests::the_axis_variance_operations_infer_their_output_shape ... ok
+test exec::catalog::tests::typed_attributes_fail_before_storage_access ... ok
+test exec::catalog::tests::topk_values_keep_the_input_dtype_while_indices_take_the_index_dtype ... ok
+test exec::catalog::tests::typed_data_creation_rejects_a_payload_dtype_mismatch ... ok
+test exec::catalog::tests::unknown_metadata_stays_unknown ... ok
+test exec::catalog::tests::validation_rejects_wrong_arity_and_cross_device_inputs ... ok
+test exec::catalog::tests::zero_output_gradient_and_determinism_exceptions_override_their_family ... ok
+test exec::conformance::tests::required_semantic_edges_are_present_once_or_more ... ok
+test exec::meta::tests::a_view_offset_weakens_but_never_strengthens_alignment ... ok
+test exec::meta::tests::contiguous_layout_is_derived_not_asserted ... ok
+test exec::meta::tests::empty_views_may_sit_at_but_not_after_the_allocation_end ... ok
+test exec::meta::tests::invalid_alignment_is_rejected ... ok
+test exec::meta::tests::rank_and_arithmetic_failures_remain_structured ... ok
+test exec::meta::tests::strided_span_and_offset_are_checked_against_capacity ... ok
+test exec::meta::tests::transposed_and_broadcast_views_are_strided ... ok
+test exec::meta::tests::zero_offset_preserves_the_allocation_alignment ... ok
+test exec::proof::tests::a_fully_typed_shape_proves_itself_statically ... ok
+test exec::proof::tests::a_named_axis_is_typed_but_not_statically_sized ... ok
+test exec::proof::tests::a_ranked_shape_knows_its_rank_but_not_its_extents ... ok
+test exec::proof::tests::a_sealed_descriptor_still_reads_back_exactly ... ok
+test exec::proof::tests::an_unranked_shape_proves_nothing_before_it_exists ... ok
+test exec::proof::tests::meet_is_commutative_idempotent_and_topped_by_static ... ok
+test exec::proof::tests::meet_takes_the_weaker_operand ... ok
+test exec::proof::tests::one_runtime_axis_weakens_the_whole_shape ... ok
+test exec::proof::tests::the_proof_is_carried_not_recomputed ... ok
+test metrics::tests::test_accuracy ... ok
+test metrics::tests::test_mse ... ok
+test metrics::tests::test_precision_recall_f1 ... ok
+test nn::state::tests::child_accepts_only_one_non_empty_component ... ok
+test nn::state::tests::paths_are_ordered_and_distinct_from_runtime_identity ... ok
+test nn::state::tests::preserves_supported_native_dtype_payloads ... ok
+test nn::state::tests::rejects_overflow_and_malformed_payloads ... ok
+test nn::state::tests::root_and_nested_paths_roundtrip_through_postcard ... ok
+test nn::state::tests::validates_exact_native_byte_length ... ok
+test nn::stats::tests::into_model_stats_doubles_macs_for_flops ... ok
+test nn::state::tests::wire_deserialization_revalidates_paths_and_payload_lengths ... ok
+test nn::stats::tests::layer_stats_add_sums_both_fields ... ok
+test nn::stats::tests::layer_stats_sum_over_empty_iter_is_default ... ok
+test nn::stats::tests::mlp_macs_scale_linearly_with_batch_but_params_do_not ... ok
+test nn::stats::tests::mlp_stats_match_the_growth_doc_hand_computed_numbers_at_batch_1 ... ok
+test nn::stats::tests::sequential_of_linear_and_relu_sums_correctly_and_relu_contributes_nothing ... ok
+test nn::stats::tests::summary_with_stats_appends_a_readable_totals_footer ... ok
+test nn::stats::tests::named_layers_summary_with_stats_convenience_method_matches_the_free_function ... ok
+test shapes::buf::tests::checked_numel_distinguishes_scalar_zero_and_overflow ... ok
+test shapes::buf::tests::checked_span_rejects_rank_and_arithmetic_overflow ... ok
+test shapes::buf::tests::contiguous_strides_reject_unrepresentable_layouts_even_when_empty ... ok
+test shapes::idx::tests::slice_full_passthrough ... ok
+test shapes::idx::tests::slice_range_output_shape ... ok
+test onnx_exporter::tests::export_uses_canonical_identity_and_projected_attributes ... ok
+test serialize::tests::postcard_supports_q8_and_safetensors_rejects_it_explicitly ... ok
+test serialize::tests::postcard_round_trips_exact_supported_native_dtypes ... ok
+test shapes::reshape::tests::reshape_different_rank_same_numel ... ok
+test shapes::reshape::tests::reshape_same_rank_same_numel ... ok
+test shapes::shape::tests::checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges ... ok
+test shapes::shape::tests::dyn_is_zero_sized ... ok
+test shapes::shape::tests::test_array_shape ... ok
+test shapes::shape::tests::test_dyn_shape ... ok
+test serialize::tests::safetensors_round_trips_exact_supported_native_dtypes ... ok
+test shapes::shape::tests::test_scalar_shape ... ok
+test tensor::allocation::tests::checked_allocation_lengths_cover_dense_and_block_storage ... ok
+test tensor::backend::scalar_value_tests::float_to_integer_requires_an_explicit_checked_policy ... ok
+test tensor::base::tests::dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel ... ok
+test tensor::base::tests::test_tensor_creation ... ok
+test tensor::device::tests::a_device_set_keeps_the_order_it_was_given ... ok
+test tensor::base::tests::test_tensor_ones ... ok
+test tensor::device::tests::a_device_set_rejects_what_cannot_describe_a_run ... ok
+test tensor::device::tests::an_empty_ordinal_range_is_rejected_rather_than_defaulted ... ok
+test tensor::device::tests::external_device_identity_is_open_and_stable ... ok
+test tensor::device::tests::test_device_variants ... ok
+test tensor::device::tests::test_dyn_tier1_fully_runtime ... ok
+test tensor::device::tests::test_wgpu_tier2_runtime_ordinal ... ok
+test tensor::device::tests::test_wgpu_tier3_static_ordinal ... ok
+test tensor::device::tests::the_default_preference_is_the_cpu ... ok
+test tensor::device::tests::the_rfcs_three_gpu_call_builds_three_cuda_devices ... ok
+test tensor::display::tests::empty_dimension_renders_empty_brackets ... ok
+test tensor::display::tests::integer_dtype_has_no_decimal_point ... ok
+test tensor::display::tests::long_one_d_axis_is_summarized ... ok
+test tensor::display::tests::long_outer_axis_drops_whole_rows ... ok
+test tensor::display::tests::nan_and_infinity_render_like_pytorch ... ok
+test tensor::display::tests::one_d_float_is_comma_separated ... ok
+test tensor::display::tests::scalar_has_no_brackets ... ok
+test tensor::display::tests::non_integral_values_use_fixed_precision ... ok
+test tensor::display::tests::two_d_float_aligns_columns_and_wraps_rows ... ok
+test tensor::display::tests::very_large_and_small_magnitudes_switch_to_scientific ... ok
+test tensor::dtype::tests::block_overflow_returns_error ... ok
+test tensor::dtype::tests::builtin_round_trip ... ok
+test tensor::dtype::tests::custom_dtype_compile_test ... ok
+test tensor::dtype::tests::custom_dtype_has_no_builtin_id ... ok
+test tensor::dtype::tests::dtype_id_classification ... ok
+test tensor::dtype::tests::f32_descriptor ... ok
+test tensor::dtype::tests::f32_encoding_is_scalar ... ok
+test tensor::dtype::tests::f64_encoding ... ok
+test tensor::dtype::tests::q8_0_descriptor ... ok
+test tensor::dtype::tests::q8_0_encoding_is_block ... ok
+test tensor::dtype::tests::scalar_overflow_returns_error ... ok
+test exec::catalog::tests::generated_semantics_document_covers_every_row ... ok
+
+test result: ok. 139 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/auto_device.rs (target/debug/deps/auto_device-055cd174dd0282b5)
+
+running 6 tests
+test a_wgpu_only_build_resolves_to_wgpu ... ok
+test best_device_is_a_fully_static_selector ... ok
+test an_ordinal_selects_that_device_on_a_gpu_build ... ok
+test best_device_resolves_to_the_most_capable_enabled_family ... ok
+test cuda_outranks_wgpu_when_both_are_enabled ... ok
+test the_macro_and_the_alias_name_the_same_type ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/axis_literal_range.rs (target/debug/deps/axis_literal_range-0debade8cf01dbd9)
+
+running 1 test
+test arbitrary_static_axis_literals_remain_static ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/backward_errors.rs (target/debug/deps/backward_errors-cc32e4b81026e5cb)
+
+running 11 tests
+test a_contribution_and_an_accumulation_are_reported_differently ... ok
+test a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one ... ok
+test a_non_finite_gradient_is_a_returned_error ... ok
+test a_failed_pass_still_drained_the_tape_it_walked ... ok
+test a_recipe_failure_propagates_rather_than_aborting ... ok
+test the_check_is_an_axis_beside_the_others_not_a_replacement_for_them ... ok
+test checking_is_off_by_default ... ok
+test the_error_message_names_the_tensor_and_where_it_was_found ... ok
+test nothing_in_the_backward_path_panics_any_more ... ok
+test the_scope_ends_where_it_says_it_does ... ok
+test the_default_pass_does_not_look_at_gradient_values ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broadcast_axes.rs (target/debug/deps/broadcast_axes-7e96b4636118725b)
+
+running 22 tests
+test a_bias_shaped_like_the_channel_axis_broadcasts_over_a_batch ... ok
+test a_five_element_axis_is_not_related_to_a_four_element_one ... ok
+test a_named_axis_whose_runtime_size_is_one_still_stretches_at_runtime ... ok
+test a_named_axis_stretches_against_a_literal_one ... ok
+test a_runtime_axis_may_sit_anywhere_rather_than_only_in_front ... ok
+test a_runtime_axis_that_contradicts_its_static_partner_is_rejected ... ok
+test a_scalar_broadcasts_against_anything ... ok
+test a_shorter_operand_right_aligns_and_may_stretch_where_it_reaches ... ok
+test a_zero_axis_absorbs_the_stretch_rather_than_being_absorbed ... ok
+test both_operands_may_stretch_at_different_axes ... ok
+test broadcast_output_normalizes_static_extents ... ok
+test identical_axes_still_pass_through_untouched ... ok
+test incompatible_sizes_are_refused_at_runtime_when_the_type_cannot_see_them ... ok
+test meeting_a_literal_one_keeps_the_axis_dynamic ... ok
+test meeting_a_static_axis_recovers_the_size_the_runtime_one_lost ... ok
+test runtime_broadcast_with_static_one_remains_runtime ... ok
+test runtime_static_broadcast_keeps_the_provable_output_extent ... ok
+test stretching_works_from_either_side ... ok
+test the_shorter_operand_may_be_on_either_side ... ok
+test two_axes_of_extent_one_stay_one ... ok
+test two_different_names_are_still_unrelated ... ok
+test two_runtime_axes_stay_runtime ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broadcast_fuzz.rs (target/debug/deps/broadcast_fuzz-b224f4bca2919ea8)
+
+running 7 tests
+test a_scalar_is_absorbed_whatever_the_other_operand_is ... ok
+test a_shape_of_ones_is_the_identity ... ok
+test a_result_axis_is_never_one_where_an_operand_axis_was_zero ... ok
+test the_result_has_the_rank_of_the_longer_operand ... ok
+test the_rule_agrees_with_the_reference_on_both_answers ... ok
+test broadcasting_is_commutative_in_the_shape_it_produces ... ok
+test broadcasting_is_associative_where_all_three_are_defined ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/builder_permutations.rs (target/debug/deps/builder_permutations-754863aaa2b90623)
+
+running 5 tests
+test test_norm_permutations ... ok
+test test_rnn_permutations ... ok
+test test_conv2d_permutations ... ok
+test test_linear_permutations ... ok
+test test_conv1d_permutations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/checkpoint_reshard.rs (target/debug/deps/checkpoint_reshard-10387805c0131d97)
+
+running 5 tests
+test test_slice_bytes_for_rank_axis_0 ... ok
+test test_slice_bytes_for_rank_axis_1 ... ok
+test test_global_checkpoint_manifest_serialization ... ok
+test test_reshard_error_rejections ... ok
+test test_save_and_load_resharded_checkpoint ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/collective_plan.rs (target/debug/deps/collective_plan-cea5dcb9b39314f7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compile_tests.rs (target/debug/deps/compile_tests-7828c27c47830429)
+
+running 2 tests
+test compile_fail_cases_fail_for_their_stated_reason ... ok
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin-core-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.14s
+
+
+test tests/compile_pass/execution_contract.rs [should pass] ... ok
+test tests/compile_fail/broadcast_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/canonical_descriptor_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/checked_byte_len_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/checked_numel_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/concat_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/concrete_static_extent_is_sealed.rs [should fail to compile] ... ok
+test tests/compile_fail/construction_witness_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/conv2d_invalid_shape.rs [should fail to compile] ... ok
+test tests/compile_fail/device_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/dim_trait_is_sealed.rs [should fail to compile] ... ok
+test tests/compile_fail/dtype_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/dyn_is_a_unit_marker.rs [should fail to compile] ... ok
+test tests/compile_fail/execute_is_not_blanket.rs [should fail to compile] ... ok
+test tests/compile_fail/execution_output_must_be_backend_owned.rs [should fail to compile] ... ok
+test tests/compile_fail/execution_request_requires_validated.rs [should fail to compile] ... ok
+test tests/compile_fail/flatten_invalid_range.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_batchnorm_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_conv1d_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_conv2d_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_linear_partial_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_linear_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_model_building_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/gradients_backend_payload_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/kernel_conv2d_channel_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/layer_builder_invalid_count.rs [should fail to compile] ... ok
+test tests/compile_fail/layer_builder_invalid_order.rs [should fail to compile] ... ok
+test tests/compile_fail/loss_cross_entropy_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_idx_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_module_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_s_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/matmul_rank8_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/matmul_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_broadcast_identity_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_concat_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_identity_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_size_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/operation_spec_is_sealed.rs [should fail to compile] ... ok
+test tests/compile_fail/reshape_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/shape_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/shape_trait_is_sealed.rs [should fail to compile] ... ok
+test tests/compile_fail/shape_value_constructor_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/stack_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/tensor_meta_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/unsupported_dtype_backend_pair.rs [should fail to compile] ... ok
+test tests/compile_fail/validated_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/validated_new_is_crate_private.rs [should fail to compile] ... ok
+
+
+test compile_fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.81s
+
+     Running tests/compiled_alloc.rs (target/debug/deps/compiled_alloc-31db335233d0c758)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_artifact.rs (target/debug/deps/compiled_artifact-d3b0c95f391b2def)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_capture.rs (target/debug/deps/compiled_capture-3461b220e713ba49)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_fold.rs (target/debug/deps/compiled_fold-54244b10f66d619c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_fusion.rs (target/debug/deps/compiled_fusion-45a864007d65826e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_guards.rs (target/debug/deps/compiled_guards-411a63d6995090c3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/concat_stack.rs (target/debug/deps/concat_stack-0d86ebcefcaee759)
+
+running 10 tests
+test test_stack_static_success ... ok
+test test_try_concat_dynamic ... ok
+test test_concat_static_success ... ok
+test test_try_concat_rejects_invalid_axis ... ok
+test test_try_concat_rejects_mismatched_non_concat_extent ... ok
+test test_try_concat_rejects_mismatched_ranks ... ok
+test test_try_concat_slice_rejects_mismatched_non_concat_extent ... ok
+test test_try_concat_slice_rejects_mismatched_ranks ... ok
+test test_try_concat_slice_rejects_invalid_axis ... ok
+test test_try_stack_dynamic ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/construction_witness.rs (target/debug/deps/construction_witness-c877944b2c59a876)
+
+running 11 tests
+test checked_construction_rejects_integer_gradient_tracking ... ok
+test checked_construction_accepts_matching_storage_metadata ... ok
+test buffer_checked_construction_validates_static_shape_contract ... ok
+test checked_construction_rejects_static_shape_contract_mismatch ... ok
+test checked_construction_rejects_storage_dtype_mismatch ... ok
+test dynamic_flatten_reports_invalid_ranges_without_panicking ... ok
+test checked_construction_rejects_storage_shape_mismatch ... ok
+test metadata_only_retagging_preserves_validated_storage ... ok
+test parameter_checked_construction_validates_static_shape_contract ... ok
+test parameter_raw_construction_validates_dtype_contract ... ok
+test raw_unchecked_constructor_is_absent_from_the_crate ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/constructor_ranks.rs (target/debug/deps/constructor_ranks-d5087cfd8a6d083c)
+
+running 1 test
+test fully_static_shapes_construct_at_every_previously_missing_rank ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/custom_operation.rs (target/debug/deps/custom_operation-3edc1b3f98e056ca)
+
+running 15 tests
+test built_in_backend_can_compile_an_open_custom_operation ... ok
+test built_in_cpu_backend_executes_a_downstream_operation ... ok
+test built_in_non_creation_rejects_an_execution_payload ... ok
+test custom_identity_is_derived_from_the_operation_key ... ok
+test custom_operation_capability_can_reject_an_input_invocation ... ok
+test built_in_creation_requires_the_declared_payload ... ok
+test custom_operation_returns_backend_owned_storage ... ok
+test custom_operations_receive_borrowed_execution_payloads ... ok
+test custom_operations_are_recorded_with_their_key ... ok
+test downstream_custom_operation_keeps_static_shape_dispatch ... ok
+test downstream_backend_can_execute_a_builtin_operation ... ok
+test downstream_device_implementation_keeps_custom_identity ... ok
+test downstream_custom_operation_uses_unified_runtime_dispatch ... ok
+test downstream_executor_receives_the_exact_shape_type ... ok
+test metadata_free_custom_operations_cannot_bypass_capability_admission ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_parallel.rs (target/debug/deps/data_parallel-ae9774c77c5aa262)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/descriptor_schema.rs (target/debug/deps/descriptor_schema-5ef6f75a79ba52e6)
+
+running 12 tests
+test axis_set_deserialization_cannot_create_unordered_contiguous_state ... ok
+test axis_set_mixes_inline_and_spilled_axes_without_losing_semantics ... ok
+test axis_set_serializes_as_canonical_semantic_axes ... ok
+test axis_set_spills_without_a_semantic_rank_ceiling ... ok
+test catalog_contains_unique_exact_operation_identities ... ok
+test exact_binary_descriptor_derives_broadcast_output ... ok
+test exact_conv_and_pool_descriptors_derive_spatial_geometry ... ok
+test exact_keep_reduction_preserves_rank ... ok
+test exact_matmul_descriptor_derives_batched_output ... ok
+test exact_reduction_descriptor_handles_axis_seventy ... ok
+test schema_version_is_explicit_and_compatible ... ok
+test exact_reshape_descriptor_checks_element_count ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/exec_context.rs (target/debug/deps/exec_context-5ae946200881c175)
+
+running 9 tests
+test a_context_built_from_a_scope_keeps_its_policy_after_the_scope_ends ... ok
+test a_fresh_context_denies_fallback_and_promises_no_determinism ... ok
+test a_panic_unwinding_out_of_a_scope_still_restores_the_enclosing_policy ... ok
+test an_explicit_context_ignores_whatever_scope_it_is_used_inside ... ok
+test each_builder_moves_one_axis_and_leaves_the_others_alone ... ok
+test scopes_nest_and_the_inner_one_restores_the_outer_rather_than_the_default ... ok
+test the_backend_survives_every_builder_and_comes_back_out_unchanged ... ok
+test transfer_implies_composition_but_composition_does_not_imply_transfer ... ok
+test one_thread_s_scope_is_invisible_to_every_other_thread ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/export_test.rs (target/debug/deps/export_test-42940f6339fb1738)
+
+running 4 tests
+test test_gguf_export_rejects_unimplemented_quant_schemes ... ok
+test test_gguf_export_actually_quantizes_eligible_tensors_and_leaves_others_at_f32 ... ok
+test test_gguf_export_and_inspect_roundtrip ... ok
+test test_mlx_export_roundtrip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/frozen_foundations.rs (target/debug/deps/frozen_foundations-f65819d7772705ce)
+
+running 2 tests
+test the_proof_mechanisms_the_document_cites_are_still_present ... ok
+test every_path_the_frozen_foundations_document_names_exists ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fsdp.rs (target/debug/deps/fsdp-88fecd3808991aa0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generated_operation_coverage.rs (target/debug/deps/generated_operation_coverage-6317edbfb8f8191c)
+
+running 2 tests
+test operation_coverage_has_one_row_for_each_execution_site ... ok
+test operation_coverage_matches_generated_document ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generated_operation_semantics.rs (target/debug/deps/generated_operation_semantics-294d8e0c13e037f3)
+
+running 2 tests
+test operation_semantics_matches_the_code_catalog ... ok
+test generated_semantics_uses_structural_line_breaks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/graph_serde_roundtrip.rs (target/debug/deps/graph_serde_roundtrip-0688514997654bd4)
+
+running 2 tests
+test captured_descriptor_projection_preserves_typed_attributes ... ok
+test graph_round_trips_through_serde_json ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hybrid_plan.rs (target/debug/deps/hybrid_plan-268bf3e053dd8c31)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lowering_parity.rs (target/debug/deps/lowering_parity-6c44a4173b28acac)
+
+running 11 tests
+test axis_attributes_reject_an_axis_outside_the_input_rank ... ok
+test axis_exact_descriptors_distinguish_dropped_and_kept_reductions ... ok
+test binary_exact_descriptors_infer_broadcast_geometry ... ok
+test conv2d_exact_rejects_groups_that_do_not_divide_input_channels ... ok
+test conv2d_exact_infers_spatial_and_channel_geometry ... ok
+test exact_descriptors_keep_their_catalog_identity_and_element_count ... ok
+test matmul_exact_descriptor_infers_batched_output_geometry ... ok
+test max_pool2d_exact_infers_window_geometry ... ok
+test max_pool2d_exact_reports_a_window_larger_than_the_input ... ok
+test reshape_exact_rejects_a_target_with_a_different_element_count ... ok
+test reshape_exact_uses_its_explicit_shape_attribute ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/manifest_replay.rs (target/debug/deps/manifest_replay-4f081837177757a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/matmul_axes.rs (target/debug/deps/matmul_axes-a79b2fbef234cbed)
+
+running 10 tests
+test anonymous_and_named_equal_static_contractions_are_compatible ... ok
+test arbitrary_batch_rank_retains_matrix_output_type ... ok
+test matching_named_static_contractions_preserve_the_matrix_result ... ok
+test named_batch_broadcast_preserves_name_and_static_extent ... ok
+test named_mixed_contractions_preserve_the_known_output_extent ... ok
+test named_static_and_runtime_contractions_use_numeric_validation ... ok
+test static_matmul_output_type_preserves_batch_and_matrix_axes ... ok
+test structural_matmul_accepts_matching_runtime_contraction ... ok
+test matmul_preserves_named_static_output_type ... ok
+test structural_matmul_checks_runtime_contraction ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mesh_bind.rs (target/debug/deps/mesh_bind-d2e606047efc5bc7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mesh_compile.rs (target/debug/deps/mesh_compile-c372a1419bacf5d3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/model_stats.rs (target/debug/deps/model_stats-a7010cc82cf86507)
+
+running 6 tests
+test conv2d_params_are_exact_but_macs_are_the_documented_v1_gap ... ok
+test linear_stats_match_hand_computed_formula ... ok
+test mlp_stats_match_the_growth_docs_own_worked_example ... ok
+test mlp_stats_scale_macs_with_batch_but_not_params ... ok
+test sequential_with_an_activation_sums_correctly_and_the_activation_contributes_nothing ... ok
+test summary_with_stats_appends_a_readable_totals_footer ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/named_dims.rs (target/debug/deps/named_dims-620443bf4ac8409b)
+
+running 21 tests
+test axis_keys_are_schema_qualified_without_module_paths ... ok
+test concrete_static_named_extents_participate_in_element_count_arithmetic ... ok
+test keepdim_rebinds_a_named_axis_to_static_one ... ok
+test named_axis_macro_expands_to_the_runtime_lookup_selector ... ok
+test named_broadcast_output_preserves_the_semantic_axis ... ok
+test named_lookup_distinguishes_same_spelling_in_different_schemas ... ok
+test named_lookup_rejects_missing_and_duplicate_names ... ok
+test named_lookup_resolves_current_position_without_storing_one ... ok
+test named_runtime_axes_are_stored_in_shape_buf ... ok
+test named_runtime_keepdim_rebinds_runtime_extent_to_one ... ok
+test named_static_broadcast_retains_proof_in_reverse_order_and_with_anonymous_one ... ok
+test named_static_broadcast_retains_static_extent_proof ... ok
+test named_selector_reaches_the_canonical_reduction_descriptor ... ok
+test named_static_extents_are_distinct_semantic_axes ... ok
+test named_static_keepdim_rebinds_only_extent ... ok
+test named_tags_are_zero_sized_semantic_metadata ... ok
+test named_tags_have_schema_local_identity_ids ... ok
+test reduction_rules_reject_axes_that_do_not_match_the_structural_cursor ... ok
+test transpose_preserves_the_complete_named_axis_type ... ok
+test structural_sum_rules_preserve_typed_outputs ... ok
+test runtime_reduction_validates_axes_beyond_inline_storage ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nn_components.rs (target/debug/deps/nn_components-ba162b5a8dfc8728)
+
+running 5 tests
+test test_dropout ... ok
+test test_lr_schedulers ... ok
+test test_rms_norm_static ... ok
+test test_nn_layers_accept_structural_shapes ... ok
+test test_structural_reduction_static ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nograd_records_nothing.rs (target/debug/deps/nograd_records_nothing-faeaedccd13df373)
+
+running 20 tests
+test a_context_carries_the_mode_it_was_built_with ... ok
+test a_fresh_thread_permits_recording ... ok
+test a_no_grad_scope_leaves_the_other_policy_axes_alone ... ok
+test a_mixed_binary_operation_records_when_any_operand_requires_grad ... ok
+test an_explicit_scope_does_re_enable_recording ... ok
+test combining_two_modes_takes_the_stricter_one ... ok
+test a_dyn_tensor_records_according_to_its_runtime_flag ... ok
+test a_panic_out_of_a_no_grad_scope_does_not_poison_the_thread ... ok
+test each_marker_derives_the_mode_its_name_promises ... ok
+test detach_and_require_grad_mint_fresh_tape_identities ... ok
+test a_no_grad_scope_silences_a_grad_chain ... ok
+test nested_scopes_restore_their_enclosing_mode_not_the_default ... ok
+test restrict_tightens_and_never_loosens ... ok
+test a_grad_chain_records_and_a_nograd_chain_records_nothing ... ok
+test mixed_binary_output_is_grad_regardless_of_operand_order ... ok
+test the_mode_cannot_disagree_with_requires_grad ... ok
+test one_threads_no_grad_scope_is_invisible_to_another ... ok
+test the_index_returning_reductions_record_nothing_even_on_grad_tensors ... ok
+test silencing_the_tape_does_not_change_what_the_forward_pass_computes ... ok
+test backward_still_reaches_the_parameters_it_did_before ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/operation_inventory.rs (target/debug/deps/operation_inventory-4aa61cccdb680e9c)
+
+running 4 tests
+test every_stable_operation_family_is_represented ... ok
+test no_catalog_row_is_a_broad_family_identity ... ok
+test operation_inventory_document_matches_the_catalog ... ok
+test legacy_operation_families_are_absent_from_production_source ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/pipeline.rs (target/debug/deps/pipeline-df4cc63960f12bd0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/placement_rules.rs (target/debug/deps/placement_rules-aa1d678d23a6839b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/placement_tensor.rs (target/debug/deps/placement_tensor-abb5b40e8af456e2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/plan_tuning.rs (target/debug/deps/plan_tuning-9840c6ee81f71619)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/precision_policy.rs (target/debug/deps/precision_policy-ae5bd74b9bf4eef5)
+
+running 4 tests
+test dynamic_loss_scaling_state_growth_and_overflow_backoff ... ok
+test resolve_precision_exact_mismatch_returns_unsupported_precision ... ok
+test precision_policy_presets_and_construction ... ok
+test resolve_precision_native_success ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/proof_provenance.rs (target/debug/deps/proof_provenance-d82abb31323bdafb)
+
+running 12 tests
+test a_dynamic_operand_dominates_everything ... ok
+test a_level_renders_as_a_word_a_diagnostic_can_use ... ok
+test a_rank_one_static_shape_is_still_static ... ok
+test a_scalar_is_static_because_it_has_no_axis_to_be_dynamic ... ok
+test a_shape_written_entirely_in_typenum_is_fully_proved ... ok
+test a_single_runtime_axis_is_enough_to_weaken_the_shape ... ok
+test an_operation_is_only_as_proved_as_its_weakest_operand ... ok
+test an_unranked_shape_settles_nothing_in_advance ... ok
+test folding_three_operands_matches_the_conv_case_the_rfc_could_not_express ... ok
+test naming_an_axis_types_it_without_sizing_it ... ok
+test of_is_usable_in_a_const_so_a_backend_can_branch_at_compile_time ... ok
+test the_ordering_runs_strongest_to_weakest ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/proof_reaches_the_backend.rs (target/debug/deps/proof_reaches_the_backend-765cbf9afb834fa6)
+
+running 5 tests
+test a_partial_shape_reaches_the_backend_as_mixed ... ok
+test a_dynamic_shape_reaches_the_backend_as_dynamic ... ok
+test a_static_shape_reaches_the_backend_as_static ... ok
+test adversarial_shape_mismatch_never_reaches_backend ... ok
+test the_evidence_free_entry_point_still_claims_nothing ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rank_matrix.rs (target/debug/deps/rank_matrix-5510f011e6533e64)
+
+running 4 tests
+test structural_broadcast_and_matmul_retain_output_types ... ok
+test structural_shapes_have_no_frontend_rank_ladder ... ok
+test structural_static_numel_is_folded_without_generated_ranks ... ok
+test high_rank_structural_operations_are_exercised_without_rank_ladders ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reshape.rs (target/debug/deps/reshape-a2c87baeba01909d)
+
+running 2 tests
+test test_try_reshape_dynamic ... ok
+test test_reshape_static_success ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_dtype_contract.rs (target/debug/deps/runtime_dtype_contract-5ef55a4f8a7ff434)
+
+running 5 tests
+test test_builtin_compatibility ... ok
+test test_capability_contract ... ok
+test test_dyn_dtype_contract ... ok
+test test_precision_contract ... ok
+test test_tensor_meta_contract ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shape_buf.rs (target/debug/deps/shape_buf-82ba597818f57543)
+
+running 17 tests
+test a_zero_dimension_holds_no_elements_and_spans_nothing ... ok
+test an_empty_tensor_is_empty_however_large_its_other_axes_are ... ok
+test broadcast_strides_span_less_than_the_element_count ... ok
+test is_contiguous_for_is_false_on_a_transposed_view ... ok
+test nothing_derived_is_cached ... ok
+test scalar_shape_holds_one_element ... ok
+test spill_boundary_is_exactly_inline_rank ... ok
+test span_rejects_a_stride_buffer_of_the_wrong_rank ... ok
+test overflow_terms_are_named_distinctly ... ok
+test dims_round_trip_across_the_spill_boundary ... ok
+test push_and_pop_round_trip_across_the_boundary ... ok
+test byte_len_overflows_separately_from_element_count ... ok
+test representation_does_not_affect_equality ... ok
+test numel_agrees_with_u128_and_reports_overflow ... ok
+test contiguous_strides_agree_with_u128_and_report_overflow ... ok
+test numel_does_not_depend_on_axis_order ... ok
+test span_agrees_with_u128 ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/shape_errors.rs (target/debug/deps/shape_errors-4fff3f891e38d888)
+
+running 14 tests
+test arithmetic_overflow_renders ... ok
+test axis_accessor_is_some_only_for_axis_variants ... ok
+test dimension_mismatch_renders ... ok
+test empty_output_renders ... ok
+test every_axis_renders ... ok
+test every_dimension_constraint_renders ... ok
+test every_rank_expectation_renders ... ok
+test invalid_axis_range_renders ... ok
+test invalid_parameter_renders ... ok
+test operation_accessor_covers_every_variant ... ok
+test operation_names_are_unique_and_lowercase ... ok
+test rank_mismatch_renders ... ok
+test shape_error_converts_into_the_crate_error ... ok
+test shape_errors_are_copy_and_allocation_free ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shape_fallible.rs (target/debug/deps/shape_fallible-288b6f6922da89f4)
+
+running 15 tests
+test a_matrix_times_a_vector_is_a_vector ... ok
+test a_target_shape_that_rejects_its_dims_reports_rather_than_panics ... ok
+test broadcast_accepts_the_numpy_compatible_cases ... ok
+test broadcast_reports_the_axis_that_disagreed ... ok
+test broadcast_right_aligns_operands_of_different_rank ... ok
+test broadcasting_a_size_one_axis_against_a_size_zero_one_yields_zero ... ok
+test dyn_broadcast_reports_a_right_aligned_axis_index ... ok
+test dyn_matmul_contracts_batched_operands ... ok
+test dyn_matmul_no_longer_returns_a_sentinel_empty_shape ... ok
+test dynamic_matmul_requires_explicit_flattening ... ok
+test every_fallible_shape_path_routes_into_the_crate_error ... ok
+test matmul_accepts_an_agreeing_contraction ... ok
+test matmul_rejects_a_disagreeing_contraction ... ok
+test shape_value_rejects_invalid_static_dimensions_before_minting_proof ... ok
+test structural_shape_resolution_rejects_bad_runtime_arguments_without_panicking ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/spatial_geometry.rs (target/debug/deps/spatial_geometry-1dd592dc5fe7e944)
+
+running 17 tests
+test a_fully_static_shape_still_agrees_with_its_type_level_output ... ok
+test a_kernel_that_does_not_fit_reports_an_empty_output ... ok
+test a_unit_kernel_with_unit_stride_is_the_identity ... ok
+test a_zero_sized_input_axis_cannot_be_pooled ... ok
+test adaptive_pool_fixes_the_output_extent ... ok
+test adaptive_pool_rejects_a_zero_output_extent ... ok
+test conv1d_computes_the_runtime_length_dim ... ok
+test conv2d_computes_runtime_spatial_dims_and_keeps_out_channels ... ok
+test dyn_conv1d_handles_both_accepted_ranks ... ok
+test dyn_conv2d_handles_both_accepted_ranks ... ok
+test dyn_pool2d_handles_both_accepted_ranks ... ok
+test dyn_pool2d_propagates_a_kernel_that_does_not_fit ... ok
+test dyn_rules_reject_a_rank_they_cannot_handle ... ok
+test overflowing_terms_are_named_individually ... ok
+test pool2d_computes_runtime_spatial_dims ... ok
+test zero_valued_parameters_are_rejected_by_name ... ok
+test out_size_matches_the_reference_formula ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stable_shape_algebra.rs (target/debug/deps/stable_shape_algebra-ccb72fc6c7e2cfa4)
+
+running 26 tests
+test descriptor_reduction_accepts_axis_seventy ... ok
+test generic_typenum_rank_arithmetic_is_structural ... ok
+test generic_typenum_ranked_shape_preserves_rank_without_a_rank_ladder ... ok
+test exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor ... ok
+test invalid_static_arithmetic_is_not_reported_as_static_knowledge ... ok
+test invalid_symbolic_dimensions_are_zst_specs_not_panic_values ... ok
+test structural_flatten_collapses_an_arbitrary_cursor_range ... ok
+test repeat_rejects_a_repeat_vector_with_the_wrong_rank ... ok
+test exact_tracing_records_boolean_comparison_output_dtype ... ok
+test structural_swap_moves_complete_dimension_metadata_at_rank_three ... ok
+test test_axis_selector_macro_and_cursors ... ok
+test exact_tracing_records_canonical_unary_and_shape_descriptors ... ok
+test test_backend_rank_support ... ok
+test test_const_dim_and_extent_classification ... ok
+test test_derived_dimension_argument_validation_is_fallible ... ok
+test test_derived_symbolic_dimensions ... ok
+test test_descriptor_axis_mask_and_axis_set_above_31 ... ok
+test test_generic_array_shapes_unlimited_rank ... ok
+test test_named_dim_tag_extent_orthogonality ... ok
+test test_high_rank_tensor_creation ... ok
+test test_recursive_fixed_rank_dim_cons ... ok
+test exact_tracing_reduction_keeps_canonical_axis_descriptor ... ok
+test test_static_cursor_types ... ok
+test test_static_axis_macro_type_preservation ... ok
+test typed_tracing_preserves_runtime_and_static_input_axes ... ok
+test structural_operations_compile_at_rank_16_64_and_200 ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_parallel.rs (target/debug/deps/tensor_parallel-436314473e804a10)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin_core
+
+running 29 tests
+test crates/incin-core/src/nn/rnn.rs - nn::rnn::RNN (line 427) - compile ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearShape (line 27) ... ok
+test crates/incin-core/src/tensor/auto_device.rs - tensor::auto_device::best_device (line 124) ... ok
+test crates/incin-core/src/shapes/dim.rs - shapes::dim::dim (line 386) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::Module (line 166) ... ok
+test crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 627) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 58) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 47) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::cross_entropy_loss (line 67) ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearBuilder (line 161) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::SeqTy (line 662) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::mse_loss (line 136) ... ok
+test crates/incin-core/src/nn/lstm.rs - nn::lstm::LSTMCell (line 289) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::SGD (line 485) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::reshape_idx (line 501) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::try_squeeze (line 667) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::reshape (line 440) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G,P>::try_narrow (line 615) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::TrainMode (line 84) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::AdamW (line 577) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::Adam (line 781) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::get (line 223) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::slice (line 204) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::max_all (line 343) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::mean_all (line 329) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::min_all (line 357) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::add_scalar (line 309) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G,Local>::sum_all (line 315) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mul_scalar (line 283) ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.62s
+
+all doctests ran in 10.97s; merged doctests compilation took 9.35s
+### backend cpu tests
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 2.89s
+     Running unittests src/lib.rs (target/debug/deps/incin_backends-00fa062007927d5c)
+
+running 332 tests
+test backend_kind::tests::checked_storage_wrapping_rejects_metadata_mismatches ... ok
+test backend_kind::tests::device_transfer_detaches_tracked_tensor_type ... ok
+test backend_kind::tests::runtime_dispatch_reports_disabled_backend ... ok
+test backend_kind::tests::runtime_dispatch_reduces_and_transfers_through_host_bytes ... ok
+test backend_kind::tests::runtime_dispatch_selects_cpu_and_preserves_metadata ... ok
+test backend_kind::tests::derived_module_transfer_changes_its_backend_output_type ... ok
+test backend_kind::tests::selects_cpu_backend ... ok
+test backend_kind::tests::runtime_from_bytes_rejects_wrong_length ... ok
+test backend_kind::tests::static_cpu_transfer_rebuilds_dynamic_dispatch_storage ... ok
+test capability_docs::tests::a_rank_bound_reads_as_a_bound_only_when_it_is_one ... ok
+test cpu::canonical::tests::a_compression_into_an_unsupported_representation_is_refused ... ok
+test capability::catalog_tests::exact_capability_rows_and_executor_admission_share_one_declaration ... ok
+test backend_kind::tests::dynamic_layer_builders_consume_dtype_device_and_optional_flags ... ok
+test capability_docs::tests::a_backend_missing_an_operation_gets_an_explicit_dash ... ok
+test cpu::canonical::tests::a_linear_layer_transposes_its_weight_and_adds_its_bias ... ok
+test cpu::canonical::tests::a_conversion_to_a_quantized_dtype_is_refused_by_name ... ok
+test capability_docs::tests::repeated_registrations_are_unioned_rather_than_replaced ... ok
+test cpu::canonical::tests::a_loss_with_no_reduction_keeps_the_elementwise_shape ... ok
+test cpu::canonical::tests::a_non_f32_convolution_operand_is_refused ... ok
+test cpu::canonical::tests::a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound ... ok
+test cpu::canonical::tests::a_training_batch_norm_normalizes_by_the_batch_statistics ... ok
+test cpu::canonical::tests::an_allocation_is_refused_by_a_row_it_does_not_match ... ok
+test cpu::canonical::tests::an_allocation_given_an_operand_is_refused ... ok
+test capability::catalog_tests::coverage_has_one_explicit_decision_per_catalog_operation ... ok
+test cpu::canonical::tests::an_epsilon_that_flushes_to_zero_in_f32_is_refused ... ok
+test cpu::canonical::tests::an_uneven_axis_leaves_a_shorter_final_piece ... ok
+test cpu::canonical::tests::canonical_and_legacy_gradients_are_identical ... ok
+test cpu::canonical::tests::canonical_conv1d_executes_at_the_ranks_its_row_advertises ... ok
+test cpu::canonical::tests::an_inference_batch_norm_with_running_statistics_executes ... ok
+test cpu::canonical::tests::canonical_layer_norm_executes_and_normalizes_each_row ... ok
+test cpu::canonical::tests::dropout_outside_training_returns_the_operand_unchanged ... ok
+test cpu::canonical::tests::chunking_beyond_the_axis_extent_produces_fewer_pieces_not_empty_ones ... ok
+test cpu::canonical::tests::each_canonical_loss_computes_its_own_formula ... ok
+test cpu::canonical::tests::rms_norm_scales_by_the_root_mean_square_without_centring ... ok
+test cpu::canonical::tests::quantization_round_trips_within_the_block_format_error ... ok
+test cpu::canonical::tests::the_axis_variance_forms_reduce_the_axis_they_name ... ok
+test cpu::canonical::tests::the_ranged_fills_read_their_parameters_in_the_right_order ... ok
+test cpu::canonical::tests::canonical_pointwise_gradients_match_finite_differences ... ok
+test cpu::canonical::tests::the_dot_and_outer_products_contract_and_expand ... ok
+test cpu::canonical::tests::the_norm_orders_agree_where_the_fast_paths_meet_the_general_one ... ok
+test cpu::creation::tests::dyn_dtype_uses_runtime_buffer_variant ... ok
+test cpu::creation::tests::integer_fill_rejects_implicit_truncation_and_saturation ... ok
+test cpu::creation::tests::ones_produces_correct_shape_and_all_one_values ... ok
+test cpu::canonical::tests::canonical_axis_reduction_gradients_match_finite_differences ... ok
+test cpu::canonical::tests::training_and_inference_batch_norm_disagree ... ok
+test cpu::canonical::tests::canonical_matmul_gradients_match_finite_differences ... ok
+test cpu::canonical::tests::the_variance_estimators_differ_by_their_correction ... ok
+test cpu::creation::tests::integer_ranges_reject_fractional_values ... ok
+test cpu::canonical::tests::canonical_view_gradients_match_finite_differences ... ok
+test cpu::creation::tests::transfer_to_cpu_returns_equivalent_storage ... ok
+test cpu::creation::tests::var_ones_wraps_equivalent_ones_result ... ok
+test cpu::creation::tests::rand_produces_values_in_zero_one_range ... ok
+test cpu::creation::tests::zeros_produces_correct_shape_and_all_zero_values ... ok
+test cpu::creation::tests::var_rand_wraps_equivalent_rand_result ... ok
+test cpu::gradcheck::tests::numerical_grad_matches_closed_form_derivative_of_cube ... ok
+test cpu::creation::tests::var_randn_wraps_equivalent_randn_result ... ok
+test cpu::creation::tests::var_zeros_wraps_equivalent_zeros_result ... ok
+test cpu::gradcheck::tests::gradcheck_matches_analytic_gradient_of_sum_of_squares ... ok
+test cpu::gradcheck::tests::gradcheck_panics_on_non_scalar_output - should panic ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_bias_adds_per_channel_constant ... ok
+test cpu::ops::conv::tests::conv1d_backward_overlapping_windows_accumulates_grad_input ... ok
+test cpu::ops::conv::tests::conv1d_forward_hand_computed_no_padding ... ok
+test cpu::ops::conv::tests::conv1d_forward_with_padding_zero_fills_boundary ... ok
+test cpu::ops::conv::tests::conv1d_forward_groups_matches_two_independent_convs ... ok
+test cpu::creation::tests::randn_produces_statistically_plausible_standard_normal_samples ... ok
+test cpu::ops::conv::tests::conv2d_forward_hand_computed_no_padding ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_hand_computed_basic ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_output_padding_appends_trailing_zeros_only ... ok
+test cpu::ops::conv::tests::conv_transpose2d_forward_stride_upsamples ... ok
+test cpu::ops::conv::tests::conv_transpose2d_rejects_groups_other_than_one ... ok
+test cpu::ops::conv::tests::conv2d_forward_depthwise_groups_equal_cin ... ok
+test cpu::ops::elementwise::tests::add_backward_unbroadcasts_correctly_for_bias_vector_case ... ok
+test cpu::ops::elementwise::tests::add_broadcasts_forward_correctly ... ok
+test cpu::ops::elementwise::tests::add_preserves_f64_dtype_and_precision ... ok
+test cpu::ops::elementwise::tests::abs_forward_and_gradcheck ... ok
+test cpu::ops::conv::tests::conv2d_forward_groups_matches_two_independent_convs ... ok
+test cpu::ops::conv::tests::conv1d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::add_scalar_float_forward_and_backward ... ok
+test cpu::ops::elementwise::tests::gelu_forward_zero_and_one ... ok
+test cpu::ops::elementwise::tests::exp_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::log_softmax_exp_sums_to_one_on_vector ... ok
+test cpu::ops::conv::tests::conv_transpose2d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise::tests::gelu_gradcheck ... ok
+test cpu::ops::elementwise::tests::log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::mul_backward_uses_other_operands_real_values ... ok
+test cpu::ops::elementwise::tests::mul_backward_with_broadcast_bias_vector_case ... ok
+test cpu::ops::elementwise::tests::mul_forward_computes_elementwise_product_with_broadcast ... ok
+test cpu::ops::elementwise::tests::mul_scalar_float_forward_and_backward ... ok
+test cpu::ops::elementwise::tests::log_softmax_gradcheck ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_half_storage_and_compute_in_f32 ... ok
+test cpu::ops::elementwise::tests::numeric_ops_preserve_non_contiguous_view_semantics ... ok
+test cpu::ops::elementwise::tests::neg_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::relu_forward_and_backward_zero_at_boundary ... ok
+test cpu::ops::elementwise::tests::relu_preserves_f64_dtype ... ok
+test cpu::ops::elementwise::tests::relu_gradcheck_on_nonzero_input ... ok
+test cpu::ops::elementwise::tests::sigmoid_forward_and_gradcheck ... ok
+test cpu::ops::elementwise::tests::softmax_after_refactor_still_passes_all_prior_behavior ... ok
+test cpu::ops::elementwise::tests::softmax_backward_finite_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::softmax_forward_stable_on_large_magnitude_equal_logits ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_on_vector ... ok
+test cpu::ops::elementwise::tests::softmax_forward_sums_to_one_per_row_on_matrix ... ok
+test cpu::ops::elementwise::tests::softmax_forward_uniform_on_all_zero_logits ... ok
+test cpu::ops::elementwise::tests::sub_forward_computes_elementwise_difference_with_broadcast ... ok
+test cpu::ops::elementwise::tests::sqrt_forward_gradcheck_and_nan_propagation ... ok
+test cpu::ops::elementwise::tests::sub_backward_negates_rhs_contribution ... ok
+test cpu::ops::elementwise_kernel::tests::benchmark_cpu_binary_kernels ... ignored, microbenchmark: run explicitly with --release --ignored --nocapture
+test cpu::ops::elementwise::tests::softmax_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::f32_contiguous_add_stays_typed ... ok
+test cpu::ops::elementwise::tests::tanh_gradcheck ... ok
+test cpu::ops::elementwise_kernel::tests::f64_contiguous_math_keeps_f64_precision ... ok
+test cpu::ops::elementwise_kernel::tests::general_broadcast_uses_typed_strided_kernel ... ok
+test cpu::ops::elementwise_kernel::tests::half_storage_uses_f32_compute ... ok
+test cpu::ops::elementwise_kernel::tests::dense_broadcast_vector_projection_preserves_order_and_odd_tails ... ok
+test cpu::ops::conv::tests::conv2d_gradcheck_input_and_weight ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_broadcast_preserves_operand_order ... ok
+test cpu::ops::elementwise_kernel::tests::scalar_vector_kernels_preserve_order_and_handle_tails ... ok
+test cpu::ops::elementwise_kernel::tests::vector_kernels_handle_odd_scalar_tails_for_every_operation ... ok
+test cpu::ops::embedding::tests::backward_unaddressed_rows_get_exactly_zero_gradient ... ok
+test cpu::ops::embedding::tests::backward_repeated_index_accumulates_not_overwrites ... ok
+test cpu::ops::embedding::tests::negative_index_returns_conversion_error_not_panic ... ok
+test cpu::ops::embedding::tests::out_of_range_index_returns_typed_shape_error ... ok
+test cpu::ops::embedding::tests::forward_1d_indices_gathers_correct_rows_with_repeats ... ok
+test cpu::ops::loss::tests::bce_with_logits_backward_finite_on_extreme_logits ... ok
+test cpu::ops::embedding::tests::forward_2d_indices_gathers_correct_rows ... ok
+test cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_positive_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_negative_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_mean_at_zero_logit_equals_log2 ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_mean_matches_hand_computed_nll ... ok
+test cpu::ops::elementwise::tests::log_forward_gradcheck_and_domain_propagation ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_none_produces_per_sample_nll_vector ... ok
+test cpu::ops::loss::tests::l1_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::bce_with_logits_sum_and_none_dispatch_correctly ... ok
+test cpu::ops::loss::tests::l1_loss_gradcheck ... ok
+test cpu::ops::loss::tests::l1_loss_none_produces_elementwise_absolute_diff ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::l1_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_sum_equals_batch_times_mean ... ok
+test cpu::ops::loss::tests::bce_with_logits_gradcheck ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_uniform_logits_equal_log_num_classes ... ok
+test cpu::ops::loss::tests::mse_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_none_produces_elementwise_squared_diff ... ok
+test cpu::ops::loss::tests::mse_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::matmul::tests::a_batched_non_f32_matmul_keeps_its_dtype ... ok
+test cpu::ops::loss::tests::mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n ... ok
+test cpu::ops::matmul::tests::a_batched_matmul_records_one_tape_entry_per_call_not_one_per_slice ... ok
+test cpu::ops::loss::tests::cross_entropy_rejects_fractional_and_out_of_range_targets ... ok
+test cpu::ops::matmul::tests::a_contiguous_f64_matmul_computes_values_and_keeps_its_dtype ... ok
+test cpu::ops::matmul::tests::a_broadcast_non_contiguous_operand_matches_its_per_slice_reference ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_gradcheck ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_left_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::batched_matmul_equal_batch_matches_per_slice_reference ... ok
+test cpu::ops::matmul::tests::batched_matmul_batch_broadcast_right_reuses_single_slice ... ok
+test cpu::ops::matmul::tests::batch_axes_broadcast_on_both_sides_index_the_right_slices ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank3_broadcasts_against_rank4_leading_dim_insertion ... ok
+test cpu::ops::matmul::tests::batched_matmul_rank4_matches_reference_at_one_batch_index ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_one_batch_is_broadcast_not_unwrapped ... ok
+test cpu::ops::matmul::tests::batched_matmul_size_zero_batch_produces_empty_output_without_panic ... ok
+test cpu::ops::matmul::tests::batched_matmul_unbatched_degenerate_matches_matmul_impl ... ok
+test cpu::ops::matmul::tests::every_layout_agrees_with_the_kernel_that_is_always_correct ... ok
+test cpu::ops::matmul::tests::matmul_forward_transposed_lhs_view_is_correct_without_materializing ... ok
+test cpu::ops::matmul::tests::matmul_backward_matches_hand_computed_gradients ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_unbatched_degenerate ... ok
+test cpu::ops::norm::tests::batch_norm_all_args_provided_matches_hand_computed_formula ... ok
+test cpu::ops::norm::tests::batch_norm_rank2_uses_channel_dim_1 ... ok
+test cpu::ops::norm::tests::batch_norm_momentum_has_no_effect_on_output ... ok
+test cpu::ops::norm::tests::batch_norm_none_args_match_explicit_default_fallback ... ok
+test cpu::ops::elementwise::tests::swish_forward_and_gradcheck ... ok
+test cpu::ops::matmul::tests::matmul_forward_hand_computed_2x3_times_3x4 ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_right ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_dense_broadcast_projection_crosses_chunk_boundaries ... ok
+test cpu::ops::norm::tests::layer_norm_none_bias_matches_explicit_zero_bias ... ok
+test cpu::ops::norm::tests::layer_norm_custom_weight_and_bias_applies_affine ... ok
+test cpu::canonical::tests::dropout_zeroes_some_elements_and_scales_the_rest_by_the_keep_reciprocal ... ok
+test cpu::ops::norm::tests::layer_norm_identity_weight_zero_bias_normalizes_each_row ... ok
+test cpu::ops::matmul::tests::matmul_shape_incompatible_returns_err_not_panic ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d ... ok
+test cpu::ops::norm::tests::layer_norm_rank3_normalizes_per_batch_seq_position ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_non_evenly_dividing_produces_variable_windows ... ok
+test cpu::ops::pool::tests::avg_pool2d_backward_overlapping_windows_sums_grad_contributions ... ok
+test cpu::ops::pool::tests::avg_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::pool::tests::adaptive_avg_pool2d_gradcheck_non_evenly_dividing ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_non_overlapping_routes_grad_to_winner_only ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_no_overlap_hand_computed ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_batch_broadcast_left ... ok
+test cpu::ops::pool::tests::max_pool2d_forward_with_padding_zero_boundary ... ok
+test cpu::ops::quant::tests::test_quantize_dequantize_fidelity ... ok
+test cpu::ops::quant::tests::test_quantized_matmul ... ok
+test cpu::ops::pool::tests::avg_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::reduce::tests::argmax_dim0_returns_row_index_of_column_max ... ok
+test cpu::ops::reduce::tests::argmax_argmin_do_not_push_tape_entries ... ok
+test cpu::ops::pool::tests::max_pool2d_backward_overlapping_windows_shared_winner_accumulates ... ok
+test cpu::ops::norm::tests::layer_norm_gradcheck ... ok
+test cpu::ops::pool::tests::max_pool2d_gradcheck_overlapping ... ok
+test cpu::ops::norm::tests::batch_norm_gradcheck ... ok
+test cpu::ops::quant::tests::unsupported_quantized_elementwise_arithmetic_is_typed ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_equal_batch ... ok
+test cpu::ops::reduce::tests::argmax_dim_none_returns_scalar_flat_index_of_global_max ... ok
+test cpu::ops::reduce::tests::argmin_dim0_and_dim_none_mirror_argmax ... ok
+test cpu::ops::reduce::tests::max_all_and_min_all_on_flat_vector ... ok
+test cpu::ops::reduce::tests::max_dim_backward_routes_gradient_to_exactly_one_winner_on_tie ... ok
+test cpu::ops::reduce::tests::max_keepdim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::max_dim_column_maxima_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_dim_column_means_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_all_backward_distributes_grad_scaled_by_1_over_n ... ok
+test cpu::ops::reduce::tests::max_dim_gradcheck_all_distinct_values ... ok
+test cpu::ops::reduce::tests::min_dim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::min_keepdim_column_minima_on_2x3 ... ok
+test cpu::ops::reduce::tests::prod_all_keeps_the_operand_dtype ... ok
+test cpu::ops::reduce::tests::prod_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::mean_keepdim_column_means_on_2x3 ... ok
+test cpu::ops::reduce::tests::prod_dim_multiplies_along_the_named_axis_only ... ok
+test cpu::ops::reduce::tests::sum_all_backward_distributes_grad_uniformly ... ok
+test cpu::ops::reduce::tests::sum_all_backward_scales_by_incoming_gradient ... ok
+test cpu::ops::reduce::tests::sum_all_on_2x3_returns_correct_scalar ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_0_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_keepdim_gradcheck_dim1 ... ok
+test cpu::ops::reduce::tests::sum_dim_backward_broadcasts_grad_back_to_original_shape ... ok
+test cpu::ops::reduce::tests::sum_keepdim_backward_broadcasts_grad_to_original_shape ... ok
+test cpu::ops::reduce::tests::sum_dim_removes_axis_1_on_2x3 ... ok
+test cpu::ops::reduce::tests::mean_dim_gradcheck_dim0 ... ok
+test cpu::ops::reduce::tests::sum_keepdim_retains_axis_0_on_2x3 ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::broadcast_as_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_multiple_new_leading_dims ... ok
+test cpu::ops::shape_ops::tests::attention_keeps_the_operand_dtype ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_prepends_single_new_leading_dim ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_through_trait_matches_direct_broadcast_as_call ... ok
+test cpu::ops::shape_ops::tests::broadcast_left_backward_unbroadcasts_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::concat_backward_narrows_grad_to_each_inputs_own_shape_and_values ... ok
+test cpu::ops::shape_ops::tests::concat_dim0_stacks_rows_in_input_order ... ok
+test cpu::ops::shape_ops::tests::concat_dim1_interleaves_columns_by_row ... ok
+test cpu::ops::shape_ops::tests::concat_dim_out_of_bounds_returns_err ... ok
+test cpu::ops::shape_ops::tests::concat_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::concat_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::concat_rejects_non_concat_axis_size_mismatch_even_when_broadcast_compatible ... ok
+test cpu::ops::shape_ops::tests::flatten_all_dims_produces_1d_shape ... ok
+test cpu::ops::shape_ops::tests::flatten_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::flatten_merges_middle_dims ... ok
+test cpu::ops::shape_ops::tests::float_to_scalar_reads_single_element ... ok
+test cpu::ops::shape_ops::tests::float_to_vec1_reads_all_elements_row_major ... ok
+test cpu::ops::shape_ops::tests::group_norm_statistics_are_per_sample_not_across_the_batch ... ok
+test cpu::ops::shape_ops::tests::instance_norm_normalizes_each_channel_of_each_sample_alone ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank2_matches_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::matmul_dispatch_rank3_matches_batched_matmul_impl_directly ... ok
+test cpu::ops::shape_ops::tests::matmul_via_trensor_ops_delegates_to_matmul_impl ... ok
+test cpu::ops::shape_ops::tests::narrow_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::narrow_on_transposed_input_produces_correct_values_without_materializing ... ok
+test cpu::ops::shape_ops::tests::narrow_out_of_bounds_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::narrow_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::reshape_backward_reshapes_grad_back_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::reshape_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::slice_backward_zero_pads_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::slice_matches_manual_sequential_narrow_calls ... ok
+test cpu::ops::shape_ops::tests::slice_on_transposed_input_across_multiple_dims_produces_correct_values ... ok
+test cpu::ops::shape_ops::tests::slice_out_of_bounds_range_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::squeeze_on_non_one_sized_axis_returns_shape_mismatch ... ok
+test cpu::ops::shape_ops::tests::squeeze_backward_reshapes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::squeeze_removes_size_one_axis_and_preserves_values ... ok
+test cpu::ops::shape_ops::tests::stack_dim0_inserts_new_leading_axis ... ok
+test cpu::ops::shape_ops::tests::stack_backward_narrows_and_squeezes_grad_to_original_shape ... ok
+test cpu::ops::shape_ops::tests::stack_empty_input_list_returns_err_not_panic ... ok
+test cpu::ops::shape_ops::tests::stack_dim_equal_to_rank_appends_new_trailing_axis ... ok
+test cpu::ops::shape_ops::tests::stack_rejects_mismatched_shapes ... ok
+test cpu::ops::shape_ops::tests::transpose_backward_reapplies_same_transpose ... ok
+test cpu::ops::shape_ops::tests::transpose_through_trait_matches_direct_storage_call ... ok
+test cpu::ops::shape_ops::tests::unsupported_methods_return_typed_error_not_silent_placeholder ... ok
+test cpu::storage::tests::broadcast_as_expands_and_shares_buffer ... ok
+test cpu::storage::tests::checked_integer_readback_preserves_integer_values ... ok
+test cpu::storage::tests::checked_integer_readback_rejects_lossy_float_values ... ok
+test cpu::storage::tests::from_contiguous_has_expected_shape_and_strides ... ok
+test cpu::storage::tests::narrow_boundary_values_succeed ... ok
+test cpu::storage::tests::narrow_contiguous_shares_buffer_and_slices_correct_values ... ok
+test cpu::storage::tests::narrow_dim_out_of_range_errors ... ok
+test cpu::storage::tests::narrow_on_transposed_view_reads_correct_values_without_materializing ... ok
+test cpu::storage::tests::narrow_out_of_bounds_length_errors ... ok
+test cpu::storage::tests::reshape_contiguous_shares_buffer_and_gets_new_id ... ok
+test cpu::storage::tests::reshape_non_contiguous_materializes_then_reshapes ... ok
+test cpu::storage::tests::scatter_into_zeros_1d_case ... ok
+test cpu::storage::tests::scatter_into_zeros_full_overlap_matches_values_exactly ... ok
+test cpu::storage::tests::scatter_into_zeros_partial_overlap_writes_only_target_region ... ok
+test cpu::storage::tests::scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc ... ok
+test cpu::storage::tests::transpose_shares_buffer_and_swaps_shape_strides ... ok
+test cpu::storage::tests::transposed_view_reads_correct_values_without_contiguous_call ... ok
+test cpu::stride::tests::is_contiguous_false_for_transposed_strides ... ok
+test cpu::stride::tests::is_contiguous_true_for_fresh_strides ... ok
+test cpu::stride::tests::numel_for_a_dynamic_shape_matches_checked_numel ... ok
+test cpu::stride::tests::numel_for_a_static_shape_reads_the_type_level_constant ... ok
+test cpu::tape::tests::a_non_finite_gradient_is_returned_rather_than_panicked ... ok
+test cpu::tape::tests::backward_accumulates_not_overwrites_on_tensor_reuse ... ok
+test cpu::tape::tests::backward_drains_tape_and_second_call_is_not_contaminated ... ok
+test cpu::tape::tests::backward_seeds_loss_gradient_with_ones ... ok
+test cpu::tape::tests::tape_len_is_zero_immediately_after_any_backward_call ... ok
+test cpu::tape::tests::unbroadcast_same_shape_is_noop ... ok
+test cpu::tape::tests::unbroadcast_bias_vector_b_n_to_n ... ok
+test cpu::tape::tests::unbroadcast_scalar_target_sums_all_axes ... ok
+test cpu::storage::tests::tensor_id_never_repeats_across_many_calls ... ok
+test cpu::var::tests::assign_var_replaces_value_and_subsequent_read_reflects_it ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_binary_f64 ... ok
+test cpu::var::tests::var_as_tensor_does_not_hold_live_borrow_across_assign_var ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_f16_bf16 ... ok
+test cpu::var::tests::two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second ... ok
+test cpu::typed_kernel::tests::test_typed_kernel_unary_f32 ... ok
+test cpu::var::tests::var_as_tensor_returns_clone_of_current_value ... ok
+test detect::tests::a_family_that_is_not_compiled_in_is_never_detected ... ok
+test detect::tests::an_empty_preference_still_yields_the_cpu ... ok
+test detect::tests::detection_agrees_with_itself ... ok
+test detect::tests::detection_always_yields_a_runnable_device ... ok
+test cpu::ops::matmul::tests::a_large_product_agrees_with_the_kernel_that_is_always_correct ... ok
+test detect::tests::preference_order_is_honored ... ok
+test iteration::tests::broadcast_axes_become_zero_stride ... ok
+test iteration::tests::coalesces_only_axes_contiguous_for_every_operand ... ok
+test iteration::tests::contiguous_operands_keep_their_strides ... ok
+test iteration::tests::empty_iteration_has_no_physical_index ... ok
+test iteration::tests::incompatible_shapes_are_rejected ... ok
+test detect::tests::probing_repeatedly_from_several_threads_is_survivable ... ok
+test iteration::tests::non_contiguous_strides_and_offsets_are_preserved ... ok
+test iteration::tests::unary_plan_preserves_view_metadata_and_checks_bounds ... ok
+test iteration::tests::unit_axes_are_removed_regardless_of_stride ... ok
+test layout::tests::broadcast_shape_both_expand ... ok
+test layout::tests::broadcast_shape_incompatible_errors ... ok
+test layout::tests::broadcast_shape_preserves_zero_extent ... ok
+test layout::tests::broadcast_shape_right_aligned_leading_dim_insert ... ok
+test layout::tests::broadcast_shape_scalar_broadcast ... ok
+test layout::tests::contiguous_strides_row_major ... ok
+test layout::tests::contiguous_strides_scalar ... ok
+test layout::tests::increment_index_carries_across_axes ... ok
+test layout::tests::increment_index_wraps_at_the_end ... ok
+test quant::tests::block_matches_the_dtype_tables_block_size ... ok
+test cpu::ops::matmul::tests::batched_matmul_gradcheck_rank4 ... ok
+test cpu::ops::elementwise_kernel::tests::parallel_vector_chunks_preserve_operations_and_tails ... ok
+
+test result: ok. 331 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/architecture_regression.rs (target/debug/deps/architecture_regression-6c0ca02202fe26c4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/candle_executor.rs (target/debug/deps/candle_executor-546a6b6fa2c1a898)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/canonical_dispatch_smoke.rs (target/debug/deps/canonical_dispatch_smoke-41846a0676c38e0a)
+
+running 2 tests
+test descriptor_validation_rejects_a_wrong_dtype_before_execution ... ok
+test add_uses_the_descriptor_executor_and_preserves_shape ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/codegen_pointwise.rs (target/debug/deps/codegen_pointwise-9855baf92b5d6f8d)
+
+running 5 tests
+test test_all_dtypes_type_mapping ... ok
+test test_binary_add_f16_codegen ... ok
+test test_scalar_broadcast_layout ... ok
+test test_complex_fma_gelu_expression ... ok
+test test_unary_relu_codegen ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/collective_tuning.rs (target/debug/deps/collective_tuning-112ae815ad1f969f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiled_cpu.rs (target/debug/deps/compiled_cpu-5effa1ef522127c5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-2c5e61cd4736d614)
+
+running 6 tests
+test a_backend_that_claims_nothing_skips_rather_than_fails ... ok
+test a_backend_that_computes_the_wrong_product_fails_only_the_tolerance_check ... ok
+test a_registry_that_claims_everything_fails_the_agreement_check ... ok
+test a_panicking_executor_is_a_reported_failure_not_a_dead_harness ... ok
+test tolerance_accepts_either_bound_and_rejects_a_non_finite_surprise ... ok
+test the_template_backend_conforms ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cpu_migration_status.rs (target/debug/deps/cpu_migration_status-ef1deea15a648e21)
+
+running 5 tests
+test every_unmigrated_executable_operation_records_what_blocks_it ... ok
+test every_migrated_identity_is_a_catalog_operation ... ok
+test no_migrated_operation_still_claims_to_be_blocked ... ok
+test the_migration_status_document_matches_the_registrations ... ok
+test no_migrated_operation_sits_at_a_non_executable_site ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/data_parallel_reference.rs (target/debug/deps/data_parallel_reference-5fd37e7ddbdab675)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generated_docs.rs (target/debug/deps/generated_docs-b755b357983b4d0f)
+
+running 4 tests
+test the_document_does_not_advertise_an_unregistered_operation ... ok
+test the_capability_document_matches_the_registrations ... ok
+test the_document_covers_every_registered_operation ... ok
+test no_public_example_is_excluded_from_compilation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/metal_tuning.rs (target/debug/deps/metal_tuning-5c6d9355e2ac1ac3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_contract.rs (target/debug/deps/nccl_contract-ef4d89f08ef52fc4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nccl_two_rank.rs (target/debug/deps/nccl_two_rank-63c8637ed256be92)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pipeline_reference.rs (target/debug/deps/pipeline_reference-8583092a1a2050b5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reference_collectives.rs (target/debug/deps/reference_collectives-dc53b0bad72428ed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_dtype_contract.rs (target/debug/deps/runtime_dtype_contract-67c648080ec2e813)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safetensors_test.rs (target/debug/deps/safetensors_test-1370145cabba3e12)
+
+running 1 test
+test test_safetensors_save_and_load_roundtrip_cpu ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/simd_lanes.rs (target/debug/deps/simd_lanes-16a3f8f5b0c9166b)
+
+running 2 tests
+test test_simd_lanes_const_eval ... ok
+test test_simd_lanes_positive_and_divisible ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api.rs (target/debug/deps/target_api-42b7064cefbd0a0c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api_wgpu.rs (target/debug/deps/target_api_wgpu-eca905f3694a8f61)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_meta.rs (target/debug/deps/tensor_meta-650be40dd4b92f23)
+
+running 5 tests
+test contiguous_transpose_and_broadcast_have_one_checked_metadata_source ... ok
+test empty_views_are_valid_but_out_of_bounds_views_are_rejected ... ok
+test every_enabled_backend_storage_uses_tensor_meta ... ok
+test invalid_alignment_rank_and_arithmetic_overflow_are_rejected ... ok
+test nonzero_view_offset_weakens_but_never_strengthens_alignment ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_parallel_reference.rs (target/debug/deps/tensor_parallel_reference-b5740e11a1f8fa1a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tiling.rs (target/debug/deps/tiling-9abb67c5bafea93f)
+
+running 3 tests
+test test_tile_2d_coverage_edge_cases ... ok
+test test_tile_2d_coverage_rectangular_non_multiple ... ok
+test test_tile_2d_coverage_square ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_cache.rs (target/debug/deps/tuning_cache-e09cdd480bcea4fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_identity.rs (target/debug/deps/tuning_identity-64d6dd9b937a66fc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_pruning.rs (target/debug/deps/tuning_pruning-8946188791841fde)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_service.rs (target/debug/deps/tuning_service-b3c9230cf8a74192)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tuning_telemetry.rs (target/debug/deps/tuning_telemetry-e74356d9e1d78e64)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wgpu_executor.rs (target/debug/deps/wgpu_executor-605fb16108719d9a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin_backends
+
+running 1 test
+test crates/incin-backends/src/detect.rs - detect::detect_device (line 25) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.39s; merged doctests compilation took 0.38s
+### facade tests
+   Compiling incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized] target(s) in 9.52s
+     Running unittests src/lib.rs (target/debug/deps/incin-20bcfb633531efc2)
+
+running 2 tests
+test tests::test_runtime_dtype_tensor_creation ... ok
+test tests::test_tensor_export ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/cargo-incin.rs (target/debug/deps/cargo_incin-efb670f3fc698d82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/advanced_math_autograd_tests.rs (target/debug/deps/advanced_math_autograd_tests-1c0f38da4ff27c42)
+
+running 3 tests
+test test_inplace_operations ... ok
+test test_autograd_tape_closures ... ok
+test test_trigonometric_and_transcendental_ops ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/autograd_tests.rs (target/debug/deps/autograd_tests-b18db500fd51ce97)
+
+running 2 tests
+test test_backward_under_nan_checking_succeeds ... ok
+test test_simple_linear_regression ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bool_mask_contract.rs (target/debug/deps/bool_mask_contract-366e863db8aa2a5f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broadcast.rs (target/debug/deps/broadcast-86866a3c7d707782)
+
+running 1 test
+test test_broadcast_success ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/canonical_only_backend_contract.rs (target/debug/deps/canonical_only_backend_contract-ee20b4d178051bcf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_tests.rs (target/debug/deps/data_tests-ff54bdbf7ddaa5bf)
+
+running 1 test
+test test_dataset ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/doctor.rs (target/debug/deps/doctor-b14a6b2d715d9a20)
+
+running 24 tests
+test a_build_with_no_backend_at_all_is_an_error ... ok
+test a_compiled_backend_with_no_hardware_is_a_warning ... ok
+test a_backend_that_is_both_compiled_and_present_says_nothing ... ok
+test a_healthy_machine_produces_no_findings_and_exits_zero ... ok
+test a_machine_with_no_device_probes_nothing ... ok
+test a_probe_reports_the_registrys_reason_for_a_rejection ... ok
+test an_absent_isa_extension_is_a_note_about_the_scalar_path ... ok
+test an_unsupported_operation_is_reported_without_becoming_a_finding ... ok
+test an_unwritable_cache_is_a_warning_naming_its_path ... ok
+test findings_are_ordered_by_severity ... ok
+test an_absent_or_unset_cache_is_not_a_finding ... ok
+test a_missing_toolchain_version_is_a_warning ... ok
+test probes_cover_the_devices_that_answered_and_no_others ... ok
+test the_argument_vocabulary_is_closed ... ok
+test the_json_carries_its_schema_version_and_a_fixed_key_set ... ok
+test the_json_reports_every_probe_the_text_does ... ok
+test the_json_and_the_text_agree_about_what_was_found ... ok
+test the_reported_features_are_exactly_the_manifests ... ok
+test the_text_rendering_is_stable ... ok
+test inspecting_a_cache_path_does_not_create_it ... ok
+test a_directory_without_its_write_bit_reports_as_not_writable ... ok
+test a_real_build_agrees_with_the_mock_about_whether_it_can_run ... ok
+test the_real_machine_produces_a_report ... ok
+test the_subcommand_renders_text_by_default_and_json_on_request ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+     Running tests/dp2_network.rs (target/debug/deps/dp2_network-31a6dc49705cffb3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/error_contract.rs (target/debug/deps/error_contract-a102d0ce02a69339)
+
+running 3 tests
+test stable_facade_exposes_typed_bounded_failure_contract ... ok
+test tensor_operators_propagate_results_instead_of_panicking ... ok
+test extracting_a_tensor_as_a_same_width_but_different_type_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/facade_contract.rs (target/debug/deps/facade_contract-bc9604f944466920)
+
+running 2 tests
+test expert_storage_encoding_has_a_named_path ... ok
+test stable_facade_consumer_contracts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.21s
+
+     Running tests/final_architecture_contract.rs (target/debug/deps/final_architecture_contract-e7a58a41ee662488)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/foundation_handoff_contract.rs (target/debug/deps/foundation_handoff_contract-780374ebe4d9a0c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fsdp.rs (target/debug/deps/fsdp-a1b989ec5a1cf977)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/handoff_manual_module.rs (target/debug/deps/handoff_manual_module-7ed134d9643fb1ee)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/high_priority_ops_tests.rs (target/debug/deps/high_priority_ops_tests-0d656ddfa1b0c1a1)
+
+running 4 tests
+test test_creation_factory_ops ... ok
+test test_selection_and_indexing ... ok
+test test_matrix_and_reductions ... ok
+test test_elementwise_math_ops ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hot_path_allocations.rs (target/debug/deps/hot_path_allocations-b5f25f63a2e3c349)
+
+running 4 tests
+test a_unary_operation_stays_within_its_measured_allocation_count ... ok
+test a_binary_elementwise_operation_stays_within_its_measured_allocation_count ... ok
+test a_higher_rank_operand_does_not_cost_more_metadata_than_a_rank_two_one ... ok
+test broadcasting_an_operand_costs_exactly_what_not_broadcasting_it_costs ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/layers.rs (target/debug/deps/layers-0e3b55a5723b027e)
+
+running 3 tests
+test test_tensor_mixed_shapes ... ok
+test test_linear_mixed_shapes ... ok
+test test_conv2d_mixed_shapes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/macro_tests.rs (target/debug/deps/macro_tests-aa404195a169bc98)
+
+running 3 tests
+test test_idx_macro ... ok
+test test_s_macro ... ok
+test test_module_macro ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/medium_priority_ops_tests.rs (target/debug/deps/medium_priority_ops_tests-df7a761875740566)
+
+running 4 tests
+test test_comparisons_and_logical ... ok
+test test_spatial_and_norm_ops ... ok
+test test_asymmetric_scalars_and_extremes ... ok
+test test_fused_matmul_and_sdpa ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/named_layers_tests.rs (target/debug/deps/named_layers_tests-1b40d1b597b415a3)
+
+running 2 tests
+test test_named_layers_derivation ... ok
+test test_sequential_named_layers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/nn_tests.rs (target/debug/deps/nn_tests-99811aeb2cf09cbc)
+
+running 10 tests
+test test_param ... ok
+test test_linear ... ok
+test test_sequential_state_dict_keys_are_flat_like_pytorch ... ok
+test test_train_mode_propagates_through_sequential_dropout ... ok
+test test_sequential ... ok
+test test_seq_ty_matches_seq_value_type ... ok
+test test_layer_norm ... ok
+test test_batch_norm2d ... ok
+test test_embedding ... ok
+test test_conv2d ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/optim_tests.rs (target/debug/deps/optim_tests-612683dfb4c264c1)
+
+running 9 tests
+test optimizer_parameter_groups_collect_through_typed_state_visitors ... ok
+test adam_step_overflow_preserves_parameters_and_state ... ok
+test test_adam_optimizer_state_dict_checkpointing ... ok
+test malformed_adam_state_load_is_typed_and_transactional ... ok
+test test_adam ... ok
+test test_sgd ... ok
+test test_adamw ... ok
+test test_adamw_optimizer_state_dict_checkpointing ... ok
+test adam_step_rolls_back_parameters_state_and_counter_on_backend_failure ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/plan_report.rs (target/debug/deps/plan_report-12aaba459b9a44f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pointwise_semantics_contract.rs (target/debug/deps/pointwise_semantics_contract-5b3a919a59f77467)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pp2_network.rs (target/debug/deps/pp2_network-6816f5a23eed7bdf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rendezvous.rs (target/debug/deps/rendezvous-7773e9c50f2adb8f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/serde_tests.rs (target/debug/deps/serde_tests-9acce237181b27c2)
+
+running 10 tests
+test test_explicit_state_name_is_schema_stable ... ok
+test test_state_extraction_failure_propagates ... ok
+test test_late_state_failure_does_not_commit_earlier_leaves ... ok
+test test_owned_heterogeneous_snapshot_extraction ... ok
+test test_state_dict_extraction ... ok
+test test_strict_load_rejects_bad_snapshots_without_mutation ... ok
+test test_mixed_dtype_snapshot_round_trip ... ok
+test test_postcard_snapshot_round_trip ... ok
+test test_sequential_state_dict_flat_keys_and_round_trip ... ok
+test test_mixed_dtype_checkpoint_round_trip ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shape_literal_range.rs (target/debug/deps/shape_literal_range-3b8998638a34f86f)
+
+running 1 test
+test shape_literal_range_uses_raw_static_extent_types ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shape_macro.rs (target/debug/deps/shape_macro-3436af2a8c56463a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shape_safety.rs (target/debug/deps/shape_safety-e533872ed63e9552)
+
+running 1 test
+test chunk_and_split_reject_invalid_axes_without_panicking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_api_facade.rs (target/debug/deps/target_api_facade-b2fbfcfb6904daca)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_display.rs (target/debug/deps/tensor_display-4c83149d7ce73bc8)
+
+running 5 tests
+test no_grad_tensor_omits_the_requires_grad_footer ... ok
+test debug_still_carries_shape_and_placement_alongside_real_values ... ok
+test non_default_dtype_is_named_in_the_footer ... ok
+test one_d_float_tensor_prints_like_pytorch ... ok
+test two_d_float_tensor_aligns_negative_columns ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_ops.rs (target/debug/deps/tensor_ops-f458fcc721f914c4)
+
+running 25 tests
+test test_binary_mul ... ok
+test test_binary_sub ... ok
+test test_binary_div ... ok
+test test_binary_add ... ok
+test test_broadcast_1d_to_2d ... ok
+test test_broadcast_scalar ... ok
+test test_broadcast_trailing_dims ... ok
+test test_indexing_concat ... ok
+test test_indexing_narrow ... ok
+test test_indexing_stack ... ok
+test test_manipulation_reshape_flatten ... ok
+test test_loss_mse ... ok
+test test_reduction_max_min ... ok
+test test_reduction_mean ... ok
+test test_manipulation_transpose_squeeze ... ok
+test test_unary_abs ... ok
+test test_loss_cross_entropy ... ok
+test test_reduction_sum ... ok
+test to_vec1_bool_rejects_numeric_u8_tensor ... ok
+test test_unary_softmax ... ok
+test test_unary_gelu ... ok
+test test_unary_relu ... ok
+test test_unary_swish ... ok
+test to_scalar_bool_rejects_numeric_u8_tensor ... ok
+test test_unary_misc ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tp2_network.rs (target/debug/deps/tp2_network-a967570f10ac75f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/trainer.rs (target/debug/deps/trainer-a4419adc69b3b9cd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/transformer_block.rs (target/debug/deps/transformer_block-e3803b067f35c519)
+
+running 2 tests
+test static_attention_shapes_compile_and_run ... ok
+test cpu_transformer_forward_backward_adamw_and_state_roundtrip ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/tune_cli.rs (target/debug/deps/tune_cli-3caa4c5e29658f21)
+
+running 4 tests
+test tune_cli_renders_text_report ... ok
+test tune_cli_renders_json_report ... ok
+test tune_cli_supports_clear_flag ... ok
+test tune_cli_supports_offline_flag ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin
+
+running 2 tests
+test crates/incin/src/lib.rs - (line 36) - compile ... ok
+test crates/incin/src/lib.rs - (line 16) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.82s; merged doctests compilation took 0.81s
+### macro tests
+   Compiling tower-http v0.6.11
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling reqwest v0.12.28
+   Compiling hf-hub v0.5.0
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `test` profile [unoptimized] target(s) in 19.17s
+     Running unittests src/lib.rs (target/debug/deps/incin_macros-bf7c158f244c844b)
+
+running 9 tests
+test onnx::tests::malformed_node_arity_is_rejected_before_codegen ... ok
+test onnx::tests::unsupported_nodes_report_identity_operation_domain_and_opset ... ok
+test onnx::tests::if_and_loop_fail_during_expansion_with_complete_node_identity ... ok
+test onnx::tests::negative_dimension_is_a_precise_metadata_error ... ok
+test onnx::tests::initializers_are_not_represented_by_zero_filled_parameters ... ok
+test onnx::tests::unknown_rank_remains_unknown_and_fails_static_expansion ... ok
+test onnx::tests::supported_expansion_has_no_weight_loading_claim_or_runtime_panic ... ok
+test safetensors::tests::numeric_tensor_path_segment_gets_a_valid_field_name ... ok
+test safetensors::tests::malformed_tensor_path_segments_are_diagnostics_not_panics ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/distributed_macro_suite.rs (target/debug/deps/distributed_macro_suite-65e51d698d4839d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/distributed_main.rs (target/debug/deps/distributed_main-a6559853b96950c9)
+
+running 1 test
+test test_distributed_main_execution ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/macro_suite.rs (target/debug/deps/macro_suite-035bf135d6dadf13)
+
+running 4 tests
+test every_policy_category_is_covered ... ok
+test compile_fail_cases_fail_for_their_stated_reason ... ok
+test invoking_the_macros_leaves_a_file_formattable ... ok
+   Compiling incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+   Compiling incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.55s
+
+
+test tests/compile_pass/hygiene.rs [should pass] ... ok
+test tests/compile_pass/idx_grammar.rs [should pass] ... ok
+test tests/compile_pass/mesh_grammar.rs [should pass] ... ok
+test tests/compile_pass/module_arguments.rs [should pass] ... ok
+test tests/compile_pass/named_axis.rs [should pass] ... ok
+test tests/compile_pass/rename.rs [should pass] ... ok
+test tests/compile_pass/rustfmt_fixture.rs [should pass] ... ok
+test tests/compile_pass/s_grammar.rs [should pass] ... ok
+test tests/compile_fail/idx_rejects_a_qualified_named_dim.rs [should fail to compile] ... ok
+test tests/compile_fail/idx_rejects_an_open_ended_range.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_duplicate_axis.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_unknown_axis.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_zero_degree.rs [should fail to compile] ... ok
+test tests/compile_fail/module_rejects_a_non_struct.rs [should fail to compile] ... ok
+test tests/compile_fail/module_rejects_an_invalid_state_component.rs [should fail to compile] ... ok
+test tests/compile_fail/module_rejects_an_unknown_argument.rs [should fail to compile] ... ok
+test tests/compile_fail/s_rejects_a_non_path_dim.rs [should fail to compile] ... ok
+test tests/compile_fail/s_rejects_a_repeat_without_a_count.rs [should fail to compile] ... ok
+
+
+test compile_pass_and_compile_fail ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.54s
+
+     Running tests/mesh_macro.rs (target/debug/deps/mesh_macro-f593d02bbb978e70)
+
+running 1 test
+test test_mesh_macro_expansion ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parallel_attrs.rs (target/debug/deps/parallel_attrs-4c43ed5d3adf9fa5)
+
+running 2 tests
+test parallel_and_shard_field_attributes_pass ... ok
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.67s
+
+
+test tests/parallel_attrs_compile_fail/conflicting_attrs.rs ... ok
+
+
+test parallel_attrs_compile_fail_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.39s
+
+     Running tests/parallel_block.rs (target/debug/deps/parallel_block-fe84b7f7d2ee02e0)
+
+running 2 tests
+test test_parallel_block_simple ... ok
+test test_parallel_block_with_mesh ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/placement_macro.rs (target/debug/deps/placement_macro-20672f78adcdb756)
+
+running 2 tests
+test placement_expansion_and_projections ... ok
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+
+
+test tests/placement_compile_fail/missing_on_mesh.rs ... ok
+
+
+test placement_compile_fail_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running tests/shape_literal_range.rs (target/debug/deps/shape_literal_range-7932086ffa390cb1)
+
+running 2 tests
+test literals_use_recursive_typenum_without_a_finite_alias_table ... ok
+test recursive_structural_shape_scales_to_rank_two_hundred ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_macro.rs (target/debug/deps/tensor_macro-cf81b92222f52944)
+
+running 20 tests
+test runtime_length_data_goes_through_dyn_directly_not_the_macro ... ok
+test nested_empty_arrays_infer_a_ragged_free_2d_shape ... ok
+test empty_literal_is_a_zero_length_tensor_defaulting_to_f32 ... ok
+test empty_literal_honors_an_explicit_dtype_clause ... ok
+test bare_integer_literals_default_to_i64 ... ok
+test a_numeric_suffix_picks_the_dtype_without_a_clause ... ok
+test an_explicit_dtype_clause_overrides_inference ... ok
+test leaves_can_be_arbitrary_expressions_not_just_bare_variables ... ok
+test mixing_an_int_and_a_float_literal_defaults_to_f32 ... ok
+test negative_literals_are_supported ... ok
+test one_d_float_literal_infers_shape_and_f32 ... ok
+test nested_literal_infers_a_2d_shape ... ok
+test plain_variables_are_passed_through_uncast ... ok
+test clauses_can_be_written_in_declaration_order ... ok
+test clauses_can_be_written_in_reverse_order ... ok
+test a_grad_clause_of_nograd_disables_gradient_tracking ... ok
+test without_a_grad_clause_the_default_is_nograd ... ok
+test triple_nested_literal_infers_a_3d_shape ... ok
+test scalar_literal_is_a_rank_one_tensor_of_length_one ... ok
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+
+
+test tests/tensor_compile_fail/backend_clause_is_gone.rs ... ok
+test tests/tensor_compile_fail/conflicting_suffixes.rs ... ok
+test tests/tensor_compile_fail/empty_sibling_mismatch.rs ... ok
+test tests/tensor_compile_fail/grad_unsupported_marker.rs ... ok
+test tests/tensor_compile_fail/mixed_nesting.rs ... ok
+test tests/tensor_compile_fail/ragged.rs ... ok
+test tests/tensor_compile_fail/runtime_vec_is_one_leaf_not_a_spread.rs ... ok
+
+
+test tensor_macro_compile_fail_diagnostics ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+   Doc-tests incin_macros
+
+running 8 tests
+test crates/incin-macros/src/lib.rs - shape (line 179) ... ok
+test crates/incin-macros/src/lib.rs - idx (line 307) ... ok
+test crates/incin-macros/src/lib.rs - s (line 67) ... ok
+test crates/incin-macros/src/lib.rs - module (line 366) ... ok
+test crates/incin-macros/src/lib.rs - s (line 57) ... ok
+test crates/incin-macros/src/lib.rs - shape (line 160) ... ok
+test crates/incin-macros/src/lib.rs - shape (line 124) ... ok
+test crates/incin-macros/src/lib.rs - s (line 77) ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.89s; merged doctests compilation took 0.88s
+### backend conformance
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 0.97s
+     Running tests/conformance.rs (target/debug/deps/conformance-3adcf1b7ac100186)
+
+running 6 tests
+test a_backend_that_computes_the_wrong_product_fails_only_the_tolerance_check ... ok
+test a_registry_that_claims_everything_fails_the_agreement_check ... ok
+test a_backend_that_claims_nothing_skips_rather_than_fails ... ok
+test tolerance_accepts_either_bound_and_rejects_a_non_finite_surprise ... ok
+test a_panicking_executor_is_a_reported_failure_not_a_dead_harness ... ok
+test the_template_backend_conforms ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+### transformer
+    Finished `test` profile [unoptimized] target(s) in 0.34s
+     Running tests/transformer_block.rs (target/debug/deps/transformer_block-e3803b067f35c519)
+
+running 2 tests
+test static_attention_shapes_compile_and_run ... ok
+test cpu_transformer_forward_backward_adamw_and_state_roundtrip ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+### distributed compile
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized] target(s) in 17.23s
+     Running tests/mesh_compile.rs (target/debug/deps/mesh_compile-d481f2d5d59b7250)
+
+running 8 tests
+test a_hybrid_mesh_multiplies_its_three_axes ... ok
+test a_single_rank_mesh_is_a_mesh ... ok
+test the_three_valid_three_gpu_topologies_are_all_three_rank_meshes ... ok
+test an_omitted_axis_is_the_same_type_as_a_degree_of_one ... ok
+test the_world_constant_is_the_projection_of_the_world_type ... ok
+test two_meshes_with_one_world_size_keep_their_own_degrees ... ok
+test every_mesh_case_names_the_rule_it_pins ... ok
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-core-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.45s
+
+
+test tests/mesh_compile_fail/mesh_axes_out_of_order.rs ... ok
+test tests/mesh_compile_fail/mesh_world_size_mismatch.rs ... ok
+test tests/mesh_compile_fail/mesh_zero_axis.rs ... ok
+
+
+test the_mesh_rejections_are_compile_errors ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.16s
+
+### capability docs no drift
+    Finished `test` profile [unoptimized] target(s) in 0.17s
+     Running tests/generated_docs.rs (target/debug/deps/generated_docs-990547f4c3caab47)
+
+running 4 tests
+test the_document_does_not_advertise_an_unregistered_operation ... ok
+test the_capability_document_matches_the_registrations ... ok
+test the_document_covers_every_registered_operation ... ok
+test no_public_example_is_excluded_from_compilation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
