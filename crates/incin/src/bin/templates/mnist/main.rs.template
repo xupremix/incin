@@ -30,7 +30,7 @@ fn main() -> incin::Result<()> {
         Linear::<Dyn, Backend>::build((128, 10))?
     ];
 
-    let mut optim = incin::AdamW::<Backend>::new(model.parameters(), 0.001);
+    let mut optim = incin::AdamW::<Backend>::from_module(&model, 0.001)?;
 
     let batch_size = 32;
     println!("Starting training on synthetic data...");

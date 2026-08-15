@@ -488,7 +488,7 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
 ///     .require_grad()
 ///     .backward()?;
 ///
-/// let mut optimizer = SGD::<DefaultBackend>::new(model.parameters(), 0.01);
+/// let mut optimizer = SGD::<DefaultBackend>::from_module(&model, 0.01)?;
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```
@@ -571,7 +571,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
 ///     .require_grad()
 ///     .backward()?;
 ///
-/// let mut optimizer = AdamW::<DefaultBackend>::new(model.parameters(), 1e-4);
+/// let mut optimizer = AdamW::<DefaultBackend>::from_module(&model, 1e-4)?;
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```
@@ -766,7 +766,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
 ///     .require_grad()
 ///     .backward()?;
 ///
-/// let mut optimizer = Adam::<DefaultBackend>::new(model.parameters(), 1e-3);
+/// let mut optimizer = Adam::<DefaultBackend>::from_module(&model, 1e-3)?;
 /// optimizer.step(&gradients)?;
 /// # Ok(()) }
 /// ```

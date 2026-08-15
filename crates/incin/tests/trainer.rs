@@ -299,7 +299,7 @@ fn a_multi_device_plan_says_it_needs_collectives() {
 #[test]
 fn the_model_trains_on_the_cpu() {
     let mut model = model().expect("the model builds");
-    let mut optimizer = SGD::<Backend>::new(model.parameters(), 0.01);
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
 
     let trainer = Trainer::new(
@@ -355,7 +355,7 @@ fn the_model_trains_on_the_cpu() {
 #[test]
 fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() {
     let mut model = model().expect("the same model as the CPU test");
-    let mut optimizer = SGD::<Backend>::new(model.parameters(), 0.01);
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
 
     let trainer = Trainer::new(
@@ -383,7 +383,7 @@ fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() {
 #[test]
 fn an_empty_dataset_reports_no_batches_rather_than_a_zero_loss() {
     let mut model = model().expect("the model builds");
-    let mut optimizer = SGD::<Backend>::new(model.parameters(), 0.01);
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let empty: Vec<(Tensor<Dyn, Backend>, Tensor<Dyn, Backend>)> = Vec::new();
 
     let trainer = Trainer::new(Trainer::plan().epochs(5).build_on(&CpuOnly).expect("cpu"));
@@ -405,7 +405,7 @@ fn an_empty_dataset_reports_no_batches_rather_than_a_zero_loss() {
 #[test]
 fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() {
     let mut model = model().expect("the model builds");
-    let mut optimizer = SGD::<Backend>::new(model.parameters(), 0.01);
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
 
     let trainer = Trainer::new(Trainer::plan().epochs(2).build_on(&CpuOnly).expect("cpu"));
@@ -445,7 +445,7 @@ fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() {
 #[test]
 fn zero_epochs_runs_nothing_rather_than_being_rounded_up() {
     let mut model = model().expect("the model builds");
-    let mut optimizer = SGD::<Backend>::new(model.parameters(), 0.01);
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
 
     let trainer = Trainer::new(Trainer::plan().epochs(0).build_on(&CpuOnly).expect("cpu"));

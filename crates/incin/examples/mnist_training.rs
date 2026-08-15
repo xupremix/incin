@@ -56,7 +56,7 @@ fn main() -> incin::Result<()> {
     ];
 
     // 3. Optimizer setup
-    let mut optim = AdamW::<Backend>::new(model.parameters(), 0.001);
+    let mut optim = AdamW::<Backend>::from_module(&model, 0.001)?;
 
     // 4. Real Training Loop
     println!("Starting training...");

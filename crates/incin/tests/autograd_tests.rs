@@ -11,7 +11,7 @@ type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
 /// Test simple linear regression.
 fn test_simple_linear_regression() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackendImpl>::build(())?;
-    let mut optim = SGD::<CpuBackendImpl>::new(model.parameters(), 0.01);
+    let mut optim = SGD::<CpuBackendImpl>::from_module(&model, 0.01)?;
 
     // We just create zeros to test the autograd and optimizer pipeline
     let x = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
@@ -41,7 +41,7 @@ fn test_simple_linear_regression() -> Result<()> {
 /// a returned error rather than a panic.
 fn test_backward_under_nan_checking_succeeds() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackendImpl>::build(())?;
-    let mut optim = SGD::<CpuBackendImpl>::new(model.parameters(), 0.01);
+    let mut optim = SGD::<CpuBackendImpl>::from_module(&model, 0.01)?;
 
     let x = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
     let y = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;

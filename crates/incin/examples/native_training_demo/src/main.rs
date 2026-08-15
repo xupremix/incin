@@ -166,7 +166,7 @@ where
 
     let model =
         SimpleCnn::<B>::new(in_channels, conv_out_channels, num_classes, flattened_dim).unwrap();
-    let mut sgd = SGD::<B>::new(model.parameters(), lr);
+    let mut sgd = SGD::<B>::from_module(&model, lr)?;
 
     let start = std::time::Instant::now();
     let mut losses = Vec::with_capacity(n_epochs);
