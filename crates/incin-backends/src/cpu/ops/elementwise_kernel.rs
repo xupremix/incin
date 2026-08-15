@@ -8,7 +8,7 @@
 use core::ops::Range;
 
 use half::{bf16, f16};
-use incin_core::prelude::{Error, Result};
+use incin_core::error::{Error, Result};
 use rayon::prelude::*;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

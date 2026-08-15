@@ -1,7 +1,7 @@
 //! Backend-neutral collective interface.
 
 use incin_core::exec::ReduceOp;
-use incin_core::prelude::DType;
+use incin_core::tensor::dtype::DType;
 
 pub use incin_core::dist::{CollectiveDType, CollectiveError, CollectiveKind, GroupId, StreamId};
 

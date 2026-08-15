@@ -4,7 +4,9 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
     LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel,
 };
-use incin_core::prelude::{DTypeDescriptor, DTypeId, DeviceKind, OperationKind};
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::device::DeviceKind;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 const ALL_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::U8.descriptor(),

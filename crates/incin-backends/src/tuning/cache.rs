@@ -20,7 +20,7 @@ use core::{
     marker::PhantomData,
     time::Duration,
 };
-use incin_core::prelude::Dyn;
+use incin_core::shapes::dynamic::Dyn;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     ffi::OsString,

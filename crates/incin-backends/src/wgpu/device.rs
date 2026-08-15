@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
-use incin_core::prelude::{BackendError, Error, OperationKind, Result};
+use incin_core::error::{BackendError, Error, Result};
+use incin_core::shapes::error::OperationKind;
 use wgpu::{Adapter, Backends, Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
 
 pub(crate) struct WgpuDeviceState {
