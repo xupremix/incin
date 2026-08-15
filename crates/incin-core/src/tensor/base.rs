@@ -7,12 +7,14 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::{
-    ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
-    Dyn, DynShape, Error, FloatDType, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
-    SupportsDType, TensorArgs, StorageTransfer, HostInterop, AutogradBackend,
-};
-use crate::shapes::Nil;
+use crate::backend_authoring::{AutogradBackend, Backend, HostInterop, StorageTransfer, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue};
+use crate::tensor::arg::TensorArgs;
+use crate::tensor::arg_into::ArgInto;
+use crate::tensor::device::{Device, DeviceId};
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType};
+use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
 use core::marker::PhantomData;
@@ -39,7 +41,7 @@ use core::marker::PhantomData;
 /// Creating and inspecting statically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
@@ -50,7 +52,7 @@ use core::marker::PhantomData;
 /// Using dynamically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
@@ -1047,13 +1049,13 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
     ) -> Result<crate::autograd::Gradients<B::Grads>> {
         if self.shape_buf() != seed.shape_buf() {
             return Err(Error::Backend(crate::err::BackendError::InvalidInput {
-                operation: crate::prelude::OperationKind::Storage,
+                operation: crate::shapes::error::OperationKind::Storage,
                 reason: "backward seed shape does not match the output",
             }));
         }
         if self.dtype() != seed.dtype() || self.device()? != seed.device()? {
             return Err(Error::Backend(crate::err::BackendError::InvalidInput {
-                operation: crate::prelude::OperationKind::Storage,
+                operation: crate::shapes::error::OperationKind::Storage,
                 reason: "backward seed metadata does not match the output",
             }));
         }
@@ -1124,7 +1126,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     }
 
     /// Converts this tensor to a dynamically-shaped `Tensor<Dyn>`.
-    pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, K, G> {
+    pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G> {
         let dims = self._shape.shape_buf();
         // `Dyn`'s field *is* the dimension vector, so there is nothing to
         // re-parse and nothing that can fail — the old
@@ -1184,8 +1186,8 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
 }
 
 impl<
-    S: crate::prelude::Shape,
-    B: crate::prelude::Backend + HostInterop,
+    S: crate::shapes::Shape,
+    B: crate::backend_authoring::Backend + HostInterop,
     K: DType,
     G: RequiresGrad,
     P: Placement,
@@ -1201,7 +1203,7 @@ impl<
     /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and — not
     /// requiring gradients. That last one is the mirror image of PyTorch's
     /// own rule for the literal reason that `G` defaults to
-    /// [`NoGrad`](crate::prelude::NoGrad) here rather than `Grad`: printing
+    /// [`NoGrad`](crate::tensor::grad::NoGrad) here rather than `Grad`: printing
     /// `requires_grad=True` whenever `G::requires_grad` is true still means
     /// "printed exactly when true", while the default tensor remains inert.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -1233,8 +1235,8 @@ impl<
 }
 
 impl<
-    S: crate::prelude::Shape,
-    B: crate::prelude::Backend + HostInterop,
+    S: crate::shapes::Shape,
+    B: crate::backend_authoring::Backend + HostInterop,
     K: DType,
     G: RequiresGrad,
     P: Placement,
@@ -1259,13 +1261,13 @@ impl<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::Dyn;
+    use crate::shapes::Dyn;
 
     use alloc::vec;
 
     #[test]
     fn test_tensor_creation() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>> =
+        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>> =
             Tensor::zeros(vec![2, 3]).unwrap();
         assert_eq!(t.rank(), 2);
         assert_eq!(t.numel(), 6);
@@ -1274,7 +1276,7 @@ mod tests {
 
     #[test]
     fn test_tensor_ones() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>> =
+        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>> =
             Tensor::ones(vec![4]).unwrap();
         assert_eq!(t.rank(), 1);
         assert_eq!(t.numel(), 4);
@@ -1288,7 +1290,7 @@ mod tests {
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
         use crate::tensor::backend::{Backend};
-        type B = crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>;
+        type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`
         // = 3*4+1 = 13, far larger than `input + 2*padding` = 2 + 0 = 2.
