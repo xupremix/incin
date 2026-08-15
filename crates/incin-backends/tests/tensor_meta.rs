@@ -8,8 +8,6 @@ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::Backend;
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId};
-#[cfg(feature = "wgpu")]
-
 fn assert_metadata_storage<T>()
 where
     T: Deref<Target = TensorMeta>,

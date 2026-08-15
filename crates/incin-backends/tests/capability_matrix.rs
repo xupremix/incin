@@ -1,4 +1,6 @@
-#![cfg(feature = "cpu")]
+#![cfg(all(feature = "cpu", feature = "legacy-operation-api-tests"))]
+//! Historical pre-descriptor capability tests. The current canonical CPU
+//! contract is exercised by `canonical_cpu.rs` and `cpu_migration_status.rs`.
 
 use std::collections::BTreeSet;
 

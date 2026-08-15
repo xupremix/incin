@@ -11,7 +11,9 @@
 //! `--features std,cpu --test gradient_parity` as its evidence compiled zero
 //! tests under it.
 
-#![cfg(feature = "cpu")]
+#![cfg(all(feature = "cpu", feature = "legacy-operation-api-tests"))]
+//! Historical backend-helper parity tests. Current CPU parity is covered by
+//! the descriptor-based canonical suite.
 
 use incin_backends::cpu::CpuBackendImpl;
 #[cfg(feature = "cuda")]

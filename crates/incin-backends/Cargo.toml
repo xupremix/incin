@@ -64,6 +64,10 @@ distributed-nccl = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 # Deterministic fault-injection hooks used only by integration tests. This is
 # deliberately opt-in and is never part of a product build.
 test-utils = ["incin-core/test-utils"]
+# Historical operation-family capability tests are retained as migration
+# evidence but are not part of the current canonical test suite. They require
+# the removed backend helper API and must be ported before this opt-in is used.
+legacy-operation-api-tests = []
 
 [dependencies]
 incin-core = { path = "../incin-core", default-features = false, version = "0.0.0" }

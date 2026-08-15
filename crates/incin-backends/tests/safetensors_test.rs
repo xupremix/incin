@@ -15,14 +15,18 @@ fn test_safetensors_save_and_load_roundtrip_cpu() {
         std::process::id()
     ));
 
-    save_safetensors(&module, &file_path).unwrap();
+    module
+        .save(Format::Safetensors, &file_path)
+        .unwrap();
     assert!(file_path.exists());
 
     let mut loaded_module = Linear::<s![2, 2], B>::build(()).unwrap();
-    load_safetensors(&mut loaded_module, &file_path).unwrap();
+    loaded_module
+        .load(Format::Safetensors, &file_path, &DeviceId::cpu())
+        .unwrap();
     assert_eq!(
-        loaded_module.state_dict().unwrap().len(),
-        module.state_dict().unwrap().len()
+        collect_state::<B, _>(&loaded_module).unwrap().len(),
+        collect_state::<B, _>(&module).unwrap().len()
     );
 
     let _ = std::fs::remove_file(file_path);

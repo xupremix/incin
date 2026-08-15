@@ -92,7 +92,7 @@ fn run_and_grad<B>(
     input_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + <B> + <B> + <B>,
+    B: Backend + HostInterop,
 {
     let x_stor = make_storage::<B>(input_data, input_shape);
     let x_var = B::var_from_tensor::<f32>(&x_stor).expect("var_from_tensor");
@@ -127,7 +127,7 @@ fn run_and_grad2<B>(
     rhs_shape: &[usize],
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>)
 where
-    B: Backend + HostInterop + <B> + <B> + <B>,
+    B: Backend + HostInterop,
 {
     let lhs_stor = make_storage::<B>(lhs_data, lhs_shape);
     let rhs_stor = make_storage::<B>(rhs_data, rhs_shape);

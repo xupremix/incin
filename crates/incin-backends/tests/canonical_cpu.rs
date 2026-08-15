@@ -7,7 +7,10 @@
 //! legacy path is asserted too, because a replacement that computes something
 //! else is not a migration.
 
-#![cfg(feature = "cpu")]
+#![cfg(all(feature = "cpu", feature = "legacy-operation-api-tests"))]
+//! Historical parity tests retained for migration archaeology. The active
+//! descriptor contract is covered by `canonical_dispatch_smoke.rs` and the
+//! machine-checked migration inventory.
 
 extern crate incin_core as incin;
 

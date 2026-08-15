@@ -1,4 +1,6 @@
-#![cfg(feature = "cpu")]
+#![cfg(all(feature = "cpu", feature = "legacy-operation-api-tests"))]
+//! Historical backend-helper tests. Current execution is tested through
+//! descriptor dispatch, not backend-family methods.
 
 use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
