@@ -108,11 +108,11 @@ impl DTypeKey {
 /// The variants exist so that future logical types fit without another
 /// category redesign.
 ///
-/// Note: `Bool` and `Complex` are reserved for future use; no tensor
-/// operations accept them yet.
+/// `Bool` is supported by logical and comparison operations. `Complex` remains
+/// reserved for future arithmetic support.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DTypeKind {
-    /// Boolean dtype (reserved for future use).
+    /// Boolean dtype for logical and comparison operations.
     Bool,
     /// Unsigned integer dtype (e.g. `u8`, `u32`).
     UnsignedInteger,
@@ -832,7 +832,7 @@ pub trait PlainDType: ConstDType {
 pub trait FloatDType: PlainDType {}
 /// Marker for integer dtypes (`u8`/`u32`/`i64`).
 pub trait IntDType: PlainDType {}
-/// Marker for the boolean dtype (reserved for future use).
+/// Marker for the boolean dtype.
 pub trait BoolDType: ConstDType {}
 /// Marker for block-quantized dtypes (e.g. `Q8_0`) — storage formats with
 /// their own internal scale/block structure, not plain scalar elements.

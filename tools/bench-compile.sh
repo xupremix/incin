@@ -24,3 +24,4 @@ run_case() {
 run_case default-lib cargo check -p incin --lib
 run_case examples cargo check -p incin --examples
 run_case book-feature-surface cargo check -p incin --lib --features 'target-api backend-authoring'
+run_case transformer-proof cargo test -p incin --test transformer_block --no-run

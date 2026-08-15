@@ -17,20 +17,17 @@ that can be named as a working implementation.
 
 ## Transformer / attention assessment
 
-A complete Transformer proof is not currently claimed. The framework has the
-tensor primitives needed for pieces such as matmul, reshape, transpose,
-softmax, masking, residual addition, and feed-forward layers, but there is no
-stable public multi-head-attention or Transformer module. Backend capability
-coverage also differs: the accelerator backends do not currently provide the
-full activation, normalization, loss, and dropout set used by a trainable
-Transformer. Consequently a CPU-only hand composition may demonstrate pieces,
-but it is not yet a portable modern-architecture prototype with a validated
-backward path.
+The repository now has a focused CPU Transformer proof in
+`crates/incin/tests/transformer_block.rs`. It runs a four-token, single-head
+self-attention block with query/key/value projections, transpose, softmax,
+residual addition, a GELU feed-forward block, backward propagation, AdamW,
+and a typed state snapshot round-trip.
 
-The honest next milestone is a focused attention operation/module fixture that
-proves causal masking, head reshaping, residuals, normalization, dropout, and
-backward together. Until that exists, examples must not label a partial
-matmul/reshape composition as a Transformer implementation.
+This is an executable composition proof, not a claim of a stable public
+`MultiHeadAttention` or `TransformerEncoderLayer` module. It does not yet
+prove causal masking, multi-head reshaping, dropout, or portable accelerator
+execution. Those remain separate milestones and must not be inferred from the
+CPU fixture.
 
 ## Modern training
 

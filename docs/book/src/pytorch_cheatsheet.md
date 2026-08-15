@@ -14,7 +14,7 @@
 | `param.grad` | `Backend::get_grad::<K>(param.inner(), grads.as_backend())?` | Explicit lookup by tensor, not an attribute. |
 | `nn.Linear(768, 256)` | `Linear::<s![768, 256], B>::build(())?` | In/out features are the shape type, not constructor arguments. |
 | `nn.Sequential(a, b, c)` | `seq!(a, b, c)` — see [Sequential](./sequential.md) | Type is `SeqTy!(A, B, C)`, built the same way the value is. |
-| `optim.Adam(model.parameters(), lr=1e-3)` | `Adam::<B>::new(model.parameters(), 1e-3)` | |
+| `optim.AdamW(model.parameters(), lr=1e-3)` | `AdamW::<B>::from_module(&model, 1e-2)?` | Parameters are collected through the module visitor. |
 | `optim.step()` | `optim.step(&grads)?` | Takes the `Gradients` from `backward()` explicitly rather than reading accumulated `.grad` fields. |
 | `scheduler.step(); optim.param_groups[0]['lr']` | `sched.step(); optim.lr = sched.get_lr();` | `lr` is a public field you copy the scheduler's value into, not managed for you. |
 | `nn.MSELoss()(pred, target)` | `MSELoss::<Mean>::new().forward(&pred, &target)?` | Reduction mode (`Mean`/`Sum`/`NoneReduction`) is the loss's own type parameter. |

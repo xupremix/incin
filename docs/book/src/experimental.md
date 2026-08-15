@@ -7,7 +7,7 @@ matters when you're deciding what to build on.
 
 ## Quantization
 
-`QuantizedOps` (feature `backend-authoring`) has three operations: `quantize`
+The quantized backend-authoring contract has three operations: `quantize`
 (float → compressed blocks), `dequantize` (blocks → float, lossy), and
 `quantized_matmul` (two quantized operands → `f32`, without fully
 dequantizing first). The only quantized representation any backend implements

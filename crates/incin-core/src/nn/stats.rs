@@ -31,7 +31,7 @@ use alloc::vec::Vec;
 pub struct LayerStats {
     /// Number of trainable parameter elements (buffers — e.g. BatchNorm's
     /// running mean/var — are deliberately excluded, matching
-    /// `Parameters::parameters()`'s trainable-only convention).
+    /// the typed `VisitParameters` traversal's trainable-only convention).
     pub params: u64,
     /// Multiply-accumulate operations for one forward pass at the batch
     /// size `compute_stats` was called with. 0 for layers with no known

@@ -75,10 +75,10 @@ questions.
 
 **Ordinary tensor methods use one canonical execution architecture.** Their
 backend bounds name an exact operation descriptor (`op::X`) and execution is
-validated before it reaches a backend. The former operation-family traits are
-hidden compatibility adapters for backend implementations and tests; they are
-not required by `Backend`, are not part of the normal facade prelude, and are
-not a second application-facing execution model.
+validated before it reaches a backend. The former operation-family traits have
+been removed from production source. Backend-local helpers and explicit test
+adapters are not a backend-authoring API or a second application-facing
+execution model.
 
 ## 3. The type-level shape system
 
@@ -219,15 +219,14 @@ skip to §7 if you just want to allocate tensors on a specific device.
 ### Why it exists
 
 The old family adapters let *any* implementation answer for an operation:
-`Backend: TensorOps<Self>` says "this backend has some `matmul`", not "this
+`Backend: TensorOps<Self>` said "this backend has some `matmul`", not "this
 backend has *this exact, validated* `matmul`, refusing anything it cannot
 prove". Two consequences: a backend cannot be asked "do you support `matmul`
 on `f16` at rank 3?" without running it and seeing what happens, and there is
 no single point where "here is the operation" and "here is the metadata
 proving it is well-formed" travel together, sealed, into the kernel. The
 canonical path is now the ordinary tensor execution architecture. The family
-traits remain only as hidden compatibility adapters for backend
-implementations and tests while their remaining methods are extracted.
+traits are historical context only and are absent from production source.
 
 ### The pieces, in the order data flows through them
 
@@ -506,8 +505,8 @@ describes.
   test fails if the committed copy and a fresh regeneration disagree. Never
   hand-edit one — edit the source and regenerate.
 - **A capability claim and an executor are the same edit.** The pattern in
-  §6 and §8: one declaration feeds the capability row, the legacy executor,
-  and the canonical executor, so a row that claims support the tree does not
+  §6 and §8: one declaration feeds the capability row and the canonical
+  executor, so a row that claims support the tree does not
   provide is a compile error, not a fact someone has to notice and file.
 - **Report exactly what was measured, including when it's small.** Where this
   guide or the codebase's own doc comments cite a number (the 12.6ns/call
