@@ -280,8 +280,10 @@ including unavailable accelerator hardware, Miri's numerical-test exclusions,
 and the repository's pre-existing formatting drift. Representative backend
 feature combinations pass; the literal cargo-hack backend powerset expands to
 16,420 combinations in this manifest and was stopped as impractical after
-focused combinations passed. Clippy remains blocked by the pre-existing
-`incin-macros` complex-type warning under `-D warnings`.
+focused combinations passed. Ordinary workspace Clippy exits successfully
+with warnings, while the strict no-default CPU CI configuration remains red
+on the broader pre-existing baseline, including unused imports, type
+complexity, and argument-count warnings under `-D warnings`.
 
 ## First 30 minutes
 
