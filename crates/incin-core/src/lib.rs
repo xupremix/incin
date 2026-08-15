@@ -31,12 +31,12 @@ mod graph_recording;
 pub mod io;
 pub mod metrics;
 pub mod nn;
-pub mod resource;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_exporter;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_pb;
 pub mod optim;
+pub mod resource;
 pub(crate) mod serialize;
 #[cfg(feature = "std")]
 /// Named serialization surface for applications that do not use the prelude.
@@ -45,8 +45,8 @@ pub mod serialization {
 }
 pub mod shapes;
 
-pub mod tensor;
 pub mod autograd;
+pub mod tensor;
 pub use typenum;
 
 /// Implementation details used by procedural macros expanded inside this crate.
@@ -54,10 +54,13 @@ pub use typenum;
 pub mod __macro_support {
     pub use crate::err::Result;
     pub use crate::nn::{
-        ComputeStats, LayerNode, LayerStats, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor,
-        StatePath, StateSnapshot, StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
+        ComputeStats, LayerNode, LayerStats, NamedLayers, ParameterVisitor, ShapeInfo,
+        StateMutVisitor, StatePath, StateSnapshot, StateVisitor, TrainMode, VisitParameters,
+        VisitState, VisitStateMut,
     };
-    pub use crate::tensor::backend::{Backend, StorageTransfer, SupportsDType, TransferTo, VariableBackend};
+    pub use crate::tensor::backend::{
+        Backend, StorageTransfer, SupportsDType, TransferTo, VariableBackend,
+    };
     pub use crate::tensor::device::Device;
     pub use crate::tensor::transfer::ToDevice;
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
@@ -103,9 +106,9 @@ pub mod backend_authoring {
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop, HostReadback,
-        StorageBackend, StorageOutput, StorageTransfer, SupportsDType, TensorBackend, TransferBackend, TransferTo, VariableTransfer,
-        VariableBackend,
+        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop,
+        HostReadback, StorageBackend, StorageOutput, StorageTransfer, SupportsDType, TensorBackend,
+        TransferBackend, TransferTo, VariableBackend, VariableTransfer,
     };
     /// Read the tracing graph mid-flight, without draining it.
     ///
@@ -174,6 +177,8 @@ pub mod prelude {
     pub use crate::dist::{Local, Placement, PlacementKind};
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
 
+    pub use super::exec::{AxisSet, RankSupport};
+    pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
@@ -193,57 +198,57 @@ pub mod prelude {
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
         module::{
-            LayerNode, Module, NamedLayers, ParameterVisitor, Sequential, ShapeInfo, TrainMode, VisitParameters,
+            LayerNode, Module, NamedLayers, ParameterVisitor, Sequential, ShapeInfo, TrainMode,
+            VisitParameters,
         },
         optional::{False, OptionalField, True},
         param::{Buffer, Frozen, Param, TrainState, Trainable},
         rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm},
         rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell},
-        state::{collect_state, load_state, StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue, StateVisitor, VisitState, VisitStateMut},
+        state::{
+            StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue,
+            StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
+        },
         stats::{ComputeStats, LayerStats, ModelStats},
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
     pub use incin_macros::{axis, idx, mesh, module, s, shape};
-    pub use super::exec::{AxisSet, RankSupport};
-    pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};
 
     pub use super::shapes::prelude::{
         AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisKey, AxisSchema,
-        AxisSelector, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape,
-        CheckedNumel, ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim,
-        DimCons, DimIdx, DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim,
-        FromEnd, HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap,
-        NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape,
-        ProductDims, RankExpectation, Ranked, ReduceAt, ReduceKeepAt, RemoveAt,
-        ReplaceAt, ReplaceLastDim, ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape,
-        ShapeArgs, ShapeBuf, ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget,
-        SpatialConv1d, SpatialConv2d, SpatialOut, StackShape, StaticAxis, StrideBuf,
-        StructuralConcatShape, SwapAt, ToAxisIndex, TryConcatShape,
-        TryReshape, broadcast_dim_slices, checked_numel_from_dims,
+        AxisSelector, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedNumel,
+        ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons, DimIdx,
+        DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, FromEnd,
+        HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup,
+        NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape, ProductDims,
+        RankExpectation, Ranked, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt, ReplaceLastDim,
+        ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeArgs, ShapeBuf, ShapeError,
+        ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget, SpatialConv1d, SpatialConv2d,
+        SpatialOut, StackShape, StaticAxis, StrideBuf, StructuralConcatShape, SwapAt, ToAxisIndex,
+        TryConcatShape, TryReshape, broadcast_dim_slices, checked_numel_from_dims,
         shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
-        ArgInto, AutogradBackend, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, ConstDType,
-        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
-        DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
-        IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
-        HostInterop, StorageBackend, StorageEncoding, SupportsDType, Tensor, TensorArgs,
-        TensorArgsData, TensorElement, ToDevice, TracingBackend, TransferBackend, StorageTransfer, TransferTo,
-        VariableBackend,
-        CheckedByteLen, checked_byte_len_from_dims,
-        extract_graph, tracing_mark_input,
-        tracing_mark_input_typed, tracing_mark_output,
+        ArgInto, AutogradBackend, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType,
+        CheckedByteLen, ConstDType, ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey,
+        DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
+        FloatDType, Grad, GradJoin, HostInterop, IntDType, JoinedGrad, MatMulShape, NoGrad,
+        PlainDType, Q8_0, QuantDType, RequiresGrad, StorageBackend, StorageEncoding,
+        StorageTransfer, SupportsDType, Tensor, TensorArgs, TensorArgsData, TensorElement,
+        ToDevice, TracingBackend, TransferBackend, TransferTo, VariableBackend,
+        checked_byte_len_from_dims, extract_graph, tracing_mark_input, tracing_mark_input_typed,
+        tracing_mark_output,
     };
-    pub use crate::distributions::TensorDistributionExt;
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};
     #[cfg(feature = "metal")]
     pub use super::tensor::prelude::{Metal, MetalN};
     #[cfg(feature = "wgpu")]
     pub use super::tensor::prelude::{Wgpu, WgpuN};
+    pub use crate::distributions::TensorDistributionExt;
     #[cfg(feature = "std")]
     pub use crate::io::{
         GgufExporter, GgufMetadata, MlxExporter, QuantScheme, ResourceLimits, inspect_file,
@@ -253,8 +258,7 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup,
-        SGD,
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
     };
     #[cfg(feature = "std")]
     pub use crate::optim::{CosineAnnealingLR, StepLR};

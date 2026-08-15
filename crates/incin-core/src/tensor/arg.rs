@@ -1,8 +1,8 @@
 use crate::shapes::{Shape, ShapeBuf};
+use crate::tensor::arg_into::TensorArgsData;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
-use crate::tensor::arg_into::TensorArgsData;
 
 /// Connects a tensor's type parameters to the runtime arguments
 /// needed for construction. For each parameter (Shape, DType, Device, Grad),

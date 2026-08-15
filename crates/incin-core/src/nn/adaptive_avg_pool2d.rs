@@ -1,17 +1,17 @@
+use crate::backend_authoring::Backend;
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{AdaptivePool2dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
-use crate::backend_authoring::Backend;
-use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 
 use typenum::Unsigned;
 
@@ -25,8 +25,12 @@ impl<HOut: Unsigned, WOut: Unsigned, B: crate::tensor::backend::VariableBackend>
     crate::nn::VisitParameters<B> for AdaptiveAvgPool2d<HOut, WOut>
 {
     fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
-        &self, _: &crate::nn::StatePath, _: &mut V,
-    ) -> Result<()> { Ok(()) }
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
@@ -53,7 +57,9 @@ impl<
     I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
     HOut: Unsigned,
     WOut: Unsigned,
-    B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::AdaptiveAvgPool2dExact>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::exec::Capabilities
+        + Execute<op::AdaptiveAvgPool2dExact>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 where
     <B as Execute<op::AdaptiveAvgPool2dExact>>::Output: Into<B::Storage<f32>>,

@@ -366,7 +366,10 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
             .collect()
     }
     /// Casts `t` to the candle dtype corresponding to `dtype`.
-    pub fn tensor_to_dtype<K: incin_core::tensor::dtype::DType, K2: incin_core::tensor::dtype::DType>(
+    pub fn tensor_to_dtype<
+        K: incin_core::tensor::dtype::DType,
+        K2: incin_core::tensor::dtype::DType,
+    >(
         t: &<Self as StorageBackend>::Storage<K>,
         dtype: DTypeDescriptor,
     ) -> Result<<Self as StorageBackend>::Storage<K2>> {

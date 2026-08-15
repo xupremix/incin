@@ -1,8 +1,8 @@
+use crate::backend_authoring::Backend;
 use crate::backend_authoring::{Descriptor, Execute};
+use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::nn::{Module, TrainMode};
-use crate::backend_authoring::Backend;
-use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
@@ -22,8 +22,12 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: crate::tensor::backe
     crate::nn::VisitParameters<B> for MaxPool2d<K, S, P, D>
 {
     fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
-        &self, _: &crate::nn::StatePath, _: &mut V,
-    ) -> Result<()> { Ok(()) }
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> MaxPool2d<K, S, P, D> {

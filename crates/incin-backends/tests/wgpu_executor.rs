@@ -314,16 +314,7 @@ fn conv2d_descriptor_execution_matches_the_legacy_path() {
     let bias = storage(&[3], &[0.5, -0.25, 1.0]);
     let validated = lower_conv2d();
 
-    let legacy = TestBackend::conv2d::<f32>(
-        &input,
-        &weight,
-        Some(&bias),
-        1,
-        1,
-        1,
-        1,
-    )
-    .unwrap();
+    let legacy = TestBackend::conv2d::<f32>(&input, &weight, Some(&bias), 1, 1, 1, 1).unwrap();
 
     let context = ExecutionContext::new(TestBackend::new());
     let inputs = [

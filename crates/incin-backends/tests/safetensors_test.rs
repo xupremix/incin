@@ -15,9 +15,7 @@ fn test_safetensors_save_and_load_roundtrip_cpu() {
         std::process::id()
     ));
 
-    module
-        .save(Format::Safetensors, &file_path)
-        .unwrap();
+    module.save(Format::Safetensors, &file_path).unwrap();
     assert!(file_path.exists());
 
     let mut loaded_module = Linear::<s![2, 2], B>::build(()).unwrap();

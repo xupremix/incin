@@ -8,23 +8,23 @@
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
 use crate::dist::Local;
+use crate::err::{Error, Result};
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::request::TensorHandle;
-use crate::err::{Error, Result};
+use crate::shapes::Dyn;
+use crate::shapes::error::OperationKind;
 use crate::shapes::prelude::{
     Axis, AxisTag, BroadcastDim, BroadcastShape, ConcreteStaticExtent, ConstDim, Dim, DimCons,
     DimensionConstraint, DynShape, NamedDim, Nil, RankExpectation, Shape, ShapeBuf, ShapeError,
     ShapeValue, SplitLast2, StructuralConcatShape,
 };
-use crate::shapes::error::OperationKind;
-use crate::shapes::Dyn;
-use crate::tensor::base::Tensor;
+use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Backend;
+use crate::tensor::backend::Execute;
+use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
-use crate::shapes::shape::shape_buf_from_dims;
-use crate::tensor::backend::Execute;
 use alloc::vec::Vec;
 
 // ============================================================================
@@ -359,16 +359,15 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         )
         .map_err(crate::err::Error::Shape)?;
         let descriptor = validated.into_descriptor();
-        let output_dims =
-            descriptor
-                .output_shape()
-                .cloned()
-                .ok_or(crate::err::Error::Shape(
-                    crate::shapes::ShapeError::TargetShapeRejected {
-                        operation: crate::shapes::OperationKind::MatMul,
-                        rank: 0,
-                    },
-                ))?;
+        let output_dims = descriptor
+            .output_shape()
+            .cloned()
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::ShapeError::TargetShapeRejected {
+                    operation: crate::shapes::OperationKind::MatMul,
+                    rank: 0,
+                },
+            ))?;
         let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(output_dims)
             .map_err(crate::err::Error::Shape)?;
         let joined_grad =

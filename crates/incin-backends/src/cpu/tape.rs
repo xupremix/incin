@@ -18,9 +18,9 @@
 
 use core::cell::RefCell;
 
+use incin_core::error::Result;
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage, TensorId};
-use incin_core::error::Result;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
@@ -580,9 +580,7 @@ mod tests {
         };
         assert!(matches!(
             err,
-            incin_core::error::Error::Backward(
-                incin_core::error::BackwardError::NonFinite { .. }
-            )
+            incin_core::error::Error::Backward(incin_core::error::BackwardError::NonFinite { .. })
         ));
     }
 }

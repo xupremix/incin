@@ -1,17 +1,17 @@
+use crate::backend_authoring::{Backend, SupportsDType};
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{BatchNormAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Buffer, Module, Param};
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::err::{Error, Result};
 use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 
 use core::marker::PhantomData;
 
@@ -63,8 +63,12 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 /// ## Running Statistics
 /// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
 /// must be handled at the backend level). During inference, these stored statistics are used.
-pub struct BatchNorm2d<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable>
-{
+pub struct BatchNorm2d<
+    S: BatchNormShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
     /// The learnable weight matrix parameter.
     pub weight: Param<S::ParamShape, B, K, Train>,
     /// The optional learnable bias vector parameter.
@@ -83,7 +87,9 @@ pub struct BatchNorm2d<S: BatchNormShape, B: crate::tensor::backend::VariableBac
     _phantom: PhantomData<(B, K, Train)>,
 }
 
-impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> BatchNorm2d<S, B, K, Train> {
+impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    BatchNorm2d<S, B, K, Train>
+{
     /// Constructs a BatchNorm2d from raw parts.
     pub fn from_raw_parts(
         weight: Param<S::ParamShape, B, K, Train>,
@@ -192,7 +198,9 @@ impl<S: BatchNormShape, Train: TrainState> BatchNorm2dBuilder<S, Train> {
 
 impl<
     S: BatchNormShape,
-    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::tensor::backend::SupportsDType<K>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > BatchNorm2d<S, B, K, Trainable>
 where

@@ -38,15 +38,7 @@ mod sealed {
 }
 
 pub trait Dim:
-    sealed::Dim
-    + 'static
-    + Copy
-    + Clone
-    + core::fmt::Debug
-    + Send
-    + Sync
-    + Eq
-    + PartialEq
+    sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
     /// The same semantic axis after a keep-dimension reduction.
     type KeepDim: Dim;

@@ -98,7 +98,10 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     /// Computes cross-entropy loss between `pred` logits and `target`
     /// class indices, casting `target` to `U32` as candle requires; the
     /// reduction argument is ignored.
-    pub fn cross_entropy_loss<K: incin_core::tensor::dtype::DType, KInt: incin_core::tensor::dtype::DType>(
+    pub fn cross_entropy_loss<
+        K: incin_core::tensor::dtype::DType,
+        KInt: incin_core::tensor::dtype::DType,
+    >(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<KInt>,
         _reduction: incin_core::tensor::reduction::Reduction,

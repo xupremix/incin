@@ -74,22 +74,26 @@ use core::hash::Hash;
 
 use alloc::vec::Vec;
 
-use incin_core::backend_authoring::{Backend, HostInterop, StorageBackend, SupportsDType, VariableBackend};
+use incin_core::backend_authoring::{
+    Backend, HostInterop, StorageBackend, SupportsDType, VariableBackend,
+};
 use incin_core::error::{Error, Result};
 pub use incin_core::exec::precision;
 pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
-use incin_core::tensor::device::{Cpu, Device, DeviceId};
-use incin_core::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, FloatDType, PlainDType};
-use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
-use incin_core::tensor::base::Tensor;
-use incin_core::shapes::{ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
 use incin_core::shapes::dynamic::Dyn;
+use incin_core::shapes::{ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
+use incin_core::tensor::base::Tensor;
+use incin_core::tensor::device::{Cpu, Device, DeviceId};
 #[cfg(feature = "cuda")]
 use incin_core::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "metal")]
 use incin_core::tensor::device::{Metal, MetalN};
 #[cfg(feature = "wgpu")]
 use incin_core::tensor::device::{Wgpu, WgpuN};
+use incin_core::tensor::dtype::{
+    BuiltinDType, ConstDType, DType, DTypeDescriptor, FloatDType, PlainDType,
+};
+use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
 
 /// A place tensors and parameters can be allocated: a device selector plus the
 /// float dtype generated allocations should use.
@@ -1044,9 +1048,7 @@ impl EngineOn<Cuda> for Native {
 }
 
 #[cfg(feature = "cuda")]
-impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<CudaN<O>> for Native
-{
+impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static> EngineOn<CudaN<O>> for Native {
     type Backend = crate::cuda::CudaBackendImpl<CudaN<O>>;
 }
 
@@ -1056,9 +1058,7 @@ impl EngineOn<Wgpu> for Native {
 }
 
 #[cfg(feature = "wgpu")]
-impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<WgpuN<O>> for Native
-{
+impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static> EngineOn<WgpuN<O>> for Native {
     type Backend = crate::wgpu::WgpuBackendImpl<WgpuN<O>>;
 }
 
@@ -1078,9 +1078,7 @@ impl EngineOn<Cuda> for Candle {
 }
 
 #[cfg(all(feature = "external-candle", feature = "cuda"))]
-impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static>
-    EngineOn<CudaN<O>> for Candle
-{
+impl<O: typenum::Unsigned + Send + Sync + Eq + Debug + 'static> EngineOn<CudaN<O>> for Candle {
     type Backend = crate::external::candle::CandleBackend<CudaN<O>>;
 }
 

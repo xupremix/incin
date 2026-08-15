@@ -5,22 +5,22 @@
 //! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::DynShape;
+use crate::shapes::Shape;
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::shape_buf_from_dims;
+use crate::tensor::backend::Backend;
+use crate::tensor::backend::Execute;
+use crate::tensor::base::Tensor;
+use crate::tensor::grad::RequiresGrad;
 use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     Reduction, ReductionMode,
 };
-use crate::err::{Error, Result};
-use crate::shapes::DynShape;
-use crate::shapes::Shape;
-use crate::tensor::backend::Backend;
-use crate::tensor::base::Tensor;
-use crate::tensor::grad::RequiresGrad;
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::shape_buf_from_dims;
-use crate::tensor::backend::Execute;
 use alloc::vec::Vec;
 
 fn execute_loss_descriptor<

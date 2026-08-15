@@ -2,9 +2,9 @@
 
 #[cfg(feature = "compiled")]
 use crate::compiled::CapturedGraph;
+use crate::err::Error;
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
-use crate::err::Error;
 use crate::tensor::dtype::DTypeId;
 use alloc::collections::BTreeMap;
 use prost::Message;

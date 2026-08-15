@@ -1,15 +1,15 @@
 use crate::dataset::Dataset;
 use incin_core::error::{Error, ErrorMessage, Result as CoreResult};
-use rand::seq::SliceRandom;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
 use std::collections::BTreeMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::num::NonZeroUsize;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::num::NonZeroUsize;
 use std::time::Duration;
 
 /// A recoverable data-pipeline failure.
@@ -20,7 +20,10 @@ pub enum DataError {
     /// A requested index was outside the dataset's declared range.
     IndexOutOfBounds { index: usize, len: usize },
     /// A worker caught a panic while reading a sample.
-    WorkerPanicked { worker_id: usize, stage: &'static str },
+    WorkerPanicked {
+        worker_id: usize,
+        stage: &'static str,
+    },
     /// A worker caught a panic while collating a batch.
     CollatePanicked { worker_id: usize },
     /// A worker stopped unexpectedly before completing the epoch.
@@ -102,14 +105,11 @@ where
 {
     /// Sets the batch size.
     pub fn batch_size(mut self, batch_size: usize) -> CoreResult<Self> {
-        self.batch_size = NonZeroUsize::new(batch_size).ok_or_else(|| {
-            Error::InvalidModuleState {
+        self.batch_size =
+            NonZeroUsize::new(batch_size).ok_or_else(|| Error::InvalidModuleState {
                 operation: "data_loader_builder",
-                reason: ErrorMessage::new(
-                    "batch size must be non-zero",
-                ),
-            }
-        })?;
+                reason: ErrorMessage::new("batch size must be non-zero"),
+            })?;
         Ok(self)
     }
 
@@ -122,13 +122,9 @@ where
 
     /// Sets the bounded worker prefetch capacity.
     pub fn prefetch(mut self, prefetch: usize) -> CoreResult<Self> {
-        self.prefetch = NonZeroUsize::new(prefetch).ok_or_else(|| {
-            Error::InvalidModuleState {
-                operation: "data_loader_builder",
-                reason: ErrorMessage::new(
-                    "prefetch capacity must be non-zero",
-                ),
-            }
+        self.prefetch = NonZeroUsize::new(prefetch).ok_or_else(|| Error::InvalidModuleState {
+            operation: "data_loader_builder",
+            reason: ErrorMessage::new("prefetch capacity must be non-zero"),
         })?;
         Ok(self)
     }
@@ -434,9 +430,11 @@ where
                     }
                 }
                 if !batch.is_empty() {
-                    return Some(catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
-                        .map_err(|_| DataError::CollatePanicked { worker_id: 0 })
-                        .and_then(|result| result));
+                    return Some(
+                        catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
+                            .map_err(|_| DataError::CollatePanicked { worker_id: 0 })
+                            .and_then(|result| result),
+                    );
                 }
                 Some(Err(DataError::WorkerDisconnected))
             });
@@ -509,9 +507,10 @@ where
                                 }
                             }
                             if !batch.is_empty() {
-                                let collated = catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
-                                    .map_err(|_| DataError::CollatePanicked { worker_id })
-                                    .and_then(|result| result);
+                                let collated =
+                                    catch_unwind(AssertUnwindSafe(|| collate_fn.collate(batch)))
+                                        .map_err(|_| DataError::CollatePanicked { worker_id })
+                                        .and_then(|result| result);
                                 if tx.send((sequence, collated)).is_err() {
                                     break;
                                 }

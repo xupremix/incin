@@ -11,8 +11,8 @@
 
 use alloc::string::ToString;
 
-use incin_core::exec::UnsupportedReason;
 use incin_core::error::{BackendError, Error};
+use incin_core::exec::UnsupportedReason;
 use incin_core::shapes::error::OperationKind;
 
 /// Build an `InvalidInput` error for a descriptor binder.
@@ -127,12 +127,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::zeros::<f32>(
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
+                Self::zeros::<f32>(&attr.shape, attr.dtype, &attr.device).map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
                         incin_core::shapes::error::OperationKind::Zeros,
@@ -162,12 +157,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::ones::<f32>(
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
+                Self::ones::<f32>(&attr.shape, attr.dtype, &attr.device).map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
                         incin_core::shapes::error::OperationKind::Ones,
@@ -197,12 +187,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::rand::<f32>(
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
+                Self::rand::<f32>(&attr.shape, attr.dtype, &attr.device).map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
                         incin_core::shapes::error::OperationKind::UniformRandom,
@@ -232,12 +217,7 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::randn::<f32>(
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
+                Self::randn::<f32>(&attr.shape, attr.dtype, &attr.device).map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
                         incin_core::shapes::error::OperationKind::NormalRandom,
@@ -267,19 +247,15 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::full::<f32>(
-                    attr.value,
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
+                Self::full::<f32>(attr.value, &attr.shape, attr.dtype, &attr.device).map_err(
+                    |err| {
+                        crate::descriptor_bind::kernel_error(
+                            Self::BACKEND_NAME,
+                            incin_core::shapes::error::OperationKind::Full,
+                            err,
+                        )
+                    },
                 )
-                .map_err(|err| {
-                    crate::descriptor_bind::kernel_error(
-                        Self::BACKEND_NAME,
-                        incin_core::shapes::error::OperationKind::Full,
-                        err,
-                    )
-                })
             }
         }
 
@@ -303,20 +279,14 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::arange::<f32>(
-                    attr.start,
-                    attr.step,
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
-                    crate::descriptor_bind::kernel_error(
-                        Self::BACKEND_NAME,
-                        incin_core::shapes::error::OperationKind::Arange,
-                        err,
-                    )
-                })
+                Self::arange::<f32>(attr.start, attr.step, &attr.shape, attr.dtype, &attr.device)
+                    .map_err(|err| {
+                        crate::descriptor_bind::kernel_error(
+                            Self::BACKEND_NAME,
+                            incin_core::shapes::error::OperationKind::Arange,
+                            err,
+                        )
+                    })
             }
         }
 
@@ -340,20 +310,14 @@ macro_rules! impl_creation_executors {
                     ));
                 }
                 let attr = request.operation.descriptor().attributes();
-                Self::linspace::<f32>(
-                    attr.start,
-                    attr.end,
-                    &attr.shape,
-                    attr.dtype,
-                    &attr.device,
-                )
-                .map_err(|err| {
-                    crate::descriptor_bind::kernel_error(
-                        Self::BACKEND_NAME,
-                        incin_core::shapes::error::OperationKind::Linspace,
-                        err,
-                    )
-                })
+                Self::linspace::<f32>(attr.start, attr.end, &attr.shape, attr.dtype, &attr.device)
+                    .map_err(|err| {
+                        crate::descriptor_bind::kernel_error(
+                            Self::BACKEND_NAME,
+                            incin_core::shapes::error::OperationKind::Linspace,
+                            err,
+                        )
+                    })
             }
         }
     };

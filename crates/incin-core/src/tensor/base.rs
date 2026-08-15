@@ -1,5 +1,9 @@
+use crate::backend_authoring::{
+    AutogradBackend, Backend, HostInterop, StorageTransfer, SupportsDType,
+};
 use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::{Local, Placement, PlacementKind};
+use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::exec::catalog::{
     ArangeAttributes, CreationAttributes, FullAttributes, LinspaceAttributes, op,
@@ -7,15 +11,13 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::backend_authoring::{AutogradBackend, Backend, HostInterop, StorageTransfer, SupportsDType};
-use crate::err::{Error, Result};
 use crate::shapes::{Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::ArgInto;
 use crate::tensor::device::{Device, DeviceId};
+use crate::tensor::dtype::PlainDType;
 use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
-use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
 use core::marker::PhantomData;
 
@@ -1267,8 +1269,10 @@ mod tests {
 
     #[test]
     fn test_tensor_creation() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>> =
-            Tensor::zeros(vec![2, 3]).unwrap();
+        let t: Tensor<
+            Dyn,
+            crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>,
+        > = Tensor::zeros(vec![2, 3]).unwrap();
         assert_eq!(t.rank(), 2);
         assert_eq!(t.numel(), 6);
         assert_eq!(t.dims(), vec![2, 3]);
@@ -1276,8 +1280,10 @@ mod tests {
 
     #[test]
     fn test_tensor_ones() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>> =
-            Tensor::ones(vec![4]).unwrap();
+        let t: Tensor<
+            Dyn,
+            crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>,
+        > = Tensor::ones(vec![4]).unwrap();
         assert_eq!(t.rank(), 1);
         assert_eq!(t.numel(), 4);
     }
@@ -1289,7 +1295,7 @@ mod tests {
     /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
-        use crate::tensor::backend::{Backend};
+        use crate::tensor::backend::Backend;
         type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`
@@ -1301,8 +1307,7 @@ mod tests {
         let out = B::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
         assert_eq!(out.len(), 4);
 
-        let pool_out =
-            B::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
+        let pool_out = B::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
         assert_eq!(pool_out.len(), 4);
     }
 }

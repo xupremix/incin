@@ -1,6 +1,6 @@
-use incin::prelude::*;
 use incin::VariableBackend;
 use incin::optim::ParameterGroup;
+use incin::prelude::*;
 use incin_macros::mesh;
 
 #[allow(dead_code)]

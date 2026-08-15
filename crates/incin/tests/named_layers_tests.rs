@@ -1,7 +1,7 @@
 #![cfg(feature = "cpu")]
 
-use incin::prelude::*;
 use incin::nn::NamedLayers;
+use incin::prelude::*;
 /// B.
 type B = incin::DefaultBackend;
 
@@ -12,7 +12,14 @@ struct SubModule {
     act: ReLU,
 }
 
-#[module(no_stats, no_parameters, no_state, no_shape_info, no_train_mode, no_to_device)]
+#[module(
+    no_stats,
+    no_parameters,
+    no_state,
+    no_shape_info,
+    no_train_mode,
+    no_to_device
+)]
 /// Test mlp.
 struct TestMLP {
     sub: SubModule,

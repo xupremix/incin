@@ -1,19 +1,19 @@
+use crate::backend_authoring::{Backend, SupportsDType};
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Descriptor, NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::err::{Error, Result};
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{AppendDim, Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::shape_buf_from_dims;
-use crate::tensor::backend::Execute;
 
 /// A shape marker trait specifying an [`Embedding`] layer's vocabulary size
 /// and embedding dimension, analogous to [`crate::nn::linear::LinearShape`].
@@ -79,12 +79,19 @@ use core::marker::PhantomData;
 #[incin_macros::module(internal)]
 /// An embedding table: maps integer token ids to dense vectors via row
 /// lookup in a learnable `[vocab_size, embed_dim]` weight matrix.
-pub struct Embedding<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct Embedding<
+    S: EmbeddingShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
     /// The learnable weight matrix parameter.
     pub weight: Param<S::WeightShape, B, K, Train>,
 }
 
-impl<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Embedding<S, B, K, Train> {
+impl<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    Embedding<S, B, K, Train>
+{
     /// Constructs an Embedding from a raw weight parameter.
     pub fn from_raw_parts(weight: Param<S::WeightShape, B, K, Train>) -> Self {
         Self { weight }
@@ -141,7 +148,9 @@ impl<S: EmbeddingShape, Train: TrainState> EmbeddingBuilder<S, Train> {
 
 impl<
     S: EmbeddingShape,
-    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::tensor::backend::SupportsDType<K>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > Embedding<S, B, K, Trainable>
 where
@@ -181,7 +190,9 @@ impl<
     Train: TrainState,
 > Module<Tensor<InS, B, InK>> for Embedding<S, B, K, Train>
 where
-    B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::EmbeddingExact>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::exec::Capabilities
+        + Execute<op::EmbeddingExact>,
     <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.

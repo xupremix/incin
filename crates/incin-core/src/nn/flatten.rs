@@ -1,15 +1,15 @@
-use crate::nn::Module;
 use crate::err::Result;
-use crate::shapes::{DynShape, Shape};
+use crate::nn::Module;
 use crate::shapes::Dyn;
-use crate::tensor::base::Tensor;
-use crate::tensor::backend::{Backend, StorageBackend};
-use crate::tensor::dtype::DType;
-use crate::tensor::grad::RequiresGrad;
 use crate::shapes::FlattenAt;
-use alloc::string::String;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::idx::{Here, Next};
+use crate::shapes::{DynShape, Shape};
+use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::base::Tensor;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::RequiresGrad;
+use alloc::string::String;
 use core::marker::PhantomData;
 
 /// Structural flatten module. Axis positions are selector types rather than
@@ -24,7 +24,9 @@ impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::VisitPar
         &self,
         _: &crate::nn::StatePath,
         _: &mut V,
-    ) -> Result<()> { Ok(()) }
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<Start, End> Flatten<Start, End> {

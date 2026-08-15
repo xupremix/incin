@@ -30,8 +30,8 @@ use crate::dist::rule::{
 use crate::exec::ReduceOp;
 use crate::shapes::Dyn;
 use crate::shapes::error::OperationKind;
-use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::ShapeError;
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 
 /// Monotonic position of a collective in one plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

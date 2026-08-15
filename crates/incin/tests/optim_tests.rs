@@ -2,11 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use incin::prelude::*;
-use incin::optim::ParameterGroup;
-use incin::{Adam, AdamW, SGD};
-use incin::backend_authoring::{HostInterop, VariableBackend};
 use incin::backend_authoring::AutogradBackend;
+use incin::backend_authoring::{HostInterop, VariableBackend};
+use incin::optim::ParameterGroup;
+use incin::prelude::*;
+use incin::{Adam, AdamW, SGD};
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;

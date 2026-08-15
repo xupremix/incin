@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::ops::Deref;
 
 use half::{bf16, f16};
-use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::error::{Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 

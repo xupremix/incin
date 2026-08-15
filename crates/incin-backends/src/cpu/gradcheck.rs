@@ -176,8 +176,8 @@ mod tests {
     fn gradcheck_matches_analytic_gradient_of_sum_of_squares() {
         let x = vector(vec![2.0, 3.0, -1.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])
-                .unwrap();
+            let squared =
+                crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0]).unwrap();
             crate::cpu::ops::reduce::sum_all(&squared).unwrap()
         };
 

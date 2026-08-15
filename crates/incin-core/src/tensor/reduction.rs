@@ -71,8 +71,10 @@ impl<S: crate::shapes::Shape> CrossEntropyReductionShape<S> for Mean {
 impl<S: crate::shapes::Shape> CrossEntropyReductionShape<S> for Sum {
     type Output = crate::shapes::Nil;
 }
-impl<S: crate::shapes::Shape + crate::shapes::shape_ops::ReduceAt<crate::shapes::idx::Next<crate::shapes::idx::Here>>>
-    CrossEntropyReductionShape<S> for NoneReduction
+impl<
+    S: crate::shapes::Shape
+        + crate::shapes::shape_ops::ReduceAt<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+> CrossEntropyReductionShape<S> for NoneReduction
 {
     type Output = <S as crate::shapes::shape_ops::ReduceAt<
         crate::shapes::idx::Next<crate::shapes::idx::Here>,

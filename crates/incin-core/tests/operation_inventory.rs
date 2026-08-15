@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 
 use incin_core::exec::OPERATION_CATALOG;
 
-
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -21,7 +20,6 @@ fn repo_root() -> PathBuf {
         .canonicalize()
         .expect("workspace root")
 }
-
 
 #[test]
 fn legacy_operation_families_are_absent_from_production_source() {
@@ -33,15 +31,26 @@ fn legacy_operation_families_are_absent_from_production_source() {
         } else if path.extension().is_some_and(|ext| ext == "rs") {
             let source = std::fs::read_to_string(path).expect("read Rust source");
             for name in forbidden {
-                assert!(!source.contains(name), "forbidden legacy name `{name}` in {}", path.display());
+                assert!(
+                    !source.contains(name),
+                    "forbidden legacy name `{name}` in {}",
+                    path.display()
+                );
             }
         }
     }
 
     let root = repo_root();
     let forbidden = [
-        "NumericOps", "FloatOps", "TensorOps", "ReductionOps", "ModuleOps",
-        "QuantizedOps", "CreationOps", "LossOps", "__backend_compat",
+        "NumericOps",
+        "FloatOps",
+        "TensorOps",
+        "ReductionOps",
+        "ModuleOps",
+        "QuantizedOps",
+        "CreationOps",
+        "LossOps",
+        "__backend_compat",
     ];
     for source_root in [
         root.join("crates/incin-core/src"),

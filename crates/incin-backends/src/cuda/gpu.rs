@@ -32,9 +32,10 @@ pub(crate) mod cuda {
             let ptx = compile_ptx_with_cuda_includes(src).map_err(|e| {
                 incin_core::error::Error::Msg(format!("PTX compile failed: {:?}", e))
             })?;
-            let module = self.ctx.load_module(ptx).map_err(|e| {
-                incin_core::error::Error::Msg(format!("Load PTX failed: {:?}", e))
-            })?;
+            let module = self
+                .ctx
+                .load_module(ptx)
+                .map_err(|e| incin_core::error::Error::Msg(format!("Load PTX failed: {:?}", e)))?;
             cuda_cache::cache_module(self.device_id, module_name.to_string(), module);
             Ok(())
         }

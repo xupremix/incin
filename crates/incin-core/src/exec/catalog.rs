@@ -17,11 +17,11 @@ use core::fmt;
 use core::marker::PhantomData;
 
 use crate::exec::OperationIdentity;
-use crate::shapes::{Shape, ShapeBuf, ShapeError};
+use crate::shapes::Dyn;
 use crate::shapes::error::OperationKind;
+use crate::shapes::{Shape, ShapeBuf, ShapeError};
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
-use crate::shapes::Dyn;
 
 /// Broad classification only. A family is never a capability identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1926,8 +1926,7 @@ impl AttributeContract for ShapeAttributes {
         validate_shape(operation, &self.shape)?;
         if let Some(input) = first_shape(inputs) {
             if operation == OperationKind::ReshapeExact {
-                let source =
-                    crate::shapes::ShapeBuf::from_slice(input).checked_numel(operation)?;
+                let source = crate::shapes::ShapeBuf::from_slice(input).checked_numel(operation)?;
                 let target =
                     crate::shapes::ShapeBuf::from_slice(&self.shape).checked_numel(operation)?;
                 if source != target {
@@ -4589,10 +4588,8 @@ mod tests {
             device: None,
         };
         let expected =
-            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[
-                2, 3,
-            ]))
-            .unwrap();
+            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2, 3]))
+                .unwrap();
         let invocation = ValidatedInvocation::<TestCustomOperation>::infer_custom_typed(
             NoAttributes,
             vec![input],
@@ -4663,10 +4660,8 @@ mod tests {
     #[test]
     fn custom_typed_proof_requires_one_concrete_output() {
         let expected =
-            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[
-                2, 3,
-            ]))
-            .unwrap();
+            crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2, 3]))
+                .unwrap();
 
         assert!(matches!(
             ValidatedInvocation::<NoShapeCustomOperation>::infer_custom_typed(

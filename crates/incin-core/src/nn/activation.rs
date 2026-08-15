@@ -1,12 +1,15 @@
-use crate::nn::module::{Module, ShapeInfo, TrainMode};
 use crate::err::{Error, Result};
+use crate::nn::module::{Module, ShapeInfo, TrainMode};
 use crate::shapes::{DynShape, Shape};
-use crate::tensor::base::Tensor;
 use crate::tensor::backend::{Backend, StorageBackend};
+use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// The Rectified Linear Unit (ReLU) activation function: `f(x) = max(0, x)`.
 ///
@@ -34,8 +37,11 @@ impl TrainMode for ReLU {}
 use crate::exec::catalog::{Descriptor, op};
 use crate::tensor::backend::Execute;
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Relu>, G: RequiresGrad>
-    Module<Tensor<S, B, f32, G>> for ReLU
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend + Execute<op::Relu>,
+    G: RequiresGrad,
+> Module<Tensor<S, B, f32, G>> for ReLU
 where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
@@ -68,7 +74,8 @@ impl_stateless_shape_info!(GELU);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for GELU {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>> Module<Tensor<S, B>> for GELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>>
+    Module<Tensor<S, B>> for GELU
 where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
@@ -98,7 +105,8 @@ impl_stateless_shape_info!(Swish);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Swish {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Swish>> Module<Tensor<S, B>> for Swish
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Swish>>
+    Module<Tensor<S, B>> for Swish
 where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
@@ -128,7 +136,8 @@ impl_stateless_shape_info!(Mish);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Mish {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Mish>> Module<Tensor<S, B>> for Mish
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Mish>>
+    Module<Tensor<S, B>> for Mish
 where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
@@ -160,7 +169,8 @@ impl_stateless_shape_info!(ELU);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ELU {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Elu>> Module<Tensor<S, B>> for ELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Elu>>
+    Module<Tensor<S, B>> for ELU
 where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
@@ -208,7 +218,8 @@ impl TrainMode for Softmax {}
 
 impl<
     S: Shape + DynShape,
-    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
 > Module<Tensor<S, B>> for Softmax
 where
     <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
@@ -239,7 +250,8 @@ impl_stateless_shape_info!(Sigmoid);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Sigmoid {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Sigmoid>> Module<Tensor<S, B>> for Sigmoid
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Sigmoid>>
+    Module<Tensor<S, B>> for Sigmoid
 where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
@@ -268,7 +280,8 @@ impl_stateless_shape_info!(Tanh);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Tanh {}
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>> Module<Tensor<S, B>> for Tanh
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>>
+    Module<Tensor<S, B>> for Tanh
 where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
@@ -283,7 +296,6 @@ where
         x.tanh()
     }
 }
-
 
 macro_rules! impl_stateless_state_visitors {
     ($($t:ty),+ $(,)?) => {$ (

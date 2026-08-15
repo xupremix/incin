@@ -6,8 +6,8 @@
 //! is not a CPU-only construction.
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
-use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::error::BackendError;
+use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::{Device, DeviceKind};
 
@@ -315,33 +315,15 @@ macro_rules! impl_wgpu_reduction_dim {
 }
 
 impl_wgpu_reduction_all![
-    (
-        SumAll,
-        WgpuBackendImpl::<D>::sum_all::<f32>
-    ),
-    (
-        MeanAll,
-        WgpuBackendImpl::<D>::mean_all::<f32>
-    ),
-    (
-        MaxAll,
-        WgpuBackendImpl::<D>::max_all::<f32>
-    ),
-    (
-        MinAll,
-        WgpuBackendImpl::<D>::min_all::<f32>
-    ),
-    (
-        ProdAll,
-        WgpuBackendImpl::<D>::prod_all::<f32>
-    ),
+    (SumAll, WgpuBackendImpl::<D>::sum_all::<f32>),
+    (MeanAll, WgpuBackendImpl::<D>::mean_all::<f32>),
+    (MaxAll, WgpuBackendImpl::<D>::max_all::<f32>),
+    (MinAll, WgpuBackendImpl::<D>::min_all::<f32>),
+    (ProdAll, WgpuBackendImpl::<D>::prod_all::<f32>),
 ];
 
 impl_wgpu_reduction_dim![
-    (
-        SumDim,
-        WgpuBackendImpl::<D>::sum_dim::<f32>
-    ),
+    (SumDim, WgpuBackendImpl::<D>::sum_dim::<f32>),
     (SumKeepDim, |input, axis| {
         WgpuBackendImpl::<D>::sum_keepdim::<f32>(input, axis)
     }),
@@ -351,17 +333,11 @@ impl_wgpu_reduction_dim![
     (MeanKeepDim, |input, axis| {
         WgpuBackendImpl::<D>::mean_keepdim::<f32>(input, axis)
     }),
-    (
-        MaxDim,
-        WgpuBackendImpl::<D>::max_dim::<f32>
-    ),
+    (MaxDim, WgpuBackendImpl::<D>::max_dim::<f32>),
     (MaxKeepDim, |input, axis| {
         WgpuBackendImpl::<D>::max_keepdim::<f32>(input, axis)
     }),
-    (
-        MinDim,
-        WgpuBackendImpl::<D>::min_dim::<f32>
-    ),
+    (MinDim, WgpuBackendImpl::<D>::min_dim::<f32>),
     (MinKeepDim, |input, axis| {
         WgpuBackendImpl::<D>::min_keepdim::<f32>(input, axis)
     }),

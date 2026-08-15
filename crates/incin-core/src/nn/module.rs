@@ -127,8 +127,12 @@ pub trait ShapeInfo {
     fn shape_info(&self) -> Option<String>;
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState>
-    ShapeInfo for crate::nn::param::Param<S, B, K, Train>
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: crate::nn::param::TrainState,
+> ShapeInfo for crate::nn::param::Param<S, B, K, Train>
 {
     fn shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
@@ -213,8 +217,8 @@ where
     }
 }
 
-impl<B: crate::tensor::backend::VariableBackend, NewD: Device, L1, L2> crate::tensor::transfer::ToDevice<B, NewD>
-    for Sequential<L1, L2>
+impl<B: crate::tensor::backend::VariableBackend, NewD: Device, L1, L2>
+    crate::tensor::transfer::ToDevice<B, NewD> for Sequential<L1, L2>
 where
     L1: ToDevice<B, NewD>,
     L2: ToDevice<B, NewD>,
@@ -591,8 +595,12 @@ impl<T: TrainMode> TrainMode for Option<T> {
     }
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState>
-    NamedLayers for crate::nn::param::Param<S, B, K, Train>
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: crate::nn::param::TrainState,
+> NamedLayers for crate::nn::param::Param<S, B, K, Train>
 {
     fn layer_structure(&self, _prefix: &str) -> Vec<LayerNode> {
         Vec::new()
@@ -607,8 +615,12 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
     }
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState> TrainMode
-    for crate::nn::param::Param<S, B, K, Train>
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: crate::nn::param::TrainState,
+> TrainMode for crate::nn::param::Param<S, B, K, Train>
 {
 }
 

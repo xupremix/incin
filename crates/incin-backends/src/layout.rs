@@ -21,9 +21,9 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use incin_core::error::{Error, Result};
-use incin_core::shapes::error::OperationKind;
-use incin_core::shapes::buf::ShapeBuf;
 use incin_core::shapes::broadcast::broadcast_dim_slices;
+use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::error::OperationKind;
 
 /// Compute row-major (C-contiguous) strides for `shape`.
 ///

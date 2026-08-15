@@ -1,9 +1,9 @@
 use crate::err::BackendError;
-use crate::exec::capability::Capabilities;
 use crate::err::{FloatToIntPolicy, Result, convert_f64_to_i64};
+use crate::exec::TensorMeta;
+use crate::exec::capability::Capabilities;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::DTypeId;
-use crate::exec::TensorMeta;
 use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
 
 mod execute;
@@ -135,18 +135,10 @@ where
 /// supertraits: inference-only backends can implement storage and execution
 /// without also providing training or serialization.
 pub trait Backend:
-    StorageBackend
-        + Capabilities
-        + Default
-        + Sized
-        + Clone
-        + Send
-        + Sync
-        + 'static
+    StorageBackend + Capabilities + Default + Sized + Clone + Send + Sync + 'static
 {
     /// The backend actually doing the compute once any runtime-dispatch
     /// wrapper (see `Dyn`'s `DispatchBackend`) has been resolved. Equal to
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
-
 }

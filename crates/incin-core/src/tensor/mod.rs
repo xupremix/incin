@@ -1,9 +1,9 @@
+/// Checked byte lengths for tensor storage allocation.
+pub mod allocation;
 /// Connects `Tensor`'s type parameters to the runtime arguments needed to construct one.
 pub mod arg;
 /// Converts user-facing constructor arguments into each `TensorArgs` field.
 pub mod arg_into;
-/// Checked byte lengths for tensor storage allocation.
-pub mod allocation;
 /// Compile-time device selection from enabled features.
 pub mod auto_device;
 /// The `Backend` trait family and the test-only `DummyBackend` stand-in.
@@ -28,24 +28,23 @@ pub mod matmul;
 pub mod ops;
 /// Runtime reduction semantics shared by tensor and neural-network operations.
 pub mod reduction;
-/// Ownership-preserving transfer contracts for tensors and module state.
-pub mod transfer;
 /// The ONNX-tracing backend wrapper used to record ops into a `Graph`.
 pub mod tracing;
+/// Ownership-preserving transfer contracts for tensors and module state.
+pub mod transfer;
 
 /// Re-exports the public tensor-layer API: `Tensor`, `Backend`, `Device`, `DType`, and their supporting traits.
 pub mod prelude {
+    pub use super::allocation::{CheckedByteLen, checked_byte_len_from_dims};
     pub use super::arg::TensorArgs;
     pub use super::arg_into::{ArgInto, TensorArgsData};
-    pub use super::allocation::{CheckedByteLen, checked_byte_len_from_dims};
     pub use super::auto_device::{BestDevice, BestDeviceAt};
     pub use super::backend::{
-        AutogradBackend, Backend, HostInterop, StorageBackend, SupportsDType, TransferBackend,
-        StorageTransfer, TransferTo, VariableBackend,
+        AutogradBackend, Backend, HostInterop, StorageBackend, StorageTransfer, SupportsDType,
+        TransferBackend, TransferTo, VariableBackend,
     };
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;
-    pub use crate::shapes::Dyn;
     pub use super::base::Tensor;
     pub use super::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
@@ -56,18 +55,19 @@ pub mod prelude {
     pub use super::device::{Metal, MetalN};
     #[cfg(feature = "wgpu")]
     pub use super::device::{Wgpu, WgpuN};
+    pub use crate::shapes::Dyn;
 
     pub use super::dtype::{
         BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
         FloatDType, IntDType, PlainDType, Q8_0, QuantDType, StorageEncoding, TensorElement,
     };
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
-    pub use crate::autograd::Gradients;
     pub use super::matmul::MatMulShape;
     pub use super::reduction::Reduction;
-    pub use super::transfer::ToDevice;
     pub use super::tracing::{
         TracingBackend, extract_graph, tracing_mark_input, tracing_mark_input_typed,
         tracing_mark_output,
     };
+    pub use super::transfer::ToDevice;
+    pub use crate::autograd::Gradients;
 }

@@ -4,9 +4,9 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::err::{Error, Result};
 use crate::exec::{ExecutionSite, OperationIdentity};
 use crate::graph::{Graph, NodeId, Value, ValueId};
-use crate::err::{Error, Result};
 
 /// A single validated node in a captured graph.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

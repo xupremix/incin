@@ -1,11 +1,11 @@
 use crate::backend_authoring::{Execute, op};
-use crate::nn::{VisitState, VisitStateMut};
 use crate::err::ErrorMessage;
-use crate::io::ResourceLimits;
 use crate::err::{Error, Result};
+use crate::io::ResourceLimits;
+use crate::nn::{VisitState, VisitStateMut};
 use crate::shapes::ShapeBuf;
-use crate::tensor::base::Tensor;
 use crate::tensor::backend::Backend;
+use crate::tensor::base::Tensor;
 use crate::tensor::dtype::{DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding};
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::{String, ToString};

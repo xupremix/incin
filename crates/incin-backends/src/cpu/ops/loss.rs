@@ -25,14 +25,14 @@
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::error::{BackendError, ConversionFailure, Error, Result};
-use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeBuf, ShapeError};
-use incin_core::shapes::error::OperationKind;
+use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::StorageBackend;
+use incin_core::error::{BackendError, ConversionFailure, Error, Result};
+use incin_core::shapes::error::OperationKind;
+use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeBuf, ShapeError};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::{DType, DTypeId};
 use incin_core::tensor::reduction::Reduction;
-use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 fn reduce_loss(t: CpuStorage, reduction: Reduction) -> Result<CpuStorage> {
     match reduction {
@@ -105,8 +105,8 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
         .into());
     }
     let log_probs = crate::cpu::ops::elementwise::log_softmax::<D, f32>(pred, 1)?;
-    let one_hot_total = ShapeBuf::from_slice(&[batch, classes])
-        .checked_numel(OperationKind::Storage)?;
+    let one_hot_total =
+        ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
     let mut one_hot_buf = vec![0.0f32; one_hot_total];
     for batch_index in 0..batch {
         let class_index = target.get_i64_checked(&[batch_index], "cross_entropy_target")?;
@@ -126,10 +126,7 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
         }
         one_hot_buf[batch_index * classes + class_index] = 1.0;
     }
-    let one_hot = CpuStorage::from_contiguous(
-        CpuBuffer::F32(one_hot_buf),
-        vec![batch, classes],
-    );
+    let one_hot = CpuStorage::from_contiguous(CpuBuffer::F32(one_hot_buf), vec![batch, classes]);
     let picked = crate::cpu::ops::elementwise::mul_storage(&log_probs, &one_hot)?;
     let summed = crate::cpu::ops::reduce::sum_dim(&picked, 1)?;
     let per_nll = crate::cpu::ops::elementwise::canonical_neg(&summed)?;
@@ -206,7 +203,11 @@ mod tests {
         let pred = matrix(vec![1.0, 2.0, 3.0], 1, 3);
         let fractional = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.5]), vec![1]);
         assert!(matches!(
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&pred, &fractional, Reduction::Mean),
+            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+                &pred,
+                &fractional,
+                Reduction::Mean
+            ),
             Err(Error::InvalidConversion {
                 operation: "cross_entropy_target",
                 ..
@@ -215,7 +216,11 @@ mod tests {
 
         let out_of_range = vector_i64(vec![3]);
         assert!(matches!(
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&pred, &out_of_range, Reduction::Mean),
+            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+                &pred,
+                &out_of_range,
+                Reduction::Mean
+            ),
             Err(Error::Shape(ShapeError::InvalidParameter { .. }))
         ));
     }
@@ -504,9 +509,12 @@ mod tests {
         let pred_row1 = [4.0f32, 5.0, 6.0];
         let expected = expected_ce_mean(&[&pred_row0, &pred_row1], &[0, 2]);
 
-        let out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
-                .unwrap();
+        let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &cross_pred(),
+            &cross_target_0_2(),
+            Reduction::Mean,
+        )
+        .unwrap();
         assert_eq!(
             out.shape,
             Vec::<usize>::new(),
@@ -522,12 +530,18 @@ mod tests {
     #[test]
     /// `cross_entropy_loss_sum_equals_batch_times_mean`.
     fn cross_entropy_loss_sum_equals_batch_times_mean() {
-        let mean_out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
-                .unwrap();
-        let sum_out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Sum)
-                .unwrap();
+        let mean_out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &cross_pred(),
+            &cross_target_0_2(),
+            Reduction::Mean,
+        )
+        .unwrap();
+        let sum_out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &cross_pred(),
+            &cross_target_0_2(),
+            Reduction::Sum,
+        )
+        .unwrap();
 
         let mean_val = mean_out.get(&[]) as f32;
         let sum_val = sum_out.get(&[]) as f32;
@@ -541,9 +555,12 @@ mod tests {
     #[test]
     /// `cross_entropy_loss_none_produces_per_sample_nll_vector`.
     fn cross_entropy_loss_none_produces_per_sample_nll_vector() {
-        let out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::None)
-                .unwrap();
+        let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &cross_pred(),
+            &cross_target_0_2(),
+            Reduction::None,
+        )
+        .unwrap();
         assert_eq!(out.shape, vec![2], "None output should be [Batch]");
         let vals = f32_vec(&out);
 
@@ -569,7 +586,12 @@ mod tests {
     fn cross_entropy_loss_gradcheck() {
         let tgt = cross_target_0_2();
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&inputs[0], &tgt, Reduction::Mean).unwrap()
+            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+                &inputs[0],
+                &tgt,
+                Reduction::Mean,
+            )
+            .unwrap()
         };
         let max_rel_err = gradcheck(op, &[cross_pred()], 1e-4);
         assert!(
@@ -583,8 +605,12 @@ mod tests {
     fn cross_entropy_loss_finite_on_extreme_logits() {
         let pred_extreme = matrix(vec![1000.0f32, -1000.0, 0.0, -1000.0, 1000.0, 0.0], 2, 3);
         let target = vector_i64(vec![0, 1]);
-        let out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&pred_extreme, &target, Reduction::Mean).unwrap();
+        let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &pred_extreme,
+            &target,
+            Reduction::Mean,
+        )
+        .unwrap();
         let loss_val = out.get(&[]) as f32;
         assert!(
             loss_val.is_finite(),
@@ -608,8 +634,12 @@ mod tests {
     fn cross_entropy_loss_uniform_logits_equal_log_num_classes() {
         let pred_uniform = matrix(vec![5.0f32, 5.0, 5.0, 5.0, 5.0, 5.0], 2, 3);
         let target = vector_i64(vec![0, 1]);
-        let out =
-            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&pred_uniform, &target, Reduction::Mean).unwrap();
+        let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+            &pred_uniform,
+            &target,
+            Reduction::Mean,
+        )
+        .unwrap();
         let loss_val = out.get(&[]) as f32;
         let expected = 3.0f32.ln();
         assert!(

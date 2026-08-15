@@ -19,9 +19,7 @@ use crate::{
 
 /// Durable, hierarchical state name.  This is a serialization path, not a
 /// parameter/runtime-variable identity or alias identifier.
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct StatePath(String);
 
 impl<'de> serde::Deserialize<'de> for StatePath {
@@ -77,9 +75,7 @@ impl StatePath {
         if name.is_empty() || name.contains('.') {
             return Err(Error::InvalidModuleState {
                 operation: "state path child",
-                reason: ErrorMessage::new(
-                    "component must be non-empty and must not contain `.`",
-                ),
+                reason: ErrorMessage::new("component must be non-empty and must not contain `.`"),
             });
         }
         if self.0.is_empty() {
@@ -153,11 +149,7 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
         1
     }
 
-    fn visit_state<V: StateVisitor<B>>(
-        &self,
-        path: &StatePath,
-        visitor: &mut V,
-    ) -> Result<()>;
+    fn visit_state<V: StateVisitor<B>>(&self, path: &StatePath, visitor: &mut V) -> Result<()>;
 
     /// Visits this subtree at a flat positional index under `parent`.
     fn visit_state_flat<V: StateVisitor<B>>(
@@ -263,7 +255,8 @@ impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateSnapsh
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        self.snapshot.insert(path.clone(), param.snapshot_state_value(path)?)
+        self.snapshot
+            .insert(path.clone(), param.snapshot_state_value(path)?)
     }
 
     fn visit_buffer<S, K>(
@@ -278,7 +271,8 @@ impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateSnapsh
             + crate::exec::Capabilities
             + crate::tensor::backend::HostInterop,
     {
-        self.snapshot.insert(path.clone(), buffer.snapshot_state_value(path)?)
+        self.snapshot
+            .insert(path.clone(), buffer.snapshot_state_value(path)?)
     }
 }
 
@@ -411,10 +405,8 @@ where
     M: VisitState<B> + VisitStateMut<B>,
 {
     let current = collect_state::<B, _>(&*module)?;
-    let expected: alloc::collections::BTreeSet<_> =
-        current.iter().map(|(path, _)| path).collect();
-    let provided: alloc::collections::BTreeSet<_> =
-        snapshot.iter().map(|(path, _)| path).collect();
+    let expected: alloc::collections::BTreeSet<_> = current.iter().map(|(path, _)| path).collect();
+    let provided: alloc::collections::BTreeSet<_> = snapshot.iter().map(|(path, _)| path).collect();
     if expected != provided {
         let missing = expected
             .difference(&provided)
@@ -652,7 +644,10 @@ mod tests {
         for valid in ["weight", "bias", "running_mean", "layer_0"] {
             let path = root.try_child(valid).expect("valid component");
             assert_eq!(path.as_str(), valid);
-            assert_eq!(postcard::from_bytes::<StatePath>(&postcard::to_allocvec(&path).unwrap()).unwrap(), path);
+            assert_eq!(
+                postcard::from_bytes::<StatePath>(&postcard::to_allocvec(&path).unwrap()).unwrap(),
+                path
+            );
         }
     }
 

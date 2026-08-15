@@ -19,12 +19,12 @@ pub mod broadcast;
 
 /// `buf`.
 pub mod buf;
-/// Runtime-selected marker types shared by shape-bearing APIs.
-pub mod dynamic;
 /// `concat`.
 pub mod concat;
 /// The dimension along which this operation is applied.
 pub mod dim;
+/// Runtime-selected marker types shared by shape-bearing APIs.
+pub mod dynamic;
 /// `error`.
 pub mod error;
 /// `idx`.

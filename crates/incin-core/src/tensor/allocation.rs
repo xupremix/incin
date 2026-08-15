@@ -1,8 +1,8 @@
 //! Checked byte lengths for tensor storage allocation.
 
 use crate::resource::ResourceLimits;
-use crate::shapes::error::{OperationKind, ShapeError};
 use crate::shapes::CheckedNumel;
+use crate::shapes::error::{OperationKind, ShapeError};
 use crate::tensor::dtype::DTypeDescriptor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -46,7 +46,9 @@ pub fn checked_byte_len_from_dims(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::dtype::{ConstDType, DTypeDescriptor, DTypeKey, DTypeKind, Q8_0, StorageEncoding};
+    use crate::tensor::dtype::{
+        ConstDType, DTypeDescriptor, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
+    };
 
     #[test]
     fn checked_allocation_lengths_cover_dense_and_block_storage() {
@@ -55,12 +57,49 @@ mod tests {
         limits.max_dimension = u64::MAX;
         limits.max_tensor_bytes = u64::MAX;
 
-        assert_eq!(CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], <f32 as ConstDType>::DESCRIPTOR, &limits).unwrap().get(), 24);
-        assert_eq!(CheckedByteLen::from_dims(OperationKind::Storage, &[64], <Q8_0 as ConstDType>::DESCRIPTOR, &limits).unwrap().get(), 68);
-        let custom = DTypeDescriptor::new(DTypeKey::new("custom", "test_block", 1), DTypeKind::Quantized, StorageEncoding::block(16, 20, 2));
-        assert_eq!(CheckedByteLen::from_dims(OperationKind::Storage, &[32], custom, &limits).unwrap().get(), 40);
+        assert_eq!(
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[2, 3],
+                <f32 as ConstDType>::DESCRIPTOR,
+                &limits
+            )
+            .unwrap()
+            .get(),
+            24
+        );
+        assert_eq!(
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[64],
+                <Q8_0 as ConstDType>::DESCRIPTOR,
+                &limits
+            )
+            .unwrap()
+            .get(),
+            68
+        );
+        let custom = DTypeDescriptor::new(
+            DTypeKey::new("custom", "test_block", 1),
+            DTypeKind::Quantized,
+            StorageEncoding::block(16, 20, 2),
+        );
+        assert_eq!(
+            CheckedByteLen::from_dims(OperationKind::Storage, &[32], custom, &limits)
+                .unwrap()
+                .get(),
+            40
+        );
 
         limits.max_tensor_bytes = 23;
-        assert!(matches!(CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], <f32 as ConstDType>::DESCRIPTOR, &limits), Err(ShapeError::ArithmeticOverflow { .. })));
+        assert!(matches!(
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[2, 3],
+                <f32 as ConstDType>::DESCRIPTOR,
+                &limits
+            ),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
     }
 }

@@ -1,18 +1,18 @@
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::dist::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Conv1dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, ParameterRole};
 use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
 use crate::nn::{Module, Param};
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::dist::Local;
-use crate::err::{Error, Result};
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 use typenum::Unsigned;
 
@@ -335,7 +335,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -425,7 +427,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -512,7 +516,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels1D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv1dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv1dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv1dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {

@@ -57,9 +57,9 @@ pub mod proof;
 pub mod request;
 /// Typed frontend shape rules that mint validated exact descriptors.
 pub mod rule;
+pub mod shape_projection;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
-pub mod shape_projection;
 pub mod symbolic;
 /// The backend-neutral autograd tape.
 pub mod tape;
@@ -79,6 +79,7 @@ pub use symbolic::{
 // The classification fields of a catalog entry, re-exported beside the entry
 // itself. Reading one of these fields off a public struct should not require
 // knowing which submodule its type was declared in.
+pub use crate::shapes::ProofLevel;
 pub use catalog::{
     BroadcastingRule, DTypeRule, EmptyRule, ExecutionSite, GradientRule, LayoutRule, NumericRule,
     OperationCoverage, OutputRule, SemanticProfile, operation_coverage,
@@ -100,7 +101,6 @@ pub use precision::{
     LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,
 };
-pub use crate::shapes::ProofLevel;
 pub use proof::{ShapeEvidence, Validated};
 pub use rule::{MatMulRule, ReduceKeepRule, ReduceRule, ReshapeRule, ShapeRule};
 

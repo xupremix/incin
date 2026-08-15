@@ -11,11 +11,11 @@
 //! executor this module routes to performs the capability query against its own
 //! registry, which is the only device that can answer.
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
-use incin_core::exec::{ExecutionContext, TensorHandle};
-use incin_core::error::BackendError;
-use incin_core::shapes::error::OperationKind;
 use incin_core::backend_authoring::StorageBackend;
+use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
+use incin_core::error::BackendError;
+use incin_core::exec::{ExecutionContext, TensorHandle};
+use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::Device;
 
 use crate::descriptor_bind::invalid;
@@ -577,9 +577,9 @@ impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(t), DispatchStorage::Cpu(f)) => {
                 use crate::cpu::CpuBackendImpl;
-                        use incin_core::dist::Local;
-                        use incin_core::shapes::Dyn;
-                        use incin_core::tensor::device::Cpu;
+                use incin_core::dist::Local;
+                use incin_core::shapes::Dyn;
+                use incin_core::tensor::device::Cpu;
                 type Concrete = CpuBackendImpl<Cpu>;
                 let context =
                     ExecutionContext::with_policy(Concrete::new(), request.context.policy());

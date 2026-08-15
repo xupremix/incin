@@ -1,6 +1,8 @@
 //! Central target-aware parameter materialization and NN layer initialization on [`TensorTarget`].
 
+use incin_core::backend_authoring::{Backend, StorageBackend};
 use incin_core::backend_authoring::{Execute, SupportsDType, VariableBackend, op};
+use incin_core::error::{Error, Result};
 use incin_core::nn::batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape};
 use incin_core::nn::conv1d::{Conv1d, Conv1dBuilder, Conv1dShape};
 use incin_core::nn::conv2d::{Conv2d, Conv2dBuilder, Conv2dShape};
@@ -13,12 +15,10 @@ use incin_core::nn::optional::OptionalField;
 use incin_core::nn::param::{Param, TrainState, Trainable};
 use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
-use incin_core::error::{Error, Result};
-use incin_core::backend_authoring::{Backend, StorageBackend};
+use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::{DynShape, Shape, ShapeValue};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::FloatDType;
-use incin_core::shapes::{DynShape, Shape, ShapeValue};
-use incin_core::shapes::buf::ShapeBuf;
 
 use crate::target::{GeneratedFill, TargetBackend, TargetExt, TensorTarget};
 
@@ -40,7 +40,8 @@ where
     T: TensorTarget + TargetExt + Clone,
     S: Shape + DynShape,
     T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -129,7 +130,8 @@ where
     S: Shape + DynShape,
     Train: TrainState,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -179,7 +181,8 @@ where
     T: TensorTarget + TargetExt + Clone,
     S: Shape + DynShape,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -231,7 +234,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -306,7 +310,8 @@ where
     S: LinearShape,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -343,7 +348,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -393,7 +399,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -450,7 +457,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -499,7 +507,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -577,7 +586,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -653,7 +663,8 @@ where
     Train: TrainState,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -738,7 +749,8 @@ where
         Into<Linear<S::HhShape, TargetBackend<T>, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -807,7 +819,8 @@ where
         Into<RNNCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -860,7 +873,8 @@ where
         Into<Linear<S::HhShape, TargetBackend<T>, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>
@@ -953,7 +967,8 @@ where
         Into<LSTMCell<S, TargetBackend<T>, BiasIh, BiasHh, T::ParameterDtype, Train>>,
     T: TensorTarget + TargetExt + Clone,
     T::ParameterDtype: FloatDType,
-TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
+    TargetBackend<T>: Backend<Device = T::Device>
+        + VariableBackend
         + SupportsDType<T::ParameterDtype>
         + Execute<op::MulScalar>
         + Execute<op::AddScalar>

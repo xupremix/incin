@@ -7,11 +7,11 @@ use alloc::vec::Vec;
 use crate::backend_authoring::TensorMeta;
 use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
+use crate::err::{Error, Result};
 use crate::exec::{
     DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
 };
 use crate::graph::ValueId;
-use crate::err::{Error, Result};
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 

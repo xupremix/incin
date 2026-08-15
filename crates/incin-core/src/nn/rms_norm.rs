@@ -1,15 +1,15 @@
-use crate::exec::catalog::{Descriptor, op};
-use crate::nn::{Module, Param};
 use crate::backend_authoring::{Backend, SupportsDType};
 use crate::err::{Error, Result};
+use crate::exec::catalog::{Descriptor, op};
+use crate::nn::{Module, Param};
+use crate::shapes::idx::{FromEnd, Here};
+use crate::shapes::shape_ops::ReduceKeepAt;
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::shapes::idx::{FromEnd, Here};
-use crate::shapes::shape_ops::ReduceKeepAt;
-use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 
 /// Shape traits for RMSNorm.
@@ -47,7 +47,12 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 /// improving training speed and stability. Widely used in modern LLMs (e.g. LLaMA).
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal)]
-pub struct RMSNorm<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct RMSNorm<
+    S: RMSNormShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
     pub weight: Param<S::ParamShape, B, K, Train>,
     #[module(ignore)]
     pub eps: f32,
@@ -55,7 +60,9 @@ pub struct RMSNorm<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, 
     _phantom: PhantomData<(S, B, K, Train)>,
 }
 
-impl<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> RMSNorm<S, B, K, Train> {
+impl<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    RMSNorm<S, B, K, Train>
+{
     /// Constructs an RMSNorm from a raw weight parameter and epsilon.
     pub fn from_raw_parts(weight: Param<S::ParamShape, B, K, Train>, eps: f32) -> Self {
         Self {
@@ -123,7 +130,9 @@ impl<S: RMSNormShape, Train: TrainState> RMSNormBuilder<S, Train> {
 
 impl<
     S: RMSNormShape,
-    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::tensor::backend::SupportsDType<K>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > RMSNorm<S, B, K, Trainable>
 {

@@ -1,19 +1,19 @@
+use crate::backend_authoring::Backend;
 use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::exec::catalog::{AvgPool2dAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
-use crate::backend_authoring::Backend;
-use crate::err::{Error, Result};
+use crate::shapes::ShapeValue;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::shapes::ShapeValue;
 
 use typenum::Unsigned;
 
@@ -28,8 +28,12 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: crate::tensor::backe
     crate::nn::VisitParameters<B> for AvgPool2d<K, S, P, D>
 {
     fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
-        &self, _: &crate::nn::StatePath, _: &mut V,
-    ) -> Result<()> { Ok(()) }
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {

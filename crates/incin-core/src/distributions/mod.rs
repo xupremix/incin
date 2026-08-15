@@ -1,18 +1,18 @@
 //! Probability distribution sampling with custom distribution trait support.
 
 use crate::backend_authoring::{Capabilities, Execute};
+use crate::err::{Error, Result};
 use crate::exec::catalog::{CreationAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
-use crate::err::{Error, Result};
 use crate::shapes::ShapeValue;
 use crate::shapes::{DimCons, DynShape, Nil, Shape, ShapeBuf};
-use crate::tensor::base::Tensor;
+use crate::tensor::arg::TensorArgs;
 use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{Grad, RequiresGrad};
-use crate::tensor::arg::TensorArgs;
 use core::fmt::Debug;
 
 fn uniform_tensor<S, B, G>(
@@ -127,8 +127,8 @@ pub trait TensorDistributionExt<S: Shape + DynShape, B: Backend, K: DType, G: Re
     fn sample<D: Distribution<K>, A>(distribution: &D, args: A) -> Result<Tensor<S, B, K, G>>
     where
         A: crate::tensor::arg_into::ArgInto<
-            <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
-        >,
+                <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
+            >,
         B: SupportsDType<K> + DistributionExecutor<D, K>;
 }
 
@@ -138,12 +138,11 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> TensorDistribut
     fn sample<D: Distribution<K>, A>(distribution: &D, args: A) -> Result<Tensor<S, B, K, G>>
     where
         A: crate::tensor::arg_into::ArgInto<
-            <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
-        >,
+                <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
+            >,
         B: SupportsDType<K> + DistributionExecutor<D, K>,
     {
-        let (shape, _dtype, device, _grad) =
-            <(S, K, B::Device, G)>::construct(args.into_arg())?;
+        let (shape, _dtype, device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg())?;
         distribution.sample::<S, B, G>(shape, &device)
     }
 }
@@ -476,8 +475,8 @@ impl Distribution<f32> for Gumbel<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shapes::Dyn;
     use crate::distributions::TensorDistributionExt;
+    use crate::shapes::Dyn;
     type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
 
     #[test]

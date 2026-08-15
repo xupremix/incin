@@ -6,9 +6,9 @@
 
 use super::StorageBackend;
 use crate::err::Result;
+use crate::shapes::ShapeBuf;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
-use crate::shapes::ShapeBuf;
 
 /// Reads tensor values into host-owned vectors for inspection and formatting.
 ///
@@ -36,11 +36,8 @@ pub trait HostInterop: StorageBackend + HostReadback {
         <Self as StorageBackend>::storage_device(storage)
     }
     /// Formats a storage value for human-facing display.
-    fn host_format_display<K: DType>(
-        storage: &Self::Storage<K>,
-    ) -> alloc::string::String
-    {
-        use crate::tensor::display::{render, Values};
+    fn host_format_display<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
+        use crate::tensor::display::{Values, render};
         let shape = Self::shape(storage);
         match Self::storage_dtype(storage) {
             None => alloc::format!("<tensor: shape={shape:?}, dtype unknown to this backend>"),
@@ -59,8 +56,7 @@ pub trait HostInterop: StorageBackend + HostReadback {
         }
     }
     /// Formats a storage value for diagnostic output.
-    fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String
-    {
+    fn host_format_debug<K: DType>(storage: &Self::Storage<K>) -> alloc::string::String {
         Self::host_format_display(storage)
     }
 
@@ -80,7 +76,10 @@ pub trait HostInterop: StorageBackend + HostReadback {
 /// `NewD`. This marker deliberately does not require variable ownership or
 /// training capabilities; inference-only backends can implement it through
 /// [`super::StorageTransfer`].
-pub trait TransferBackend<NewD: crate::tensor::device::Device>: super::StorageTransfer<NewD> {}
+pub trait TransferBackend<NewD: crate::tensor::device::Device>:
+    super::StorageTransfer<NewD>
+{
+}
 
 impl<B, NewD> TransferBackend<NewD> for B
 where

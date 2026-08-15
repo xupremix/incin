@@ -155,7 +155,10 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     /// Looks up rows of embedding table `w` for each index in `t`, first
     /// casting indices to `U32` if they aren't already `U32`/`I64` (candle
     /// requires one of those two dtypes for embedding lookups).
-    pub fn embedding<K: incin_core::tensor::dtype::DType, KInt: incin_core::tensor::dtype::DType>(
+    pub fn embedding<
+        K: incin_core::tensor::dtype::DType,
+        KInt: incin_core::tensor::dtype::DType,
+    >(
         t: &<Self as StorageBackend>::Storage<KInt>,
         w: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {

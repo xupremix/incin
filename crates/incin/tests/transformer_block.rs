@@ -1,10 +1,10 @@
 #![cfg(feature = "cpu")]
 
+use incin::AdamW;
 use incin::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
 use incin::optim::ParameterGroup;
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
-use incin::AdamW;
 use std::collections::BTreeMap;
 
 type Cpu = incin_backends::cpu::CpuBackendImpl;
@@ -86,10 +86,12 @@ fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
     let output = model.forward(input)?;
     assert_eq!(output.dims().dims(), &[4, 8]);
     let output_bytes = Cpu::to_bytes::<f32>(output.inner())?;
-    assert!(output_bytes
-        .chunks_exact(core::mem::size_of::<f32>())
-        .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
-        .all(f32::is_finite));
+    assert!(
+        output_bytes
+            .chunks_exact(core::mem::size_of::<f32>())
+            .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
+            .all(f32::is_finite)
+    );
     let loss = output.mse_loss(&target)?;
     let grads = loss.backward()?;
 

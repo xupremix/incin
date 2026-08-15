@@ -1,19 +1,19 @@
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::capability::Capabilities;
 use crate::exec::catalog::{Descriptor, DropoutAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
-use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
-use crate::tensor::base::Tensor;
+use crate::tensor::backend::Execute;
 use crate::tensor::backend::{Backend, StorageBackend, SupportsDType};
+use crate::tensor::base::Tensor;
 use crate::tensor::device::ConstDevice;
 use crate::tensor::dtype::{BuiltinDType, DType};
 use crate::tensor::grad::RequiresGrad;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 
 /// A Dropout layer.
 ///
@@ -37,7 +37,9 @@ impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> f
         &self,
         _: &crate::nn::StatePath,
         _: &mut V,
-    ) -> Result<()> { Ok(()) }
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Dropout {
@@ -59,8 +61,12 @@ impl TrainMode for Dropout {
     }
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: BuiltinDType, G: RequiresGrad> Module<Tensor<S, B, K, G>>
-    for Dropout
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: BuiltinDType,
+    G: RequiresGrad,
+> Module<Tensor<S, B, K, G>> for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,

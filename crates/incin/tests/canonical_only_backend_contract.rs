@@ -39,33 +39,30 @@ impl StorageBackend for CanonicalOnlyBackend {
 
 impl Backend for CanonicalOnlyBackend {
     type InnerBackend = Self;
-
-
-
 }
 
 impl incin_core::backend_authoring::HostInterop for CanonicalOnlyBackend {
     fn to_bytes<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<u8>> {
-            Ok(vec![])
-        }
+        Ok(vec![])
+    }
     fn from_bytes<K: DType>(
-            _bytes: &[u8],
-            dims: &[usize],
-            dtype: DTypeDescriptor,
-            _device: &DeviceId,
-        ) -> Result<Self::Storage<K>> {
-            let meta = TensorMeta::contiguous(
-                ShapeBuf::from_slice(dims),
-                dtype,
-                DeviceId::CPU,
-                Alignment::new(1)?,
-                dims.iter().product(),
-            )?;
-            Ok(CanonicalStorage {
-                meta,
-                _phantom: core::marker::PhantomData,
-            })
-        }
+        _bytes: &[u8],
+        dims: &[usize],
+        dtype: DTypeDescriptor,
+        _device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        let meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(dims),
+            dtype,
+            DeviceId::CPU,
+            Alignment::new(1)?,
+            dims.iter().product(),
+        )?;
+        Ok(CanonicalStorage {
+            meta,
+            _phantom: core::marker::PhantomData,
+        })
+    }
 }
 
 impl VariableBackend for CanonicalOnlyBackend {
@@ -92,12 +89,16 @@ impl VariableBackend for CanonicalOnlyBackend {
 impl AutogradBackend for CanonicalOnlyBackend {
     type Grads = ();
 
-    fn backward<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Grads> { Ok(()) }
+    fn backward<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Grads> {
+        Ok(())
+    }
 
     fn get_grad<K: DType>(
         _tensor: &Self::Storage<K>,
         _grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> { Ok(None) }
+    ) -> Result<Option<Self::Storage<K>>> {
+        Ok(None)
+    }
 }
 
 impl Capabilities for CanonicalOnlyBackend {

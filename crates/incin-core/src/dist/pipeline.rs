@@ -20,10 +20,10 @@ use crate::dist::mesh::{Data, DeviceMesh, MeshSpec, Pipeline, TensorParallel};
 use crate::dist::plan::{
     CollectivePlan, CollectivePlanBuilder, CollectiveTag, PlanError, SequenceToken,
 };
-use crate::shapes::{Dyn, Shape};
 use crate::shapes::error::OperationKind;
-use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use crate::shapes::error::ShapeError;
+use crate::shapes::{Dyn, Shape};
+use crate::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 
 /// Exactly two pipeline stages and no data or tensor partitioning.
 pub type TwoRankPipeline = MeshSpec<Data<U1>, TensorParallel<U1>, Pipeline<U2>>;

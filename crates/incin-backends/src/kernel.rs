@@ -5,10 +5,10 @@
 //! Cartesian product of operations, dtypes, layouts, and devices.
 
 use alloc::{boxed::Box, string::String};
+use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::PrecisionRequest;
 use incin_core::exec::{LayoutClass, MathMode};
-use incin_core::error::{Error, Result};
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::dtype::DTypeId;
 const KERNEL_KEY_SCHEMA_VERSION: u8 = 1;

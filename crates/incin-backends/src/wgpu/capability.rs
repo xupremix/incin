@@ -31,7 +31,11 @@ pub(crate) fn validate_wgpu_dtype(dtype: DTypeDescriptor, op: &'static str) -> R
     if dtype.builtin_id() == Some(DTypeId::F32) {
         Ok(())
     } else {
-        Err(Error::UnsupportedDType { dtype, backend: "Wgpu", op })
+        Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Wgpu",
+            op,
+        })
     }
 }
 

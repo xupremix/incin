@@ -1,18 +1,18 @@
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::dist::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, ParameterRole};
 use crate::nn::param::{Frozen, TrainState, Trainable, execute_plan_raw};
 use crate::nn::{Module, Param};
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::dist::Local;
-use crate::err::{Error, Result};
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 use typenum::Unsigned;
 
 /// A shape marker trait specifying a [`Conv2d`] layer's channel counts and
@@ -304,7 +304,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv2dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv2dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -395,7 +397,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv2dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv2dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
@@ -484,7 +488,9 @@ where
         + DynShape
         + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
         + crate::shapes::HasChannels2D<CIn>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Conv2dExact> + Execute<op::ReshapeExact>,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::Conv2dExact>
+        + Execute<op::ReshapeExact>,
     <B as Execute<op::Conv2dExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {

@@ -16,12 +16,12 @@
 //! forward pass or v2's type-level shape propagation. Both are out of scope
 //! here; this is an honest gap, not a bug.
 
-use crate::shapes::{DynShape, Shape, ShapeBuf};
+use crate::nn::param::{Buffer, Param, TrainState};
+use crate::nn::{AdaptiveAvgPool2d, GELU, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
 use crate::shapes::error::OperationKind;
+use crate::shapes::{DynShape, Shape, ShapeBuf};
 use crate::tensor::backend::Backend;
 use crate::tensor::dtype::DType;
-use crate::nn::{AdaptiveAvgPool2d, GELU, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
-use crate::nn::param::{Buffer, Param, TrainState};
 use alloc::vec::Vec;
 
 /// One layer's (or one subtree's, once summed) contribution to a model's
@@ -94,8 +94,12 @@ pub trait ComputeStats {
     }
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: crate::nn::param::TrainState> ComputeStats
-    for Param<S, B, K, Train>
+impl<
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: crate::nn::param::TrainState,
+> ComputeStats for Param<S, B, K, Train>
 {
     /// A parameter's own element count; it has no operation of its own, so
     /// 0 MACs (the layer that *uses* this parameter reports those, if it
@@ -108,7 +112,9 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType, 
     }
 }
 
-impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> ComputeStats for Buffer<S, B, K> {
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> ComputeStats
+    for Buffer<S, B, K>
+{
     fn compute_stats(&self, _batch: u64) -> LayerStats {
         LayerStats::default()
     }

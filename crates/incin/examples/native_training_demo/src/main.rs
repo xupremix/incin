@@ -11,9 +11,9 @@ use incin::optim::OptimizerBackend;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
+use incin_core::backend_authoring::Execute;
 use incin_core::exec::catalog::op;
 use incin_core::nn::param::ParameterInit;
-use incin_core::backend_authoring::Execute;
 
 /// The CPU backend type alias.
 type NB = CpuBackendImpl;

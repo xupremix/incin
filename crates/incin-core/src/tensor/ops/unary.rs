@@ -3,13 +3,13 @@
 //! This module provides element-wise unary operations (e.g., `abs`, `relu`, `exp`) that act
 //! on a single tensor and return a new tensor with the exact same shape. It also includes
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
-use crate::exec::catalog::{Descriptor, op};
 use crate::err::{Error, Result};
+use crate::exec::catalog::{Descriptor, op};
 use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
-use crate::tensor::backend::Execute;
 
 macro_rules! impl_unary_op {
     (

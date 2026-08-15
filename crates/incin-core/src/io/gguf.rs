@@ -1,10 +1,10 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::nn::{StateSnapshot, VisitState};
-use crate::tensor::backend::{Backend, Execute, HostInterop, SupportsDType};
-use crate::exec::{self, ExecutionContext};
 use crate::exec::catalog::{QuantizationAttributes, op};
 use crate::exec::request::TensorHandle;
+use crate::exec::{self, ExecutionContext};
+use crate::nn::{StateSnapshot, VisitState};
+use crate::tensor::backend::{Backend, Execute, HostInterop, SupportsDType};
 use crate::tensor::dtype::{DTypeId, Q8_0};
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -140,7 +140,11 @@ impl GgufMetadata {
 }
 
 /// Exporter for saving `incin` modules to GGUF v3 format.
-pub struct GgufExporter<'a, B: Backend + crate::tensor::backend::VariableBackend + HostInterop, M: VisitState<B>> {
+pub struct GgufExporter<
+    'a,
+    B: Backend + crate::tensor::backend::VariableBackend + HostInterop,
+    M: VisitState<B>,
+> {
     module: &'a M,
     metadata: GgufMetadata,
     quant: QuantScheme,
@@ -277,7 +281,9 @@ where
                 let context = ExecutionContext::from_scope(B::default());
                 let quantized = exec::dispatch::execute::<op::Quantize, B>(
                     &context,
-                    QuantizationAttributes { dtype: DTypeId::Q8_0.descriptor() },
+                    QuantizationAttributes {
+                        dtype: DTypeId::Q8_0.descriptor(),
+                    },
                     &[input],
                 )?
                 .into();

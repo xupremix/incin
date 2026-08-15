@@ -1,7 +1,7 @@
-use crate::shapes::{Dim, Dyn};
 use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
+use crate::shapes::{Dim, Dyn};
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Add, Sub};
@@ -29,16 +29,7 @@ mod sealed {
 /// * **`Ranked<R>`** - Runtime extents with a typenum-known rank.
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
-pub trait Shape:
-    sealed::Shape
-    + 'static
-    + Clone
-    + Debug
-    + Send
-    + Sync
-    + Eq
-    + PartialEq
-{
+pub trait Shape: sealed::Shape + 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Compile-time validity gate for exact structural shape expressions.
     ///
     /// The default is intentionally permissive for dynamic and legacy input

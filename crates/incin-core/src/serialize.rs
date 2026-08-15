@@ -2,8 +2,8 @@ use crate::err::{Error, Result};
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
 use crate::shapes::ShapeBuf;
 use crate::tensor::backend::{Backend, StorageBackend};
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 use crate::tensor::base::Tensor;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 use crate::tensor::prelude::{DType, Device, DeviceId, Q8_0, StorageEncoding};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
@@ -175,14 +175,19 @@ pub trait ModelExt<B: Backend + crate::tensor::backend::VariableBackend> {
 impl<
     B: Backend + crate::tensor::backend::VariableBackend,
     T: crate::nn::VisitState<B> + crate::nn::VisitStateMut<B>,
-> ModelExt<B> for T {
+> ModelExt<B> for T
+{
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
         match format {
-            Format::Safetensors => serialize_snapshot_safetensors(&crate::nn::collect_state::<B, _>(self)?, path),
-            Format::Postcard => serialize_snapshot_postcard(&crate::nn::collect_state::<B, _>(self)?, path),
+            Format::Safetensors => {
+                serialize_snapshot_safetensors(&crate::nn::collect_state::<B, _>(self)?, path)
+            }
+            Format::Postcard => {
+                serialize_snapshot_postcard(&crate::nn::collect_state::<B, _>(self)?, path)
+            }
             Format::ONNX => Err(anyhow::anyhow!("ONNX is not a state format")),
         }
         .map_err(|e| Error::Msg(e.to_string()))

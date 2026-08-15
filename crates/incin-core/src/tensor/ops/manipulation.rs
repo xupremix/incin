@@ -4,9 +4,11 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
+use crate::backend_authoring::{Backend, HostInterop, StorageTransfer, SupportsDType};
 use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::Placement;
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
@@ -18,18 +20,16 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::backend_authoring::{Backend, HostInterop, StorageTransfer, SupportsDType};
-use crate::err::{Error, Result};
+use crate::shapes::error::OperationKind;
+use crate::shapes::idx::StaticCursor;
+use crate::shapes::shape::shape_buf_from_dims;
+use crate::shapes::{Dyn, DynShape, Shape};
+use crate::shapes::{FlattenAt, SwapAxes};
+use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
-use crate::shapes::{Dyn, DynShape, Shape};
-use crate::shapes::error::OperationKind;
-use crate::shapes::idx::StaticCursor;
-use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{FlattenAt, SwapAxes};
-use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::ops::*;
 use core::marker::PhantomData;
 
@@ -457,14 +457,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             (),
         )
         .map_err(crate::err::Error::Shape)?;
-        let new_shape_field = validated.into_descriptor().output_shape().cloned().ok_or(
-            crate::err::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {
-                operation: OperationKind::Reshape,
-                rank: S2::RANK.unwrap_or(0),
-            }),
-        )?;
-        let new_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::err::Error::Shape)?;
+        let new_shape_field =
+            validated
+                .into_descriptor()
+                .output_shape()
+                .cloned()
+                .ok_or(crate::err::Error::Shape(
+                    crate::shapes::ShapeError::TargetShapeRejected {
+                        operation: OperationKind::Reshape,
+                        rank: S2::RANK.unwrap_or(0),
+                    },
+                ))?;
+        let new_shape =
+            ShapeValue::<S2>::try_new(new_shape_field.clone()).map_err(crate::err::Error::Shape)?;
 
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
@@ -734,8 +739,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             });
         }
 
-        let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::err::Error::Shape)?;
+        let output_shape =
+            ShapeValue::<S2>::try_new(new_shape_field.clone()).map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
@@ -784,9 +789,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 device: None,
             }],
         )
-        .map_err(|error| {
-            crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error))
-        })?
+        .map_err(|error| crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
         .into_descriptor();
         let new_shape_field = descriptor.output_shape().cloned().ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
@@ -794,8 +797,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 rank: 0,
             })
         })?;
-        let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
-            .map_err(crate::err::Error::Shape)?;
+        let output_shape =
+            ShapeValue::<S2>::try_new(new_shape_field.clone()).map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad).restrict(|| {
@@ -1962,9 +1965,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 device: None,
             }],
         )
-        .map_err(|error| {
-            crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error))
-        })?
+        .map_err(|error| crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
         .into_descriptor();
         let out_shape = descriptor.output_shape().cloned().ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::TargetShapeRejected {

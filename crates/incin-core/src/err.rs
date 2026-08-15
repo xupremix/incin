@@ -1,10 +1,10 @@
+use crate::shapes::error::OperationKind;
+use crate::tensor::device::DeviceId;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use crate::shapes::error::OperationKind;
-use crate::tensor::device::DeviceId;
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 /// Maximum diagnostic text retained from a backend, parser, or external
 /// library. Errors carry enough context to diagnose a failure without allowing
@@ -291,17 +291,11 @@ pub enum Error {
 
     #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
     /// Logical device differs from physical storage.
-    DeviceStorageMismatch {
-        expected: DeviceId,
-        got: DeviceId,
-    },
+    DeviceStorageMismatch { expected: DeviceId, got: DeviceId },
 
     #[error("Device mismatch: left {left:?}, right {right:?}")]
     /// Inputs reside on different devices.
-    DeviceMismatch {
-        left: DeviceId,
-        right: DeviceId,
-    },
+    DeviceMismatch { left: DeviceId, right: DeviceId },
 
     #[error("{operation}: device or placement mismatch: expected {expected:?}, got {actual:?}")]
     /// An operation received storage on a different device or placement.

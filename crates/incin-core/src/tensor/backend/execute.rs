@@ -3,9 +3,9 @@ use crate::err::BackendError;
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{TensorMeta, Validated};
+use crate::shapes::ShapeBuf;
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
-use crate::shapes::ShapeBuf;
 
 /// Physical storage ownership, independent of operation execution.
 pub trait StorageBackend<P: Placement = Local>: Sized {

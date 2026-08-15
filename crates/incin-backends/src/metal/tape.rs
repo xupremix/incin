@@ -2,9 +2,9 @@
 
 use core::cell::RefCell;
 
+use incin_core::error::Result;
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode};
-use incin_core::error::Result;
 
 use crate::metal::storage::{MetalStorage, TensorId};
 

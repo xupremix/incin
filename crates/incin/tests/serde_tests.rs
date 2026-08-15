@@ -1,8 +1,8 @@
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;
-use incin::{StateVisitor, VariableBackend, VisitState};
 use incin::state::{collect_state, load_state};
+use incin::{StateVisitor, VariableBackend, VisitState};
 extern crate alloc;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -266,11 +266,7 @@ fn test_late_state_failure_does_not_commit_earlier_leaves() -> Result<()> {
 struct FailingState;
 
 impl<B: VariableBackend> VisitState<B> for FailingState {
-    fn visit_state<V: StateVisitor<B>>(
-        &self,
-        _: &StatePath,
-        _: &mut V,
-    ) -> Result<()> {
+    fn visit_state<V: StateVisitor<B>>(&self, _: &StatePath, _: &mut V) -> Result<()> {
         Err(Error::Msg("intentional state readback failure".into()))
     }
 }

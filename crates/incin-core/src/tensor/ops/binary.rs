@@ -8,6 +8,7 @@
 //! broadcast shape resolution (`BroadcastShape`).
 
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::ExecutionDescriptor;
 use crate::exec::capability::Capabilities;
 use crate::exec::catalog::{
@@ -16,15 +17,14 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::err::{Error, Result};
+use crate::shapes::ShapeValue;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
-use crate::tensor::base::Tensor;
-use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
-use crate::shapes::ShapeValue;
 use crate::tensor::backend::Execute;
+use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::NoGrad;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use crate::tensor::ops::*;
 
 pub(crate) fn execute_binary_descriptor<

@@ -5,7 +5,7 @@ use incin_core::error::{BackendError, Error, Result};
 use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
 use incin_core::tensor::device::{Cuda, Device, DeviceId, DeviceKind};
 use incin_core::tensor::dtype::{
-    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, QuantDType, Q8_0,
+    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
 };
 
 pub(crate) use crate::cuda::capability::{

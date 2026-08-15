@@ -19,12 +19,12 @@ extern crate incin_core as incin;
 use std::panic;
 
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
+use incin_core::backend_authoring::AutogradBackend;
 use incin_core::exec::{
     Determinism, ExecutionPolicy, GradMode, MathMode, NanPolicy, check_gradients,
 };
 use incin_core::exec::{TapeStorage, TensorId};
 use incin_core::prelude::*;
-use incin_core::backend_authoring::AutogradBackend;
 use incin_macros::s;
 
 type B = CpuBackendImpl;

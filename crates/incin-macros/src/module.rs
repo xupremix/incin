@@ -579,9 +579,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             .cloned()
             .unwrap_or_else(|| syn::parse_quote!(where));
         for fty in &state_dict_field_types {
-            visit_where_clause
-                .predicates
-                .push(syn::parse_quote!(#fty: #k_crate::__macro_support::VisitParameters<#b_ident>));
+            visit_where_clause.predicates.push(
+                syn::parse_quote!(#fty: #k_crate::__macro_support::VisitParameters<#b_ident>),
+            );
         }
         quote! {
             impl #impl_generics #k_crate::__macro_support::VisitParameters<#b_ident> for #name #ty_generics #visit_where_clause {

@@ -1,20 +1,22 @@
 use crate::backend_authoring::TensorBackend;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
-use crate::err::{Error, Result};
-use crate::shapes::{Dim, DimCons, Dyn, DynShape, Nil, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue};
-use crate::tensor::base::Tensor;
-use crate::tensor::backend::{Backend, SupportsDType};
-use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
-use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use crate::nn::module::ShapeInfo;
 use crate::nn::param::{Frozen, Param, TrainState, Trainable};
 use crate::nn::stats::{ComputeStats, LayerStats};
-use alloc::string::String;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
+use crate::shapes::{
+    Dim, DimCons, Dyn, DynShape, Nil, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue,
+};
 use crate::tensor::backend::Execute;
+use crate::tensor::backend::{Backend, SupportsDType};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
+use alloc::string::String;
 
 type LinearMatMulDescriptor = Descriptor<op::MatMulExact>;
 
@@ -463,7 +465,10 @@ where
 }
 
 impl<
-    B: crate::tensor::backend::VariableBackend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
+        + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
@@ -582,7 +587,10 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: crate::tensor::backend::VariableBackend + Execute<op::MatMulExact> + Execute<op::TransposeExact> + crate::exec::Capabilities,
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>
+        + crate::exec::Capabilities,
     K: DType,
     Train: TrainState,
     G: RequiresGrad,

@@ -1,10 +1,10 @@
 //! Floating-point precision policies and loss scaling for mixed-precision training.
 
-use crate::exec::{LayoutClass, MathMode};
 use crate::err::{Error, Result};
+use crate::exec::{LayoutClass, MathMode};
+use crate::shapes::Dyn;
 use crate::shapes::error::OperationKind;
 use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType};
-use crate::shapes::Dyn;
 use crate::tensor::dtype::{bf16, f16};
 
 /// Role of precision choice being queried (compute or accumulator).

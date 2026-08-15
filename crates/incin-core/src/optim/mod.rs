@@ -1,15 +1,14 @@
+use crate::dist::Local;
 use crate::err::{Error, ErrorMessage, Result};
-use crate::shapes::{Shape, ShapeBuf, ShapeValue};
+use crate::nn::param::{Param, TrainState};
+use crate::nn::{ParameterVisitor, StatePath, VisitParameters};
 use crate::shapes::Dyn;
-use crate::tensor::base::Tensor;
+use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::backend::{AutogradBackend, Backend, StorageBackend, VariableBackend};
+use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{ConstDType, DType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
-use crate::dist::Local;
-use crate::nn::param::{Param, TrainState};
-use crate::nn::{ParameterVisitor, StatePath, VisitParameters};
-use alloc::string::{String, ToString};
 use crate::{
     backend_authoring::{Capabilities, Execute},
     exec::request::TensorHandle,
@@ -18,10 +17,11 @@ use crate::{
         dispatch,
     },
 };
+use alloc::string::{String, ToString};
 
 pub mod scheduler;
-pub use scheduler::*;
 pub use crate::autograd::Gradients;
+pub use scheduler::*;
 
 /// Trait defining a generic optimization algorithm.
 ///
@@ -101,13 +101,14 @@ impl<B: VariableBackend, K: ConstDType> ParameterVisitor<B> for ParameterCollect
         if param.dtype_descriptor() != K::DESCRIPTOR {
             return Ok(());
         }
-        let variable = param
-            .variable_any()
-            .downcast_ref::<B::Var<K>>()
-            .ok_or(Error::InternalInvariant {
-                operation: "collect parameter group",
-                reason: "dtype matched but backend variable type did not",
-            })?;
+        let variable =
+            param
+                .variable_any()
+                .downcast_ref::<B::Var<K>>()
+                .ok_or(Error::InternalInvariant {
+                    operation: "collect parameter group",
+                    reason: "dtype matched but backend variable type did not",
+                })?;
         self.params.insert(path.to_string(), variable.clone());
         Ok(())
     }
@@ -330,7 +331,10 @@ type AdamState<S> = (
 fn load_adam_state<B: VariableBackend, K: DType>(
     operation: &'static str,
     prefix: &str,
-    params: &alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    params: &alloc::collections::BTreeMap<
+        String,
+        <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    >,
     dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
 ) -> Result<AdamState<B::Storage<K>>> {
     let prefix = if prefix.is_empty() {
@@ -372,7 +376,10 @@ fn load_adam_state<B: VariableBackend, K: DType>(
 
 fn commit_parameter_updates<B: VariableBackend, K: DType>(
     operation: &'static str,
-    params: &mut alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    params: &mut alloc::collections::BTreeMap<
+        String,
+        <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    >,
     updates: &[PreparedUpdate<B::Storage<K>>],
 ) -> Result<()> {
     for update in updates {
@@ -493,7 +500,10 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
 /// # Ok(()) }
 /// ```
 pub struct SGD<B: VariableBackend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    params: alloc::collections::BTreeMap<
+        String,
+        <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    >,
     /// `lr`.
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
@@ -501,7 +511,13 @@ pub struct SGD<B: VariableBackend, K: DType = f32> {
 
 impl<B: VariableBackend, K: DType> SGD<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>, lr: f64) -> Self {
+    pub fn new(
+        params: alloc::collections::BTreeMap<
+            String,
+            <B as crate::tensor::backend::VariableBackend>::Var<K>,
+        >,
+        lr: f64,
+    ) -> Self {
         Self {
             params,
             lr,
@@ -576,7 +592,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
 /// # Ok(()) }
 /// ```
 pub struct AdamW<B: VariableBackend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    params: alloc::collections::BTreeMap<
+        String,
+        <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    >,
     /// `lr`.
     pub lr: f64,
     /// `beta1`.
@@ -594,7 +613,13 @@ pub struct AdamW<B: VariableBackend, K: DType = f32> {
 
 impl<B: VariableBackend, K: DType> AdamW<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>, lr: f64) -> Self {
+    pub fn new(
+        params: alloc::collections::BTreeMap<
+            String,
+            <B as crate::tensor::backend::VariableBackend>::Var<K>,
+        >,
+        lr: f64,
+    ) -> Self {
         Self {
             params,
             lr,
@@ -771,7 +796,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
 /// # Ok(()) }
 /// ```
 pub struct Adam<B: VariableBackend, K: DType = f32> {
-    params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    params: alloc::collections::BTreeMap<
+        String,
+        <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    >,
     /// `lr`.
     pub lr: f64,
     /// `beta1`.
@@ -787,7 +815,13 @@ pub struct Adam<B: VariableBackend, K: DType = f32> {
 
 impl<B: VariableBackend, K: DType> Adam<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(params: alloc::collections::BTreeMap<String, <B as crate::tensor::backend::VariableBackend>::Var<K>>, lr: f64) -> Self {
+    pub fn new(
+        params: alloc::collections::BTreeMap<
+            String,
+            <B as crate::tensor::backend::VariableBackend>::Var<K>,
+        >,
+        lr: f64,
+    ) -> Self {
         Self {
             params,
             lr,

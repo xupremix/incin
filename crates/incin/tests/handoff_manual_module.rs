@@ -41,8 +41,7 @@ impl VisitParameters<CpuBackend> for ManualLinear {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.layer
-            .visit_parameters(&path.child("layer"), visitor)
+        self.layer.visit_parameters(&path.child("layer"), visitor)
     }
 }
 
@@ -52,8 +51,7 @@ impl VisitStateMut<CpuBackend> for ManualLinear {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.layer
-            .visit_state_mut(&path.child("layer"), visitor)
+        self.layer.visit_state_mut(&path.child("layer"), visitor)
     }
 }
 
@@ -142,7 +140,7 @@ impl Module<Input> for ForwardOnlyField {
     no_named_layers,
     no_shape_info,
     no_train_mode,
-    no_to_device,
+    no_to_device
 )]
 struct ForwardOnlyMacro {
     field: ForwardOnlyField,
@@ -176,12 +174,24 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     assert_eq!(manual_parameters.0, macro_parameters.0);
     let manual_snapshot = incin::state::collect_state::<CpuBackend, _>(&manual)?;
     assert_eq!(
-        manual_snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
-        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        manual_snapshot
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
     );
     assert_eq!(
-        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
-        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&macro_layer)?
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
     );
 
     let input = target.zeros(shape![2, 4])?.into_dyn().require_grad();
@@ -199,7 +209,10 @@ fn manual_and_macro_modules_have_equivalent_state_and_forward_behavior() -> Resu
     let mut restored = macro_layer;
     incin::state::load_state::<CpuBackend, _>(&mut restored, &snapshot)?;
     assert_eq!(
-        incin::state::collect_state::<CpuBackend, _>(&restored)?.iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        incin::state::collect_state::<CpuBackend, _>(&restored)?
+            .iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>(),
         snapshot.iter().map(|(path, _)| path).collect::<Vec<_>>(),
     );
 

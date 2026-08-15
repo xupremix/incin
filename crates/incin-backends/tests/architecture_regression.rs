@@ -91,7 +91,7 @@ fn test_engine_on_single_generic_backend() {
 
 #[test]
 fn test_8a_same_native_cpu_backend_across_dtypes() {
-    use incin_backends::target::{precision, Target};
+    use incin_backends::target::{Target, precision};
     type NativeTarget = Target<Native, Cpu, precision::Default>;
     assert_same_type::<<NativeTarget as TensorTarget>::Backend, CpuBackendImpl<Cpu>>();
 }
@@ -100,7 +100,7 @@ fn test_8a_same_native_cpu_backend_across_dtypes() {
 #[test]
 fn test_8b_same_candle_cpu_backend_across_dtypes() {
     use incin_backends::external::candle::CandleBackend;
-    use incin_backends::target::{precision, Candle, Target};
+    use incin_backends::target::{Candle, Target, precision};
     type CandleTarget = Target<Candle, Cpu, precision::Default>;
     assert_same_type::<<CandleTarget as TensorTarget>::Backend, CandleBackend<Cpu>>();
 }

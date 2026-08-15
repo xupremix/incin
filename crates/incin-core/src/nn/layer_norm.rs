@@ -1,18 +1,18 @@
+use crate::backend_authoring::{Backend, SupportsDType};
 use crate::dist::placement::Local;
+use crate::err::{Error, Result};
 use crate::exec::catalog::{Descriptor, LayerNormAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::{Module, Param};
 use crate::nn::module::ShapeInfo;
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::err::{Error, Result};
+use crate::nn::{Module, Param};
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::String;
-use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
 
 /// A shape marker trait specifying a [`LayerNorm`] layer's normalized
@@ -54,7 +54,12 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 #[incin_macros::module(internal)]
 /// Layer normalization: normalizes the last dimension to zero mean and
 /// unit variance, then applies a learnable affine `weight`/`bias`.
-pub struct LayerNorm<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
+pub struct LayerNorm<
+    S: LayerNormShape,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
     /// The learnable weight matrix parameter.
     pub weight: Param<S::ParamShape, B, K, Train>,
     /// The optional learnable bias vector parameter.
@@ -78,7 +83,9 @@ where
     }
 }
 
-impl<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> LayerNorm<S, B, K, Train> {
+impl<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    LayerNorm<S, B, K, Train>
+{
     /// Constructs a LayerNorm from raw weight/bias parameters and epsilon.
     pub fn from_raw_parts(
         weight: Param<S::ParamShape, B, K, Train>,
@@ -162,7 +169,9 @@ impl<S: LayerNormShape, Train: TrainState> LayerNormBuilder<S, Train> {
 
 impl<
     S: LayerNormShape,
-    B: crate::tensor::backend::VariableBackend + crate::tensor::backend::SupportsDType<K> + crate::nn::param::ParameterInit<K>,
+    B: crate::tensor::backend::VariableBackend
+        + crate::tensor::backend::SupportsDType<K>
+        + crate::nn::param::ParameterInit<K>,
     K: DType,
 > LayerNorm<S, B, K, Trainable>
 where

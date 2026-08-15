@@ -4,8 +4,8 @@ use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
-use crate::graph::ValueId;
 use crate::err::{Error, Result};
+use crate::graph::ValueId;
 
 /// A bounded shape bucket for dynamic shape alignment.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

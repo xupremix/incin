@@ -4,9 +4,9 @@ use incin::backend_authoring::{SupportsDType, VariableBackend};
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
+use incin_core::backend_authoring::Execute;
 use incin_core::exec::catalog::op;
 use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
-use incin_core::backend_authoring::Execute;
 use incin_telemetry::events::GraphSnapshotEvent;
 use incin_telemetry::reporter::Reporter;
 
@@ -26,8 +26,12 @@ pub struct SimpleMlp<B: VariableBackend> {
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<B: VariableBackend + incin_core::nn::param::ParameterInit<f32> + Execute<op::Add> + Execute<op::Relu>>
-    SimpleMlp<B>
+impl<
+    B: VariableBackend
+        + incin_core::nn::param::ParameterInit<f32>
+        + Execute<op::Add>
+        + Execute<op::Relu>,
+> SimpleMlp<B>
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,

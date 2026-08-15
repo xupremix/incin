@@ -1,12 +1,12 @@
+use crate::err::{BackendError, Result};
 use crate::exec::catalog::TraceDescriptor;
 use crate::exec::spec::ExecutionDescriptor;
 use crate::graph_recording::{Graph, TRACING_GRAPH, ValueId};
-use crate::err::{BackendError, Result};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::SupportsDType;
+use crate::tensor::backend::*;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
-use crate::tensor::backend::*;
 // removed RefCell
 // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): this used
 // to be `pub`, letting any downstream crate `.lock()` the raw `Mutex<Graph>`
@@ -107,7 +107,9 @@ impl<V> From<TracingTensor<V>> for TracingVar<V> {
 impl<B: Backend> TracingBackend<B> {
     fn canonical_graph_attributes<O>(
         descriptor: &crate::exec::catalog::Descriptor<O>,
-    ) -> Result<alloc::collections::BTreeMap<alloc::string::String, crate::graph_recording::AttributeValue>>
+    ) -> Result<
+        alloc::collections::BTreeMap<alloc::string::String, crate::graph_recording::AttributeValue>,
+    >
     where
         O: crate::exec::catalog::Operation,
     {
@@ -126,7 +128,6 @@ impl<B: Backend> TracingBackend<B> {
             Ok(alloc::collections::BTreeMap::new())
         }
     }
-
 }
 
 impl<B: Backend> StorageBackend for TracingBackend<B> {
@@ -271,35 +272,39 @@ impl<B: Backend + crate::tensor::backend::HostReadback> crate::tensor::backend::
     }
 }
 
-impl<B: Backend + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::HostInterop> crate::tensor::backend::HostInterop
+    for TracingBackend<B>
+{
     /// Delegates to `B::from_bytes`, additionally recording the result
-        /// as a graph initializer (constant input) node.
-        fn from_bytes<K: super::dtype::DType>(
-            bytes: &[u8],
-            shape: &[usize],
-            dtype: DTypeDescriptor,
-            device: &DeviceId,
-        ) -> Result<<Self as crate::tensor::backend::StorageBackend>::Storage<K>> {
-            let inner = B::from_bytes(bytes, shape, dtype, device)?;
-            let value_id = {
-                let mut g = TRACING_GRAPH.lock();
-                let id = g.add_value(shape.to_vec(), dtype, None);
-                g.initializers.insert(id, bytes.to_vec());
-                let metadata = B::metadata(&inner);
-                let _ = g.set_value_placement(id, Some(metadata.device), Some(metadata.layout));
-                id
-            };
-            Ok(TracingTensor { inner, value_id })
-        }
+    /// as a graph initializer (constant input) node.
+    fn from_bytes<K: super::dtype::DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<<Self as crate::tensor::backend::StorageBackend>::Storage<K>> {
+        let inner = B::from_bytes(bytes, shape, dtype, device)?;
+        let value_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let id = g.add_value(shape.to_vec(), dtype, None);
+            g.initializers.insert(id, bytes.to_vec());
+            let metadata = B::metadata(&inner);
+            let _ = g.set_value_placement(id, Some(metadata.device), Some(metadata.layout));
+            id
+        };
+        Ok(TracingTensor { inner, value_id })
+    }
     /// Delegates to `B::to_bytes`.
-        fn to_bytes<K: super::dtype::DType>(
-            t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
-        ) -> Result<alloc::vec::Vec<u8>> {
-            B::to_bytes(&t.inner)
-        }
+    fn to_bytes<K: super::dtype::DType>(
+        t: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<alloc::vec::Vec<u8>> {
+        B::to_bytes(&t.inner)
+    }
 }
 
-impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backend::AutogradBackend for TracingBackend<B> {
+impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backend::AutogradBackend
+    for TracingBackend<B>
+{
     type Grads = B::Grads;
 
     fn backward<K: super::dtype::DType>(
@@ -326,18 +331,22 @@ impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backen
 impl<B: VariableBackend> VariableBackend for TracingBackend<B> {
     type Var<K: DType> = TracingVar<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
 
-    fn var_as_tensor<K: DType>(
-        var: &Self::Var<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::var_as_tensor(&var.inner)?;
-        Ok(TracingTensor { inner, value_id: var.value_id })
+        Ok(TracingTensor {
+            inner,
+            value_id: var.value_id,
+        })
     }
 
     fn var_from_tensor<K: DType>(
         tensor: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Self::Var<K>> {
         let inner = B::var_from_tensor(&tensor.inner)?;
-        Ok(TracingVar { inner, value_id: tensor.value_id })
+        Ok(TracingVar {
+            inner,
+            value_id: tensor.value_id,
+        })
     }
 
     fn assign_var<K: DType>(
@@ -382,7 +391,6 @@ where
             value_id: storage.value_id,
         })
     }
-
 }
 
 impl<B, NewD> TransferTo<NewD> for TracingBackend<B>
@@ -408,7 +416,8 @@ where
         let storage = <<B as StorageTransfer<NewD>>::Output as HostInterop>::from_bytes::<K>(
             &bytes, &shape, dtype_id, &device_id,
         )?;
-        let inner = <<B as StorageTransfer<NewD>>::Output as VariableBackend>::var_from_tensor(&storage)?;
+        let inner =
+            <<B as StorageTransfer<NewD>>::Output as VariableBackend>::var_from_tensor(&storage)?;
         Ok(TracingVar {
             inner,
             value_id: variable.value_id,

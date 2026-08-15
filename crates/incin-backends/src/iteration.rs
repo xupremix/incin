@@ -14,11 +14,11 @@
 //! of vectors, because an iteration plan has exactly one or two operands and
 //! the count is known to the type system.
 
+use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::LayoutClass;
-use incin_core::error::{Error, Result};
-use incin_core::shapes::buf::StrideBuf;
 use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::buf::StrideBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OperandIteration {

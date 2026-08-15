@@ -5,8 +5,8 @@ use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
-use crate::graph::ValueId;
 use crate::err::Result;
+use crate::graph::ValueId;
 
 /// The liveness interval of a value in the compiled graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
