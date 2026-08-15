@@ -5,10 +5,11 @@ use core::marker::PhantomData;
 use incin_core::backend_authoring::*;
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
-use incin_core::prelude::{
-    BackendError, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId, DeviceKind, Dyn,
-    Error, FloatDType, OperationKind, Q8_0, QuantDType, Result, ShapeError, StrideBuf, Metal,
-};
+use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Metal};
+use incin_core::tensor::dtype::{ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType};
 
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
@@ -581,7 +582,7 @@ fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalSto
         .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let axis_len = dims[axis];
     let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[axis + 1..]))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
 
     for o in 0..outer {
         for a in 0..axis_len {

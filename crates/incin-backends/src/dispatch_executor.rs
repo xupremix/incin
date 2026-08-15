@@ -55,7 +55,9 @@ macro_rules! route_single_operand {
                     #[cfg(feature = "cpu")]
                     DispatchStorage::Cpu(input) => {
                         use crate::cpu::CpuBackendImpl;
-                        use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
 
                         type Concrete = CpuBackendImpl<Cpu>;
                         let context = ExecutionContext::with_policy(
@@ -76,7 +78,9 @@ macro_rules! route_single_operand {
                     #[cfg(feature = "wgpu")]
                     DispatchStorage::Wgpu(input) => {
                         use crate::wgpu::WgpuBackendImpl;
-                        use incin_core::prelude::{Dyn, Local, WgpuN};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::WgpuN;
 
                         type Concrete = WgpuBackendImpl<WgpuN<incin_core::typenum::U0>>;
                         let context = ExecutionContext::with_policy(
@@ -97,7 +101,9 @@ macro_rules! route_single_operand {
                     #[cfg(feature = "cuda")]
                     DispatchStorage::Cuda(input) => {
                         use crate::cuda::backend::CudaBackendImpl;
-                        use incin_core::prelude::{Cuda, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cuda;
 
                         type Concrete = CudaBackendImpl<Cuda>;
                         let context = ExecutionContext::with_policy(
@@ -160,7 +166,9 @@ macro_rules! impl_dispatch_binary {
                     #[cfg(feature = "cpu")]
                     (DispatchStorage::Cpu(l), DispatchStorage::Cpu(r)) => {
                         use crate::cpu::CpuBackendImpl;
-                        use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
                         type Concrete = CpuBackendImpl<Cpu>;
                         let context = ExecutionContext::with_policy(Concrete::new(), request.context.policy().clone());
                         let inputs = [
@@ -180,7 +188,9 @@ macro_rules! impl_dispatch_binary {
                     #[cfg(feature = "cuda")]
                     (DispatchStorage::Cuda(l), DispatchStorage::Cuda(r)) => {
                         use crate::cuda::CudaBackendImpl;
-                        use incin_core::prelude::{Cuda, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cuda;
                         type Concrete = CudaBackendImpl<Cuda>;
                         let context = ExecutionContext::with_policy(Concrete::new(), request.context.policy().clone());
                         let inputs = [
@@ -200,7 +210,9 @@ macro_rules! impl_dispatch_binary {
                     #[cfg(feature = "wgpu")]
                     (DispatchStorage::Wgpu(l), DispatchStorage::Wgpu(r)) => {
                         use crate::wgpu::WgpuBackendImpl;
-                        use incin_core::prelude::{Dyn, Local, Wgpu};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Wgpu;
                         type Concrete = WgpuBackendImpl<Wgpu>;
                         let context = ExecutionContext::with_policy(Concrete::new(), request.context.policy().clone());
                         let inputs = [
@@ -255,7 +267,9 @@ macro_rules! impl_dispatch_binary_with_metal {
                     #[cfg(feature = "cpu")]
                     (DispatchStorage::Cpu(lhs), DispatchStorage::Cpu(rhs)) => {
                         use crate::cpu::CpuBackendImpl;
-                        use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
                         type Concrete = CpuBackendImpl<Cpu>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -277,7 +291,9 @@ macro_rules! impl_dispatch_binary_with_metal {
                     #[cfg(feature = "wgpu")]
                     (DispatchStorage::Wgpu(lhs), DispatchStorage::Wgpu(rhs)) => {
                         use crate::wgpu::WgpuBackendImpl;
-                        use incin_core::prelude::{Dyn, Local, Wgpu};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Wgpu;
                         type Concrete = WgpuBackendImpl<Wgpu>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -299,7 +315,9 @@ macro_rules! impl_dispatch_binary_with_metal {
                     #[cfg(feature = "cuda")]
                     (DispatchStorage::Cuda(lhs), DispatchStorage::Cuda(rhs)) => {
                         use crate::cuda::backend::CudaBackendImpl;
-                        use incin_core::prelude::{Cuda, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cuda;
                         type Concrete = CudaBackendImpl<Cuda>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -321,7 +339,9 @@ macro_rules! impl_dispatch_binary_with_metal {
                     #[cfg(feature = "metal")]
                     (DispatchStorage::Metal(lhs), DispatchStorage::Metal(rhs)) => {
                         use crate::metal::MetalBackendImpl;
-                        use incin_core::prelude::{Dyn, Local, Metal};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Metal;
                         type Concrete = MetalBackendImpl<Metal>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -373,7 +393,9 @@ macro_rules! route_cpu_unary {
                     #[cfg(feature = "cpu")]
                     DispatchStorage::Cpu(input) => {
                         use crate::cpu::CpuBackendImpl;
-                        use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
                         type Concrete = CpuBackendImpl<Cpu>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -482,7 +504,9 @@ macro_rules! route_cpu_variadic {
                             .all(|input| matches!(input, DispatchStorage::Cpu(_))) =>
                     {
                         use crate::cpu::CpuBackendImpl;
-                        use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
                         type Concrete = CpuBackendImpl<Cpu>;
                         let context = ExecutionContext::with_policy(
                             Concrete::new(),
@@ -553,7 +577,9 @@ impl<D: Device> Execute<op::WhereCond> for DispatchBackend<D> {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(t), DispatchStorage::Cpu(f)) => {
                 use crate::cpu::CpuBackendImpl;
-                use incin_core::prelude::{Cpu, Dyn, Local};
+                        use incin_core::dist::Local;
+                        use incin_core::shapes::Dyn;
+                        use incin_core::tensor::device::Cpu;
                 type Concrete = CpuBackendImpl<Cpu>;
                 let context =
                     ExecutionContext::with_policy(Concrete::new(), request.context.policy());
@@ -626,7 +652,9 @@ impl<D: Device> Execute<op::MaskedFill> for DispatchBackend<D> {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(i), DispatchStorage::Cpu(m)) => {
                 use crate::cpu::CpuBackendImpl;
-                use incin_core::prelude::{Cpu, Dyn, Local};
+                use incin_core::dist::Local;
+                use incin_core::shapes::Dyn;
+                use incin_core::tensor::device::Cpu;
                 type Concrete = CpuBackendImpl<Cpu>;
                 let context =
                     ExecutionContext::with_policy(Concrete::new(), request.context.policy());
