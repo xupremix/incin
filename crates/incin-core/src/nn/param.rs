@@ -207,7 +207,7 @@ where
         &[],
     )
     .map(Into::into)
-    .map_err(crate::prelude::Error::from)
+    .map_err(crate::err::Error::from)
 }
 
 fn execute_storage<O, B, K>(attributes: O::Attributes, dims: &[usize]) -> Result<B::Storage<K>>
@@ -223,7 +223,7 @@ where
         .with_grad_mode(crate::exec::GradMode::Disabled);
     dispatch::execute_shaped::<O, B, Dyn>(&context, attributes, &[], &expected)
         .map(Into::into)
-        .map_err(crate::prelude::Error::from)
+        .map_err(crate::err::Error::from)
 }
 
 fn execute_scalar<O, B, K>(storage: &B::Storage<K>, value: f64) -> Result<B::Storage<K>>
@@ -245,7 +245,7 @@ where
         &expected,
     )
     .map(Into::into)
-    .map_err(crate::prelude::Error::from)
+    .map_err(crate::err::Error::from)
 }
 
 fn execute_initializer<B, K: DType>(
@@ -466,7 +466,7 @@ where
     }
 }
 
-impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState, NewD: crate::prelude::Device>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState, NewD: crate::tensor::device::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Param<S, B, K, Train>
 where
     B: VariableTransfer<NewD>,
@@ -888,7 +888,7 @@ where
     }
 }
 
-impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, NewD: crate::prelude::Device>
+impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, NewD: crate::tensor::device::Device>
     crate::tensor::transfer::ToDevice<B, NewD> for Buffer<S, B, K>
 where
     B: VariableTransfer<NewD>,

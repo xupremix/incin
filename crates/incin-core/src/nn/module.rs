@@ -1,4 +1,10 @@
-use crate::prelude::{Backend, DType, Device, Dim, DynShape, Error, Result, Shape, Tensor, ToDevice, VariableBackend};
+use crate::backend_authoring::{Backend, VariableBackend};
+use crate::err::{Error, Result};
+use crate::shapes::{Dim, DynShape, Shape};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
+use crate::tensor::transfer::ToDevice;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -79,7 +85,7 @@ pub trait VisitParameters<B: VariableBackend> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let mut model = seq!(
@@ -327,7 +333,7 @@ where
 impl<T, B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B>
     for core::marker::PhantomData<T>
 where
-    T: crate::prelude::DType,
+    T: crate::tensor::dtype::DType,
 {
     fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
         &mut self,
@@ -624,7 +630,7 @@ macro_rules! seq {
         $l1
     };
     ($l1:expr, $($tail:expr),+ $(,)?) => {
-        $crate::prelude::Sequential($l1, $crate::seq!($($tail),+))
+        $crate::nn::Sequential($l1, $crate::seq!($($tail),+))
     };
 }
 
@@ -645,7 +651,7 @@ macro_rules! seq {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
 /// use incin::prelude::*;
 ///
 /// type Net = SeqTy!(
@@ -667,7 +673,7 @@ macro_rules! SeqTy {
         $l1
     };
     ($l1:ty, $($tail:ty),+ $(,)?) => {
-        $crate::prelude::Sequential<$l1, $crate::SeqTy!($($tail),+)>
+        $crate::nn::Sequential<$l1, $crate::SeqTy!($($tail),+)>
     };
 }
 
