@@ -245,11 +245,11 @@ Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
 ## Validation checkpoint
 
-The latest reproducible artifact validation was run from the current handoff
-commit:
+The latest reproducible artifact validation is regenerated at the final
+handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004-final.zip                   # passed
+tools/export-snapshot.sh /tmp/hnd004-final-v8.zip                # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -270,8 +270,11 @@ cargo test -p incin --features 'target-api backend-authoring' --doc
 
 The Cargo command is intentional: standalone `mdbook test` does not receive
 Cargo's dependency metadata and cannot resolve the facade's workspace crates.
-Broader HND-004 executable-example, prototype, and benchmark work remains
-tracked separately until its acceptance requirements are proven.
+The broad HND-004 executable-example, prototype, benchmark, and automation
+pass is complete for the reachable requirements. Remaining caveats are
+explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
+including unavailable accelerator hardware, Miri's numerical-test exclusions,
+and the repository's pre-existing formatting drift.
 
 ## First 30 minutes
 

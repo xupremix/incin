@@ -65,7 +65,7 @@ run_miri() {
     step "Miri: incin-backends CPU (interpreter, Tree Borrows)"
     MIRIFLAGS="$MIRIFLAGS_COMMON" cargo +nightly miri test \
         -p incin-backends --no-default-features --features std,cpu --lib \
-        "${MIRI_BACKEND_NUMERIC_SKIPS[@]}" \
+        -- "${MIRI_BACKEND_NUMERIC_SKIPS[@]}" \
         || fail "miri: incin-backends"
     success "miri: incin-backends"
 }

@@ -32,7 +32,7 @@ impl<D> Default for WgpuBackendImpl<D> {
 ///
 /// The shared handle is load bearing, not a style choice. An optimizer holds
 /// its own map of these and commits an update through
-/// [`Backend::assign_var`]; the model holds the *same* parameters. With a
+/// [`VariableBackend::assign_var`]; the model holds the *same* parameters. With a
 /// plain owned `WgpuStorage` here, `assign_var` replaced the optimizer's copy
 /// and the model never saw it, so `optimizer.step()` was a no-op and training
 /// loss sat at exactly its initial value forever — the failure looks like a
