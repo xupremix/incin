@@ -97,9 +97,9 @@ jobs:
         cargo test -p incin-backends --features autotune --test tuning_service
         cargo test -p incin-backends --features distributed-nccl --test nccl_contract
         cargo test -p incin --features distributed-nccl --test rendezvous
-        cargo test -p incin --features distributed-nccl --test dp2_network --no-run
-        cargo test -p incin --features distributed-nccl --test tp2_network --no-run
-        cargo test -p incin --features distributed-nccl --test pp2_network --no-run
+        cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network --no-run
+        cargo test -p incin --features distributed-nccl,hardware-tests --test tp2_network --no-run
+        cargo test -p incin --features distributed-nccl,hardware-tests --test pp2_network --no-run
 
     - name: Run Isolated Bare-CPU Tests
       run: cargo test -p incin-backends --no-default-features --features std,cpu
@@ -157,7 +157,7 @@ jobs:
     # the stable channel rejects before any of this crate's own code is
     # reached. The external-candle feature is excluded from the broad matrix
     # because it pulls a large optional dependency graph; it has a focused
-    # compile job elsewhere.
+    # compile job elsewhere. Hardware tests are covered by hardware.yml.
     - name: incin-core, every feature combination
       run: cargo hack check -p incin-core --feature-powerset --all-targets --exclude-features nightly
 
@@ -174,7 +174,7 @@ jobs:
       run: cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
 
     - name: incin, every feature combination
-      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle
+      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle,hardware-tests
 
   # Every job above proves the unsafe code compiles. None of them proves it is
   # sound, and roughly 170 `unsafe` sites sit behind the CPU backend's SIMD

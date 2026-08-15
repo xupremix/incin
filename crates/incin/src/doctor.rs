@@ -687,6 +687,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("test-utils", cfg!(feature = "test-utils")),
         Feature::new("backend-authoring", cfg!(feature = "backend-authoring")),
         Feature::new("compiled", cfg!(feature = "compiled")),
+        Feature::new("hardware-tests", cfg!(feature = "hardware-tests")),
         Feature::new("target-api", cfg!(feature = "target-api")),
     ]
 }

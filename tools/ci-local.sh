@@ -74,9 +74,9 @@ cargo test -p incin-backends --features autotune --test tuning_cache
 cargo test -p incin-backends --features autotune --test tuning_service
 cargo test -p incin-backends --features distributed-nccl --test nccl_contract
 cargo test -p incin --features distributed-nccl --test rendezvous
-cargo test -p incin --features distributed-nccl --test dp2_network --no-run
-cargo test -p incin --features distributed-nccl --test tp2_network --no-run
-cargo test -p incin --features distributed-nccl --test pp2_network --no-run
+cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network --no-run
+cargo test -p incin --features distributed-nccl,hardware-tests --test tp2_network --no-run
+cargo test -p incin --features distributed-nccl,hardware-tests --test pp2_network --no-run
 success "Preview-Feature Tests OK"
 
 step "7. Isolated Bare-CPU & CPU-BLAS Tests"
@@ -118,7 +118,7 @@ if [ $SKIP_POWERSET -eq 0 ]; then
         cargo hack check -p incin-macros --feature-powerset --no-dev-deps --exclude-features nightly
         cargo hack check -p incin-diagnostics --feature-powerset --all-targets
         cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
-        cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle
+        cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle,hardware-tests
         success "Powerset OK"
     else
         echo -e "${YELLOW}cargo-hack not found, skipping powerset check. Install with: cargo install cargo-hack${NC}"

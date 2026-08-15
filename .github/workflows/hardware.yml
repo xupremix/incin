@@ -282,13 +282,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Data Parallel (DP2) Networked Training Test
-        run: cargo test -p incin --features distributed-nccl --test dp2_network
+        run: cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network
 
       - name: Tensor Parallel (TP2) Networked Linear/Attention Test
-        run: cargo test -p incin --features distributed-nccl --test tp2_network
+        run: cargo test -p incin --features distributed-nccl,hardware-tests --test tp2_network
 
       - name: Pipeline Parallel (PP2) Networked Execution Test
-        run: cargo test -p incin --features distributed-nccl --test pp2_network
+        run: cargo test -p incin --features distributed-nccl,hardware-tests --test pp2_network
 
   multinode:
     name: Multi-Node & Rendezvous Suite (CI-004)
@@ -306,5 +306,4 @@ jobs:
 
       - name: Global Checkpoint Manifest & Reshard Load Test
         run: cargo test -p incin-core --test checkpoint_reshard
-
 

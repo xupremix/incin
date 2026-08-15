@@ -7,6 +7,7 @@
 
 use incin::nn::{Module, ParameterVisitor, TrainState, VisitParameters};
 use incin::prelude::*;
+use incin::state::{StateMutVisitor, StateVisitor, VisitState, VisitStateMut};
 
 type CpuBackend = incin_backends::cpu::CpuBackendImpl;
 type Input = Tensor<Dyn, CpuBackend, f32, Grad>;

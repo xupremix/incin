@@ -484,6 +484,10 @@ name = "compiled"
 enables = ["incin-core/compiled", "incin-backends/compiled"]
 
 [[feature_crate.feature]]
+name = "hardware-tests"
+enables = []
+
+[[feature_crate.feature]]
 name = "target-api"
 enables = ["incin-backends/target-api"]
 

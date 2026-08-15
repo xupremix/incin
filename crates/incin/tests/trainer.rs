@@ -297,7 +297,7 @@ fn a_multi_device_plan_says_it_needs_collectives() {
 
 /// The CPU half of the deliverable: the model from `model()`, really trained.
 #[test]
-fn the_model_trains_on_the_cpu() {
+fn the_model_trains_on_the_cpu() -> Result<()> {
     let mut model = model().expect("the model builds");
     let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
@@ -348,12 +348,13 @@ fn the_model_trains_on_the_cpu() {
         "got {:?}",
         outcome.final_loss
     );
+    Ok(())
 }
 
 /// The three-GPU half. Same `model()`, same `batches()`, different plan — and
 /// `fit` refuses rather than running a third of the work on one GPU.
 #[test]
-fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() {
+fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() -> Result<()> {
     let mut model = model().expect("the same model as the CPU test");
     let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
@@ -376,12 +377,13 @@ fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() {
             .expect_err("collectives do not exist yet"),
         TrainError::CollectivesUnavailable { devices: 3 }
     );
+    Ok(())
 }
 
 /// An empty dataset is a dataset with no batches, not an error and not a loss
 /// of zero.
 #[test]
-fn an_empty_dataset_reports_no_batches_rather_than_a_zero_loss() {
+fn an_empty_dataset_reports_no_batches_rather_than_a_zero_loss() -> Result<()> {
     let mut model = model().expect("the model builds");
     let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let empty: Vec<(Tensor<Dyn, Backend>, Tensor<Dyn, Backend>)> = Vec::new();
@@ -398,12 +400,13 @@ fn an_empty_dataset_reports_no_batches_rather_than_a_zero_loss() {
 
     assert_eq!(outcome.batches, 0);
     assert_eq!(outcome.final_loss, None);
+    Ok(())
 }
 
 /// A failure in the caller's own step has to say where it happened. "Shape
 /// mismatch" without a batch number is a bug report nobody can act on.
 #[test]
-fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() {
+fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() -> Result<()> {
     let mut model = model().expect("the model builds");
     let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
@@ -438,12 +441,13 @@ fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() {
         }
         other => panic!("expected a step failure, got {other:?}"),
     }
+    Ok(())
 }
 
 /// `epochs(0)` is a plan that trains nothing. It is allowed — planning without
 /// training is a use of this API — but it must not silently become one epoch.
 #[test]
-fn zero_epochs_runs_nothing_rather_than_being_rounded_up() {
+fn zero_epochs_runs_nothing_rather_than_being_rounded_up() -> Result<()> {
     let mut model = model().expect("the model builds");
     let mut optimizer = SGD::<Backend>::from_module(&model, 0.01)?;
     let data = batches();
@@ -460,6 +464,7 @@ fn zero_epochs_runs_nothing_rather_than_being_rounded_up() {
 
     assert_eq!(outcome.batches, 0);
     assert_eq!(outcome.final_loss, None);
+    Ok(())
 }
 
 /// The plan a trainer reports is the plan it was built with, unmodified.

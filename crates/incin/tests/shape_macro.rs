@@ -8,6 +8,7 @@
 #![cfg(all(feature = "target-api", feature = "cpu"))]
 
 use incin::prelude::*;
+use incin::types::{DimCons, Nil};
 
 dim!(Batch, Features);
 

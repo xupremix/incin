@@ -86,6 +86,16 @@ impl VariableBackend for CanonicalOnlyBackend {
     }
 }
 
+impl incin_core::backend_authoring::HostReadback for CanonicalOnlyBackend {
+    fn float_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<f64>> {
+        Ok(vec![])
+    }
+
+    fn int_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<i64>> {
+        Ok(vec![])
+    }
+}
+
 impl AutogradBackend for CanonicalOnlyBackend {
     type Grads = ();
 

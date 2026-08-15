@@ -43,6 +43,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `test-utils` | no | Test-only backends and test utilities. |
 | `backend-authoring` | no | Extension contracts for backend authors. |
 | `compiled` | no | Curated preview types for compiled execution. |
+| `hardware-tests` | no | Opt-in only: ignored multi-host CUDA runtime fixtures require actual hardware and are not part of compile-only feature coverage. |
 <!-- END GENERATED: facade-features -->
 
 Examples:

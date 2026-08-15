@@ -281,9 +281,12 @@ exclusions. Repository formatting now passes. The exact core cargo-hack
 powerset passes all 384 combinations, and the macros and diagnostics
 powersets pass. The backend command was also started exactly as CI specifies
 and reached the dependency-heavy CUDA combinations without a failure before
-being stopped at 20 of 8,212 combinations; after excluding the real
-`external-candle` feature, the literal backend and facade matrices are 8,212
-and 36,608 combinations and remain impractical to complete locally.
+being stopped at 20 of 8,212 combinations; the literal backend and facade
+matrices remain impractical to complete locally. The facade's full feature
+combination was checked after the stale ignored CUDA fixtures were moved
+behind the explicit `hardware-tests` feature, and all three hardware fixtures
+compile with that feature. Those fixtures now validate NCCL plan and
+communicator setup only; they make no unsupported CUDA kernel-parity claim.
 Representative backend combinations pass. Ordinary workspace Clippy and the
 strict no-default CPU CI configuration both exit successfully with
 `-D warnings` across all targets.
