@@ -1,4 +1,4 @@
-error[E0599]: the associated function or constant `new_static` exists for struct `TwoRankLaunchPlan<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B1>>>>`, but its trait bounds were not satisfied
+error[E0599]: the associated function or constant `new_static` exists for struct `TwoRankLaunchPlan<MeshSpec<incin::experimental::distributed::mesh::Data<UInt<UInt<UTerm, B1>, B1>>>>`, but its trait bounds were not satisfied
  --> tests/rendezvous_compile_fail/wrong_static_world.rs:8:46
   |
 8 |     let _ = TwoRankLaunchPlan::<ThreeRanks>::new_static(
@@ -10,4 +10,4 @@ error[E0599]: the associated function or constant `new_static` exists for struct
   | ------------------------------------------------------------------- doesn't satisfy `<_ as ValidMesh>::World = UInt<UInt<UTerm, B1>, B0>`
   |
   = note: the following trait bounds were not satisfied:
-          `<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B1>>> as ValidMesh>::World = UInt<UInt<UTerm, B1>, B0>`
+          `<MeshSpec<incin::experimental::distributed::mesh::Data<UInt<UInt<UTerm, B1>, B1>>> as ValidMesh>::World = UInt<UInt<UTerm, B1>, B0>`

@@ -1,10 +1,10 @@
-error[E0277]: the trait bound `UTerm: incin_backends::typenum::NonZero` is not satisfied
+error[E0277]: the trait bound `UTerm: incin_core::typenum::NonZero` is not satisfied
  --> tests/tuning_identity_compile_fail/zero_static_world.rs:8:13
   |
 8 |     let _ = TuningTopologyFingerprint::<StaticWorld<U0>>::new(
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `incin_backends::typenum::NonZero` is not implemented for `UTerm`
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `incin_core::typenum::NonZero` is not implemented for `UTerm`
   |
-help: the following other types implement trait `incin_backends::typenum::NonZero`
+help: the following other types implement trait `incin_core::typenum::NonZero`
  --> $CARGO/typenum-$VERSION/src/bit.rs
   |
   | impl NonZero for B1 {}
@@ -36,7 +36,7 @@ error[E0599]: the associated function or constant `new` exists for struct `Tunin
  ::: $CARGO/typenum-$VERSION/src/uint.rs
   |
   | pub struct UTerm;
-  | ---------------- doesn't satisfy `UTerm: incin_backends::typenum::NonZero`
+  | ---------------- doesn't satisfy `UTerm: incin_core::typenum::NonZero`
   |
   = note: the following trait bounds were not satisfied:
-          `UTerm: incin_backends::typenum::NonZero`
+          `UTerm: incin_core::typenum::NonZero`
