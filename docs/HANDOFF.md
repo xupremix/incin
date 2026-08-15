@@ -245,11 +245,11 @@ Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
 ## Validation checkpoint
 
-The latest reproducible artifact validation is regenerated at the final
+The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004-final-v8.zip                # passed
+tools/export-snapshot.sh /tmp/hnd004b-final.zip                 # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -270,11 +270,17 @@ cargo test -p incin --features 'target-api backend-authoring' --doc
 
 The Cargo command is intentional: standalone `mdbook test` does not receive
 Cargo's dependency metadata and cannot resolve the facade's workspace crates.
-The broad HND-004 executable-example, prototype, benchmark, and automation
-pass is complete for the reachable requirements. Remaining caveats are
+The HND-004b executable proof includes the CPU Transformer composition in
+`crates/incin/tests/transformer_block.rs`, the four-case compile benchmark in
+`tools/bench-compile.sh`, lazy zero-worker data loading, and dependency checks
+inside exported snapshots. The normal workspace suite, mdBook build, docs
+drift gate, budget gate, and export gates pass. Remaining caveats are
 explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
 including unavailable accelerator hardware, Miri's numerical-test exclusions,
-and the repository's pre-existing formatting drift.
+and the repository's pre-existing formatting drift. The broad
+`cargo test --workspace --all-targets` command remains outside the passing gate
+because stale direct WGPU tests use removed `Backend` methods; that module is
+excluded from the active suite.
 
 ## First 30 minutes
 
