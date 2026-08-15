@@ -42,7 +42,6 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
 | `test-utils` | no | Test-only backends and test utilities. |
 | `backend-authoring` | no | Extension contracts for backend authors. |
-| `legacy-operation-api-tests` | no | Historical direct-operation parity tests. These target the removed static operation-family API and are excluded from the active canonical suite. |
 | `compiled` | no | Curated preview types for compiled execution. |
 <!-- END GENERATED: facade-features -->
 
@@ -65,7 +64,7 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, `test-utils`, and `legacy-operation-api-tests`.
+- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `test-utils`, and `compiled`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
