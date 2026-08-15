@@ -170,7 +170,10 @@ fn named_derived_dimension_retains_name_and_expression_in_capture() {
 
     impl incin_core::shapes::AxisTag for Batch {
         const NAME: &'static str = "Batch";
-        const KEY: &'static str = "compiled_capture::derived::Batch";
+
+        fn key() -> incin_core::shapes::AxisKey {
+            incin_core::shapes::AxisKey::new("compiled_capture::derived", "Batch")
+        }
     }
 
     type Shape = DimCons<NamedDim<Batch, MulDim<usize, ConstDim<2>>>, Nil>;
@@ -202,7 +205,10 @@ fn named_static_dimension_retains_name_and_constant_value_in_capture() {
 
     impl incin_core::shapes::AxisTag for Hidden {
         const NAME: &'static str = "Hidden";
-        const KEY: &'static str = "compiled_capture::static::Hidden";
+
+        fn key() -> incin_core::shapes::AxisKey {
+            incin_core::shapes::AxisKey::new("compiled_capture::static", "Hidden")
+        }
     }
 
     type Shape = DimCons<NamedDim<Hidden, ConstDim<768>>, Nil>;
