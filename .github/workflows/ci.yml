@@ -214,6 +214,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
+    - name: Install protobuf compiler
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Validate PROPOSALS.md against docs/plan/ledger.toml
       run: cargo xtask ledger
     - name: Run xtask unit tests
