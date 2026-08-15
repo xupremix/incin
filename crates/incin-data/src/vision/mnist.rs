@@ -58,6 +58,11 @@ impl MnistDataset {
 
     fn try_from_parts(images: Vec<u8>, labels: Vec<u8>, train: bool) -> anyhow::Result<Self> {
         const PIXELS_PER_IMAGE: usize = 28 * 28;
+        if labels.iter().any(|&label| label > 9) {
+            return Err(anyhow::anyhow!(
+                "MNIST labels must be decimal digits in the range 0..=9"
+            ));
+        }
         let expected_images = labels
             .len()
             .checked_mul(PIXELS_PER_IMAGE)
@@ -127,6 +132,13 @@ impl MnistDataset {
                 cols
             ));
         }
+        if rows != 28 || cols != 28 {
+            return Err(anyhow::anyhow!(
+                "MNIST images must be 28x28, got {}x{}",
+                rows,
+                cols
+            ));
+        }
 
         let num_bytes = count
             .checked_mul(rows)
@@ -135,6 +147,9 @@ impl MnistDataset {
 
         let mut data = vec![0u8; num_bytes];
         f.read_exact(&mut data)?;
+        if f.read(&mut [0u8; 1])? != 0 {
+            return Err(anyhow::anyhow!("MNIST image file contains trailing bytes"));
+        }
 
         Ok(data)
     }
@@ -166,6 +181,14 @@ impl MnistDataset {
 
         let mut data = vec![0u8; count];
         f.read_exact(&mut data)?;
+        if data.iter().any(|&label| label > 9) {
+            return Err(anyhow::anyhow!(
+                "MNIST labels must be decimal digits in the range 0..=9"
+            ));
+        }
+        if f.read(&mut [0u8; 1])? != 0 {
+            return Err(anyhow::anyhow!("MNIST label file contains trailing bytes"));
+        }
 
         Ok(data)
     }
@@ -212,6 +235,11 @@ mod tests {
     #[test]
     fn validated_parts_reject_mismatched_image_and_label_counts() {
         assert!(MnistDataset::try_from_parts(vec![0; 28 * 28], vec![0, 1], true).is_err());
+    }
+
+    #[test]
+    fn validated_parts_reject_non_digit_labels() {
+        assert!(MnistDataset::try_from_parts(vec![0; 28 * 28], vec![10], true).is_err());
     }
 
     #[test]
