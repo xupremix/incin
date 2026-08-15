@@ -165,7 +165,7 @@ fn render_inventory() -> String {
     let _ = writeln!(
         out,
         "| Exact identity | Family | Profile | Descriptor | Attributes | Inputs | Outputs | \
-         Legacy source |",
+         Catalog source mapping |",
     );
     let _ = writeln!(out, "|---|---|---|---|---|---|---|---|");
     for row in OPERATION_CATALOG {

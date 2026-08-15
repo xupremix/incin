@@ -1,6 +1,6 @@
 //! Canonical-Only Backend Acceptance Contract Test.
 //! Proves that ordinary Tensor methods (add, eq, etc.) do NOT require
-//! legacy backend traits (), but execute through
+//! superseded backend-family traits, but execute through
 //! exact operation-keyed `Execute<Op>` bounds.
 
 #![cfg(feature = "target-api")]

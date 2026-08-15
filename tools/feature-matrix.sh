@@ -37,6 +37,10 @@ run_row "backend-cpu-blas" cargo check -p incin-backends --no-default-features -
 run_row "backend-cpu-target-api" cargo check -p incin-backends --no-default-features --features std,cpu,target-api
 run_row "backend-wgpu-compile" cargo check -p incin-backends --no-default-features --features std,wgpu
 run_row "backend-cuda-compile" cargo check -p incin-backends --no-default-features --features std,cuda
+# `cuda-vendor` is a supported compatibility feature layered on the native
+# CUDA backend. It has no separate implementation until vendor-kernel dispatch
+# is added, but it must remain a compiling public configuration.
+run_row "backend-cuda-vendor-compile" cargo check -p incin-backends --no-default-features --features std,cuda-vendor
 run_row "backend-metal-compile" cargo check -p incin-backends --no-default-features --features std,metal
 run_row "backend-external-candle" cargo check -p incin-backends --no-default-features --features std,external-candle
 run_row "backend-telemetry" cargo check -p incin-backends --no-default-features --features std,cpu,telemetry

@@ -3151,8 +3151,8 @@ mod tests {
     /// absolute difference is below `1e-3`, so this catches a gradient that is
     /// structurally wrong - missing, misrouted, or wrongly scaled - and does
     /// not resolve differences finer than that ceiling. The exact agreement
-    /// between the canonical and legacy paths is asserted separately, by
-    /// `canonical_and_legacy_gradients_are_identical`.
+    /// between the canonical and backend-helper paths is asserted separately,
+    /// by `canonical_and_backend_helper_gradients_are_identical`.
     const GRADIENT_STEP: f64 = 1e-2;
     const GRADIENT_TOLERANCE: f64 = 1e-3;
 
@@ -3160,7 +3160,7 @@ mod tests {
     /// difference of the same path.
     ///
     /// This is the property that makes the migration safe to depend on: the
-    /// descriptor executors reuse the legacy kernels' tape entries, and a
+    /// descriptor executors reuse the backend-helper kernels' tape entries, and a
     /// reuse that lost one would still produce the right forward value.
     #[test]
     fn canonical_pointwise_gradients_match_finite_differences() {
@@ -3285,7 +3285,7 @@ mod tests {
     /// The descriptor path and the backend-local helper must produce the same
     /// gradient. Both paths intentionally share the concrete kernel bodies.
     #[test]
-    fn canonical_and_legacy_gradients_are_identical() {
+    fn canonical_and_backend_helper_gradients_are_identical() {
         use crate::cpu::tape;
 
         let context = context();

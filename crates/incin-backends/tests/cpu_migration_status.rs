@@ -104,7 +104,7 @@ fn document() -> String {
     );
 
     out.push_str("## Backend-executable operations\n\n");
-    out.push_str("| Operation | Site | Migrated | Legacy source |\n|---|---|:--:|---|\n");
+    out.push_str("| Operation | Site | Migrated | Catalog source mapping |\n|---|---|:--:|---|\n");
     for row in &executable {
         let _ = writeln!(
             out,
@@ -143,9 +143,9 @@ fn document() -> String {
         "\n## Operations the execution contract cannot carry\n\nThese are not pending \
          migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an \
          executor for it could be written, and until then the stable tensor surface \
-         reaches it through the legacy path by necessity rather than by omission.\n\n",
+         reaches it only through the documented non-backend-executable boundary rather than by omission.\n\n",
     );
-    out.push_str("| Operation | Site | Why | Legacy source |\n|---|---|---|---|\n");
+    out.push_str("| Operation | Site | Why | Catalog source mapping |\n|---|---|---|---|\n");
     for row in OPERATION_CATALOG
         .iter()
         .filter(|row| !row.site.is_backend_executable())

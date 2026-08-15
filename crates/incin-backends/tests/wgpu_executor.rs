@@ -84,16 +84,16 @@ fn execute(
 }
 
 #[test]
-fn rank2_descriptor_execution_matches_the_legacy_path() {
+fn rank2_descriptor_execution_matches_the_backend_helper() {
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
     let rhs = storage(&[3, 2], &[7., 8., 9., 10., 11., 12.]);
     let validated = lower(&[2, 3], &[3, 2]);
 
-    let legacy = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+    let helper = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
     let descriptor = execute(&validated, &lhs, &rhs).unwrap();
 
-    assert_eq!(descriptor.shape(), legacy.shape());
-    assert_eq!(read(&descriptor), read(&legacy));
+    assert_eq!(descriptor.shape(), helper.shape());
+    assert_eq!(read(&descriptor), read(&helper));
     assert_eq!(read(&descriptor), vec![58., 64., 139., 154.]);
 }
 
@@ -212,19 +212,19 @@ fn execute_reshape(
 }
 
 #[test]
-fn reshape_descriptor_execution_matches_the_legacy_path() {
+fn reshape_descriptor_execution_matches_the_backend_helper() {
     let input = storage(
         &[2, 6],
         &[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.],
     );
     let validated = lower_reshape_2x6_to_3x4();
 
-    let legacy = TestBackend::reshape::<f32>(&input, &[3, 4]).unwrap();
+    let helper = TestBackend::reshape::<f32>(&input, &[3, 4]).unwrap();
     let descriptor = execute_reshape(&validated, &input).unwrap();
 
-    assert_eq!(descriptor.shape(), legacy.shape());
+    assert_eq!(descriptor.shape(), helper.shape());
     assert_eq!(descriptor.shape().dims(), &[3, 4]);
-    assert_eq!(read(&descriptor), read(&legacy));
+    assert_eq!(read(&descriptor), read(&helper));
 }
 
 #[test]
@@ -306,7 +306,7 @@ fn lower_conv2d() -> Validated<Descriptor<op::Conv2dExact>> {
 }
 
 #[test]
-fn conv2d_descriptor_execution_matches_the_legacy_path() {
+fn conv2d_descriptor_execution_matches_the_backend_helper() {
     let input: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
     let weight: Vec<f32> = (0..54).map(|value| value as f32 * 0.1 - 2.5).collect();
     let input = storage(&[1, 2, 4, 4], &input);
@@ -314,7 +314,7 @@ fn conv2d_descriptor_execution_matches_the_legacy_path() {
     let bias = storage(&[3], &[0.5, -0.25, 1.0]);
     let validated = lower_conv2d();
 
-    let legacy = TestBackend::conv2d::<f32>(&input, &weight, Some(&bias), 1, 1, 1, 1).unwrap();
+    let helper = TestBackend::conv2d::<f32>(&input, &weight, Some(&bias), 1, 1, 1, 1).unwrap();
 
     let context = ExecutionContext::new(TestBackend::new());
     let inputs = [
@@ -333,9 +333,9 @@ fn conv2d_descriptor_execution_matches_the_legacy_path() {
         .expect("a valid conv2d descriptor must execute");
 
     assert_eq!(descriptor.shape().dims(), &[1, 3, 4, 4]);
-    let (descriptor, legacy) = (read(&descriptor), read(&legacy));
-    assert_eq!(descriptor.len(), legacy.len());
-    for (index, (left, right)) in descriptor.into_iter().zip(legacy).enumerate() {
+    let (descriptor, helper) = (read(&descriptor), read(&helper));
+    assert_eq!(descriptor.len(), helper.len());
+    for (index, (left, right)) in descriptor.into_iter().zip(helper).enumerate() {
         assert!(
             (left - right).abs() <= 1e-4,
             "value {index} differs: {left} versus {right}"

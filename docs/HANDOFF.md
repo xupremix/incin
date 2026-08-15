@@ -242,56 +242,59 @@ handles, compatibility adapters for superseded operation families, backend
 requirements that force autograd or state, or hand-edits to generated docs.
 Do not weaken shape/dtype/device/error invariants to make a fixture compile.
 
-## Validation checkpoint
+## Current baseline
 
-The latest reproducible artifact validation is regenerated at the HND-004c
-handoff checkpoint:
+Broad stabilization is complete. The current baseline includes rectangular,
+static, mixed, named-axis, and dynamic `Shape` forms; canonical
+`Descriptor<O>` and `Execute<O>` operation execution; typed `Tensor` and
+`Var<K>` values; `VisitParameters` and `ParameterGroup`; transactional state
+loading; exact optimizer-state errors; lazy and error-reporting `DataLoader`
+behavior; current CPU autograd; the explicit backend capability model; the
+Book and generated capability/operation documents; and the executable
+Transformer-style differentiable composition proof. The canonical exporter
+also verifies the tracked source set and required distributed source trees.
+
+The current feature contract is the 32-row general matrix in
+`docs/FEATURE_MATRIX.md`, plus the dedicated platform and hardware jobs named
+there. It does not promise every Cartesian combination of optional Cargo
+features.
+
+## Experimental and not permanently frozen
+
+Target API, compiled execution, distributed execution, telemetry/viz plugin
+boundaries, and accelerator/runtime maturity remain experimental or
+platform-dependent according to their feature and module documentation. These
+surfaces are validated at their documented compile or hardware boundary and
+are not presented as stable CPU-only guarantees.
+
+## Future human-directed architecture
+
+Deliberate future topics are mutation and alias semantics, training-state
+semantics, dtype and storage identity, backend resource ownership, placement,
+ragged tensors, sparse tensors, custom-operation VJP/JVP and batching,
+higher-order autodiff, compiler evolution, and distributed runtime evolution.
+These are isolated future subsystem questions, not reasons for another
+repository-wide stabilization pass.
+
+## Final stabilization checkpoint
+
+The final reproducible validation and export evidence is tracked under
+`audit-evidence/HND-final/summary.md`. Its validation is run from the final
+source commit and includes formatting, workspace checks, tests and doctests,
+supported clippy, the complete feature contract, documentation, structural
+gates, soundness status, package checks, mdBook, and canonical export
+metadata. Hardware-only runtime checks are explicitly marked not run when no
+matching runner is available.
+
+The canonical artifact is created only with:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004c-canonical-final.zip # passed at final commit
+tools/export-snapshot.sh <output.zip>
 ```
 
-That command validated the generated ZIP itself: it matched the tracked file
-set, contained both distributed source trees, unpacked successfully, ran the
-architecture, dependency, large-file, and public-API gates inside the unpacked copy, and
-ran `cargo check -p incin-core --no-default-features` there. The ZIP is the
-artifact result; `tools/check-package.sh` remains an internal component check,
-not an alternate snapshot workflow.
-
-The export gate validates the tracked source set, both distributed source
-trees, the structural gates inside the unpacked snapshot, and the minimal core
-build. The current Book proof path is also:
-
-```text
-mdbook build docs/book
-cargo test -p incin --features 'target-api backend-authoring' --doc
-```
-
-The Cargo command is intentional: standalone `mdbook test` does not receive
-Cargo's dependency metadata and cannot resolve the facade's workspace crates.
-The HND-004c executable proof includes the CPU Transformer composition in
-`crates/incin/tests/transformer_block.rs`, the six-fixture clean/incremental
-compile benchmark in `tools/bench-compile.sh`, lazy zero-worker data loading,
-and dependency checks
-inside exported snapshots. Remaining caveats are explicitly recorded in
-`docs/PROTOTYPING.md`, `docs/PROJECT_STATUS.md`, and
-`audit-evidence/HND-004c/summary.md`, including unavailable accelerator
-hardware and resource-bounded feature matrices. Repository formatting passes.
-The exact core, macro, and diagnostics cargo-hack powersets remain the useful
-exhaustive checks. Backend and facade validation is the explicit supported
-feature contract matrix in `tools/feature-matrix.sh`, shared verbatim by CI
-and `tools/ci-local.sh`; it does not claim an exhaustive Cartesian product.
-Soundness validation is complete for the supported local targets:
-Miri passed 139 core tests and 322 backend tests with three ignored numerical
-tests, and the baseline and AVX2 ASan runs passed. The facade's representative
-feature combination was checked after
-the stale ignored CUDA fixtures were moved
-behind the explicit `hardware-tests` feature, and all three hardware fixtures
-compile with that feature. Those fixtures now validate NCCL plan and
-communicator setup only; they make no unsupported CUDA kernel-parity claim.
-Representative backend combinations pass. Ordinary workspace Clippy and the
-strict no-default CPU CI configuration both exit successfully with
-`-D warnings` across all targets.
+The broad HND stabilization sequence is complete. No further repository-wide
+migration is required before normal human-owned development. Future work
+should proceed through focused subsystem tasks.
 
 ## First 30 minutes
 
