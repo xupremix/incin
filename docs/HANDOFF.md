@@ -249,7 +249,7 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-final.zip                 # passed
+zip-proj /home/xupremix/Projects/incin /tmp/hnd004b-final-v9.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -271,16 +271,18 @@ cargo test -p incin --features 'target-api backend-authoring' --doc
 The Cargo command is intentional: standalone `mdbook test` does not receive
 Cargo's dependency metadata and cannot resolve the facade's workspace crates.
 The HND-004b executable proof includes the CPU Transformer composition in
-`crates/incin/tests/transformer_block.rs`, the four-case compile benchmark in
-`tools/bench-compile.sh`, lazy zero-worker data loading, and dependency checks
+`crates/incin/tests/transformer_block.rs`, the six-fixture clean/incremental
+compile benchmark in `tools/bench-compile.sh`, lazy zero-worker data loading,
+and dependency checks
 inside exported snapshots. The normal workspace suite, mdBook build, docs
 drift gate, budget gate, and export gates pass. Remaining caveats are
 explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
 including unavailable accelerator hardware, Miri's numerical-test exclusions,
-and the repository's pre-existing formatting drift. The broad
-`cargo test --workspace --all-targets` command remains outside the passing gate
-because stale direct WGPU tests use removed `Backend` methods; that module is
-excluded from the active suite.
+and the repository's pre-existing formatting drift. Representative backend
+feature combinations pass; the literal cargo-hack backend powerset expands to
+16,420 combinations in this manifest and was stopped as impractical after
+focused combinations passed. Clippy remains blocked by the pre-existing
+`incin-macros` complex-type warning under `-D warnings`.
 
 ## First 30 minutes
 
