@@ -50,7 +50,7 @@ pub(crate) fn normal_random_storage(
     CandleStorage::try_new(t)
 }
 
-impl<D: incin_core::prelude::Device> CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     // This adapter does not route candle's fill or sequence constructors yet.
     crate::unsupported::unsupported_creation_ops! {
         fill: full;
@@ -59,7 +59,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Allocates a tensor of `shape` filled with zeros on `device` with the
     /// given dtype.
-    pub fn zeros<K: incin_core::prelude::DType>(
+    pub fn zeros<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -69,7 +69,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Allocates a tensor of `shape` filled with ones on `device` with the
     /// given dtype.
-    pub fn ones<K: incin_core::prelude::DType>(
+    pub fn ones<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -79,7 +79,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Samples a uniform `[0, 1)` tensor of `shape` on `device`, then casts
     /// it to `dtype`.
-    pub fn rand<K: incin_core::prelude::DType>(
+    pub fn rand<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -89,7 +89,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Samples a standard-normal tensor of `shape` on `device`, then casts
     /// it to `dtype`.
-    pub fn randn<K: incin_core::prelude::DType>(
+    pub fn randn<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -98,11 +98,11 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
 
     /// Allocates a zero-initialized trainable `Var` of `shape` on `device`.
-    fn var_zeros<K: incin_core::prelude::DType>(
+    fn var_zeros<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
+    ) -> Result<<Self as incin_core::backend_authoring::VariableBackend>::Var<K>> {
         Ok(
             candle::Var::zeros(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
@@ -110,7 +110,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
 
     /// Allocates a one-initialized trainable `Var` of `shape` on `device`.
-    fn var_ones<K: incin_core::prelude::DType>(
+    fn var_ones<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -123,7 +123,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Allocates a trainable `Var` of `shape` on `device`, sampled from a
     /// uniform `[0, 1)` distribution.
-    fn var_rand<K: incin_core::prelude::DType>(
+    fn var_rand<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         _dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -136,7 +136,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Allocates a trainable `Var` of `shape` on `device`, sampled from a
     /// standard-normal distribution.
-    fn var_randn<K: incin_core::prelude::DType>(
+    fn var_randn<K: incin_core::tensor::dtype::DType>(
         shape: &[usize],
         _dtype: DTypeDescriptor,
         device: &DeviceId,

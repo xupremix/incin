@@ -1,7 +1,7 @@
 //! Wraps the `candle_core` crate, providing `CandleBackend` as a `Backend`
 //! implementation backed by Candle's own tensor type.
 
-use incin_core::prelude::Cpu;
+use incin_core::tensor::device::Cpu;
 
 mod backend;
 pub mod convert;

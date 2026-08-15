@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     // Candle has native equivalents for several of these, but this adapter
     // does not route them yet. Declaring the gap here keeps it visible instead
     // of leaving it to a trait default that reads as full coverage.
@@ -17,7 +17,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
 
     /// Adds a scalar to every element of `t`.
-    pub fn add_scalar_float<K: incin_core::prelude::DType>(
+    pub fn add_scalar_float<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -25,7 +25,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Multiplies every element of `t` by a scalar.
-    pub fn mul_scalar_float<K: incin_core::prelude::DType>(
+    pub fn mul_scalar_float<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -33,7 +33,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies the ReLU activation element-wise.
-    pub fn relu<K: incin_core::prelude::DType>(
+    pub fn relu<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -44,7 +44,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
     /// Applies GELU using candle's exact erf-based formulation
     /// (`gelu_erf`), used here as the general-purpose GELU.
-    pub fn gelu<K: incin_core::prelude::DType>(
+    pub fn gelu<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -56,7 +56,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Implements Heaviside step function: H(x) = 0 if x < 0, else 1.
     /// Computed as: mask = (x >= 0), cast mask to float.
-    pub fn step<K: incin_core::prelude::DType>(
+    pub fn step<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // (t >= 0.0) gives a bool mask; cast to float dtype
@@ -76,7 +76,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Implements Mish activation: `x * tanh(softplus(x))`
     /// where `softplus(x) = ln(1 + exp(x))`.
-    pub fn mish<K: incin_core::prelude::DType>(
+    pub fn mish<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // softplus(x) = ln(1 + exp(x))
@@ -100,7 +100,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
 
     /// Implements Exponential Linear Unit: ELU(x) = x if x >= 0, else 1*(e^x - 1).
-    pub fn elu<K: incin_core::prelude::DType>(
+    pub fn elu<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -111,7 +111,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     }
 
     /// Applies softmax along `dim`.
-    pub fn softmax<K: incin_core::prelude::DType>(
+    pub fn softmax<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -122,7 +122,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Applies the swish/SiLU activation (`x * sigmoid(x)`) via candle's
     /// `silu` op.
-    pub fn swish<K: incin_core::prelude::DType>(
+    pub fn swish<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // swish is x * sigmoid(x)
@@ -131,7 +131,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies absolute value element-wise.
-    pub fn abs<K: incin_core::prelude::DType>(
+    pub fn abs<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -141,7 +141,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Negates every element of `t`.
-    pub fn neg<K: incin_core::prelude::DType>(
+    pub fn neg<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -151,7 +151,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies element-wise square root.
-    pub fn sqrt<K: incin_core::prelude::DType>(
+    pub fn sqrt<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -161,7 +161,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies element-wise exponential.
-    pub fn exp<K: incin_core::prelude::DType>(
+    pub fn exp<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -171,7 +171,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies element-wise natural logarithm.
-    pub fn log<K: incin_core::prelude::DType>(
+    pub fn log<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -181,7 +181,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies element-wise hyperbolic tangent.
-    pub fn tanh<K: incin_core::prelude::DType>(
+    pub fn tanh<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = t
@@ -191,7 +191,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
         CandleStorage::try_new(res)
     }
     /// Applies the sigmoid activation element-wise.
-    pub fn sigmoid<K: incin_core::prelude::DType>(
+    pub fn sigmoid<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let res = ::candle_nn::ops::sigmoid(t.tensor())

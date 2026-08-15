@@ -4,10 +4,10 @@ use crate::external::candle::CandleBackend;
 use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
-impl<D: incin_core::prelude::Device> CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     /// Candle has no native adaptive pooling; returns an error
     /// instead of panicking so callers can handle the unsupported case.
-    pub fn adaptive_avg_pool2d<K: incin_core::prelude::DType>(
+    pub fn adaptive_avg_pool2d<K: incin_core::tensor::dtype::DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _output_size: (usize, usize),
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -19,7 +19,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// Applies layer normalization over the last dimension, substituting a
     /// zero bias when none is provided.
-    pub fn layer_norm<K: incin_core::prelude::DType>(
+    pub fn layer_norm<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -45,7 +45,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     /// defaults of 0/1 when not provided) and an optional affine
     /// weight/bias, reshaping all of them to broadcast over the channel
     /// dimension.
-    pub fn batch_norm<K: incin_core::prelude::DType>(
+    pub fn batch_norm<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: Option<&<Self as StorageBackend>::Storage<K>>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -155,7 +155,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
     /// Looks up rows of embedding table `w` for each index in `t`, first
     /// casting indices to `U32` if they aren't already `U32`/`I64` (candle
     /// requires one of those two dtypes for embedding lookups).
-    pub fn embedding<K: incin_core::prelude::DType, KInt: incin_core::prelude::DType>(
+    pub fn embedding<K: incin_core::tensor::dtype::DType, KInt: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<KInt>,
         w: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -185,7 +185,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// 1-D convolution of `t` with kernel `w`; the bias argument is
     /// ignored.
-    pub fn conv1d<K: incin_core::prelude::DType>(
+    pub fn conv1d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,
         _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -203,7 +203,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// 2-D convolution of `t` with kernel `weight`; the bias argument is
     /// ignored.
-    pub fn conv2d<K: incin_core::prelude::DType>(
+    pub fn conv2d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         _bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -221,7 +221,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// 2-D transposed convolution of `t` with kernel `weight`; the bias
     /// and groups arguments are ignored.
-    pub fn conv_transpose2d<K: incin_core::prelude::DType>(
+    pub fn conv_transpose2d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         _bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -240,7 +240,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// 2-D max pooling with the given kernel size and stride; padding and
     /// dilation are ignored (not supported by candle's pooling op).
-    pub fn max_pool2d<K: incin_core::prelude::DType>(
+    pub fn max_pool2d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -256,7 +256,7 @@ impl<D: incin_core::prelude::Device> CandleBackend<D> {
 
     /// 2-D average pooling with the given kernel size and stride; padding
     /// is ignored (not supported by candle's pooling op).
-    pub fn avg_pool2d<K: incin_core::prelude::DType>(
+    pub fn avg_pool2d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),

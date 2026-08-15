@@ -6,7 +6,7 @@ use candle_core as candle;
 /// Converts a incin `DeviceId` into a candle `Device`, mapping CPU/CUDA/wgpu
 /// device kinds and erroring on any device kind Candle doesn't support.
 pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
-    use incin_core::prelude::DeviceKind;
+    use incin_core::tensor::device::DeviceKind;
     match dev.kind() {
         DeviceKind::Cpu => Ok(candle::Device::Cpu),
         #[cfg(feature = "cuda")]

@@ -36,30 +36,30 @@ pub(crate) fn div_storage(lhs: &CandleStorage, rhs: &CandleStorage) -> Result<Ca
     CandleStorage::try_new(t)
 }
 
-impl<D: incin_core::prelude::Device> CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     /// Element-wise addition with broadcasting.
-    pub fn add<K: incin_core::prelude::DType>(
+    pub fn add<K: incin_core::tensor::dtype::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         add_storage(lhs, rhs)
     }
     /// Element-wise subtraction with broadcasting.
-    pub fn sub<K: incin_core::prelude::DType>(
+    pub fn sub<K: incin_core::tensor::dtype::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         sub_storage(lhs, rhs)
     }
     /// Element-wise multiplication with broadcasting.
-    pub fn mul<K: incin_core::prelude::DType>(
+    pub fn mul<K: incin_core::tensor::dtype::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         mul_storage(lhs, rhs)
     }
     /// Element-wise division with broadcasting.
-    pub fn div<K: incin_core::prelude::DType>(
+    pub fn div<K: incin_core::tensor::dtype::DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {

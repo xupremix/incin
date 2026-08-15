@@ -58,7 +58,7 @@ impl CandleStorage {
             capacity,
         )
         .map_err(|error| {
-            incin_core::prelude::Error::Msg(alloc::format!(
+            incin_core::error::Error::Msg(alloc::format!(
                 "invalid Candle storage metadata: {error}"
             ))
         })?;

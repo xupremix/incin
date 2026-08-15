@@ -6,15 +6,15 @@ use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 use candle_core as candle;
 
-impl<D: incin_core::prelude::Device> incin_core::prelude::Backend for CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::Backend for CandleBackend<D> {
 
     type InnerBackend = Self;
 }
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostReadback
+impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::HostReadback
     for CandleBackend<D>
 {
-    fn float_to_vec1<K: incin_core::prelude::DType>(
+    fn float_to_vec1<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<f64>> {
         let values: Vec<f32> = t
@@ -26,7 +26,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostReadback
         Ok(values.into_iter().map(f64::from).collect())
     }
 
-    fn int_to_vec1<K: incin_core::prelude::DType>(
+    fn int_to_vec1<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Vec<i64>> {
         let tensor = t.tensor();
@@ -76,11 +76,11 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostReadback
                 values
                     .into_iter()
                     .map(|value| {
-                        incin_core::prelude::convert_f64_to_i64(
+                        incin_core::error::convert_f64_to_i64(
                             "candle_int_to_vec1",
                             from_candle_dtype(dtype),
                             value,
-                            incin_core::prelude::FloatToIntPolicy::Exact,
+                            incin_core::error::FloatToIntPolicy::Exact,
                         )
                     })
                     .collect()
@@ -89,16 +89,16 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostReadback
     }
 }
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::HostInterop for CandleBackend<D> {
     /// Formats the tensor using candle's own `Display` implementation.
-    fn host_format_display<K: incin_core::prelude::DType>(
+    fn host_format_display<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String {
         std::format!("{}", t.tensor())
     }
     /// Formats the tensor's raw contents together with its strides, for
     /// debugging.
-    fn host_format_debug<K: incin_core::prelude::DType>(
+    fn host_format_debug<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> alloc::string::String {
         std::format!(
@@ -109,7 +109,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop 
     }
 
     /// Flattens the tensor and returns its raw byte representation according to its actual dtype.
-        fn to_bytes<K: incin_core::prelude::DType>(
+        fn to_bytes<K: incin_core::tensor::dtype::DType>(
             t: &<Self as StorageBackend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<u8>> {
             let flat = t
@@ -163,7 +163,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::HostInterop 
         }
     /// Reinterprets `bytes` as typed scalar elements matching `dtype`, constructs
         /// a tensor with `shape` on `device`, and returns it.
-        fn from_bytes<K: incin_core::prelude::DType>(
+        fn from_bytes<K: incin_core::tensor::dtype::DType>(
             bytes: &[u8],
             shape: &[usize],
             dtype: DTypeDescriptor,
@@ -262,14 +262,14 @@ impl<D: Device> incin_core::exec::PrecisionCapabilities for CandleBackend<D> {
     }
 }
 
-impl<D, NewD> incin_core::prelude::StorageTransfer<NewD> for CandleBackend<D>
+impl<D, NewD> incin_core::backend_authoring::StorageTransfer<NewD> for CandleBackend<D>
 where
-    D: incin_core::prelude::Device,
-    NewD: incin_core::prelude::Device,
+    D: incin_core::tensor::device::Device,
+    NewD: incin_core::tensor::device::Device,
 {
     type Output = CandleBackend<NewD>;
 
-    fn transfer_storage<K: incin_core::prelude::DType>(
+    fn transfer_storage<K: incin_core::tensor::dtype::DType>(
         storage: &Self::Storage<K>,
         dtype: &K::Field,
         device: &NewD::Field,
@@ -289,12 +289,12 @@ where
 
 }
 
-impl<D, NewD> incin_core::prelude::TransferTo<NewD> for CandleBackend<D>
+impl<D, NewD> incin_core::backend_authoring::TransferTo<NewD> for CandleBackend<D>
 where
     D: incin_core::prelude::Device,
     NewD: incin_core::prelude::Device,
 {
-    fn transfer_var<K: incin_core::prelude::DType>(
+    fn transfer_var<K: incin_core::tensor::dtype::DType>(
         variable: &Self::Var<K>,
         dtype: &K::Field,
         device: &NewD::Field,
@@ -303,7 +303,7 @@ where
         Self::Output: SupportsDType<K>,
     {
         let storage = <Self as VariableBackend>::var_as_tensor::<K>(variable)?;
-        let transferred = <Self as incin_core::prelude::StorageTransfer<NewD>>::transfer_storage(
+        let transferred = <Self as incin_core::backend_authoring::StorageTransfer<NewD>>::transfer_storage(
             &storage, dtype, device,
         )?;
         <Self::Output as VariableBackend>::var_from_tensor::<K>(&transferred)
@@ -311,10 +311,10 @@ where
 }
 
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::AutogradBackend for CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::AutogradBackend for CandleBackend<D> {
     type Grads = candle_core::backprop::GradStore;
 
-    fn backward<K: incin_core::prelude::DType>(
+    fn backward<K: incin_core::tensor::dtype::DType>(
         loss: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<Self::Grads> {
         loss.tensor()
@@ -322,7 +322,7 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::AutogradBack
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
     }
 
-    fn get_grad<K: incin_core::prelude::DType>(
+    fn get_grad<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<<Self as StorageBackend>::Storage<K>>> {
@@ -334,23 +334,23 @@ impl<D: incin_core::prelude::Device> incin_core::backend_authoring::AutogradBack
     }
 }
 
-impl<D: incin_core::prelude::Device> incin_core::backend_authoring::VariableBackend for CandleBackend<D> {
+impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::VariableBackend for CandleBackend<D> {
     type Var<K: DType> = candle_core::Var;
 
-    fn var_as_tensor<K: incin_core::prelude::DType>(
+    fn var_as_tensor<K: incin_core::tensor::dtype::DType>(
         var: &Self::Var<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         CandleStorage::try_new(var.as_tensor().clone())
     }
 
-    fn var_from_tensor<K: incin_core::prelude::DType>(
+    fn var_from_tensor<K: incin_core::tensor::dtype::DType>(
         t: &Self::Storage<K>,
     ) -> Result<Self::Var<K>> {
         Ok(candle::Var::from_tensor(t.tensor())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
     }
 
-    fn assign_var<K: incin_core::prelude::DType>(
+    fn assign_var<K: incin_core::tensor::dtype::DType>(
         var: &mut Self::Var<K>,
         tensor: &Self::Storage<K>,
     ) -> Result<()> {
