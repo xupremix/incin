@@ -8,13 +8,13 @@ use incin_core::prelude::{
 use alloc::{string::String, vec::Vec};
 
 #[cfg(feature = "cpu")]
-use incin_core::prelude::Cpu;
+use incin_core::tensor::device::Cpu;
 #[cfg(feature = "cuda")]
-use incin_core::prelude::Cuda;
+use incin_core::tensor::device::Cuda;
 #[cfg(feature = "wgpu")]
-use incin_core::prelude::Wgpu;
+use incin_core::tensor::device::Wgpu;
 #[cfg(feature = "metal")]
-use incin_core::prelude::Metal;
+use incin_core::tensor::device::Metal;
 
 
 /// Backend whose concrete implementation is selected from a [`DeviceId`].

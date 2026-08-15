@@ -270,7 +270,7 @@ macro_rules! assert_every_advertised_metal_row_executes {
                 $($(executes::<op::$operation, MetalBackendImpl<D>>();)*)*
             }
 
-            assert_all::<incin_core::prelude::Metal>();
+            assert_all::<incin_core::tensor::device::Metal>();
         };
     };
 }

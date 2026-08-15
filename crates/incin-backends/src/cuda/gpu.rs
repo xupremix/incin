@@ -2,7 +2,7 @@
 pub(crate) mod cuda {
     use alloc::sync::Arc;
     use cudarc::driver::CudaContext;
-    use incin_core::prelude::Result;
+    use incin_core::error::Result;
 
     /// Cpu CUDA kernel compiler and execution dispatcher.
     pub(crate) struct CpuCudaDispatcher {
@@ -14,8 +14,8 @@ pub(crate) mod cuda {
         /// Creates a new instance with default (statically inferred) shape arguments.
         pub fn new(device_id: usize) -> Result<Self> {
             let ctx = cuda_cache::try_get_cuda_device(device_id).map_err(|error| {
-                incin_core::prelude::Error::Backend(incin_core::prelude::BackendError::Execution {
-                    operation: incin_core::prelude::OperationKind::Storage,
+                incin_core::error::Error::Backend(incin_core::error::BackendError::Execution {
+                    operation: incin_core::shapes::error::OperationKind::Storage,
                     message: format!("CUDA context initialization failed: {error:?}").into(),
                 })
             })?;
@@ -30,10 +30,10 @@ pub(crate) mod cuda {
             module_name: &str,
         ) -> Result<()> {
             let ptx = compile_ptx_with_cuda_includes(src).map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("PTX compile failed: {:?}", e))
+                incin_core::error::Error::Msg(format!("PTX compile failed: {:?}", e))
             })?;
             let module = self.ctx.load_module(ptx).map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("Load PTX failed: {:?}", e))
+                incin_core::error::Error::Msg(format!("Load PTX failed: {:?}", e))
             })?;
             cuda_cache::cache_module(self.device_id, module_name.to_string(), module);
             Ok(())
@@ -46,10 +46,10 @@ pub(crate) mod cuda {
             entry_point: &str,
         ) -> Result<cudarc::driver::CudaFunction> {
             let module = cuda_cache::get_module(self.device_id, module_name).ok_or_else(|| {
-                incin_core::prelude::Error::Msg(format!("Module {} not found", module_name))
+                incin_core::error::Error::Msg(format!("Module {} not found", module_name))
             })?;
             let f = module.load_function(entry_point).map_err(|e| {
-                incin_core::prelude::Error::Msg(format!(
+                incin_core::error::Error::Msg(format!(
                     "Function {} not found: {:?}",
                     entry_point, e
                 ))

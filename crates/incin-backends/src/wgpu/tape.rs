@@ -133,7 +133,7 @@ fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
     let params = [
         0,
         u32::try_from(n).map_err(|_| {
-            incin_core::prelude::Error::Msg("WGPU launch element count exceeds u32".into())
+            incin_core::error::Error::Msg("WGPU launch element count exceeds u32".into())
         })?,
     ]; // op_mode 0=add
     dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params);
@@ -173,21 +173,21 @@ fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
 fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let total: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, total, OperationKind::Storage)?;
 
     let inner_stride: usize =
-        incin_core::prelude::ShapeBuf::from_slice(&(storage.shape[axis + 1..]))
-            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        incin_core::shapes::ShapeBuf::from_slice(&(storage.shape[axis + 1..]))
+            .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
 
     let axis_len = u32::try_from(storage.shape[axis]).map_err(|_| {
-        incin_core::prelude::Error::Msg("WGPU reduction axis length exceeds u32".into())
+        incin_core::error::Error::Msg("WGPU reduction axis length exceeds u32".into())
     })?;
     let inner_stride = u32::try_from(inner_stride)
-        .map_err(|_| incin_core::prelude::Error::Msg("WGPU reduction stride exceeds u32".into()))?;
+        .map_err(|_| incin_core::error::Error::Msg("WGPU reduction stride exceeds u32".into()))?;
     let total = u32::try_from(total).map_err(|_| {
-        incin_core::prelude::Error::Msg("WGPU reduction output length exceeds u32".into())
+        incin_core::error::Error::Msg("WGPU reduction output length exceeds u32".into())
     })?;
     dispatch::dispatch_reduce_dim(
         &storage.buffer,

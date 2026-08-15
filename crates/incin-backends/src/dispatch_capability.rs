@@ -4,9 +4,9 @@ use incin_core::exec::{Capabilities, PrecisionCapabilities, PrecisionRequest, Re
 use incin_core::prelude::{Backend, Device, Error};
 
 impl<D: Device> PrecisionCapabilities for DispatchBackend<D> {
-    fn native_precision(&self, request: &PrecisionRequest) -> incin_core::prelude::Result<ResolvedPrecision> {
+    fn native_precision(&self, request: &PrecisionRequest) -> incin_core::error::Result<ResolvedPrecision> {
         #[cfg(feature = "cpu")]
-        { crate::cpu::CpuBackendImpl::<incin_core::prelude::Cpu>::new().native_precision(request) }
+        { crate::cpu::CpuBackendImpl::<incin_core::tensor::device::Cpu>::new().native_precision(request) }
         #[cfg(not(feature = "cpu"))]
         { Err(Error::BackendUnavailable { backend: "DispatchBackend" }) }
     }
@@ -17,7 +17,7 @@ impl<D: Device> Capabilities for DispatchBackend<D> {
         #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda", feature = "metal"))]
         {
             #[cfg(feature = "cpu")]
-            { crate::cpu::CpuBackendImpl::<incin_core::prelude::Cpu>::default().support(query) }
+            { crate::cpu::CpuBackendImpl::<incin_core::tensor::device::Cpu>::default().support(query) }
             #[cfg(all(not(feature = "cpu"), any(feature = "wgpu", feature = "cuda", feature = "metal")))]
             { let _ = query; incin_core::exec::SupportLevel::Native }
         }

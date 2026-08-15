@@ -1711,7 +1711,7 @@ mod tests {
     fn attention_keeps_the_operand_dtype() {
         let operand =
             || CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0]), vec![2, 2]);
-        let out = scaled_dot_product_attention_storage::<incin_core::prelude::Cpu>(
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
             &operand(),
             &operand(),
             &operand(),
@@ -1719,7 +1719,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(out.dtype, incin_core::prelude::DTypeId::F64.descriptor());
+        assert_eq!(out.dtype, incin_core::tensor::dtype::DTypeId::F64.descriptor());
         assert_eq!(out.shape, vec![2, 2]);
     }
 }

@@ -36,7 +36,7 @@ impl WgpuBuffer {
     /// element count whose byte length overflows `usize` is reported instead of
     /// wrapping into an undersized buffer that a shader would then write past.
     pub(crate) fn new_zeros_for(
-        dtype: impl Into<incin_core::prelude::DTypeDescriptor>,
+        dtype: impl Into<incin_core::tensor::dtype::DTypeDescriptor>,
         elements: usize,
         operation: OperationKind,
     ) -> Result<Arc<Self>> {
@@ -107,7 +107,7 @@ impl WgpuBuffer {
         state.device.poll(wgpu::Maintain::Wait);
         rx.recv()
             .map_err(|error| {
-                Error::Backend(incin_core::prelude::BackendError::Execution {
+                Error::Backend(incin_core::error::BackendError::Execution {
                     operation: OperationKind::Storage,
                     message: alloc::format!("WGPU map callback was lost: {error}").into(),
                 })
@@ -228,7 +228,7 @@ pub(crate) fn scatter_into_zeros(
     out_shape: &[usize],
     start: &[usize],
     grad_out: &WgpuStorage,
-) -> incin_core::prelude::Result<WgpuStorage> {
+) -> incin_core::error::Result<WgpuStorage> {
     use crate::wgpu::dispatch;
     let out_n = crate::wgpu::backend::num_elements(out_shape)?;
     let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;

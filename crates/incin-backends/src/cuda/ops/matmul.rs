@@ -7,7 +7,7 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf};
 
 const BM: u32 = 128;
@@ -89,7 +89,7 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             .arg(&k_i32)
             .arg(&n_i32)
             .launch(cfg)
-            .map_err(|e| incin_core::prelude::Error::Msg(format!("matmul launch failed: {e:?}")))?;
+            .map_err(|e| incin_core::error::Error::Msg(format!("matmul launch failed: {e:?}")))?;
     }
 
     let strides = crate::layout::contiguous_strides(&out_shape);

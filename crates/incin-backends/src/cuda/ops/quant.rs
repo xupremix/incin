@@ -2,7 +2,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use crate::quant::BlockQ8_0;
 use alloc::sync::Arc;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
@@ -25,7 +25,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
     if n % 32 != 0 {
-        return Err(incin_core::prelude::Error::Msg(alloc::format!(
+        return Err(incin_core::error::Error::Msg(alloc::format!(
             "quantize requires length multiple of 32, got {}",
             n
         )));
@@ -34,7 +34,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let num_blocks = n / 32;
     debug_assert_eq!(
         core::mem::size_of::<BlockQ8_0>(),
-        incin_core::prelude::DTypeId::Q8_0
+        incin_core::tensor::dtype::DTypeId::Q8_0
             .encoding()
             .bytes_per_block()
     );
@@ -45,10 +45,10 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     // two-element allocation, which is what the hardware run rejected.
     let mut out_buf = CudaBuffer {
         len: n,
-        dtype: incin_core::prelude::DTypeId::Q8_0.descriptor(),
+        dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
         data: Arc::new(alloc_zeroed_bytes(
             &stream,
-            incin_core::prelude::DTypeId::Q8_0.descriptor(),
+            incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
             n,
             OperationKind::Storage,
         )?),
@@ -79,7 +79,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
             .arg(&num_blocks_i32)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(alloc::format!(
+                incin_core::error::Error::Msg(alloc::format!(
                     "quantize_q8_0 launch failed: {:?}",
                     e
                 ))
@@ -125,10 +125,10 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     let mut out_buf = CudaBuffer {
         len: out_numel,
-        dtype: incin_core::prelude::DTypeId::F32.descriptor(),
+        dtype: incin_core::tensor::dtype::DTypeId::F32.descriptor(),
         data: Arc::new(alloc_zeroed_bytes(
             &stream,
-            incin_core::prelude::DTypeId::F32.descriptor(),
+            incin_core::tensor::dtype::DTypeId::F32.descriptor(),
             out_numel,
             OperationKind::Storage,
         )?),

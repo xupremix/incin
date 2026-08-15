@@ -104,7 +104,7 @@ fn fill_buffer(
     };
 
     match device.kind() {
-        incin_core::prelude::DeviceKind::Cpu => Ok(host_buf),
+        incin_core::tensor::device::DeviceKind::Cpu => Ok(host_buf),
 
         _ => Err(Error::DeviceInitializationError {
             expected: "cpu".into(),
@@ -164,7 +164,7 @@ pub(crate) fn rand_with_total(
     };
 
     let final_buffer = match device.kind() {
-        incin_core::prelude::DeviceKind::Cpu => buffer,
+        incin_core::tensor::device::DeviceKind::Cpu => buffer,
 
         _ => {
             return Err(Error::DeviceInitializationError {
@@ -233,7 +233,7 @@ pub(crate) fn arange_with_total(
     dtype: DTypeDescriptor,
     device: &DeviceId,
 ) -> Result<CpuStorage> {
-    if device.kind() != incin_core::prelude::DeviceKind::Cpu {
+    if device.kind() != incin_core::tensor::device::DeviceKind::Cpu {
         return Err(Error::DeviceInitializationError {
             expected: "cpu".into(),
             got: alloc::format!("{:?}", device.kind()),

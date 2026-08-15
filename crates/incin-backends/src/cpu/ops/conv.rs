@@ -410,7 +410,7 @@ fn col2im_2d(
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
 /// broadcast-added via the canonical storage helper (so
 /// `grad_bias` is free via composition, per this file's module doc).
-pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -540,7 +540,7 @@ pub(crate) fn conv1d_impl<D: incin_core::prelude::Device, K: DType>(
 ///
 /// The legacy signature states one extent for both axes, so this is the
 /// isotropic case of [`conv2d_windowed_impl`] rather than a kernel of its own.
-pub(crate) fn conv2d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -565,7 +565,7 @@ pub(crate) fn conv2d_impl<D: incin_core::prelude::Device, K: DType>(
 /// single extent for both. Nothing about the algorithm needed them equal: the
 /// row and column extents are used in separate expressions throughout, and
 /// making them separate parameters is the whole of the change.
-pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -732,7 +732,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::prelude::Device, K: DType>(
 /// confirmed behavior, which likewise ignores `groups`); a `groups != 1`
 /// call returns a typed `Error::ShapeMismatch` rather than silently ignoring
 /// the parameter or asserting via `debug_assert_eq!`.
-pub(crate) fn conv_transpose2d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -935,7 +935,7 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
     let mut out_shape = parts[0].shape.to_vec();
     out_shape[dim] = parts.iter().try_fold(0usize, |total, part| {
         total.checked_add(part.shape[dim]).ok_or(
-            incin_core::prelude::ShapeError::ArithmeticOverflow {
+            incin_core::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::Concat,
                 expression: "sum of convolution gradient group dimensions",
             },
@@ -982,7 +982,7 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::prelude::Cpu;
+    use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

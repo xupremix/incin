@@ -7,7 +7,7 @@ use core::fmt::Debug;
 pub use incin_core::exec::TensorId;
 use incin_core::exec::{Alignment, TapeStorage, TensorMeta};
 #[cfg(test)]
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
 

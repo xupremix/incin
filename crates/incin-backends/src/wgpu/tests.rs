@@ -788,7 +788,7 @@ fn test_cross_entropy_mean() {
     let out = B::cross_entropy_loss::<f32, f32>(
         &pred,
         &target,
-        incin_core::prelude::Reduction::Mean,
+        incin_core::tensor::reduction::Reduction::Mean,
     )
     .unwrap();
     let loss = readback(&out)[0];
@@ -838,7 +838,7 @@ fn cross_entropy_loss_backward_matches_finite_difference() {
         B::cross_entropy_loss::<f32, f32>(
             &inputs[0],
             &target,
-            incin_core::prelude::Reduction::Mean,
+            incin_core::tensor::reduction::Reduction::Mean,
         )
         .unwrap()
     };
@@ -953,13 +953,13 @@ fn test_quantize_dequantize() {
         *d = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
     }
     let s = storage(data.clone(), vec![2, 32]);
-    let q_storage = B::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
+    let q_storage = B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&s).unwrap();
     assert_eq!(q_storage.dtype, DTypeId::Q8_0.descriptor());
     assert_eq!(q_storage.device, DeviceId::wgpu(0));
     assert_eq!(q_storage.shape, vec![2, 32]);
     assert_eq!(q_storage.offset_elements, 0);
     let deq_storage =
-        B::dequantize::<incin_core::prelude::Q8_0, f32>(&q_storage).unwrap();
+        B::dequantize::<incin_core::tensor::dtype::Q8_0, f32>(&q_storage).unwrap();
     let deq_data = readback(&deq_storage);
 
     for (orig, deq) in data.iter().zip(deq_data.iter()) {

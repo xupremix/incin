@@ -1,7 +1,7 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
@@ -73,7 +73,7 @@ pub(crate) fn launch_nll_loss(
             .arg(&classes_i32)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(alloc::format!("nll_loss launch failed: {:?}", e))
+                incin_core::error::Error::Msg(alloc::format!("nll_loss launch failed: {:?}", e))
             })?;
     }
 

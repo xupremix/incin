@@ -60,7 +60,7 @@ pub fn emit_memory(step: usize, rss_bytes: u64) {
 
 /// Emit a computation graph snapshot if an emitter has been installed.
 #[cfg(feature = "telemetry")]
-pub fn emit_graph_snapshot(graph: incin_core::prelude::Graph) {
+pub fn emit_graph_snapshot(graph: incin_core::graph::Graph) {
     use incin_telemetry::prelude::*;
     if let Some(emitter) = GLOBAL_EMITTER.get() {
         emitter.log_graph_snapshot(GraphSnapshotEvent {

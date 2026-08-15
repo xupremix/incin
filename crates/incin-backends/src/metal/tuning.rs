@@ -71,7 +71,7 @@ impl MetalLaunchCandidate {
 pub fn metal_environment_fingerprint(
     device_name: &str,
     is_unified_memory: bool,
-) -> Result<TuningEnvironmentFingerprint<incin_core::prelude::Dyn>> {
+) -> Result<TuningEnvironmentFingerprint<incin_core::shapes::Dyn>> {
     let dev_id = if device_name.is_empty() {
         "Apple Metal GPU"
     } else {
@@ -304,7 +304,7 @@ pub(crate) fn select_fastest_metal(
 #[cfg(any(feature = "autotune", test))]
 #[allow(dead_code)]
 pub(crate) fn claim_metal_tuning(
-    env: TuningEnvironmentFingerprint<incin_core::prelude::Dyn>,
+    env: TuningEnvironmentFingerprint<incin_core::shapes::Dyn>,
     kernel_key: &KernelKey,
     workload: WorkloadBucket,
     metal_candidates: &[MetalLaunchCandidate],
@@ -387,7 +387,7 @@ mod tests {
 
         let env = metal_environment_fingerprint("Apple M1 Max", true).unwrap();
         let kernel_key = KernelKey::cuda(
-            incin_core::prelude::OperationKind::Pointwise,
+            incin_core::shapes::error::OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,

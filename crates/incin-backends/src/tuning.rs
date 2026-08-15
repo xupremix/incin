@@ -503,9 +503,9 @@ mod tests {
     use incin_core::exec::LayoutClass;
 
     fn test_environment(id: &str) -> identity::TuningEnvironmentFingerprint {
-        identity::TuningEnvironmentFingerprint::<incin_core::prelude::Dyn>::new_dyn(
+        identity::TuningEnvironmentFingerprint::<incin_core::shapes::Dyn>::new_dyn(
             identity::DeviceFingerprint::new_dyn(
-                incin_core::prelude::DeviceKind::Cuda,
+                incin_core::tensor::device::DeviceKind::Cuda,
                 id,
                 "sm_90",
                 identity::SoftwareVersion::new(12, 8, 0),
@@ -525,7 +525,7 @@ mod tests {
 
     fn test_kernel() -> KernelKey {
         KernelKey::cuda(
-            incin_core::prelude::OperationKind::Pointwise,
+            incin_core::shapes::error::OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,

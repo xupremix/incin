@@ -133,7 +133,7 @@ fn scatter_pool_grad_2d(
 
 /// Canonical max-pool implementation shared by the CPU executor.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn max_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn max_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
     stride: (usize, usize),
@@ -172,7 +172,7 @@ pub(crate) fn max_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
 /// position the window covered, `+=`-accumulating across overlapping
 /// windows.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn avg_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn avg_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
     stride: (usize, usize),
@@ -315,7 +315,7 @@ fn adaptive_window_bounds(
 
 /// Canonical adaptive-average-pool implementation.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn adaptive_avg_pool2d_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn adaptive_avg_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     output_size: (usize, usize),
 ) -> Result<CpuStorage> {
@@ -442,7 +442,7 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::prelude::Cpu;
+    use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

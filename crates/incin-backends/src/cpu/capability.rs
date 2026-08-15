@@ -5,7 +5,7 @@ use incin_core::prelude::{Cpu, Device};
 
 impl<D: Device> Capabilities for CpuBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-        crate::capability::support(incin_core::prelude::DeviceKind::Cpu, query)
+        crate::capability::support(incin_core::tensor::device::DeviceKind::Cpu, query)
     }
 }
 

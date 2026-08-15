@@ -78,7 +78,7 @@ impl KernelDType {
         }
     }
 
-    fn from_descriptor(dtype: incin_core::prelude::DTypeDescriptor) -> Result<Self> {
+    fn from_descriptor(dtype: incin_core::tensor::dtype::DTypeDescriptor) -> Result<Self> {
         let id = dtype.builtin_id().ok_or_else(|| {
             Error::Msg(format!(
                 "custom dtype {:?} has no kernel-key encoding",
@@ -1038,7 +1038,7 @@ pub(crate) fn render_cuda_reduction(
     #[cfg(feature = "cuda")]
     let policy = {
         let req = PrecisionRequest::new(
-            incin_core::prelude::OperationKind::Reduction,
+            incin_core::shapes::error::OperationKind::Reduction,
             dtype.descriptor(),
             dtype.descriptor(),
             LayoutClass::Contiguous,
@@ -1287,7 +1287,7 @@ pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result
     #[cfg(feature = "cuda")]
     let policy = {
         let req = PrecisionRequest::new(
-            incin_core::prelude::OperationKind::Normalization,
+            incin_core::shapes::error::OperationKind::Normalization,
             dtype.descriptor(),
             dtype.descriptor(),
             LayoutClass::Contiguous,

@@ -114,7 +114,7 @@ mod tests {
     #[cfg(feature = "cpu")]
     use incin_core::exec::DescriptorError;
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
-    use incin_core::prelude::BackendError;
+    use incin_core::error::BackendError;
     #[cfg(feature = "cpu")]
     use incin_core::prelude::{
         DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, OperationKind, RequiresGrad, Tensor,
@@ -137,13 +137,13 @@ mod tests {
     #[cfg(feature = "wgpu")]
     #[test]
     fn selects_wgpu_backend() {
-        assert_backend::<crate::IncinBackend<incin_core::prelude::Wgpu>>();
+        assert_backend::<crate::IncinBackend<incin_core::tensor::device::Wgpu>>();
     }
 
     #[cfg(feature = "cuda")]
     #[test]
     fn selects_cuda_backend() {
-        assert_backend::<crate::IncinBackend<incin_core::prelude::Cuda>>();
+        assert_backend::<crate::IncinBackend<incin_core::tensor::device::Cuda>>();
     }
 
     #[cfg(feature = "cpu")]
@@ -252,7 +252,7 @@ mod tests {
                 &DeviceId::cpu(),
             )
             .unwrap();
-        fn assert_detached(_: &Tensor<Dyn, B, Dyn, incin_core::prelude::NoGrad>) {}
+        fn assert_detached(_: &Tensor<Dyn, B, Dyn, incin_core::tensor::grad::NoGrad>) {}
         assert_detached(&transferred);
     }
 

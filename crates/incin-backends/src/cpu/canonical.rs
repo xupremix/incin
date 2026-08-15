@@ -2850,11 +2850,11 @@ trait VarianceAxis<D: Device> {
     fn mean_along_axis(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<(CpuStorage, usize)>;
+    ) -> incin_core::error::Result<(CpuStorage, usize)>;
     fn sum_along_axis(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage>;
+    ) -> incin_core::error::Result<CpuStorage>;
     fn sum_along_axis_keeping_it(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
@@ -2882,7 +2882,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn mean_along_axis(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
+    ) -> incin_core::error::Result<(CpuStorage, usize)> {
         let count = input.shape.get(attributes.axis).copied().unwrap_or(0);
         Ok((
             crate::cpu::ops::reduce::mean_keepdim(input, attributes.axis)?,
@@ -2893,7 +2893,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn sum_along_axis(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage> {
+    ) -> incin_core::error::Result<CpuStorage> {
         crate::cpu::ops::reduce::sum_dim(input, attributes.axis)
     }
 

@@ -1,7 +1,7 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
@@ -24,7 +24,7 @@ pub(crate) fn launch_embedding_forward(
     let (w_b, i_b) = (&*weight.buffer, &*indices.buffer);
     let device_id = w_b.device_id;
     if device_id != i_b.device_id {
-        return Err(incin_core::prelude::Error::Msg(
+        return Err(incin_core::error::Error::Msg(
             "embedding_forward: weight and indices must be on the same CUDA device".into(),
         ));
     }
@@ -87,7 +87,7 @@ pub(crate) fn launch_embedding_forward(
             .arg(&{ hidden_size })
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("embedding_forward launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("embedding_forward launch failed: {e:?}"))
             })?;
     }
 
@@ -157,7 +157,7 @@ pub(crate) fn launch_embedding_backward(
             .arg(&{ hidden_size })
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("embedding_backward launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("embedding_backward launch failed: {e:?}"))
             })?;
     }
 

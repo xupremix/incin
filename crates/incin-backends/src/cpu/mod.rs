@@ -85,7 +85,7 @@ impl<D: Device, K: DType> SupportsDType<K> for CpuBackendImpl<D> {
         if descriptor.builtin_id().is_some() {
             Ok(descriptor)
         } else {
-            Err(incin_core::prelude::Error::UnsupportedDType {
+            Err(incin_core::error::Error::UnsupportedDType {
                 dtype: descriptor,
                 backend: "Cpu",
                 op: "pointwise",
@@ -184,7 +184,7 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for CpuBackendImpl<D
     }
 }
 
-impl<D: Device> incin_core::prelude::Backend for CpuBackendImpl<D> {
+impl<D: Device> incin_core::backend_authoring::Backend for CpuBackendImpl<D> {
 
     /// `InnerBackend`.
     type InnerBackend = Self;

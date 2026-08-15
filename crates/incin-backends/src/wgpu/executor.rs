@@ -416,7 +416,7 @@ macro_rules! assert_every_advertised_wgpu_row_executes {
                 $($(executes::<op::$operation, WgpuBackendImpl<D>>();)*)*
             }
 
-            assert_all::<incin_core::prelude::Wgpu>();
+            assert_all::<incin_core::tensor::device::Wgpu>();
         };
     };
 }

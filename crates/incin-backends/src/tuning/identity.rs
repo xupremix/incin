@@ -263,16 +263,16 @@ impl<N: Unsigned + 'static> StaticBackend for CudaN<N> {
 }
 
 #[cfg(feature = "wgpu")]
-impl sealed::Sealed for incin_core::prelude::Wgpu {}
+impl sealed::Sealed for incin_core::tensor::device::Wgpu {}
 #[cfg(feature = "wgpu")]
-impl StaticBackend for incin_core::prelude::Wgpu {
+impl StaticBackend for incin_core::tensor::device::Wgpu {
     const BACKEND: BackendIdentity = BackendIdentity::Wgpu;
 }
 
 #[cfg(feature = "wgpu")]
-impl<N: Unsigned + 'static> sealed::Sealed for incin_core::prelude::WgpuN<N> {}
+impl<N: Unsigned + 'static> sealed::Sealed for incin_core::tensor::device::WgpuN<N> {}
 #[cfg(feature = "wgpu")]
-impl<N: Unsigned + 'static> StaticBackend for incin_core::prelude::WgpuN<N> {
+impl<N: Unsigned + 'static> StaticBackend for incin_core::tensor::device::WgpuN<N> {
     const BACKEND: BackendIdentity = BackendIdentity::Wgpu;
 }
 
@@ -1240,8 +1240,8 @@ impl TuningEnvironmentFingerprint<Cuda> {
     /// Queries the complete CUDA device/compiler environment.
     pub fn from_cuda_context(
         context: &cudarc::driver::CudaContext,
-    ) -> incin_core::prelude::Result<Self> {
-        use incin_core::prelude::Error;
+    ) -> incin_core::error::Result<Self> {
+        use incin_core::error::Error;
         Self::new(
             DeviceFingerprint::from_cuda_context(context)
                 .map_err(|error| Error::Msg(error.to_string()))?,

@@ -84,7 +84,7 @@ pub(crate) fn num_elements(shape: &[usize]) -> Result<usize> {
 
 pub(crate) fn checked_u32(value: usize, expression: &'static str) -> Result<u32> {
     u32::try_from(value).map_err(|_| {
-        incin_core::prelude::ShapeError::ArithmeticOverflow {
+        incin_core::shapes::ShapeError::ArithmeticOverflow {
             operation: OperationKind::Storage,
             expression,
         }
@@ -168,11 +168,11 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for WgpuBackendImpl<
         let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         data.into_iter()
             .map(|value| {
-                incin_core::prelude::convert_f64_to_i64(
+                incin_core::error::convert_f64_to_i64(
                     "int_to_vec1",
                     t.dtype,
                     f64::from(value),
-                    incin_core::prelude::FloatToIntPolicy::Exact,
+                    incin_core::error::FloatToIntPolicy::Exact,
                 )
             })
             .collect()
@@ -195,7 +195,7 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for WgpuBackendImpl<D
             validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
             let expected = num_elements(shape)?
                 .checked_mul(core::mem::size_of::<f32>())
-                .ok_or(incin_core::prelude::ShapeError::ArithmeticOverflow {
+                .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
                     operation: OperationKind::Storage,
                     expression: "WGPU element count * element byte width",
                 })?;
@@ -1844,8 +1844,8 @@ impl<D: Device> WgpuBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let shape = &t.shape;
         let flat_size: usize =
-            incin_core::prelude::ShapeBuf::from_slice(&(shape[start_dim..=end_dim]))
-                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            incin_core::shapes::ShapeBuf::from_slice(&(shape[start_dim..=end_dim]))
+                .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
         let mut new_shape: Vec<usize> = shape[..start_dim].to_vec();
         new_shape.push(flat_size);
         new_shape.extend_from_slice(&shape[end_dim + 1..]);
@@ -2061,11 +2061,11 @@ impl<D: Device> WgpuBackendImpl<D> {
             expected: core::mem::size_of::<f32>(),
             got: 0,
         })?;
-        incin_core::prelude::convert_f64_to_i64(
+        incin_core::error::convert_f64_to_i64(
             "int_to_scalar",
             t.dtype,
             f64::from(value),
-            incin_core::prelude::FloatToIntPolicy::Exact,
+            incin_core::error::FloatToIntPolicy::Exact,
         )
     }
 
@@ -2170,10 +2170,10 @@ pub fn reduce_dim_to_storage(
 /// without a general N-dimensional odometer — WGPU storage has no
 /// non-contiguous view support, so this always applies.
 pub fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
-    let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape[..dim]))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[..dim]))
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let axis = shape[dim];
-    let inner: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape[dim + 1..]))
+    let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[dim + 1..]))
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     Ok((outer, axis, inner))
 }
@@ -4217,7 +4217,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<KInt>,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let batch = pred.shape[0];
         let classes = pred.shape[1];
@@ -4252,9 +4252,9 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         // 5. Dispatch reduction
         match reduction {
-            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&per_nll),
-            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&per_nll),
-            incin_core::prelude::Reduction::None => Ok(per_nll),
+            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&per_nll),
+            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&per_nll),
+            incin_core::tensor::reduction::Reduction::None => Ok(per_nll),
         }
     }
 }
@@ -4308,7 +4308,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
 
             // Write scale as f16 little-endian.
-            let d_f16 = incin_core::prelude::f16::from_f32(d);
+            let d_f16 = incin_core::tensor::dtype::f16::from_f32(d);
             let d_bits = d_f16.to_bits();
             out_bytes.push((d_bits & 0xFF) as u8);
             out_bytes.push((d_bits >> 8) as u8);
@@ -4351,7 +4351,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         for block in raw.chunks_exact(block_bytes) {
             let d_bits = (block[0] as u16) | ((block[1] as u16) << 8);
-            let d = incin_core::prelude::f16::from_bits(d_bits).to_f32();
+            let d = incin_core::tensor::dtype::f16::from_bits(d_bits).to_f32();
             for i in 0..32 {
                 let q = block[2 + i] as i8;
                 f32_data.push(q as f32 * d);

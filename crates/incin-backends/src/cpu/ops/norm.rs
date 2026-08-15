@@ -343,7 +343,7 @@ mod tests {
         let bias = vec1(vec![1.0f32, 1.0, 1.0]);
         let eps = 1e-5f32;
 
-        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
+        let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
             .unwrap();
         let vals = f32_vec(&out);
 
@@ -620,7 +620,7 @@ mod tests {
         let b = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+        let out = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),

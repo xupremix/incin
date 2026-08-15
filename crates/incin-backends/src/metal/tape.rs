@@ -4,7 +4,7 @@ use core::cell::RefCell;
 
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode};
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 
 use crate::metal::storage::{MetalStorage, TensorId};
 
@@ -63,7 +63,7 @@ impl MetalGrads {
 ///
 /// # Errors
 ///
-/// Returns [`incin_core::prelude::Error`] if tape traversal or gradient accumulation fails.
+/// Returns [`incin_core::error::Error`] if tape traversal or gradient accumulation fails.
 pub fn backward(loss: &MetalStorage) -> Result<MetalGrads> {
     let nodes = TAPE.with(|t| t.borrow_mut().drain_reachable(loss.id()));
     let grads = incin_core::exec::GradMode::Disabled.scope(|| tape::backward(nodes, loss))?;

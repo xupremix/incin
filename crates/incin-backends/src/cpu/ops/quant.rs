@@ -247,7 +247,7 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::prelude::Q8_0;
+    use incin_core::tensor::dtype::Q8_0;
 
     #[test]
     /// `test_quantize_dequantize_fidelity`.

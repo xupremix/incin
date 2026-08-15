@@ -1380,7 +1380,7 @@ mod tests {
         // Without max-subtraction, exp(1000.0) overflows to inf, producing
         // NaN (inf/inf) instead of a finite uniform distribution.
         let t = vector(vec![1000.0, 1000.0, 1000.0]);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         for v in &vals {
@@ -1466,7 +1466,7 @@ mod tests {
         // Without max-subtraction, exp(1000) overflows to inf and log(inf) = inf.
         use crate::cpu::ops::elementwise::log_softmax;
         let t = vector(vec![1000.0f32, 1000.0, 1000.0]);
-        let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let ls = log_softmax::<incin_core::tensor::device::Cpu, f32>(&t, 0).unwrap();
         let vals = f32_vec(&ls);
         let expected = -(3.0f32.ln());
         for (i, &v) in vals.iter().enumerate() {

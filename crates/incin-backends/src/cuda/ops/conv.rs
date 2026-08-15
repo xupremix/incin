@@ -15,7 +15,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
 
 /// `L_out`/`H_out`/`W_out` output-size formula, matching
@@ -123,7 +123,7 @@ fn alloc_zeroed(
     stream: &Arc<cudarc::driver::CudaStream>,
     device: &Arc<cudarc::driver::CudaContext>,
     device_id: usize,
-    dtype: incin_core::prelude::DTypeDescriptor,
+    dtype: incin_core::tensor::dtype::DTypeDescriptor,
     numel: usize,
 ) -> Result<CudaBuffer> {
     Ok(CudaBuffer {
@@ -177,8 +177,8 @@ pub(crate) fn launch_im2col_2d(
     let h_out = out_size(h, kh, stride, padding, dilation)?;
     let w_out = out_size(w, kw, stride, padding, dilation)?;
     let out_shape: Vec<usize> = alloc::vec![b, c * kh * kw, h_out * w_out];
-    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let out_total: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let thread_total =
         ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
 
@@ -211,7 +211,7 @@ pub(crate) fn launch_im2col_2d(
             .arg(&dilation)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("im2col_2d launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("im2col_2d launch failed: {e:?}"))
             })?;
     }
 
@@ -289,7 +289,7 @@ pub(crate) fn launch_col2im_2d(
             .arg(&dilation)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("col2im_2d launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("col2im_2d launch failed: {e:?}"))
             })?;
     }
 
@@ -344,7 +344,7 @@ pub(crate) fn launch_im2col_1d(
             .arg(&dilation)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("im2col_1d launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("im2col_1d launch failed: {e:?}"))
             })?;
     }
 
@@ -405,7 +405,7 @@ pub(crate) fn launch_col2im_1d(
             .arg(&dilation)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("col2im_1d launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("col2im_1d launch failed: {e:?}"))
             })?;
     }
 

@@ -9,7 +9,7 @@
 
 /// One GGUF-style Q8_0 block: 32 `i8` quants sharing a single `f16` scale.
 ///
-/// The field order is the byte order. [`incin_core::prelude::DTypeId::Q8_0`]'s
+/// The field order is the byte order. [`incin_core::tensor::dtype::DTypeId::Q8_0`]'s
 /// `block_bytes` reports the same 34 bytes, and the two are asserted equal at
 /// every site that allocates by block count.
 #[repr(C)]
@@ -30,10 +30,10 @@ mod tests {
     /// by `block_bytes` — so a disagreement would under-allocate on one side of
     /// a transfer rather than fail to compile.
     fn block_matches_the_dtype_tables_block_size() {
-        use incin_core::prelude::ConstDType;
+        use incin_core::tensor::dtype::ConstDType;
         assert_eq!(
             core::mem::size_of::<BlockQ8_0>(),
-            incin_core::prelude::Q8_0::DESCRIPTOR
+            incin_core::tensor::dtype::Q8_0::DESCRIPTOR
                 .encoding()
                 .bytes_per_block()
         );

@@ -20,10 +20,10 @@ pub use tape::depth as tape_depth;
 pub(crate) fn checked_u32(
     value: usize,
     expression: &'static str,
-) -> incin_core::prelude::Result<u32> {
+) -> incin_core::error::Result<u32> {
     u32::try_from(value).map_err(|_| {
-        incin_core::prelude::ShapeError::ArithmeticOverflow {
-            operation: incin_core::prelude::OperationKind::Storage,
+        incin_core::shapes::ShapeError::ArithmeticOverflow {
+            operation: incin_core::shapes::error::OperationKind::Storage,
             expression,
         }
         .into()
@@ -33,7 +33,7 @@ pub(crate) fn checked_u32(
 pub(crate) fn checked_i32(
     value: usize,
     expression: &'static str,
-) -> incin_core::prelude::Result<i32> {
+) -> incin_core::error::Result<i32> {
     i32::try_from(value).map_err(|_| {
         incin_core::prelude::ShapeError::ArithmeticOverflow {
             operation: incin_core::prelude::OperationKind::Storage,

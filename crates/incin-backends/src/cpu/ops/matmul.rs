@@ -735,7 +735,7 @@ unsafe fn gemm_wasm(
 /// `tests`.
 mod tests {
     use super::*;
-    use incin_core::prelude::DTypeId;
+    use incin_core::tensor::dtype::DTypeId;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1047,7 +1047,7 @@ mod tests {
 
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::prelude::Cpu;
+    use incin_core::tensor::device::Cpu;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<Cpu>;

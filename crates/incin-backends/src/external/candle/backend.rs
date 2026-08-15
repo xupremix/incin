@@ -291,8 +291,8 @@ where
 
 impl<D, NewD> incin_core::backend_authoring::TransferTo<NewD> for CandleBackend<D>
 where
-    D: incin_core::prelude::Device,
-    NewD: incin_core::prelude::Device,
+    D: incin_core::tensor::device::Device,
+    NewD: incin_core::tensor::device::Device,
 {
     fn transfer_var<K: incin_core::tensor::dtype::DType>(
         variable: &Self::Var<K>,

@@ -308,7 +308,7 @@ macro_rules! assert_every_advertised_cuda_row_executes {
                 $($(executes::<op::$operation, CudaBackendImpl<D>>();)*)*
             }
 
-            assert_all::<incin_core::prelude::Cuda>();
+            assert_all::<incin_core::tensor::device::Cuda>();
         };
     };
 }

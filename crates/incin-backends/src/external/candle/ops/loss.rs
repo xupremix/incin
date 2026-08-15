@@ -37,7 +37,7 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     pub fn bce_with_logits_loss<K: incin_core::tensor::dtype::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<K>,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         // Numerically stable: max(x, 0) - x*y + log(1 + exp(-|x|))
         let zero = pred
@@ -101,7 +101,7 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     pub fn cross_entropy_loss<K: incin_core::tensor::dtype::DType, KInt: incin_core::tensor::dtype::DType>(
         pred: &<Self as StorageBackend>::Storage<K>,
         target: &<Self as StorageBackend>::Storage<KInt>,
-        _reduction: incin_core::prelude::Reduction,
+        _reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let target_u32 = target
             .tensor()

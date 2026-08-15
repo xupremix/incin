@@ -43,7 +43,7 @@
 //!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
-use incin_core::prelude::Error;
+use incin_core::error::Error;
 use incin_core::prelude::{
     DType, DTypeId, DTypeDescriptor, OperationKind, Result, ShapeError,
 };

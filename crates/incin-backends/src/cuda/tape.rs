@@ -52,8 +52,8 @@ impl TapeStorage for CudaStorage {
             .device
             .default_stream()
             .clone_dtoh(&*self.buffer.data)
-            .map_err(|error| incin_core::prelude::BackendError::Execution {
-                operation: incin_core::prelude::OperationKind::Storage,
+            .map_err(|error| incin_core::error::BackendError::Execution {
+                operation: incin_core::shapes::error::OperationKind::Storage,
                 message: alloc::format!("CUDA gradient readback failed: {error:?}").into(),
             })?;
         Ok(bytemuck::cast_slice::<u8, f32>(&bytes)

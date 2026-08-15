@@ -40,8 +40,8 @@ macro_rules! cpu_compiled_operations {
 
 macro_rules! supports_cpu_operation {
     ($($kind:ident => $descriptor:ty,)*) => {
-        fn supports_cpu_operation(operation: incin_core::prelude::OperationKind) -> bool {
-            matches!(operation, $(incin_core::prelude::OperationKind::$kind)|*)
+        fn supports_cpu_operation(operation: incin_core::shapes::error::OperationKind) -> bool {
+            matches!(operation, $(incin_core::shapes::error::OperationKind::$kind)|*)
         }
     };
 }
@@ -55,7 +55,7 @@ cpu_compiled_operations!(supports_cpu_operation);
 /// second operation vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuCompiledSupport {
-    pub operation: incin_core::prelude::OperationKind,
+    pub operation: incin_core::shapes::error::OperationKind,
     pub name: &'static str,
     pub descriptor: &'static str,
     pub execution_site: incin_core::exec::ExecutionSite,
@@ -68,7 +68,7 @@ macro_rules! compiled_support_report {
             let mut report = Vec::new();
             $(push_compiled_support(
                 &mut report,
-                incin_core::prelude::OperationKind::$kind,
+                incin_core::shapes::error::OperationKind::$kind,
             )?;)*
             Ok(report)
         }
@@ -77,7 +77,7 @@ macro_rules! compiled_support_report {
 
 fn push_compiled_support(
     report: &mut Vec<CpuCompiledSupport>,
-    operation: incin_core::prelude::OperationKind,
+    operation: incin_core::shapes::error::OperationKind,
 ) -> core::result::Result<(), &'static str> {
     let entry = incin_core::exec::catalog::catalog_entry(operation)
         .ok_or("compiled CPU operation is missing from the canonical catalog")?;
@@ -204,11 +204,11 @@ impl CpuCompiledFunction {
 macro_rules! validate_cpu_descriptor_dispatch {
     ($($kind:ident => $descriptor:ty,)*) => {
         fn validate_cpu_descriptor_dispatch(
-            operation: incin_core::prelude::OperationKind,
+            operation: incin_core::shapes::error::OperationKind,
             payload: &incin_core::graph::DescriptorPayload,
         ) -> Result<()> {
             match operation {
-                $(incin_core::prelude::OperationKind::$kind => {
+                $(incin_core::shapes::error::OperationKind::$kind => {
                     validate_descriptor::<$descriptor>(payload)
                 })*
                 _ => Err(Error::Msg(format!(
@@ -273,7 +273,7 @@ impl CpuCompiledInvocation {
                 bytes,
                 &value.shape,
                 value.dtype,
-                &incin_core::prelude::DeviceId::cpu(),
+                &incin_core::tensor::device::DeviceId::cpu(),
             )?;
             let slot = plan
                 .memory_plan

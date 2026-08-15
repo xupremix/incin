@@ -796,11 +796,11 @@ impl<D: Device> CudaBackendImpl<D> {
             expected: core::mem::size_of::<f32>(),
             got: 0,
         })?;
-        incin_core::prelude::convert_f64_to_i64(
+        incin_core::error::convert_f64_to_i64(
             "int_to_scalar",
             t.buffer.dtype,
             f64::from(value),
-            incin_core::prelude::FloatToIntPolicy::Exact,
+            incin_core::error::FloatToIntPolicy::Exact,
         )
     }
     /// Compatibility forwarding method; host readback ownership lives in `HostReadback` below.
@@ -1162,8 +1162,8 @@ impl<D: Device> CudaBackendImpl<D> {
             });
         }
         let merged: usize =
-            incin_core::prelude::ShapeBuf::from_slice(&(t.shape[start_dim..=end_dim]))
-                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+            incin_core::shapes::ShapeBuf::from_slice(&(t.shape[start_dim..=end_dim]))
+                .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
         let mut target_shape = t.shape[..start_dim].to_vec();
         target_shape.push(merged);
         target_shape.extend_from_slice(&t.shape[end_dim + 1..]);
@@ -2091,8 +2091,8 @@ impl<D: Device> CudaBackendImpl<D> {
                 (t.clone(), d)
             }
             None => {
-                let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
-                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+                let numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(t.shape))
+                    .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
                 (Self::reshape::<K>(t, &[numel])?, 0)
             }
         };
@@ -2169,7 +2169,7 @@ impl<D: Device> CudaBackendImpl<D> {
         lhs: &CudaStorage,
         rhs: &CudaStorage,
     ) -> Result<CudaStorage> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<incin_core::prelude::Q8_0>() {
+        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<incin_core::tensor::dtype::Q8_0>() {
             return Err(Error::UnsupportedBackendOperation {
                 op: "quantized_matmul",
                 backend: "Cuda (only Q8_0 supported)",
@@ -2185,7 +2185,7 @@ impl<D: Device> CudaBackendImpl<D> {
         }
         let k = lhs.shape[lhs.shape.len() - 1];
         let m: usize =
-            incin_core::prelude::ShapeBuf::from_slice(&(lhs.shape[..lhs.shape.len() - 1]))
+            incin_core::shapes::ShapeBuf::from_slice(&(lhs.shape[..lhs.shape.len() - 1]))
                 .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let n = rhs.shape[0];
         if k != rhs.shape[1] {
@@ -2777,14 +2777,14 @@ impl<D: Device> CudaBackendImpl<D> {
     pub fn mse_loss<K: DType>(
         pred: &CudaStorage,
         target: &CudaStorage,
-        reduction: incin_core::prelude::Reduction,
+        reduction: incin_core::tensor::reduction::Reduction,
     ) -> Result<CudaStorage> {
         let diff = Self::sub::<K>(pred, target)?;
         let squared = Self::mul::<K>(&diff, &diff)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&squared),
-            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&squared),
-            incin_core::prelude::Reduction::None => Ok(squared),
+            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&squared),
+            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&squared),
+            incin_core::tensor::reduction::Reduction::None => Ok(squared),
         }
     }
 
@@ -2796,9 +2796,9 @@ impl<D: Device> CudaBackendImpl<D> {
         let diff = Self::sub::<K>(pred, target)?;
         let absolute = Self::abs::<K>(&diff)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&absolute),
-            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&absolute),
-            incin_core::prelude::Reduction::None => Ok(absolute),
+            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&absolute),
+            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&absolute),
+            incin_core::tensor::reduction::Reduction::None => Ok(absolute),
         }
     }
 
@@ -2817,9 +2817,9 @@ impl<D: Device> CudaBackendImpl<D> {
         let term2 = Self::log::<K>(&one_plus)?;
         let loss = Self::add::<K>(&term1, &term2)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&loss),
-            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&loss),
-            incin_core::prelude::Reduction::None => Ok(loss),
+            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&loss),
+            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&loss),
+            incin_core::tensor::reduction::Reduction::None => Ok(loss),
         }
     }
 
@@ -2837,9 +2837,9 @@ impl<D: Device> CudaBackendImpl<D> {
         let log_sm = Self::log::<K>(&sm)?;
         let nll = crate::cuda::ops::loss::launch_nll_loss(&log_sm, target, classes)?;
         match reduction {
-            incin_core::prelude::Reduction::Mean => Self::mean_all::<K>(&nll),
-            incin_core::prelude::Reduction::Sum => Self::sum_all::<K>(&nll),
-            incin_core::prelude::Reduction::None => Ok(nll),
+            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&nll),
+            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&nll),
+            incin_core::tensor::reduction::Reduction::None => Ok(nll),
         }
     }
 }
@@ -2885,11 +2885,11 @@ impl<D: Device> incin_core::backend_authoring::HostReadback for CudaBackendImpl<
         let data = download_f32_host(t)?;
         data.into_iter()
             .map(|value| {
-                incin_core::prelude::convert_f64_to_i64(
+                incin_core::error::convert_f64_to_i64(
                     "int_to_vec1",
                     t.buffer.dtype,
                     f64::from(value),
-                    incin_core::prelude::FloatToIntPolicy::Exact,
+                    incin_core::error::FloatToIntPolicy::Exact,
                 )
             })
             .collect()
@@ -3206,9 +3206,9 @@ fn cuda_topk_host(
     let mut base_shape = shape.clone();
     base_shape[dim] = 1;
 
-    let n_slices: usize = incin_core::prelude::ShapeBuf::from_slice(&(base_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
-    let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+    let n_slices: usize = incin_core::shapes::ShapeBuf::from_slice(&(base_shape))
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
+    let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut out_vals = vec![0.0f32; out_numel];
     let mut out_indices = vec![0u32; out_numel];
@@ -3967,11 +3967,11 @@ mod tests {
         let lhs_f32 = cuda_f32(&[2, 32], (0..64).map(|i| i as f32 * 0.01).collect());
         let rhs_f32 = cuda_f32(&[4, 32], (0..128).map(|i| i as f32 * 0.01).collect());
         let lhs_q =
-            B::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&lhs_f32).unwrap();
         let rhs_q =
-            B::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+            B::quantize::<f32, incin_core::tensor::dtype::Q8_0>(&rhs_f32).unwrap();
         let out =
-            B::quantized_matmul::<incin_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+            B::quantized_matmul::<incin_core::tensor::dtype::Q8_0>(&lhs_q, &rhs_q)
                 .unwrap();
         assert_eq!(out.shape, vec![2, 4]);
     }

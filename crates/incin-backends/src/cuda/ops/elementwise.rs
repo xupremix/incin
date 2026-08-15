@@ -3,7 +3,7 @@ use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
 use incin_core::exec::LayoutClass;
 #[cfg(test)]
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 fn validate_kernel_abi(
@@ -129,7 +129,7 @@ fn pointwise_launch_selection(
     {
         let key = crate::tuning::TuningKey::new(
             crate::tuning::identity::TuningEnvironmentFingerprint::<
-                incin_core::prelude::Cuda,
+                incin_core::tensor::device::Cuda,
             >::from_cuda_context(context)?
             .erase(),
             &kernel.key,

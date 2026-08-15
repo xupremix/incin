@@ -3,7 +3,7 @@
 use alloc::format;
 use alloc::string::{String, ToString};
 
-use incin_core::prelude::Dyn;
+use incin_core::shapes::Dyn;
 
 use crate::tuning::cache::CacheKey;
 use crate::tuning::identity::TuningEnvironmentFingerprint;

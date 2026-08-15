@@ -87,7 +87,7 @@ fn reduction_launch_selection(
     {
         let key = crate::tuning::TuningKey::new(
             crate::tuning::identity::TuningEnvironmentFingerprint::<
-                incin_core::prelude::Cuda,
+                incin_core::tensor::device::Cuda,
             >::from_cuda_context(context)?
             .erase(),
             &kernel.key,

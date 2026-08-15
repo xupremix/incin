@@ -2,11 +2,11 @@
 
 use alloc::{format, string::String, vec::Vec};
 use incin_core::exec::LayoutClass;
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 
 pub use crate::kernel::{KernelAccess, KernelFamily, KernelKey};
 pub use crate::tuning::LaunchCandidate;
-pub use incin_core::prelude::OperationKind;
+pub use incin_core::shapes::error::OperationKind;
 
 /// Classification of tensor rank for legal-candidate pruning and specialization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

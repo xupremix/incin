@@ -2,7 +2,7 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
 
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
@@ -108,13 +108,13 @@ fn launch_shape_op(
     let f = dispatcher.get_function("shape", "shape_op")?;
     let stream = t_buf.device.default_stream();
 
-    let n_elements: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
-        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let n_elements: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let launch_n_u32 = crate::cuda::checked_u32(launch_n, "CUDA shape-op grid dimension")?;
     let params = prepare_shape_params(op_mode, launch_n_u32, &out_shape, &t.shape, aux)?;
     let params_u8: &[u8] = bytemuck::cast_slice(&params);
     let params_dev = stream.clone_htod(params_u8).map_err(|e| {
-        incin_core::prelude::Error::Msg(format!("shape params upload failed: {e:?}"))
+        incin_core::error::Error::Msg(format!("shape params upload failed: {e:?}"))
     })?;
 
     let mut out_b = CudaBuffer {
@@ -156,7 +156,7 @@ fn launch_shape_op(
             .arg(&params_f32)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("shape_op launch failed: {e:?}"))
+                incin_core::error::Error::Msg(format!("shape_op launch failed: {e:?}"))
             })?;
     }
 
@@ -238,7 +238,7 @@ fn ensure_concat_loaded(device_id: usize) -> Result<()> {
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
     if tensors.is_empty() {
-        return Err(incin_core::prelude::Error::Msg(
+        return Err(incin_core::error::Error::Msg(
             "concat: empty tensor list".into(),
         ));
     }
@@ -276,7 +276,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         device_id,
     };
 
-    let outer_size: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape[0..dim]))
+    let outer_size: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape[0..dim]))
         .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let inner_size: usize = if dim + 1 < out_shape.len() {
         ShapeBuf::from_slice(&out_shape[dim + 1..]).checked_numel(OperationKind::Concat)?
@@ -339,7 +339,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
                 .arg(&current_offset_u32)
                 .launch(cfg)
                 .map_err(|e| {
-                    incin_core::prelude::Error::Msg(format!("concat launch failed: {e:?}"))
+                    incin_core::error::Error::Msg(format!("concat launch failed: {e:?}"))
                 })?;
         }
 

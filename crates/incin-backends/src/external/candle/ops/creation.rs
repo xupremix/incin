@@ -114,7 +114,7 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
-    ) -> Result<<Self as incin_core::prelude::VariableBackend>::Var<K>> {
+    ) -> Result<<Self as incin_core::backend_authoring::VariableBackend>::Var<K>> {
         Ok(
             candle::Var::ones(shape, to_candle_dtype(dtype)?, &to_candle_device(device)?)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,

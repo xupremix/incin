@@ -265,7 +265,7 @@ impl TopologyProbe for NcclTopology {
     }
 }
 
-/// Rank-local CUDA bytes indexed by a static dtype or [`Dyn`](incin_core::prelude::Dyn).
+/// Rank-local CUDA bytes indexed by a static dtype or [`Dyn`](incin_core::shapes::Dyn).
 #[derive(Debug)]
 pub struct NcclBuffer<K: DType> {
     data: CudaSlice<u8>,
@@ -2208,7 +2208,7 @@ pub enum NcclTransportError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use incin_core::prelude::Backend;
+    use incin_core::backend_authoring::Backend;
 
     fn all_reduce_plan() -> CollectivePlan {
         type Mesh =
@@ -2918,8 +2918,8 @@ mod tests {
     #[test]
     #[ignore = "requires one CUDA device"]
     fn tensor_parallel_reassembly_moves_rank_axis_on_cuda_for_static_and_dyn() {
-        type B = CudaBackendImpl<incin_core::prelude::CudaN<incin_core::typenum::U0>>;
-        type D = incin_core::prelude::CudaN<incin_core::typenum::U0>;
+        type B = CudaBackendImpl<incin_core::tensor::device::CudaN<incin_core::typenum::U0>>;
+        type D = incin_core::tensor::device::CudaN<incin_core::typenum::U0>;
 
         let rank_major = [
             1.0f32, 2.0, 3.0, 2.0, 3.0, 4.0, //
@@ -2932,7 +2932,7 @@ mod tests {
         let collective = TensorParallelCollective::ColumnOutputGather { tensor_axis: 1 };
 
         let static_input =
-            Tensor::<incin_core::prelude::Dyn, B>::from_slice(&rank_major, vec![12]).unwrap();
+            Tensor::<incin_core::shapes::Dyn, B>::from_slice(&rank_major, vec![12]).unwrap();
         let static_output = reassemble_tensor_parallel_storage::<D, f32>(
             static_input.inner(),
             collective,
@@ -2944,19 +2944,19 @@ mod tests {
         assert_eq!(bytemuck::cast_slice::<u8, f32>(&static_bytes), expected);
 
         let dyn_input =
-            Tensor::<incin_core::prelude::Dyn, B, incin_core::prelude::Dyn>::from_bytes(
+            Tensor::<incin_core::shapes::Dyn, B, incin_core::shapes::Dyn>::from_bytes(
                 bytemuck::cast_slice(&rank_major),
                 (vec![12], DTypeId::F32),
             )
             .unwrap();
-        let dyn_output = reassemble_tensor_parallel_storage::<D, incin_core::prelude::Dyn>(
+        let dyn_output = reassemble_tensor_parallel_storage::<D, incin_core::shapes::Dyn>(
             dyn_input.inner(),
             collective,
             &[2, 3],
             &[2, 6],
         )
         .unwrap();
-        let dyn_bytes = B::to_bytes::<incin_core::prelude::Dyn>(&dyn_output).unwrap();
+        let dyn_bytes = B::to_bytes::<incin_core::shapes::Dyn>(&dyn_output).unwrap();
         assert_eq!(bytemuck::cast_slice::<u8, f32>(&dyn_bytes), expected);
     }
 }

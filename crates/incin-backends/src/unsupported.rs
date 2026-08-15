@@ -15,7 +15,7 @@
 //! The error a caller sees is unchanged. What changes is that a reader can see
 //! which operations a backend does not have without running it.
 //!
-//! [`Error::UnsupportedBackendOperation`]: incin_core::prelude::Error
+//! [`Error::UnsupportedBackendOperation`]: incin_core::error::Error
 
 /// Declares float operations a backend does not implement, grouped by
 /// signature: `unary` takes one tensor, `exponent` a tensor and an exponent,

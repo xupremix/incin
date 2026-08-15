@@ -523,7 +523,7 @@ mod tests {
     /// `cross_entropy_loss_sum_equals_batch_times_mean`.
     fn cross_entropy_loss_sum_equals_batch_times_mean() {
         let mean_out =
-            cross_entropy_loss_storage::<incin_core::prelude::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
+            cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
                 .unwrap();
         let sum_out =
             cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(&cross_pred(), &cross_target_0_2(), Reduction::Sum)

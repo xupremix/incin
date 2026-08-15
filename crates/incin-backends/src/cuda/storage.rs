@@ -3,7 +3,7 @@ use core::ops::Deref;
 
 use incin_core::exec::{Alignment, TensorMeta};
 #[cfg(test)]
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 use incin_core::prelude::{DTypeDescriptor, DeviceId, Error, OperationKind, Result};
 
 /// Byte alignment every CUDA device allocation satisfies.

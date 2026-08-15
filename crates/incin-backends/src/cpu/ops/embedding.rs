@@ -13,7 +13,7 @@
 //! accumulate-not-overwrite requirement, done inside ONE backward closure
 //! rather than via multiple `TapeEntry` pushes.
 
-use incin_core::prelude::Error;
+use incin_core::error::Error;
 use incin_core::prelude::{BackwardError, OperationKind};
 use incin_core::prelude::{DType, Result};
 
@@ -32,7 +32,7 @@ use crate::cpu::tape::{self, TapeEntry};
 /// of a zero-filled buffer sized to `w`, summing contributions when the same
 /// row index appears more than once in `t`.
 #[allow(clippy::extra_unused_type_parameters)]
-pub(crate) fn embedding_impl<D: incin_core::prelude::Device, K: DType, KInt: DType>(
+pub(crate) fn embedding_impl<D: incin_core::tensor::device::Device, K: DType, KInt: DType>(
     t: &CpuStorage,
     w: &CpuStorage,
 ) -> Result<CpuStorage> {
@@ -63,12 +63,12 @@ pub(crate) fn embedding_impl<D: incin_core::prelude::Device, K: DType, KInt: DTy
         let raw = t.get_i64_checked(&idx, "embedding_index")?;
         let row_idx = usize::try_from(raw).map_err(|_| Error::InvalidConversion {
             operation: "embedding_index",
-            from: incin_core::prelude::DTypeId::I64.descriptor(),
-            to: incin_core::prelude::DTypeId::U32.descriptor(),
-            reason: incin_core::prelude::ConversionFailure::OutOfRange,
+            from: incin_core::tensor::dtype::DTypeId::I64.descriptor(),
+            to: incin_core::tensor::dtype::DTypeId::U32.descriptor(),
+            reason: incin_core::error::ConversionFailure::OutOfRange,
         })?;
         if row_idx >= vocab_size {
-            return Err(incin_core::prelude::ShapeError::InvalidParameter {
+            return Err(incin_core::shapes::ShapeError::InvalidParameter {
                 operation: OperationKind::Embedding,
                 parameter: "index",
                 value: row_idx,
@@ -138,7 +138,7 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
-    use incin_core::prelude::Cpu;
+    use incin_core::tensor::device::Cpu;
 
     /// `B`.
     type B = CpuBackendImpl<Cpu>;

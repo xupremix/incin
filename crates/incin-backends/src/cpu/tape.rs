@@ -20,7 +20,7 @@ use core::cell::RefCell;
 
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage, TensorId};
-use incin_core::prelude::Result;
+use incin_core::error::Result;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
@@ -280,7 +280,7 @@ fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
     // that axis's stride contribution once its size is 1.
     reduced
         .reshape(&new_shape)
-        .map_err(|_| incin_core::prelude::Error::InternalInvariant {
+        .map_err(|_| incin_core::error::Error::InternalInvariant {
             operation: "autograd unbroadcast",
             reason: "validated keepdim reduction could not be reshaped",
         })
@@ -320,8 +320,8 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
 
         CpuBuffer::Q8_0(_) => {
-            return Err(incin_core::prelude::Error::UnsupportedDType {
-                dtype: incin_core::prelude::DTypeId::Q8_0.descriptor(),
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
                 backend: "cpu",
                 op: "autograd unbroadcast",
             });
@@ -580,8 +580,8 @@ mod tests {
         };
         assert!(matches!(
             err,
-            incin_core::prelude::Error::Backward(
-                incin_core::prelude::BackwardError::NonFinite { .. }
+            incin_core::error::Error::Backward(
+                incin_core::error::BackwardError::NonFinite { .. }
             )
         ));
     }

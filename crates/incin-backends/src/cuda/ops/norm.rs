@@ -53,8 +53,8 @@ fn validate_parameter(
     }
     if input.buffer.device_id != parameter.buffer.device_id {
         return Err(Error::DeviceMismatch {
-            left: incin_core::prelude::DeviceId::cuda(input.buffer.device_id),
-            right: incin_core::prelude::DeviceId::cuda(parameter.buffer.device_id),
+            left: incin_core::tensor::device::DeviceId::cuda(input.buffer.device_id),
+            right: incin_core::tensor::device::DeviceId::cuda(parameter.buffer.device_id),
         });
     }
     let numel = validate_contiguous(parameter, name)?;
@@ -101,7 +101,7 @@ fn normalization_launch_selection(
     {
         let key = crate::tuning::TuningKey::new(
             crate::tuning::identity::TuningEnvironmentFingerprint::<
-                incin_core::prelude::Cuda,
+                incin_core::tensor::device::Cuda,
             >::from_cuda_context(context)?
             .erase(),
             &kernel.key,
@@ -178,7 +178,7 @@ pub(crate) fn launch_layer_norm(
         validate_parameter(input, bias, norm_size, "bias")?;
     }
     let req = PrecisionRequest::new(
-        incin_core::prelude::OperationKind::Normalization,
+        incin_core::shapes::error::OperationKind::Normalization,
         buffer.dtype,
         buffer.dtype,
         incin_core::exec::LayoutClass::Contiguous,
@@ -412,7 +412,7 @@ pub(crate) fn launch_batch_norm(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use incin_core::prelude::DTypeId;
+    use incin_core::tensor::dtype::DTypeId;
 
     #[test]
     fn normalization_metadata_checks_reject_overflow() {
