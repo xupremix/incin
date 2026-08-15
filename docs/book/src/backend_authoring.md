@@ -107,10 +107,10 @@ operations can return a tuple.
 5. A capability-matrix test that *runs* each advertised row rather than
    asserting the table against itself.
 
-Step 6 is the one that catches real mistakes. The repository's own
-`capability_matrix` suite executes the boundary cases of every registered
-rule, which is how it found rows advertising ranks their kernels refused and
-dtypes their kernels silently narrowed.
+Step 6 is the one that catches real mistakes. The repository's own capability
+registration tests execute the boundary cases of every registered rule, which
+is how it found rows advertising ranks their kernels refused and dtypes their
+kernels silently narrowed.
 
 Two executable downstream fixtures show the contract in context:
 `crates/incin-core/tests/custom_operation.rs` implements a custom operation,

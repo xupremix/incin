@@ -237,7 +237,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 ///
 /// Only geometry. **Dtype comes from elsewhere**: generated tensors take the
 /// target's bound float (`gpu.zeros(..)` is `f32` unless the target was rebound
-/// with `with_float`), and data tensors take the element type of the data
+/// with `with_dtype`), and data tensors take the element type of the data
 /// (`gpu.tensor([0_i64, 1])` is `i64`). Nothing in this macro can change
 /// either, which is deliberate — a shape argument that silently decided dtype
 /// would be the same mistake as a device argument that silently decided a

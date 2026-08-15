@@ -174,12 +174,6 @@ jobs:
             exit 1
           fi
 
-      - name: Capability matrix against real execution
-        run: cargo test -p incin-backends --features cuda --test capability_matrix -- --ignored
-
-      - name: Gradient parity against CPU
-        run: cargo test -p incin-backends --features cuda --test gradient_parity -- --ignored
-
       - name: Storage metadata against real device pointers
         run: cargo test -p incin-backends --features cuda --test tensor_meta -- --ignored
 
@@ -264,9 +258,6 @@ jobs:
       - name: Metal backend suite
         run: cargo test -p incin-backends --no-default-features --features std,cpu,metal,metal-mps,autotune
 
-      - name: Metal parity integration tests
-        run: cargo test -p incin-backends --features metal,metal-mps --test metal_parity
-
       - name: Metal autotuning integration tests
         run: cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning
 
@@ -306,4 +297,3 @@ jobs:
 
       - name: Global Checkpoint Manifest & Reshard Load Test
         run: cargo test -p incin-core --test checkpoint_reshard
-

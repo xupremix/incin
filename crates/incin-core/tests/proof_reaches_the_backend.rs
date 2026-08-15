@@ -48,7 +48,7 @@ impl StorageBackend for RecordingBackend {
 }
 
 impl Capabilities for RecordingBackend {
-    /// Everything is supported. Refusal is `canonical_cpu.rs`'s subject; the
+    /// Everything is supported. Refusal is the canonical capability suite's subject; the
     /// only thing being measured here is what proof arrives.
     fn support(&self, _query: &CapabilityQuery) -> SupportLevel {
         SupportLevel::Native

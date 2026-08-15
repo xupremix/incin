@@ -8,7 +8,7 @@ two almost always and let the rest default:
 | `S` | Shape (see [Shapes](./shapes.md)) | required |
 | `B` | Backend (which device this runs on) | required (`DefaultBackend` if `cpu` is on) |
 | `K` | Element dtype | `B::FloatElem` (`f32` for the default backend) |
-| `G` | Gradient tracking (`Grad` / `NoGrad`) | `Grad` |
+| `G` | Gradient tracking (`Grad` / `NoGrad`) | `NoGrad` |
 | `P` | Placement (distributed only) | `Local` |
 
 ## Creating tensors

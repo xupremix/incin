@@ -297,7 +297,7 @@ explicit constructor form for backend authors or code that intentionally fixes
 
 Feature `target-api`. A **target** is a value that knows where and how to
 allocate — a device (`Cpu`, `Wgpu::new(0)`, ...) or a backend value rebound to
-a specific dtype (`.with_float::<f64>()`). It has no construction step and
+a specific dtype (`.with_dtype::<f64>()`). It has no construction step and
 owns no resources; it is a value you pass around, not a runtime handle you
 initialize and hold.
 
@@ -325,7 +325,7 @@ CPU). Prefer the ordinary forms for application code.
 
 `TensorTarget`/`DtypeTarget` extend the same idea to data-carrying and
 dtype-rebinding constructors — `gpu.tensor([[1.0, 2.0]])`,
-`gpu.with_float::<f64>().zeros(...)`. This whole surface is marked
+`gpu.with_dtype::<f64>().zeros(...)`. This whole surface is marked
 feature-gated in the prelude comment (`crates/incin/src/lib.rs:496`) — it
 is real and tested, not a stub, but its API is not yet frozen the way §5's is.
 

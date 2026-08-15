@@ -72,9 +72,9 @@ finding contradicts a doc comment in the tree, that is called out.
 ### 1.1 Canonical dispatch is test-only
 
 ```
-crates/incin-backends/tests/canonical_cpu.rs      128   integration test
+crates/incin-backends/tests/canonical_dispatch_smoke.rs   current canonical dispatch test
 crates/incin-backends/src/cpu/canonical.rs         56   all after #[cfg(test)] @2596
-crates/incin-backends/tests/capability_matrix.rs   32   integration test
+crates/incin-backends/src/capability.rs             current capability registrations
                                                   ---
                               real call sites     216   every one a test
 crates/incin-backends/src/capability.rs             2   comments, not calls
@@ -178,18 +178,14 @@ and does `labels.push(label as f32)` with the comment "F32 target tensor for
 CrossEntropyLoss". When the framework's own showcase routes around the
 constructors, the constructors have failed. **Not yet fixed** — see §4.3.
 
-### 1.9 Boolean tensors do not exist
+### 1.9 Boolean tensors
 
-- `DTypeId` has no `Bool` variant (U8, U32, I64, BF16, F16, F32, F64, Q8_0).
-- Element types: f32, f64, u8, u32, i64, f16, bf16, Q8_0. No `bool`.
-- **`pub trait BoolDType: DType {}` has zero implementors** and is exported in
-  the prelude. A dead abstraction.
-- Comparisons return the operand dtype:
-  `fn cmp_eq<K: DType>(lhs: &Storage<K>, rhs: &Storage<K>) -> Result<Storage<K>>`.
-  So `a.gt(&b)` on f32 yields f32 `0.0`/`1.0`, not a mask.
-
-**Not fixed.** See §4.1 — it is a frozen-foundation change and needs a ledger
-task.
+- `DTypeId::Bool` and `bool` implement `DType`, `ConstDType`, `BuiltinDType`,
+  `PlainDType`, and `BoolDType`.
+- Comparisons return `Tensor<..., bool, NoGrad>` and logical operations consume
+  boolean tensors. Boolean readback validates the logical `0`/`1` values.
+- The current boolean contract is covered by the target-api and tensor
+  operation tests; this section is descriptive rather than a pending design.
 
 ### 1.10 Transfer structurally cannot be canonical, and the repo says so
 
@@ -511,7 +507,7 @@ backend.
 **Two corrections made here after probing the first version:**
 
 1. `TensorTarget::Float` / `with_float` were **misnamed**. `BackendFor<T>` is
-   generic over any `DType`, so `with_float::<i64>()` already worked and
+   generic over any `DType`, so `with_dtype::<i64>()` already worked and
    produced perfectly good `i64` zeros. Renamed to `Dtype` / `with_dtype`,
    because a target rebound to `i64` for index buffers or masks is a
    legitimate thing to want and the old name said otherwise.
@@ -676,17 +672,10 @@ See §5 for criteria.
 
 ### 4.1 Boolean tensors
 
-Needs: a `Bool` variant in `DTypeId`, a `bool` element type, `BoolDType`
-implemented (or deleted from the prelude), and comparison ops changed to
-return a bool-dtype storage instead of the operand dtype.
-
-This changes the operation catalog's dtype/output column, which is a **frozen
-foundation**. It needs a `PROPOSALS.md` ledger row before starting. Cost is
-not small: every backend's comparison kernels change their output type.
-
-Interim honesty: `BoolDType` having zero implementors while sitting in the
-public prelude is misleading regardless of whether bool lands. Either
-implement it or remove it.
+Resolved in the current contract: `DTypeId::Bool`, `bool`, `BoolDType`, and
+boolean comparison/logical outputs are implemented and covered by the current
+target-api and tensor operation tests. This is no longer a pending foundation
+change.
 
 ### 4.2 Transfer
 
