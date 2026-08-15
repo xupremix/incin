@@ -834,7 +834,7 @@ pub(crate) fn div_storage_with_shape(
 /// Called by both `::softmax` (as `exp(log_softmax(x, dim))`) and
 /// `cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
 /// numerically-stable kernel is shared rather than duplicated.
-pub(crate) fn log_softmax<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn log_softmax<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     dim: usize,
 ) -> Result<CpuStorage> {
@@ -1344,7 +1344,7 @@ mod tests {
     /// `softmax_forward_sums_to_one_on_vector`.
     fn softmax_forward_sums_to_one_on_vector() {
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 0).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 0).unwrap();
         let vals = f32_vec(&out);
 
         let sum: f32 = vals.iter().sum();
@@ -1359,7 +1359,7 @@ mod tests {
     /// `softmax_forward_sums_to_one_per_row_on_matrix`.
     fn softmax_forward_sums_to_one_per_row_on_matrix() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let out = canonical_softmax::<incin_core::prelude::Cpu>(&t, 1).unwrap();
+        let out = canonical_softmax::<incin_core::tensor::device::Cpu>(&t, 1).unwrap();
         let vals = f32_vec(&out);
 
         let row0_sum: f32 = vals[0..3].iter().sum();
@@ -1413,7 +1413,7 @@ mod tests {
     fn softmax_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let s = canonical_softmax::<incin_core::prelude::Cpu>(&inputs[0], 0).unwrap();
+            let s = canonical_softmax::<incin_core::tensor::device::Cpu>(&inputs[0], 0).unwrap();
             crate::cpu::ops::reduce::sum_all(&s).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);
@@ -1449,7 +1449,7 @@ mod tests {
         // exp(log_softmax(x)).sum() == 1.0 (the softmax identity).
         use crate::cpu::ops::elementwise::log_softmax;
         let t = vector(vec![1.0, 2.0, 3.0]);
-        let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let ls = log_softmax::<incin_core::tensor::device::Cpu, f32>(&t, 0).unwrap();
         let exp_ls = canonical_exp(&ls).unwrap();
         let vals = f32_vec(&exp_ls);
         let sum: f32 = vals.iter().sum();
@@ -1506,7 +1506,7 @@ mod tests {
         use crate::cpu::ops::elementwise::log_softmax;
         let x = vector(vec![0.5f32, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let ls = log_softmax::<incin_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
+            let ls = log_softmax::<incin_core::tensor::device::Cpu, f32>(&inputs[0], 0).unwrap();
             crate::cpu::ops::reduce::sum_all(&ls).unwrap()
         };
         let max_rel_err = gradcheck(op, &[x], 1e-4);

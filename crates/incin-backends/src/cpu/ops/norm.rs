@@ -36,7 +36,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 /// When `bias` is `None`, a zero-filled buffer of the same shape as `weight`
 /// is substituted (matching `CandleBackend::layer_norm`'s `zeros_like`
 /// default-fallback convention, confirmed by direct code read).
-pub(crate) fn layer_norm_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     weight: &CpuStorage,
     bias: Option<&CpuStorage>,
@@ -91,7 +91,7 @@ pub(crate) fn layer_norm_impl<D: incin_core::prelude::Device, K: DType>(
 ///   - absent `bias`         → zeros shaped `[1, C, 1, ...]`
 ///
 /// Formula: `((t - rm) / sqrt(rv + eps)) * weight + bias`, all broadcast.
-pub(crate) fn batch_norm_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
     b: Option<&CpuStorage>,
@@ -193,7 +193,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::prelude::Device, K: DType>(
 /// which the execution contract does not currently carry. A caller that
 /// trains with this and then evaluates with inference mode is therefore
 /// reading whatever running statistics it supplied, unchanged.
-pub(crate) fn batch_norm_training_impl<D: incin_core::prelude::Device, K: DType>(
+pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
     b: Option<&CpuStorage>,
@@ -211,7 +211,7 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::prelude::Device, K: DType>
     let reduced_axes: Vec<usize> = (0..rank).filter(|axis| *axis != channel_dim).collect();
     let count: usize = reduced_axes.iter().map(|&axis| t.shape[axis]).product();
     if count == 0 {
-        return Err(incin_core::prelude::Error::Msg(
+        return Err(incin_core::error::Error::Msg(
             "batch_norm: training mode needs at least one element per channel".into(),
         ));
     }
@@ -300,7 +300,7 @@ mod tests {
         let bias = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias), eps)
+        let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias), eps)
             .unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let vals = f32_vec(&out);
@@ -373,10 +373,10 @@ mod tests {
         let eps = 1e-5f32;
 
         let with_explicit_zero =
-            layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, Some(&bias_zeros), eps)
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, Some(&bias_zeros), eps)
                 .unwrap();
         let with_none_bias =
-            layer_norm_impl::<incin_core::prelude::Cpu, f32>(&t, &weight, None, eps).unwrap();
+            layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, &weight, None, eps).unwrap();
 
         let a = f32_vec(&with_explicit_zero);
         let b = f32_vec(&with_none_bias);
@@ -399,7 +399,7 @@ mod tests {
         let bias = vec1(vec![0.1f32, -0.1, 0.2]);
         let eps = 1e-5f32;
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = layer_norm_impl::<incin_core::prelude::Cpu, f32>(
+            let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
                 &inputs[0],
                 &weight,
                 Some(&bias),
@@ -476,7 +476,7 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+        let out = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -523,7 +523,7 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out0 = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+        let out0 = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -533,7 +533,7 @@ mod tests {
             0.0,
         )
         .unwrap();
-        let out1 = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+        let out1 = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
             &t,
             Some(&w),
             Some(&b),
@@ -575,7 +575,7 @@ mod tests {
         let b_zeros = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let with_explicit = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+        let with_explicit = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
             &t,
             Some(&w_ones),
             Some(&b_zeros),
@@ -586,7 +586,7 @@ mod tests {
         )
         .unwrap();
         let with_none =
-            batch_norm_impl::<incin_core::prelude::Cpu, f32>(&t, None, None, None, None, eps, 0.0)
+            batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(&t, None, None, None, None, eps, 0.0)
                 .unwrap();
 
         let a = f32_vec(&with_explicit);
@@ -674,7 +674,7 @@ mod tests {
         let eps = 1e-5f32;
 
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
-            let out = batch_norm_impl::<incin_core::prelude::Cpu, f32>(
+            let out = batch_norm_impl::<incin_core::tensor::device::Cpu, f32>(
                 &inputs[0],
                 Some(&w),
                 Some(&b),

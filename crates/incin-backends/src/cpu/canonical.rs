@@ -601,7 +601,7 @@ impl<D: Device> Execute<op::Cumsum> for CpuBackendImpl<D> {
 macro_rules! dispatch_index_dtype {
     ($operation:expr, $dtype:expr, |$index:ident| $body:expr) => {{
         let operation = $operation;
-        let desc: incin_core::prelude::DTypeDescriptor = $dtype;
+        let desc: incin_core::tensor::dtype::DTypeDescriptor = $dtype;
         match desc.builtin_id() {
             Some(DTypeId::U8) => {
                 type $index = u8;
@@ -2825,7 +2825,7 @@ macro_rules! variance_executors {
                     variance_scale(count, attributes.unbiased),
                 )
                 .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
-                let finish: fn(&CpuStorage) -> incin_core::prelude::Result<CpuStorage> = $finish;
+                let finish: fn(&CpuStorage) -> incin_core::error::Result<CpuStorage> = $finish;
                 finish(&scaled).map_err(|error| kernel_error(CPU_NAME, operation, error))
             }
         }
@@ -2842,11 +2842,11 @@ trait VarianceAxis<D: Device> {
     fn mean_over_all(
         input: &CpuStorage,
         attributes: &VarianceAttributes,
-    ) -> incin_core::prelude::Result<(CpuStorage, usize)>;
+    ) -> incin_core::error::Result<(CpuStorage, usize)>;
     fn sum_over_all(
         input: &CpuStorage,
         attributes: &VarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage>;
+    ) -> incin_core::error::Result<CpuStorage>;
     fn mean_along_axis(
         input: &CpuStorage,
         attributes: &AxisVarianceAttributes,
@@ -2865,7 +2865,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn mean_over_all(
         input: &CpuStorage,
         _: &VarianceAttributes,
-    ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
+    ) -> incin_core::error::Result<(CpuStorage, usize)> {
         let count = input.shape.iter().product::<usize>();
         Ok((crate::cpu::ops::reduce::mean_all(input)?, count))
     }
@@ -2873,7 +2873,7 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     fn sum_over_all(
         input: &CpuStorage,
         _: &VarianceAttributes,
-    ) -> incin_core::prelude::Result<CpuStorage> {
+    ) -> incin_core::error::Result<CpuStorage> {
         crate::cpu::ops::reduce::sum_all(input)
     }
 
@@ -2905,11 +2905,11 @@ impl<D: Device> VarianceAxis<D> for CpuBackendImpl<D> {
     }
 }
 
-fn identity(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
+fn identity(storage: &CpuStorage) -> incin_core::error::Result<CpuStorage> {
     Ok(storage.clone())
 }
 
-fn square_root<D: Device>(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
+fn square_root<D: Device>(storage: &CpuStorage) -> incin_core::error::Result<CpuStorage> {
     let _ = core::marker::PhantomData::<D>;
     canonical_sqrt(storage)
 }
@@ -3093,7 +3093,7 @@ macro_rules! assert_every_advertised_row_executes {
                 $($(executes::<op::$operation, CpuBackendImpl<D>>();)*)*
             }
 
-            assert_all::<incin_core::prelude::Cpu>();
+            assert_all::<incin_core::tensor::device::Cpu>();
         };
     };
 }
