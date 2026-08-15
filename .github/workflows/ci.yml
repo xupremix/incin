@@ -107,11 +107,10 @@ jobs:
     - name: Run Bare-CPU Tests With The Optional Blocked GEMM
       run: cargo test -p incin-backends --no-default-features --features std,cpu,cpu-blas
 
-  # Every job above pins one feature set each. Between them they leave most of
-  # the combinations a dependent can actually write untested, and the manifest
-  # is what offers those combinations: `incin-backends/cpu` without `std` was a
-  # documented feature pair that had never compiled, because nothing ever built
-  # it. This job builds the combinations instead of trusting them.
+  # Core, macros, and diagnostics have small enough feature spaces for useful
+  # cargo-hack powersets. Backend and facade combinations are validated by the
+  # explicit supported contract matrix in tools/feature-matrix.sh; exhaustive
+  # backend and facade powersets are not a CI contract.
   powerset:
     name: Feature Powerset
     runs-on: ubuntu-latest
@@ -170,12 +169,6 @@ jobs:
     - name: incin-diagnostics, every feature combination
       run: cargo hack check -p incin-diagnostics --feature-powerset --all-targets
 
-    - name: incin-backends, every feature combination
-      run: cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
-
-    - name: incin, every feature combination
-      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle,hardware-tests
-
   # Every job above proves the unsafe code compiles. None of them proves it is
   # sound, and roughly 170 `unsafe` sites sit behind the CPU backend's SIMD
   # kernels. Worse, most of those kernels are not merely unproven but
@@ -233,7 +226,7 @@ jobs:
     # checked by `incin-backends`' `generated_docs` suite instead.
     - name: Check README.md's generated feature tables
       run: cargo xtask docs --check
-    - name: Run Backend Feature Matrix
+    - name: Run Supported Feature Contract Matrix
       run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check

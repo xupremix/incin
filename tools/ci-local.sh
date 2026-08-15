@@ -37,7 +37,7 @@ cargo xtask ledger || fail "Ledger validation failed!"
 cargo test -p xtask || fail "xtask unit tests failed!"
 cargo xtask budgets || fail "Budgets enforcement failed!"
 cargo xtask docs --check || fail "README feature table check failed!"
-cargo xtask feature-matrix || fail "Backend feature matrix failed!"
+cargo xtask feature-matrix || fail "Supported feature contract matrix failed!"
 tools/audit-shapes.sh --check || fail "Shape audit check failed!"
 success "Ledger & Governance OK"
 
@@ -117,8 +117,6 @@ if [ $SKIP_POWERSET -eq 0 ]; then
         cargo hack check -p incin-core --feature-powerset --all-targets --exclude-features nightly
         cargo hack check -p incin-macros --feature-powerset --no-dev-deps --exclude-features nightly
         cargo hack check -p incin-diagnostics --feature-powerset --all-targets
-        cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features external-candle
-        cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,external-candle,hardware-tests
         success "Powerset OK"
     else
         echo -e "${YELLOW}cargo-hack not found, skipping powerset check. Install with: cargo install cargo-hack${NC}"

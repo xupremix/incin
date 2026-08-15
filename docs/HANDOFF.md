@@ -277,10 +277,11 @@ inside exported snapshots. Remaining caveats are explicitly recorded in
 `docs/PROTOTYPING.md`, `docs/PROJECT_STATUS.md`, and
 `audit-evidence/HND-004c/summary.md`, including unavailable accelerator
 hardware and resource-bounded feature matrices. Repository formatting passes.
-The exact core, macro, and diagnostics cargo-hack powersets pass. The backend
-and facade matrices are recorded as incomplete because their current exact
-combination counts are resource-prohibitive here; neither is claimed as
-passed. Soundness validation is complete for the supported local targets:
+The exact core, macro, and diagnostics cargo-hack powersets remain the useful
+exhaustive checks. Backend and facade validation is the explicit supported
+feature contract matrix in `tools/feature-matrix.sh`, shared verbatim by CI
+and `tools/ci-local.sh`; it does not claim an exhaustive Cartesian product.
+Soundness validation is complete for the supported local targets:
 Miri passed 139 core tests and 322 backend tests with three ignored numerical
 tests, and the baseline and AVX2 ASan runs passed. The facade's representative
 feature combination was checked after

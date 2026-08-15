@@ -53,5 +53,5 @@ fn usage() {
     eprintln!("                    inventory (GOV-005)");
     eprintln!("    docs            Regenerate README.md's feature tables from the Cargo");
     eprintln!("                    manifests; --check fails instead of writing (UX-013)");
-    eprintln!("    feature-matrix  Check compilation of all backend feature combinations");
+    eprintln!("    feature-matrix  Check the supported backend/facade feature contract matrix");
 }
