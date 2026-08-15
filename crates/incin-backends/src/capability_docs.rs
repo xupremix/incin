@@ -18,7 +18,7 @@ use alloc::vec::Vec;
 use core::fmt::Write as _;
 
 use incin_core::exec::{CapabilityRule, OPERATION_CATALOG};
-use incin_core::prelude::DeviceKind;
+use incin_core::tensor::device::DeviceKind;
 
 use crate::capability::{CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES};
 
@@ -186,7 +186,8 @@ fn join(items: impl Iterator<Item = String>) -> String {
 mod tests {
     use super::*;
     use incin_core::exec::{ImplementationKind, LayoutClass, MathMode};
-    use incin_core::prelude::{DTypeDescriptor, DTypeId, OperationKind};
+    use incin_core::shapes::error::OperationKind;
+    use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
     const PRECISE: &[MathMode] = &[MathMode::Precise];
     const CONTIGUOUS: &[LayoutClass] = &[LayoutClass::Contiguous];

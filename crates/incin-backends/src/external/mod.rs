@@ -11,9 +11,10 @@ pub use incin_core::backend_authoring::{
     SupportsDType, TensorBackend, TensorMeta, TransferTo, UnsupportedReason, Validated, VariableBackend, execute,
     execute_shaped, execute_shaped_with_payload, execute_with_payload,
 };
-pub use incin_core::prelude::{
-    BackendError, DType, DTypeDescriptor, DTypeId, Device, DeviceId, Error, OperationKind, Result,
-};
+pub use incin_core::error::{BackendError, Error, Result};
+pub use incin_core::shapes::error::OperationKind;
+pub use incin_core::tensor::device::{Device, DeviceId};
+pub use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 /// The conformance suite an external backend runs against itself (`EXE-010`).
 ///

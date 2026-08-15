@@ -6,7 +6,8 @@ use incin_core::dist::mesh::{
     DeviceIdentity, LinkClass, ProcessLayout, TopologyProbe, TransportVersion,
 };
 use incin_core::exec::ReduceOp;
-use incin_core::prelude::{DType, DTypeId, DeviceId};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::{DType, DTypeId};
 
 use super::collective::{
     CollectiveBackend, CollectiveDType, CollectiveError, CollectiveKind, CollectiveOutput, GroupId,

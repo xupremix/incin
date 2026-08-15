@@ -2,7 +2,7 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::Write;
-use incin_core::prelude::DTypeId;
+use incin_core::tensor::dtype::DTypeId;
 
 /// Unary pointwise mathematical operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

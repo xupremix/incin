@@ -99,7 +99,7 @@ pub type NativeBackend<D> = crate::target::NativeBackend<D>;
 ///
 /// Static devices resolve to concrete implementations. `IncinBackend<Dyn>`
 /// resolves to [`DispatchBackend`] and selects its implementation at runtime.
-pub type IncinBackend<D = incin_core::prelude::Cpu> = NativeBackend<D>;
+pub type IncinBackend<D = incin_core::tensor::device::Cpu> = NativeBackend<D>;
 
 #[cfg(feature = "target-api")]
 pub mod nn_target;

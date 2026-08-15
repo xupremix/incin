@@ -17,7 +17,8 @@ use incin_core::dist::{
     ShardDivisible,
 };
 use incin_core::exec::{Determinism, ReduceOp};
-use incin_core::prelude::{ConstDType, DTypeId, OperationKind};
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::dtype::{ConstDType, DTypeId};
 use incin_core::typenum::{B1, IsLessOrEqual, NonZero, PowerOfTwo, U2, U32, U4294967295, Unsigned};
 
 /// Collective algorithm family offered to a transport.

@@ -10,7 +10,7 @@
 //! not enable is skipped without being probed, so `detect_device` never links
 //! against a driver the build excluded.
 
-use incin_core::prelude::{DeviceId, DeviceKind};
+use incin_core::tensor::device::{DeviceId, DeviceKind};
 
 /// The best device available on this machine right now.
 ///
@@ -25,7 +25,7 @@ use incin_core::prelude::{DeviceId, DeviceKind};
 /// ```rust
 /// # extern crate incin_backends as incin;
 /// use incin_backends::prelude::*;
-/// use incin_core::prelude::*;
+/// use incin_core::tensor::prelude::*;
 ///
 /// let device = incin_backends::detect_device();
 /// let t = Tensor::<Dyn, IncinBackend<Dyn>>::zeros(([2, 3], device));
