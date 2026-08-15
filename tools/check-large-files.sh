@@ -18,7 +18,6 @@ declare -A explained=(
     [crates/incin-core/src/dist/plan.rs]=1
     [crates/incin-backends/src/cpu/ops/elementwise_kernel.rs]=1
     [crates/incin-backends/src/cpu/ops/shape_ops.rs]=1
-    [crates/incin-backends/src/wgpu/tests.rs]=1
     [crates/incin-backends/src/dispatch.rs]=1
     [crates/incin-backends/src/cpu/ops/elementwise.rs]=1
     [crates/incin-backends/src/kernel.rs]=1

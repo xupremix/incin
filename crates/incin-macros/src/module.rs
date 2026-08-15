@@ -23,9 +23,11 @@ const STRUCT_ARGUMENTS: &[&str] = &[
     "no_to_device",
 ];
 
+type ModuleArguments = (bool, bool, bool, bool, bool, bool, bool, bool);
+
 /// Parse the struct-level argument list, rejecting anything not in the
 /// vocabulary.
-fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool, bool, bool, bool, bool, bool, bool)> {
+fn parse_arguments(attr: TokenStream) -> syn::Result<ModuleArguments> {
     let attr: proc_macro2::TokenStream = attr.into();
     if attr.is_empty() {
         return Ok((false, false, false, false, false, false, false, false));

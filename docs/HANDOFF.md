@@ -228,7 +228,6 @@ of problem:
 | `crates/incin-backends/src/{cpu/canonical.rs,dispatch.rs,capability.rs}` | canonical registrations, dispatch routing, and capability declarations | keep generated/completeness coupling intact; extract operation families only with focused tests |
 | `crates/incin-backends/src/cpu/ops/{elementwise_kernel,elementwise,shape_ops,reduce,matmul,conv}.rs` | cohesive CPU operation families and kernel helpers | preserve family-local tests; split only where execution ownership becomes clearer |
 | `crates/incin-backends/src/{dist/nccl.rs,dist/tuning.rs,tuning/identity.rs,tuning/service.rs}` | feature-gated distributed/tuning services | keep experimental ownership local; split resource protocols when they stabilize |
-| `crates/incin-backends/src/wgpu/tests.rs` | feature-gated backend integration tests | split by operation family when test fixtures stop sharing setup |
 | `crates/incin-backends/src/kernel.rs` | kernel template/rendering and specialization test vocabulary | retain as a mechanical kernel source boundary |
 | `crates/incin-diagnostics/src/lib.rs` | diagnostic command and report surface | split command families when the diagnostic API stabilizes |
 
