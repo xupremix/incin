@@ -48,6 +48,7 @@ required=(
     crates/incin-backends/src/lib.rs
     crates/incin-backends/src/dist/mod.rs
     tools/check-architecture.sh
+    tools/check-dependencies.sh
     tools/check-large-files.sh
     tools/check-public-api.sh
 )
@@ -76,6 +77,7 @@ if [[ "$tracked_rs" -ne "$archived_rs" ]]; then
 fi
 
 (cd "$snapshot" && bash tools/check-architecture.sh)
+(cd "$snapshot" && bash tools/check-dependencies.sh --check)
 (cd "$snapshot" && bash tools/check-large-files.sh)
 (cd "$snapshot" && bash tools/check-public-api.sh)
 
