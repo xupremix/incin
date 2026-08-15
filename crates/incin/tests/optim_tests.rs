@@ -3,12 +3,22 @@
 use std::collections::BTreeMap;
 
 use incin::prelude::*;
+use incin::optim::ParameterGroup;
 use incin::{Adam, AdamW, SGD};
 use incin::backend_authoring::HostInterop;
 use incin::backend_authoring::AutogradBackend;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
+
+#[test]
+fn optimizer_parameter_groups_collect_through_typed_state_visitors() {
+    let linear = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let group = ParameterGroup::<CpuBackendImpl, f32>::from_module(&linear).unwrap();
+    assert_eq!(group.len(), 2);
+    assert!(!group.is_empty());
+    let _optimizer = SGD::<CpuBackendImpl>::from_group(group, 0.01);
+}
 
 fn parameter_bytes(
     linear: &Linear<s![10, 5], CpuBackendImpl>,

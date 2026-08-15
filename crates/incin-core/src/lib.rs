@@ -235,7 +235,8 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup,
+        SGD,
     };
     #[cfg(feature = "std")]
     pub use crate::optim::{CosineAnnealingLR, StepLR};

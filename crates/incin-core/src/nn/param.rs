@@ -293,6 +293,16 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
 }
 
 impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> Param<S, B, K, Train> {
+    /// Returns the runtime descriptor carried by this parameter.
+    pub(crate) fn dtype_descriptor(&self) -> crate::tensor::dtype::DTypeDescriptor {
+        K::descriptor(&self._dtype)
+    }
+
+    /// Exposes the backend variable only to optimizer-owned collection code.
+    pub(crate) fn variable_any(&self) -> &dyn core::any::Any {
+        &self.inner
+    }
+
     /// Checked constructor boundary from parts.
     pub fn from_parts_checked(
         raw_var: <B as crate::tensor::backend::VariableBackend>::Var<K>,

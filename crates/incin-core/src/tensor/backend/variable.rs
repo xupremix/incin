@@ -5,7 +5,7 @@ use crate::tensor::dtype::DType;
 /// Trainable-variable storage capabilities.
 pub trait VariableBackend: Backend {
     /// Backend-native variable handle.
-    type Var<K: DType>: Clone;
+    type Var<K: DType>: Clone + 'static;
     /// Views a variable as ordinary tensor storage.
     fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Err(crate::err::Error::Backend(BackendError::unsupported(

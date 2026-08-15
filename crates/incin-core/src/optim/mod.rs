@@ -4,10 +4,11 @@ use crate::shapes::Dyn;
 use crate::tensor::base::Tensor;
 use crate::tensor::backend::{AutogradBackend, Backend, StorageBackend, VariableBackend};
 use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
+use crate::tensor::dtype::{ConstDType, DType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use crate::dist::Local;
 use crate::nn::param::{Param, TrainState};
+use crate::nn::{ParameterVisitor, StatePath, VisitParameters};
 use alloc::string::{String, ToString};
 use crate::{
     backend_authoring::{Capabilities, Execute},
@@ -29,6 +30,82 @@ pub use crate::autograd::Gradients;
 pub trait Optimizer<B: VariableBackend + AutogradBackend> {
     /// Steps the optimizer using the given gradients, updating the tracked parameters.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
+}
+
+/// A homogeneous, optimizer-owned collection of trainable variables.
+pub struct ParameterGroup<B: VariableBackend, K: ConstDType> {
+    params: alloc::collections::BTreeMap<String, B::Var<K>>,
+}
+
+impl<B: VariableBackend, K: ConstDType> ParameterGroup<B, K> {
+    /// Collects trainable parameters with dtype `K` through the canonical
+    /// heterogeneous module visitor. Parameters of other dtypes are ignored;
+    /// this lets one model contain optimizer-incompatible auxiliary dtypes
+    /// without creating a second module traversal architecture.
+    pub fn from_module<M>(module: &M) -> Result<Self>
+    where
+        M: VisitParameters<B>,
+    {
+        let mut collector = ParameterCollector::<B, K> {
+            params: alloc::collections::BTreeMap::new(),
+        };
+        module.visit_parameters(&StatePath::root(), &mut collector)?;
+        Ok(Self {
+            params: collector.params,
+        })
+    }
+
+    /// Creates a group from an already collected homogeneous map.
+    #[must_use]
+    pub fn from_map(params: alloc::collections::BTreeMap<String, B::Var<K>>) -> Self {
+        Self { params }
+    }
+
+    /// Returns the number of collected variables.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.params.len()
+    }
+
+    /// Returns whether the group contains no variables.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
+    }
+
+    fn into_map(self) -> alloc::collections::BTreeMap<String, B::Var<K>> {
+        self.params
+    }
+}
+
+struct ParameterCollector<B: VariableBackend, K: ConstDType> {
+    params: alloc::collections::BTreeMap<String, B::Var<K>>,
+}
+
+impl<B: VariableBackend, K: ConstDType> ParameterVisitor<B> for ParameterCollector<B, K> {
+    fn visit_param<S, LeafK, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &Param<S, B, LeafK, Train>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        LeafK: DType,
+        Train: TrainState,
+    {
+        if param.dtype_descriptor() != K::DESCRIPTOR {
+            return Ok(());
+        }
+        let variable = param
+            .variable_any()
+            .downcast_ref::<B::Var<K>>()
+            .ok_or(Error::InternalInvariant {
+                operation: "collect parameter group",
+                reason: "dtype matched but backend variable type did not",
+            })?;
+        self.params.insert(path.to_string(), variable.clone());
+        Ok(())
+    }
 }
 
 struct PreparedUpdate<S> {
@@ -426,6 +503,14 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
             _marker: core::marker::PhantomData,
         }
     }
+
+    /// Creates an optimizer from the canonical module-derived parameter group.
+    pub fn from_group(group: ParameterGroup<B, K>, lr: f64) -> Self
+    where
+        K: ConstDType,
+    {
+        Self::new(group.into_map(), lr)
+    }
 }
 
 impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B, K> {
@@ -507,6 +592,14 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
             v: alloc::collections::BTreeMap::new(),
             step: 0,
         }
+    }
+
+    /// Creates an optimizer from the canonical module-derived parameter group.
+    pub fn from_group(group: ParameterGroup<B, K>, lr: f64) -> Self
+    where
+        K: ConstDType,
+    {
+        Self::new(group.into_map(), lr)
     }
 
     /// Gets the current step counter.
@@ -682,6 +775,14 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
             v: alloc::collections::BTreeMap::new(),
             step: 0,
         }
+    }
+
+    /// Creates an optimizer from the canonical module-derived parameter group.
+    pub fn from_group(group: ParameterGroup<B, K>, lr: f64) -> Self
+    where
+        K: ConstDType,
+    {
+        Self::new(group.into_map(), lr)
     }
 
     /// Gets the current step counter.
