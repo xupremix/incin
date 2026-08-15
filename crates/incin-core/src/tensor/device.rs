@@ -48,7 +48,8 @@
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-use crate::prelude::{Dyn, Result};
+use crate::err::Result;
+use crate::shapes::Dyn;
 
 /// A type-level compute device.
 ///
@@ -624,7 +625,7 @@ impl WgpuDevice {
 /// cannot exist.
 ///
 /// ```rust
-/// use incin_core::prelude::{DeviceKind, DeviceSet};
+/// use incin_core::tensor::device::{DeviceKind, DeviceSet};
 ///
 /// let one = DeviceSet::cpu();
 /// assert_eq!(one.len(), 1);

@@ -11,7 +11,7 @@ use crate::dist::Local;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, Descriptor, op};
 use crate::exec::request::TensorHandle;
-use crate::err::Result;
+use crate::err::{Error, Result};
 use crate::shapes::prelude::{
     Axis, AxisTag, BroadcastDim, BroadcastShape, ConcreteStaticExtent, ConstDim, Dim, DimCons,
     DimensionConstraint, DynShape, NamedDim, Nil, RankExpectation, Shape, ShapeBuf, ShapeError,
@@ -357,20 +357,20 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
             &(self.shape_buf_value(), rhs.shape_buf_value()),
             (),
         )
-        .map_err(crate::prelude::Error::Shape)?;
+        .map_err(crate::err::Error::Shape)?;
         let descriptor = validated.into_descriptor();
         let output_dims =
             descriptor
                 .output_shape()
                 .cloned()
-                .ok_or(crate::prelude::Error::Shape(
+                .ok_or(crate::err::Error::Shape(
                     crate::shapes::ShapeError::TargetShapeRejected {
                         operation: crate::shapes::OperationKind::MatMul,
                         rank: 0,
                     },
                 ))?;
         let output_shape = crate::shapes::ShapeValue::<S1::Output>::try_new(output_dims)
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let joined_grad =
             <G1 as crate::tensor::grad::GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
         let lhs = TensorHandle::from_storage::<B, K, Local>(&self.inner);
@@ -446,7 +446,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         <B as Execute<op::Addmm>>::Output: Into<B::Storage<K>>,
     {
         let output_shape = crate::shapes::ShapeValue::<S1>::try_new(self.shape_buf_value())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let bias = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let lhs = TensorHandle::from_storage::<B, K, Local>(&mat1.inner);
         let rhs = TensorHandle::from_storage::<B, K, Local>(&mat2.inner);
@@ -487,7 +487,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
     {
         let output_shape = crate::shapes::ShapeValue::<S1>::try_new(q.shape_buf_value())
-            .map_err(crate::prelude::Error::Shape)?;
+            .map_err(crate::err::Error::Shape)?;
         let q_handle = TensorHandle::from_storage::<B, K, Local>(&q.inner);
         let k_handle = TensorHandle::from_storage::<B, K, Local>(&k.inner);
         let v_handle = TensorHandle::from_storage::<B, K, Local>(&v.inner);

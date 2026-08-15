@@ -3,7 +3,12 @@ use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::prelude::{Backend, DType, Dim, DimCons, Dyn, DynShape, Error, Nil, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, Tensor};
+use crate::backend_authoring::Backend;
+use crate::err::{Error, Result};
+use crate::shapes::{Dim, DimCons, Dyn, DynShape, Nil, Shape, ShapeBuf};
+use crate::tensor::base::Tensor;
+use crate::tensor::dtype::DType;
+use crate::tensor::grad::{NoGrad, RequiresGrad};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::tensor::backend::Execute;
@@ -29,7 +34,7 @@ impl<R: ReductionMode> MSELoss<R> {
 
     /// Forward pass computing the Mean Squared Error between predictions and targets.
     pub fn forward<
-        S: Shape + crate::prelude::DynShape,
+        S: Shape + crate::shapes::DynShape,
         B: Backend + crate::exec::Capabilities + Execute<op::MseLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
@@ -54,7 +59,7 @@ impl<R: ReductionMode> MSELoss<R> {
         let context = ExecutionContext::from_scope(B::default());
         let inner =
             dispatch::execute::<op::MseLoss, B>(&context, LossAttributes { reduction }, &inputs)
-                .map_err(crate::prelude::Error::from)?;
+                .map_err(crate::err::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -110,7 +115,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
         target: &Tensor<S2, B, u32, NoGrad>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
-        S1: Shape + crate::prelude::DynShape + CrossEntropyShape<S2>,
+        S1: Shape + crate::shapes::DynShape + CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
         <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
@@ -128,7 +133,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
             LossAttributes { reduction },
             &[prediction, target_handle],
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -149,8 +154,8 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
 }
 
 /// Trait to statically verify that two shapes are identical for L1 loss.
-pub trait L1Shape<S2: crate::prelude::Shape> {}
-impl<S: crate::prelude::Shape> L1Shape<S> for S {}
+pub trait L1Shape<S2: crate::shapes::Shape> {}
+impl<S: crate::shapes::Shape> L1Shape<S> for S {}
 
 /// Mean Absolute Error (L1) Loss.
 #[derive(Debug, Clone, Default)]
@@ -164,7 +169,7 @@ impl<R: ReductionMode> L1Loss<R> {
 
     /// Forward pass computing the L1 Loss between predictions and targets.
     pub fn forward<
-        S: Shape + crate::prelude::DynShape,
+        S: Shape + crate::shapes::DynShape,
         B: Backend + crate::exec::Capabilities + Execute<op::L1Loss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
@@ -189,7 +194,7 @@ impl<R: ReductionMode> L1Loss<R> {
         let context = ExecutionContext::from_scope(B::default());
         let inner =
             dispatch::execute::<op::L1Loss, B>(&context, LossAttributes { reduction }, &inputs)
-                .map_err(crate::prelude::Error::from)?;
+                .map_err(crate::err::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
@@ -207,8 +212,8 @@ impl<R: ReductionMode> L1Loss<R> {
 }
 
 /// Trait to statically verify that two shapes are identical for BCEWithLogits loss.
-pub trait BCEWithLogitsShape<S2: crate::prelude::Shape> {}
-impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
+pub trait BCEWithLogitsShape<S2: crate::shapes::Shape> {}
+impl<S: crate::shapes::Shape> BCEWithLogitsShape<S> for S {}
 
 /// Binary Cross Entropy with Logits Loss.
 #[derive(Debug, Clone, Default)]
@@ -222,7 +227,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
 
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
     pub fn forward<
-        S: Shape + crate::prelude::DynShape,
+        S: Shape + crate::shapes::DynShape,
         B: Backend + crate::exec::Capabilities + Execute<op::BceWithLogitsLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
@@ -250,7 +255,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
             LossAttributes { reduction },
             &inputs,
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();

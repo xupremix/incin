@@ -8,7 +8,7 @@
 //!    enabled Cargo features, in the order CUDA → WGPU → CPU.
 //! 2. **Which backend can actually run here?** Answered at runtime by probing
 //!    real hardware. That lives in `incin-backends::detect_device`, returns a
-//!    [`DeviceId`](crate::prelude::DeviceId), and is used with the fully
+//!    [`DeviceId`](crate::tensor::device::DeviceId), and is used with the fully
 //!    dynamic tier.
 //!
 //! # Why the compile-time half does not probe hardware
@@ -36,7 +36,7 @@
 //! safe; probing at runtime is correct about the machine that actually
 //! executes. Between them there is no case left for probing at build time.
 
-use crate::prelude::Cpu;
+use crate::tensor::device::Cpu;
 #[cfg(feature = "cuda")]
 use crate::tensor::device::CudaN;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
@@ -55,7 +55,7 @@ use crate::tensor::device::WgpuN;
 /// ```rust
 /// # extern crate incin_core as incin;
 /// use incin::prelude::*;
-/// type Dev = incin_core::prelude::BestDevice;
+/// type Dev = incin_core::tensor::auto_device::BestDevice;
 /// let t = Tensor::<s![2, 3], incin_core::test_utils::DummyBackend<Dev>>::zeros(()).unwrap();
 /// ```
 #[cfg(feature = "cuda")]
@@ -126,6 +126,6 @@ impl<N> IgnoreOrdinal for (Cpu, core::marker::PhantomData<N>) {
 /// ```
 #[macro_export]
 macro_rules! best_device {
-    () => { $crate::prelude::BestDevice };
-    ($ordinal:ty) => { $crate::prelude::BestDeviceAt<$ordinal> };
+    () => { $crate::tensor::auto_device::BestDevice };
+    ($ordinal:ty) => { $crate::tensor::auto_device::BestDeviceAt<$ordinal> };
 }
