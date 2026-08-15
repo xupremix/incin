@@ -33,7 +33,7 @@ struct Slice<A, B, C>(A, B, C);
 struct Vec;
 
 #[module]
-pub struct Shadowed<B: ::incin::prelude::Backend + ::incin::prelude::VariableBackend> {
+pub struct Shadowed<B: ::incin::Backend + ::incin::VariableBackend> {
     fc: Linear<s![8, 4], B>,
 }
 
