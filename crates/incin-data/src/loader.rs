@@ -798,6 +798,32 @@ mod tests {
         ));
     }
 
+    struct SlowDataset;
+    impl Dataset for SlowDataset {
+        type Item = i32;
+
+        fn len(&self) -> usize {
+            1
+        }
+
+        fn get(&self, _index: usize) -> BatchResult<Option<Self::Item>> {
+            std::thread::sleep(Duration::from_millis(25));
+            Ok(Some(1))
+        }
+    }
+
+    #[test]
+    fn worker_timeout_is_an_explicit_iterator_error() {
+        let loader = DataLoader::new(SlowDataset, VecCollate, 1)
+            .unwrap()
+            .with_num_workers(1)
+            .with_timeout(Some(Duration::from_millis(1)));
+        assert!(matches!(
+            (&loader).into_iter().next().unwrap(),
+            Err(DataError::Timeout { duration }) if duration == Duration::from_millis(1)
+        ));
+    }
+
     #[test]
     fn builder_controls_drop_last_and_deterministic_shuffle() {
         let make = || {
