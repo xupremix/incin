@@ -557,17 +557,13 @@ pub mod macros {
 pub mod prelude {
     pub use super::Tensor;
     pub use incin_core::SeqTy;
-    pub use incin_core::backend_authoring::{Backend, VariableBackend};
+    pub use incin_core::backend_authoring::Backend;
     pub use incin_core::error::{
         BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
         NonFiniteSite, Result, convert_f64_to_i64,
     };
-    pub use incin_core::nn::module::{Module, ShapeInfo};
-    pub use incin_core::nn::state::{
-        StateMutVisitor, StatePath, StateRole, StateSnapshot, StateValue, StateVisitor, VisitState,
-        VisitStateMut,
-    };
-    pub use incin_core::nn::stats::ComputeStats;
+    pub use incin_core::nn::module::Module;
+    pub use incin_core::nn::state::{StatePath, StateRole, StateSnapshot, StateValue};
     pub use incin_core::shapes::{
         AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, Here, InferDim,
         NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Ranked, Shape, ShapeArgs, ShapeSpec,
@@ -641,9 +637,7 @@ pub mod prelude {
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
-        module::{
-            LayerNode, NamedLayers, ParameterVisitor, Sequential, TrainMode, VisitParameters,
-        },
+        module::{Sequential, TrainMode},
         rms_norm::RMSNorm,
     };
 

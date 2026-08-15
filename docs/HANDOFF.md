@@ -80,7 +80,9 @@ distributed, import, and tooling APIs are explicitly unstable.
 
 The ordinary facade prelude allowlist is intentionally user-shaped: tensor
 and shape construction, dtype/device selection, gradients, module/layer
-building, state visitors/snapshots, optimizers, and the stable macros. It does
+building, state snapshots, optimizers, and the stable macros. Visitor traits,
+backend capability traits, and variable handles remain available through named
+expert modules. It does
 not export graph capture, proof-construction helpers, storage/backend-authoring
 traits, physical storage encodings, legacy state staging traits, or backend variable handles; those
 names require a named expert surface or are reserved for macro expansion.

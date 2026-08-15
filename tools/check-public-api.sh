@@ -48,7 +48,9 @@ prelude=$(sed -n '/^pub mod prelude {/,/^#\[cfg(test)\]/p' crates/incin/src/lib.
 for symbol in \
     Graph ConcreteStaticExtent DimCons Nil ProductDims ReplaceAt \
     StructuralConcatShape StorageBackend SupportsDType StorageEncoding \
-    StateDict StateLoadPlan tracing_mark_input extract_graph; do
+    StateDict StateLoadPlan ShapeInfo ComputeStats LayerNode NamedLayers \
+    ParameterVisitor VisitParameters StateVisitor StateMutVisitor VisitState VisitStateMut \
+    VariableBackend tracing_mark_input extract_graph; do
     if printf '%s\n' "$prelude" | rg -q "\\b${symbol}\\b"; then
         echo "public API check failed: ${symbol} leaked into the ordinary facade prelude" >&2
         exit 1
