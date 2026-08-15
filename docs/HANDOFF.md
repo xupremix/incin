@@ -277,14 +277,16 @@ inside exported snapshots. The normal workspace suite, mdBook build, docs
 drift gate, budget gate, and export gates pass. Remaining caveats are
 explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
 including unavailable accelerator hardware and Miri's numerical-test
-exclusions. Repository formatting now passes. Representative backend feature
-combinations pass; after excluding the real `external-candle` feature, the
-literal cargo-hack matrix expands to 8,212 backend and 36,608 facade
-combinations and remains impractical to complete locally. The smaller macros
-and diagnostics powersets pass. Ordinary workspace Clippy and the strict
-no-default CPU CI configuration both exit successfully with `-D warnings`
-across all targets. The literal backend and facade powersets remain
-impractical to complete locally, as noted above.
+exclusions. Repository formatting now passes. The exact core cargo-hack
+powerset passes all 384 combinations, and the macros and diagnostics
+powersets pass. The backend command was also started exactly as CI specifies
+and reached the dependency-heavy CUDA combinations without a failure before
+being stopped at 20 of 8,212 combinations; after excluding the real
+`external-candle` feature, the literal backend and facade matrices are 8,212
+and 36,608 combinations and remain impractical to complete locally.
+Representative backend combinations pass. Ordinary workspace Clippy and the
+strict no-default CPU CI configuration both exit successfully with
+`-D warnings` across all targets.
 
 ## First 30 minutes
 
