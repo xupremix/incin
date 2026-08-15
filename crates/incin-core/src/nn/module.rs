@@ -1,7 +1,6 @@
-use crate::backend_authoring::{Backend, VariableBackend};
-use crate::err::{Error, Result};
-use crate::shapes::{Dim, DynShape, Shape};
-use crate::tensor::base::Tensor;
+use crate::backend_authoring::VariableBackend;
+use crate::err::Result;
+use crate::shapes::{DynShape, Shape};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::transfer::ToDevice;

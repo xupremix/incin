@@ -5,11 +5,8 @@ use crate::shapes::FlattenAt;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::idx::{Here, Next};
 use crate::shapes::{DynShape, Shape};
-use crate::tensor::backend::{Backend, StorageBackend};
 use crate::tensor::base::Tensor;
-use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
-use alloc::string::String;
 use core::marker::PhantomData;
 
 /// Structural flatten module. Axis positions are selector types rather than

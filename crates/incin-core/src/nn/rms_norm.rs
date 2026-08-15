@@ -1,15 +1,14 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::op;
 use crate::nn::{Module, Param};
 use crate::shapes::idx::{FromEnd, Here};
 use crate::shapes::shape_ops::ReduceKeepAt;
-use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
-use alloc::string::String;
 use core::marker::PhantomData;
 
 /// Shape traits for RMSNorm.
@@ -146,7 +145,6 @@ impl<
                 f32,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (channels, dtype, device, eps) = args.into_layer_arg();
         let shape = S::build_args(channels);
         let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(

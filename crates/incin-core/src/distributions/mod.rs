@@ -6,13 +6,13 @@ use crate::exec::catalog::{CreationAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::shapes::ShapeValue;
-use crate::shapes::{DimCons, DynShape, Nil, Shape, ShapeBuf};
+use crate::shapes::{DynShape, Shape, ShapeBuf};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::backend::{Backend, SupportsDType};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
-use crate::tensor::grad::{Grad, RequiresGrad};
+use crate::tensor::grad::RequiresGrad;
 use core::fmt::Debug;
 
 fn uniform_tensor<S, B, G>(

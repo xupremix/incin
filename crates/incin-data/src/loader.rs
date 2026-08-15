@@ -438,7 +438,7 @@ where
                 }
                 Some(Err(DataError::WorkerDisconnected))
             });
-            return DataLoaderIter {
+            DataLoaderIter {
                 sync_next: Some(sync_next),
                 receiver: None,
                 pending: BTreeMap::new(),
@@ -448,7 +448,7 @@ where
                 timeout: self.timeout,
                 cancel,
                 workers,
-            };
+            }
         } else {
             // Multi-threaded
             let (tx, rx) = sync_channel(self.prefetch.get());

@@ -1,17 +1,16 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{BatchNormAttributes, Descriptor, op};
+use crate::exec::catalog::{BatchNormAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Buffer, Module, Param};
-use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
-use alloc::string::String;
 
 use core::marker::PhantomData;
 
@@ -218,7 +217,6 @@ where
                 f32,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (channels, dtype, device, eps, momentum) = args.into_layer_arg();
         let shape = S::build_args(channels);
         let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(

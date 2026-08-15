@@ -1,7 +1,6 @@
-use crate::backend_authoring::Backend;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{AdaptivePool2dAttributes, Descriptor, op};
+use crate::exec::catalog::{AdaptivePool2dAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -9,9 +8,6 @@ use crate::nn::{Module, TrainMode};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
-use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
-use alloc::string::String;
 
 use typenum::Unsigned;
 

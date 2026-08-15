@@ -1,5 +1,3 @@
-use crate::shapes::dim::NamedDim;
-
 /// Anonymous semantic-axis marker.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct Anon;

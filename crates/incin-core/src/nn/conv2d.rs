@@ -1,7 +1,7 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::dist::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
+use crate::exec::catalog::{Conv2dAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::nn::init::{InitContext, ParameterRole};
@@ -12,8 +12,6 @@ use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
-use alloc::string::String;
-use typenum::Unsigned;
 
 /// A shape marker trait specifying a [`Conv2d`] layer's channel counts and
 /// compile-time-fixed kernel/stride/padding/dilation. The typical usage is
@@ -244,7 +242,6 @@ where
                 <Bias as crate::nn::optional::OptionalField>::Arg,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (out_c, in_c, dtype_arg, device_arg, bias_arg) = args.into_layer_arg();
         let (cout, cin, weight_shape_arg, bias_shape_arg) =
             S::build_args((out_c, in_c)).map_err(Error::Shape)?;

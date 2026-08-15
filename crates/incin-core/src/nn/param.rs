@@ -8,15 +8,12 @@ use crate::nn::init::{InitContext, InitPlan, ParameterRole};
 use crate::shapes::Dyn;
 use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
-use crate::tensor::arg_into::{ArgInto, LayerArgInto};
-use crate::tensor::backend::{
-    Backend, HostInterop, StorageBackend, SupportsDType, VariableBackend, VariableTransfer,
-};
+use crate::tensor::arg_into::ArgInto;
+use crate::tensor::backend::{HostInterop, SupportsDType, VariableBackend, VariableTransfer};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
-use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 

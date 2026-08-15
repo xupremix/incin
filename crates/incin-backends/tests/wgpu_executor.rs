@@ -20,7 +20,7 @@ use incin_core::exec::{
     op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
+    BackendError, DTypeId, DeviceId, Local, OperationKind, Shape, ShapeBuf, WgpuN, s,
 };
 use incin_core::typenum::U0;
 

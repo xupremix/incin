@@ -8,14 +8,14 @@ use crate::backend_authoring::{Backend, HostInterop, StorageTransfer, SupportsDT
 use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::Placement;
 use crate::dist::placement::Local;
-use crate::err::{Error, Result};
+use crate::err::Result;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
     AxisAttributes, DTypeAttributes, DiagonalAttributes, DuplicateIndexRule, EpsilonAttributes,
     FlattenAttributes, GroupNormAttributes, LogicalTensorMeta, NarrowAttributes, NoAttributes,
-    PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScalarAttributes,
-    ScatterAttributes, ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
+    PadAttributes, PixelShuffleAttributes, Pool2dAttributes, RepeatAttributes, ScatterAttributes,
+    ShapeAttributes, SliceAttributes, TransposeAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -27,7 +27,6 @@ use crate::shapes::{Dyn, DynShape, Shape};
 use crate::shapes::{FlattenAt, SwapAxes};
 use crate::shapes::{ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;
-use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
 use crate::tensor::ops::*;

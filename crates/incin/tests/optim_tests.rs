@@ -26,9 +26,8 @@ fn parameter_bytes(
     ParameterGroup::<CpuBackendImpl, f32>::from_module(linear)
         .unwrap()
         .iter()
-        .into_iter()
         .map(|(name, var)| {
-            let storage = CpuBackendImpl::var_as_tensor::<f32>(&var)?;
+            let storage = CpuBackendImpl::var_as_tensor::<f32>(var)?;
             Ok((name.clone(), CpuBackendImpl::to_bytes::<f32>(&storage)?))
         })
         .collect()

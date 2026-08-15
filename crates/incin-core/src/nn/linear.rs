@@ -8,10 +8,9 @@ use crate::nn::stats::{ComputeStats, LayerStats};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{
-    Dim, DimCons, Dyn, DynShape, Nil, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue,
+    Dim, DimCons, Dyn, DynShape, Nil, ReplaceLastDim, Shape, ShapeError, ShapeValue,
 };
 use crate::tensor::backend::Execute;
-use crate::tensor::backend::{Backend, SupportsDType};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
@@ -365,7 +364,6 @@ where
                 <Bias as crate::nn::optional::OptionalField>::Arg,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (in_arg, out_arg, dtype, device, bias) = args.into_layer_arg();
         Self::build_full(in_arg, out_arg, dtype, device, bias)
     }

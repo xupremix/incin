@@ -1,10 +1,8 @@
 use crate::err::{Error, Result};
 use crate::nn::module::{Module, ShapeInfo, TrainMode};
 use crate::shapes::{DynShape, Shape};
-use crate::tensor::backend::{Backend, StorageBackend};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use alloc::{
     string::{String, ToString},
@@ -34,7 +32,7 @@ impl_stateless_shape_info!(ReLU);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ReLU {}
 
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::op;
 use crate::tensor::backend::Execute;
 
 impl<

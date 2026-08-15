@@ -1,8 +1,8 @@
 use core::ops::{Add, Div, Mul, Sub};
 use typenum::{U1, U2, UInt, UTerm};
 
-use super::dim::{Dim, StaticExtent};
-use super::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+use super::dim::Dim;
+use super::error::{Axis, OperationKind, RankExpectation, ShapeError};
 use crate::shapes::ShapeBuf;
 
 /// Compile-time formula for a single spatial dimension's conv/pool

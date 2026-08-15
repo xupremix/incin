@@ -4,14 +4,13 @@ use alloc::vec::Vec;
 
 use crate::dist::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Conv2dAttributes, Descriptor, op};
+use crate::exec::catalog::{Conv2dAttributes, op};
 use crate::exec::request::TensorHandle;
 use crate::shapes::Dyn;
 use crate::shapes::{ConvOutDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
-use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use crate::tensor::matmul::StaticDim;
 use typenum::{Diff, Prod, Quot, Sum, U1, U2};

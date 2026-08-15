@@ -1,16 +1,15 @@
 use crate::backend_authoring::Backend;
 use crate::dist::placement::Local;
-use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
+use crate::err::Result;
+use crate::exec::catalog::{LossAttributes, LossReduction, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{Dim, DimCons, Dyn, DynShape, Nil, Shape, ShapeBuf};
+use crate::shapes::{Dim, DimCons, Dyn, Nil, Shape};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
-use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
 pub use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,

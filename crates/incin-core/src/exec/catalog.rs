@@ -17,9 +17,8 @@ use core::fmt;
 use core::marker::PhantomData;
 
 use crate::exec::OperationIdentity;
-use crate::shapes::Dyn;
+use crate::shapes::ShapeBuf;
 use crate::shapes::error::OperationKind;
-use crate::shapes::{Shape, ShapeBuf, ShapeError};
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 

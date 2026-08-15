@@ -260,7 +260,7 @@ where
                     name
                 )));
             }
-            let numel = crate::shapes::ShapeBuf::from_slice(&shape)
+            let numel = crate::shapes::ShapeBuf::from_slice(shape)
                 .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
             // Q8_0 quantizes in blocks of 32 elements; tensors that don't

@@ -7,7 +7,7 @@ pub trait VariableBackend: Backend {
     /// Backend-native variable handle.
     type Var<K: DType>: Clone + 'static;
     /// Views a variable as ordinary tensor storage.
-    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
+    fn var_as_tensor<K: DType>(_var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Err(crate::err::Error::Backend(BackendError::unsupported(
             Self::BACKEND_NAME,
             crate::exec::UnsupportedReason::MissingDeviceFeature {

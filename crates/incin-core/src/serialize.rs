@@ -1,10 +1,9 @@
 use crate::err::{Error, Result};
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
 use crate::shapes::ShapeBuf;
-use crate::tensor::backend::{Backend, StorageBackend};
-use crate::tensor::base::Tensor;
+use crate::tensor::backend::Backend;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
-use crate::tensor::prelude::{DType, Device, DeviceId, Q8_0, StorageEncoding};
+use crate::tensor::prelude::{Device, DeviceId};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 #[cfg(feature = "std")]

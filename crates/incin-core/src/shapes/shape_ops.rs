@@ -1,6 +1,6 @@
 use crate::shapes::Shape;
 use crate::shapes::idx::{FromEnd, Here, Next, StaticCursor};
-use crate::shapes::{At, Dim, DimCons, Nil, RemoveAt, RemoveFromEnd, ReplaceAt, SwapAt};
+use crate::shapes::{Dim, DimCons, RemoveAt, RemoveFromEnd, SwapAt};
 
 /// Unified selector-facing swap operation. Both positive and from-end
 /// selectors use the one structural `SwapAt` algebra.

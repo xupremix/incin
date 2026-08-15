@@ -1,19 +1,18 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, NoAttributes, op};
+use crate::exec::catalog::{NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{AppendDim, Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::shapes::{AppendDim, Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
-use alloc::string::String;
 
 /// A shape marker trait specifying an [`Embedding`] layer's vocabulary size
 /// and embedding dimension, analogous to [`crate::nn::linear::LinearShape`].
@@ -165,7 +164,6 @@ where
                 <B::Device as Device>::Arg,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (vocab, embed, dtype, device) = args.into_layer_arg();
         let shape = S::build_args((vocab, embed));
         let weight = Param::<S::WeightShape, B, K, Trainable>::new_init_raw(

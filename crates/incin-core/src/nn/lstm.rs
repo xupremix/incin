@@ -1,21 +1,18 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, op};
+use crate::exec::catalog::op;
 use crate::nn::init::Init;
 use crate::nn::linear::LinearShape;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, VisitParameters};
 use crate::shapes::shape::{DimCons, Nil};
-use crate::shapes::{
-    AppendDim, Dim, Dyn, DynShape, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue,
-};
+use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
-use crate::tensor::dtype::{ConstDType, DType};
-use crate::tensor::grad::{Grad, GradJoin, JoinedGrad, RequiresGrad};
-use alloc::string::{String, ToString};
+use crate::tensor::dtype::DType;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 type D2<A, B> = DimCons<A, DimCons<B, Nil>>;
@@ -368,7 +365,6 @@ where
                 <BiasHh as crate::nn::optional::OptionalField>::Arg,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (input, output, dtype, device, bias_ih, bias_hh) = args.into_layer_arg();
         Ok(Self {
             wi_i: Linear::<_, _, _, K, Train>::build_full(

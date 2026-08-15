@@ -8,7 +8,7 @@
 //! broadcast shape resolution (`BroadcastShape`).
 
 use crate::dist::placement::Local;
-use crate::err::{Error, Result};
+use crate::err::Result;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::capability::Capabilities;
 use crate::exec::catalog::{

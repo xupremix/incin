@@ -1,6 +1,8 @@
 use crate::shapes::error::OperationKind;
 use crate::tensor::device::DeviceId;
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::dtype::DTypeDescriptor;
+#[cfg(test)]
+use crate::tensor::dtype::DTypeId;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;

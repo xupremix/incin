@@ -1,13 +1,13 @@
-use crate::backend_authoring::{Backend, SupportsDType};
+use crate::backend_authoring::SupportsDType;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, LayerNormAttributes, op};
+use crate::exec::catalog::{LayerNormAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::module::ShapeInfo;
 use crate::nn::{Module, Param};
-use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
@@ -188,7 +188,6 @@ where
                 f32,
             )>,
     {
-        use crate::tensor::arg_into::LayerArgInto;
         let (channels, dtype, device, eps) = args.into_layer_arg();
         let shape = S::build_args(channels);
         let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(

@@ -1,5 +1,5 @@
 //! Compile-time shape reshaping and element count verification.
-use crate::shapes::{DimCons, DynShape, Shape};
+use crate::shapes::{DynShape, Shape};
 use core::ops::Mul;
 use typenum::{Prod, U1, Unsigned};
 

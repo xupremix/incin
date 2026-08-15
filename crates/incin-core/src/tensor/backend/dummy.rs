@@ -1,12 +1,10 @@
 use super::*;
 
-use super::*;
 use crate::err::Result;
 use crate::exec::spec::ExecutionDescriptor;
 use crate::tensor::device::Device;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::DType;
-use crate::tensor::reduction::Reduction;
 
 /// Test-only stand-in `Backend` used by `tensor/base.rs`'s unit tests to
 /// exercise `Tensor`'s generic-over-`Backend` machinery without pulling

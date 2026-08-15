@@ -5,11 +5,10 @@
 //! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::dist::placement::Local;
-use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, LossAttributes, LossReduction, op};
+use crate::err::Result;
+use crate::exec::catalog::{LossAttributes, LossReduction, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::shapes::DynShape;
 use crate::shapes::Shape;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;

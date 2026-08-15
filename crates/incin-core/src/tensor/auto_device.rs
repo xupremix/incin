@@ -36,7 +36,6 @@
 //! safe; probing at runtime is correct about the machine that actually
 //! executes. Between them there is no case left for probing at build time.
 
-use crate::tensor::device::Cpu;
 #[cfg(feature = "cuda")]
 use crate::tensor::device::CudaN;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]

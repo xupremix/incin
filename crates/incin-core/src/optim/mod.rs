@@ -4,11 +4,9 @@ use crate::nn::param::{Param, TrainState};
 use crate::nn::{ParameterVisitor, StatePath, VisitParameters};
 use crate::shapes::Dyn;
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
-use crate::tensor::backend::{AutogradBackend, Backend, StorageBackend, VariableBackend};
+use crate::tensor::backend::{AutogradBackend, VariableBackend};
 use crate::tensor::base::Tensor;
-use crate::tensor::device::Device;
 use crate::tensor::dtype::{ConstDType, DType};
-use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use crate::{
     backend_authoring::{Capabilities, Execute},
     exec::request::TensorHandle,

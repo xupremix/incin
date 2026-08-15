@@ -1,19 +1,17 @@
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{Descriptor, DropoutAttributes, op};
-use crate::exec::context::ExecutionContext;
+use crate::exec::catalog::{DropoutAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Execute;
-use crate::tensor::backend::{Backend, StorageBackend, SupportsDType};
+use crate::tensor::backend::SupportsDType;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::ConstDevice;
-use crate::tensor::dtype::{BuiltinDType, DType};
+use crate::tensor::dtype::BuiltinDType;
 use crate::tensor::grad::RequiresGrad;
-use alloc::string::String;
 
 /// A Dropout layer.
 ///

@@ -4,7 +4,7 @@ use crate::exec::TensorMeta;
 use crate::exec::capability::Capabilities;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::DTypeId;
-use crate::tensor::dtype::{DType, DTypeDescriptor, FloatDType, QuantDType};
+use crate::tensor::dtype::{DType, DTypeDescriptor};
 
 mod execute;
 pub use execute::{Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput};
@@ -77,35 +77,6 @@ impl From<i64> for ScalarValue {
     }
 }
 
-#[cfg(test)]
-mod scalar_value_tests {
-    use super::*;
-    use crate::err::{ConversionFailure, Error};
-
-    #[test]
-    fn float_to_integer_requires_an_explicit_checked_policy() {
-        assert_eq!(
-            ScalarValue::Float(12.0)
-                .to_i64(FloatToIntPolicy::Exact)
-                .unwrap(),
-            12
-        );
-        assert!(matches!(
-            ScalarValue::Float(12.5).to_i64(FloatToIntPolicy::Exact),
-            Err(Error::InvalidConversion {
-                reason: ConversionFailure::Fractional,
-                ..
-            })
-        ));
-        assert_eq!(
-            ScalarValue::Float(12.5)
-                .to_i64(FloatToIntPolicy::Truncate)
-                .unwrap(),
-            12
-        );
-    }
-}
-
 /// Resolves the dtype represented by `K` for a concrete runtime device.
 pub trait SupportsDType<K: DType> {
     /// Resolve and validate dtype metadata before storage is created.
@@ -141,4 +112,33 @@ pub trait Backend:
     /// wrapper (see `Dyn`'s `DispatchBackend`) has been resolved. Equal to
     /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
+}
+
+#[cfg(test)]
+mod scalar_value_tests {
+    use super::*;
+    use crate::err::{ConversionFailure, Error};
+
+    #[test]
+    fn float_to_integer_requires_an_explicit_checked_policy() {
+        assert_eq!(
+            ScalarValue::Float(12.0)
+                .to_i64(FloatToIntPolicy::Exact)
+                .unwrap(),
+            12
+        );
+        assert!(matches!(
+            ScalarValue::Float(12.5).to_i64(FloatToIntPolicy::Exact),
+            Err(Error::InvalidConversion {
+                reason: ConversionFailure::Fractional,
+                ..
+            })
+        ));
+        assert_eq!(
+            ScalarValue::Float(12.5)
+                .to_i64(FloatToIntPolicy::Truncate)
+                .unwrap(),
+            12
+        );
+    }
 }

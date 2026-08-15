@@ -2,10 +2,10 @@ use crate::err::{Error, Result};
 use crate::exec::{ExecutionSite, LayoutClass, OperationIdentity, ShapeExpr};
 use crate::shapes::error::OperationKind;
 use crate::tensor::device::DeviceId;
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::dtype::DTypeDescriptor;
 use alloc::boxed::Box;
 use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Identifies a tensor value in a graph.

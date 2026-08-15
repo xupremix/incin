@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 #[cfg(any(feature = "wgpu", feature = "cuda", feature = "metal"))]
-use incin_core::backend_authoring::{Backend, HostInterop};
+use incin_core::backend_authoring::HostInterop;
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId};
 fn assert_metadata_storage<T>()

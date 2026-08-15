@@ -1,21 +1,17 @@
-use crate::backend_authoring::{Backend, SupportsDType};
-use crate::err::{Error, Result};
-use crate::exec::catalog::{Descriptor, op};
+use crate::err::Error;
+use crate::exec::catalog::op;
 use crate::nn::init::Init;
 use crate::nn::linear::LinearShape;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, VisitParameters};
 use crate::shapes::shape::{DimCons, Nil};
-use crate::shapes::{
-    AppendDim, Dim, Dyn, DynShape, ReplaceLastDim, Shape, ShapeBuf, ShapeError, ShapeValue,
-};
+use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
-use crate::tensor::device::{ConstDevice, Device};
+use crate::tensor::device::ConstDevice;
 use crate::tensor::dtype::{ConstDType, DType};
 use crate::tensor::grad::{Grad, GradJoin, JoinedGrad, RequiresGrad};
-use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 

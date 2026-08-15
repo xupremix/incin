@@ -1,7 +1,7 @@
+use crate::backend_authoring::Execute;
 use crate::backend_authoring::{
     AutogradBackend, Backend, HostInterop, StorageTransfer, SupportsDType,
 };
-use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::{Local, Placement, PlacementKind};
 use crate::err::{Error, Result};
 use crate::exec::Capabilities;
@@ -10,7 +10,6 @@ use crate::exec::catalog::{
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
-use crate::exec::request::TensorHandle;
 use crate::shapes::{Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::ArgInto;
@@ -1295,7 +1294,6 @@ mod tests {
     /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
-        use crate::tensor::backend::Backend;
         type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`

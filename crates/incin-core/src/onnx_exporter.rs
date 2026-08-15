@@ -6,7 +6,6 @@ use crate::err::Error;
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::tensor::dtype::DTypeId;
-use alloc::collections::BTreeMap;
 use prost::Message;
 use std::path::Path;
 
@@ -179,6 +178,18 @@ fn value_to_value_info(val: &crate::graph::Value) -> anyhow::Result<onnx::ValueI
     Ok(vi)
 }
 
+/// `OnnxImporter`.
+pub struct OnnxImporter<'a> {
+    _path: &'a Path,
+}
+
+impl<'a> OnnxImporter<'a> {
+    /// Creates a new instance with default (statically inferred) shape arguments.
+    pub fn new(path: &'a Path) -> Self {
+        Self { _path: path }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,17 +243,5 @@ mod tests {
         assert_eq!(node.op_type.as_deref(), Some("Add"));
         assert!(node.attribute.is_empty());
         std::fs::remove_file(path).expect("test export should be removable");
-    }
-}
-
-/// `OnnxImporter`.
-pub struct OnnxImporter<'a> {
-    _path: &'a Path,
-}
-
-impl<'a> OnnxImporter<'a> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(path: &'a Path) -> Self {
-        Self { _path: path }
     }
 }

@@ -26,10 +26,9 @@ use crate::err::BackendError;
 use crate::exec::capability::{
     Capabilities, CapabilityQuery, OperationIdentity, SupportLevel, UnsupportedReason,
 };
-use crate::exec::catalog::{Descriptor, DescriptorError, LogicalTensorMeta, Operation};
+use crate::exec::catalog::{DescriptorError, LogicalTensorMeta, Operation};
 use crate::exec::context::ExecutionContext;
 use crate::exec::meta::TensorMeta;
-use crate::exec::policy::GradMode;
 
 use crate::exec::request::TensorHandle;
 use crate::tensor::backend::{Execute, ExecutionRequest};

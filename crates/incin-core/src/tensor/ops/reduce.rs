@@ -5,23 +5,23 @@
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
 use crate::dist::{Local, Placement};
-use crate::err::{Error, Result};
+use crate::err::Result;
 use crate::exec::catalog::{
     AxisAttributes, CanonicalOperation, Descriptor, LogicalTensorMeta, Operation, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
+use crate::shapes::ShapeBuf;
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
-use crate::shapes::{Dyn, DynShape, Shape};
-use crate::shapes::{ShapeBuf, ShapeValue};
+use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::{DType, DTypeId};
-use crate::tensor::grad::{NoGrad, RequiresGrad};
+use crate::tensor::grad::RequiresGrad;
 
 fn reduction_descriptor<O>(shape: &ShapeBuf, axis: usize) -> Result<Descriptor<O>>
 where

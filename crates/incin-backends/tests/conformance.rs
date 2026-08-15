@@ -26,8 +26,7 @@ use incin_core::exec::{
     TensorMeta, UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, Shape, ShapeBuf, StorageBackend,
-    StrideBuf,
+    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
 };
 
 type MatMulOperation = op::MatMulExact;

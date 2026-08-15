@@ -24,8 +24,6 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::ops::Deref;
 
-use serde::{Deserialize, Serialize};
-
 use super::error::{OperationKind, RankExpectation, ShapeError};
 
 /// Ranks up to this bound are stored inline, without allocating.
