@@ -402,8 +402,8 @@ macro_rules! unsupported_tensor_ops {
 pub(crate) use unsupported_tensor_ops;
 
 /// The error a declared gap reports, identical to the removed default body's.
-pub(crate) fn unsupported<B>(op: &'static str) -> incin_core::prelude::Error {
-    incin_core::prelude::Error::UnsupportedBackendOperation {
+pub(crate) fn unsupported<B>(op: &'static str) -> incin_core::error::Error {
+    incin_core::error::Error::UnsupportedBackendOperation {
         op,
         backend: core::any::type_name::<B>(),
     }

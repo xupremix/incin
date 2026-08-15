@@ -13,16 +13,19 @@ use incin_core::nn::optional::OptionalField;
 use incin_core::nn::param::{Param, TrainState, Trainable};
 use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
-use incin_core::prelude::{
-    Backend, DynShape, FloatDType, Result, Shape, ShapeBuf, ShapeValue, StorageBackend,
-};
+use incin_core::error::{Error, Result};
+use incin_core::tensor::backend::{Backend, StorageBackend};
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::FloatDType;
+use incin_core::shapes::{DynShape, Shape, ShapeValue};
+use incin_core::shapes::buf::ShapeBuf;
 
 use crate::target::{GeneratedFill, TargetBackend, TargetExt, TensorTarget};
 
 /// Build a target-side shape value from generated dimensions through the
 /// canonical ShapeBuf validation boundary.
 fn shape_value_from_dims<S: Shape>(dims: &[usize]) -> Result<ShapeValue<S>> {
-    ShapeValue::try_new(ShapeBuf::from_slice(dims)).map_err(incin_core::prelude::Error::Shape)
+    ShapeValue::try_new(ShapeBuf::from_slice(dims)).map_err(Error::Shape)
 }
 type Shape2<A, B> =
     incin_core::shapes::DimCons<A, incin_core::shapes::DimCons<B, incin_core::shapes::Nil>>;
@@ -155,7 +158,7 @@ TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
     let shape_buf = shape_val.shape_buf().clone();
     let raw_var = materialize_storage_plan(target, shape_val, init, context)?;
     let dtype_field = target.parameter_dtype_field();
-    let device_field = <T::Device as incin_core::prelude::Device>::init(target.device_arg());
+    let device_field = <T::Device as Device>::init(target.device_arg());
 
     Param::<S, TargetBackend<T>, T::ParameterDtype, Train>::from_parts_checked(
         raw_var,
@@ -202,7 +205,7 @@ TargetBackend<T>: Backend<Device = T::Device> + VariableBackend
     let shape_buf = shape_val.shape_buf().clone();
     let raw_var = materialize_storage_plan(target, shape_val, init, context)?;
     let dtype_field = target.parameter_dtype_field();
-    let device_field = <T::Device as incin_core::prelude::Device>::init(target.device_arg());
+    let device_field = <T::Device as Device>::init(target.device_arg());
 
     incin_core::nn::Buffer::<S, TargetBackend<T>, T::ParameterDtype>::from_parts_checked(
         raw_var,
