@@ -367,7 +367,7 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 /// use incin::prelude::*;
 ///
 /// #[module]
-/// pub struct MyModel<B: Backend> {
+/// pub struct MyModel<B: VariableBackend> {
 ///     fc1: Linear<s![128, 64], B>,
 ///     fc2: Linear<s![64, 10], B>,
 /// }

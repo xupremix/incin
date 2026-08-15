@@ -22,7 +22,7 @@ type NB = CpuBackendImpl;
 
 /// A small CNN classifier: conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear.
 #[module]
-pub struct SimpleCnn<B: Backend> {
+pub struct SimpleCnn<B: VariableBackend> {
     pub conv1: incin_core::prelude::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B, incin_core::prelude::False>,
     pub bn1: incin::BatchNorm2d<s![dyn], B>,
     #[module(ignore)]
@@ -30,7 +30,7 @@ pub struct SimpleCnn<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<B: Backend + incin_core::nn::param::ParameterInit<f32>> SimpleCnn<B>
+impl<B: VariableBackend + incin_core::nn::param::ParameterInit<f32>> SimpleCnn<B>
 where
     B: SupportsDType<f32> + SupportsDType<u32>,
     B::Device: ConstDevice,
@@ -55,7 +55,7 @@ where
 }
 
 impl<
-    B: Backend
+    B: VariableBackend
         + Execute<op::TransposeExact>
         + Execute<op::ReshapeExact>
         + incin_core::backend_authoring::Execute<op::MatMulExact>
@@ -129,7 +129,7 @@ fn train<B>(
     lr: f64,
 ) -> (Vec<f32>, std::time::Duration)
 where
-    B: Backend
+    B: VariableBackend
         + SupportsDType<f32>
         + SupportsDType<u32>
         + ParameterInit<f32>

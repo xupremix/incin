@@ -165,12 +165,12 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 /// use incin::prelude::*;
 ///
 /// #[module]
-/// pub struct MyLayer<B: crate::tensor::backend::VariableBackend> {
+/// pub struct MyLayer<B: VariableBackend> {
 ///     weight: Param<s![128, 128], B>,
 ///     bias: Param<s![128], B>,
 /// }
 ///
-/// impl<B: crate::tensor::backend::VariableBackend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
+/// impl<B: VariableBackend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
 ///     type Output = Tensor<s![1, 128], B>;
 ///     type Error = Error;
 ///

@@ -28,7 +28,7 @@ type LinearMatMulDescriptor = Descriptor<op::MatMulExact>;
 /// ```rust
 /// # extern crate incin_core as incin;
 /// use incin_core::nn::linear::LinearShape;
-/// use incin_core::shapes::s;
+/// use incin_macros::s;
 /// // Static linear layer: 784 inputs → 256 outputs
 /// type S = s![784, 256];
 /// # fn assert_is_a_linear_shape<T: LinearShape>() {}

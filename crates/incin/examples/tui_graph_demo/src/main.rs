@@ -17,7 +17,7 @@ type TB = TracingBackend<NB>;
 
 #[module]
 /// Simple mlp.
-pub struct SimpleMlp<B: Backend> {
+pub struct SimpleMlp<B: VariableBackend> {
     /// Fc1.
     pub fc1: Linear<Dyn, B>,
     /// Fc2.
@@ -26,7 +26,7 @@ pub struct SimpleMlp<B: Backend> {
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<B: Backend + incin_core::nn::param::ParameterInit<f32> + Execute<op::Add> + Execute<op::Relu>>
+impl<B: VariableBackend + incin_core::nn::param::ParameterInit<f32> + Execute<op::Add> + Execute<op::Relu>>
     SimpleMlp<B>
 where
     B: SupportsDType<f32>,
