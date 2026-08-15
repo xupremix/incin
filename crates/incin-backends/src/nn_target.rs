@@ -14,7 +14,7 @@ use incin_core::nn::param::{Param, TrainState, Trainable};
 use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
 use incin_core::error::{Error, Result};
-use incin_core::tensor::backend::{Backend, StorageBackend};
+use incin_core::backend_authoring::{Backend, StorageBackend};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::FloatDType;
 use incin_core::shapes::{DynShape, Shape, ShapeValue};
