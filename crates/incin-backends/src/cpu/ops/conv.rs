@@ -40,9 +40,10 @@
 //! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
-use incin_core::prelude::Error;
-use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
-use incin_core::prelude::{DType, Result};
+use incin_core::error::{BackwardError, Error, Result};
+use incin_core::shapes::{ShapeBuf, ShapeError};
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::dtype::DType;
 
 use crate::cpu::ops::elementwise::add_storage;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};

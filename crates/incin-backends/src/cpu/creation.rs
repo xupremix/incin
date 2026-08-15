@@ -5,10 +5,9 @@
 //! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
-use incin_core::prelude::{
-    ConversionFailure, DeviceId, DTypeDescriptor, DTypeId, Error, FloatToIntPolicy, Result,
-    convert_f64_to_i64,
-};
+use incin_core::error::{ConversionFailure, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 #[allow(unused_imports)]
 use rand::Rng;
 #[allow(unused_imports)]

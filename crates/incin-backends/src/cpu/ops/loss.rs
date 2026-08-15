@@ -25,11 +25,13 @@
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::CpuBackendImpl;
-use incin_core::prelude::Reduction;
-use incin_core::prelude::{
-    Axis, BackendError, ConversionFailure, DType, DTypeId, Device, DimensionConstraint, Error,
-    OperationKind, RankExpectation, Result, ShapeBuf, ShapeError, StorageBackend,
-};
+use incin_core::error::{BackendError, ConversionFailure, Error, Result};
+use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeBuf, ShapeError};
+use incin_core::shapes::error::OperationKind;
+use incin_core::backend_authoring::StorageBackend;
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::{DType, DTypeId};
+use incin_core::tensor::reduction::Reduction;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 fn reduce_loss(t: CpuStorage, reduction: Reduction) -> Result<CpuStorage> {

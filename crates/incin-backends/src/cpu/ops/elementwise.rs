@@ -10,9 +10,9 @@
 //! whose backward closure calls `tape::unbroadcast` on the ORIGINAL
 //! (pre-broadcast) operand shapes.
 
-use incin_core::prelude::{
-    DType, Device, Error, FloatDType, Result,
-};
+use incin_core::error::{Error, Result};
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::{DType, FloatDType};
 
 use crate::cpu::ops::elementwise_kernel::{self, BinaryOp, UnaryOp};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
