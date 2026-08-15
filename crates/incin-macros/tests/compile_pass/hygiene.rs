@@ -7,6 +7,7 @@
 //! caller's own macro invocation.
 use ::incin::experimental::mesh;
 use ::incin::prelude::*;
+use ::incin::optim::ParameterGroup;
 
 /// The decoy that used to win.
 mod incin {
@@ -54,7 +55,9 @@ fn main() {
     let m = Shadowed::<::incin::prelude::DefaultBackend> {
         fc: ::incin::prelude::Linear::build(()).unwrap(),
     };
-    assert!(!m.parameters().is_empty());
+    assert!(!ParameterGroup::<::incin::prelude::DefaultBackend, f32>::from_module(&m)
+        .unwrap()
+        .is_empty());
 
     // The decoys are still the caller's, which is the other half of hygiene:
     // the macro must not capture them either.
