@@ -45,9 +45,10 @@ optim.step(&grads)?;
 # Ok::<(), incin::Error>(())
 ```
 
-`SGD` and `AdamW` follow the identical `new(params, lr)` / `step(&grads)`
-shape. The learning rate is a public field (`optim.lr`), not hidden behind a
-setter — read on for why that matters with a scheduler.
+`SGD` and `AdamW` use `from_module(&model, lr)` for the normal module path, or
+`from_group(ParameterGroup::from_module(&model)?, lr)` when a caller needs to
+assemble a homogeneous group explicitly. Both use `step(&grads)`. The
+learning rate is a public field (`optim.lr`), not hidden behind a setter.
 
 ## Learning rate schedulers
 

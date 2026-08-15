@@ -118,3 +118,14 @@ and `crates/incin/tests/consumer-fixtures/backend-authoring-pass/` implements
 both a small custom backend and an inference-only backend. They are compiled
 as part of focused integration suites rather than presented as unchecked
 pseudocode.
+
+## Custom operations
+
+A custom operation supplies an `Operation` identity, serializable attributes,
+and output inference. A backend opts into that identity through
+`Capabilities` and implements `Execute<YourOperation>` with an
+`ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
+attribute validation, capability admission, and execution against the public
+authoring traits. Custom autodiff extension points are not part of this
+contract yet, so a custom operation should be documented as forward-only
+unless it is composed from existing differentiable tensor operations.

@@ -429,8 +429,9 @@ impl MLP {
 
 `#[module]` derives typed state and parameter visitors by walking every field:
 a layer or nested `Sequential` is delegated to recursively; a plain field is
-skipped. `parameters()` remains a consumer adapter for optimizer setup. `SeqTy!`
-names the same nested
+skipped. `ParameterGroup::from_module` is the optimizer-owned consumer path:
+it collects one homogeneous dtype through the visitor without changing module
+traversal. `SeqTy!` names the same nested
 `Sequential<...>` type `seq!` builds a value of, so a layer list is written
 once instead of the field type and the constructor drifting independently.
 

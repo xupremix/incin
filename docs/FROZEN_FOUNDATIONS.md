@@ -16,7 +16,7 @@ stops existing, so this file cannot rot into a list of deleted files.
 
 | Foundation | Where | Why it is finished | What keeps it true |
 |---|---|---|---|
-| The operation declaration | `crates/incin-core/src/operation_catalog.rs` | One authoritative declaration of every operation the library has. 174 rows, each naming an identity, a semantic profile, an attribute type, an operand arity and a legacy source | Every consumer is generated from it; a row cannot be added to one consumer only |
+| The operation declaration | `crates/incin-core/src/operation_catalog.rs` | One authoritative declaration of every operation the library has. 174 rows, each naming an identity, a semantic profile, an attribute type, an operand arity and historical family metadata | Every consumer is generated from it; a row cannot be added to one consumer only |
 | The descriptor vocabulary | `crates/incin-core/src/exec/catalog.rs` | `op::X` markers, `Descriptor<O>`, typed attributes, `OperationCatalogEntry` and its classification enums are all expanded from the declaration above | `incin_operation_catalog!(define_catalog)`; the sealed `CanonicalOperation` trait keeps new identities inside the crate |
 | The dispatch path | `crates/incin-core/src/exec/dispatch.rs` | `execute::<O, B>` is the single route from an operation to a kernel: validate the descriptor against real storage metadata, query the exact capability row per operand, then dispatch | `B: Execute<O>` is a compile-time bound, and there is no default method to fall through |
 | The execution contract | `crates/incin-core/src/exec/request.rs`, `crates/incin-core/src/tensor/backend/execute.rs` | `Execute<O>` carries an associated `Output`, so an operation returning a pair is expressible without a special case. `TensorHandle` carries checked metadata, so an executor never re-derives it | Type-checked at every call site |
@@ -50,7 +50,11 @@ treated as settled.
 | `CapabilityRule`'s single rank range | Same cause, same fix already in place: the range states the minimum over *all* operands, which is what `descriptor_min_rank` has always done and what `INDEX_AND_F32_DTYPES`'s rows now also do for rank |
 | `Execute`'s reachable sites | Sixteen operations have an `ExecutionSite` the trait cannot carry: they mutate through an operand, produce storage on another backend, or act on autograd state. `ExecutionSite::blocking_reason` states which |
 
-## Next steps, in dependency order
+## Historical migration notes
+
+The following records the dependency order used during the foundation
+migration. It is historical context, not a list of unfinished HND-004b work.
+The current execution contract is the descriptor and `Execute<O>` path above.
 
 Each step is blocked by the one above it, and the reason is stated rather than
 implied.

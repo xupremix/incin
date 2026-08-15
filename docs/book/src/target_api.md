@@ -1,7 +1,8 @@
 # The target API and canonical dispatch
 
-Feature `target-api`. This is the preferred application-facing allocation
-surface when the feature is enabled. Explicit `Tensor::<S, B>::...` constructors
+Feature `target-api` is experimental and not enabled by default. When enabled,
+it is the preferred application-facing allocation surface. Explicit
+`Tensor::<S, B>::...` constructors
 remain the backend-authoring form for code that intentionally fixes `B`.
 
 ## Allocation targets

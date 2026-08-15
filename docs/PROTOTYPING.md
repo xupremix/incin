@@ -19,9 +19,18 @@ that can be named as a working implementation.
 
 The repository now has a focused CPU Transformer proof in
 `crates/incin/tests/transformer_block.rs`. It runs a four-token, single-head
-self-attention block with query/key/value projections, transpose, softmax,
+self-attention block with query/key/value projections, transposed key, scaled
+QK scores, softmax, attention-value multiplication, output projection,
 residual addition, a GELU feed-forward block, backward propagation, AdamW,
-and a typed state snapshot round-trip.
+and a typed state snapshot round-trip. A companion test and the
+`compile_fixture_transformer_static.rs`, `compile_fixture_transformer_mixed.rs`,
+and `compile_fixture_transformer_dyn.rs` examples cover static, partially
+dynamic, and runtime-heavy shape forms.
+
+The compile baseline in `docs/benchmarks/compile-2026-08-15.md` records clean
+and incremental checks for this proof alongside tiny tensor, MLP, and CNN
+fixtures. The test observes finite output and nonzero gradients for the query,
+key, value, output, and both feed-forward projection groups.
 
 This is an executable composition proof, not a claim of a stable public
 `MultiHeadAttention` or `TransformerEncoderLayer` module. It does not yet

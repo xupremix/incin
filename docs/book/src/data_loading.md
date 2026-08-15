@@ -46,6 +46,13 @@ size, easy to get backwards coming from a framework that orders them the
 other way. Iterate with `&loader` (it implements `IntoIterator` by
 reference, so the loader itself is reusable across epochs).
 
+Errors are values, not end-of-epoch signals. A dataset or worker failure is
+returned as `Err(DataError)` from iteration and must be handled by the caller;
+it is never silently converted to `None`. With `num_workers == 0`, constructing
+the iterator performs no dataset reads, and each `next()` fetches and collates
+only its next batch synchronously. Worker-backed iteration keeps its explicit
+cancellation and error propagation semantics.
+
 ## A realistic collate function
 
 The MNIST example in the repository (`crates/incin/examples/mnist_training.rs`)
