@@ -95,7 +95,7 @@ fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
 
     // Save optimizer state
     let mut state = BTreeMap::new();
-    optim1.state_dict("", &mut state);
+    optim1.state_dict("", &mut state)?;
     assert!(!state.is_empty());
 
     // Create a new optimizer instance and load state
@@ -120,7 +120,7 @@ fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
     assert_eq!(optim1.step_count(), 1);
 
     let mut state = BTreeMap::new();
-    optim1.state_dict("", &mut state);
+    optim1.state_dict("", &mut state)?;
     assert!(!state.is_empty());
 
     let mut optim2 = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.01);
@@ -140,7 +140,7 @@ fn adam_step_rolls_back_parameters_state_and_counter_on_backend_failure() -> Res
     let before = parameter_bytes(&linear)?;
     let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
     let mut state_before = BTreeMap::new();
-    optim.state_dict("", &mut state_before);
+    optim.state_dict("", &mut state_before)?;
 
     let failure = incin::test_utils::fail_assign_on(2);
     let error = optim.step(&grads).unwrap_err();
@@ -153,7 +153,7 @@ fn adam_step_rolls_back_parameters_state_and_counter_on_backend_failure() -> Res
     assert_eq!(parameter_bytes(&linear)?, before);
     assert_eq!(optim.step_count(), 0);
     let mut state_after = BTreeMap::new();
-    optim.state_dict("", &mut state_after);
+    optim.state_dict("", &mut state_after)?;
     assert_eq!(
         state_after.keys().collect::<Vec<_>>(),
         state_before.keys().collect::<Vec<_>>()
@@ -183,7 +183,7 @@ fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
     assert_eq!(parameter_bytes(&linear)?, before);
     assert_eq!(optim.step_count(), usize::MAX);
     let mut state = BTreeMap::new();
-    optim.state_dict("", &mut state);
+    optim.state_dict("", &mut state)?;
     assert!(state.is_empty());
     Ok(())
 }
@@ -195,7 +195,7 @@ fn malformed_adam_state_load_is_typed_and_transactional() -> Result<()> {
     optim.step(&grads)?;
 
     let mut valid_state = BTreeMap::new();
-    optim.state_dict("", &mut valid_state);
+    optim.state_dict("", &mut valid_state)?;
     let before = state_bytes(&valid_state)?;
     let first_key = valid_state.keys().next().cloned().unwrap();
     valid_state.remove(&first_key);
@@ -208,7 +208,7 @@ fn malformed_adam_state_load_is_typed_and_transactional() -> Result<()> {
         })
     ));
     let mut after_state = BTreeMap::new();
-    optim.state_dict("", &mut after_state);
+    optim.state_dict("", &mut after_state)?;
     assert_eq!(state_bytes(&after_state)?, before);
     assert_eq!(optim.step_count(), 1);
     Ok(())

@@ -225,6 +225,43 @@ fn test_strict_load_rejects_bad_snapshots_without_mutation() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_late_state_failure_does_not_commit_earlier_leaves() -> Result<()> {
+    let mut model = MixedStateModel {
+        fp32: Linear::build(())?,
+        fp16: incin_core::nn::Linear::<
+            s![2, 2],
+            CpuBackendImpl,
+            incin_core::nn::optional::True,
+            f16,
+        >::build(())?,
+    };
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let fp16_weight = original
+        .get(&StatePath::new("fp16.weight")?)
+        .expect("mixed model has an fp16 weight");
+    let mut invalid = StateSnapshot::new();
+    for (path, value) in original.iter() {
+        invalid.insert(
+            path.clone(),
+            if path.as_str() == "fp16.weight" {
+                StateValue::new(
+                    fp16_weight.shape().clone(),
+                    DTypeId::F32.descriptor(),
+                    vec![0; 16],
+                    fp16_weight.role(),
+                )?
+            } else {
+                value.clone()
+            },
+        )?;
+    }
+
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &invalid).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
+    Ok(())
+}
+
 struct FailingState;
 
 impl<B: VariableBackend> VisitState<B> for FailingState {

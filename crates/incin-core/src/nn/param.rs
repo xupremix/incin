@@ -266,6 +266,7 @@ where
 /// A parameter storing an underlying backend variable that supports gradient computation.
 pub struct Param<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32, Train: TrainState = Trainable> {
     pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    pub(crate) pending_state: Option<<B as crate::tensor::backend::VariableBackend>::Var<K>>,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
@@ -276,6 +277,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            pending_state: None,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
@@ -333,6 +335,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
 
         Ok(Self {
             inner: raw_var,
+            pending_state: None,
             _shape: shape_value,
             _dtype: dtype,
             _device: device,
@@ -357,6 +360,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
     pub fn freeze(self) -> Param<S, B, K, Frozen> {
         Param {
             inner: self.inner,
+            pending_state: None,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: self._device,
@@ -368,6 +372,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
     pub fn unfreeze(self) -> Param<S, B, K, Trainable> {
         Param {
             inner: self.inner,
+            pending_state: None,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: self._device,
@@ -411,13 +416,13 @@ where
         })
     }
 
-    pub(crate) fn restore_state_value(
+    pub(crate) fn prepare_state_value(
         &mut self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
     ) -> Result<()> {
         let value = snapshot.get(path).ok_or_else(|| Error::InvalidModuleState {
-            operation: "restore parameter",
+            operation: "prepare parameter",
             reason: ErrorMessage::new(format!("missing state path {path}")),
         })?;
         let expected_dtype = K::descriptor(&self._dtype);
@@ -426,7 +431,7 @@ where
             || value.dtype() != expected_dtype
         {
             return Err(Error::InvalidModuleState {
-                operation: "restore parameter",
+                operation: "prepare parameter",
                 reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
             });
         }
@@ -437,7 +442,18 @@ where
             expected_dtype,
             &device,
         )?;
-        B::assign_var(&mut self.inner, &storage)
+        self.pending_state = Some(B::var_from_tensor::<K>(&storage)?);
+        Ok(())
+    }
+
+    pub(crate) fn commit_prepared_state(&mut self) {
+        if let Some(var) = self.pending_state.take() {
+            self.inner = var;
+        }
+    }
+
+    pub(crate) fn clear_prepared_state(&mut self) {
+        self.pending_state = None;
     }
 }
 
@@ -453,6 +469,7 @@ where
         let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
         Ok(Param {
             inner,
+            pending_state: None,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: field,
@@ -485,6 +502,7 @@ where
 
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -516,6 +534,7 @@ where
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::zeros_raw")?;
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -550,6 +569,7 @@ where
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::randn")?;
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -572,6 +592,7 @@ where
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::ones_raw")?;
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -622,6 +643,7 @@ where
         }
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: shape_value,
             _dtype,
             _device,
@@ -641,6 +663,7 @@ where
         let new_inner = B::transfer_var::<K>(&self.inner, &self._dtype, _device)?;
         Ok(Param {
             inner: new_inner,
+            pending_state: None,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: _device.clone(),
@@ -713,6 +736,7 @@ impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: 
 
         Ok(Param::<S2, B, K, Train> {
             inner: self.inner,
+            pending_state: None,
             _shape: shape_value,
             _dtype: self._dtype,
             _device: self._device,
@@ -724,6 +748,7 @@ impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: 
 /// A non-trainable state buffer.
 pub struct Buffer<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32> {
     pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
+    pub(crate) pending_state: Option<<B as crate::tensor::backend::VariableBackend>::Var<K>>,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
@@ -733,6 +758,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Clone for B
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            pending_state: None,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
@@ -789,6 +815,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B
 
         Ok(Self {
             inner: raw_var,
+            pending_state: None,
             _shape: shape_value,
             _dtype: dtype,
             _device: device,
@@ -823,13 +850,13 @@ where
         + HostInterop,
     K: DType<Arg = ()>,
 {
-    pub(crate) fn restore_state_value(
+    pub(crate) fn prepare_state_value(
         &mut self,
         path: &crate::nn::StatePath,
         snapshot: &crate::nn::StateSnapshot,
     ) -> Result<()> {
         let value = snapshot.get(path).ok_or_else(|| Error::InvalidModuleState {
-            operation: "restore buffer",
+            operation: "prepare buffer",
             reason: ErrorMessage::new(format!("missing state path {path}")),
         })?;
         let expected_dtype = K::descriptor(&self._dtype);
@@ -838,7 +865,7 @@ where
             || value.dtype() != expected_dtype
         {
             return Err(Error::InvalidModuleState {
-                operation: "restore buffer",
+                operation: "prepare buffer",
                 reason: ErrorMessage::new(format!("shape or dtype mismatch at {path}")),
             });
         }
@@ -849,7 +876,18 @@ where
             expected_dtype,
             &device,
         )?;
-        B::assign_var(&mut self.inner, &storage)
+        self.pending_state = Some(B::var_from_tensor::<K>(&storage)?);
+        Ok(())
+    }
+
+    pub(crate) fn commit_prepared_state(&mut self) {
+        if let Some(var) = self.pending_state.take() {
+            self.inner = var;
+        }
+    }
+
+    pub(crate) fn clear_prepared_state(&mut self) {
+        self.pending_state = None;
     }
 }
 
@@ -865,6 +903,7 @@ where
         let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
         Ok(Buffer {
             inner,
+            pending_state: None,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: field,
@@ -891,6 +930,7 @@ where
 
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -919,6 +959,7 @@ where
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Buffer::zeros_raw")?;
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -946,6 +987,7 @@ where
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Buffer::ones_raw")?;
         Ok(Self {
             inner,
+            pending_state: None,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,

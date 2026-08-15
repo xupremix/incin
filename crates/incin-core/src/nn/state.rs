@@ -238,11 +238,11 @@ where
     Ok(visitor.into_snapshot())
 }
 
-struct StateLoader<'a> {
+struct StatePreparation<'a> {
     snapshot: &'a StateSnapshot,
 }
 
-impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateLoader<'a> {
+impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StatePreparation<'a> {
     fn visit_param<S, K, Train>(
         &mut self,
         path: &StatePath,
@@ -256,7 +256,7 @@ impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for Stat
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        param.restore_state_value(path, self.snapshot)
+        param.prepare_state_value(path, self.snapshot)
     }
 
     fn visit_buffer<S, K>(
@@ -271,7 +271,81 @@ impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for Stat
             + crate::exec::Capabilities
             + crate::tensor::backend::HostInterop,
     {
-        buffer.restore_state_value(path, self.snapshot)
+        buffer.prepare_state_value(path, self.snapshot)
+    }
+}
+
+struct StateCommit;
+
+impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateCommit {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        _path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        param.commit_prepared_state();
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        _path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        buffer.commit_prepared_state();
+        Ok(())
+    }
+}
+
+struct StateClear;
+
+impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateClear {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        _path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        param.clear_prepared_state();
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        _path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        buffer.clear_prepared_state();
+        Ok(())
     }
 }
 
@@ -303,8 +377,15 @@ where
             )),
         });
     }
-    let mut visitor = StateLoader { snapshot };
-    module.visit_state_mut(&StatePath::root(), &mut visitor)
+    let mut visitor = StatePreparation { snapshot };
+    if let Err(error) = module.visit_state_mut(&StatePath::root(), &mut visitor) {
+        let mut clear = StateClear;
+        let _ = module.visit_state_mut(&StatePath::root(), &mut clear);
+        return Err(error);
+    }
+
+    let mut commit = StateCommit;
+    module.visit_state_mut(&StatePath::root(), &mut commit)
 }
 
 /// One owned, exact-dtype state value.

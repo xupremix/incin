@@ -524,7 +524,7 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         &self,
         prefix: &str,
         dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) {
+    ) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -532,28 +532,27 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         };
         for (name, m_val) in &self.m {
             let shape = B::shape(m_val);
-            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
+            let tensor = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
                 ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            ) {
-                dict.insert(alloc::format!("{}m.{}", p, name), tensor);
-            }
+            )?;
+            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
         }
         for (name, v_val) in &self.v {
             let shape = B::shape(v_val);
-            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
+            let tensor = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
                 ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            ) {
-                dict.insert(alloc::format!("{}v.{}", p, name), tensor);
-            }
+            )?;
+            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
+        Ok(())
     }
 
     /// Loads optimizer state tensors from a dictionary.
@@ -700,7 +699,7 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         &self,
         prefix: &str,
         dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) {
+    ) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -708,28 +707,27 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         };
         for (name, m_val) in &self.m {
             let shape = B::shape(m_val);
-            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
+            let tensor = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
                 ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            ) {
-                dict.insert(alloc::format!("{}m.{}", p, name), tensor);
-            }
+            )?;
+            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
         }
         for (name, v_val) in &self.v {
             let shape = B::shape(v_val);
-            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
+            let tensor = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
                 ShapeBuf::from_slice(&shape),
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            ) {
-                dict.insert(alloc::format!("{}v.{}", p, name), tensor);
-            }
+            )?;
+            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
+        Ok(())
     }
 
     /// Loads optimizer state tensors from a dictionary.
