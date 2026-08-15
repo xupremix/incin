@@ -368,17 +368,17 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     state_dict_field_types.push(field.ty.clone());
 
                     visit_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitState::visit_state(
                             &self.#fname, &child_path, visitor)?;
                     });
                     visit_state_mut_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitStateMut::visit_state_mut(
                             &mut self.#fname, &child_path, visitor)?;
                     });
                     visit_parameter_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitParameters::visit_parameters(
                             &self.#fname, &child_path, visitor)?;
                     });
@@ -444,17 +444,17 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     state_dict_field_types.push(field.ty.clone());
 
                     visit_state_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitState::visit_state(
                             &self.#idx, &child_path, visitor)?;
                     });
                     visit_state_mut_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitStateMut::visit_state_mut(
                             &mut self.#idx, &child_path, visitor)?;
                     });
                     visit_parameter_calls.push(quote! {
-                        let child_path = path.child(#state_component);
+                        let child_path = path.try_child(#state_component)?;
                         #k_crate::__macro_support::VisitParameters::visit_parameters(
                             &self.#idx, &child_path, visitor)?;
                     });

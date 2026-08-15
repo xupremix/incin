@@ -12,6 +12,7 @@ that establishes their contract.
 | --- | --- | --- | --- | --- | --- |
 | `Dyn`, `Cpu`, static ordinal/dtype/policy markers | marker with no invariant | No runtime validity claim | Unit/default construction | None | Marker identity/type |
 | `ShapeBuf`, `StrideBuf` | validated value | Derived counts, strides, and spans are representable | `from_slice`; checked derived methods | Checked multiplication/addition per operation | `dims`, `strides` |
+| `StatePath` | validated value | Root or non-empty dotted components; child construction accepts one non-empty component without `.` | `root`, checked `new`, fallible `try_child` | Constructor and custom deserialization, including the root wire value | `as_str` |
 | `Alignment` | validated value | Nonzero power-of-two byte alignment | `Alignment::new`, `Alignment::of` | Constructor | `bytes` |
 | `CheckedNumel`, `CheckedByteLen` | validated value | Resource-bounded element/allocation count | `from_dims`; tuple fields private | Shape/resource limits and checked arithmetic | `get` |
 | `AxisSet`, `DeviceSet`, cache keys/records | validated value | Semantic axis collections, nonempty homogeneous devices, and bounded/provenanced cache data | Named checked constructors | Constructor and custom deserialization | Named read-only accessors |
@@ -82,3 +83,12 @@ crate-visible backend storage, or deliberately transparent configuration such as
 Unchecked constructors remain crate-private. A future public unchecked
 constructor requires a documented caller proof, a safety boundary commensurate
 with its consequences, and compile-contract coverage.
+
+## State paths
+
+`StatePath` stores the canonical dotted state name. `StatePath::root()` is the
+empty root and is the only valid empty representation; non-root paths contain
+one or more non-empty components joined by `.`. `try_child` accepts exactly one
+component and returns a typed error for empty or dotted input. Serialization
+uses the empty string for the root and custom deserialization maps that value
+back to `StatePath::root()` before validating all other paths.

@@ -28,7 +28,11 @@ impl<'de> serde::Deserialize<'de> for StatePath {
         D: serde::Deserializer<'de>,
     {
         let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
-        Self::new(raw).map_err(|error| serde::de::Error::custom(error.to_string()))
+        if raw.is_empty() {
+            Ok(Self::root())
+        } else {
+            Self::new(raw).map_err(|error| serde::de::Error::custom(error.to_string()))
+        }
     }
 }
 
@@ -57,15 +61,6 @@ impl StatePath {
         Ok(Self(path))
     }
 
-    /// Adds a named child component.
-    #[must_use]
-    pub fn child(&self, name: &str) -> Self {
-        match self.try_child(name) {
-            Ok(path) => path,
-            Err(error) => panic!("invalid state path child `{name}`: {error}"),
-        }
-    }
-
     /// Fallibly adds exactly one named child component.
     ///
     /// Components are non-empty strings that do not contain `.`.  Dotted
@@ -88,7 +83,12 @@ impl StatePath {
     /// Adds a flat positional child component used by `Sequential`.
     #[must_use]
     pub fn index(&self, index: usize) -> Self {
-        self.child(&index.to_string())
+        let component = index.to_string();
+        if self.0.is_empty() {
+            Self(component)
+        } else {
+            Self(format!("{}.{}", self.0, component))
+        }
     }
 
     /// Returns the canonical dotted representation.
@@ -627,7 +627,11 @@ mod tests {
     fn paths_are_ordered_and_distinct_from_runtime_identity() {
         let root = StatePath::root();
         assert_eq!(
-            root.child("q_proj").child("weight").as_str(),
+            root.try_child("q_proj")
+                .unwrap()
+                .try_child("weight")
+                .unwrap()
+                .as_str(),
             "q_proj.weight"
         );
         assert_eq!(root.index(3).as_str(), "3");
@@ -648,6 +652,19 @@ mod tests {
                 postcard::from_bytes::<StatePath>(&postcard::to_allocvec(&path).unwrap()).unwrap(),
                 path
             );
+        }
+    }
+
+    #[test]
+    fn root_and_nested_paths_roundtrip_through_postcard() {
+        for path in [
+            StatePath::root(),
+            StatePath::new("weight").unwrap(),
+            StatePath::new("layer_0.attention.q_proj.weight").unwrap(),
+        ] {
+            let encoded = postcard::to_allocvec(&path).unwrap();
+            let decoded = postcard::from_bytes::<StatePath>(&encoded).unwrap();
+            assert_eq!(decoded, path);
         }
     }
 

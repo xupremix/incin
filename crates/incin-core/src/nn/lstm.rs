@@ -477,14 +477,22 @@ where
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> crate::err::Result<()> {
-        self.wi_i.visit_parameters(&path.child("wi_i"), visitor)?;
-        self.wi_f.visit_parameters(&path.child("wi_f"), visitor)?;
-        self.wi_g.visit_parameters(&path.child("wi_g"), visitor)?;
-        self.wi_o.visit_parameters(&path.child("wi_o"), visitor)?;
-        self.wh_i.visit_parameters(&path.child("wh_i"), visitor)?;
-        self.wh_f.visit_parameters(&path.child("wh_f"), visitor)?;
-        self.wh_g.visit_parameters(&path.child("wh_g"), visitor)?;
-        self.wh_o.visit_parameters(&path.child("wh_o"), visitor)
+        self.wi_i
+            .visit_parameters(&path.try_child("wi_i")?, visitor)?;
+        self.wi_f
+            .visit_parameters(&path.try_child("wi_f")?, visitor)?;
+        self.wi_g
+            .visit_parameters(&path.try_child("wi_g")?, visitor)?;
+        self.wi_o
+            .visit_parameters(&path.try_child("wi_o")?, visitor)?;
+        self.wh_i
+            .visit_parameters(&path.try_child("wh_i")?, visitor)?;
+        self.wh_f
+            .visit_parameters(&path.try_child("wh_f")?, visitor)?;
+        self.wh_g
+            .visit_parameters(&path.try_child("wh_g")?, visitor)?;
+        self.wh_o
+            .visit_parameters(&path.try_child("wh_o")?, visitor)
     }
 }
 
@@ -653,7 +661,8 @@ where
         path: &crate::nn::StatePath,
         visitor: &mut V,
     ) -> crate::err::Result<()> {
-        self.cell.visit_parameters(&path.child("cell"), visitor)
+        self.cell
+            .visit_parameters(&path.try_child("cell")?, visitor)
     }
 }
 

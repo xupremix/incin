@@ -32,7 +32,7 @@ impl VisitState<CpuBackend> for ManualLinear {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.layer.visit_state(&path.child("layer"), visitor)
+        self.layer.visit_state(&path.try_child("layer")?, visitor)
     }
 }
 
@@ -42,7 +42,8 @@ impl VisitParameters<CpuBackend> for ManualLinear {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.layer.visit_parameters(&path.child("layer"), visitor)
+        self.layer
+            .visit_parameters(&path.try_child("layer")?, visitor)
     }
 }
 
@@ -52,7 +53,8 @@ impl VisitStateMut<CpuBackend> for ManualLinear {
         path: &StatePath,
         visitor: &mut V,
     ) -> Result<()> {
-        self.layer.visit_state_mut(&path.child("layer"), visitor)
+        self.layer
+            .visit_state_mut(&path.try_child("layer")?, visitor)
     }
 }
 
