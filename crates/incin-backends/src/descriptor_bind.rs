@@ -12,7 +12,8 @@
 use alloc::string::ToString;
 
 use incin_core::exec::UnsupportedReason;
-use incin_core::prelude::{BackendError, Error, OperationKind};
+use incin_core::error::{BackendError, Error};
+use incin_core::shapes::error::OperationKind;
 
 /// Build an `InvalidInput` error for a descriptor binder.
 pub(crate) const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
@@ -70,14 +71,14 @@ macro_rules! impl_data_creation_executors {
                     ) -> core::result::Result<$storage, BackendError> {
                         if !request.inputs.is_empty() {
                             return Err(crate::descriptor_bind::invalid(
-                                incin_core::prelude::OperationKind::$operation,
+                                incin_core::shapes::error::OperationKind::$operation,
                                 "data creation takes no operand",
                             ));
                         }
                         let attr = request.operation.descriptor().attributes();
                         let bytes = request.payload.ok_or_else(|| {
                             crate::descriptor_bind::invalid(
-                                incin_core::prelude::OperationKind::$operation,
+                                incin_core::shapes::error::OperationKind::$operation,
                                 "data creation requires borrowed bytes",
                             )
                         })?;
@@ -90,7 +91,7 @@ macro_rules! impl_data_creation_executors {
                         .map_err(|err| {
                             crate::descriptor_bind::kernel_error(
                                 Self::BACKEND_NAME,
-                                incin_core::prelude::OperationKind::$operation,
+                                incin_core::shapes::error::OperationKind::$operation,
                                 err,
                             )
                         })
@@ -121,7 +122,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::Zeros,
+                        incin_core::shapes::error::OperationKind::Zeros,
                         "an allocation takes no operand",
                     ));
                 }
@@ -134,7 +135,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::Zeros,
+                        incin_core::shapes::error::OperationKind::Zeros,
                         err,
                     )
                 })
@@ -156,7 +157,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::Ones,
+                        incin_core::shapes::error::OperationKind::Ones,
                         "an allocation takes no operand",
                     ));
                 }
@@ -169,7 +170,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::Ones,
+                        incin_core::shapes::error::OperationKind::Ones,
                         err,
                     )
                 })
@@ -191,7 +192,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::UniformRandom,
+                        incin_core::shapes::error::OperationKind::UniformRandom,
                         "an allocation takes no operand",
                     ));
                 }
@@ -204,7 +205,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::UniformRandom,
+                        incin_core::shapes::error::OperationKind::UniformRandom,
                         err,
                     )
                 })
@@ -226,7 +227,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::NormalRandom,
+                        incin_core::shapes::error::OperationKind::NormalRandom,
                         "an allocation takes no operand",
                     ));
                 }
@@ -239,7 +240,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::NormalRandom,
+                        incin_core::shapes::error::OperationKind::NormalRandom,
                         err,
                     )
                 })
@@ -261,7 +262,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::Full,
+                        incin_core::shapes::error::OperationKind::Full,
                         "an allocation takes no operand",
                     ));
                 }
@@ -275,7 +276,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::Full,
+                        incin_core::shapes::error::OperationKind::Full,
                         err,
                     )
                 })
@@ -297,7 +298,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::Arange,
+                        incin_core::shapes::error::OperationKind::Arange,
                         "an allocation takes no operand",
                     ));
                 }
@@ -312,7 +313,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::Arange,
+                        incin_core::shapes::error::OperationKind::Arange,
                         err,
                     )
                 })
@@ -334,7 +335,7 @@ macro_rules! impl_creation_executors {
             ) -> core::result::Result<$storage, BackendError> {
                 if !request.inputs.is_empty() {
                     return Err(crate::descriptor_bind::invalid(
-                        incin_core::prelude::OperationKind::Linspace,
+                        incin_core::shapes::error::OperationKind::Linspace,
                         "an allocation takes no operand",
                     ));
                 }
@@ -349,7 +350,7 @@ macro_rules! impl_creation_executors {
                 .map_err(|err| {
                     crate::descriptor_bind::kernel_error(
                         Self::BACKEND_NAME,
-                        incin_core::prelude::OperationKind::Linspace,
+                        incin_core::shapes::error::OperationKind::Linspace,
                         err,
                     )
                 })
