@@ -23,6 +23,3 @@ pub use backend::{WgpuBackendImpl, WgpuGrads, WgpuVar};
 /// nothing, and its evidence test lives outside this crate. A guarantee
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
-
-#[cfg(test)]
-mod tests;
