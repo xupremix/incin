@@ -16,7 +16,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::err::Result;
+use crate::err::{Error, Result};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::base::Tensor;
@@ -55,7 +55,7 @@ where
     let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
-            .map_err(crate::prelude::Error::from)?;
+            .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -93,7 +93,7 @@ where
     let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, attributes, &[h_lhs, h_rhs], &shape_val)
-            .map_err(crate::prelude::Error::from)?;
+            .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -140,10 +140,10 @@ where
             },
         ],
     )
-    .map_err(|error| crate::prelude::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
+    .map_err(|error| crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
     .into_descriptor();
     let b_shape = descriptor.output_shape().cloned().ok_or_else(|| {
-        crate::prelude::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
+        crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
             operation: crate::shapes::error::OperationKind::Broadcast,
             rank: 0,
         })
@@ -151,14 +151,14 @@ where
     let h_lhs = TensorHandle::from_storage::<B, K, Local>(&lhs.inner);
     let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
     let shape_val =
-        ShapeValue::<SOut>::try_new(b_shape.clone()).map_err(crate::prelude::Error::Shape)?;
+        ShapeValue::<SOut>::try_new(b_shape.clone()).map_err(crate::err::Error::Shape)?;
     let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, SOut>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
-            .map_err(crate::prelude::Error::from)?;
+            .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
-        ShapeValue::<SOut>::try_new(b_shape).map_err(crate::prelude::Error::Shape)?,
+        ShapeValue::<SOut>::try_new(b_shape).map_err(crate::err::Error::Shape)?,
         lhs._dtype.clone(),
         lhs._device.clone(),
         grad_out,
@@ -191,7 +191,7 @@ where
         ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
-            .map_err(crate::prelude::Error::from)?;
+            .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -226,7 +226,7 @@ where
         ExecutionContext::from_scope(B::default()).with_grad_mode(crate::exec::GradMode::Disabled);
     let storage =
         dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
-            .map_err(crate::prelude::Error::from)?;
+            .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         lhs._shape.clone(),
@@ -599,7 +599,7 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::prelude::Result<
+            type Output = crate::err::Result<
                 Tensor<
                     <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
                     B,
@@ -630,7 +630,7 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::prelude::Result<
+            type Output = crate::err::Result<
                 Tensor<
                     <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
                     B,
@@ -660,7 +660,7 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::prelude::Result<
+            type Output = crate::err::Result<
                 Tensor<
                     <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
                     B,
@@ -690,7 +690,7 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::prelude::Result<
+            type Output = crate::err::Result<
                 Tensor<
                     <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
                     B,

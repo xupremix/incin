@@ -4,7 +4,7 @@
 //! on a single tensor and return a new tensor with the exact same shape. It also includes
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
 use crate::exec::catalog::{Descriptor, op};
-use crate::err::Result;
+use crate::err::{Error, Result};
 use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
 use crate::tensor::base::Tensor;
@@ -282,7 +282,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
@@ -308,7 +308,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
@@ -358,7 +358,7 @@ where
         .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[handle], &shape_val)
         })
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         tensor._shape.clone(),
@@ -391,7 +391,7 @@ where
         .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, attributes, &[handle], &shape_val)
         })
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         tensor._shape.clone(),
@@ -417,7 +417,7 @@ where
         .restrict(|| {
             dispatch::execute_shaped::<O, B, S>(&context, NoAttributes, &[handle], &shape_val)
         })
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
         tensor._shape.clone(),
@@ -447,7 +447,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
+            type Output = crate::err::Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
@@ -462,7 +462,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
+            type Output = crate::err::Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
@@ -477,7 +477,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
+            type Output = crate::err::Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].
@@ -492,7 +492,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = crate::prelude::Result<Tensor<S, B, K, G>>;
+            type Output = crate::err::Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].

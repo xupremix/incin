@@ -12,7 +12,8 @@ use crate::tensor::reduction::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     Reduction, ReductionMode,
 };
-use crate::err::Result;
+use crate::err::{Error, Result};
+use crate::shapes::DynShape;
 use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
 use crate::tensor::base::Tensor;
@@ -50,11 +51,11 @@ where
     };
     let context = crate::tensor::grad::execution_context::<B, G>(&prediction._grad);
     dispatch::execute::<O, B>(&context, LossAttributes { reduction }, &inputs)
-        .map_err(crate::prelude::Error::from)
+        .map_err(crate::err::Error::from)
 }
 
 impl<
-    S: Shape + crate::prelude::DynShape,
+    S: Shape + crate::shapes::DynShape,
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
@@ -66,7 +67,7 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend, i64>::zeros(()).unwrap();
@@ -111,7 +112,7 @@ impl<
             LossAttributes { reduction },
             &[prediction, target_handle],
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -135,7 +136,7 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
