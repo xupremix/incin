@@ -131,7 +131,7 @@ jobs:
     if: needs.select.outputs.cuda == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # A self-hosted runner keeps its state between runs, so the toolchain is
       # installed explicitly rather than assuming whatever the last job left
@@ -190,7 +190,7 @@ jobs:
     if: needs.select.outputs.wgpu_software == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -219,7 +219,7 @@ jobs:
     if: needs.select.outputs.wgpu_native == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.wgpu_runner) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -253,7 +253,7 @@ jobs:
     if: needs.select.outputs.metal == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.metal_runner) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -287,7 +287,7 @@ jobs:
     if: needs.select.outputs.dist2_network == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -314,7 +314,7 @@ jobs:
     if: needs.select.outputs.multinode == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable

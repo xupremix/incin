@@ -17,10 +17,10 @@ jobs:
     name: CPU Test Suite
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache Cargo modules
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -115,10 +115,10 @@ jobs:
     name: Feature Powerset
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache Cargo modules
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -180,10 +180,10 @@ jobs:
     name: Miri and Sanitizers
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache Cargo modules
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
@@ -212,7 +212,7 @@ jobs:
     name: Execution Ledger Validation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -237,7 +237,7 @@ jobs:
     name: Documentation Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     # The WGPU dependencies are here for the all-backend build below, which
     # compiles wgpu in order to document what sits on top of it.
@@ -273,7 +273,7 @@ jobs:
     name: Core no_std Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     # incin-core resolves against the workspace, which pulls onnx-pb's prost
     # build script into the graph even for a core-only check. Every other job
@@ -288,7 +288,7 @@ jobs:
     name: WGPU Software Adapter Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     - name: Install WGPU system dependencies
       run: |
@@ -309,7 +309,7 @@ jobs:
     name: CUDA Compile Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -337,7 +337,7 @@ jobs:
       matrix:
         backend: [cpu, cuda, wgpu, metal]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     - name: Install system dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libvulkan-dev
@@ -348,7 +348,7 @@ jobs:
     name: Build the mdBook Documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
 
     # Cached separately from the main workspace cache: mdbook is a standalone
@@ -356,7 +356,7 @@ jobs:
     # job's cache key would tie this job's speed to workspace lockfile
     # changes that have nothing to do with it.
     - name: Cache mdbook binary
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cargo/bin/mdbook
         key: ${{ runner.os }}-mdbook-${{ hashFiles('docs/book/book.toml') }}
