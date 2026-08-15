@@ -38,7 +38,8 @@ use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::String,
 };
-use incin_core::prelude::{DTypeDescriptor, DTypeId, Error, Result};
+use incin_core::error::{Error, Result};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 #[cfg(any(feature = "autotune", test))]
 use std::sync::{Condvar, Mutex, OnceLock};
 
@@ -512,7 +513,7 @@ mod tests {
             )
             .unwrap(),
             identity::CompilerFingerprint::new_dyn(
-                incin_core::prelude::DeviceKind::Cuda,
+                incin_core::tensor::device::DeviceKind::Cuda,
                 "nvrtc",
                 identity::SoftwareVersion::new(12, 8, 0),
                 "sm_90",

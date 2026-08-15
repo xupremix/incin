@@ -1,5 +1,8 @@
 use incin_core::backend_authoring::*;
-use incin_core::prelude::{DType, DTypeDescriptor, DTypeId, Device, DeviceId, Dyn, Error, Result};
+use incin_core::error::{Error, Result};
+use incin_core::shapes::Dyn;
+use incin_core::tensor::device::{Device, DeviceId};
+use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 macro_rules! impl_wgpu_supports_dtype {
     ($($t:ty),*) => {

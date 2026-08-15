@@ -7,7 +7,9 @@
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::prelude::{BackendError, Device, DeviceKind, OperationKind};
+use incin_core::error::BackendError;
+use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::device::{Device, DeviceKind};
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;

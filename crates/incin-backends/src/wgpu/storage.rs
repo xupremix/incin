@@ -1,7 +1,10 @@
 use alloc::sync::Arc;
 use core::ops::Deref;
 use incin_core::exec::{Alignment, TensorMeta};
-use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result, ShapeBuf};
+use incin_core::error::{BackendError, Error, Result};
+use incin_core::shapes::{ShapeBuf, error::OperationKind};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::DTypeId;
 use wgpu::util::DeviceExt;
 
 use crate::wgpu::device::{get_device_state, try_get_device_state};
@@ -113,7 +116,7 @@ impl WgpuBuffer {
                 })
             })?
             .map_err(|error| {
-                Error::Backend(incin_core::prelude::BackendError::Execution {
+                Error::Backend(BackendError::Execution {
                     operation: OperationKind::Storage,
                     message: alloc::format!("WGPU buffer mapping failed: {error}").into(),
                 })
