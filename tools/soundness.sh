@@ -51,6 +51,7 @@ MIRI_BACKEND_NUMERIC_SKIPS=(
     --skip cpu::ops::elementwise::tests::softmax_gradcheck
     --skip cpu::ops::elementwise::tests::swish_forward_and_gradcheck
     --skip cpu::ops::elementwise::tests::tanh_gradcheck
+    --skip cpu::ops::elementwise::tests::log_forward_gradcheck_and_domain_propagation
     --skip cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute
     --skip cpu::ops::loss::tests::cross_entropy_loss_gradcheck
 )
