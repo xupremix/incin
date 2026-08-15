@@ -248,7 +248,7 @@ The latest reproducible artifact validation is regenerated at the HND-004b
 handoff checkpoint:
 
 ```text
-tools/export-snapshot.sh /tmp/hnd004b-canonical-v16.zip # passed
+tools/export-snapshot.sh /tmp/hnd004b-canonical-v17.zip # passed
 ```
 
 That command validated the generated ZIP itself: it matched the tracked file
@@ -279,12 +279,17 @@ explicitly recorded in `docs/PROTOTYPING.md` and `docs/PROJECT_STATUS.md`,
 including unavailable accelerator hardware and Miri's numerical-test
 exclusions. Repository formatting now passes. The exact core cargo-hack
 powerset passes all 384 combinations, and the macros and diagnostics
-powersets pass. The backend command was also started exactly as CI specifies
-and reached the dependency-heavy CUDA combinations without a failure before
-being stopped at 20 of 8,212 combinations; the full backend command is now
-running locally against that matrix and has reached 208 combinations without
-a failure. The facade matrix remains pending after that long-running job. The
-facade's representative feature combination was checked after the stale ignored CUDA fixtures were moved
+powersets pass. The backend and facade cargo-hack matrices were attempted
+with the exact CI feature sets. The backend matrix was partitioned into four
+disjoint cargo-hack runs, and the facade matrix was started independently;
+the attempts exhausted the available `/tmp` filesystem while compiling
+isolated targets (`No space left on device`) before terminal completion, so
+neither matrix is claimed as passed. The exact core, macros, and diagnostics
+powerset results remain complete. Soundness validation is complete for the
+supported local targets: Miri passed 138 core tests and 324 backend tests
+with three ignored numerical tests, and the baseline and AVX2 ASan runs
+passed. The facade's representative feature combination was checked after
+the stale ignored CUDA fixtures were moved
 behind the explicit `hardware-tests` feature, and all three hardware fixtures
 compile with that feature. Those fixtures now validate NCCL plan and
 communicator setup only; they make no unsupported CUDA kernel-parity claim.
