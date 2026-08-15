@@ -47,8 +47,14 @@ pub use typenum;
 /// Implementation details used by procedural macros expanded inside this crate.
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::nn::{ComputeStats, LayerStats, StateMutVisitor, StatePath, StateSnapshot, StateVisitor, VisitState, VisitStateMut};
-    pub use crate::tensor::backend::{StorageTransfer, SupportsDType, TransferTo, VariableBackend};
+    pub use crate::err::Result;
+    pub use crate::nn::{
+        ComputeStats, LayerNode, LayerStats, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor,
+        StatePath, StateSnapshot, StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
+    };
+    pub use crate::tensor::backend::{Backend, StorageTransfer, SupportsDType, TransferTo, VariableBackend};
+    pub use crate::tensor::device::Device;
+    pub use crate::tensor::transfer::ToDevice;
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 }
 

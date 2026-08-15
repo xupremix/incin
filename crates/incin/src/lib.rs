@@ -117,9 +117,17 @@ pub mod types {
 /// consumer crate. Its contents are not part of the stable end-user facade.
 #[doc(hidden)]
 pub mod __macro_support {
+    pub use incin_core::error::Result;
+    pub use incin_core::nn::{
+        LayerNode, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor, StatePath,
+        StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
+    };
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
     pub use incin_core::backend_authoring::{StorageTransfer, SupportsDType, TransferTo, VariableBackend};
     pub use incin_core::nn::{ComputeStats, LayerStats};
+    pub use incin_core::backend_authoring::Backend;
+    pub use incin_core::tensor::device::Device;
+    pub use incin_core::tensor::transfer::ToDevice;
 }
 
 /// Unstable APIs that carry no compatibility guarantee.

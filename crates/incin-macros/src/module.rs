@@ -293,7 +293,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else if is_internal {
         generics
             .params
-            .push(syn::parse_quote!(__B: #k_crate::prelude::Backend + #k_crate::prelude::VariableBackend));
+            .push(syn::parse_quote!(__B: #k_crate::__macro_support::Backend + #k_crate::__macro_support::VariableBackend));
         quote! { __B }
     } else {
         quote! { #k_crate::prelude::DefaultBackend }
@@ -303,7 +303,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         generics
             .make_where_clause()
             .predicates
-            .push(syn::parse_quote!(#b: #k_crate::prelude::VariableBackend));
+            .push(syn::parse_quote!(#b: #k_crate::__macro_support::VariableBackend));
     }
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
@@ -357,17 +357,17 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitState::visit_state(
+                        #k_crate::__macro_support::VisitState::visit_state(
                             &self.#fname, &child_path, visitor)?;
                     });
                     visit_state_mut_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitStateMut::visit_state_mut(
+                        #k_crate::__macro_support::VisitStateMut::visit_state_mut(
                             &mut self.#fname, &child_path, visitor)?;
                     });
                     visit_parameter_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitParameters::visit_parameters(
+                        #k_crate::__macro_support::VisitParameters::visit_parameters(
                             &self.#fname, &child_path, visitor)?;
                     });
                     named_layer_calls.push(quote! {
@@ -376,26 +376,26 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         } else {
                             #format_mac("{}.{}", prefix, #fname_str)
                         };
-                        children.extend(#k_crate::prelude::NamedLayers::layer_structure(
+                        children.extend(#k_crate::__macro_support::NamedLayers::layer_structure(
                             &self.#fname, &child_prefix));
                     });
                     if !no_shape_info {
                         shape_info_calls.push(quote! {
-                            if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#fname) {
+                            if let Some(sh) = #k_crate::__macro_support::ShapeInfo::shape_info(&self.#fname) {
                                 shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
                             }
                         });
                     }
                     stats_calls.push(quote! {
-                        total += #k_crate::prelude::ComputeStats::compute_stats(&self.#fname, batch);
+                        total += #k_crate::__macro_support::ComputeStats::compute_stats(&self.#fname, batch);
                     });
                     if !no_train_mode {
                         train_mode_calls.push(quote! {
-                            #k_crate::prelude::TrainMode::set_training(&mut self.#fname, training);
+                            #k_crate::__macro_support::TrainMode::set_training(&mut self.#fname, training);
                         });
                     }
                     to_device_fields.push(quote! {
-                        #fname: #k_crate::prelude::ToDevice::to_device(self.#fname, arg)?
+                        #fname: #k_crate::__macro_support::ToDevice::to_device(self.#fname, arg)?
                     });
                 }
             }
@@ -433,17 +433,17 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     visit_state_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitState::visit_state(
+                        #k_crate::__macro_support::VisitState::visit_state(
                             &self.#idx, &child_path, visitor)?;
                     });
                     visit_state_mut_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitStateMut::visit_state_mut(
+                        #k_crate::__macro_support::VisitStateMut::visit_state_mut(
                             &mut self.#idx, &child_path, visitor)?;
                     });
                     visit_parameter_calls.push(quote! {
                         let child_path = path.child(#state_component);
-                        #k_crate::prelude::VisitParameters::visit_parameters(
+                        #k_crate::__macro_support::VisitParameters::visit_parameters(
                             &self.#idx, &child_path, visitor)?;
                     });
                     named_layer_calls.push(quote! {
@@ -452,27 +452,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         } else {
                             #format_mac("{}.{}", prefix, #idx_str)
                         };
-                        children.extend(#k_crate::prelude::NamedLayers::layer_structure(
+                        children.extend(#k_crate::__macro_support::NamedLayers::layer_structure(
                             &self.#idx, &child_prefix));
                     });
                     if !no_shape_info {
                         shape_info_calls.push(quote! {
-                            if let Some(sh) = #k_crate::prelude::ShapeInfo::shape_info(&self.#idx) {
+                            if let Some(sh) = #k_crate::__macro_support::ShapeInfo::shape_info(&self.#idx) {
                                 shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
                             }
                         });
                     }
                     stats_calls.push(quote! {
-                        total += #k_crate::prelude::ComputeStats::compute_stats(&self.#idx, batch);
+                        total += #k_crate::__macro_support::ComputeStats::compute_stats(&self.#idx, batch);
                     });
                     if !no_train_mode {
                         train_mode_calls.push(quote! {
-                            #k_crate::prelude::TrainMode::set_training(&mut self.#idx, training);
+                            #k_crate::__macro_support::TrainMode::set_training(&mut self.#idx, training);
                         });
                     }
 
                     to_device_fields.push(quote! {
-                        #k_crate::prelude::ToDevice::to_device(self.#idx, arg)?
+                        #k_crate::__macro_support::ToDevice::to_device(self.#idx, arg)?
                     });
                 }
             }
@@ -569,15 +569,15 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         for fty in &state_dict_field_types {
             visit_where_clause
                 .predicates
-                .push(syn::parse_quote!(#fty: #k_crate::prelude::VisitParameters<#b_ident>));
+                .push(syn::parse_quote!(#fty: #k_crate::__macro_support::VisitParameters<#b_ident>));
         }
         quote! {
-            impl #impl_generics #k_crate::prelude::VisitParameters<#b_ident> for #name #ty_generics #visit_where_clause {
-                fn visit_parameters<V: #k_crate::prelude::ParameterVisitor<#b_ident>>(
+            impl #impl_generics #k_crate::__macro_support::VisitParameters<#b_ident> for #name #ty_generics #visit_where_clause {
+                fn visit_parameters<V: #k_crate::__macro_support::ParameterVisitor<#b_ident>>(
                     &self,
-                    path: &#k_crate::prelude::StatePath,
+                    path: &#k_crate::__macro_support::StatePath,
                     visitor: &mut V,
-                ) -> #k_crate::prelude::Result<()> {
+                ) -> #k_crate::__macro_support::Result<()> {
                     #(#visit_parameter_calls)*
                     Ok(())
                 }
@@ -594,15 +594,15 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         for fty in &state_dict_field_types {
             visit_where_clause
                 .predicates
-                .push(syn::parse_quote!(#fty: #k_crate::prelude::VisitState<#b_ident>));
+                .push(syn::parse_quote!(#fty: #k_crate::__macro_support::VisitState<#b_ident>));
         }
         quote! {
-            impl #impl_generics #k_crate::prelude::VisitState<#b_ident> for #name #ty_generics #visit_where_clause {
-                fn visit_state<V: #k_crate::prelude::StateVisitor<#b_ident>>(
+            impl #impl_generics #k_crate::__macro_support::VisitState<#b_ident> for #name #ty_generics #visit_where_clause {
+                fn visit_state<V: #k_crate::__macro_support::StateVisitor<#b_ident>>(
                     &self,
-                    path: &#k_crate::prelude::StatePath,
+                    path: &#k_crate::__macro_support::StatePath,
                     visitor: &mut V,
-                ) -> #k_crate::prelude::Result<()> {
+                ) -> #k_crate::__macro_support::Result<()> {
                     #(#visit_state_calls)*
                     Ok(())
                 }
@@ -619,15 +619,15 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         for fty in &state_dict_field_types {
             visit_where_clause
                 .predicates
-                .push(syn::parse_quote!(#fty: #k_crate::prelude::VisitStateMut<#b_ident>));
+                .push(syn::parse_quote!(#fty: #k_crate::__macro_support::VisitStateMut<#b_ident>));
         }
         quote! {
-            impl #impl_generics #k_crate::prelude::VisitStateMut<#b_ident> for #name #ty_generics #visit_where_clause {
-                fn visit_state_mut<V: #k_crate::prelude::StateMutVisitor<#b_ident>>(
+            impl #impl_generics #k_crate::__macro_support::VisitStateMut<#b_ident> for #name #ty_generics #visit_where_clause {
+                fn visit_state_mut<V: #k_crate::__macro_support::StateMutVisitor<#b_ident>>(
                     &mut self,
-                    path: &#k_crate::prelude::StatePath,
+                    path: &#k_crate::__macro_support::StatePath,
                     visitor: &mut V,
-                ) -> #k_crate::prelude::Result<()> {
+                ) -> #k_crate::__macro_support::Result<()> {
                     #(#visit_state_mut_calls)*
                     Ok(())
                 }
@@ -639,23 +639,23 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl #impl_generics #k_crate::prelude::NamedLayers for #name #ty_generics #where_clause {
+            impl #impl_generics #k_crate::__macro_support::NamedLayers for #name #ty_generics #where_clause {
                 /// Layer structure.
-                fn layer_structure(&self, prefix: &str) -> #macro_support::Vec<#k_crate::prelude::LayerNode> {
+                fn layer_structure(&self, prefix: &str) -> #macro_support::Vec<#k_crate::__macro_support::LayerNode> {
                     let node_name = if prefix.is_empty() {
                         #macro_support::String::from(stringify!(#name))
                     } else {
                         #macro_support::String::from(prefix)
                     };
 
-                    let mut children: #macro_support::Vec<#k_crate::prelude::LayerNode> = #macro_support::Vec::new();
+                    let mut children: #macro_support::Vec<#k_crate::__macro_support::LayerNode> = #macro_support::Vec::new();
                     #(#named_layer_calls)*
 
                     let mut shape_parts: #macro_support::Vec<#macro_support::String> = #macro_support::Vec::new();
                     #(#shape_info_calls)*
                     let shape_info = shape_parts.join(", ");
 
-                    #macro_support::Vec::from([#k_crate::prelude::LayerNode {
+                    #macro_support::Vec::from([#k_crate::__macro_support::LayerNode {
                         name: node_name,
                         type_name: #macro_support::String::from(stringify!(#name)),
                         shape_info,
@@ -670,7 +670,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl #impl_generics #k_crate::prelude::TrainMode for #name #ty_generics #where_clause {
+            impl #impl_generics #k_crate::__macro_support::TrainMode for #name #ty_generics #where_clause {
                 /// Set training.
                 fn set_training(&mut self, training: bool) {
                     #(#train_mode_calls)*
@@ -683,7 +683,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         let mut impl_generics_with_newd = generics.clone();
         impl_generics_with_newd
             .params
-            .push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
+            .push(syn::parse_quote!(__NewD: #k_crate::__macro_support::Device));
         let where_clause = impl_generics_with_newd.make_where_clause();
         where_clause
             .predicates
@@ -723,11 +723,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
         let (impl_g, _, to_device_where_clause) = impl_generics_with_newd.split_for_impl();
         quote! {
-            impl #impl_g #k_crate::prelude::ToDevice<#b_ident, __NewD> for #name #ty_generics #to_device_where_clause {
+            impl #impl_g #k_crate::__macro_support::ToDevice<#b_ident, __NewD> for #name #ty_generics #to_device_where_clause {
                 /// Output.
                 type Output = #name #output_ty_generics;
                 /// To device.
-                fn to_device(self, arg: &__NewD::Arg) -> #k_crate::prelude::Result<Self::Output> {
+                fn to_device(self, arg: &__NewD::Arg) -> #k_crate::__macro_support::Result<Self::Output> {
                     #to_device_instantiation
                 }
             }
