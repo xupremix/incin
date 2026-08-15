@@ -8,7 +8,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 
 ## Backend-executable operations
 
-| Operation | Site | Migrated | Legacy source |
+| Operation | Site | Migrated | Catalog source mapping |
 |---|---|:--:|---|
 | `tensor_from_data` | `Creation` | yes | `TensorArgsData` |
 | `tensor_from_bytes` | `Creation` | yes | `Tensor::from_bytes` |
@@ -178,9 +178,9 @@ None of these is an unwritten function. Each names a limit of the descriptor or 
 
 ## Operations the execution contract cannot carry
 
-These are not pending migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an executor for it could be written, and until then the stable tensor surface reaches it through the legacy path by necessity rather than by omission.
+These are not pending migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an executor for it could be written, and until then the stable tensor surface reaches it only through the documented non-backend-executable boundary rather than by omission.
 
-| Operation | Site | Why | Legacy source |
+| Operation | Site | Why | Catalog source mapping |
 |---|---|---|---|
 | `sample` | `Composed` | the frontend composition owns the execution semantics | `Tensor::sample` |
 | `add_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::add_` |
