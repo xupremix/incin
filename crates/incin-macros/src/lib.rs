@@ -56,7 +56,6 @@ mod tensor;
 /// ## Examples
 /// ```rust
 /// use incin::prelude::*;
-/// use incin::VariableBackend;
 ///
 /// // Defines a 4D tensor shape [Batch=2, Channels=3, Height=224, Width=224]
 /// type ImageBatch = s![2, 3, 224, 224];
@@ -366,6 +365,7 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 /// ## Examples
 /// ```rust
 /// use incin::prelude::*;
+/// use incin::VariableBackend;
 ///
 /// #[module]
 /// pub struct MyModel<B: VariableBackend> {
