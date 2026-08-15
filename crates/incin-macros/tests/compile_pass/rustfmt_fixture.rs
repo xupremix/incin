@@ -6,6 +6,7 @@
 //! parseable as Rust, rustfmt skips it and this stops being a fixed point.
 use ::incin::experimental::mesh;
 use ::incin::prelude::*;
+use ::incin::{optim::ParameterGroup, VariableBackend};
 
 #[module]
 pub struct Formatted<B: Backend + VariableBackend> {
@@ -22,7 +23,9 @@ fn main() {
         fc: Linear::build(()).unwrap(),
         head: Linear::build(()).unwrap(),
     };
-    assert!(!model.parameters().is_empty());
+    assert!(!ParameterGroup::<DefaultBackend, f32>::from_module(&model)
+        .unwrap()
+        .is_empty());
 
     type FormattedMesh = mesh![dp = 2, tp = 2, pp = 1];
     assert_eq!(

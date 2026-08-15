@@ -4,8 +4,8 @@
 //! No `use ::incin::prelude::*` anywhere below. Each macro is named through an
 //! alias, and everything the expansion needs it must reach on its own.
 use ::incin as renamed;
-use renamed::prelude::Backend;
-use renamed::prelude::{idx, module, s, VariableBackend};
+use renamed::{Backend, VariableBackend};
+use renamed::prelude::{idx, module, s};
 
 type Shape = s![2, 3];
 
@@ -28,6 +28,7 @@ fn main() {
     // `parameters()` comes from a trait the expansion implements; the caller
     // has to have it in scope, which is the one thing a macro cannot do for
     // them without also polluting it.
-    use renamed::prelude::Parameters;
-    assert!(!m.parameters().is_empty());
+    assert!(!renamed::optim::ParameterGroup::<renamed::prelude::DefaultBackend, f32>::from_module(&m)
+        .unwrap()
+        .is_empty());
 }
