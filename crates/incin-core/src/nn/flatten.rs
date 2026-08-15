@@ -48,7 +48,7 @@ where
     G: RequiresGrad,
 {
     type Output = Tensor<Dyn, B, K, G>;
-    type Error = crate::prelude::Error;
+    type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<Dyn, B, K, G>) -> Result<Self::Output> {
         x.flatten_runtime(1, 3)
@@ -70,7 +70,7 @@ where
     G: RequiresGrad,
 {
     type Output = Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>;
-    type Error = crate::prelude::Error;
+    type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
         x.flatten::<Start, End>()

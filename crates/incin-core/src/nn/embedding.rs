@@ -4,7 +4,12 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
-use crate::prelude::{AppendDim, Backend, Device, DType, Dim, Dyn, DynShape, Error, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{AppendDim, Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
 use alloc::string::String;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
@@ -201,7 +206,7 @@ where
         )?;
         let output_shape =
             crate::shapes::ShapeValue::<<InS as AppendDim<S::Embed>>::Output>::try_new(shape)
-                .map_err(crate::prelude::Error::Shape)?;
+                .map_err(crate::err::Error::Shape)?;
         let out = dispatch::execute_shaped::<
             op::EmbeddingExact,
             B,
@@ -212,7 +217,7 @@ where
             &[x_handle, weight_handle],
             &output_shape,
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
 
         Tensor::from_shape_value(
             out.into(),

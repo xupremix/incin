@@ -4,7 +4,12 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Buffer, Module, Param};
-use crate::prelude::{Backend, Device, DType, Dim, Dyn, DynShape, Error, HasChannels2D, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
 use alloc::string::String;
 use crate::tensor::backend::Execute;
 
@@ -295,7 +300,7 @@ where
             &inputs,
             &x._shape,
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
         Tensor::from_shape_value(
             out.into(),
             x._shape.clone(),

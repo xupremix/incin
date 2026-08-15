@@ -5,7 +5,12 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
 use crate::nn::module::ShapeInfo;
-use crate::prelude::{Backend, Device, DType, Dim, Dyn, DynShape, Error, Result, Shape, ShapeBuf, ShapeError, ShapeValue, SupportsDType, Tensor};
+use crate::backend_authoring::{Backend, SupportsDType};
+use crate::err::{Error, Result};
+use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeBuf, ShapeError, ShapeValue};
+use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
+use crate::tensor::dtype::DType;
 use alloc::string::String;
 use crate::tensor::backend::Execute;
 use core::marker::PhantomData;
@@ -236,7 +241,7 @@ where
             &inputs,
             &x._shape,
         )
-        .map_err(crate::prelude::Error::from)?;
+        .map_err(crate::err::Error::from)?;
 
         Tensor::from_shape_value(
             out_inner.into(),
