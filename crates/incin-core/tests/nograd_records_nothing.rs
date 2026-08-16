@@ -209,7 +209,7 @@ fn chain<G: RequiresGrad>(
 ) -> Result<f32> {
     let sum = a.add(b)?;
     let scaled = sum.mul_scalar(2.0)?;
-    let flat = scaled.reshape::<s![6]>(((), ()))?;
+    let flat = scaled.reshape(shape![6])?;
     flat.sum_all()?.to_scalar::<f32>()
 }
 

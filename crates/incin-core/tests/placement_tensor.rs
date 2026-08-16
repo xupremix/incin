@@ -136,7 +136,7 @@ fn structural_reshape_retains_static_placement_metadata() {
     )
     .unwrap();
 
-    let reshaped: ReplicatedTensor = tensor.reshape::<Global>(((), ((), ()))).unwrap();
+    let reshaped: ReplicatedTensor = tensor.reshape(shape![2, 3]).unwrap();
     assert_eq!(reshaped.placement(), PlacementKind::Replicated);
     assert_eq!(reshaped.dims().as_ref(), &[2, 8]);
 }

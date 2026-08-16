@@ -6,5 +6,5 @@ use incin_macros::s;
 fn main() {
     let t = Tensor::<s![2, 3], DummyBackend<Cpu>>::zeros(()).unwrap();
     
-    let _ = t.reshape::<s![2, 4]>(((), ()));
+    let _ = t.reshape(shape![2, 4]);
 }

@@ -25,7 +25,7 @@ use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{Dyn, DynShape, Shape};
 use crate::shapes::{FlattenAt, SwapAxes};
-use crate::shapes::{ShapeBuf, ShapeValue};
+use crate::shapes::{ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
@@ -433,8 +433,10 @@ where
 impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
     Tensor<S, B, K, G, P>
 {
-    /// Reshape this tensor into explicitly provided shape `S2`.
-    /// This is guaranteed at compile-time to have matching elements.
+    /// Reshape this tensor using a [`ShapeSpec`].
+    ///
+    /// Fully static specifications preserve compile-time element-count
+    /// checking. Runtime specifications are checked before dispatch.
     ///
     /// # Examples
     /// ```rust
@@ -442,9 +444,64 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-    /// let r = t.reshape::<s![6]>(((), ())).unwrap();
+    /// let r = t.reshape(shape![6]).unwrap();
     /// ```
-    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G, P>>
+    pub fn reshape<Spec>(&self, spec: Spec) -> Result<Tensor<Spec::Shape, B, K, G, P>>
+    where
+        Spec: ShapeSpec + crate::shapes::reshape::ReshapeSpec<S>,
+        B: Execute<op::ReshapeExact> + Capabilities,
+        <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    {
+        let new_shape = spec.resolve()?;
+        let new_shape_field = new_shape.shape_buf().clone();
+        let source_numel = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Reshape,
+        )?;
+        let target_numel = Spec::Shape::checked_numel(
+            new_shape.shape_buf(),
+            crate::shapes::error::OperationKind::Reshape,
+        )?;
+        if source_numel != target_numel {
+            return Err(crate::err::Error::ShapeMismatch {
+                op: "reshape",
+                expected: alloc::vec![source_numel],
+                got: alloc::vec![target_numel],
+                msg: alloc::format!(
+                    "Reshape failed: source numel ({}) != target numel ({})",
+                    source_numel,
+                    target_numel
+                ),
+            });
+        }
+
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::ReshapeExact, B, Spec::Shape>(
+                    &context,
+                    ShapeAttributes {
+                        shape: new_shape_field.as_ref().to_vec(),
+                    },
+                    &[input],
+                    &new_shape,
+                )
+            })?
+            .into();
+        Tensor::<Spec::Shape, B, K, G, P>::from_shape_value_placed(
+            inner,
+            new_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+            self._placement.clone(),
+        )
+    }
+
+    /// Reshape using the legacy explicit `S2::Arg` representation.
+    #[doc(hidden)]
+    pub fn reshape_typed<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G, P>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::ReshapeShape<S2>,
@@ -470,7 +527,6 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 ))?;
         let new_shape =
             ShapeValue::<S2>::try_new(new_shape_field.clone()).map_err(crate::err::Error::Shape)?;
-
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)

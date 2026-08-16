@@ -270,7 +270,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
     // reshape
-    let r = t.clone().reshape::<s![3, 2]>(((), ((), ())))?;
+    let r = t.clone().reshape(shape![3, 2])?;
     assert_eq!(r.dims().as_ref(), &[3, 2]);
 
     // flatten all (using 0 and 1 since it's 2D)

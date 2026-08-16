@@ -431,7 +431,7 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let _ = incin_core::prelude::extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let relu = input.relu().unwrap();
-    let _reshaped = relu.reshape::<s![3, 2]>(((), ((), ()))).unwrap();
+    let _reshaped = relu.reshape(shape![3, 2]).unwrap();
 
     let graph = incin_core::prelude::extract_graph();
     assert!(graph.nodes.iter().any(|node| node.operation

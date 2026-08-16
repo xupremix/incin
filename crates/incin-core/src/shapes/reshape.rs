@@ -1,5 +1,6 @@
 //! Compile-time shape reshaping and element count verification.
-use crate::shapes::{DynShape, Shape};
+use crate::shapes::shape::{ShapeArgs, ShapeSpec};
+use crate::shapes::{DynShape, Shape, ShapeValue};
 use core::ops::Mul;
 use typenum::{Prod, U1, Unsigned};
 
@@ -65,6 +66,34 @@ pub trait TryReshape<Target: Shape>: Shape {}
 
 // Any pair of dynamic shapes can attempt to reshape at runtime.
 impl<S1: DynShape, S2: DynShape> TryReshape<S2> for S1 {}
+
+/// Shape specifications accepted by the ergonomic [`Tensor::reshape`](crate::tensor::Tensor::reshape)
+/// API.
+///
+/// Fully static [`ShapeValue`] inputs retain the compile-time element-count
+/// proof. Runtime [`ShapeArgs`], arrays, and vectors use the checked runtime
+/// path because their dimensions are not known to the type system.
+pub trait ReshapeSpec<Source: Shape>: ShapeSpec {}
+
+impl<Source, Target> ReshapeSpec<Source> for ShapeValue<Target>
+where
+    Source: Shape + ReshapeShape<Target>,
+    Target: Shape + DynShape,
+{
+}
+
+impl<Source, Target> ReshapeSpec<Source> for ShapeArgs<Target>
+where
+    Source: DynShape,
+    Target: Shape + DynShape,
+{
+}
+
+impl<Source, const N: usize> ReshapeSpec<Source> for [usize; N] where Source: DynShape {}
+
+impl<Source> ReshapeSpec<Source> for alloc::vec::Vec<usize> where Source: DynShape {}
+
+impl<'a, Source> ReshapeSpec<Source> for &'a [usize] where Source: DynShape {}
 
 #[cfg(test)]
 /// `tests`.

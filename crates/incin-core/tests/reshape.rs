@@ -11,7 +11,7 @@ fn test_reshape_static_success() {
     let t = Tensor::<s![2, 3], DummyBackend<Cpu>>::zeros(()).unwrap();
 
     // Reshaping to (typenum::U6,) has the same element count (6).
-    let reshaped = t.reshape::<s![6]>(((), ())).unwrap();
+    let reshaped = t.reshape(shape![6]).unwrap();
     let dims: &[usize] = reshaped.shape_buf().as_ref();
     assert_eq!(dims, &[6]);
 }

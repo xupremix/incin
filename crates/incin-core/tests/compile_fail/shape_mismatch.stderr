@@ -11,5 +11,5 @@ error[E0308]: mismatched types
 note: method defined here
   --> src/tensor/ops/binary.rs
    |
-   |     Add, add, Add
+   |     Add, add, try_add, Add
    |          ^^^
