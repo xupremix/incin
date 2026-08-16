@@ -21,8 +21,8 @@ example does not claim causal masking, normalization, dropout, portable GPU
 training, or a complete decoder implementation. Those are separate composition
 and backend contracts rather than features hidden in this example.
 
-The canonical source is included below so the Book and executable proof stay
-together:
+The canonical source is included below so the Book, executable example, and
+integration proof stay together:
 
 ```rust,ignore
 {{#include ../../../crates/incin/tests/transformer_block.rs}}

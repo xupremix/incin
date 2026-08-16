@@ -75,8 +75,7 @@ fn static_attention_shapes_compile_and_run() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
+pub fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
     let model = TransformerBlock::build()?;
     let input_values = (0..32).map(|value| value as f32 / 32.0).collect::<Vec<_>>();
     let input = Tensor::<Dyn, Cpu>::from_slice(&input_values, vec![4, 8])?.require_grad();
@@ -144,4 +143,9 @@ fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
         Cpu::to_bytes::<f32>(actual.inner())?
     );
     Ok(())
+}
+
+#[test]
+fn transformer_proof_runs_in_the_test_harness() -> Result<()> {
+    cpu_transformer_forward_backward_adamw_and_state_roundtrip()
 }

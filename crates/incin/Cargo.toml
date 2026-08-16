@@ -112,6 +112,10 @@ name = "mnist_training"
 required-features = ["cpu"]
 
 [[example]]
+name = "transformer_block"
+required-features = ["cpu"]
+
+[[example]]
 name = "rnn_sequence_prediction"
 required-features = ["cpu"]
 
