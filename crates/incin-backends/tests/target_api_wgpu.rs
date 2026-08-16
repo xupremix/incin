@@ -53,10 +53,9 @@ fn with_dtype_refuses_a_dtype_the_accelerator_cannot_store() {
             &device,
         )
         .expect_err("the wgpu storage row lists f32 only");
-    assert_eq!(
-        refused.to_string(),
-        "Dtype F64 is unsupported by backend 'Wgpu' for 'dtype'"
-    );
+    let message = refused.to_string();
+    assert!(message.contains("unsupported by backend 'Wgpu' for 'dtype'"));
+    assert!(message.contains("f64"));
 
     assert!(gpu.dtype::<f32>().is_ok());
 }

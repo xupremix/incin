@@ -36,7 +36,7 @@ fn tensor_operators_propagate_results_instead_of_panicking() -> incin::Result<()
     let lhs = Tensor::<s![2], DefaultBackend>::ones(())?;
     let rhs = Tensor::<s![2], DefaultBackend>::ones(())?;
     let sum = lhs + rhs;
-    assert_eq!(sum?.to_vec1::<f32>()?, vec![2.0, 2.0]);
+    assert_eq!(sum.to_vec1::<f32>()?, vec![2.0, 2.0]);
     Ok(())
 }
 

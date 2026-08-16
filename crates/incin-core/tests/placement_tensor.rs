@@ -6,6 +6,8 @@
 
 #![cfg(feature = "distributed")]
 
+extern crate incin_core as incin;
+
 mod support;
 
 use std::collections::BTreeMap;
@@ -23,6 +25,7 @@ use incin_core::prelude::{
     DTypeId, DimCons, Dyn, Grad, Nil, PlacedTensorError, Shape, ShapeBuf, Tensor,
 };
 use incin_core::typenum::{U1, U2, U8};
+use incin_macros::shape;
 
 type B = CpuBackendImpl;
 type Mesh = MeshSpec<Data<U1>, TensorParallel<U2>>;
@@ -136,7 +139,7 @@ fn structural_reshape_retains_static_placement_metadata() {
     )
     .unwrap();
 
-    let reshaped: ReplicatedTensor = tensor.reshape(shape![2, 3]).unwrap();
+    let reshaped: ReplicatedTensor = tensor.reshape(shape![2, 8]).unwrap();
     assert_eq!(reshaped.placement(), PlacementKind::Replicated);
     assert_eq!(reshaped.dims().as_ref(), &[2, 8]);
 }
