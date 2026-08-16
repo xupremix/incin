@@ -67,8 +67,7 @@ pub trait TryReshape<Target: Shape>: Shape {}
 // Any pair of dynamic shapes can attempt to reshape at runtime.
 impl<S1: DynShape, S2: DynShape> TryReshape<S2> for S1 {}
 
-/// Shape specifications accepted by the ergonomic [`Tensor::reshape`](crate::tensor::Tensor::reshape)
-/// API.
+/// Shape specifications accepted by the ergonomic `Tensor::reshape` API.
 ///
 /// Fully static [`ShapeValue`] inputs retain the compile-time element-count
 /// proof. Runtime [`ShapeArgs`], arrays, and vectors use the checked runtime
