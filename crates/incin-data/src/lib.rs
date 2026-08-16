@@ -69,7 +69,12 @@ pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale
 
 /// Prelude.
 pub mod prelude {
-    pub use super::hub::*;
-    pub use super::loader::*;
-    pub use super::transforms::*;
+    pub use super::hub::{HubApi, HubRepo, download, from_pretrained};
+    pub use super::loader::{
+        BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DataLoaderIter,
+        DefaultCollate,
+    };
+    pub use super::transforms::{
+        CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform,
+    };
 }
