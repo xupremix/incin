@@ -7,8 +7,8 @@ error[E0423]: cannot initialize a tuple struct which contains private fields
 note: constructor is not visible here due to private fields
  --> src/autograd.rs
   |
-  | pub struct Gradients<G>(G);
-  |                         ^ private field
+  | pub struct Gradients<B: Backend + AutogradBackend>(B::Grads);
+  |                                                    ^^^^^^^^ private field
 help: you might have meant to use the `from_backend` associated function
   |
 4 |     let _forged = Gradients::from_backend(());
