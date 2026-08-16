@@ -201,13 +201,12 @@ impl GradMode {
     /// frontend operation and a recorded node, because a backend kernel
     /// receives storage and never sees `G`.
     ///
-    /// Without `std` there is no thread-local to read and no [`scope`] to have
+    /// Without `std` there is no thread-local to read and no policy scope to have
     /// installed anything, so the answer is the default. That is the true
     /// state rather than a weakened guarantee: nothing in a `no_std` build can
     /// express a disabled scope, and every tape in the workspace lives in a
     /// backend that requires `std`.
     ///
-    /// [`scope`]: Self::scope
     #[must_use]
     pub fn current() -> Self {
         #[cfg(feature = "std")]
@@ -223,7 +222,8 @@ impl GradMode {
     /// Run `body` under this mode combined with the ambient one, per
     /// [`and`](Self::and).
     ///
-    /// This is what an operation whose result's `G` is known calls; [`scope`]
+    /// This is what an operation whose result's `G` is known calls; the policy
+    /// scope
     /// is what a *caller* calls. The difference is the direction: this can
     /// only tighten, so it needs to install nothing when it is `Enabled`, and
     /// the common path — an operation on a `Grad` tensor — reads no
@@ -233,7 +233,6 @@ impl GradMode {
     /// [`current`](Self::current) for why that is the true answer rather than
     /// a weakened one.
     ///
-    /// [`scope`]: Self::scope
     #[inline]
     pub fn restrict<R>(self, body: impl FnOnce() -> R) -> R {
         #[cfg(feature = "std")]

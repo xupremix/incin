@@ -30,6 +30,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **CI package gate:** The ledger job now validates locked Cargo metadata and
   every publishable package archive, catching omitted sources, binaries, and
   license metadata before release packaging.
+- **Core rustdoc links:** Removed invalid `GradMode` scope links and clarified
+  the no-`std` policy-scope wording so core rustdoc passes with warnings denied.
 - **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
   helpers are now test-only, with production builds retaining only the
   candidate conversion and fallback policy they use.
