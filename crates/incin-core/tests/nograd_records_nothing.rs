@@ -16,6 +16,7 @@
 
 extern crate incin_core as incin;
 
+use incin_core::backend_authoring::Backend;
 use std::panic;
 use std::sync::mpsc;
 use std::thread;

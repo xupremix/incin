@@ -6,8 +6,8 @@ use core::marker::PhantomData;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::cpu::{CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
-    DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
-    StorageBackend, execute, execute_shaped, execute_with_payload,
+    Backend, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
+    OperationKey, StorageBackend, VariableBackend, execute, execute_shaped, execute_with_payload,
 };
 use incin_core::exec::TensorHandle;
 use incin_core::exec::catalog::CreationAttributes;
@@ -16,9 +16,9 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, DTypeId, Device, DeviceId, Local, ShapeBuf, ShapeValue,
-    TracingBackend, extract_graph,
+    BackendError, Cpu, DTypeId, Device, DeviceId, Local, ShapeBuf, ShapeValue,
 };
+use incin_core::tensor::tracing::{TracingBackend, extract_graph};
 use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -177,7 +177,7 @@ impl Backend for CompanyBackend {
     type InnerBackend = Self;
 }
 
-impl incin_core::prelude::VariableBackend for CompanyBackend {
+impl VariableBackend for CompanyBackend {
     type Var<K: incin_core::prelude::DType> = ();
 
     fn var_as_tensor<K: incin_core::prelude::DType>(

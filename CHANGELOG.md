@@ -31,6 +31,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   backend-authoring namespace after the stable root API was narrowed.
 - **Advanced facade:** Removed internal reshape and slice specification traits
   from the public advanced namespace; the user-facing selector contracts remain.
+- **Core prelude:** Moved backend-authoring, tracing, and storage-encoding
+  contracts to named modules, and added `incin_core::onnx` for ONNX helpers.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.

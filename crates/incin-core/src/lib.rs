@@ -39,6 +39,11 @@ pub(crate) mod serialize;
 pub mod serialization {
     pub use crate::serialize::{Format, ModelExt};
 }
+#[cfg(feature = "std")]
+/// ONNX import and export helpers for graph interchange.
+pub mod onnx {
+    pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter, export_to_onnx};
+}
 pub mod shapes;
 
 pub mod autograd;
@@ -223,15 +228,11 @@ pub mod prelude {
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
-        ArgInto, AutogradBackend, Backend, BestDevice, BestDeviceAt, BoolDType, BuiltinDType,
-        CheckedByteLen, ConstDType, ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey,
-        DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
-        FloatDType, Grad, GradJoin, HostInterop, IntDType, JoinedGrad, MatMulShape, NoGrad,
-        PlainDType, Q8_0, QuantDType, RequiresGrad, StorageBackend, StorageEncoding,
-        StorageTransfer, SupportsDType, Tensor, TensorArgs, TensorArgsData, TensorElement,
-        ToDevice, TracingBackend, TransferBackend, TransferTo, VariableBackend,
-        checked_byte_len_from_dims, extract_graph, tracing_mark_input, tracing_mark_input_typed,
-        tracing_mark_output,
+        ArgInto, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, CheckedByteLen, ConstDType,
+        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
+        DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
+        IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
+        Tensor, TensorArgs, TensorArgsData, TensorElement, ToDevice, checked_byte_len_from_dims,
     };
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};
@@ -247,7 +248,7 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::nn::save::{load_safetensors, load_safetensors_snapshot, save_safetensors};
     #[cfg(feature = "std")]
-    pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter, export_to_onnx};
+    pub use crate::onnx::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
     };

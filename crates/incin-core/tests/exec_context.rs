@@ -11,11 +11,12 @@
 use std::sync::mpsc;
 use std::thread;
 
+use incin_core::backend_authoring::StorageBackend;
 use incin_core::exec::{
     AllocatorPolicy, Determinism, ExecutionContext, ExecutionPolicy, FallbackPolicy, MathMode,
     TensorMeta,
 };
-use incin_core::prelude::{Cpu, DType, StorageBackend};
+use incin_core::prelude::{Cpu, DType};
 
 /// A backend that owns no device and executes nothing. The context under test
 /// is generic over `StorageBackend`, so what this one does is irrelevant; what

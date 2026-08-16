@@ -10,6 +10,7 @@ use incin_core::exec::{
 };
 use incin_core::prelude::*;
 use incin_core::shapes::ShapeBuf;
+use incin_core::tensor::dtype::StorageEncoding;
 
 /// 1B — Custom DType definition (NO DTypeId variant).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

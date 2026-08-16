@@ -7,6 +7,7 @@ use incin_core::axis;
 use incin_core::exec::catalog::{AxisAttributes, Descriptor, LogicalTensorMeta, op};
 use incin_core::exec::{AxisSet, ExecutionDescriptor, OperationIdentity, RankSupport};
 use incin_core::prelude::*;
+use incin_core::tensor::tracing::{TracingBackend, extract_graph, tracing_mark_input_typed};
 
 static TRACE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use incin_core::shapes::dim::{
@@ -386,16 +387,16 @@ fn test_high_rank_tensor_creation() {
 #[test]
 fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
-    let _ = incin_core::prelude::extract_graph();
+    let _ = extract_graph();
     let lhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let rhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let output = lhs.try_add(&rhs).unwrap();
 
     assert_eq!(output.dims(), [2, 3]);
-    let graph = incin_core::prelude::extract_graph();
+    let graph = extract_graph();
     assert!(graph.nodes.iter().any(|node| node.operation
         == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Add)));
 }
@@ -403,15 +404,15 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
 #[test]
 fn exact_tracing_records_boolean_comparison_output_dtype() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
-    let _ = incin_core::prelude::extract_graph();
+    let _ = extract_graph();
     let lhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let rhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let _output = lhs.eq(&rhs).unwrap();
 
-    let graph = incin_core::prelude::extract_graph();
+    let graph = extract_graph();
     let node = graph
         .nodes
         .iter()
@@ -429,15 +430,15 @@ fn exact_tracing_records_boolean_comparison_output_dtype() {
 #[test]
 fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
-    let _ = incin_core::prelude::extract_graph();
+    let _ = extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let relu = input.relu().unwrap();
     let _reshaped = relu.reshape(shape![3, 2]).unwrap();
 
-    let graph = incin_core::prelude::extract_graph();
+    let graph = extract_graph();
     assert!(graph.nodes.iter().any(|node| node.operation
         == OperationIdentity::Builtin(incin_core::prelude::OperationKind::Relu)));
     assert!(
@@ -456,15 +457,15 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
 #[test]
 fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<DummyBackend<Cpu>>;
     type S = s![2, 3];
 
-    let _ = incin_core::prelude::extract_graph();
+    let _ = extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let _reduced = input.sum(axis!(1)).unwrap();
     let _kept = input.sum_keepdim(axis!(1)).unwrap();
 
-    let graph = incin_core::prelude::extract_graph();
+    let graph = extract_graph();
     let node = graph
         .nodes
         .iter()
@@ -487,14 +488,14 @@ fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
 #[test]
 fn typed_tracing_preserves_runtime_and_static_input_axes() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = incin_core::prelude::TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<DummyBackend<Cpu>>;
     type S = s![usize, 768];
 
-    let _ = incin_core::prelude::extract_graph();
+    let _ = extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros((7usize, ())).unwrap();
-    incin_core::prelude::tracing_mark_input_typed::<S>(input.inner().value_id);
+    tracing_mark_input_typed::<S>(input.inner().value_id);
 
-    let graph = incin_core::prelude::extract_graph();
+    let graph = extract_graph();
     let value = graph.values.get(&input.inner().value_id).unwrap();
     assert!(matches!(
         value.shape_expr.dims[0],

@@ -30,7 +30,14 @@ backends are never part of a default build.
 | `incin::Backend` | `incin::backend_authoring::Backend` | `backend-authoring` | backend authoring | `use incin::backend_authoring::Backend;` | yes |
 | `incin::VariableBackend` | `incin::backend_authoring::VariableBackend` | `backend-authoring` | backend authoring | Import the trait beside the backend implementation | yes |
 | `incin::prelude::Backend` | `incin::backend_authoring::Backend` | `backend-authoring` | backend authoring | Keep backend bounds out of ordinary model code | yes |
+| `incin_core::prelude::Backend` | `incin_core::backend_authoring::Backend` | none | backend authoring | Import the trait beside the backend implementation | yes |
+| `incin_core::prelude::StorageBackend` | `incin_core::backend_authoring::StorageBackend` | none | backend authoring | Import the storage contract explicitly | yes |
+| `incin_core::prelude::TracingBackend` | `incin_core::tensor::tracing::TracingBackend` | none | graph inspection | Use the named tracing module only in capture code | yes |
+| `incin_core::prelude::StorageEncoding` | `incin_core::tensor::dtype::StorageEncoding` | none | expert dtype API | Import storage layout metadata explicitly | yes |
 | `incin_core::prelude::Graph` | `incin_core::graph::Graph` | `std` as applicable | graph inspection | Import `Graph` only in capture/compiler code | yes |
+| `incin::advanced::ReshapeTargetSpec` | no public replacement | none | implementation detail | Use `ReshapeTarget` and the `idx!` macro | yes |
+| `incin::advanced::SliceSpec` | no public replacement | none | implementation detail | Use `SliceTarget` and the `idx!` macro | yes |
+| `incin_core::prelude::export_to_onnx` | `incin_core::onnx::export_to_onnx` | `std` | graph interchange | Import the named ONNX module | yes |
 | `incin::experimental::compiled::*` | `incin::experimental::compiled::*` | `compiled` | preview | Enable `compiled` and use the documented inspection types | no, when already namespaced |
 | tuning service internals | `incin::experimental::tuning::*` | `autotune` | preview | Use the documented policy and explanation types | yes |
 | `incin::test_utils::DummyBackend` without a feature | `incin::test_utils::DummyBackend` | `test-utils` | test-only | Enable `test-utils` in a test consumer | yes |
