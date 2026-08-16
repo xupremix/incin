@@ -81,6 +81,7 @@ impl WorkloadBucket {
         }
     }
 
+    #[cfg(feature = "cuda")]
     pub(crate) fn normalization(batch_size: usize, norm_size: usize) -> Self {
         Self {
             elements_log2: size_log2_bucket(batch_size),
