@@ -76,10 +76,10 @@ cancellation and error propagation semantics.
 
 ## A model-specific collate function
 
-The default MNIST path receives `(Vec<Vec<f32>>, Vec<u8>)`, so the example
-does not require custom loader plumbing. Applications that want tensors
-created inside the loader can provide a model-specific `Collate` implementation
-like this:
+The default MNIST path receives `(Vec<Vec<f32>>, Vec<u8>)`, which keeps dataset
+loading independent of a backend type. Applications that want tensors created
+inside the loader can provide a model-specific `Collate` implementation like
+this:
 
 ```rust,ignore
 struct MnistCollate;
@@ -97,8 +97,9 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
             labels.push(label as f32);
         }
 
-        // ... build tensors from the flattened Vecs (see the full example
-        // for the from_bytes plumbing) ...
+        // Build tensors here with the target backend and return one typed
+        // batch. The full MNIST example keeps this conversion at the model
+        // boundary instead of embedding a backend in the dataset crate.
         # Ok(unimplemented!())
     }
 }

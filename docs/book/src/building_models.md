@@ -7,6 +7,23 @@ constructors  -  pass exactly the runtime values the static shape didn't
 already pin down, in a tuple if there's more than one, and `()` when there
 are none.
 
+## Flattening runtime image axes
+
+Use `FlattenAxes` when a model receives a runtime-shaped tensor and ordinary
+code should describe the axis range directly. The signed end axis `-1` means
+the final axis, so this keeps the leading batch axis and flattens the image
+axes without exposing structural cursor types.
+
+```rust,no_run
+use incin::prelude::*;
+
+let flatten = FlattenAxes::new(1, -1);
+let images = Cpu.ones(shape![32, 1, 28, 28])?;
+let flat = flatten.forward(images)?;
+assert_eq!(flat.dims().as_ref(), &[32, 784]);
+# Ok::<(), incin::Error>(())
+```
+
 ## Linear
 
 ```rust,no_run
