@@ -1,9 +1,16 @@
+#[cfg(feature = "std")]
 use crate::err::{Error, Result};
+#[cfg(feature = "std")]
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
+#[cfg(feature = "std")]
 use crate::shapes::ShapeBuf;
+#[cfg(feature = "std")]
 use crate::tensor::backend::Backend;
+#[cfg(feature = "std")]
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+#[cfg(feature = "std")]
 use crate::tensor::prelude::{Device, DeviceId};
+#[cfg(feature = "std")]
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 #[cfg(feature = "std")]

@@ -1,16 +1,13 @@
 //! Immutable compiled execution plans and dynamic runtime guards.
 
 use alloc::boxed::Box;
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::backend_authoring::TensorMeta;
 use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
 use crate::err::{Error, Result};
-use crate::exec::{
-    DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
-};
+use crate::exec::{DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolTable};
 use crate::graph::ValueId;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
@@ -692,6 +689,7 @@ fn node_attribute_axis_or_sum_keep_descriptor(
     node_attribute_axis(node)
 }
 
+#[cfg(feature = "std")]
 fn remove_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
     let mut shape = input.clone();
     if axis < shape.dims.len() {
@@ -701,6 +699,7 @@ fn remove_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
     shape
 }
 
+#[cfg(feature = "std")]
 fn keep_axis(input: &ShapeExpr, axis: usize) -> ShapeExpr {
     let mut shape = input.clone();
     if let Some(dim) = shape.dims.get_mut(axis) {
@@ -758,6 +757,7 @@ fn aligned_dim(dims: &[DimExpr], rank: usize, offset: usize) -> DimExpr {
     }
 }
 
+#[cfg(feature = "std")]
 fn flatten_symbolic(input: &ShapeExpr, start: usize, end: usize) -> ShapeExpr {
     let mut dims = Vec::with_capacity(input.dims.len().saturating_sub(end - start));
     dims.extend_from_slice(&input.dims[..start]);
@@ -776,6 +776,7 @@ fn flatten_symbolic(input: &ShapeExpr, start: usize, end: usize) -> ShapeExpr {
     }
 }
 
+#[cfg(feature = "std")]
 fn linear_shape(input: &ShapeExpr, weight: &ShapeExpr) -> ShapeExpr {
     let mut shape = input.clone();
     if let (Some(last), Some(output)) = (shape.dims.last_mut(), weight.dims.first()) {

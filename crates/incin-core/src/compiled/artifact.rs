@@ -2,7 +2,7 @@
 //! and an Adler-32 checksum for compatibility detection and corruption detection.
 
 use alloc::string::String;
-use alloc::vec;
+#[cfg(feature = "serde_json")]
 use alloc::vec::Vec;
 
 use crate::compiled::plan::CompiledPlan;
@@ -60,6 +60,7 @@ pub struct ArtifactHeader {
 }
 
 /// Computes an Adler-32 checksum over a byte slice.
+#[cfg(feature = "serde_json")]
 fn adler32(data: &[u8]) -> u32 {
     const MOD: u32 = 65521;
     let mut a: u32 = 1;

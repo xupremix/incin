@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use crate::compiled::capture::{CapturedGraph, CapturedNode};
+use crate::compiled::capture::CapturedGraph;
 use crate::err::Result;
 use crate::shapes::error::OperationKind;
 
