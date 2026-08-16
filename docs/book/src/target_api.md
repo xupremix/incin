@@ -121,6 +121,30 @@ available only for low-level shape implementations. `unsqueeze` and
 shapes, while signed runtime selectors retain known rank and validate the
 selected extent for squeezing.
 
+Dimension-selecting operations use the same selector vocabulary. `narrow`,
+`chunk`, `split`, `gather`, `scatter`, `index_select`, and `topk` accept static,
+named, or signed runtime selectors. Runtime selectors are checked against the
+rank before dispatch, so invalid negative axes return the normal recoverable
+shape error:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![4, 8, 16])?;
+let indices = Tensor::<s![4, 8, 16], DefaultBackend, u32>::zeros(())?;
+let selected = x.index_select(axis!(-1), &Tensor::<s![2], DefaultBackend, u32>::zeros(())?)?;
+let parts = x.chunk(2, axis!(1))?;
+let pieces = x.split(4, -1isize)?;
+let gathered = x.gather(axis!(1), &indices)?;
+let _ = x.scatter(axis!(-1), &indices, &x)?;
+let _ = x.topk(2, 1isize, true)?;
+assert_eq!(selected.dims().as_ref(), &[4, 8, 2]);
+assert_eq!(parts.len(), 2);
+assert_eq!(pieces.len(), 4);
+assert_eq!(gathered.dims().as_ref(), &[4, 8, 16]);
+# Ok::<(), incin::Error>(())
+```
+
 Axis-preserving operations use the same selectors:
 
 ```rust,no_run

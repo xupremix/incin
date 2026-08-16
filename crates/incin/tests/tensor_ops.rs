@@ -395,24 +395,24 @@ fn test_indexing_narrow() -> Result<()> {
     )?;
 
     // Narrow dim 0
-    let n0 = t.clone().try_narrow(0, 1, 2)?; // elements from index 1, len 2
+    let n0 = t.clone().try_narrow(0isize, 1, 2)?; // elements from index 1, len 2
     assert_eq!(to_vec(&n0.into_dyn()), vec![4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
 
     // Narrow dim 1
-    let n1 = t.clone().try_narrow(1, 1, 2)?; // elements from index 1, len 2
+    let n1 = t.clone().try_narrow(1isize, 1, 2)?; // elements from index 1, len 2
     assert_eq!(to_vec(&n1.into_dyn()), vec![2.0, 3.0, 5.0, 6.0, 8.0, 9.0]);
 
     // Out of bounds
-    let err = t.clone().try_narrow(0, 2, 5);
+    let err = t.clone().try_narrow(0isize, 2, 5);
     assert!(err.is_err()); // should fail
 
-    let invalid_axis = t.clone().try_narrow(2, 0, 1);
+    let invalid_axis = t.clone().try_narrow(2isize, 0, 1);
     assert!(invalid_axis.is_err());
 
     let invalid_squeeze = t.clone().try_squeeze(0isize);
     assert!(invalid_squeeze.is_err());
 
-    let invalid_topk = t.topk(4, 1, true);
+    let invalid_topk = t.topk(4, 1isize, true);
     assert!(invalid_topk.is_err());
 
     Ok(())
@@ -484,5 +484,20 @@ fn to_scalar_bool_rejects_numeric_u8_tensor() -> Result<()> {
 fn to_vec1_bool_rejects_numeric_u8_tensor() -> Result<()> {
     let t = Tensor::<s![4], CpuBackendImpl, u8>::from_bytes(&[0u8, 1u8, 5u8, 255u8], ())?;
     assert!(t.to_vec1::<bool>().is_err());
+    Ok(())
+}
+
+#[test]
+fn dimension_selecting_operations_accept_axis_selectors() -> Result<()> {
+    let tensor = Tensor::<s![2, 3], CpuBackendImpl>::ones(())?;
+    let indices = Tensor::<s![2, 3], CpuBackendImpl, u32>::zeros(())?;
+    let select_indices = Tensor::<s![1], CpuBackendImpl, u32>::zeros(())?;
+
+    let _ = tensor.gather(axis!(1), &indices)?;
+    let _ = tensor.index_select(-1isize, &select_indices)?;
+    let _ = tensor.scatter(axis!(-1), &indices, &tensor)?;
+    assert_eq!(tensor.chunk(2, -1isize)?.len(), 2);
+    assert_eq!(tensor.split(2, axis!(1))?.len(), 2);
+    let _ = tensor.topk(1, axis!(1), true)?;
     Ok(())
 }

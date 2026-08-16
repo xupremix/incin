@@ -14,17 +14,19 @@ fn main() -> Result<()> {
     let loss = c.sum_all()?;
 
     let grads = loss.backward()?;
-    let grad_a = DefaultBackend::get_grad::<f32>(a.inner(), grads.as_backend())?
-        .expect("a participated in the computation, so it has a gradient");
+    let grad_a = grads
+        .require(&a)?
+        .to_vec1::<f32>()?;
 
     println!("d(loss)/d(a) = {:?}", grad_a);
     Ok(())
 }
 ```
 
-`s![2, 2]` is a **type**, not a value  -  `a`'s shape is checked at compile
-time. `a.try_mul(&b)` requires `b`'s shape type to match exactly (`ShapeEq`); a
-`[2, 3]` operand there is a compile error, not a panic three lines later.
+`s![2, 2]` is a **type**, not a value. `a`'s shape is checked at compile
+time. Checked arithmetic uses the same broadcasting rules as ordinary
+operators, while `add_exact`, `mul_exact`, and their siblings request strict
+equal-shape behavior explicitly.
 
 ## A tiny model
 

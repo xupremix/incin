@@ -719,7 +719,7 @@ where
         let mut outputs = Vec::with_capacity(seq_len);
 
         for i in 0..seq_len {
-            let x_step = x.clone().try_narrow(1, i, 1)?.try_squeeze(1isize)?;
+            let x_step = x.clone().try_narrow(1isize, i, 1)?.try_squeeze(1isize)?;
             let x_step_static: Tensor<D2<Batch, In>, B, K> = x_step.into_shape()?;
             let (h_next, c_next) = self.cell.forward((x_step_static, (h, c)))?;
             h = h_next;

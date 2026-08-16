@@ -339,7 +339,7 @@ fn the_index_returning_reductions_record_nothing_even_on_grad_tensors() {
     // rather than the receiver's.
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 5.0, 3.0, 4.0, 2.0, 6.0], ()).unwrap();
 
-    assert_eq!(recorded(|| t.topk(2, 1, true).unwrap()), 0);
+    assert_eq!(recorded(|| t.topk(2, 1isize, true).unwrap()), 0);
     assert_eq!(recorded(|| t.argsort(1, false).unwrap()), 0);
 
     // These used to be asserted without unwrapping, because the CPU kernel

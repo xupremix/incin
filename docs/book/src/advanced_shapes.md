@@ -62,7 +62,7 @@ wrote the operation:
 
 | Form | Rule | Fails how |
 |---|---|---|
-| `a.try_add(&b)` | `ShapeEq` exact match | compile error |
+| `a.try_add(&b)` | broadcasting | recoverable error |
 | `a + b` | `BroadcastShape`  -  numpy-style | compile error if unbroadcastable |
 | `a.broadcast_add(&b)` | `BroadcastShape` | compile error if unbroadcastable |
 

@@ -363,8 +363,8 @@ therefore consult the same execution policy; they are API spellings over the
 same canonical operation contract, not competing kernel paths.
 
 `Tensor::backward()` walks the tape and returns `Gradients`;
-`Backend::get_grad::<K>(&tensor, &grads)` reads one tensor's gradient back
-out. Both are `GraphState`-sited operations (§6)  -  outside what `Execute` can
+`grads.get(&tensor)?` reads an optional gradient and `grads.require(&tensor)?`
+reads one that must exist. Both are `GraphState`-sited operations (§6), outside what `Execute` can
 carry, by design, since they act on tape state rather than producing an
 allocation.
 

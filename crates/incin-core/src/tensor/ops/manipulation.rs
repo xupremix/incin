@@ -65,6 +65,49 @@ pub trait StackSelector<S: Shape> {
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
+/// Selects one axis for operations whose output geometry does not depend on
+/// the selector's proof type.
+pub trait AxisSelectorArg<S: Shape> {
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, C> AxisSelectorArg<S> for StaticAxis<C>
+where
+    S: Shape,
+    C: StaticCursor,
+{
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        self.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })
+    }
+}
+
+impl<S> AxisSelectorArg<S> for isize
+where
+    S: Shape,
+{
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Msg("runtime axis selector resolved to no axis".into())
+            })
+    }
+}
+
+impl<S, Tag> AxisSelectorArg<S> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + crate::shapes::idx::NamedAxisLookup<Tag>,
+    Tag: crate::shapes::AxisTag,
+{
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 /// Selects the insertion axis for unsqueeze while retaining the strongest
 /// shape proof available from the input and selector.
 pub trait UnsqueezeSelector<S: Shape> {
@@ -975,13 +1018,15 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
-    /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
+    /// let n = t.try_narrow(0isize, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G, P>>
+    pub fn try_narrow<A>(self, axis: A, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G, P>>
     where
+        A: AxisSelectorArg<S>,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -2214,15 +2259,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Gathers values along `dim` specified by `index`.
-    pub fn gather<S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    pub fn gather<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
         &self,
-        dim: usize,
+        axis: A,
         index: &Tensor<S2, B, KInt, G2>,
     ) -> Result<Tensor<S2, B, K, G>>
     where
+        A: AxisSelectorArg<S>,
         B: Execute<op::Gather> + Capabilities,
         <B as Execute<op::Gather>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
@@ -2249,6 +2296,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Scatters `src` values along `dim` into `self` using `index`.
     pub fn scatter<
+        A,
         S2: Shape,
         S3: Shape,
         KInt: crate::tensor::dtype::DType,
@@ -2256,16 +2304,18 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         G3: RequiresGrad,
     >(
         &self,
-        dim: usize,
+        axis: A,
         index: &Tensor<S2, B, KInt, G2>,
         src: &Tensor<S3, B, K, G3>,
     ) -> Result<Self>
     where
+        A: AxisSelectorArg<S>,
         S2: ShapeEq<S3>,
         B: Execute<op::Scatter> + Capabilities,
         <B as Execute<op::Scatter>>::Output: Into<B::Storage<K>>,
     {
         <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
             TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
@@ -2295,15 +2345,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Selects slices along `dim` given 1D `index`.
-    pub fn index_select<S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    pub fn index_select<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
         &self,
-        dim: usize,
+        axis: A,
         index: &Tensor<S2, B, KInt, G2>,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
+        A: AxisSelectorArg<S>,
         B: Execute<op::IndexSelect> + Capabilities,
         <B as Execute<op::IndexSelect>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let mut out_shape = self.shape_buf().as_ref().to_vec();
         if dim >= out_shape.len() {
             return Err(crate::err::Error::Shape(
@@ -2636,11 +2688,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into `chunks` equal parts along `dim`.
-    pub fn chunk(&self, chunks: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
+    pub fn chunk<A>(&self, chunks: usize, axis: A) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
     where
+        A: AxisSelectorArg<S>,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
                 axis: dim,
@@ -2660,21 +2714,23 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 break;
             }
             let len = (dim_size - start).min(chunk_size);
-            out.push(self.clone().try_narrow(dim, start, len)?);
+            out.push(self.clone().try_narrow(dim as isize, start, len)?);
         }
         Ok(out)
     }
 
     /// Splits tensor into sections of size `split_size` along `dim`.
-    pub fn split(
+    pub fn split<A>(
         &self,
         split_size: usize,
-        dim: usize,
+        axis: A,
     ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
     where
+        A: AxisSelectorArg<S>,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let dim_size = *self.shape_buf().as_ref().get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
                 axis: dim,
@@ -2691,7 +2747,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         for i in 0..chunks {
             let start = i * split_size;
             let len = (dim_size - start).min(split_size);
-            out.push(self.clone().try_narrow(dim, start, len)?);
+            out.push(self.clone().try_narrow(dim as isize, start, len)?);
         }
         Ok(out)
     }

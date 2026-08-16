@@ -706,21 +706,22 @@ where
     /// Computes the top `k` elements of the tensor along the given dimension.
     /// Returns a tuple of `(values, indices)`.
     #[allow(clippy::type_complexity)]
-    pub fn topk(
+    pub fn topk<A>(
         &self,
         k: usize,
-        dim: usize,
+        axis: A,
         largest: bool,
     ) -> Result<(
         Tensor<crate::shapes::Dyn, B, K, crate::tensor::grad::NoGrad>,
         Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>,
     )>
     where
+        A: crate::tensor::ops::manipulation::AxisSelectorArg<S>,
         B: Execute<op::TopK> + crate::exec::Capabilities,
         <B as Execute<op::TopK>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
     {
         let rank = self.rank();
-        let dim = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, rank)?;
+        let dim = axis.resolve(rank)?;
         let extent = self.shape_buf().as_ref()[dim];
         if k > extent {
             return Err(crate::err::Error::Shape(
