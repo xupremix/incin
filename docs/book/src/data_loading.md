@@ -83,13 +83,13 @@ loader boundary. It returns normalized image tensors with shape
 
 ```rust,no_run
 use incin::prelude::*;
-use incin_data::vision::mnist::{MnistCollate, MnistDataset};
-use incin_data::DataLoader;
+use incin_data::vision::mnist::MnistDataset;
 
 type Backend = incin_backends::cpu::CpuBackendImpl;
 
 let dataset = MnistDataset::new("./data/mnist", true)?;
-let loader = DataLoader::builder_with_collate(dataset, MnistCollate::<Backend>::new())
+let loader = dataset
+    .loader::<Backend>()
     .batch_size(32)
     .shuffle(true)
     .build()?;
@@ -104,7 +104,9 @@ for batch in &loader {
 
 This path avoids flattening samples into host vectors and rebuilding tensors in
 the training loop. The complete example is in
-`crates/incin/examples/mnist_training.rs`.
+`crates/incin/examples/mnist_training.rs`. The backend type is the explicit
+target choice, and the built-in tensor batcher returns model-ready image and
+integer-label tensors with `NoGrad` markers.
 
 ## Transforms
 

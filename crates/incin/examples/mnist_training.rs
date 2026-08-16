@@ -1,6 +1,6 @@
 use incin::prelude::*;
-use incin_data::vision::mnist::{MnistCollate, MnistDataset};
-use incin_data::{DataLoader, Dataset};
+use incin_data::Dataset;
+use incin_data::vision::mnist::MnistDataset;
 use std::path::PathBuf;
 
 type Backend = incin_backends::cpu::CpuBackendImpl;
@@ -15,7 +15,8 @@ fn main() -> incin::Result<()> {
     println!("Loaded {} training images", train_data.len());
 
     // Create DataLoader
-    let dataloader = DataLoader::builder_with_collate(train_data, MnistCollate::<Backend>::new())
+    let dataloader = train_data
+        .loader::<Backend>()
         .batch_size(32)
         .shuffle(true)
         .workers(0)

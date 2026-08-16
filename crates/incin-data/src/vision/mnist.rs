@@ -18,23 +18,23 @@ pub struct MnistDataset {
     train: bool,
 }
 
-/// Collates MNIST samples directly into model-ready tensors.
+/// Batches MNIST samples directly into model-ready tensors for backend `B`.
 ///
 /// Images are normalized to `f32` with shape `[batch, 1, 28, 28]`. Labels
 /// remain integer `u8` values and carry [`NoGrad`], so data loading does not
-/// create a training graph.
+/// create a training graph. The backend type is the explicit target choice.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MnistCollate<B>(core::marker::PhantomData<B>);
+pub struct TensorCollate<B>(core::marker::PhantomData<B>);
 
-impl<B> MnistCollate<B> {
-    /// Creates a collator for `B`.
+impl<B> TensorCollate<B> {
+    /// Creates a target-aware tensor batcher for `B`.
     #[must_use]
     pub const fn new() -> Self {
         Self(core::marker::PhantomData)
     }
 }
 
-impl<B> Collate<(Vec<f32>, u8)> for MnistCollate<B>
+impl<B> Collate<(Vec<f32>, u8)> for TensorCollate<B>
 where
     B: Backend
         + Execute<op::TensorFromData>
@@ -77,6 +77,29 @@ where
 }
 
 impl MnistDataset {
+    /// Starts a model-ready loader using backend `B` as the explicit target.
+    ///
+    /// The returned builder uses [`TensorCollate`] internally, so ordinary
+    /// MNIST application code does not need to assemble host vectors or name
+    /// a custom collator.
+    #[must_use]
+    pub fn loader<B>(self) -> crate::loader::DataLoaderBuilder<Self, TensorCollate<B>>
+    where
+        B: Backend
+            + Execute<op::TensorFromData>
+            + Capabilities
+            + SupportsDType<f32>
+            + SupportsDType<u8>,
+        B::Device: ConstDevice,
+        <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<f32>> + Into<B::Storage<u8>>,
+        B::Storage<f32>: Send,
+        B::Storage<u8>: Send,
+        B::Device: Send + Sync,
+        <B::Device as Device>::Field: Send,
+    {
+        crate::loader::DataLoader::builder_with_collate(self, TensorCollate::new())
+    }
+
     /// New.
     pub fn new<P: AsRef<Path>>(dir: P, train: bool) -> anyhow::Result<Self> {
         let dir = dir.as_ref();
@@ -298,6 +321,9 @@ impl crate::dataset::Dataset for MnistDataset {
 mod tests {
     use super::*;
     use crate::dataset::Dataset;
+    use incin_backends::cpu::CpuBackendImpl;
+
+    type TestBackend = CpuBackendImpl;
 
     #[test]
     fn validated_parts_reject_mismatched_image_and_label_counts() {
@@ -318,5 +344,24 @@ mod tests {
         assert_eq!(dataset.labels(), &[3, 7]);
         assert_eq!(dataset.get(1).unwrap().unwrap().1, 7);
         assert!(dataset.get(2).unwrap().is_none());
+    }
+
+    #[test]
+    fn tensor_collate_returns_targeted_no_grad_batches() {
+        let batch = TensorCollate::<TestBackend>::new()
+            .collate(vec![(vec![0.25; 28 * 28], 3), (vec![0.5; 28 * 28], 7)])
+            .expect("valid MNIST samples should form a tensor batch");
+
+        assert_eq!(batch.0.shape_buf().as_ref(), &[2, 1, 28, 28]);
+        assert_eq!(batch.1.shape_buf().as_ref(), &[2]);
+    }
+
+    #[test]
+    fn tensor_collate_rejects_incompatible_image_shape() {
+        let error = TensorCollate::<TestBackend>::new()
+            .collate(vec![(vec![0.0; 28 * 28 - 1], 0)])
+            .expect_err("a malformed image must not enter a model batch");
+
+        assert!(matches!(error, DataError::InvalidBatch(_)));
     }
 }

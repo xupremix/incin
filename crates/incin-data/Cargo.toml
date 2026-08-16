@@ -16,5 +16,8 @@ rand = "0.8"
 ureq = "3.3.0"
 flate2 = "1.1.9"
 
+[dev-dependencies]
+incin-backends = { path = "../incin-backends", default-features = false, features = ["std", "cpu"] }
+
 [lints]
 workspace = true
