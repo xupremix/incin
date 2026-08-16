@@ -1,6 +1,6 @@
 # Public API Design & Encapsulation Guidelines
 
-**INSTRUCTIONS FOR ALL DEVELOPERS AND AI ASSISTANTS WORKING ON THIS REPOSITORY**
+**INSTRUCTIONS FOR ALL DEVELOPERS WORKING ON THIS REPOSITORY**
 
 This codebase follows a strict policy regarding the public API surface. Every `pub` item declared represents a long-term contract that cannot be broken without a major version bump.
 

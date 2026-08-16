@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
 
     let Some(run_path) = run_path else {
         println!(
-            "incin-viz — no runs found in default directory. Pass --run-id <id> or --run-dir <path>."
+            "incin-viz: no runs found in default directory. Pass --run-id <id> or --run-dir <path>."
         );
         std::process::exit(0);
     };

@@ -36,7 +36,7 @@ const FOOTER_HINTS: &str =
     "q: quit  Tab: focus next  l: toggle layout  f: fullscreen  p: trigger panic";
 
 /// Exact UI-SPEC.md crashed-panel placeholder copy (Red/Bold, rendered
-const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
+const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed; press r to retry";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Layout mode.
@@ -222,7 +222,7 @@ impl App {
             ])
             .split(frame.area());
 
-        let header = Paragraph::new(format!("incin-viz — run: {}", self.run_id_or_path));
+        let header = Paragraph::new(format!("incin-viz; run: {}", self.run_id_or_path));
         frame.render_widget(header, rows[0]);
 
         let footer =

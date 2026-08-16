@@ -12,6 +12,7 @@ to be automatically executed. Read it first if you are new to the codebase.
 |---|---|
 | [GUIDE.md](GUIDE.md) | the crate map, the type-level shape system, tensor creation, the operation surface, the canonical execution architecture, the target API, backend authoring, autograd, modules, errors, feature flags, and the idioms the rest of this tree assumes. Concept-oriented: "how does the shape-proof system work" |
 | [book/src/](book/src/SUMMARY.md) | the full user-facing book. The chapter count and hierarchy are checked from `SUMMARY.md`; `mdbook build docs/book` renders the source, `python3 docs/book/build_site.py` builds the chaptered Pages site, `python3 tools/check-book-site.py` validates its static shell and routes, and `python3 docs/book/make_single_page.py` builds the separate self-contained offline artifact. |
+| [security/unsafe-ledger.md](security/unsafe-ledger.md) | production unsafe-code inventory and the checker that keeps new unsafe-bearing files visible during review. |
 
 **Generated.** Written by a test from the Rust source and re-checked on every
 run. If one of these is wrong, the source is wrong. Never edit them by hand.
