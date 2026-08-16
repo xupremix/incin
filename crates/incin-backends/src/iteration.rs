@@ -17,8 +17,7 @@
 use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::LayoutClass;
-use incin_core::shapes::buf::ShapeBuf;
-use incin_core::shapes::buf::StrideBuf;
+use incin_core::shapes::{ShapeBuf, StrideBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OperandIteration {

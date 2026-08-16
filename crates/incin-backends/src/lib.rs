@@ -57,6 +57,7 @@ pub mod iteration;
 
 pub(crate) mod layout;
 
+#[cfg(any(feature = "cpu", feature = "cuda"))]
 pub(crate) mod quant;
 
 /// Compile-time SIMD lane-width resolution for type-specialized kernels.

@@ -9,7 +9,7 @@
 //! only `CpuStorage` asks for.
 
 use incin_core::error::Result;
-use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::error::OperationKind;
 
 pub(crate) use crate::layout::{broadcast_shape, checked_contiguous_strides, contiguous_strides};

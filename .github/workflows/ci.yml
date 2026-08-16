@@ -230,8 +230,6 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-    - name: Install Chromium for browser checks
-      run: sudo apt-get install -y chromium
     - name: Validate PROPOSALS.md against docs/plan/ledger.toml
       run: cargo xtask ledger
     - name: Run xtask unit tests
@@ -368,6 +366,8 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - name: Install Chromium for browser checks
+      run: sudo apt-get install -y chromium
 
     # Cached separately from the main workspace cache: mdbook is a standalone
     # binary the workspace itself never depends on, and sharing the `test`

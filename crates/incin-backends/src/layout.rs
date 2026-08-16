@@ -21,8 +21,10 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use incin_core::error::{Error, Result};
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
+use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::broadcast::broadcast_dim_slices;
-use incin_core::shapes::buf::ShapeBuf;
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 use incin_core::shapes::error::OperationKind;
 
 /// Compute row-major (C-contiguous) strides for `shape`.
@@ -30,8 +32,9 @@ use incin_core::shapes::error::OperationKind;
 /// The last dimension has stride 1; each earlier dimension's stride is the
 /// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
 /// returns an empty stride vector.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
-    incin_core::shapes::buf::StrideBuf::contiguous_for(
+    incin_core::shapes::StrideBuf::contiguous_for(
         &ShapeBuf::from_slice(shape),
         OperationKind::Storage,
     )
@@ -43,6 +46,7 @@ pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> 
 ///
 /// Panics where the checked form returns an error, so it is only for shapes
 /// that some constructor has already accepted.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
     checked_contiguous_strides(shape)
         .expect("validated storage shape must have representable contiguous strides")
@@ -65,6 +69,7 @@ pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
 
 /// Increment a row-major multi-index in place (odometer-style), matching the
 /// iteration order [`contiguous_strides`] assumes.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
     for i in (0..idx.len()).rev() {
         idx[i] += 1;
@@ -77,6 +82,7 @@ pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
 
 #[cfg(test)]
 /// `tests`.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 mod tests {
     use super::*;
 

@@ -184,38 +184,6 @@ pub(crate) fn dispatch_reduce_all(
     dispatch_reduce_all(&partial_buf, n_wg, reduce_mode)
 }
 
-/// Dispatch softmax: shape [batch, n]
-#[allow(dead_code)]
-pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u32, n: u32) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/softmax.wgsl");
-    let pipeline = get_or_create_pipeline("softmax", shader, "main");
-
-    let params = [batch, n];
-    let params_buf = WgpuBuffer::from_slice(&params);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Softmax BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inp.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    // Each workgroup handles one row
-    run_pipeline(&state, &pipeline, &bg, batch, 1, 1, "Softmax");
-}
-
 /// `run_pipeline`.
 fn run_pipeline(
     state: &crate::wgpu::device::WgpuDeviceState,
@@ -290,54 +258,6 @@ pub(crate) fn dispatch_im2col(
     )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Im2Col");
     Ok(())
-}
-
-/// Fused GPU AdamW.
-/// param, grad, m, v must all be length-N f32 buffers.
-/// meta: [N, lr_bits, beta1_bits, beta2_bits, eps_bits, wd_bits, bc1_bits, bc2_bits]
-#[allow(dead_code)]
-pub(crate) fn dispatch_adamw(
-    param: &WgpuBuffer,
-    grad: &WgpuBuffer,
-    m: &WgpuBuffer,
-    v: &WgpuBuffer,
-    meta: &[u32],
-) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/adamw.wgsl");
-    let pipeline = get_or_create_pipeline("adamw", shader, "main");
-
-    let meta_buf = WgpuBuffer::from_slice(meta);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("AdamW BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: param.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: grad.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: m.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: v.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: meta_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let n = meta[0];
-    let wg = n.div_ceil(256);
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "AdamW");
 }
 
 /// Dispatch transposed 2D convolution
@@ -563,120 +483,6 @@ pub(crate) fn dispatch_embedding(
     Ok(())
 }
 
-#[allow(dead_code, clippy::too_many_arguments)]
-pub(crate) fn dispatch_layer_norm(
-    inp: &WgpuBuffer,
-    gamma: &WgpuBuffer,
-    beta: &WgpuBuffer,
-    out: &Arc<WgpuBuffer>,
-    eps: f32,
-    norm_size: u32,
-    has_bias: f32,
-    batch_size: u32,
-) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/layer_norm.wgsl");
-    let pipeline = get_or_create_pipeline("layer_norm", shader, "main");
-    let params_buf = WgpuBuffer::from_slice(&[eps, norm_size as f32, has_bias, batch_size as f32]);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("LayerNorm BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inp.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: gamma.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: beta.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg = batch_size.div_ceil(64); // workgroup size is 64
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "LayerNorm");
-}
-
-#[allow(dead_code, clippy::too_many_arguments)]
-pub(crate) fn dispatch_batch_norm(
-    inp: &WgpuBuffer,
-    gamma: &WgpuBuffer,
-    beta: &WgpuBuffer,
-    rm: &WgpuBuffer,
-    rv: &WgpuBuffer,
-    out: &Arc<WgpuBuffer>,
-    eps: f32,
-    channels: u32,
-    spatial: u32,
-    batch: u32,
-    has_gamma: f32,
-    has_beta: f32,
-    has_rm_rv: f32,
-) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/batch_norm.wgsl");
-    let pipeline = get_or_create_pipeline("batch_norm", shader, "main");
-    let params = [
-        eps,
-        channels as f32,
-        spatial as f32,
-        batch as f32,
-        has_gamma,
-        has_beta,
-        has_rm_rv,
-    ];
-    let params_buf = WgpuBuffer::from_slice(&params);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("BatchNorm BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inp.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: gamma.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: beta.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: rm.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: rv.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 5,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 6,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg = channels.div_ceil(64); // workgroup size is 64
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BatchNorm");
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn dispatch_pool2d(
     inp: &WgpuBuffer,
@@ -726,49 +532,6 @@ pub(crate) fn dispatch_pool2d(
     Ok(())
 }
 
-#[allow(dead_code)] // wired up once WGPU conv bias path is complete
-pub(crate) fn dispatch_bias_add(
-    t: &Arc<WgpuBuffer>,
-    bias: &WgpuBuffer,
-    batch: u32,
-    channels: u32,
-    spatial: u32,
-) -> Result<()> {
-    let state = get_device_state();
-    let shader = include_str!("shaders/bias_add.wgsl");
-    let pipeline = get_or_create_pipeline("bias_add", shader, "main");
-    let total = batch
-        .checked_mul(channels)
-        .and_then(|total| total.checked_mul(spatial))
-        .ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::Pointwise,
-            expression: "WGPU bias-add element count",
-        })?;
-    let params_buf = WgpuBuffer::from_slice(&[channels, spatial, total]);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("BiasAdd BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: t.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: bias.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg = total.div_ceil(WG_SIZE);
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BiasAdd");
-    Ok(())
-}
-
 pub(crate) fn dispatch_conv2d_direct(
     inp: &WgpuBuffer,
     weight: &WgpuBuffer,
@@ -809,43 +572,4 @@ pub(crate) fn dispatch_conv2d_direct(
     )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");
     Ok(())
-}
-
-#[allow(dead_code)]
-pub(crate) fn dispatch_nll_loss(
-    log_sm: &WgpuBuffer,
-    target: &WgpuBuffer,
-    out: &Arc<WgpuBuffer>,
-    batch: u32,
-    n_classes: u32,
-) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/nll_loss.wgsl");
-    let pipeline = get_or_create_pipeline("nll_loss", shader, "main");
-    let params_buf = WgpuBuffer::from_slice(&[batch, n_classes]);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("NLLLoss BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: log_sm.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: target.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg = batch.div_ceil(WG_SIZE);
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "NLLLoss");
 }

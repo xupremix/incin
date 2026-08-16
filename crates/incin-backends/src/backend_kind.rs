@@ -5,7 +5,7 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::{Error, Result};
 #[cfg(test)]
-use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::ShapeBuf;
 #[cfg(test)]
 use incin_core::shapes::dynamic::Dyn;
 #[cfg(test)]

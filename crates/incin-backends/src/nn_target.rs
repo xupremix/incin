@@ -15,7 +15,7 @@ use incin_core::nn::optional::OptionalField;
 use incin_core::nn::param::{Param, TrainState};
 use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
-use incin_core::shapes::buf::ShapeBuf;
+use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::{DynShape, Shape, ShapeValue};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::FloatDType;

@@ -40,7 +40,7 @@
 use core::fmt;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
-use crate::shapes::buf::ShapeBuf;
+use crate::shapes::ShapeBuf;
 use crate::shapes::error::{OperationKind, RankExpectation, ShapeError};
 
 // --- schema version ---------------------------------------------------------

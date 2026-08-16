@@ -9,7 +9,7 @@ use super::catalog::{
 use super::proof::Validated;
 use super::spec::ExecutionDescriptor;
 use crate::shapes::ProofLevel;
-use crate::shapes::buf::ShapeBuf;
+use crate::shapes::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
 use crate::shapes::idx::AxisSelector;
 use crate::shapes::reshape::ReshapeShape;
