@@ -114,7 +114,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// let y = Wgpu::new(0).tensor([[1.0_f32, 2.0]])?;      // and this one places it
 /// ```
 ///
-/// See `incin_backends::target` (feature `target-api`). An earlier revision
+/// See the target-first allocation API. An earlier revision
 /// of this macro did take a `device:` clause and inferred the backend from
 /// the *token spelling* of the expression, which could not see through
 /// `let d = Wgpu::new(0);`. That heuristic is gone rather than patched.
@@ -264,8 +264,8 @@ pub fn s(input: TokenStream) -> TokenStream {
 ///
 /// # Availability
 ///
-/// Expands to `Static`/`Bound`, which live behind the `target-api` feature. It
-/// will not resolve without it.
+/// Expands to a `ShapeValue` that implements the target-first `ShapeSpec`
+/// contract. It is available in the normal standard-library build.
 ///
 /// ## Path resolution
 ///

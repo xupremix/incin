@@ -1,4 +1,4 @@
-//! The `target-api` prototype against a real accelerator.
+//! Target-first allocation against a real accelerator.
 //!
 //! `Wgpu` is a Tier 2 device: the backend family is fixed at compile time and
 //! the ordinal is a runtime value. That is the case the current constructor

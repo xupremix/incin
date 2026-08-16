@@ -1,4 +1,4 @@
-//! The `target-api` prototype as an ordinary user reaches it: through the
+//! The target-first allocation API as an ordinary user reaches it: through the
 //! `incin` façade's prelude, with no `incin_backends` import.
 //!
 //! The prototype's own tests live in `incin-backends` and import it directly.

@@ -1,4 +1,4 @@
-//! The `target-api` prototype: device values as allocation targets.
+//! Target-first device values as allocation targets.
 //!
 //! These are the tests the architecture review named as the prototype's
 //! acceptance criteria. Each one asserts a property the current constructor
