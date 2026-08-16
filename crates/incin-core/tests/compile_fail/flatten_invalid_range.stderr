@@ -11,6 +11,8 @@ help: the trait `FlattenAt<Next<Here>, Here>` is not implemented for `DimCons<UI
   | / impl<H: Dim, T: Shape, Start, End>
   | |     FlattenAt<crate::shapes::idx::Next<Start>, crate::shapes::idx::Next<End>> for DimCons<H, T>
   | | where
+  | |     Start: ForwardCursor,
+  | |     End: ForwardCursor,
   | |     T: FlattenAt<Start, End>,
   | |_____________________________^
   = help: for that trait implementation, expected `Next<Here>`, found `Here`
