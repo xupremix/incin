@@ -2,6 +2,7 @@
 
 extern crate incin_core as incin;
 
+use incin_core::advanced::NamedAxisSelector;
 use incin_core::exec::catalog::AxisAttributes;
 use incin_core::exec::{ReduceKeepRule, ReduceRule, ShapeRule};
 use incin_core::prelude::*;

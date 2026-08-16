@@ -176,8 +176,8 @@ known-rank inputs, and `Dyn` only when the input rank is dynamic.
 
 Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
 ranges. Reshape inference is separate from indexing and uses `shape![..., infer]`.
-The older `reshape_idx::<idx![... ]>()` spelling remains available for
-advanced type-level targets. Axis selection is
+Advanced type-level reshape targets remain available through
+`incin::macros::advanced::idx` and `reshape_idx::<idx![... ]>()`. Axis selection is
 also separate, so `axis!(-1)` never changes `i![-1]` indexing rules.
 
 ```rust,no_run

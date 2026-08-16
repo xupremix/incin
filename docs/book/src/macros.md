@@ -85,6 +85,7 @@ the heterogeneous type-level target used by the advanced `reshape_idx` API:
 
 ```rust,no_run
 use incin::prelude::*;
+use incin::macros::advanced::idx;
 
 let t = Tensor::<s![10, 20, 30], DefaultBackend>::zeros(())?;
 let reshaped = t.reshape_infer(shape![6, infer])?;

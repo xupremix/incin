@@ -1,6 +1,7 @@
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 
+use incin::macros::advanced::idx;
 use incin::prelude::*;
 use incin::{DynShape, Shape, VariableBackend};
 

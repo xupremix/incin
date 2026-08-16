@@ -1,3 +1,4 @@
+use incin::MnistTargetExt;
 use incin::prelude::*;
 use incin_data::Dataset;
 use incin_data::vision::mnist::MnistDataset;
@@ -16,7 +17,7 @@ fn main() -> incin::Result<()> {
 
     // Create DataLoader
     let dataloader = train_data
-        .loader::<Backend>()
+        .loader_on(Cpu)
         .batch_size(32)
         .shuffle(true)
         .workers(0)

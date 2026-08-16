@@ -2,7 +2,7 @@
 
 There are three different forms of fusion:
 
-1. A new semantic operation, such as `BiasGelu`, is an `Operation` with
+1. A new semantic operation, such as a real `BiasGelu` implementation, is an `Operation` with
    attributes and output inference, plus a backend `Execute<YourOperation>`.
 2. A faster implementation of an existing operation stays behind that
    operation's existing `Execute` implementation. It does not add a second

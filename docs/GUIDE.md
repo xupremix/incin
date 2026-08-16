@@ -40,7 +40,7 @@ re-exports the rest.
 | Crate | Role |
 |---|---|
 | `incin-core` | The `Tensor` type, the shape/dtype/device type-level system, autograd, `nn`/`optim`/`metrics`, the operation catalog and descriptor contract, distributed primitives. `no_std` unless a feature says otherwise |
-| `incin-backends` | Concrete backends: `cpu`, `cuda`, `wgpu`, `metal`, and the third-party `external::candle` adapter. Also `incin_backends::target`, the allocation-target prototype (§7) |
+| `incin-backends` | Concrete backends: `cpu`, `cuda`, `wgpu`, `metal`, and the third-party `external::candle` adapter. Also `incin_backends::target`, the target-driven allocation API (§7) |
 | `incin-macros` | Procedural macros: `s!`, `shape!`, `idx!`, `tensor!`, `#[module]`, `dim!`, `mesh!`/`parallel!`/`placement!`, `model!`/`import_model!` |
 | `incin-data` | `Dataset`, `DataLoader`, vision datasets, transforms, HuggingFace Hub downloading |
 | `incin-viz` / `incin-viz-plugin-api` | Graph visualization tooling, plugin surface for it |

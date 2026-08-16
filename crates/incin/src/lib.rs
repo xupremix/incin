@@ -135,6 +135,78 @@ pub use incin_core::tensor::dtype::{
 };
 pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
 
+/// Incin's target-backed adapter for model-ready MNIST batches.
+#[derive(Clone)]
+pub struct TargetBatch<T>(pub T);
+
+impl<T> incin_data::vision::mnist::MnistBatchTarget for TargetBatch<T>
+where
+    T: incin_backends::target::TensorTarget + Clone + Send + Sync + 'static,
+    T::Backend: incin_core::backend_authoring::HostInterop,
+    <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<f32>: Send + 'static,
+    <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<u8>: Send + 'static,
+    <T::Device as incin_core::tensor::device::Device>::Field: Send + 'static,
+{
+    type Images = incin_backends::target::TargetTensor<T, incin_core::shapes::Dyn, f32>;
+    type Labels = incin_backends::target::TargetTensor<T, incin_core::shapes::Dyn, u8>;
+
+    fn batch(
+        &self,
+        images: Vec<f32>,
+        labels: Vec<u8>,
+        batch_size: usize,
+    ) -> incin_data::BatchResult<(Self::Images, Self::Labels)> {
+        use incin_backends::target::TargetExt;
+
+        let images = self
+            .0
+            .tensor_from_vec(images, vec![batch_size, 1, 28, 28])
+            .map_err(|error| incin_data::DataError::InvalidBatch(error.to_string()))?;
+        let labels = self
+            .0
+            .tensor_from_vec(labels, vec![batch_size])
+            .map_err(|error| incin_data::DataError::InvalidBatch(error.to_string()))?;
+        Ok((images, labels))
+    }
+}
+
+/// Target-value MNIST loader extension for the facade crate.
+pub trait MnistTargetExt {
+    /// Builds a model-ready loader on the supplied target value.
+    fn loader_on<T>(
+        self,
+        target: T,
+    ) -> incin_data::loader::DataLoaderBuilder<
+        incin_data::vision::mnist::MnistDataset,
+        incin_data::vision::mnist::TensorCollate<TargetBatch<T>>,
+    >
+    where
+        T: incin_backends::target::TensorTarget + Clone + Send + Sync + 'static,
+        T::Backend: incin_core::backend_authoring::HostInterop,
+        <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<f32>: Send + 'static,
+        <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<u8>: Send + 'static,
+        <T::Device as incin_core::tensor::device::Device>::Field: Send + 'static;
+}
+
+impl MnistTargetExt for incin_data::vision::mnist::MnistDataset {
+    fn loader_on<T>(
+        self,
+        target: T,
+    ) -> incin_data::loader::DataLoaderBuilder<
+        incin_data::vision::mnist::MnistDataset,
+        incin_data::vision::mnist::TensorCollate<TargetBatch<T>>,
+    >
+    where
+        T: incin_backends::target::TensorTarget + Clone + Send + Sync + 'static,
+        T::Backend: incin_core::backend_authoring::HostInterop,
+        <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<f32>: Send + 'static,
+        <T::Backend as incin_core::backend_authoring::StorageBackend>::Storage<u8>: Send + 'static,
+        <T::Device as incin_core::tensor::device::Device>::Field: Send + 'static,
+    {
+        incin_data::vision::mnist::MnistDataset::loader(self, TargetBatch(target))
+    }
+}
+
 #[cfg(feature = "cuda")]
 pub use incin_core::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "metal")]
@@ -375,7 +447,9 @@ pub mod metrics {
 
 /// Dataset abstractions and data loading utilities.
 pub mod data {
+    pub use super::MnistTargetExt;
     pub use incin_data::vision;
+    pub use incin_data::vision::mnist::MnistBatchTarget;
     pub use incin_data::{
         BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, Dataset, Downloader,
     };
@@ -550,7 +624,12 @@ pub mod macros {
     // invoked once, internally, by `incin-core` itself
     // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
-    pub use incin_macros::{i, idx, s, shape, tensor};
+    pub use incin_macros::{i, s, shape, tensor};
+
+    /// Advanced type-level slicing and reshape syntax.
+    pub mod advanced {
+        pub use incin_macros::idx;
+    }
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
@@ -565,9 +644,8 @@ pub mod prelude {
     pub use incin_core::nn::module::Module;
     pub use incin_core::nn::state::{StatePath, StateRole, StateSnapshot, StateValue};
     pub use incin_core::shapes::{
-        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, InferDim, InferShape,
-        NamedAxisLookup, NamedAxisSelector, NamedDim, Ranked, Shape, ShapeArgs, ShapeSpec,
-        ShapeValue, Slice,
+        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, InferShape, NamedDim, Ranked,
+        Shape, ShapeArgs, ShapeSpec, ShapeValue,
     };
     pub use incin_core::tensor::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
@@ -585,8 +663,8 @@ pub mod prelude {
     pub use incin_core::shapes::concat::ConcatShape;
     pub use incin_core::shapes::stack::StackShape;
     pub use incin_core::shapes::{
-        AppendDim, Axis, AxisSelector, BroadcastExtent, BroadcastShape, ReshapeShape, SameCount,
-        Scalar, StaticAxis, ToAxisIndex, TryReshape,
+        AppendDim, Axis, BroadcastExtent, BroadcastShape, ReshapeShape, SameCount, Scalar,
+        TryReshape,
     };
 
     #[cfg(feature = "cuda")]
@@ -618,7 +696,7 @@ pub mod prelude {
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{axis, i, idx, module, s, shape, tensor};
+    pub use incin_macros::{axis, i, module, s, shape, tensor};
 
     pub use super::{
         BatchNorm2d, Buffer, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
@@ -658,9 +736,12 @@ pub mod prelude {
 
 /// Structural shape proofs for advanced generic code.
 pub mod advanced {
+    pub use incin_core::shapes::idx::*;
     pub use incin_core::shapes::{
-        At, FromEnd, Here, Next, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt,
+        At, AxisSelector, FromEnd, Here, NamedAxisSelector, Next, ReduceAt, ReduceKeepAt, RemoveAt,
+        StaticAxis, SwapAt, ToAxisIndex,
     };
+    pub use incin_core::typenum;
 }
 
 #[cfg(test)]

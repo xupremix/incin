@@ -1,6 +1,7 @@
 extern crate incin_core as incin;
 
-use incin_core::prelude::{ToAxisIndex, axis};
+use incin_core::advanced::ToAxisIndex;
+use incin_core::prelude::axis;
 
 #[test]
 fn arbitrary_static_axis_literals_remain_static() {

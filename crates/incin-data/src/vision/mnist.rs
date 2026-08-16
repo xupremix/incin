@@ -2,13 +2,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use incin_core::backend_authoring::{Backend, Capabilities, Execute, SupportsDType};
-use incin_core::exec::catalog::op;
-use incin_core::shapes::Dyn;
-use incin_core::tensor::base::Tensor;
-use incin_core::tensor::device::{ConstDevice, Device};
-use incin_core::tensor::grad::NoGrad;
-
 use crate::loader::{BatchResult, Collate, DataError};
 
 /// Mnist dataset.
@@ -18,37 +11,46 @@ pub struct MnistDataset {
     train: bool,
 }
 
-/// Batches MNIST samples directly into model-ready tensors for backend `B`.
+/// Converts an MNIST batch to model-ready tensors on an explicitly selected target.
+///
+/// The data crate owns this small adapter contract without depending on any
+/// concrete backend crate. The facade implements it for `TensorTarget` values.
+pub trait MnistBatchTarget: Clone + Send + Sync + 'static {
+    /// Image batch type.
+    type Images: Send + 'static;
+    /// Label batch type.
+    type Labels: Send + 'static;
+
+    /// Builds normalized images and integer labels on this target.
+    fn batch(
+        &self,
+        images: Vec<f32>,
+        labels: Vec<u8>,
+        batch_size: usize,
+    ) -> BatchResult<(Self::Images, Self::Labels)>;
+}
+
+/// Batches MNIST samples directly into model-ready tensors for target `T`.
 ///
 /// Images are normalized to `f32` with shape `[batch, 1, 28, 28]`. Labels
-/// remain integer `u8` values and carry [`NoGrad`], so data loading does not
-/// create a training graph. The backend type is the explicit target choice.
+/// remain integer `u8` values and carry no gradient marker, so data loading does not
+/// create a training graph. The target value is the explicit device choice.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct TensorCollate<B>(core::marker::PhantomData<B>);
+pub struct TensorCollate<T>(T);
 
-impl<B> TensorCollate<B> {
-    /// Creates a target-aware tensor batcher for `B`.
+impl<T> TensorCollate<T> {
+    /// Creates a target-aware tensor batcher for `target`.
     #[must_use]
-    pub const fn new() -> Self {
-        Self(core::marker::PhantomData)
+    pub const fn new(target: T) -> Self {
+        Self(target)
     }
 }
 
-impl<B> Collate<(Vec<f32>, u8)> for TensorCollate<B>
+impl<T> Collate<(Vec<f32>, u8)> for TensorCollate<T>
 where
-    B: Backend
-        + Execute<op::TensorFromData>
-        + Capabilities
-        + SupportsDType<f32>
-        + SupportsDType<u8>,
-    B::Device: ConstDevice,
-    <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<f32>> + Into<B::Storage<u8>>,
-    B::Storage<f32>: Send,
-    B::Storage<u8>: Send,
-    B::Device: Send + Sync,
-    <B::Device as Device>::Field: Send,
+    T: MnistBatchTarget,
 {
-    type Output = (Tensor<Dyn, B, f32, NoGrad>, Tensor<Dyn, B, u8, NoGrad>);
+    type Output = (T::Images, T::Labels);
 
     fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> BatchResult<Self::Output> {
         const PIXELS_PER_IMAGE: usize = 28 * 28;
@@ -67,37 +69,22 @@ where
             labels.push(label);
         }
 
-        let images =
-            Tensor::<Dyn, B, f32, NoGrad>::from_slice(&images, vec![batch_size, 1, 28, 28])
-                .map_err(|error| DataError::InvalidBatch(error.to_string()))?;
-        let labels = Tensor::<Dyn, B, u8, NoGrad>::from_slice(&labels, vec![batch_size])
-            .map_err(|error| DataError::InvalidBatch(error.to_string()))?;
-        Ok((images, labels))
+        self.0.batch(images, labels, batch_size)
     }
 }
 
 impl MnistDataset {
-    /// Starts a model-ready loader using backend `B` as the explicit target.
+    /// Starts a model-ready loader using `target` as the explicit target.
     ///
     /// The returned builder uses [`TensorCollate`] internally, so ordinary
     /// MNIST application code does not need to assemble host vectors or name
     /// a custom collator.
     #[must_use]
-    pub fn loader<B>(self) -> crate::loader::DataLoaderBuilder<Self, TensorCollate<B>>
+    pub fn loader<T>(self, target: T) -> crate::loader::DataLoaderBuilder<Self, TensorCollate<T>>
     where
-        B: Backend
-            + Execute<op::TensorFromData>
-            + Capabilities
-            + SupportsDType<f32>
-            + SupportsDType<u8>,
-        B::Device: ConstDevice,
-        <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<f32>> + Into<B::Storage<u8>>,
-        B::Storage<f32>: Send,
-        B::Storage<u8>: Send,
-        B::Device: Send + Sync,
-        <B::Device as Device>::Field: Send,
+        T: MnistBatchTarget,
     {
-        crate::loader::DataLoader::builder_with_collate(self, TensorCollate::new())
+        crate::loader::DataLoader::builder_with_collate(self, TensorCollate::new(target))
     }
 
     /// New.
@@ -321,9 +308,25 @@ impl crate::dataset::Dataset for MnistDataset {
 mod tests {
     use super::*;
     use crate::dataset::Dataset;
-    use incin_backends::cpu::CpuBackendImpl;
+    #[derive(Clone)]
+    struct TestTarget;
 
-    type TestBackend = CpuBackendImpl;
+    impl MnistBatchTarget for TestTarget {
+        type Images = (Vec<f32>, Vec<usize>);
+        type Labels = (Vec<u8>, Vec<usize>);
+
+        fn batch(
+            &self,
+            images: Vec<f32>,
+            labels: Vec<u8>,
+            batch_size: usize,
+        ) -> BatchResult<(Self::Images, Self::Labels)> {
+            Ok((
+                (images, vec![batch_size, 1, 28, 28]),
+                (labels, vec![batch_size]),
+            ))
+        }
+    }
 
     #[test]
     fn validated_parts_reject_mismatched_image_and_label_counts() {
@@ -348,17 +351,17 @@ mod tests {
 
     #[test]
     fn tensor_collate_returns_targeted_no_grad_batches() {
-        let batch = TensorCollate::<TestBackend>::new()
+        let batch = TensorCollate::new(TestTarget)
             .collate(vec![(vec![0.25; 28 * 28], 3), (vec![0.5; 28 * 28], 7)])
             .expect("valid MNIST samples should form a tensor batch");
 
-        assert_eq!(batch.0.shape_buf().as_ref(), &[2, 1, 28, 28]);
-        assert_eq!(batch.1.shape_buf().as_ref(), &[2]);
+        assert_eq!(batch.0.1, vec![2, 1, 28, 28]);
+        assert_eq!(batch.1.1, vec![2]);
     }
 
     #[test]
     fn tensor_collate_rejects_incompatible_image_shape() {
-        let error = TensorCollate::<TestBackend>::new()
+        let error = TensorCollate::new(TestTarget)
             .collate(vec![(vec![0.0; 28 * 28 - 1], 0)])
             .expect_err("a malformed image must not enter a model batch");
 

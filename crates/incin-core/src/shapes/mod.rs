@@ -33,6 +33,8 @@ pub mod idx;
 pub mod named;
 /// Shape proof strength.
 pub mod proof;
+/// Rank-only shape proofs for runtime and partially-known shapes.
+pub mod rank;
 /// `reshape`.
 pub mod reshape;
 /// `shape`.
@@ -53,6 +55,7 @@ pub use error::*;
 pub use idx::*;
 pub use named::*;
 pub use proof::*;
+pub use rank::*;
 pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
@@ -68,8 +71,8 @@ pub mod prelude {
     pub use super::dim::*;
     pub use super::dynamic::*;
     pub use super::error::*;
-    pub use super::idx::*;
     pub use super::named::*;
+    pub use super::rank::*;
     pub use super::reshape::*;
     pub use super::shape::*;
     pub use super::shape_ops::*;

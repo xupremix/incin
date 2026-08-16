@@ -1,7 +1,7 @@
 use crate::shapes::Shape;
 use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next};
-use crate::shapes::{At, Dim, DimCons, Dyn, RemoveAt, RemoveFromEnd, ReplaceAt};
+use crate::shapes::{Dim, DimCons, Dyn, RemoveAt, RemoveFromEnd};
 
 /// Unified selector-facing swap operation. Both positive and from-end
 /// selectors use the one structural `SwapAt` algebra.
@@ -42,45 +42,13 @@ pub trait SwapAxes<Left, Right>: Shape {
     }
 }
 
-#[doc(hidden)]
-pub trait ForwardSwapAxes<Left, Right>: Shape {
-    type Output: Shape;
-}
-
-impl<H: Dim, T: Shape> ForwardSwapAxes<Here, Here> for DimCons<H, T> {
-    type Output = DimCons<H, T>;
-}
-
-impl<H: Dim, T: Shape, R, RD> ForwardSwapAxes<Here, Next<R>> for DimCons<H, T>
-where
-    T: At<R, Output = RD> + ReplaceAt<R, H>,
-    RD: Dim,
-{
-    type Output = DimCons<RD, <T as ReplaceAt<R, H>>::Output>;
-}
-
-impl<H: Dim, T: Shape, L, LD> ForwardSwapAxes<Next<L>, Here> for DimCons<H, T>
-where
-    T: At<L, Output = LD> + ReplaceAt<L, H>,
-    LD: Dim,
-{
-    type Output = DimCons<LD, <T as ReplaceAt<L, H>>::Output>;
-}
-
-impl<H: Dim, T: Shape, L, R> ForwardSwapAxes<Next<L>, Next<R>> for DimCons<H, T>
-where
-    T: ForwardSwapAxes<L, R>,
-{
-    type Output = DimCons<H, <T as ForwardSwapAxes<L, R>>::Output>;
-}
-
 impl<S, L, R> SwapAxes<L, R> for S
 where
-    L: crate::shapes::shape::ForwardCursor,
-    R: crate::shapes::shape::ForwardCursor,
-    S: ForwardSwapAxes<L, R>,
+    L: crate::shapes::idx::StaticCursor,
+    R: crate::shapes::idx::StaticCursor,
+    S: crate::shapes::SwapAt<L, R>,
 {
-    type Output = <S as ForwardSwapAxes<L, R>>::Output;
+    type Output = <S as crate::shapes::SwapAt<L, R>>::Output;
 }
 
 /// Structural reduction which removes one axis.

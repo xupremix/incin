@@ -6,6 +6,7 @@ actually wants, such as a tensor, a tuple of tensors, or another batch type.
 
 ```rust,no_run
 use incin::prelude::*;
+use incin::MnistTargetExt;
 use incin_data::{Collate, DataLoader, Dataset};
 
 struct Toy;
@@ -85,11 +86,9 @@ loader boundary. It returns normalized image tensors with shape
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
 
-type Backend = incin_backends::cpu::CpuBackendImpl;
-
 let dataset = MnistDataset::new("./data/mnist", true)?;
 let loader = dataset
-    .loader::<Backend>()
+    .loader_on(Cpu)
     .batch_size(32)
     .shuffle(true)
     .build()?;
@@ -102,11 +101,11 @@ for batch in &loader {
 # Ok::<(), incin::Error>(())
 ```
 
-This path avoids flattening samples into host vectors and rebuilding tensors in
-the training loop. The complete example is in
-`crates/incin/examples/mnist_training.rs`. The backend type is the explicit
-target choice, and the built-in tensor batcher returns model-ready image and
-integer-label tensors with `NoGrad` markers.
+This path keeps batching backend-neutral until the explicit target value is
+provided. The complete example is in `crates/incin/examples/mnist_training.rs`.
+The same generic call accepts runtime-selectable targets such as
+`Cuda::new(1)` when that backend is enabled. The built-in tensor batcher returns
+model-ready image and integer-label tensors with `NoGrad` markers.
 
 ## Transforms
 

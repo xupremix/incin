@@ -25,7 +25,7 @@ use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{Dyn, DynShape, Shape, StaticAxis};
-use crate::shapes::{FlattenAt, SwapAxes};
+use crate::shapes::{FlattenAt, FlattenFromEndAt, SwapAxes, SwapFromEndAt};
 use crate::shapes::{ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
@@ -309,11 +309,65 @@ impl<S, L, R> FlattenSelector<S>
     )
 where
     S: Shape + DynShape + FlattenAt<L, R>,
-    L: StaticCursor,
-    R: StaticCursor,
+    L: StaticCursor + crate::shapes::shape::ForwardCursor,
+    R: StaticCursor + crate::shapes::shape::ForwardCursor,
     <S as FlattenAt<L, R>>::Output: Shape + DynShape,
 {
     type Output = <S as FlattenAt<L, R>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let start = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        let end = self.1.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        Ok((start, end))
+    }
+}
+
+impl<S, L, R> FlattenSelector<S>
+    for (
+        crate::shapes::idx::StaticAxis<L>,
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::FromEnd<R>>,
+    )
+where
+    S: Shape + DynShape + FlattenFromEndAt<L, crate::shapes::idx::FromEnd<R>>,
+    L: StaticCursor + crate::shapes::shape::ForwardCursor,
+    R: StaticCursor + crate::shapes::shape::ForwardCursor,
+    <S as FlattenFromEndAt<L, crate::shapes::idx::FromEnd<R>>>::Output: Shape + DynShape,
+{
+    type Output = <S as FlattenFromEndAt<L, crate::shapes::idx::FromEnd<R>>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let start = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        let end = self.1.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        Ok((start, end))
+    }
+}
+
+impl<S, L, R> FlattenSelector<S>
+    for (
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::FromEnd<L>>,
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::FromEnd<R>>,
+    )
+where
+    S: Shape
+        + DynShape
+        + FlattenFromEndAt<crate::shapes::idx::FromEnd<L>, crate::shapes::idx::FromEnd<R>>,
+    L: StaticCursor + crate::shapes::shape::ForwardCursor,
+    R: StaticCursor + crate::shapes::shape::ForwardCursor,
+    <S as FlattenFromEndAt<crate::shapes::idx::FromEnd<L>, crate::shapes::idx::FromEnd<R>>>::Output:
+        Shape + DynShape,
+{
+    type Output = <S as FlattenFromEndAt<
+        crate::shapes::idx::FromEnd<L>,
+        crate::shapes::idx::FromEnd<R>,
+    >>::Output;
 
     fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
         let start = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
@@ -338,18 +392,52 @@ where
     }
 }
 
-impl<S, L, R> AxisPairSelector<S>
+impl<S> AxisPairSelector<S>
     for (
-        crate::shapes::idx::StaticAxis<L>,
-        crate::shapes::idx::StaticAxis<R>,
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::Here>,
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::Next<
+            crate::shapes::idx::Here,
+        >>,
     )
 where
-    S: Shape + DynShape + SwapAxes<L, R>,
-    L: StaticCursor,
-    R: StaticCursor,
-    <S as SwapAxes<L, R>>::Output: Shape + DynShape,
+    S: Shape + DynShape + SwapAxes<crate::shapes::idx::Here, crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+    <S as SwapAxes<crate::shapes::idx::Here, crate::shapes::idx::Next<crate::shapes::idx::Here>>>::Output:
+        Shape + DynShape,
 {
-    type Output = <S as SwapAxes<L, R>>::Output;
+    type Output = <S as SwapAxes<crate::shapes::idx::Here, crate::shapes::idx::Next<crate::shapes::idx::Here>>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let left = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })?;
+        let right = self.1.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })?;
+        Ok((left, right))
+    }
+}
+
+impl<S> AxisPairSelector<S>
+    for (
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::Here>,
+        crate::shapes::idx::StaticAxis<crate::shapes::idx::FromEnd<crate::shapes::idx::Here>>,
+    )
+where
+    S: Shape
+        + DynShape
+        + SwapFromEndAt<
+            crate::shapes::idx::Here,
+            crate::shapes::idx::FromEnd<crate::shapes::idx::Here>,
+        >,
+    <S as SwapFromEndAt<
+        crate::shapes::idx::Here,
+        crate::shapes::idx::FromEnd<crate::shapes::idx::Here>,
+    >>::Output: Shape + DynShape,
+{
+    type Output = <S as SwapFromEndAt<
+        crate::shapes::idx::Here,
+        crate::shapes::idx::FromEnd<crate::shapes::idx::Here>,
+    >>::Output;
 
     fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
         let left = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {

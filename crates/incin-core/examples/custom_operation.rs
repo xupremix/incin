@@ -1,8 +1,8 @@
 //! A compact downstream custom-operation example.
 //!
 //! This uses the same `Operation`, `Descriptor`, and `Execute` path as a
-//! backend crate. It returns proof metadata instead of allocating storage so
-//! the authoring contract stays visible without hiding a backend kernel.
+//! backend crate. It returns proof metadata instead of allocating storage, so
+//! the example demonstrates extension plumbing rather than a numerical kernel.
 
 extern crate incin_core as incin;
 
@@ -15,15 +15,15 @@ use incin_core::prelude::{Cpu, DType, DTypeId, DeviceId, ShapeBuf, ShapeValue};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-struct BiasGeluAttributes {
+struct ProofAwareAttributes {
     shape: ShapeBuf,
 }
 
 #[derive(Debug, Clone)]
-struct BiasGelu;
+struct ProofAwareOp;
 
-impl Operation for BiasGelu {
-    type Attributes = BiasGeluAttributes;
+impl Operation for ProofAwareOp {
+    type Attributes = ProofAwareAttributes;
 
     const KEY: OperationKey = OperationKey {
         namespace: Cow::Borrowed("example.org"),
@@ -39,7 +39,7 @@ impl Operation for BiasGelu {
             return Err(DescriptorError::InvalidAttribute {
                 operation: incin_core::shapes::error::OperationKind::Pointwise,
                 attribute: "shape",
-                reason: "BiasGelu expects a rank-two activation",
+                reason: "ProofAwareOp expects a rank-two activation",
             });
         }
 
@@ -74,12 +74,12 @@ impl Backend for ExampleBackend {
     type InnerBackend = Self;
 }
 
-impl Execute<BiasGelu> for ExampleBackend {
+impl Execute<ProofAwareOp> for ExampleBackend {
     type Output = ProofLevel;
 
     fn execute(
         &self,
-        request: ExecutionRequest<'_, BiasGelu, Self>,
+        request: ExecutionRequest<'_, ProofAwareOp, Self>,
     ) -> Result<Self::Output, incin_core::prelude::BackendError> {
         Ok(request.operation.proof_level())
     }
@@ -88,15 +88,15 @@ impl Execute<BiasGelu> for ExampleBackend {
 fn main() -> incin_core::prelude::Result<()> {
     type Shape = incin_core::prelude::s![4, 8];
     let expected = ShapeValue::<Shape>::try_new(ShapeBuf::from_slice(&[4, 8]))?;
-    let result = execute_shaped::<BiasGelu, _, Shape>(
+    let result = execute_shaped::<ProofAwareOp, _, Shape>(
         &ExecutionContext::new(ExampleBackend),
-        BiasGeluAttributes {
+        ProofAwareAttributes {
             shape: ShapeBuf::from_slice(&[4, 8]),
         },
         &[],
         &expected,
     )?;
 
-    println!("BiasGelu executed with {result:?} output proof");
+    println!("ProofAwareOp executed with {result:?} output proof");
     Ok(())
 }

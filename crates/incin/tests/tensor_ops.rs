@@ -318,6 +318,10 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     let f_runtime = t3.flatten(-2isize, -1isize)?;
     assert_eq!(f_runtime.dims().as_ref(), &[2, 4]);
 
+    let t4 = Tensor::<s![2, 3, 4], CpuBackendImpl>::ones(())?;
+    let f_negative = t4.flatten(axis!(1), axis!(-1))?;
+    assert_eq!(f_negative.dims().as_ref(), &[2, 12]);
+
     Ok(())
 }
 
@@ -333,6 +337,10 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     let tr = t.clone().transpose(0isize, 1isize)?;
     assert_eq!(tr.dims().dims(), &[3, 2]);
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
+
+    let t3 = Tensor::<s![2, 3, 4], CpuBackendImpl>::ones(())?;
+    let tr_negative: Tensor<s![4, 3, 2], CpuBackendImpl> = t3.transpose(axis!(0), axis!(-1))?;
+    assert_eq!(tr_negative.dims().as_ref(), &[4, 3, 2]);
 
     // squeeze (must be size 1)
     let t_sq = Tensor::<s![1, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0], ())?;
@@ -365,6 +373,9 @@ fn test_indexing_concat() -> Result<()> {
 
     let c_runtime: Tensor<Ranked<incin::typenum::U2>, CpuBackendImpl> = t1.concat(&t2, -1isize)?;
     assert_eq!(c_runtime.dims().as_ref(), &[2, 4]);
+
+    let c_negative: Tensor<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(-1))?;
+    assert_eq!(c_negative.dims().as_ref(), &[2, 4]);
 
     Ok(())
 }

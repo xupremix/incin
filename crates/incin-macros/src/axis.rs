@@ -45,7 +45,7 @@ fn cursor(value: isize) -> proc_macro2::TokenStream {
         ("Next", value as usize)
     };
     let path = quote! { ::incin::advanced:: };
-    let api = quote! { ::incin::prelude:: };
+    let api = quote! { ::incin::advanced:: };
     if name == "FromEnd" {
         let mut ty = quote! { #path Here };
         for _ in 0..magnitude.saturating_sub(1) {
@@ -114,8 +114,8 @@ pub(crate) fn axis(input: TokenStream) -> TokenStream {
             return values[0].clone().into();
         }
         return quote! {
-            ::incin::prelude::AxisSelector::new(&[
-                #(::incin::prelude::ToAxisIndex::to_axis_index(&#values)),*
+            ::incin::advanced::AxisSelector::new(&[
+                #(::incin::advanced::ToAxisIndex::to_axis_index(&#values)),*
             ])
         }
         .into();
@@ -123,7 +123,7 @@ pub(crate) fn axis(input: TokenStream) -> TokenStream {
     if list.items.len() == 1
         && let Some(AxisItem::Named(path)) = list.items.first()
     {
-        return quote! { ::incin::prelude::NamedAxisSelector::<#path>::default() }.into();
+        return quote! { ::incin::advanced::NamedAxisSelector::<#path>::default() }.into();
     }
     if list.items.len() == 1
         && let Some(AxisItem::Expr(Expr::Path(path))) = list.items.first()
@@ -131,7 +131,7 @@ pub(crate) fn axis(input: TokenStream) -> TokenStream {
         && path.path.segments.len() == 1
     {
         let tag = &path.path;
-        return quote! { ::incin::prelude::NamedAxisSelector::<#tag>::default() }.into();
+        return quote! { ::incin::advanced::NamedAxisSelector::<#tag>::default() }.into();
     }
     if list
         .items
@@ -149,13 +149,13 @@ pub(crate) fn axis(input: TokenStream) -> TokenStream {
         .map(|item| match item {
             AxisItem::Expr(expr) => quote! { #expr },
             AxisItem::Named(path) => quote! {
-                ::incin::prelude::NamedAxisSelector::<#path>::default()
+                ::incin::advanced::NamedAxisSelector::<#path>::default()
             },
         })
         .collect();
     quote! {
-        ::incin::prelude::AxisSelector::new(&[
-            #( ::incin::prelude::ToAxisIndex::to_axis_index(&#items) ),*
+        ::incin::advanced::AxisSelector::new(&[
+            #( ::incin::advanced::ToAxisIndex::to_axis_index(&#items) ),*
         ])
     }
     .into()
