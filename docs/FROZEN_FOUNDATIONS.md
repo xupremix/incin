@@ -64,7 +64,7 @@ sites and are not counted as missing kernel executors.
 
 The dtype-set blocker is closed. `embedding` and `cross_entropy_loss` were the
 only two operations whose operands differ in dtype by construction, and both
-are migrated on the union technique described in the table above — a row
+are migrated using the union technique described in the table above. A row
 stating `INDEX_AND_F32_DTYPES`, the descriptor's own per-operand contract
 refusing the wrong pair before any capability query, and `f32_only` in the
 executor enforcing whichever operand the union cannot pin down alone. No

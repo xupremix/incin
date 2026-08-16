@@ -48,7 +48,7 @@ pub struct CpuStorage {
 
 ## 3. Best Practices for Features & Operations
 1. Always start with `pub(crate)`.
-2. Do not add `pub` functions to internal modules just to make them accessible from another internal module — `pub(crate)` handles cross-module internal access perfectly.
+2. Do not add `pub` functions to internal modules just to make them accessible from another internal module. Use `pub(crate)` for cross-module internal access.
 3. If an existing `pub` item clearly looks like an internal implementation detail, flag it or change it to `pub(crate)`. The policy applies to code already in the tree, not only to new code.
 4. Ensure unit tests (which live in the same crate) use `pub(crate)` items without exposing them to public API surface.
 
