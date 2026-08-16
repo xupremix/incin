@@ -2763,7 +2763,6 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    #[doc(hidden)]
     pub(crate) fn unsqueeze_dyn(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Capabilities + Execute<op::UnsqueezeExact>,

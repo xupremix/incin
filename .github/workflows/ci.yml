@@ -60,6 +60,7 @@ jobs:
         cargo install cargo-public-api --version "${PUBLIC_API_VERSION}" --locked
         bash tools/check-public-api.sh
         python3 tools/check-unsafe-ledger.py
+        python3 tools/check-hidden-items.py
 
     # These three commands used to carry `--workspace --exclude backends
     # --exclude tui_graph_demo --exclude native_training_demo`, which is now
