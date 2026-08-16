@@ -68,7 +68,6 @@ pub struct WgpuGrads {
 
 impl WgpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
-    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&WgpuStorage> {
         self.grads.get(id)
     }

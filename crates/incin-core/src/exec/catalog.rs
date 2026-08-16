@@ -199,7 +199,6 @@ impl ExecutionSite {
     }
 
     /// Short reason a non-executable site cannot be reached, for reports.
-    #[must_use]
     pub const fn blocking_reason(self) -> Option<&'static str> {
         match self {
             Self::Kernel | Self::Creation | Self::HostReadback => None,
@@ -4439,7 +4438,6 @@ where
     }
 }
 
-#[must_use]
 pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatalogEntry> {
     OPERATION_CATALOG
         .iter()
@@ -4448,7 +4446,6 @@ pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatal
 
 /// Explicit ONNX projection for canonical built-in operations.
 /// Unsupported operations return `None` instead of being silently renamed.
-#[must_use]
 pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
     Some(match operation {
         OperationKind::Add => "Add",

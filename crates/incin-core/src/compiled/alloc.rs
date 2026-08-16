@@ -113,7 +113,6 @@ impl LivenessMap {
     }
 
     /// Returns the liveness interval for a given value, if known.
-    #[must_use]
     pub fn get(&self, value_id: ValueId) -> Option<LivenessInterval> {
         self.intervals.get(&value_id).copied()
     }

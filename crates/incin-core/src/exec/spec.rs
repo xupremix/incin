@@ -180,7 +180,6 @@ impl AxisMask {
     }
 
     /// The set with `axis` added, or `None` if `axis` is out of range.
-    #[must_use]
     pub const fn insert(self, axis: usize) -> Option<Self> {
         if axis < Self::MAX_AXES {
             Some(Self(self.0 | (1u64 << axis)))

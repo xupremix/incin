@@ -577,7 +577,6 @@ impl StateSnapshot {
         Ok(())
     }
     /// Looks up a path.
-    #[must_use]
     pub fn get(&self, path: &StatePath) -> Option<&StateValue> {
         self.0.get(path)
     }

@@ -268,7 +268,6 @@ impl RuntimePrecisionPolicy {
     }
 
     /// Returns the target active dtype descriptor if constrained to a specific storage dtype.
-    #[must_use]
     pub const fn active_dtype(&self) -> Option<DTypeDescriptor> {
         self.active_dtype
     }

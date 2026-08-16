@@ -8,7 +8,6 @@ pub type Scalar = Nil;
 /// `None` from any axis, or an overflowing product, makes the whole answer
 /// `None`. The multiplication is checked because a wrapped element count
 /// could undersize an allocation or a kernel constant.
-#[must_use]
 pub const fn fold_static_numel(extents: &[Option<usize>]) -> Option<usize> {
     let mut product: usize = 1;
     let mut index = 0;

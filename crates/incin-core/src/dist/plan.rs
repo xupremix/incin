@@ -163,7 +163,6 @@ impl CollectiveDescriptor {
     }
 
     /// Earlier collective that must complete before this launch.
-    #[must_use]
     pub const fn depends_on(&self) -> Option<SequenceToken> {
         self.depends_on
     }
@@ -1532,7 +1531,6 @@ impl StrategyCandidate {
     }
 
     /// Pipeline schedule for PP=2, or `None` for DP/TP.
-    #[must_use]
     pub const fn schedule(&self) -> Option<PipelineSchedule> {
         self.schedule
     }

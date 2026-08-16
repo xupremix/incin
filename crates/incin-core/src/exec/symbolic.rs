@@ -67,7 +67,6 @@ impl SymbolEnvironment {
         Ok(())
     }
 
-    #[must_use]
     pub fn get(&self, id: SymbolId) -> Option<usize> {
         self.bindings.get(&id).copied()
     }
@@ -237,7 +236,6 @@ impl DimExpr {
         }
     }
 
-    #[must_use]
     pub fn evaluate(&self, symbols: &[(SymbolId, usize)]) -> Option<usize> {
         match self {
             Self::Const(value) => Some(*value),

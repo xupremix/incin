@@ -354,7 +354,6 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
 
     /// Returns the `DTypeId` if this tensor's dtype is a built-in Incin dtype,
     /// or `None` for custom third-party dtypes.
-    #[must_use]
     pub fn builtin_dtype_id(&self) -> Option<DTypeId> {
         K::descriptor(&self._dtype).builtin_id()
     }

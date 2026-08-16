@@ -146,7 +146,6 @@ pub struct GradientMap<S> {
 
 impl<S> GradientMap<S> {
     /// The accumulated gradient for `id`, if the backward pass reached it.
-    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&S> {
         self.grads.get(&id)
     }

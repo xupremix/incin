@@ -477,7 +477,6 @@ impl ShapeError {
     }
 
     /// The axis the failure is attributed to, when the variant names one.
-    #[must_use]
     pub const fn axis(&self) -> Option<Axis> {
         match self {
             Self::DimensionMismatch { axis, .. } | Self::EmptyOutput { axis, .. } => Some(*axis),

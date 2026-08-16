@@ -65,7 +65,6 @@ pub fn detect_device_in(preference: &[DeviceKind]) -> DeviceId {
 /// compiled in but no hardware answers. Those are different reasons and a
 /// caller that needs to tell them apart should ask
 /// [`is_compiled_in`] as well.
-#[must_use]
 pub fn probe(kind: DeviceKind) -> Option<DeviceId> {
     match kind {
         DeviceKind::Cpu => cfg!(feature = "cpu").then(DeviceId::cpu),

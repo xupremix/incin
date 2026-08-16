@@ -81,7 +81,6 @@ pub struct CudaGrads {
 
 impl CudaGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
-    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&CudaStorage> {
         self.grads.get(id)
     }

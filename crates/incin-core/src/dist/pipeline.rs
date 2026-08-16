@@ -199,7 +199,6 @@ impl PipelineClock {
     }
 
     /// Action assigned to `stage`, or `None` for a bubble.
-    #[must_use]
     pub const fn stage(self, stage: usize) -> Option<PipelineAction> {
         if stage < 2 { self.stages[stage] } else { None }
     }

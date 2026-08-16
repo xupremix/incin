@@ -41,7 +41,6 @@ impl MetalGrads {
     }
 
     /// Look up the accumulated gradient for a given tensor id, if any.
-    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&MetalStorage> {
         self.grads.get(id)
     }

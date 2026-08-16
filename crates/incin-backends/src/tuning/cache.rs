@@ -139,7 +139,6 @@ impl CacheLimits {
     }
 
     /// Maximum record age, if configured.
-    #[must_use]
     pub const fn max_age(self) -> Option<Duration> {
         self.max_age
     }
@@ -540,7 +539,6 @@ impl CacheRecord {
     }
 
     /// Median duration when the method measured one.
-    #[must_use]
     pub const fn median_ns(&self) -> Option<u64> {
         self.median_ns
     }
@@ -650,7 +648,6 @@ impl PersistentTuningCache {
     }
 
     /// Recovery performed during the latest disk merge.
-    #[must_use]
     pub const fn recovery(&self) -> Option<&CacheRecovery> {
         self.recovery.as_ref()
     }
@@ -671,7 +668,6 @@ impl PersistentTuningCache {
     ///
     /// The returned winner remains opaque and untrusted; the caller must parse
     /// it and prove it belongs to the current legal set.
-    #[must_use]
     pub fn lookup(
         &self,
         key: &CacheKey<Dyn>,

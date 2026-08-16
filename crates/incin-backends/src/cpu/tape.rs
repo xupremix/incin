@@ -82,7 +82,6 @@ pub struct CpuGrads {
 
 impl CpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
-    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&CpuStorage> {
         self.grads.get(id)
     }

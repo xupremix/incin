@@ -493,7 +493,6 @@ impl CollectiveGroups {
 
     /// A rank's coordinate along every axis, most significant first, or `None`
     /// if the rank is not in this mesh.
-    #[must_use]
     pub fn coordinates(&self, rank: usize) -> Option<[usize; AXIS_COUNT]> {
         if rank >= self.world() {
             return None;
@@ -507,7 +506,6 @@ impl CollectiveGroups {
 
     /// A rank's coordinate along one axis, or `None` if the rank is not in
     /// this mesh.
-    #[must_use]
     pub fn coordinate(&self, rank: usize, axis: MeshAxis) -> Option<usize> {
         let position = self.position(axis)?;
         Some(self.coordinates(rank)?[position])
@@ -518,7 +516,6 @@ impl CollectiveGroups {
     /// The inverse of [`coordinates`](Self::coordinates), and the round trip
     /// between them is what the evidence suite pins: a layout convention that
     /// is not its own inverse is one that silently permutes a mesh.
-    #[must_use]
     pub fn rank_of(&self, coordinates: [usize; AXIS_COUNT]) -> Option<usize> {
         let mut rank = 0;
         for (position, &coordinate) in coordinates.iter().enumerate() {
@@ -536,7 +533,6 @@ impl CollectiveGroups {
     /// This is the member list of the communicator that axis's collectives run
     /// on: an all-reduce along [`MeshAxis::Data`] is over the data group, an
     /// all-gather along [`MeshAxis::Tensor`] over the tensor group.
-    #[must_use]
     pub fn group(&self, axis: MeshAxis, rank: usize) -> Option<Vec<usize>> {
         let position = self.position(axis)?;
         let coordinate = self.coordinates(rank)?[position];
@@ -1038,7 +1034,6 @@ impl<M: ValidMesh> DeviceMesh<M> {
     }
 
     /// The identity bound to `rank`, or `None` if the mesh has no such rank.
-    #[must_use]
     pub fn device(&self, rank: usize) -> Option<&DeviceIdentity> {
         self.fingerprint.devices.get(rank)
     }

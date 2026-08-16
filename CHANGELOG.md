@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **`must_use` signal:** Removed 40 redundant method and function annotations
+  whose return types were already `Option` or `Result`, while retaining
+  annotations on builders, constructors, and semantically important values.
 - **CUDA lint and structure:** Grouped internal two-dimensional column-to-image
   parameters into `Col2Im2dSpec`, kept the shared transposed-convolution
   backend contract explicit, and moved CUDA backend trait implementations

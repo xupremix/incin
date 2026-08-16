@@ -16,7 +16,6 @@ pub enum OperationIdentity {
 }
 
 impl OperationIdentity {
-    #[must_use]
     pub fn execution_site(&self) -> Option<super::catalog::ExecutionSite> {
         match self {
             Self::Builtin(operation) => {
@@ -38,7 +37,6 @@ impl OperationIdentity {
     }
 
     /// Explicit ONNX projection for this identity.
-    #[must_use]
     pub fn onnx_name(&self) -> Option<&'static str> {
         match self {
             Self::Builtin(operation) => super::catalog::onnx_name(*operation),

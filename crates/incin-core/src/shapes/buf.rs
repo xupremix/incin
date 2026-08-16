@@ -285,7 +285,6 @@ impl ShapeBuf {
     /// overflows before it gets there — the same dimensions, two different
     /// answers. An empty tensor holds no elements no matter how its axes are
     /// written.
-    #[must_use]
     pub fn numel(&self) -> Option<usize> {
         if self.is_empty_tensor() {
             return Some(0);

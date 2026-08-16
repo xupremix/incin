@@ -66,12 +66,10 @@ impl ShapeEvidence {
         self.proof
     }
 
-    #[must_use]
     pub const fn static_rank(self) -> Option<usize> {
         self.static_rank
     }
 
-    #[must_use]
     pub const fn static_numel(self) -> Option<usize> {
         self.static_numel
     }

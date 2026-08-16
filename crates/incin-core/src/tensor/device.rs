@@ -451,7 +451,6 @@ impl DeviceKind {
     }
 
     /// Returns the external namespace key, if this is a custom backend kind.
-    #[must_use]
     pub const fn custom_key(self) -> Option<u64> {
         match self {
             Self::Custom(key) => Some(key),
@@ -790,7 +789,6 @@ impl DeviceSet {
     ///
     /// `Option` only because [`DeviceKind`] is `#[non_exhaustive]`: the set is
     /// never empty, so this is `Some` for every family this build knows.
-    #[must_use]
     pub fn kind(&self) -> Option<DeviceKind> {
         self.devices.first().map(|device| device.kind())
     }

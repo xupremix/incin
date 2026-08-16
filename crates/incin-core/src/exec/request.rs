@@ -46,7 +46,6 @@ impl<'a> TensorHandle<'a> {
         self.metadata
     }
 
-    #[must_use]
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         self.storage.downcast_ref()
     }

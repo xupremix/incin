@@ -266,7 +266,6 @@ impl<D, S> TuningContext<D, S> {
     }
 
     /// Exact topology for distributed scopes.
-    #[must_use]
     pub const fn topology(&self) -> Option<&TuningTopologyFingerprint<Dyn>> {
         self.topology.as_ref()
     }
@@ -418,7 +417,6 @@ impl TuningSelection {
     }
 
     /// Measured median when available.
-    #[must_use]
     pub const fn median_ns(&self) -> Option<u64> {
         self.median_ns
     }
