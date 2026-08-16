@@ -10,11 +10,8 @@
 
 use crate::dist::placement::Local;
 use crate::err::Result;
-use crate::exec::ExecutionDescriptor;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{
-    AttributeContract, CanonicalOperation, Descriptor, LogicalTensorMeta, NoAttributes, op,
-};
+use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -126,40 +123,25 @@ where
     <B as Execute<O>>::Output: Into<B::Storage<K>>,
 {
     <SOut as Shape>::STATIC_VALID;
-    let descriptor = Descriptor::<O>::infer_runtime(
-        NoAttributes,
-        alloc::vec![
-            LogicalTensorMeta {
-                shape: Some(lhs.shape_buf().clone()),
-                dtype: None,
-                device: None,
-            },
-            LogicalTensorMeta {
-                shape: Some(rhs.shape_buf().clone()),
-                dtype: None,
-                device: None,
-            },
-        ],
-    )
-    .map_err(|error| crate::err::Error::from(crate::exec::CanonicalError::Descriptor(error)))?
-    .into_descriptor();
-    let b_shape = descriptor.output_shape().cloned().ok_or_else(|| {
-        crate::err::Error::Shape(crate::shapes::error::ShapeError::TargetShapeRejected {
-            operation: crate::shapes::error::OperationKind::Broadcast,
-            rank: 0,
-        })
-    })?;
+    let shape_val = if lhs.shape_buf().as_ref() == rhs.shape_buf().as_ref() {
+        ShapeValue::<SOut>::try_new(lhs.shape_buf().clone()).map_err(crate::err::Error::Shape)?
+    } else {
+        let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(
+            lhs.shape_buf(),
+            rhs.shape_buf(),
+        )
+        .map_err(crate::err::Error::Shape)?;
+        ShapeValue::<SOut>::try_new(b_shape).map_err(crate::err::Error::Shape)?
+    };
     let h_lhs = TensorHandle::from_storage::<B, K, Local>(&lhs.inner);
     let h_rhs = TensorHandle::from_storage::<B, K, Local>(&rhs.inner);
-    let shape_val =
-        ShapeValue::<SOut>::try_new(b_shape.clone()).map_err(crate::err::Error::Shape)?;
     let context = crate::tensor::grad::execution_context::<B, GOut>(&grad_out);
     let storage =
         dispatch::execute_shaped::<O, B, SOut>(&context, NoAttributes, &[h_lhs, h_rhs], &shape_val)
             .map_err(crate::err::Error::from)?;
     Tensor::from_shape_value(
         storage.into(),
-        ShapeValue::<SOut>::try_new(b_shape).map_err(crate::err::Error::Shape)?,
+        shape_val,
         lhs._dtype.clone(),
         lhs._device.clone(),
         grad_out,
