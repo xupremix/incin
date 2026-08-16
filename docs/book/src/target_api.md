@@ -87,7 +87,7 @@ identity matters more than its numeric position:
 use incin::prelude::*;
 
 dim!(Batch, Channels, Width);
-let x = Cpu.ones(shape![Batch, Channels, Width])?;
+let x = Tensor::<s![Batch = 4, Channels = 8, Width = 16], DefaultBackend>::ones(())?;
 let channels = x.sum(axis!(Channels))?;
 let kept = x.mean_keepdim(axis!(Channels))?;
 # Ok::<(), incin::Error>(())
@@ -101,8 +101,12 @@ rules.
 Axis-preserving operations use the same selectors:
 
 ```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![4, 8, 16])?;
 let cumulative = x.cumsum(-1)?;
-let probabilities = x.softmax(axis!(Channels))?;
+let probabilities = x.softmax(axis!(1))?;
+# Ok::<(), incin::Error>(())
 ```
 
 For generic known-rank runtime shapes, `Ranked<R>` also provides
