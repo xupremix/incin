@@ -1,37 +1,9 @@
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
-use incin_data::{BatchResult, Collate, DataError, DataLoader, Dataset};
+use incin_data::{DataLoader, Dataset};
 use std::path::PathBuf;
 
 type Backend = incin_backends::cpu::CpuBackendImpl;
-
-/// Mnist collate.
-struct MnistCollate;
-
-impl Collate<(Vec<f32>, u8)> for MnistCollate {
-    /// Output.
-    type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend, f32, Grad>);
-
-    /// Collate.
-    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> BatchResult<Self::Output> {
-        let batch_size = batch.len();
-        let mut images = Vec::with_capacity(batch_size * 784);
-        let mut labels = Vec::with_capacity(batch_size);
-
-        for (img, label) in batch {
-            images.extend_from_slice(&img);
-            labels.push(label as f32); // F32 target tensor for CrossEntropyLoss
-        }
-
-        Ok((
-            Tensor::<Dyn, Backend>::from_slice(&images, vec![batch_size, 1, 28, 28])
-                .map_err(|error| DataError::Dataset(error.to_string()))?,
-            Tensor::<Dyn, Backend>::from_slice(&labels, vec![batch_size])
-                .map_err(|error| DataError::Dataset(error.to_string()))?
-                .require_grad(),
-        ))
-    }
-}
 
 fn main() -> incin::Result<()> {
     println!("Starting MNIST Training Example");
@@ -43,9 +15,11 @@ fn main() -> incin::Result<()> {
     println!("Loaded {} training images", train_data.len());
 
     // Create DataLoader
-    let dataloader = DataLoader::new(train_data, MnistCollate, 32)?
-        .with_shuffle(true)
-        .with_num_workers(0); // Using 0 for simple blocking execution
+    let dataloader = DataLoader::builder(train_data)
+        .batch_size(32)?
+        .shuffle(true)
+        .workers(0)
+        .build();
 
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
@@ -62,7 +36,18 @@ fn main() -> incin::Result<()> {
     println!("Starting training...");
     let mut batch_idx = 0;
     for batch in &dataloader {
-        let (images, labels) = batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
+        let batch = batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
+        let batch_size = batch.len();
+        let mut image_values = Vec::with_capacity(batch_size * 784);
+        let mut label_values = Vec::with_capacity(batch_size);
+        for (image, label) in batch {
+            image_values.extend(image);
+            label_values.push(label as f32);
+        }
+        let images =
+            Tensor::<Dyn, Backend>::from_slice(&image_values, vec![batch_size, 1, 28, 28])?;
+        let labels =
+            Tensor::<Dyn, Backend>::from_slice(&label_values, vec![batch_size])?.require_grad();
         // Forward pass
         let output = model.forward(images)?;
 

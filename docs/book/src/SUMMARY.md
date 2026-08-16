@@ -25,6 +25,8 @@
 
 - [Losses, optimizers, and schedulers](./training.md)
 - [Data loading](./data_loading.md)
+- [Quantization](./quantization.md)
+- [Distributed planning](./distributed.md)
 - [Metrics](./metrics.md)
 - [Saving and loading](./saving_loading.md)
 
@@ -33,6 +35,8 @@
 - [CPU, and what actually runs on GPU today](./backends.md)
 - [The target API and canonical dispatch](./target_api.md)
 - [Backend authoring](./backend_authoring.md)
+- [From proofs to execution](./proofs_to_execution.md)
+- [Custom and fused operations](./custom_operations.md)
 
 # Reference
 

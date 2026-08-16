@@ -226,7 +226,7 @@ where
 
     /// Starts a builder with a default batch size of one.
     #[must_use]
-    pub fn builder(dataset: D, collate_fn: C) -> DataLoaderBuilder<D, C> {
+    pub fn builder_with_collate(dataset: D, collate_fn: C) -> DataLoaderBuilder<D, C> {
         DataLoaderBuilder {
             dataset,
             collate_fn,
@@ -303,7 +303,24 @@ where
     /// Starts a builder using [`DefaultCollate`].
     #[must_use]
     pub fn default_builder(dataset: D) -> DataLoaderBuilder<D, DefaultCollate> {
-        Self::builder(dataset, DefaultCollate)
+        Self::builder(dataset)
+    }
+
+    /// Starts a builder using [`DefaultCollate`].
+    #[must_use]
+    pub fn builder(dataset: D) -> DataLoaderBuilder<D, DefaultCollate> {
+        DataLoaderBuilder {
+            dataset,
+            collate_fn: DefaultCollate,
+            batch_size: NonZeroUsize::new(1).expect("constant is non-zero"),
+            workers: 0,
+            prefetch: NonZeroUsize::new(2).expect("constant is non-zero"),
+            drop_last: false,
+            shuffle: false,
+            seed: 0,
+            epoch: 0,
+            timeout: None,
+        }
     }
 }
 
@@ -911,7 +928,7 @@ mod tests {
     #[test]
     fn builder_controls_drop_last_and_deterministic_shuffle() {
         let make = || {
-            DataLoader::builder(RangeDataset(10), VecCollate)
+            DataLoader::builder_with_collate(RangeDataset(10), VecCollate)
                 .batch_size(3)
                 .unwrap()
                 .drop_last(true)

@@ -46,10 +46,19 @@ function before the batch size. Iterate with `&loader` (it implements
 `IntoIterator` by
 reference, so the loader itself is reusable across epochs).
 
-For the common case where a batch should remain a vector of samples, use
-`DataLoader::from_dataset(dataset, batch_size)` or
-`DataLoader::default_builder(dataset)`. Custom collation remains available
-through `DataLoader::new` and `DataLoader::builder`.
+For the common case where a batch should remain a vector of samples, use the
+default builder:
+
+```rust,no_run
+let loader = DataLoader::builder(Toy)
+    .batch_size(4)?
+    .workers(2)
+    .shuffle(true)
+    .build();
+```
+
+Custom collation remains available through `DataLoader::new` and
+`DataLoader::builder_with_collate`.
 
 Errors are values, not end-of-epoch signals. A dataset or worker failure is
 returned as `Err(DataError)` from iteration and must be handled by the caller;
@@ -58,11 +67,12 @@ the iterator performs no dataset reads, and each `next()` fetches and collates
 only its next batch synchronously. Worker-backed iteration keeps its explicit
 cancellation and error propagation semantics.
 
-## A realistic collate function
+## A model-specific collate function
 
-The MNIST example in the repository (`crates/incin/examples/mnist_training.rs`)
-shows the shape a real `Collate` impl takes: gathering a `Vec<(Vec<f32>,
-u8)>` batch into two tensors.
+The default MNIST path keeps a batch as `Vec<(Vec<f32>, u8)>`, so the example
+does not require custom loader plumbing. Applications that want tensors
+created inside the loader can provide a model-specific `Collate` implementation
+like this:
 
 ```rust,ignore
 struct MnistCollate;
