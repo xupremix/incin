@@ -71,6 +71,59 @@ pub trait AxisSelectorArg<S: Shape> {
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
+/// Selects an axis for an operation that replaces its extent at runtime.
+/// Static selectors preserve all unaffected dimensions; runtime selectors
+/// preserve the input rank.
+pub trait ReplaceAxisSelector<S: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, C> ReplaceAxisSelector<S> for StaticAxis<C>
+where
+    S: Shape + DynShape + crate::shapes::ReplaceAt<C, usize>,
+    C: StaticCursor,
+    <S as crate::shapes::ReplaceAt<C, usize>>::Output: Shape,
+{
+    type Output = <S as crate::shapes::ReplaceAt<C, usize>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        self.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })
+    }
+}
+
+impl<S> ReplaceAxisSelector<S> for isize
+where
+    S: Shape + RuntimeRankProjection,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Msg("runtime axis selector resolved to no axis".into())
+            })
+    }
+}
+
+impl<S, Tag> ReplaceAxisSelector<S> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + RuntimeRankProjection + crate::shapes::idx::NamedAxisLookup<Tag>,
+    Tag: crate::shapes::AxisTag,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 impl<S, C> AxisSelectorArg<S> for StaticAxis<C>
 where
     S: Shape,
@@ -1010,7 +1063,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Narrows the tensor dynamically, returning a tensor with `Dyn` shape.
+    /// Narrows the tensor along a selector, preserving static dimensions when
+    /// the selected axis is known and preserving rank for runtime selectors.
     ///
     /// # Examples
     /// ```rust
@@ -1020,9 +1074,15 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0isize, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow<A>(self, axis: A, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G, P>>
+    pub fn try_narrow<A>(
+        self,
+        axis: A,
+        start: usize,
+        len: usize,
+    ) -> Result<Tensor<A::Output, B, K, G, P>>
     where
-        A: AxisSelectorArg<S>,
+        A: ReplaceAxisSelector<S>,
+        A::Output: DynShape,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
@@ -1054,7 +1114,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = G::grad_mode(&self._grad)
             .restrict(|| narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len))?;
         shape[dim] = len;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Output>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,
@@ -2349,9 +2409,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         axis: A,
         index: &Tensor<S2, B, KInt, G2>,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<Tensor<A::Output, B, K, G>>
     where
-        A: AxisSelectorArg<S>,
+        A: ReplaceAxisSelector<S>,
+        A::Output: DynShape,
         B: Execute<op::IndexSelect> + Capabilities,
         <B as Execute<op::IndexSelect>>::Output: Into<B::Storage<K>>,
     {
@@ -2375,7 +2436,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             ));
         }
         out_shape[dim] = index.shape_buf().as_ref()[0];
-        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+        let output_shape = ShapeValue::<A::Output>::try_new(ShapeBuf::from_slice(&out_shape))
             .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
@@ -2384,7 +2445,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                dispatch::execute_shaped::<op::IndexSelect, B, Dyn>(
+                dispatch::execute_shaped::<op::IndexSelect, B, A::Output>(
                     &context,
                     AxisAttributes { axis: dim },
                     &inputs,
@@ -2392,7 +2453,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 )
             })?
             .into();
-        Tensor::from_parts(
+        Tensor::<A::Output, B, K, G>::from_parts(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -2688,9 +2749,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into `chunks` equal parts along `dim`.
-    pub fn chunk<A>(&self, chunks: usize, axis: A) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
+    pub fn chunk<A>(
+        &self,
+        chunks: usize,
+        axis: A,
+    ) -> Result<alloc::vec::Vec<Tensor<A::Output, B, K, G>>>
     where
-        A: AxisSelectorArg<S>,
+        A: ReplaceAxisSelector<S> + Copy,
+        A::Output: DynShape,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
@@ -2714,7 +2780,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 break;
             }
             let len = (dim_size - start).min(chunk_size);
-            out.push(self.clone().try_narrow(dim as isize, start, len)?);
+            out.push(self.clone().try_narrow(axis, start, len)?);
         }
         Ok(out)
     }
@@ -2724,9 +2790,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         split_size: usize,
         axis: A,
-    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>>
+    ) -> Result<alloc::vec::Vec<Tensor<A::Output, B, K, G>>>
     where
-        A: AxisSelectorArg<S>,
+        A: ReplaceAxisSelector<S> + Copy,
+        A::Output: DynShape,
         B: Capabilities + Execute<op::Narrow>,
         <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     {
@@ -2747,7 +2814,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         for i in 0..chunks {
             let start = i * split_size;
             let len = (dim_size - start).min(split_size);
-            out.push(self.clone().try_narrow(dim as isize, start, len)?);
+            out.push(self.clone().try_narrow(axis, start, len)?);
         }
         Ok(out)
     }

@@ -494,10 +494,22 @@ fn dimension_selecting_operations_accept_axis_selectors() -> Result<()> {
     let select_indices = Tensor::<s![1], CpuBackendImpl, u32>::zeros(())?;
 
     let _ = tensor.gather(axis!(1), &indices)?;
-    let _ = tensor.index_select(-1isize, &select_indices)?;
+    let selected: Tensor<s![2, usize], CpuBackendImpl> =
+        tensor.index_select(axis!(1), &select_indices)?;
+    let narrowed: Tensor<s![2, usize], CpuBackendImpl> =
+        tensor.clone().try_narrow(axis!(1), 0, 1)?;
     let _ = tensor.scatter(axis!(-1), &indices, &tensor)?;
-    assert_eq!(tensor.chunk(2, -1isize)?.len(), 2);
-    assert_eq!(tensor.split(2, axis!(1))?.len(), 2);
-    let _ = tensor.topk(1, axis!(1), true)?;
+    let chunks: Vec<Tensor<s![2, usize], CpuBackendImpl>> = tensor.chunk(2, axis!(1))?;
+    let splits: Vec<Tensor<s![2, usize], CpuBackendImpl>> = tensor.split(2, axis!(1))?;
+    let _: Tensor<Ranked<typenum::U2>, CpuBackendImpl> =
+        tensor.clone().try_narrow(-1isize, 0, 1)?;
+    assert_eq!(selected.dims().as_ref(), &[2, 1]);
+    assert_eq!(narrowed.dims().as_ref(), &[2, 1]);
+    assert_eq!(chunks.len(), 2);
+    assert_eq!(splits.len(), 2);
+    let _: (
+        Tensor<s![2, usize], CpuBackendImpl, f32, NoGrad>,
+        Tensor<s![2, usize], CpuBackendImpl, u32, NoGrad>,
+    ) = tensor.topk(1, axis!(1), true)?;
     Ok(())
 }

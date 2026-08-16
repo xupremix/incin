@@ -712,11 +712,23 @@ where
         axis: A,
         largest: bool,
     ) -> Result<(
-        Tensor<crate::shapes::Dyn, B, K, crate::tensor::grad::NoGrad>,
-        Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>,
+        Tensor<
+            <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
+            B,
+            K,
+            crate::tensor::grad::NoGrad,
+        >,
+        Tensor<
+            <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
+            B,
+            u32,
+            crate::tensor::grad::NoGrad,
+        >,
     )>
     where
-        A: crate::tensor::ops::manipulation::AxisSelectorArg<S>,
+        A: crate::tensor::ops::manipulation::ReplaceAxisSelector<S>,
+        <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output:
+            crate::shapes::DynShape,
         B: Execute<op::TopK> + crate::exec::Capabilities,
         <B as Execute<op::TopK>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
     {
@@ -736,9 +748,9 @@ where
         }
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims[dim] = k;
-        let out_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
-            crate::shapes::ShapeBuf::from_slice(&out_dims),
-        )
+        let out_shape = crate::shapes::ShapeValue::<
+            <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
+        >::try_new(crate::shapes::ShapeBuf::from_slice(&out_dims))
         .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
@@ -757,14 +769,24 @@ where
             })?
             .into();
 
-        let values = Tensor::from_parts(
+        let values = Tensor::<
+            <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
+            B,
+            K,
+            crate::tensor::grad::NoGrad,
+        >::from_parts(
             values_inner,
             out_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             crate::tensor::grad::NoGrad::init(()),
         )?;
-        let indices = Tensor::from_parts(
+        let indices = Tensor::<
+            <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
+            B,
+            u32,
+            crate::tensor::grad::NoGrad,
+        >::from_parts(
             indices_inner,
             out_shape.shape_buf().clone(),
             core::marker::PhantomData,

@@ -307,6 +307,15 @@ pub trait ReplaceAt<Cursor, NewDim: Dim>: Shape {
     type Output: Shape;
 }
 
+impl<S, Cursor, NewDim> ReplaceAt<crate::shapes::idx::FromEnd<Cursor>, NewDim> for S
+where
+    Cursor: ForwardCursor,
+    NewDim: Dim,
+    S: ReplaceFromEnd<Cursor, NewDim>,
+{
+    type Output = <S as ReplaceFromEnd<Cursor, NewDim>>::Output;
+}
+
 impl<H: Dim, T: Shape, NewDim: Dim> ReplaceAt<crate::shapes::idx::Here, NewDim> for DimCons<H, T> {
     type Output = DimCons<NewDim, T>;
 }
