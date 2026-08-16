@@ -31,6 +31,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Rustdoc coverage:** The public `incin` facade now enables local
   `missing_docs` warnings, and CI runs a warning-free facade-only rustdoc gate
   in addition to the workspace link and warning check.
+- **Tensor byte views:** `Tensor::from_slice` now uses the `bytemuck` checked
+  byte-slice conversion already guaranteed by `TensorElement`, removing a raw
+  pointer reinterpretation from the core tensor boundary.
 
 ### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.

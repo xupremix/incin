@@ -821,7 +821,7 @@ where
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let byte_len = core::mem::size_of_val(data);
-        let bytes = unsafe { core::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
+        let bytes = bytemuck::cast_slice(data);
         let expected = ShapeValue::<S>::try_new(_shape.clone()).map_err(Error::Shape)?;
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
