@@ -142,6 +142,8 @@ pub(crate) fn launch_max_pool2d_forward(
     )?;
 
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -207,6 +209,8 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
 
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let idx_buf = &*max_indices.buffer;
@@ -259,6 +263,8 @@ pub(crate) fn launch_avg_pool2d_forward(
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -322,6 +328,8 @@ pub(crate) fn launch_avg_pool2d_backward(
 
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let gi_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -375,6 +383,8 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -430,6 +440,8 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
 
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
     let cfg = launch_cfg(out_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let gi_u8: &mut cudarc::driver::CudaSlice<u8> =

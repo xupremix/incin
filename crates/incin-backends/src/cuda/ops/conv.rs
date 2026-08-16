@@ -184,6 +184,8 @@ pub(crate) fn launch_im2col_2d(
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(thread_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -262,6 +264,8 @@ pub(crate) fn launch_col2im_2d(
         out_total,
     )?;
     let cfg = launch_cfg(thread_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -323,6 +327,8 @@ pub(crate) fn launch_im2col_1d(
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(thread_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -384,6 +390,8 @@ pub(crate) fn launch_col2im_1d(
         out_total,
     )?;
     let cfg = launch_cfg(thread_total)?;
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
