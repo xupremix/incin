@@ -2,7 +2,7 @@
 
 `Dataset` is a random-access source (`len` + `get(index) -> Result<Option<Item>, DataError>`),
 and `Collate` turns a `Vec<Item>` into whatever batched form your model
-actually wants — a tensor, a tuple of tensors, or anything else.
+actually wants, such as a tensor, a tuple of tensors, or another batch type.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -41,10 +41,15 @@ fn main() -> Result<()> {
 }
 ```
 
-`DataLoader::new` takes `(dataset, collate_fn, batch_size)` — collate before
-size, easy to get backwards coming from a framework that orders them the
-other way. Iterate with `&loader` (it implements `IntoIterator` by
+`DataLoader::new` takes `(dataset, collate_fn, batch_size)`, with the collate
+function before the batch size. Iterate with `&loader` (it implements
+`IntoIterator` by
 reference, so the loader itself is reusable across epochs).
+
+For the common case where a batch should remain a vector of samples, use
+`DataLoader::from_dataset(dataset, batch_size)` or
+`DataLoader::default_builder(dataset)`. Custom collation remains available
+through `DataLoader::new` and `DataLoader::builder`.
 
 Errors are values, not end-of-epoch signals. A dataset or worker failure is
 returned as `Err(DataError)` from iteration and must be handled by the caller;

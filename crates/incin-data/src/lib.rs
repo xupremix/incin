@@ -5,9 +5,10 @@
 //!
 //! ## Examples
 //!
-//! A `Dataset` supplies items by index; a `Collate` turns a batch of them into
-//! whatever the training step wants; a `DataLoader` joins the two and yields
-//! typed `Result` values so worker failures cannot look like end-of-data.
+//! A `Dataset` supplies items by index; a `Collate` can turn a batch into the
+//! model's input type; a `DataLoader` joins the two and yields typed `Result`
+//! values so worker failures cannot look like end-of-data. Use
+//! `DataLoader::from_dataset` when retaining samples as `Vec<Item>` is enough.
 //!
 //! ```rust
 //! use incin_data::{Collate, DataLoader, Dataset};
@@ -66,7 +67,7 @@ pub mod vision;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;
-pub use loader::{BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder};
+pub use loader::{BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DefaultCollate};
 pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
 
 /// Prelude.

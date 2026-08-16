@@ -62,8 +62,23 @@ pub trait Collate<T>: Send + Sync {
     fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output>;
 }
 
+/// The default collation policy, which preserves every sample in a batch.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultCollate;
+
+impl<T> Collate<T> for DefaultCollate
+where
+    T: Send + 'static,
+{
+    type Output = Vec<T>;
+
+    fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output> {
+        Ok(batch)
+    }
+}
+
 /// Data loader.
-pub struct DataLoader<D, C>
+pub struct DataLoader<D, C = DefaultCollate>
 where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
@@ -271,6 +286,24 @@ where
     pub fn with_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.timeout = timeout;
         self
+    }
+}
+
+impl<D> DataLoader<D, DefaultCollate>
+where
+    D: Dataset + 'static,
+    D::Item: Send + 'static,
+{
+    /// Creates a loader using [`DefaultCollate`], which returns `Vec<D::Item>`
+    /// for each batch.
+    pub fn from_dataset(dataset: D, batch_size: usize) -> CoreResult<Self> {
+        Self::new(dataset, DefaultCollate, batch_size)
+    }
+
+    /// Starts a builder using [`DefaultCollate`].
+    #[must_use]
+    pub fn default_builder(dataset: D) -> DataLoaderBuilder<D, DefaultCollate> {
+        Self::builder(dataset, DefaultCollate)
     }
 }
 
@@ -606,6 +639,25 @@ mod tests {
         assert_eq!(reads.load(Ordering::Relaxed), 3);
         assert_eq!(iter.next().unwrap().unwrap(), vec![3, 4, 5]);
         assert_eq!(reads.load(Ordering::Relaxed), 6);
+    }
+
+    #[test]
+    fn default_collation_returns_samples_without_custom_code() {
+        let loader = DataLoader::from_dataset(RangeDataset(5), 2).unwrap();
+        let batches = collect_with_timeout((&loader).into_iter());
+        assert_eq!(batches, vec![vec![0, 1], vec![2, 3], vec![4]]);
+    }
+
+    #[test]
+    fn default_builder_keeps_loader_configuration_composable() {
+        let loader = DataLoader::default_builder(RangeDataset(4))
+            .batch_size(3)
+            .unwrap()
+            .shuffle(true)
+            .seed(7)
+            .build();
+        let batches = collect_with_timeout((&loader).into_iter());
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 4);
     }
 
     // Every test below has a hard wall-clock timeout: a regression in the
