@@ -39,7 +39,7 @@ pub const INLINE_RANK: usize = 8;
 /// spill boundary. Equality, ordering, hashing, and iteration all go through
 /// the slice, so a value that spills stays equal to one that did not.
 #[derive(Clone)]
-pub struct InlineOrHeap<T: Copy + Default> {
+pub(crate) struct InlineOrHeap<T: Copy + Default> {
     repr: Repr<T>,
 }
 
@@ -258,7 +258,7 @@ impl ShapeBuf {
     }
 
     /// Whether the dimensions are stored inline. See
-    /// [`InlineOrHeap::is_inline`].
+    /// the internal inline-storage check.
     #[must_use]
     pub fn is_inline(&self) -> bool {
         self.dims.is_inline()
@@ -491,7 +491,7 @@ impl StrideBuf {
         self.strides.is_empty()
     }
 
-    /// Whether the strides are stored inline. See [`InlineOrHeap::is_inline`].
+    /// Whether the strides are stored inline.
     #[must_use]
     pub fn is_inline(&self) -> bool {
         self.strides.is_inline()

@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
+  out of the public shape prelude and removed the unused public
+  `fold_static_numel` helper.
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.
