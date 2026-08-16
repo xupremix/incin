@@ -602,17 +602,68 @@ where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 {
-    /// Computes argmax along a static, named, or runtime axis selector.
-    pub fn argmax<A>(
+    fn index_reduce<O, Out>(
         &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+        dim: Option<isize>,
+    ) -> Result<Tensor<Out, B, u32, crate::tensor::grad::NoGrad>>
+    where
+        O: CanonicalOperation
+            + Operation<Attributes = crate::exec::catalog::IndexReductionAttributes>,
+        Out: crate::shapes::Shape + crate::shapes::DynShape,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<u32>>,
+    {
+        let normalized = dim
+            .map(|d| {
+                crate::shapes::idx::AxisSelector::new(&[d])
+                    .normalize(self.rank())
+                    .map(|axes| axes[0])
+            })
+            .transpose()?;
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
+        if let Some(d) = normalized {
+            out_dims.remove(d);
+        } else {
+            out_dims = alloc::vec![];
+        }
+        let output_shape = crate::shapes::ShapeValue::<Out>::try_new(
+            crate::shapes::ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
+        let inner = GradMode::Disabled
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped::<O, B, Out>(
+                    &context,
+                    crate::exec::catalog::IndexReductionAttributes {
+                        axis: normalized,
+                        dtype: DTypeId::U32.descriptor(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+
+        Tensor::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            u32::init(()),
+            self._device.clone(),
+            crate::tensor::grad::NoGrad::init(()),
+        )
+    }
+
+    /// Computes argmax along a static, named, or runtime axis selector.
+    pub fn argmax<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, u32, crate::tensor::grad::NoGrad>>
     where
         A: ReduceSelector<S>,
+        A::Drop: crate::shapes::DynShape,
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
     {
-        self.argmax_runtime(Some(axis.resolve(self.rank())? as isize))
+        self.index_reduce::<op::ArgMax, A::Drop>(Some(axis.resolve(self.rank())? as isize))
     }
 
     /// Computes argmax over a runtime-selected axis.
@@ -625,59 +676,18 @@ where
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
     {
-        let normalized = dim
-            .map(|d| {
-                crate::shapes::idx::AxisSelector::new(&[d])
-                    .normalize(self.rank())
-                    .map(|axes| axes[0])
-            })
-            .transpose()?;
-        let mut out_dims = self.shape_buf().as_ref().to_vec();
-        if let Some(d) = normalized {
-            out_dims.remove(d);
-        } else {
-            out_dims = alloc::vec![];
-        }
-        let output_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
-            crate::shapes::ShapeBuf::from_slice(&out_dims),
-        )
-        .map_err(crate::err::Error::Shape)?;
-        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
-        let inner = GradMode::Disabled
-            .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<op::ArgMax, B, crate::shapes::Dyn>(
-                    &context,
-                    crate::exec::catalog::IndexReductionAttributes {
-                        axis: normalized,
-                        dtype: DTypeId::U32.descriptor(),
-                    },
-                    &[input],
-                    &output_shape,
-                )
-            })?
-            .into();
-
-        Tensor::from_parts(
-            inner,
-            output_shape.shape_buf().clone(),
-            u32::init(()),
-            self._device.clone(),
-            crate::tensor::grad::NoGrad::init(()),
-        )
+        self.index_reduce::<op::ArgMax, crate::shapes::Dyn>(dim)
     }
 
     /// Computes argmin along a static, named, or runtime axis selector.
-    pub fn argmin<A>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+    pub fn argmin<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, u32, crate::tensor::grad::NoGrad>>
     where
         A: ReduceSelector<S>,
+        A::Drop: crate::shapes::DynShape,
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
     {
-        self.argmin_runtime(Some(axis.resolve(self.rank())? as isize))
+        self.index_reduce::<op::ArgMin, A::Drop>(Some(axis.resolve(self.rank())? as isize))
     }
 
     /// Computes argmin over a runtime-selected axis.
@@ -690,46 +700,7 @@ where
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
     {
-        let normalized = dim
-            .map(|d| {
-                crate::shapes::idx::AxisSelector::new(&[d])
-                    .normalize(self.rank())
-                    .map(|axes| axes[0])
-            })
-            .transpose()?;
-        let mut out_dims = self.shape_buf().as_ref().to_vec();
-        if let Some(d) = normalized {
-            out_dims.remove(d);
-        } else {
-            out_dims = alloc::vec![];
-        }
-        let output_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(
-            crate::shapes::ShapeBuf::from_slice(&out_dims),
-        )
-        .map_err(crate::err::Error::Shape)?;
-        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
-        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
-        let inner = GradMode::Disabled
-            .restrict(|| {
-                crate::exec::dispatch::execute_shaped::<op::ArgMin, B, crate::shapes::Dyn>(
-                    &context,
-                    crate::exec::catalog::IndexReductionAttributes {
-                        axis: normalized,
-                        dtype: DTypeId::U32.descriptor(),
-                    },
-                    &[input],
-                    &output_shape,
-                )
-            })?
-            .into();
-
-        Tensor::from_parts(
-            inner,
-            output_shape.shape_buf().clone(),
-            u32::init(()),
-            self._device.clone(),
-            crate::tensor::grad::NoGrad::init(()),
-        )
+        self.index_reduce::<op::ArgMin, crate::shapes::Dyn>(dim)
     }
 
     /// Computes the top `k` elements of the tensor along the given dimension.

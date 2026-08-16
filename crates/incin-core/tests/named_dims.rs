@@ -80,6 +80,16 @@ fn selector_reductions_preserve_static_drop_and_keep_shapes() {
 }
 
 #[test]
+fn index_reductions_preserve_selector_output_shapes() {
+    type B = DummyBackend<Cpu>;
+    type S = s![2, 3, 4];
+    let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
+
+    let _: Tensor<s![2, 4], B, u32, NoGrad> = tensor.argmax(axis!(1)).unwrap();
+    let _: Tensor<Ranked<typenum::U2>, B, u32, NoGrad> = tensor.argmin(1isize).unwrap();
+}
+
+#[test]
 fn reduction_rules_reject_axes_that_do_not_match_the_structural_cursor() {
     type S = s![Batch = 2, Channels = 2];
     let dims = ShapeBuf::from_slice(&[2, 2]);
