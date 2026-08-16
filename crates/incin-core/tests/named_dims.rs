@@ -83,9 +83,10 @@ fn selector_reductions_preserve_static_drop_and_keep_shapes() {
 fn index_reductions_preserve_selector_output_shapes() {
     type B = DummyBackend<Cpu>;
     type S = s![2, 3, 4];
+    type ArgmaxOutput = Tensor<s![2, 4], B, u32, NoGrad>;
     let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
 
-    let _: Tensor<s![2, 4], B, u32, NoGrad> = tensor.argmax(axis!(1)).unwrap();
+    let _: ArgmaxOutput = tensor.argmax(axis!(1)).unwrap();
     let _: Tensor<Ranked<typenum::U2>, B, u32, NoGrad> = tensor.argmin(1isize).unwrap();
 }
 
@@ -93,13 +94,15 @@ fn index_reductions_preserve_selector_output_shapes() {
 fn insertion_and_removal_selectors_preserve_shape_proofs() {
     type B = DummyBackend<Cpu>;
     type S = s![2, 3];
+    type Expanded = Tensor<s![2, 1, 3], B>;
+    type Squeezed = Tensor<s![2, 3], B>;
     let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
 
-    let _: Tensor<s![2, 1, 3], B> = tensor.unsqueeze(axis!(1)).unwrap();
+    let _: Expanded = tensor.unsqueeze(axis!(1)).unwrap();
     let _: Tensor<Ranked<typenum::U3>, B> = tensor.unsqueeze(1isize).unwrap();
 
-    let singleton: Tensor<s![2, 1, 3], B> = Tensor::ones(()).unwrap();
-    let _: Tensor<s![2, 3], B> = singleton.clone().try_squeeze(axis!(1)).unwrap();
+    let singleton: Expanded = Tensor::ones(()).unwrap();
+    let _: Squeezed = singleton.clone().try_squeeze(axis!(1)).unwrap();
     let _: Tensor<Ranked<typenum::U2>, B> = singleton.try_squeeze(1isize).unwrap();
 }
 

@@ -75,11 +75,11 @@ pub trait UnsqueezeSelector<S: Shape> {
 
 impl<S, C> UnsqueezeSelector<S> for StaticAxis<C>
 where
-    S: Shape + DynShape + crate::shapes::InsertAt<C, typenum::U1>,
+    S: Shape + DynShape + crate::shapes::InsertAxis<C, typenum::U1>,
     C: StaticCursor,
-    <S as crate::shapes::InsertAt<C, typenum::U1>>::Output: Shape,
+    <S as crate::shapes::InsertAxis<C, typenum::U1>>::Output: Shape,
 {
-    type Output = <S as crate::shapes::InsertAt<C, typenum::U1>>::Output;
+    type Output = <S as crate::shapes::InsertAxis<C, typenum::U1>>::Output;
 
     fn resolve(&self, rank: usize) -> Result<usize> {
         self.normalize(rank + 1)?.into_iter().next().ok_or_else(|| {

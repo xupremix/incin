@@ -355,10 +355,25 @@ where
     type Output = DimCons<H, <T as InsertAt<SubCursor, NewDim>>::Output>;
 }
 
-impl<S, Cursor, NewDim> InsertAt<crate::shapes::idx::FromEnd<Cursor>, NewDim> for S
+/// Inserts a dimension at a static axis, including from-end cursors.
+pub trait InsertAxis<Cursor, NewDim: Dim>: Shape {
+    type Output: Shape;
+}
+
+impl<S, Cursor, NewDim> InsertAxis<Cursor, NewDim> for S
 where
-    S: ReverseShape,
     Cursor: ForwardCursor,
+    S: InsertAt<Cursor, NewDim>,
+    <S as InsertAt<Cursor, NewDim>>::Output: Shape,
+    NewDim: Dim,
+{
+    type Output = <S as InsertAt<Cursor, NewDim>>::Output;
+}
+
+impl<S, Cursor, NewDim> InsertAxis<crate::shapes::idx::FromEnd<Cursor>, NewDim> for S
+where
+    Cursor: ForwardCursor,
+    S: ReverseShape,
     S::Output: InsertAt<Cursor, NewDim>,
     <S::Output as InsertAt<Cursor, NewDim>>::Output: ReverseShape,
     NewDim: Dim,
