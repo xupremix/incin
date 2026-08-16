@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **CUDA lint and structure:** Grouped internal two-dimensional column-to-image
+  parameters into `Col2Im2dSpec`, kept the shared transposed-convolution
+  backend contract explicit, and moved CUDA backend trait implementations
+  before the test module so the CUDA all-targets lint gate passes with
+  warnings denied.
 - **Dead-code audit:** Removed unused raw conversion and complement helpers
   from the private axis-mask implementation, and removed a redundant CUDA
   identity suppression while retaining feature-gated test and dummy-backend

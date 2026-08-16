@@ -107,11 +107,12 @@ pub(crate) mod cuda {
         use cudarc::driver::{CudaContext, CudaModule, DriverError};
         use std::sync::{Arc, Mutex, OnceLock};
 
+        type CudaModuleMap = BTreeMap<(usize, String), Arc<CudaModule>>;
+
         /// `CUDA_DEVICES`.
         static CUDA_DEVICES: OnceLock<Mutex<BTreeMap<usize, Arc<CudaContext>>>> = OnceLock::new();
         /// `CUDA_MODULES`.
-        static CUDA_MODULES: OnceLock<Mutex<BTreeMap<(usize, String), Arc<CudaModule>>>> =
-            OnceLock::new();
+        static CUDA_MODULES: OnceLock<Mutex<CudaModuleMap>> = OnceLock::new();
 
         /// The process-wide context for `id`, created once and never released.
         ///

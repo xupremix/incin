@@ -2252,13 +2252,15 @@ pub fn im2col_2d_tape(
             Ok(vec![crate::cuda::ops::conv::launch_col2im_2d(
                 grad_out,
                 &original_shape,
-                h_out,
-                w_out,
-                kh,
-                kw,
-                stride,
-                padding,
-                dilation,
+                crate::cuda::ops::conv::Col2Im2dSpec {
+                    h_out,
+                    w_out,
+                    kh,
+                    kw,
+                    stride,
+                    padding,
+                    dilation,
+                },
             )?])
         }),
     });
@@ -2271,25 +2273,9 @@ pub fn im2col_2d_tape(
 pub fn col2im_2d_tape(
     cols: &CudaStorage,
     target_shape: &[usize],
-    h_out: usize,
-    w_out: usize,
-    kh: usize,
-    kw: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
+    spec: crate::cuda::ops::conv::Col2Im2dSpec,
 ) -> Result<CudaStorage> {
-    let out = crate::cuda::ops::conv::launch_col2im_2d(
-        cols,
-        target_shape,
-        h_out,
-        w_out,
-        kh,
-        kw,
-        stride,
-        padding,
-        dilation,
-    )?;
+    let out = crate::cuda::ops::conv::launch_col2im_2d(cols, target_shape, spec)?;
     let cols_shape = cols.shape.to_vec();
     let (cols_id, out_id) = (cols.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
@@ -2297,7 +2283,12 @@ pub fn col2im_2d_tape(
         input_ids: vec![cols_id],
         backward: Box::new(move |grad_out: &CudaStorage| {
             let cols_grad = crate::cuda::ops::conv::launch_im2col_2d(
-                grad_out, kh, kw, stride, padding, dilation,
+                grad_out,
+                spec.kh,
+                spec.kw,
+                spec.stride,
+                spec.padding,
+                spec.dilation,
             )?;
             debug_assert_eq!(cols_grad.shape, cols_shape);
             Ok(vec![cols_grad])
@@ -2689,6 +2680,10 @@ impl<D: Device> CudaBackendImpl<D> {
     /// `output_padding` is its own final step via `pad_trailing_zeros_2d_tape`,
     /// never folded into `padding`'s symmetric arithmetic. Only `groups ==
     /// 1` is supported, matching CPU/WGPU's own documented scope.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "matches the backend operation contract shared by CPU, CUDA, and Metal"
+    )]
     pub fn conv_transpose2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         w: &<Self as StorageBackend>::Storage<K>,
@@ -2763,13 +2758,15 @@ impl<D: Device> CudaBackendImpl<D> {
         let natural_out = col2im_2d_tape(
             &cols,
             &[batch, cout, h_nat, w_nat],
-            h,
-            wid,
-            kh,
-            kw,
-            stride,
-            padding,
-            dilation,
+            crate::cuda::ops::conv::Col2Im2dSpec {
+                h_out: h,
+                w_out: wid,
+                kh,
+                kw,
+                stride,
+                padding,
+                dilation,
+            },
         )?;
 
         let conv_out = if output_padding == 0 {
@@ -3332,10 +3329,54 @@ fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<Cu
     upload_u32_from_host(t_buf, shape, out)
 }
 
+impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendImpl<D> {
+    type Grads = CudaGrads;
+
+    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+        let loss: &CudaStorage = loss;
+        crate::cuda::tape::backward(loss)
+    }
+
+    fn backward_with<K: DType>(
+        loss: &Self::Storage<K>,
+        seed: &Self::Storage<K>,
+    ) -> Result<Self::Grads> {
+        let loss: &CudaStorage = loss;
+        let seed: &CudaStorage = seed;
+        crate::cuda::tape::backward_with(loss, seed)
+    }
+
+    fn get_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        let t: &CudaStorage = t;
+        Ok(grads.get(t.id).cloned())
+    }
+}
+
+impl<D: Device> VariableBackend for CudaBackendImpl<D> {
+    type Var<K: DType> = CudaVar;
+
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
+        Ok(var.storage.clone())
+    }
+
+    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
+        let t: &CudaStorage = t;
+        Ok(CudaVar { storage: t.clone() })
+    }
+
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
+        let tensor: &CudaStorage = tensor;
+        var.storage = tensor.clone();
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use incin_core::backend_authoring::{AutogradBackend, HostInterop};
     use incin_core::tensor::reduction::Reduction;
 
     #[test]
@@ -4487,49 +4528,5 @@ mod tests {
             download_f32_host(&out).unwrap(),
             vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]
         );
-    }
-}
-
-impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendImpl<D> {
-    type Grads = CudaGrads;
-
-    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        let loss: &CudaStorage = loss;
-        crate::cuda::tape::backward(loss)
-    }
-
-    fn backward_with<K: DType>(
-        loss: &Self::Storage<K>,
-        seed: &Self::Storage<K>,
-    ) -> Result<Self::Grads> {
-        let loss: &CudaStorage = loss;
-        let seed: &CudaStorage = seed;
-        crate::cuda::tape::backward_with(loss, seed)
-    }
-
-    fn get_grad<K: DType>(
-        t: &Self::Storage<K>,
-        grads: &Self::Grads,
-    ) -> Result<Option<Self::Storage<K>>> {
-        let t: &CudaStorage = t;
-        Ok(grads.get(t.id).cloned())
-    }
-}
-impl<D: Device> VariableBackend for CudaBackendImpl<D> {
-    type Var<K: DType> = CudaVar;
-
-    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
-        Ok(var.storage.clone())
-    }
-
-    fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::Var<K>> {
-        let t: &CudaStorage = t;
-        Ok(CudaVar { storage: t.clone() })
-    }
-
-    fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
-        let tensor: &CudaStorage = tensor;
-        var.storage = tensor.clone();
-        Ok(())
     }
 }

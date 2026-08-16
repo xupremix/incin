@@ -105,6 +105,19 @@ pub(crate) fn natural_transpose_out_size(
     })
 }
 
+/// Parameters shared by the two-dimensional column-to-image launcher and its
+/// tape wrapper.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Col2Im2dSpec {
+    pub h_out: usize,
+    pub w_out: usize,
+    pub kh: usize,
+    pub kw: usize,
+    pub stride: usize,
+    pub padding: usize,
+    pub dilation: usize,
+}
+
 #[cfg(feature = "cuda")]
 fn ensure_conv_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
@@ -230,13 +243,7 @@ pub(crate) fn launch_im2col_2d(
 pub(crate) fn launch_col2im_2d(
     cols: &CudaStorage,
     target_shape: &[usize],
-    h_out: usize,
-    w_out: usize,
-    kh: usize,
-    kw: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
+    spec: Col2Im2dSpec,
 ) -> Result<CudaStorage> {
     let cols_buf = &*cols.buffer;
     let device_id = cols_buf.device_id;
@@ -253,8 +260,8 @@ pub(crate) fn launch_col2im_2d(
     );
     let out_total =
         ShapeBuf::from_slice(&[b, c, h_in, w_in]).checked_numel(OperationKind::Conv2d)?;
-    let thread_total =
-        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+    let thread_total = ShapeBuf::from_slice(&[b, c, spec.h_out, spec.w_out])
+        .checked_numel(OperationKind::Conv2d)?;
 
     let mut out_b = alloc_zeroed(
         &stream,
@@ -281,16 +288,16 @@ pub(crate) fn launch_col2im_2d(
             .arg(&c)
             .arg(&h_in)
             .arg(&w_in)
-            .arg(&h_out)
-            .arg(&w_out)
-            .arg(&kh)
-            .arg(&kw)
-            .arg(&stride)
-            .arg(&stride)
-            .arg(&padding)
-            .arg(&padding)
-            .arg(&dilation)
-            .arg(&dilation)
+            .arg(&spec.h_out)
+            .arg(&spec.w_out)
+            .arg(&spec.kh)
+            .arg(&spec.kw)
+            .arg(&spec.stride)
+            .arg(&spec.stride)
+            .arg(&spec.padding)
+            .arg(&spec.padding)
+            .arg(&spec.dilation)
+            .arg(&spec.dilation)
             .launch(cfg)
             .map_err(|e| {
                 incin_core::error::Error::Msg(format!("col2im_2d launch failed: {e:?}"))
