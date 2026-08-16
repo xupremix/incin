@@ -5,7 +5,7 @@
 //! surface cannot offer, so a passing run is evidence the design works rather
 //! than evidence it compiles.
 
-#![cfg(all(feature = "target-api", feature = "cpu"))]
+#![cfg(feature = "cpu")]
 
 // `s!` expands to `::incin::prelude::…`, which does not resolve inside this
 // crate. The repo's own doctests use the same alias.

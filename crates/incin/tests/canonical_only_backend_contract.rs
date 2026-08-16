@@ -3,8 +3,6 @@
 //! superseded backend-family traits, but execute through
 //! exact operation-keyed `Execute<Op>` bounds.
 
-#![cfg(feature = "target-api")]
-
 use incin_core::backend_authoring::operations::op;
 use incin_core::backend_authoring::{
     AutogradBackend, Backend, Execute, ExecutionRequest, StorageBackend, SupportsDType,

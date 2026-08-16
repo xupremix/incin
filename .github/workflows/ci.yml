@@ -374,7 +374,7 @@ jobs:
     # Rust examples need Cargo's dependency metadata; mdbook test invokes
     # standalone rustdoc and therefore cannot validate these facade imports.
     - name: Compile the Book examples
-      run: cargo test -p incin --features 'target-api backend-authoring' --doc
+      run: cargo test -p incin --features backend-authoring --doc
 
     # A self-contained single HTML file with no external CSS/JS/font
     # requests - inlined from the multi-page build above, not a second

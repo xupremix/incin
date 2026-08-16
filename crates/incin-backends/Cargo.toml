@@ -27,10 +27,6 @@ std = [
 cpu = ["std"]
 # Enables execution of compiled graphs through the canonical CPU descriptors.
 compiled = ["std", "cpu", "incin-core/compiled"]
-# **Experimental.** Device values as user-facing allocation targets
-# (`crates/incin-backends/src/target.rs`). Additive: it adds a surface and
-# changes none. Off by default until the prototype is judged.
-target-api = []
 # Hands large f32 CPU matmuls to a blocked, register-tiled GEMM. Off by
 # default: the pure-Rust kernels in cpu/ops/matmul.rs stay complete without
 # it, and enabling it changes only floating-point accumulation order.

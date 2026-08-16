@@ -2,8 +2,6 @@
 //! Verifies standard pointwise numeric operations, real bool comparisons,
 //! logical operations on bool tensors, target factories for bool, and exact bool extraction.
 
-#![cfg(feature = "target-api")]
-
 use incin::prelude::*;
 
 #[test]

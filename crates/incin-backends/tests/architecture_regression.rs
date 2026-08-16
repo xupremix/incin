@@ -1,4 +1,4 @@
-#![cfg(all(feature = "cpu", feature = "target-api"))]
+#![cfg(feature = "cpu")]
 //! Architecture regression tests enforcing concrete backend dtype decoupling.
 
 use incin_backends::cpu::CpuBackendImpl;

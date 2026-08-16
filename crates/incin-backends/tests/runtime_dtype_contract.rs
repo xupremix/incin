@@ -1,4 +1,4 @@
-#![cfg(all(feature = "cpu", feature = "target-api"))]
+#![cfg(feature = "cpu")]
 //! Acceptance test suite for Runtime DType Abstraction (Backend contracts).
 //! Tests built-in backend rejection of unsupported custom dtypes, public tensor dtype contract,
 //! target dtype extensibility, and runtime dtype view.

@@ -76,7 +76,7 @@
 // mdBook's standalone tester does not receive Cargo's `--extern` arguments.
 // Keep a Cargo-backed doctest mirror so the user-facing chapters are checked
 // against the real facade and feature set.
-#[cfg(all(doctest, feature = "target-api", feature = "backend-authoring"))]
+#[cfg(all(doctest, feature = "backend-authoring"))]
 #[doc = include_str!("../../../docs/book/src/introduction.md")]
 #[doc = include_str!("../../../docs/book/src/installation.md")]
 #[doc = include_str!("../../../docs/book/src/quickstart.md")]
@@ -101,7 +101,7 @@
 #[doc = include_str!("../../../docs/book/src/whats_not_finished.md")]
 mod book_docs {}
 
-#[cfg(all(doctest, feature = "target-api", feature = "backend-authoring"))]
+#[cfg(all(doctest, feature = "backend-authoring"))]
 #[doc = include_str!("../../../docs/book/src/target_api.md")]
 mod target_api_book_docs {}
 
@@ -602,15 +602,13 @@ pub mod prelude {
     pub use super::DefaultDevice;
     pub use incin_backends::IncinBackend;
 
-    // (`target-api`): device values as the preferred allocation targets.
+    // Device values are the preferred allocation targets.
     // These are extension traits, so they only resolve when in scope — which
     // is the whole reason they are in the prelude rather than left to a
     // module path. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.
-    #[cfg(feature = "target-api")]
     pub use incin_backends::nn_target::InitOnTarget;
-    #[cfg(all(feature = "target-api", feature = "external-candle"))]
+    #[cfg(feature = "external-candle")]
     pub use incin_backends::target::Candle;
-    #[cfg(feature = "target-api")]
     pub use incin_backends::target::{
         DtypeTarget, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec, Target,
         TargetExt, TensorData, TensorTarget, precision,

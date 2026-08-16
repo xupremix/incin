@@ -5,7 +5,7 @@
 //! type would pass every runtime check and lose exactly the static information
 //! it exists to preserve, so each case pins the resulting `Tensor` type.
 
-#![cfg(all(feature = "target-api", feature = "cpu"))]
+#![cfg(feature = "cpu")]
 
 use incin::prelude::*;
 use incin::types::{DimCons, Nil};

@@ -34,7 +34,6 @@ run_row "core-serialization" cargo check -p incin-core --no-default-features --f
 run_row "backend-cpu-minimal" cargo check -p incin-backends --no-default-features --features std,cpu
 run_row "backend-default" cargo check -p incin-backends
 run_row "backend-cpu-blas" cargo check -p incin-backends --no-default-features --features std,cpu,cpu-blas
-run_row "backend-cpu-target-api" cargo check -p incin-backends --no-default-features --features std,cpu,target-api
 run_row "backend-wgpu-compile" cargo check -p incin-backends --no-default-features --features std,wgpu
 run_row "backend-cuda-compile" cargo check -p incin-backends --no-default-features --features std,cuda
 # `cuda-vendor` is a supported compatibility feature layered on the native
@@ -52,7 +51,6 @@ run_row "backend-cpu-wgpu-telemetry" cargo check -p incin-backends --no-default-
 # extension contracts, and representative orthogonal interactions.
 run_row "facade-default" cargo check -p incin
 run_row "facade-std-no-backend" cargo check -p incin --no-default-features --features std
-run_row "facade-target-api" cargo check -p incin --no-default-features --features std,cpu,target-api
 run_row "facade-training" cargo check -p incin --no-default-features --features std,cpu,train
 run_row "facade-compiled" cargo check -p incin --no-default-features --features std,cpu,compiled
 run_row "facade-telemetry" cargo check -p incin --no-default-features --features std,cpu,telemetry
@@ -63,7 +61,7 @@ run_row "facade-metal-compile" cargo check -p incin --no-default-features --feat
 run_row "facade-external-candle" cargo check -p incin --no-default-features --features std,external-candle
 run_row "facade-distributed-reference" cargo check -p incin --no-default-features --features std,cpu,distributed-reference
 run_row "facade-distributed-nccl-compile" cargo check -p incin --no-default-features --features std,distributed-nccl
-run_row "facade-target-telemetry" cargo check -p incin --no-default-features --features std,cpu,target-api,telemetry
+run_row "facade-telemetry" cargo check -p incin --no-default-features --features std,cpu,telemetry
 run_row "facade-compiled-telemetry" cargo check -p incin --no-default-features --features std,cpu,compiled,telemetry
 
 printf '\n%b=== Supported feature contract matrix: PASS ===%b\n' "$BOLD$GREEN" "$NC"

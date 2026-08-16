@@ -9,7 +9,7 @@
 //! - Unary, reduction, and matmul frontend APIs
 //! - Builder-first NN layer initialization and frozen layers
 
-#![cfg(all(feature = "target-api", feature = "cpu"))]
+#![cfg(feature = "cpu")]
 
 use incin::nn;
 use incin::prelude::*;

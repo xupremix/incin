@@ -1,9 +1,4 @@
-//! **Experimental.** A device value as the user-facing allocation target.
-//!
-//! Gated behind the `target-api` feature and additive: nothing here replaces
-//! [`Tensor`]'s existing constructors, and every method in this module is a
-//! thin front over them. If the experiment is abandoned, deleting this file
-//! and its feature flag removes it completely.
+//! A device value as the user-facing allocation target.
 //!
 //! # What problem this solves
 //!
@@ -938,7 +933,6 @@ pub trait LinearInit<T: TensorTarget>: Sized {
     fn new(in_features: usize, out_features: usize, target: &T) -> Result<Self>;
 }
 
-#[cfg(feature = "target-api")]
 impl<T> LinearInit<T>
     for incin_core::nn::linear::Linear<
         Dyn,

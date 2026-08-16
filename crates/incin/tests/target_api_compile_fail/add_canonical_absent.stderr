@@ -2,4 +2,4 @@ error[E0599]: no method named `add_canonical` found for struct `incin_core::tens
  --> tests/target_api_compile_fail/add_canonical_absent.rs:6:15
   |
 6 |     let _ = a.add_canonical(&b);
-  |               ^^^^^^^^^^^^^ method not found in `incin_core::tensor::base::Tensor<(UInt<UInt<UTerm, B1>, B0>,), incin_backends::cpu::CpuBackendImpl, f32, NoGrad>`
+  |               ^^^^^^^^^^^^^ method not found in `incin_core::tensor::base::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl>`

@@ -9,7 +9,7 @@
 //! Execution-verified rather than compile-checked: this environment has a
 //! software adapter.
 
-#![cfg(all(feature = "target-api", feature = "wgpu"))]
+#![cfg(feature = "wgpu")]
 
 extern crate incin_core as incin;
 

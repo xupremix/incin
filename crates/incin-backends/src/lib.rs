@@ -101,7 +101,6 @@ pub type NativeBackend<D> = crate::target::NativeBackend<D>;
 /// resolves to [`DispatchBackend`] and selects its implementation at runtime.
 pub type IncinBackend<D = incin_core::tensor::device::Cpu> = NativeBackend<D>;
 
-#[cfg(feature = "target-api")]
 pub mod nn_target;
 pub mod target;
 
@@ -114,16 +113,13 @@ pub mod prelude {
 
     // Extension methods only resolve when their trait is in scope, so the
     // traits are exported alongside the types they operate on.
-    #[cfg(feature = "target-api")]
     pub use super::nn_target::{InitOnTarget, LinearNewOnTarget};
-    #[cfg(all(feature = "target-api", feature = "external-candle"))]
+    #[cfg(feature = "external-candle")]
     pub use super::target::Candle;
-    #[cfg(feature = "target-api")]
     pub use super::target::{
         DtypeTarget, EngineOn, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec,
         RuntimeEngine, Target, TargetExt, TensorData, TensorTarget, precision,
     };
-    #[cfg(feature = "target-api")]
     pub use incin_core::shapes::ShapeSpec;
 }
 

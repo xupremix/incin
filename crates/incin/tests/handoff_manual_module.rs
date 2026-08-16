@@ -3,7 +3,7 @@
 //! The manual implementation is deliberately written without `#[module]`.
 //! The macro fixture below exercises the same public traversal contracts.
 
-#![cfg(all(feature = "cpu", feature = "target-api"))]
+#![cfg(feature = "cpu")]
 
 use incin::nn::{Module, ParameterVisitor, TrainState, VisitParameters};
 use incin::prelude::*;

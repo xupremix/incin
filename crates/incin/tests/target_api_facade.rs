@@ -6,7 +6,7 @@
 //! so "is it actually reachable from the public façade" is a separate
 //! question from "does it work".
 
-#![cfg(all(feature = "target-api", feature = "cpu"))]
+#![cfg(feature = "cpu")]
 
 use incin::prelude::*;
 

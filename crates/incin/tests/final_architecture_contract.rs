@@ -2,8 +2,6 @@
 //! Verifies that standard user-facing architecture APIs (shapes, targets,
 //! linear, embedding, frozen layers, recurrent modules) compile and execute.
 
-#![cfg(feature = "target-api")]
-
 use incin::nn;
 use incin::prelude::*;
 

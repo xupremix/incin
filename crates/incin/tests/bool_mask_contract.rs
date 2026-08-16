@@ -1,5 +1,3 @@
-#![cfg(feature = "target-api")]
-
 use incin::prelude::*;
 
 #[test]

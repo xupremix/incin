@@ -2,10 +2,4 @@ error[E0599]: no method named `eq_canonical` found for struct `incin_core::tenso
  --> tests/target_api_compile_fail/eq_canonical_absent.rs:6:15
   |
 6 |     let _ = a.eq_canonical(&b);
-  |               ^^^^^^^^^^^^
-  |
-help: there is a method `concat` with a similar name
-  |
-6 -     let _ = a.eq_canonical(&b);
-6 +     let _ = a.concat(&b);
-  |
+  |               ^^^^^^^^^^^^ method not found in `incin_core::tensor::base::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl>`
