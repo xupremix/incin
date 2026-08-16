@@ -429,6 +429,7 @@ where
     /// Reduces one runtime axis while retaining the known rank in the type.
     /// The output dimensions remain runtime values, but the rank changes from
     /// `Ranked<R>` to its `RemoveOneRank::Output`.
+    #[doc(hidden)]
     pub fn sum_runtime_ranked(
         &self,
         axis: isize,
@@ -447,6 +448,7 @@ where
 
     /// Reduces one runtime axis while preserving the known rank and axis
     /// positions in the type.
+    #[doc(hidden)]
     pub fn sum_keepdim_runtime_ranked(
         &self,
         axis: isize,

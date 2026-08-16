@@ -1592,6 +1592,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Runtime flatten range with checked normalization and a dynamic output.
+    #[doc(hidden)]
     pub fn flatten_runtime(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<
@@ -1650,6 +1651,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Flattens an inclusive signed axis range and returns a dynamic shape.
+    #[doc(hidden)]
     pub fn flatten_range(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<

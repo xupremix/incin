@@ -90,7 +90,7 @@ let transposed = x.transpose(axis!(0), axis!(2))?;
 let flattened = x.flatten(axis!(1), axis!(2))?;
 let stacked = x.stack(&x, axis!(0))?;
 let concatenated = x.concat(&x, axis!(-1))?;
-let flattened_runtime = x.flatten_range(1, -1)?;
+let flattened_runtime = x.flatten(1isize, -1isize)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -112,7 +112,7 @@ let kept = x.mean_keepdim(axis!(Channels))?;
 Runtime selectors validate their normalized position against the tensor rank.
 `mean`, `max`, `min`, and their keep-dimension forms follow the same selector
 rules.
-`flatten_range` uses the same signed runtime axis convention. Use `concat` and
+`flatten` uses the same signed runtime axis convention. Use `concat` and
 `stack` with a selector for ordinary code. The structural cursor forms remain
 available only for low-level shape implementations.
 
@@ -133,7 +133,10 @@ arithmetic in the type while leaving extents runtime-valued. The older
 
 Named reduction selectors retain known rank. Named dimensions are resolved at
 runtime, while the public output uses the strongest shape proof available for
-the selected operation.
+the selected operation. On stable Rust, the blanket recursive lookup cannot
+currently produce an exact named post-reduction type without overlapping trait
+implementations. The deliberate fallback is `Ranked<R>` or `Ranked<R-1>` for
+known-rank inputs, and `Dyn` only when the input rank is dynamic.
 
 Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
 ranges. Reshape inference is separate from indexing and uses `shape![..., infer]`.

@@ -365,8 +365,8 @@ fn test_high_rank_tensor_creation() {
     )
     .unwrap();
     assert_eq!(t16.dims().len(), 16);
-    let reduced = t16.sum_runtime_ranked(-1).unwrap();
-    let kept = t16.sum_keepdim_runtime_ranked(0).unwrap();
+    let reduced = t16.sum(-1isize).unwrap();
+    let kept = t16.sum_keepdim(0isize).unwrap();
     assert_eq!(reduced.dims().len(), 15);
     assert_eq!(kept.dims().len(), 16);
 

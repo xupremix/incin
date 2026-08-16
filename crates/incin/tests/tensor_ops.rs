@@ -308,7 +308,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     let t3 = Tensor::<s![2, 2, 2], CpuBackendImpl>::ones(())?;
     let f_part = t3.flatten(axis!(1), axis!(2))?;
     assert_eq!(f_part.dims().as_ref(), &[2, 4]);
-    let f_runtime = t3.flatten_range(-2, -1)?;
+    let f_runtime = t3.flatten(-2isize, -1isize)?;
     assert_eq!(f_runtime.dims().as_ref(), &[2, 4]);
 
     Ok(())
@@ -323,7 +323,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     // transpose
     let tr_static: Tensor<s![3, 2], CpuBackendImpl> = t.clone().transpose(axis!(0), axis!(1))?;
     assert_eq!(tr_static.dims().dims(), &[3, 2]);
-    let tr = t.clone().transpose_runtime(0, 1)?;
+    let tr = t.clone().transpose(0isize, 1isize)?;
     assert_eq!(tr.dims().dims(), &[3, 2]);
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
 
