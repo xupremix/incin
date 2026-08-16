@@ -7,7 +7,6 @@ the type, not just at runtime.
 
 ```rust,no_run
 use incin::prelude::*;
-use incin::backend_authoring::AutogradBackend;
 type B = DefaultBackend;
 
 let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
@@ -17,13 +16,14 @@ let c = &a * &b;
 let loss = c.sum_all()?;
 
 let grads = loss.backward()?;
-let grad_a = B::get_grad::<f32>(a.inner(), grads.as_backend())?
-    .expect("a participated in the computation");
+let grad_a = grads.require(&a)?;
 # Ok::<(), incin::Error>(())
 ```
 
-`backward()` walks the tape from `loss` and returns `Gradients`;
-`Backend::get_grad` reads one tensor's gradient back out of it.
+`backward()` walks the tape from `loss` and returns a backend-typed
+`Gradients` handle. Use `grads.get(&tensor)` for an optional gradient or
+`grads.require(&tensor)` when the gradient is required. Both return an
+ordinary detached tensor, so backend storage details stay out of model code.
 
 ## Turning tracking off
 

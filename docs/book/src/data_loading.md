@@ -54,7 +54,7 @@ let loader = DataLoader::builder(Toy)
     .batch_size(4)
     .workers(2)
     .shuffle(true)
-    .build();
+    .build()?;
 ```
 
 Custom collation remains available through `DataLoader::new` and

@@ -91,7 +91,7 @@ let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::full(2.0, ())?; // shorter shape, broadcasts against `a`
 
 let sum = a.clone() + b.clone();            // operator: broadcasts
-let sum2 = a.broadcast_add(&b)?;            // same operation, method-call form
+let sum2 = a.try_add(&b)?;                  // checked broadcast operation
 assert_eq!(sum.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())
 ```
@@ -104,8 +104,9 @@ type B = DefaultBackend;
 
 let x = Tensor::<s![2, 3], B>::ones(())?;
 
-let by_row = x.sum_keepdim::<1>(); // axis is checked at compile time
-let idx = x.argmax::<1>();         // index dtype defaults to u32
+let by_row = x.sum_keepdim::<1>()?;
+let by_last_row = x.sum_keepdim_axis(axis!(-1))?;
+let idx = x.argmax::<1>()?;         // index dtype defaults to u32
 
 // `reshape` changes the geometry and keeps the target shape in the type.
 let reshaped = x.reshape(shape![3, 2])?;

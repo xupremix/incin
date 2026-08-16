@@ -51,17 +51,18 @@ use incin::prelude::*;
 
 let x = Cpu.ones(shape![4, 8, 16])?;
 let summed = x.sum::<1>()?;
-let kept = x.sum_keepdim::<1>()?;
+let kept = x.sum_keepdim_axis(axis!(-2))?;
 let indices = x.argmax::<2>()?;
 let minima = x.argmin::<0>()?;
 # Ok::<(), incin::Error>(())
 ```
 
-The ergonomic const selector currently supports numeric axes `0` through
-`15`. Higher-rank or runtime-selected code can use the structural and runtime
-selector APIs. Named axes remain available through `sum_named` and
+Numeric axes accept arbitrary signed `isize` values, including negative axes.
+Use `axis!(...)` with `sum_axis` or `sum_keepdim_axis` when the selector is
+chosen as a value. Named axes remain available through `sum_named` and
 `sum_keepdim_named` when the axis identity matters more than its numeric
-position.
+position. Structural cursor methods remain available when the output shape
+can be proven statically.
 
 Named dimensions and const dimensions use different syntax. A named axis is
 written as `s![Batch, Features]`; a const path must be marked explicitly:
