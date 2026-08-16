@@ -1,5 +1,10 @@
 # A small Transformer-style block
 
+The executable Transformer proof uses `Param::as_tensor()` and
+`Gradients::require(&parameter)` for parameter gradients. It does not reach
+into a backend gradient store, so the proof follows the same typed lookup path
+available to application code.
+
 The current stable composition surface is enough to write and train a small
 CPU self-attention block directly. The executable proof is
 [`crates/incin/tests/transformer_block.rs`](../../../crates/incin/tests/transformer_block.rs):

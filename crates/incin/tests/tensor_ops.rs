@@ -1,4 +1,5 @@
 #![cfg(feature = "cpu")]
+use incin::advanced::{Here, Next};
 use incin::prelude::*;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.

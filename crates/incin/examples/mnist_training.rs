@@ -1,3 +1,4 @@
+use incin::advanced::{Here, Next};
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
 use incin_data::{DataLoader, Dataset};

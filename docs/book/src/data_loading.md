@@ -60,11 +60,12 @@ let loader = DataLoader::builder(Toy)
 Custom collation remains available through `DataLoader::new` and
 `DataLoader::builder_with_collate`.
 
-The default collator batches scalar samples as `Vec<T>`, and batches tuple
-samples field-wise, such as `(A, B)` into `(Vec<A>, Vec<B>)`. It preserves
-vector-valued samples as `Vec<Vec<T>>`. Use a custom `Collate` implementation
-when batching must perform tensor creation, padding, or other domain-specific
-conversion.
+The default collator batches scalar samples as `Vec<T>`, batches tuple samples
+field-wise, and stacks compatible tensor samples along a leading batch axis.
+For example, `(Tensor<A>, u8)` becomes `(Vec<Tensor<A>>, Vec<u8>)` unless the
+tensor field is itself collated by a custom tuple collator. Vector-valued
+samples remain `Vec<Vec<T>>`. Shape or backend failures while stacking tensors
+are returned as `DataError::InvalidBatch`.
 
 Errors are values, not end-of-epoch signals. A dataset or worker failure is
 returned as `Err(DataError)` from iteration and must be handled by the caller;

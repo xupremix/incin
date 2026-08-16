@@ -372,27 +372,6 @@ impl<I: StaticCursor> StaticCursor for FromEnd<I> {
     const INDEX: isize = -(1 + I::INDEX);
 }
 
-/* Legacy finite const-axis map removed. Axis selectors now resolve through
-   `AxisSelector` and `axis!` without a hard-coded range.
-const_axis_map!(
-    0 => Here,
-    1 => Next<Here>,
-    2 => Next<Next<Here>>,
-    3 => Next<Next<Next<Here>>>,
-    4 => Next<Next<Next<Next<Here>>>>,
-    5 => Next<Next<Next<Next<Next<Here>>>>>,
-    6 => Next<Next<Next<Next<Next<Next<Here>>>>>>,
-    7 => Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>,
-    8 => Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>,
-    9 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>,
-    10 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>,
-    11 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>,
-    12 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>,
-    13 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>,
-    14 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>>,
-    15 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>>>,
-); */
-
 /// Value-level spelling of a compile-time axis cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct StaticAxis<I: StaticCursor>(core::marker::PhantomData<I>);

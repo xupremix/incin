@@ -1,11 +1,9 @@
 #![cfg(feature = "cpu")]
 
 use incin::AdamW;
-use incin::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin::optim::ParameterGroup;
+use incin::backend_authoring::HostInterop;
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
-use std::collections::BTreeMap;
 
 type Cpu = incin_backends::cpu::CpuBackendImpl;
 type Input = Tensor<Dyn, Cpu, f32, Grad>;
@@ -94,38 +92,41 @@ pub fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()
     let loss = output.mse_loss(&target)?;
     let grads = loss.backward()?;
 
-    let parameters = ParameterGroup::<Cpu, f32>::from_module(&model)?;
-    let gradients: BTreeMap<_, _> = parameters
-        .iter()
-        .map(|(name, variable)| {
-            let storage = Cpu::var_as_tensor::<f32>(variable)?;
-            let storage = Cpu::get_grad::<f32>(&storage, grads.as_backend())?
-                .ok_or_else(|| Error::Msg(format!("missing gradient for {name}")))?;
-            let bytes = Cpu::to_bytes::<f32>(&storage)?;
+    macro_rules! assert_parameter_gradient {
+        ($name:literal, $parameter:expr) => {{
+            let parameter = $parameter.as_tensor()?;
+            let gradient = grads
+                .require(&parameter)
+                .map_err(|error| Error::Msg(format!("missing gradient for {}: {error}", $name)))?;
+            let bytes = Cpu::to_bytes::<f32>(gradient.inner())?;
             let values = bytes
                 .chunks_exact(core::mem::size_of::<f32>())
                 .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
                 .collect::<Vec<_>>();
-            Ok((name.clone(), values))
-        })
-        .collect::<Result<_>>()?;
-    for prefix in [
-        "query",
-        "key",
-        "value",
-        "projection",
-        "feed_forward_in",
-        "feed_forward_out",
-    ] {
-        let values = gradients
-            .iter()
-            .filter(|(name, _)| name.starts_with(prefix))
-            .flat_map(|(_, values)| values.iter())
-            .collect::<Vec<_>>();
-        assert!(!values.is_empty(), "no gradients reached {prefix}");
-        assert!(values.iter().all(|value| value.is_finite()));
-        assert!(values.iter().any(|value| **value != 0.0));
+            assert!(!values.is_empty(), "no gradients reached {}", $name);
+            assert!(values.iter().all(|value| value.is_finite()));
+            assert!(values.iter().any(|value| *value != 0.0));
+        }};
     }
+
+    assert_parameter_gradient!("query.weight", model.query.weight);
+    assert_parameter_gradient!("query.bias", model.query.bias.as_ref().unwrap());
+    assert_parameter_gradient!("key.weight", model.key.weight);
+    assert_parameter_gradient!("key.bias", model.key.bias.as_ref().unwrap());
+    assert_parameter_gradient!("value.weight", model.value.weight);
+    assert_parameter_gradient!("value.bias", model.value.bias.as_ref().unwrap());
+    assert_parameter_gradient!("projection.weight", model.projection.weight);
+    assert_parameter_gradient!("projection.bias", model.projection.bias.as_ref().unwrap());
+    assert_parameter_gradient!("feed_forward_in.weight", model.feed_forward_in.weight);
+    assert_parameter_gradient!(
+        "feed_forward_in.bias",
+        model.feed_forward_in.bias.as_ref().unwrap()
+    );
+    assert_parameter_gradient!("feed_forward_out.weight", model.feed_forward_out.weight);
+    assert_parameter_gradient!(
+        "feed_forward_out.bias",
+        model.feed_forward_out.bias.as_ref().unwrap()
+    );
 
     let mut optimizer = AdamW::<Cpu>::from_module(&model, 1e-2)?;
     optimizer.step(&grads)?;

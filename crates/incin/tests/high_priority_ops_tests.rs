@@ -1,5 +1,6 @@
 #![cfg(feature = "cpu")]
 
+use incin::advanced::Here;
 use incin::prelude::*;
 
 #[test]

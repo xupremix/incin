@@ -565,8 +565,8 @@ pub mod prelude {
     pub use incin_core::nn::module::Module;
     pub use incin_core::nn::state::{StatePath, StateRole, StateSnapshot, StateValue};
     pub use incin_core::shapes::{
-        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, Here, InferDim,
-        NamedAxisLookup, NamedAxisSelector, NamedDim, Next, Ranked, Shape, ShapeArgs, ShapeSpec,
+        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, InferDim,
+        NamedAxisLookup, NamedAxisSelector, NamedDim, Ranked, Shape, ShapeArgs, ShapeSpec,
         ShapeValue, Slice,
     };
     pub use incin_core::tensor::device::{
@@ -585,9 +585,8 @@ pub mod prelude {
     pub use incin_core::shapes::concat::ConcatShape;
     pub use incin_core::shapes::stack::StackShape;
     pub use incin_core::shapes::{
-        AppendDim, At, Axis, AxisSelector, BroadcastExtent, BroadcastShape, FromEnd, ReduceAt,
-        ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar, StaticAxis, SwapAt, ToAxisIndex,
-        TryReshape,
+        AppendDim, Axis, AxisSelector, BroadcastExtent, BroadcastShape, ReshapeShape, SameCount,
+        Scalar, StaticAxis, ToAxisIndex, TryReshape,
     };
 
     #[cfg(feature = "cuda")]
@@ -655,6 +654,13 @@ pub mod prelude {
 
     #[cfg(feature = "distributed")]
     pub use incin_core::dist::{Local, Placement, PlacementKind};
+}
+
+/// Structural shape proofs for advanced generic code.
+pub mod advanced {
+    pub use incin_core::shapes::{
+        At, FromEnd, Here, Next, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt,
+    };
 }
 
 #[cfg(test)]

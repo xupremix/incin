@@ -1,5 +1,13 @@
 use crate::dataset::Dataset;
+use incin_core::backend_authoring::Backend;
+use incin_core::backend_authoring::{Capabilities, Execute};
 use incin_core::error::{Error, ErrorMessage, Result as CoreResult};
+use incin_core::exec::catalog::op;
+use incin_core::shapes::{Dyn, DynShape, Shape};
+use incin_core::tensor::base::Tensor;
+use incin_core::tensor::device::Device;
+use incin_core::tensor::dtype::DType;
+use incin_core::tensor::grad::RequiresGrad;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -26,6 +34,8 @@ pub enum DataError {
     },
     /// A worker caught a panic while collating a batch.
     CollatePanicked { worker_id: usize },
+    /// The samples could not be combined into a batch.
+    InvalidBatch(String),
     /// A worker stopped unexpectedly before completing the epoch.
     WorkerDisconnected,
     /// The configured worker receive timeout elapsed.
@@ -45,6 +55,7 @@ impl core::fmt::Display for DataError {
             Self::CollatePanicked { worker_id } => {
                 write!(f, "worker {worker_id} panicked while collating")
             }
+            Self::InvalidBatch(message) => write!(f, "invalid batch: {message}"),
             Self::WorkerDisconnected => f.write_str("data-loader worker disconnected"),
             Self::Timeout { duration } => write!(f, "data-loader timed out after {duration:?}"),
         }
@@ -62,7 +73,7 @@ pub trait Collate<T>: Send + Sync {
     fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output>;
 }
 
-/// The default collation policy for common scalar and tuple samples.
+/// The default collation policy for common scalar, tuple, and tensor samples.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DefaultCollate;
 
@@ -87,6 +98,27 @@ impl<T: Send + 'static> Collate<Vec<T>> for DefaultCollate {
 
     fn collate(&self, batch: Vec<Vec<T>>) -> BatchResult<Self::Output> {
         Ok(batch)
+    }
+}
+
+impl<S, B, K, G> Collate<Tensor<S, B, K, G>> for DefaultCollate
+where
+    S: Shape + DynShape,
+    B: Backend + Execute<op::StackExact> + Capabilities,
+    K: DType,
+    G: RequiresGrad,
+    Tensor<S, B, K, G>: Send + 'static,
+    <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
+    B::Storage<K>: Send + 'static,
+    K::Field: Send + 'static,
+    <B::Device as Device>::Field: Send + 'static,
+{
+    type Output = Tensor<Dyn, B, K, G>;
+
+    fn collate(&self, batch: Vec<Tensor<S, B, K, G>>) -> BatchResult<Self::Output> {
+        let samples = batch.iter().collect::<Vec<_>>();
+        incin_core::tensor::ops::manipulation::try_stack_tensors(&samples, 0)
+            .map_err(|error| DataError::InvalidBatch(error.to_string()))
     }
 }
 
