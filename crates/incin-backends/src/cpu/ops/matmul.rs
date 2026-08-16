@@ -1046,13 +1046,7 @@ mod tests {
 
     // --- Task 2: batched matmul backward (gradcheck) ---
 
-    use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::tensor::device::Cpu;
-
-    /// `TestBackend`.
-    #[allow(dead_code)]
-    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
     /// requires a scalar-output op) can drive it.

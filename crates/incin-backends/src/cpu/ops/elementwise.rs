@@ -611,14 +611,6 @@ fn negate(t: &CpuStorage) -> CpuStorage {
     elementwise_unary_typed(UnaryOp::Neg, t).unwrap()
 }
 
-/// Elementwise multiply of two ALREADY-shape-matching (or one of them
-/// broadcastable to the other's shape) storages — used by `mul`'s backward
-/// rule to compute `grad_out * other_operand`, aligned to `grad_out`'s shape.
-#[allow(dead_code)]
-fn mul_elementwise_broadcast(grad_out: &CpuStorage, other: &CpuStorage) -> Result<CpuStorage> {
-    elementwise_binary_numeric(BinaryOp::Mul, grad_out, other, &grad_out.shape)
-}
-
 /// Abramowitz & Stegun 7.1.26 rational polynomial approximation of the
 /// error function `erf(x)`, max absolute error ~1.5e-7. Rust's standard
 /// library has no `erf`, so `gelu`'s exact erf-based formula (matching
