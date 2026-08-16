@@ -43,27 +43,27 @@ pub mod spatial;
 /// Compile-time proofs for stacking tensors along a new axis.
 pub mod stack;
 
-pub use arithmetic::*;
+pub use arithmetic::{ConvOutDim, FlatDim};
 pub use broadcast::BroadcastShape;
-pub use buf::*;
+pub use buf::{INLINE_RANK, ShapeBuf, StrideBuf};
 pub use dim::*;
 pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
 pub use named::*;
-pub use proof::*;
+pub use proof::ProofLevel;
 pub use rank::*;
 pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
-pub use shape_utils::*;
+pub use shape_utils::Scalar;
 pub use spatial::*;
 
 /// `prelude`.
 pub mod prelude {
-    pub use super::arithmetic::*;
+    pub use super::arithmetic::{ConvOutDim, FlatDim};
     pub use super::broadcast::*;
-    pub use super::buf::*;
+    pub use super::buf::{INLINE_RANK, ShapeBuf, StrideBuf};
     pub use super::concat::*;
 
     pub use super::dim::*;
@@ -74,7 +74,7 @@ pub mod prelude {
     pub use super::reshape::*;
     pub use super::shape::*;
     pub use super::shape_ops::*;
-    pub use super::shape_utils::*;
+    pub use super::shape_utils::Scalar;
     pub use super::spatial::*;
     pub use super::stack::*;
 }
