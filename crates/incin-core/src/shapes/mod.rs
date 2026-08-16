@@ -2,50 +2,45 @@
 //!
 //! The `shapes` module is the type-theoretic core of Incin. It contains:
 //!
-//! * [`dim`] — The [`Dim`] trait, raw typenum static extents, derived extent
+//! * [`dim`] - The [`Dim`] trait, raw typenum static extents, derived extent
 //!   specifications, and semantic named-axis tags.
-//! * [`shape`] — The structural [`Shape`] algebra, runtime [`ShapeBuf`], and
+//! * [`shape`] - The structural [`Shape`] algebra, runtime [`ShapeBuf`], and
 //!   dynamic-shape adapters.
-//! * [`reshape`] — The [`ReshapeShape`] trait for compile-time element-count preservation.
-//! * [`idx`] — The [`DimIdx`], [`SliceIdx`], [`Slice`], [`InferDim`], and [`Ellipsis`] types.
-//! * [`broadcast`] — The [`BroadcastShape`] trait for verifying broadcasting compatibility.
-//! * [`spatial`] — Shape traits for convolution (`Conv2dShape`, `Conv1dShape`) and pooling.
-//! * `concat` — Shape traits for verified concatenation along an axis.
-//! * `stack` — Shape traits for verified tensor stacking.
-/// `arithmetic`.
-pub mod arithmetic;
-/// `broadcast`.
+//! * [`reshape`] - The [`ReshapeShape`] trait for compile-time element-count preservation.
+//! * [`idx`] - The [`DimIdx`], [`SliceIdx`], [`Slice`], [`InferDim`], and [`Ellipsis`] types.
+//! * [`broadcast`] - The [`BroadcastShape`] trait for verifying broadcasting compatibility.
+//! * [`spatial`] - Shape traits for convolution (`Conv2dShape`, `Conv1dShape`) and pooling.
+//! * [`mod@concat`] - Shape traits for verified concatenation along an axis.
+//! * [`stack`] - Shape traits for verified tensor stacking.
+mod arithmetic;
+/// Broadcast compatibility proofs for tensor operations.
 pub mod broadcast;
-
-/// `buf`.
-pub mod buf;
-/// `concat`.
+mod buf;
+/// Compile-time and runtime proofs for verified shape concatenation.
 pub mod concat;
 /// The dimension along which this operation is applied.
 pub mod dim;
 /// Runtime-selected marker types shared by shape-bearing APIs.
 pub mod dynamic;
-/// `error`.
+/// Errors produced while validating or transforming shapes.
 pub mod error;
-/// `idx`.
+/// Type-level axis, slice, and reshape selectors.
 pub mod idx;
-/// `named`.
+/// Named dimensions and their compile-time compatibility rules.
 pub mod named;
-/// Shape proof strength.
-pub mod proof;
+mod proof;
 /// Rank-only shape proofs for runtime and partially-known shapes.
 pub mod rank;
-/// `reshape`.
+/// Compile-time element-count-preserving reshape proofs.
 pub mod reshape;
-/// `shape`.
+/// Structural shapes, runtime shape values, and shape metadata.
 pub mod shape;
-/// `shape_ops`.
+/// Type-level operations that transform structural shapes.
 pub mod shape_ops;
-/// Small shape metadata helpers shared by the public shape surface.
-pub mod shape_utils;
-/// `spatial`.
+mod shape_utils;
+/// Shape rules for convolution, pooling, and related spatial operations.
 pub mod spatial;
-/// `stack`.
+/// Compile-time proofs for stacking tensors along a new axis.
 pub mod stack;
 
 pub use arithmetic::*;
