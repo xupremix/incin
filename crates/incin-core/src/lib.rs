@@ -164,7 +164,6 @@ pub mod prelude {
         NonFiniteSite, Result, convert_f64_to_i64,
     };
     pub use crate::SeqTy;
-    pub use crate::graph::Graph;
     pub use half::{bf16, f16};
 
     pub use crate::dim;

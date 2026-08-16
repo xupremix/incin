@@ -9,6 +9,48 @@
 
 ## Status: INCOMPLETE
 
+## Post-8f90364 verification
+
+**Current commit before this verification:** `7c8194229b55f797323ab5841f850bc27fc58102`
+
+The older completion claim was not archived with reproducible command output.
+The current checkout was inspected again before editing. The remaining items
+were:
+
+- `crates/incin/src/lib.rs:121` still exposed `Backend` and `VariableBackend`
+  at the stable root.
+- `crates/incin/src/lib.rs:646` still exposed `Backend` from the default
+  facade prelude.
+- `crates/incin-core/src/lib.rs:167` still exposed `Graph` from the core
+  prelude, which is an implementation/inspection contract rather than a
+  normal model-building import.
+- `crates/incin-data/src/lib.rs:72-74` still uses internal prelude globs;
+  this remains a separate crate-by-crate facade review item.
+- `crates/incin-core/src/shapes/mod.rs` and `crates/incin-core/src/nn/mod.rs`
+  still contain owning-crate wildcard exports; these are not counted as
+  completed facade remediation until their public contracts are reviewed.
+
+The prior commit range also changed executor/backend files outside the narrow
+facade boundary, and this evidence directory had no archived `api-after.txt`,
+`commands.log`, or semver report. Acceptance boxes below therefore remain
+unchecked until the current evidence is generated.
+
+### Current evidence
+
+The following evidence was generated after the focused facade changes:
+
+- `api-after.txt` records the current CPU facade output from `cargo public-api`.
+- `commands.log` records the baseline, blacklist, and semver commands and their
+  results.
+- `semver-report.txt` records the `HEAD^` major-release comparison. It exited
+  zero with no required semver update and 254 skipped checks.
+- `crates/incin/tests/facade_contract.rs` passes the default-prelude, `Dyn`,
+  backend-authoring, feature-isolation, and internal-absence consumer fixtures.
+
+This proves the current `incin` facade changes, but does not close API-001:
+the owning-crate wildcard and core-prelude review items listed above still
+require explicit contracts and evidence.
+
 The completion claim below has not been reproduced from the inspected checkout. At
 `fa8d2030141b04bc7c0dfccb382bfa60647223cf`, the archived
 `cargo test --workspace` baseline exits 101 because two `trybuild` snapshots do

@@ -118,7 +118,6 @@ extern crate alloc;
 
 pub use incin_backends::IncinBackend;
 pub use incin_core::autograd::Gradients;
-pub use incin_core::backend_authoring::{Backend, VariableBackend};
 pub use incin_core::error::{
     BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
     NonFiniteSite, Result, convert_f64_to_i64,
@@ -643,7 +642,6 @@ pub mod macros {
 pub mod prelude {
     pub use super::Tensor;
     pub use incin_core::SeqTy;
-    pub use incin_core::backend_authoring::Backend;
     pub use incin_core::error::{
         BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
         NonFiniteSite, Result, convert_f64_to_i64,

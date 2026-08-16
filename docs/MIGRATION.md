@@ -18,6 +18,26 @@ The `0.1.0` core stabilization milestone establishes key architectural invariant
 
 ## Breaking Changes & Migration Pathways
 
+### Public facade tiers
+
+The stable `incin` facade keeps model-building and tensor ergonomics in its
+root and prelude. Backend extension contracts are explicitly namespaced and
+feature-gated. Compiler inspection and tuning are preview surfaces, and test
+backends are never part of a default build.
+
+| Old path | New path | Feature | Tier | Replacement | Breaking |
+|---|---|---|---|---|---|
+| `incin::Backend` | `incin::backend_authoring::Backend` | `backend-authoring` | backend authoring | `use incin::backend_authoring::Backend;` | yes |
+| `incin::VariableBackend` | `incin::backend_authoring::VariableBackend` | `backend-authoring` | backend authoring | Import the trait beside the backend implementation | yes |
+| `incin::prelude::Backend` | `incin::backend_authoring::Backend` | `backend-authoring` | backend authoring | Keep backend bounds out of ordinary model code | yes |
+| `incin_core::prelude::Graph` | `incin_core::graph::Graph` | `std` as applicable | graph inspection | Import `Graph` only in capture/compiler code | yes |
+| `incin::experimental::compiled::*` | `incin::experimental::compiled::*` | `compiled` | preview | Enable `compiled` and use the documented inspection types | no, when already namespaced |
+| tuning service internals | `incin::experimental::tuning::*` | `autotune` | preview | Use the documented policy and explanation types | yes |
+| `incin::test_utils::DummyBackend` without a feature | `incin::test_utils::DummyBackend` | `test-utils` | test-only | Enable `test-utils` in a test consumer | yes |
+
+The `Dyn` marker remains a normal public type. Its constructor and proof
+invariants are covered by the later API-002 constructor audit.
+
 ### 1. Backend Trait & Dispatch Migration
 
 #### Old Pattern

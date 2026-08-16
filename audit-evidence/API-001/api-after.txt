@@ -1,56 +1,4 @@
-impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
-impl<T> incin_data::vision::mnist::MnistBatchTarget for incin::TargetBatch<T> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
-pub fn incin::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
-pub fn incin::TargetBatch<T>::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
-pub fn incin::data::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
-pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub mod incin
-pub mod incin::advanced
-pub mod incin::data
-pub mod incin::experimental
-pub mod incin::hub
-pub mod incin::macros
-pub mod incin::macros::advanced
-pub mod incin::metrics
-pub mod incin::nn
-pub mod incin::optim
-pub mod incin::prelude
-pub mod incin::state
-pub mod incin::transforms
-pub mod incin::types
-pub mod incin::types::dtype
-pub struct incin::TargetBatch<T>(pub T)
-pub trait incin::MnistTargetExt
-pub trait incin::data::MnistTargetExt
-pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
-pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
-pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
-pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
-pub type incin::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
-pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
-pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
-pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
-pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
-pub type incin::MaxPool2d<K, S, P, D> = incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
-pub type incin::Param<T, B> = incin_core::nn::param::Param<T, B>
-pub type incin::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
-pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
-pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
-pub type incin::TargetBatch<T>::Images = incin_core::tensor::base::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::TensorTarget>::Backend>
-pub type incin::TargetBatch<T>::Labels = incin_core::tensor::base::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::TensorTarget>::Backend, u8>
-pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
-pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
-pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
-pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
-pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
-pub type incin::prelude::DefaultDevice = incin_core::tensor::device::Cpu
-pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
-pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
-pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
-pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
-pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
-pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
-pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
 pub use incin::Adam
 pub use incin::AdamW
 pub use incin::BackendError
@@ -107,6 +55,13 @@ pub use incin::TensorElement
 pub use incin::TrainState
 pub use incin::VisitState
 pub use incin::VisitStateMut
+pub use incin::bf16
+pub use incin::convert_f64_to_i64
+pub use incin::dim
+pub use incin::f16
+pub use incin::module
+pub use incin::typenum
+pub mod incin::advanced
 pub use incin::advanced::<<incin_core::shapes::idx::*>>
 pub use incin::advanced::At
 pub use incin::advanced::AxisSelector
@@ -121,8 +76,7 @@ pub use incin::advanced::StaticAxis
 pub use incin::advanced::SwapAt
 pub use incin::advanced::ToAxisIndex
 pub use incin::advanced::typenum
-pub use incin::bf16
-pub use incin::convert_f64_to_i64
+pub mod incin::data
 pub use incin::data::BatchResult
 pub use incin::data::Collate
 pub use incin::data::DataError
@@ -132,22 +86,29 @@ pub use incin::data::Dataset
 pub use incin::data::Downloader
 pub use incin::data::MnistBatchTarget
 pub use incin::data::vision
-pub use incin::dim
+pub trait incin::data::MnistTargetExt
+pub fn incin::data::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
+pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub mod incin::experimental
 pub use incin::experimental::import_model
 pub use incin::experimental::mesh
 pub use incin::experimental::model
 pub use incin::experimental::parallel
 pub use incin::experimental::placement
-pub use incin::f16
+pub mod incin::hub
 pub use incin::hub::HubApi
 pub use incin::hub::HubRepo
 pub use incin::hub::download
 pub use incin::hub::from_pretrained
-pub use incin::macros::advanced::idx
+pub mod incin::macros
 pub use incin::macros::i
 pub use incin::macros::s
 pub use incin::macros::shape
 pub use incin::macros::tensor
+pub mod incin::macros::advanced
+pub use incin::macros::advanced::idx
+pub mod incin::metrics
 pub use incin::metrics::Accuracy
 pub use incin::metrics::ConfusionMatrix
 pub use incin::metrics::F1Score
@@ -155,7 +116,7 @@ pub use incin::metrics::MSE
 pub use incin::metrics::Metric
 pub use incin::metrics::Precision
 pub use incin::metrics::Recall
-pub use incin::module
+pub mod incin::nn
 pub use incin::nn::AdaptiveAvgPool2d
 pub use incin::nn::AvgPool2d
 pub use incin::nn::BCEWithLogitsLoss
@@ -224,17 +185,26 @@ pub use incin::nn::True
 pub use incin::nn::VisitParameters
 pub use incin::nn::batch_norm2d
 pub use incin::nn::conv1d
+pub use incin::nn::conv1d
 pub use incin::nn::conv2d
+pub use incin::nn::conv2d
+pub use incin::nn::embedding
 pub use incin::nn::embedding
 pub use incin::nn::format_layer_summary
 pub use incin::nn::format_layer_summary_with_stats
 pub use incin::nn::layer_norm
+pub use incin::nn::layer_norm
 pub use incin::nn::linear
+pub use incin::nn::linear
+pub use incin::nn::lstm
 pub use incin::nn::lstm
 pub use incin::nn::param
 pub use incin::nn::rms_norm
+pub use incin::nn::rms_norm
+pub use incin::nn::rnn
 pub use incin::nn::rnn
 pub use incin::nn::sum_stats
+pub mod incin::optim
 pub use incin::optim::Adam
 pub use incin::optim::AdamW
 pub use incin::optim::ConstantLR
@@ -245,6 +215,7 @@ pub use incin::optim::Optimizer
 pub use incin::optim::OptimizerBackend
 pub use incin::optim::ParameterGroup
 pub use incin::optim::SGD
+pub mod incin::prelude
 pub use incin::prelude::Accuracy
 pub use incin::prelude::Adam
 pub use incin::prelude::AdamW
@@ -378,6 +349,19 @@ pub use incin::prelude::seq
 pub use incin::prelude::shape
 pub use incin::prelude::tensor
 pub use incin::prelude::typenum
+pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
+pub type incin::prelude::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
+pub mod incin::state
 pub use incin::state::StateMutVisitor
 pub use incin::state::StatePath
 pub use incin::state::StateRole
@@ -389,16 +373,42 @@ pub use incin::state::VisitState
 pub use incin::state::VisitStateMut
 pub use incin::state::collect_state
 pub use incin::state::load_state
+pub mod incin::transforms
 pub use incin::transforms::CenterCrop
 pub use incin::transforms::Compose
 pub use incin::transforms::Normalize
 pub use incin::transforms::RandomHorizontalFlip
 pub use incin::transforms::Scale
 pub use incin::transforms::Transform
-pub use incin::typenum
+pub mod incin::types
 pub use incin::types::ConcreteStaticExtent
 pub use incin::types::DimCons
 pub use incin::types::Nil
 pub use incin::types::ReplaceAt
 pub use incin::types::StructuralConcatShape
+pub mod incin::types::dtype
 pub use incin::types::dtype::StorageEncoding
+pub struct incin::TargetBatch<T>(pub T)
+impl<T> incin_data::vision::mnist::MnistBatchTarget for incin::TargetBatch<T> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub type incin::TargetBatch<T>::Images = incin_core::tensor::base::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::TensorTarget>::Backend>
+pub type incin::TargetBatch<T>::Labels = incin_core::tensor::base::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::TensorTarget>::Backend, u8>
+pub fn incin::TargetBatch<T>::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
+pub trait incin::MnistTargetExt
+pub fn incin::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
+pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
+pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::MaxPool2d<K, S, P, D> = incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
+pub type incin::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
+pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>

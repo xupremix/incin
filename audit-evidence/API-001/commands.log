@@ -1,0 +1,8 @@
+cargo public-api -sss --color never -p incin --no-default-features --features cpu
+python3 tools/check-public-api-baseline.py
+result: public API baseline passed: 404 reviewed facade entries
+bash tools/check-public-api.sh
+result: public API checks passed
+cargo semver-checks -p incin --baseline-rev HEAD^ --release-type major --default-features --color never
+exit_status=0
+result: Summary no semver update required; 0 checks, 254 skipped

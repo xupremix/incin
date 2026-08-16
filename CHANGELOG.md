@@ -9,6 +9,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **Facade API tiers:** Removed backend-authoring traits from the stable
+  `incin` root and default prelude, and removed `Graph` from the core prelude.
+  The supported migration paths are recorded in `docs/MIGRATION.md`; backend
+  contracts remain under the explicit `backend-authoring` feature.
 - **Editor documentation prose:** Replaced em-dash-heavy phrasing in the
   VS Code, Neovim, and RustRover integration READMEs with ordinary punctuation
   so current user-facing documentation follows the repository prose style.

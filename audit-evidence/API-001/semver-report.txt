@@ -1,0 +1,13 @@
+     Cloning HEAD^
+    Building incin v0.0.0 (current)
+       Built [  27.313s] (current)
+     Parsing incin v0.0.0 (current)
+      Parsed [   0.012s] (current)
+    Building incin v0.0.0 (baseline)
+       Built [  27.851s] (baseline)
+     Parsing incin v0.0.0 (baseline)
+      Parsed [   0.009s] (baseline)
+    Checking incin v0.0.0 -> v0.0.0 (assume major change)
+     Checked [   0.000s] 0 checks: 0 pass, 254 skip
+     Summary no semver update required
+    Finished [  72.914s] incin
