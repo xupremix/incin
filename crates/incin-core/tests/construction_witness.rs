@@ -156,10 +156,7 @@ fn dynamic_flatten_reports_invalid_ranges_without_panicking() {
     );
 
     let err = tensor.flatten_runtime(1, 3).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "flatten: axis range 1..3 is invalid for rank 3"
-    );
+    assert_eq!(err.to_string(), "axis 3 is invalid for rank 3");
 }
 
 #[test]
