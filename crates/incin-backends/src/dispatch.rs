@@ -850,46 +850,6 @@ macro_rules! create_dispatch {
     };
 }
 
-macro_rules! create_var_dispatch {
-    ($helper:ident, $method:ident, $shape:expr, $dtype:expr, $device:expr) => {
-        match $device.kind() {
-            DeviceKind::Cpu => {
-                #[cfg(feature = "cpu")]
-                {
-                    let total = crate::cpu::stride::checked_numel($shape)?;
-                    return crate::cpu::creation::$helper(total, $shape, $dtype, $device)
-                        .map(DispatchVar::Cpu);
-                }
-                #[cfg(not(feature = "cpu"))]
-                Err(unavailable(DeviceKind::Cpu))
-            }
-            DeviceKind::Wgpu => {
-                #[cfg(feature = "wgpu")]
-                {
-                    return crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<K>(
-                        $shape, $dtype, $device,
-                    )
-                    .map(DispatchVar::Wgpu);
-                }
-                #[cfg(not(feature = "wgpu"))]
-                Err(unavailable(DeviceKind::Wgpu))
-            }
-            DeviceKind::Cuda => {
-                #[cfg(feature = "cuda")]
-                {
-                    return crate::cuda::CudaBackendImpl::<Cuda>::$method::<K>(
-                        $shape, $dtype, $device,
-                    )
-                    .map(DispatchVar::Cuda);
-                }
-                #[cfg(not(feature = "cuda"))]
-                Err(unavailable(DeviceKind::Cuda))
-            }
-            other => Err(unavailable(other)),
-        }
-    };
-}
-
 macro_rules! variable_executors {
     ($(($operation:ident, $cpu_method:ident, $backend_method:ident)),* $(,)?) => {$ (
         impl<D: Device> Execute<op::$operation> for DispatchBackend<D> {
@@ -1320,38 +1280,6 @@ impl<D: Device> DispatchBackend<D> {
             }
             other => Err(unavailable(other)),
         }
-    }
-    #[allow(dead_code, clippy::extra_unused_type_parameters)]
-    fn var_zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_zeros_with_total, var_zeros, shape, dtype, device)
-    }
-    #[allow(dead_code, clippy::extra_unused_type_parameters)]
-    fn var_ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_ones_with_total, var_ones, shape, dtype, device)
-    }
-    #[allow(dead_code, clippy::extra_unused_type_parameters)]
-    fn var_rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_rand_with_total, var_rand, shape, dtype, device)
-    }
-    #[allow(dead_code, clippy::extra_unused_type_parameters)]
-    fn var_randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<DispatchVar> {
-        create_var_dispatch!(var_randn_with_total, var_randn, shape, dtype, device)
     }
 }
 
