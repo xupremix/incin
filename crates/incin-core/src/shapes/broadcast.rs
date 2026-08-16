@@ -185,6 +185,16 @@ impl<U, B> StaticNatDim for typenum::UInt<U, B> where
 {
 }
 
+/// Equal const-generic extents remain statically broadcastable. Const paths
+/// use `ConstDim<N>` rather than the typenum representation emitted for raw
+/// literals, so this focused implementation keeps target-created static
+/// tensors on the same operator path without admitting unequal extents.
+impl<const N: usize> BroadcastDim<crate::shapes::dim::ConstDim<N>>
+    for crate::shapes::dim::ConstDim<N>
+{
+    type Output = crate::shapes::dim::ConstDim<N>;
+}
+
 /// Static anonymous axes normalize directly to the selected typenum extent.
 /// The comparison bounds are deliberately part of the implementation so an
 /// incompatible pair has no `BroadcastDim` implementation at all.

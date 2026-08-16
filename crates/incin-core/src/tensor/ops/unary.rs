@@ -157,13 +157,23 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         )
     }
 
-    /// Negates the tensor element-wise.
-    pub fn neg(&self) -> Result<Self>
+    /// Negates the tensor element-wise, returning recoverable execution errors.
+    pub fn try_neg(&self) -> Result<Self>
     where
         B: Execute<op::Neg>,
         <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
     {
         execute_unary_descriptor::<op::Neg, S, B, K, G>(self)
+    }
+
+    /// Checked compatibility spelling. Prefer [`Self::try_neg`] in new code.
+    #[doc(hidden)]
+    pub fn neg(&self) -> Result<Self>
+    where
+        B: Execute<op::Neg>,
+        <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
+    {
+        self.try_neg()
     }
 
     /// Computes the square root of each element.
@@ -505,3 +515,33 @@ impl_std_scalar_ops!(f32);
 impl_std_scalar_ops!(f64);
 impl_std_scalar_ops!(i32);
 impl_std_scalar_ops!(i64);
+
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> core::ops::Neg
+    for Tensor<S, B, K, G>
+where
+    B: Execute<op::Neg>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
+{
+    type Output = Tensor<S, B, K, G>;
+
+    #[track_caller]
+    fn neg(self) -> Self::Output {
+        self.try_neg()
+            .unwrap_or_else(|error| panic!("Incin Neg failed: {error}"))
+    }
+}
+
+impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> core::ops::Neg
+    for &'a Tensor<S, B, K, G>
+where
+    B: Execute<op::Neg>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
+{
+    type Output = Tensor<S, B, K, G>;
+
+    #[track_caller]
+    fn neg(self) -> Self::Output {
+        self.try_neg()
+            .unwrap_or_else(|error| panic!("Incin Neg failed: {error}"))
+    }
+}

@@ -239,11 +239,11 @@ where
 macro_rules! impl_binary_op {
     (
         $(#[$meta:meta])*
-        $op:ident, $method:ident, $op_marker:ident
+        $op:ident, $method:ident, $try_method:ident, $op_marker:ident
     ) => {
         impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S, B, K, G1> {
             $(#[$meta])*
-            pub fn $method<S2: Shape, G2: RequiresGrad>(
+            pub fn $try_method<S2: Shape, G2: RequiresGrad>(
                 &self,
                 rhs: &Tensor<S2, B, K, G2>,
             ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
@@ -258,28 +258,44 @@ macro_rules! impl_binary_op {
                     execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _>(self, rhs, grad_out)
                 })
             }
+
+            /// Checked compatibility spelling. Prefer the explicit `try_*`
+            /// method in new code.
+            #[doc(hidden)]
+            pub fn $method<S2: Shape, G2: RequiresGrad>(
+                &self,
+                rhs: &Tensor<S2, B, K, G2>,
+            ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
+            where
+                S: ShapeEq<S2>,
+                G1: GradJoin<G2>,
+                B: Execute<op::$op_marker>,
+                <B as Execute<op::$op_marker>>::Output: Into<B::Storage<K>>,
+            {
+                self.$try_method(rhs)
+            }
         }
     };
 }
 
 impl_binary_op!(
     /// Adds another tensor element-wise.
-    Add, add, Add
+    Add, add, try_add, Add
 );
 
 impl_binary_op!(
     /// Subtracts another tensor element-wise.
-    Sub, sub, Sub
+    Sub, sub, try_sub, Sub
 );
 
 impl_binary_op!(
     /// Multiplies by another tensor element-wise.
-    Mul, mul, Mul
+    Mul, mul, try_mul, Mul
 );
 
 impl_binary_op!(
     /// Divides by another tensor element-wise.
-    Div, div, Div
+    Div, div, try_div, Div
 );
 
 macro_rules! impl_cmp_op {
@@ -367,28 +383,28 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad> Tensor<S, B
 
 impl_binary_op!(
     /// Element-wise maximum of two tensors.
-    Maximum, maximum, Maximum
+    Maximum, maximum, try_maximum, Maximum
 );
 impl_binary_op!(
     /// Element-wise minimum of two tensors.
-    Minimum, minimum, Minimum
+    Minimum, minimum, try_minimum, Minimum
 );
 impl_binary_op!(
     /// Element-wise absolute difference `|self - rhs|`.
-    AbsDiff, abs_diff, AbsDiff
+    AbsDiff, abs_diff, try_abs_diff, AbsDiff
 );
 
 impl_binary_op!(
     /// Element-wise 2-argument arctangent `atan2(self, rhs)`.
-    Atan2, atan2, Atan2
+    Atan2, atan2, try_atan2, Atan2
 );
 impl_binary_op!(
     /// Element-wise floating point remainder `self % rhs`.
-    Fmod, fmod, Fmod
+    Fmod, fmod, try_fmod, Fmod
 );
 impl_binary_op!(
     /// Element-wise IEEE remainder.
-    Remainder, remainder, Remainder
+    Remainder, remainder, try_remainder, Remainder
 );
 
 impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
@@ -584,7 +600,6 @@ impl_broadcast_binary_op!(
 
 macro_rules! impl_std_ops {
     ($trait:ident, $method:ident, $backend_method:ident, $op:ident) => {
-        // Tensor + Tensor
         impl<
             S1: Shape + DynShape,
             S2: Shape + DynShape,
@@ -599,21 +614,19 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::err::Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
-            #[inline]
+            #[track_caller]
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
+                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
-        // &Tensor + &Tensor
         impl<
             'a,
             'b,
@@ -630,21 +643,19 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::err::Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
-            #[inline]
+            #[track_caller]
             fn $method(self, rhs: &'b Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
+                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
-        // Tensor + &Tensor
         impl<
             'a,
             S1: Shape + DynShape,
@@ -660,21 +671,19 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::err::Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
-            #[inline]
+            #[track_caller]
             fn $method(self, rhs: &'a Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
+                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
-        // &Tensor + Tensor
         impl<
             'a,
             S1: Shape + DynShape,
@@ -690,17 +699,16 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = crate::err::Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
-            #[inline]
+            #[track_caller]
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
+                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
     };
