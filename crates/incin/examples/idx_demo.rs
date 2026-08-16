@@ -11,8 +11,8 @@ fn main() {
     println!("Reshaped shape: {:?}", t2.dims());
     assert_eq!(t2.dims().as_ref(), &[2, 12]);
 
-    // slice to (1, 12) via idx![0..1, ..]
-    let t3 = t2.slice_idx::<idx![0..1, ..]>().unwrap();
+    // slice to (1, 12) via i![0..1, ..]
+    let t3 = t2.get(i![0..1, ..]).unwrap();
     println!("Sliced shape: {:?}", t3.dims());
     assert_eq!(t3.dims().as_ref(), &[1, 12]);
 }

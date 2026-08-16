@@ -34,7 +34,7 @@ impl SimpleCNN {
         let f = self.features.forward(x)?;
 
         // 2. Flatten (B, 16, 26, 26) -> (B, 10816)
-        let flat = f.flatten_runtime(1, 3)?;
+        let flat = f.flatten(1isize, 3isize)?;
 
         // 3. Classification
         let logits = self.classifier.forward(flat)?;

@@ -131,14 +131,13 @@ type NamedStatic = s![BatchSize = 25, 128]; // named axis with static extent
 type Loose = s![usize, 128];         // unnamed runtime axis
 ```
 
-`idx![0..5, .., 15..30]` is the slicing analogue  -  it builds the type
-`.slice_idx::<...>()` expects, translating `a..b` to a bounded `Slice`, `..`
-to "take the whole axis", and `-1` to `InferDim` for reshape.
+`i![0..5, .., 15..30]` is the indexing form for `Tensor::get`. Reshape
+inference is separate and uses `shape![..., infer]` with `reshape_infer`.
 
 ### Why two type-level systems (`s!` vs `shape!`)
 
 `s!` names a *type*. Allocation targets (§7) need a *value* to pass to a
-constructor, and that value has to encode the same static/runtime split  -
+constructor, and that value has to encode the same static/runtime split.
 `shape!` is that value-level counterpart:
 
 ```rust

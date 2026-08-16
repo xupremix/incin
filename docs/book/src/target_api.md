@@ -131,10 +131,9 @@ For generic known-rank runtime shapes, `sum` and `sum_keepdim` retain the rank
 arithmetic in the type while leaving extents runtime-valued. The older
 `sum_runtime_ranked` spellings remain hidden compatibility helpers.
 
-Named reduction selectors retain known rank and preserve named dimensions at
-runtime. Stable Rust currently cannot express the exact post-reduction named
-type through the blanket named-axis lookup implementation without overlapping
-trait implementations, so these APIs use `Ranked<R>` at that boundary.
+Named reduction selectors retain known rank. Named dimensions are resolved at
+runtime, while the public output uses the strongest shape proof available for
+the selected operation.
 
 Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
 ranges. Reshape inference is separate from indexing and uses `shape![..., infer]`.

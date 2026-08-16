@@ -204,7 +204,7 @@ fn main() -> Result<()> {
   the `cargo-incin` CLI binary.
 - `incin-core`: Statically-typed `Tensor` implementation, traits, and graph definitions.
 - `incin-backends`: Native CPU, opt-in CUDA and WGPU execution engines, plus an external Candle adapter.
-- `incin-macros`: Procedural macros (`s!`, `idx!`, `module`, `import_model!`).
+- `incin-macros`: Procedural macros (`s!`, `shape!`, `axis!`, `i!`, `module`, `import_model!`).
 - `incin-data`: Data loading utilities, dataset traits, and HuggingFace Hub support.
 - `incin-telemetry`: Event emission, transport streams, and graph snapshot recording.
 - `incin-viz`: Terminal UI (TUI) model graph visualizer.
