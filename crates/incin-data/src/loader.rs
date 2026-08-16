@@ -273,7 +273,7 @@ where
     }
 
     /// Builds the configured loader.
-    #[must_use]
+    #[must_use = "building a loader returns the configured loader or its validation error"]
     pub fn build(self) -> CoreResult<DataLoader<D, C>> {
         let batch_size =
             NonZeroUsize::new(self.batch_size).ok_or_else(|| Error::InvalidModuleState {

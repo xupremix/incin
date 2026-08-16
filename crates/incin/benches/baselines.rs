@@ -38,7 +38,7 @@ fn eager_baselines(c: &mut Criterion) {
     for elements in [1_024usize, 65_536] {
         let input = Tensor::<Dyn, B>::ones(vec![elements]).unwrap();
         group.bench_with_input(BenchmarkId::new("add_f32", elements), &elements, |b, _| {
-            b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+            b.iter(|| black_box(&input) + black_box(&input))
         });
         group.bench_with_input(BenchmarkId::new("sum_f32", elements), &elements, |b, _| {
             b.iter_batched(
@@ -86,7 +86,7 @@ fn gpu_baselines(c: &mut Criterion) {
 
     let input = Tensor::<Dyn, WgpuB>::ones(vec![65_536]).unwrap();
     group.bench_function("add_f32/65536", |b| {
-        b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+        b.iter(|| black_box(&input) + black_box(&input))
     });
 
     let lhs = Tensor::<Dyn, WgpuB>::ones(vec![64, 64]).unwrap();

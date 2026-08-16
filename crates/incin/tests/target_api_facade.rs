@@ -26,8 +26,10 @@ fn the_whole_surface_is_reachable_from_the_facade_prelude() {
     assert_eq!(cpu.zeros(shape![batch, 4]).unwrap().dims(), [3, 4]);
     assert_eq!(&cpu.zeros([batch, 4]).unwrap().dims()[..], &[3, 4][..]);
 
-    // Layers begin at the layer type.
-    let layer = Linear::<Dyn, _>::new(4, 3, &cpu).unwrap();
+    // Layers begin at the canonical target-aware builder.
+    let layer = incin_core::nn::linear::linear(shape![4, 3])
+        .init(&cpu)
+        .unwrap();
     assert_eq!(layer.weight.shape_dims(), vec![3, 4]);
 }
 
