@@ -1,6 +1,6 @@
-//! Scaffolded by `cargo incin new mnist` -- a 784 -> 128 -> 10 MLP training
-//! loop with live telemetry pre-wired, so `cargo run` plus `cargo incin
-//! watch` gives you a live loss curve in the terminal with zero extra setup.
+//! Scaffolded by `cargo incin new mnist`, a 784 -> 128 -> 10 MLP training
+//! loop with live telemetry pre-wired. `cargo run` plus `cargo incin watch`
+//! gives you a live loss curve in the terminal with no extra setup.
 //!
 //! This trains on synthetic random data (not real MNIST), deliberately, so
 //! the scaffold builds and runs immediately with no external download. Swap
@@ -19,7 +19,7 @@ type Backend = incin::DefaultBackend;
 fn main() -> incin::Result<()> {
     let (reporter, run) = Emitter::to_run_dir(None).expect("failed to start telemetry");
     println!(
-        "Telemetry run `{}` started -- watch it live in another terminal with:\n    cargo incin watch --run-id {}",
+        "Telemetry run `{}` started. Watch it live in another terminal with:\n    cargo incin watch --run-id {}",
         run.run_id, run.run_id
     );
 
@@ -56,6 +56,6 @@ fn main() -> incin::Result<()> {
         }
     }
 
-    println!("Done -- see the module doc comment for how to swap in real MNIST data.");
+    println!("Done. See the module doc comment for how to swap in real MNIST data.");
     Ok(())
 }
