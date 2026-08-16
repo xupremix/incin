@@ -18,6 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Dispatch dead-code cleanup:** Removed four private variable-creation
   dispatch wrappers that were never called; the execution registry remains the
   active path for variable creation operations.
+- **Hidden API inventory:** Refreshed the reviewed source locations for the
+  descriptor transform, paranoid-validation, and macro-support hidden items so
+  the mechanical inventory check matches the current source.
 - **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
   helpers are now test-only, with production builds retaining only the
   candidate conversion and fallback policy they use.
