@@ -155,15 +155,6 @@ pub trait DtypeTarget: TensorTarget + Sized + Clone {
         <Self::Backend as SupportsDType<Dyn>>::resolve_dtype(&field, &device)?;
         Ok(DtypeView::new(self.clone(), field))
     }
-
-    /// Legacy compatibility spelling.
-    #[deprecated(note = "Use `.dtype::<K>()` instead")]
-    fn with_dtype<K: ConstDType>(&self) -> Result<DtypeView<Self, K>>
-    where
-        Self::Backend: SupportsDType<K>,
-    {
-        self.dtype::<K>()
-    }
 }
 
 impl<T: TensorTarget + Sized + Clone> DtypeTarget for T {}
@@ -897,87 +888,6 @@ impl_self_arg_target!(Metal);
 
 // ============================================================================
 // Layer initialization
-// ============================================================================
-
-/// Constructing a layer from an allocation target.
-///
-/// Implemented for `Linear<Dyn, _>` so that the ordinary path begins at the
-/// *layer type*, matching the rule the rest of this module follows: creating
-/// data or a generated tensor begins at the target, creating a layer begins at
-/// the layer, moving something begins at the object being moved. A
-/// `target.linear(..)` method would read fluently and put layer construction
-/// in the one namespace where nobody would look for it.
-///
-/// This is an extension trait for the same reason [`TargetExt`] is: `Linear`
-/// is defined in `incin-core`, [`TensorTarget`] in this
-/// crate, and an inherent `impl` may only live beside its type.
-pub trait LinearInit<T: TensorTarget>: Sized {
-    /// Builds a linear layer with parameters allocated on `target`.
-    ///
-    /// Feature counts are runtime values here, so the layer is
-    /// `Linear<Dyn, _>`. Its parameters are created through
-    /// [`TargetExt::parameter`], so there is no second allocation path for
-    /// weights, and they carry [`Grad`] while everything else the target
-    /// produces carries [`NoGrad`].
-    ///
-    /// `S` cannot be inferred from the arguments — nothing here mentions it —
-    /// so the call needs a turbofish for it:
-    ///
-    /// ```text
-    /// let layer = Linear::<Dyn, _>::new(784, 128, &gpu)?;
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Propagates parameter allocation failure.
-    fn new(in_features: usize, out_features: usize, target: &T) -> Result<Self>;
-}
-
-impl<T> LinearInit<T>
-    for incin_core::nn::linear::Linear<
-        Dyn,
-        TargetBackend<T>,
-        incin_core::nn::optional::True,
-        T::ParameterDtype,
-        incin_core::nn::param::Trainable,
-    >
-where
-    T: TensorTarget + TargetExt + Clone,
-    T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
-        + SupportsDType<T::ParameterDtype>
-        + incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::MulScalar>
-        + incin_core::backend_authoring::Execute<incin_core::backend_authoring::op::AddScalar>
-        + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::Zeros,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::Ones,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::UniformRandom,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::NormalRandom,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::exec::Capabilities
-        + Default,
-    <TargetBackend<T> as incin_core::backend_authoring::Execute<
-        incin_core::backend_authoring::op::MulScalar,
-    >>::Output: Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
-    <TargetBackend<T> as incin_core::backend_authoring::Execute<
-        incin_core::backend_authoring::op::AddScalar,
-    >>::Output: Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
-{
-    fn new(in_features: usize, out_features: usize, target: &T) -> Result<Self> {
-        let shape_val = incin_core::shapes::ShapeValue::<Dyn>::try_new(
-            incin_core::shapes::ShapeBuf::from_slice(&[in_features, out_features]),
-        )
-        .map_err(Error::Shape)?;
-        crate::nn_target::InitOnTarget::init(incin_core::nn::linear::linear(shape_val), target)
-    }
-}
-
 // ============================================================================
 // Engine & Precision abstractions (Target<E, D, P>)
 // ============================================================================

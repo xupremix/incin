@@ -12,7 +12,7 @@ use incin_core::nn::layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape};
 use incin_core::nn::linear::{Linear, LinearBuilder, LinearShape};
 use incin_core::nn::lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape};
 use incin_core::nn::optional::OptionalField;
-use incin_core::nn::param::{Param, TrainState, Trainable};
+use incin_core::nn::param::{Param, TrainState};
 use incin_core::nn::rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape};
 use incin_core::nn::rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape};
 use incin_core::shapes::buf::ShapeBuf;
@@ -293,52 +293,6 @@ where
         };
 
         Ok(Linear::from_raw_parts(weight, bias))
-    }
-}
-
-/// Direct `Linear::new_on_target` constructor extension trait for targets.
-pub trait LinearNewOnTarget<S: LinearShape, T: TensorTarget> {
-    /// The initialized layer output type.
-    type Output;
-    /// Direct linear layer construction on target.
-    fn new_on_target(shape: ShapeValue<S>, target: &T) -> Result<Self::Output>;
-}
-
-impl<S, T> LinearNewOnTarget<S, T>
-    for Linear<S, TargetBackend<T>, incin_core::nn::optional::True, T::ParameterDtype, Trainable>
-where
-    S: LinearShape,
-    T: TensorTarget + TargetExt + Clone,
-    T::ParameterDtype: FloatDType,
-    TargetBackend<T>: Backend<Device = T::Device>
-        + VariableBackend
-        + SupportsDType<T::ParameterDtype>
-        + Execute<op::MulScalar>
-        + Execute<op::AddScalar>
-        + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::Zeros,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::Ones,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::UniformRandom,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::backend_authoring::Execute<
-            incin_core::backend_authoring::op::NormalRandom,
-            Output = <TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>,
-        > + incin_core::exec::Capabilities
-        + Default,
-    <TargetBackend<T> as Execute<op::MulScalar>>::Output:
-        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
-    <TargetBackend<T> as Execute<op::AddScalar>>::Output:
-        Into<<TargetBackend<T> as StorageBackend>::Storage<T::ParameterDtype>>,
-{
-    type Output =
-        Linear<S, TargetBackend<T>, incin_core::nn::optional::True, T::ParameterDtype, Trainable>;
-
-    fn new_on_target(shape: ShapeValue<S>, target: &T) -> Result<Self::Output> {
-        incin_core::nn::linear::linear(shape).init(target)
     }
 }
 

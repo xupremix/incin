@@ -122,8 +122,16 @@ where
     }
 }
 
-impl<A: Send + 'static, B: Send + 'static> Collate<(A, B)> for DefaultCollate {
-    type Output = (Vec<A>, Vec<B>);
+impl<A, B> Collate<(A, B)> for DefaultCollate
+where
+    A: Send + 'static,
+    B: Send + 'static,
+    DefaultCollate: Collate<A> + Collate<B>,
+{
+    type Output = (
+        <DefaultCollate as Collate<A>>::Output,
+        <DefaultCollate as Collate<B>>::Output,
+    );
 
     fn collate(&self, batch: Vec<(A, B)>) -> BatchResult<Self::Output> {
         let mut first = Vec::with_capacity(batch.len());
@@ -132,14 +140,25 @@ impl<A: Send + 'static, B: Send + 'static> Collate<(A, B)> for DefaultCollate {
             first.push(a);
             second.push(b);
         }
-        Ok((first, second))
+        Ok((
+            <Self as Collate<A>>::collate(self, first)?,
+            <Self as Collate<B>>::collate(self, second)?,
+        ))
     }
 }
 
-impl<A: Send + 'static, B: Send + 'static, C: Send + 'static> Collate<(A, B, C)>
-    for DefaultCollate
+impl<A, B, C> Collate<(A, B, C)> for DefaultCollate
+where
+    A: Send + 'static,
+    B: Send + 'static,
+    C: Send + 'static,
+    DefaultCollate: Collate<A> + Collate<B> + Collate<C>,
 {
-    type Output = (Vec<A>, Vec<B>, Vec<C>);
+    type Output = (
+        <DefaultCollate as Collate<A>>::Output,
+        <DefaultCollate as Collate<B>>::Output,
+        <DefaultCollate as Collate<C>>::Output,
+    );
 
     fn collate(&self, batch: Vec<(A, B, C)>) -> BatchResult<Self::Output> {
         let mut first = Vec::with_capacity(batch.len());
@@ -150,7 +169,11 @@ impl<A: Send + 'static, B: Send + 'static, C: Send + 'static> Collate<(A, B, C)>
             second.push(b);
             third.push(c);
         }
-        Ok((first, second, third))
+        Ok((
+            <Self as Collate<A>>::collate(self, first)?,
+            <Self as Collate<B>>::collate(self, second)?,
+            <Self as Collate<C>>::collate(self, third)?,
+        ))
     }
 }
 
@@ -375,8 +398,8 @@ where
     D::Item: Send + 'static,
     DefaultCollate: Collate<D::Item>,
 {
-    /// Creates a loader using [`DefaultCollate`], which returns `Vec<D::Item>`
-    /// for each batch.
+    /// Creates a loader using [`DefaultCollate`] for scalar, tuple, and tensor
+    /// batches.
     pub fn from_dataset(dataset: D, batch_size: usize) -> CoreResult<Self> {
         Self::new(dataset, DefaultCollate, batch_size)
     }

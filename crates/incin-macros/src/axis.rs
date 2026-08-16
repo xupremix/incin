@@ -44,13 +44,14 @@ fn cursor(value: isize) -> proc_macro2::TokenStream {
     } else {
         ("Next", value as usize)
     };
-    let path = quote! { ::incin::prelude:: };
+    let path = quote! { ::incin::advanced:: };
+    let api = quote! { ::incin::prelude:: };
     if name == "FromEnd" {
         let mut ty = quote! { #path Here };
         for _ in 0..magnitude.saturating_sub(1) {
             ty = quote! { #path Next::<#ty> };
         }
-        quote! { #path StaticAxis::<#path FromEnd::<#ty>>::DEFAULT }
+        quote! { #api StaticAxis::<#path FromEnd::<#ty>>::DEFAULT }
     } else if magnitude == 0 {
         quote! { #path Here }
     } else {
@@ -58,7 +59,7 @@ fn cursor(value: isize) -> proc_macro2::TokenStream {
         for _ in 0..magnitude {
             ty = quote! { #path Next::<#ty> };
         }
-        quote! { #path StaticAxis::<#ty>::DEFAULT }
+        quote! { #api StaticAxis::<#ty>::DEFAULT }
     }
 }
 

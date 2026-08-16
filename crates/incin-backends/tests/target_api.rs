@@ -317,14 +317,18 @@ fn canonical_zeros_refuses_an_unsupported_dtype() {
 #[test]
 fn a_linear_layer_is_built_from_a_target() {
     let cpu = Cpu;
-    let layer = incin_core::nn::Linear::<Dyn, _>::new(4, 3, &cpu).unwrap();
+    let layer = incin_core::nn::linear::linear(shape![4, 3])
+        .init(&cpu)
+        .unwrap();
     assert_eq!(layer.weight.shape_dims(), vec![3, 4]);
     assert!(layer.bias.is_some(), "bias is present by default");
 }
 
 #[test]
 fn layer_parameters_are_shaped_from_the_feature_counts() {
-    let layer = incin_core::nn::Linear::<Dyn, _>::new(4, 3, &Cpu).unwrap();
+    let layer = incin_core::nn::linear::linear(shape![4, 3])
+        .init(&Cpu)
+        .unwrap();
     assert_eq!(layer.weight.shape_dims(), vec![3, 4]);
     assert_eq!(
         layer.bias.as_ref().map(incin_core::nn::Param::shape_dims),
@@ -344,14 +348,6 @@ fn a_target_can_be_rebound_to_an_integer_dtype_for_fills() {
 
     let ones = idx.ones(shape![3]).unwrap();
     assert_eq!(ones.to_vec1::<i64>().unwrap(), vec![1_i64; 3]);
-}
-
-#[allow(deprecated)]
-#[test]
-fn legacy_with_dtype_alias_works() {
-    let idx = Cpu.with_dtype::<i64>().unwrap();
-    let t = idx.zeros(shape![4]).unwrap();
-    assert_eq!(t.to_vec1::<i64>().unwrap(), vec![0_i64; 4]);
 }
 
 #[test]

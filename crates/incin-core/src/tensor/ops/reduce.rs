@@ -562,8 +562,8 @@ where
         )
     }
 
-    /// Computes argmin along a compile-time numeric axis.
-    pub fn argmin<const AXIS: usize>(
+    /// Computes argmin along a compile-time signed axis.
+    pub fn argmin<const AXIS: isize>(
         &self,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
@@ -577,14 +577,18 @@ where
     #[doc(hidden)]
     pub fn argmin_runtime(
         &self,
-        dim: Option<usize>,
+        dim: Option<isize>,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
     {
         let normalized = dim
-            .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
+            .map(|d| {
+                crate::shapes::idx::AxisSelector::new(&[d])
+                    .normalize(self.rank())
+                    .map(|axes| axes[0])
+            })
             .transpose()?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = normalized {

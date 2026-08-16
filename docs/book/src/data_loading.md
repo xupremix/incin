@@ -62,8 +62,8 @@ Custom collation remains available through `DataLoader::new` and
 
 The default collator batches scalar samples as `Vec<T>`, batches tuple samples
 field-wise, and stacks compatible tensor samples along a leading batch axis.
-For example, `(Tensor<A>, u8)` becomes `(Vec<Tensor<A>>, Vec<u8>)` unless the
-tensor field is itself collated by a custom tuple collator. Vector-valued
+For example, `(Tensor<A>, u8)` becomes `(Tensor<Dyn>, Vec<u8>)`, while
+`(Tensor<A>, Tensor<B>)` becomes `(Tensor<Dyn>, Tensor<Dyn>)`. Vector-valued
 samples remain `Vec<Vec<T>>`. Shape or backend failures while stacking tensors
 are returned as `DataError::InvalidBatch`.
 

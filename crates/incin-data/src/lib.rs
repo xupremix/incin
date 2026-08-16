@@ -8,7 +8,8 @@
 //! A `Dataset` supplies items by index; a `Collate` can turn a batch into the
 //! model's input type; a `DataLoader` joins the two and yields typed `Result`
 //! values so worker failures cannot look like end-of-data. Use
-//! `DataLoader::builder` when retaining samples as `Vec<Item>` is enough.
+//! `DataLoader::builder` for the default scalar, tuple, and tensor batching
+//! policy.
 //!
 //! ```rust
 //! use incin_data::{Collate, DataLoader, Dataset};

@@ -113,12 +113,12 @@ pub mod prelude {
 
     // Extension methods only resolve when their trait is in scope, so the
     // traits are exported alongside the types they operate on.
-    pub use super::nn_target::{InitOnTarget, LinearNewOnTarget};
+    pub use super::nn_target::InitOnTarget;
     #[cfg(feature = "external-candle")]
     pub use super::target::Candle;
     pub use super::target::{
-        DtypeTarget, EngineOn, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec,
-        RuntimeEngine, Target, TargetExt, TensorData, TensorTarget, precision,
+        DtypeTarget, EngineOn, EngineSpec, GeneratedFill, Native, PrecisionSpec, RuntimeEngine,
+        Target, TargetExt, TensorData, TensorTarget, precision,
     };
     pub use incin_core::shapes::ShapeSpec;
 }

@@ -330,12 +330,12 @@ fn test_indexing_concat() -> Result<()> {
     let t2 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
 
     // concat dim 0
-    let c0 = t1.clone().concat::<s![2, 2], incin::prelude::Here>(&t2)?;
+    let c0 = t1.clone().concat::<s![2, 2], incin::advanced::Here>(&t2)?;
     assert_eq!(c0.dims().dims(), &[4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
 
     // concat dim 1
-    let c1 = t1.concat::<s![2, 2], incin::prelude::Next<incin::prelude::Here>>(&t2)?;
+    let c1 = t1.concat::<s![2, 2], incin::advanced::Next<incin::advanced::Here>>(&t2)?;
     assert_eq!(c1.dims().dims(), &[2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
 
@@ -349,14 +349,14 @@ fn test_indexing_stack() -> Result<()> {
     let t2 = Tensor::<s![2], CpuBackendImpl>::from_slice(&[3.0, 4.0], ())?;
 
     // stack dim 0
-    let s0 = t1.clone().stack::<incin::prelude::Here>(&t2)?;
+    let s0 = t1.clone().stack::<incin::advanced::Here>(&t2)?;
     assert_eq!(s0.dims().dims(), &[2, 2]);
     assert_eq!(to_vec(&s0.into_dyn()), vec![1., 2., 3., 4.]);
 
     // stack dim 1
     let s1 = t1
         .clone()
-        .stack::<incin::prelude::Next<incin::prelude::Here>>(&t2)?;
+        .stack::<incin::advanced::Next<incin::advanced::Here>>(&t2)?;
     assert_eq!(s1.dims().dims(), &[2, 2]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![1., 3., 2., 4.]);
 

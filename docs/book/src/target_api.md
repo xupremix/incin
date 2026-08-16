@@ -36,6 +36,18 @@ let tensor = Tensor::<s![2, 2], Backend>::ones(())?;
 # Ok::<(), incin::Error>(())
 ```
 
+Layer construction follows the same target-first boundary through the
+canonical builder extension. The older direct `Linear::new` and
+`new_on_target` spellings are not part of the public prelude.
+
+```rust,no_run
+use incin::prelude::*;
+
+let layer = incin_core::nn::linear::linear(shape![4, 3]).init(&Cpu)?;
+assert_eq!(layer.weight.shape_dims(), vec![3, 4]);
+# Ok::<(), incin::Error>(())
+```
+
 Arithmetic operators return tensors directly and include operation context in
 their panic message when a runtime broadcast or backend check fails. Use the
 `try_add`, `try_sub`, `try_mul`, `try_div`, and `try_neg` methods when the
@@ -43,8 +55,10 @@ failure must remain a recoverable `Result`.
 
 ## Compile-time axis selectors
 
-Reductions can select a numeric axis with a const generic. The output keeps
-the shape information that the structural reduction rules can prove:
+Reductions can select a numeric axis with a const generic or with a selector
+value. Structural cursor methods remain an advanced escape hatch when the
+output shape can be proven statically. Ordinary selector methods return the
+runtime shape that is available after resolving the axis.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -52,17 +66,23 @@ use incin::prelude::*;
 let x = Cpu.ones(shape![4, 8, 16])?;
 let summed = x.sum::<1>()?;
 let kept = x.sum_keepdim_axis(axis!(-2))?;
+let first = x.sum_axis(axis!(0))?;
 let indices = x.argmax::<2>()?;
 let minima = x.argmin::<0>()?;
 # Ok::<(), incin::Error>(())
 ```
 
-Numeric axes accept arbitrary signed `isize` values, including negative axes.
-Use `axis!(...)` with `sum_axis` or `sum_keepdim_axis` when the selector is
-chosen as a value. Named axes remain available through `sum_named` and
-`sum_keepdim_named` when the axis identity matters more than its numeric
-position. Structural cursor methods remain available when the output shape
-can be proven statically.
+Numeric axes accept arbitrary signed `isize` values, including negative axes,
+without a finite lookup table. Use `axis!(...)` with `sum_axis` or
+`sum_keepdim_axis` when the selector is chosen as a value. Named axes remain
+available through `sum_named` and `sum_keepdim_named` when the axis identity
+matters more than its numeric position. Runtime selectors validate their
+normalized position against the tensor rank.
+
+Tensor slicing and indexing use `idx![...]`. Axis selection is a separate
+concept, so `axis!(-1)` never changes the `idx![-1]` indexing rules. There is
+no separate `i!` macro because the existing `idx!` syntax already owns tensor
+indexing, slicing, and reshape inference in one type-level grammar.
 
 Named dimensions and const dimensions use different syntax. A named axis is
 written as `s![Batch, Features]`; a const path must be marked explicitly:

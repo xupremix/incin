@@ -610,8 +610,8 @@ pub mod prelude {
     #[cfg(feature = "external-candle")]
     pub use incin_backends::target::Candle;
     pub use incin_backends::target::{
-        DtypeTarget, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec, Target,
-        TargetExt, TensorData, TensorTarget, precision,
+        DtypeTarget, EngineSpec, GeneratedFill, Native, PrecisionSpec, Target, TargetExt,
+        TensorData, TensorTarget, precision,
     };
 
     pub use incin_core::dim;
