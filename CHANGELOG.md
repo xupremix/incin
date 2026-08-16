@@ -20,6 +20,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   from the shared descriptor executor declarations.
 - **Dispatch scaffolding:** Removed the unused multi-operand dispatch macro;
   all live routes use the module-specific helper or explicit routing path.
+- **Unsupported-operation scaffolding:** Removed unused creation, reduction,
+  and tensor-operation declaration macros; float-operation declarations remain
+  because CUDA, Metal, WGPU, and Candle still use them.
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.
