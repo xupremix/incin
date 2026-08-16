@@ -97,6 +97,14 @@ Runtime selectors validate their normalized position against the tensor rank.
 `mean`, `max`, `min`, and their keep-dimension forms follow the same selector
 rules.
 `flatten_range` and `concat_axis` use the same signed runtime axis convention.
+
+Axis-preserving operations use the same selectors:
+
+```rust,no_run
+let cumulative = x.cumsum(-1)?;
+let probabilities = x.softmax(axis!(Channels))?;
+```
+
 For generic known-rank runtime shapes, `Ranked<R>` also provides
 `sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank
 arithmetic in the type while leaving extents runtime-valued.

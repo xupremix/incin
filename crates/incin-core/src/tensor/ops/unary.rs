@@ -5,11 +5,12 @@
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
 use crate::err::Result;
 use crate::exec::catalog::op;
-use crate::shapes::Shape;
+use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
+use crate::tensor::ops::reduce::ReduceSelector;
 
 macro_rules! impl_unary_op {
     (
@@ -146,16 +147,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
 
     /// Applies the Softmax function over the specified dimension.
     #[inline]
-    pub fn softmax(&self, dim: isize) -> Result<Tensor<S, B, K, G>>
+    pub fn softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G>>
     where
+        S: DynShape,
         B: Execute<op::Softmax>,
         <B as Execute<op::Softmax>>::Output: Into<B::Storage<K>>,
     {
-        let dim = crate::shapes::idx::AxisSelector::new(&[dim])
-            .normalize(self.shape_buf().rank())?
-            .into_iter()
-            .next()
-            .expect("one axis selector always yields one axis");
+        let dim = axis.resolve(self.shape_buf().rank())?;
         execute_unary_descriptor_with_attributes::<op::Softmax, S, B, K, G>(
             self,
             crate::exec::catalog::AxisAttributes { axis: dim },

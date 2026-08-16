@@ -13,8 +13,8 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
 use crate::shapes::ShapeBuf;
+use crate::shapes::StaticCursor;
 use crate::shapes::error::OperationKind;
-use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
@@ -526,23 +526,14 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         prod_all, ProdAll
     );
 
-    /// Cumulative sum along a compile-time structural axis cursor.
-    pub fn cumsum<C: StaticCursor>(&self) -> Result<Self>
+    /// Computes a cumulative sum along a static, named, or signed runtime axis.
+    pub fn cumsum<A: ReduceSelector<S>>(&self, axis: A) -> Result<Self>
     where
         S: DynShape,
         B: Execute<op::Cumsum> + crate::exec::Capabilities,
         <B as Execute<op::Cumsum>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[C::INDEX])
-            .normalize(self.rank())?
-            .into_iter()
-            .next()
-            .ok_or(crate::err::Error::Shape(
-                crate::shapes::error::ShapeError::InvalidAxis {
-                    axis: C::INDEX.unsigned_abs(),
-                    rank: self.rank(),
-                },
-            ))?;
+        let axis = axis.resolve(self.rank())?;
         let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
             .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);

@@ -1,6 +1,5 @@
 #![cfg(feature = "cpu")]
 
-use incin::advanced::Here;
 use incin::prelude::*;
 
 #[test]
@@ -91,7 +90,7 @@ fn test_matrix_and_reductions() -> Result<()> {
     let prod = v1.clone().prod_all()?;
     assert_eq!(prod.to_scalar::<f32>()?, 6.0);
 
-    let cum = v1.cumsum::<Here>()?;
+    let cum = v1.cumsum(axis!(0))?;
     assert_eq!(cum.to_vec1::<f32>()?, vec![1.0, 3.0, 6.0]);
 
     Ok(())
