@@ -1,4 +1,4 @@
-# Every feature flag
+# Facade and workspace feature flags
 
 The facade feature inventory is checked against `crates/incin/Cargo.toml`.
 The default is `["std", "cpu"]`  -  a
@@ -54,6 +54,17 @@ features is the one configuration that is genuinely `no_std`.
 Transports are deliberately separate opt-ins from `distributed` itself:
 declaring a mesh and actually moving bytes between hosts are different
 commitments.
+
+## Internal feature gates
+
+These gates belong to lower-level crates rather than the normal `incin`
+facade. They are listed here so the documentation covers the complete
+workspace feature vocabulary while making their intended audience explicit.
+
+| Feature | Crate | What it enables |
+|---|---|---|
+| `paranoid-validation` | `incin-core` | Rechecks sealed execution proofs in validation-oriented builds; it is not required by release execution. |
+| `cuda-vendor` | `incin-backends` | Enables the CUDA vendor-library selection layer on top of `cuda`; it does not claim vendor-kernel runtime parity by itself. |
 
 ## `no_std`
 

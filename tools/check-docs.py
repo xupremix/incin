@@ -4,6 +4,7 @@
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 SUMMARY = ROOT / "docs/book/src/SUMMARY.md"
@@ -20,6 +21,19 @@ def facade_features() -> list[str]:
     text = FEATURES.read_text()
     table = text.split("[features]", 1)[1].split("[dependencies]", 1)[0]
     return [name for name in re.findall(r"^([A-Za-z0-9_-]+)\s*=", table, re.MULTILINE) if name != "default"]
+
+
+def workspace_features() -> dict[str, list[str]]:
+    features: dict[str, list[str]] = {}
+    for manifest in sorted((ROOT / "crates").rglob("Cargo.toml")):
+        package = tomllib.loads(manifest.read_text(encoding="utf-8")).get("package", {})
+        name = package.get("name")
+        if not name:
+            continue
+        for feature in tomllib.loads(manifest.read_text(encoding="utf-8")).get("features", {}):
+            if feature != "default":
+                features.setdefault(feature, []).append(name)
+    return features
 
 
 def main() -> int:
@@ -44,12 +58,23 @@ def main() -> int:
         count = len(re.findall(rf"^\| `{re.escape(feature)}` \|", doc, re.MULTILINE))
         if count != 1:
             errors.append(f"feature_flags.md documents `{feature}` {count} times; expected once")
+    for feature, crates in workspace_features().items():
+        count = len(re.findall(rf"^\| `{re.escape(feature)}` \|", doc, re.MULTILINE))
+        if count != 1:
+            owners = ", ".join(crates)
+            errors.append(
+                f"feature_flags.md documents workspace feature `{feature}` {count} times; "
+                f"expected once (defined by {owners})"
+            )
 
     if errors:
         for error in errors:
             print(f"docs check: {error}", file=sys.stderr)
         return 1
-    print(f"docs checks passed: {len(chapters)} book chapters and {len(facade_features())} facade features")
+    print(
+        f"docs checks passed: {len(chapters)} book chapters, "
+        f"{len(facade_features())} facade features, and {len(workspace_features())} workspace features"
+    )
     return 0
 
 
