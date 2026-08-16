@@ -202,7 +202,6 @@ impl AxisMask {
             Some(axis)
         })
     }
-
 }
 
 /// Dynamic/arbitrary rank descriptor axis set.

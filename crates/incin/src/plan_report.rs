@@ -3,7 +3,9 @@
 use crate::train::{HostMachine, Machine, Trainer};
 use incin_core::tensor::device::{DevicePreference, DeviceSet};
 
+/// Process exit status for a successful plan report.
 pub const EXIT_OK: i32 = 0;
+/// Process exit status for invalid plan-report arguments.
 pub const EXIT_USAGE: i32 = 2;
 
 /// Runs `cargo incin plan` given CLI arguments.

@@ -13,6 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   from the private axis-mask implementation, and removed a redundant CUDA
   identity suppression while retaining feature-gated test and dummy-backend
   helpers.
+- **Rustdoc coverage:** Documented the public plan-report exit status constants
+  so trainer builds remain warning-free under the facade documentation lint.
 - **Architecture and build hygiene:** The shape buffer helpers remain available
   through the documented `incin_core::shapes` facade while their implementation
   modules are private. Unreferenced WGPU dispatch paths and CUDA kernel sources
