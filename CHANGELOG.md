@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Neovim, VS Code, and RustRover integrations with ordinary punctuation.
 - **Descriptor macro policy:** Removed an obsolete unused-macro suppression
   from the shared descriptor executor declarations.
+- **Dispatch scaffolding:** Removed the unused multi-operand dispatch macro;
+  all live routes use the module-specific helper or explicit routing path.
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.

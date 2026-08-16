@@ -230,56 +230,6 @@ operand_accessors! {
     metal_operand, metal_optional, Metal, crate::metal::storage::MetalStorage, "metal";
 }
 
-/// Routes a multi-operand operation to the backend holding its first operand.
-///
-/// `req` and `opt` name the remaining required and optional tensor operands;
-/// each is checked against the routed backend, so a mixed-device call fails
-/// with a device mismatch instead of reaching a kernel.
-#[allow(unused_macros)]
-macro_rules! dispatch_same_device {
-    (
-        $primary:expr, $method:ident::<$($generic:ty),*>,
-        req = [$($req:expr),*], opt = [$($opt:expr),*], args = [$($arg:expr),*]
-    ) => {{
-        let routed = $primary;
-        match routed {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<Cpu>::$method::<$($generic),*>(
-                value,
-                $(cpu_operand(routed, $req)?,)*
-                $(cpu_optional(routed, $opt)?,)*
-                $($arg),*
-            )
-            .map(DispatchStorage::Cpu),
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<Wgpu>::$method::<$($generic),*>(
-                value,
-                $(wgpu_operand(routed, $req)?,)*
-                $(wgpu_optional(routed, $opt)?,)*
-                $($arg),*
-            )
-            .map(DispatchStorage::Wgpu),
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<Cuda>::$method::<$($generic),*>(
-                value,
-                $(cuda_operand(routed, $req)?,)*
-                $(cuda_optional(routed, $opt)?,)*
-                $($arg),*
-            )
-            .map(DispatchStorage::Cuda),
-            #[cfg(feature = "metal")]
-            DispatchStorage::Metal(value) => crate::metal::MetalBackendImpl::<Metal>::$method::<$($generic),*>(
-                value,
-                $(metal_operand(routed, $req)?,)*
-                $(metal_optional(routed, $opt)?,)*
-                $($arg),*
-            )
-            .map(DispatchStorage::Metal),
-            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }};
-}
-
 /// Routes a module operation while keeping the CPU path on its canonical
 /// helper. Non-CPU backends remain on their temporary adapters until their
 /// backend migrations land.
@@ -2060,7 +2010,7 @@ impl<D: Device> DispatchBackend<D> {
         }
     }
     // `topk` returns a value/index pair rather than one storage, so it does
-    // not fit `dispatch_same_device!` and is routed by hand.
+    // not fit the generic dispatch helpers and is routed by hand.
     pub fn topk<K: DType, KInt: DType>(
         t: &DispatchStorage,
         k: usize,
