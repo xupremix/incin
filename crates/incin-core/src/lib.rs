@@ -267,10 +267,13 @@ pub mod prelude {
 /// Structural shape cursors retained for low-level and legacy integrations.
 /// Ordinary application code should prefer signed numeric axis selectors.
 pub mod advanced {
-    pub use crate::shapes::idx::*;
+    pub use crate::shapes::idx::{
+        AxisCursor, DimIdx, Ellipsis, ForwardAxis, InferDim, NamedAxisLookup, Next, ReshapeTarget,
+        ReverseAxis, Slice, SliceIdx, SliceTarget, StaticCursor,
+    };
     pub use crate::shapes::prelude::{At, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt};
     pub use crate::shapes::{
-        AxisSelector, ForwardAxis, NamedAxisSelector, ReverseAxis, StaticAxis, ToAxisIndex,
+        AxisSelector, FromEnd, Here, NamedAxisSelector, StaticAxis, ToAxisIndex,
     };
     pub use crate::typenum;
     pub use incin_macros::idx;

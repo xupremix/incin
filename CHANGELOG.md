@@ -11,6 +11,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - **Advanced indexing facade:** Curated `incin::advanced` to export only the
   documented type-level indexing selectors and traits.
+- **Core advanced indexing facade:** Applied the same explicit export boundary
+  to `incin_core::advanced`, keeping hidden implementation traits out of the
+  downstream namespace.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.
