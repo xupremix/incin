@@ -41,7 +41,7 @@ use core::fmt;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use crate::shapes::ShapeBuf;
-use crate::shapes::error::{OperationKind, RankExpectation, ShapeError};
+use crate::shapes::error::{OperationKind, ShapeError};
 
 // --- schema version ---------------------------------------------------------
 
@@ -148,44 +148,18 @@ impl fmt::Display for ReduceOp {
 ///
 /// Reductions name the axes they collapse, and broadcasts name the axes they
 /// stretch. Both are sets over a small range, both are read in kernel inner
-/// loops, and neither may allocate. A bitmask gives all three, plus a form that
-/// passes to a native kernel as a single scalar --- see [`bits`](Self::bits).
+/// loops, and neither may allocate.
 ///
 /// Axes are counted from the front of the shape, so axis 0 is the outermost.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AxisMask(u64);
 
-#[allow(dead_code)]
 impl AxisMask {
     /// The number of axes a mask can address inline (64).
     pub const MAX_AXES: usize = u64::BITS as usize;
 
     /// The empty set.
     pub const EMPTY: Self = Self(0);
-
-    /// Reinterpret a raw 32-bit pattern.
-    #[must_use]
-    pub const fn from_bits(bits: u32) -> Self {
-        Self(bits as u64)
-    }
-
-    /// Reinterpret a raw 64-bit pattern.
-    #[must_use]
-    pub const fn from_bits_u64(bits: u64) -> Self {
-        Self(bits)
-    }
-
-    /// The raw 32-bit pattern (saturates if axes >= 32 are present).
-    #[must_use]
-    pub const fn bits(self) -> u32 {
-        self.0 as u32
-    }
-
-    /// The raw 64-bit pattern.
-    #[must_use]
-    pub const fn bits_u64(self) -> u64 {
-        self.0
-    }
 
     /// Whether `axis` is in the set.
     #[must_use]
@@ -215,84 +189,6 @@ impl AxisMask {
         }
     }
 
-    /// The set with `axis` removed. An out-of-range axis was never present, so
-    /// removing it is a no-op rather than an error.
-    #[must_use]
-    pub const fn remove(self, axis: usize) -> Self {
-        if axis < Self::MAX_AXES {
-            Self(self.0 & !(1u64 << axis))
-        } else {
-            self
-        }
-    }
-
-    /// Every axis of a shape of this rank, or `None` if the rank exceeds
-    /// [`MAX_AXES`](Self::MAX_AXES).
-    #[must_use]
-    pub const fn all_below(rank: usize) -> Option<Self> {
-        if rank > Self::MAX_AXES {
-            None
-        } else if rank == Self::MAX_AXES {
-            Some(Self(u64::MAX))
-        } else {
-            Some(Self((1u64 << rank) - 1))
-        }
-    }
-
-    /// The axes of a shape of this rank that are *not* in the set.
-    ///
-    /// The rank is required because a mask does not know it: the complement of
-    /// "axis 1" is a different set for a rank-2 shape than for a rank-5 one.
-    #[must_use]
-    pub const fn complement_within(self, rank: usize) -> Option<Self> {
-        match Self::all_below(rank) {
-            Some(all) => Some(Self(all.0 & !self.0)),
-            None => None,
-        }
-    }
-
-    /// Build a mask from listed axes, checking each against `rank`.
-    ///
-    /// A repeated axis is rejected rather than absorbed. In a set, the second
-    /// mention has no effect, which means `sum(dims = [1, 1])` would silently
-    /// behave as `sum(dims = [1])` --- an argument list that says one thing and
-    /// does another is worth a diagnostic.
-    pub fn try_from_axes(
-        operation: OperationKind,
-        rank: usize,
-        axes: impl IntoIterator<Item = usize>,
-    ) -> Result<Self, ShapeError> {
-        if rank > Self::MAX_AXES {
-            return Err(ShapeError::RankMismatch {
-                operation,
-                expected: RankExpectation::AtMost(Self::MAX_AXES),
-                actual: rank,
-            });
-        }
-        let mut mask = Self::EMPTY;
-        for axis in axes {
-            if axis >= rank || mask.contains(axis) {
-                return Err(ShapeError::InvalidParameter {
-                    operation,
-                    parameter: "axis",
-                    value: axis,
-                });
-            }
-            mask = match mask.insert(axis) {
-                Some(wider) => wider,
-                // Unreachable: `axis < rank`, and `rank <= MAX_AXES` above.
-                None => {
-                    return Err(ShapeError::RankMismatch {
-                        operation,
-                        expected: RankExpectation::AtMost(Self::MAX_AXES),
-                        actual: rank,
-                    });
-                }
-            };
-        }
-        Ok(mask)
-    }
-
     /// The axes in the set, in ascending order.
     pub fn axes(self) -> impl Iterator<Item = usize> {
         let mut bits = self.0;
@@ -307,19 +203,6 @@ impl AxisMask {
         })
     }
 
-    /// Whether the set is a single unbroken run of axes.
-    ///
-    /// Descriptors whose geometry collapses a shape into contiguous regions are
-    /// only expressible when the axes they act on are adjacent.
-    #[must_use]
-    pub const fn is_contiguous_run(self) -> bool {
-        if self.0 == 0 {
-            return true;
-        }
-        let lowest = self.0.trailing_zeros();
-        let past_highest = u64::BITS - self.0.leading_zeros();
-        self.0.count_ones() == past_highest - lowest
-    }
 }
 
 /// Dynamic/arbitrary rank descriptor axis set.

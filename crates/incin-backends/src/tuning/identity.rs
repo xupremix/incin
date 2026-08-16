@@ -1308,7 +1308,6 @@ fn nvrtc_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     Ok(SoftwareVersion::new(major, minor, 0))
 }
 
-#[allow(dead_code)]
 fn format_cuda_uuid(bytes: [core::ffi::c_char; 16]) -> String {
     let mut output = String::from("GPU-");
     for (index, byte) in bytes.into_iter().enumerate() {
