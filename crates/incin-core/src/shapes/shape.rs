@@ -281,9 +281,10 @@ where
 
 impl<H: Dim, T: Shape, Cursor: ForwardCursor> AtFromEnd<Next<Cursor>> for DimCons<H, T>
 where
-    T: AtFromEnd<Cursor>,
+    DimCons<H, T>: RemoveLastDim,
+    <DimCons<H, T> as RemoveLastDim>::Output: AtFromEnd<Cursor>,
 {
-    type Output = <T as AtFromEnd<Cursor>>::Output;
+    type Output = <<DimCons<H, T> as RemoveLastDim>::Output as AtFromEnd<Cursor>>::Output;
 }
 
 /// Removes the dimension at structural cursor `Cursor`.
