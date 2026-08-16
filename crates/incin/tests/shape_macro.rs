@@ -103,9 +103,9 @@ fn const_path_axes_produce_static_typenum_dimensions() {
 #[test]
 fn named_shape_types_accept_explicit_const_dimensions() {
     type NamedConstShape = s![Batch = const N_CONST, Features = const M_CONST];
-    let tensor: Tensor<NamedConstShape, _, f32, NoGrad> =
-        Cpu.zeros(shape![Batch = const N_CONST, Features = const M_CONST])
-            .unwrap();
+    let tensor: Tensor<NamedConstShape, _, f32, NoGrad> = Cpu
+        .zeros(shape![Batch = const N_CONST, Features = const M_CONST])
+        .unwrap();
     assert_eq!(tensor.dims(), [32, 64]);
 }
 
