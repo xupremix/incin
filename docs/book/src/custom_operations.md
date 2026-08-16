@@ -102,6 +102,13 @@ The real fixture fills in metadata validation, capability admission, and
 backend execution. Keep the operation key stable once published, serialize
 all attributes, and route execution through the validated descriptor request.
 
+The runnable compact example is
+`crates/incin-core/examples/custom_operation.rs`. It uses a metadata-only
+backend so the operation contract can be exercised without pretending that a
+backend kernel exists. A real backend replaces its proof-only executor with a
+kernel implementation while keeping the same operation, descriptor, and
+dispatch boundaries.
+
 For a real fused operation such as `BiasGelu`, the same pattern applies. The
 operation accepts activation and bias handles, validates their broadcast
 relationship, infers the output metadata, and dispatches one backend kernel.
