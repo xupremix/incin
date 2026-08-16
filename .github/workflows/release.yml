@@ -93,6 +93,11 @@ jobs:
         working-directory: editors/vscode
         run: |
           set -euo pipefail
+          {
+            cat ../../LICENSE_MIT
+            printf '\n\n==================== Apache License 2.0 ====================\n\n'
+            cat ../../LICENSE_APACHE
+          } > LICENSE
           npm ci
           npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
           npm run compile
