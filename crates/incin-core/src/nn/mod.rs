@@ -93,30 +93,44 @@ pub mod state;
 /// `stats`.
 pub mod stats;
 
-pub use activation::*;
-pub use adaptive_avg_pool2d::*;
-pub use avg_pool2d::*;
-pub use batch_norm::*;
-pub use conv1d::*;
-pub use conv2d::*;
-pub use dropout::*;
-pub use embedding::*;
-pub use flatten::*;
-pub use init::*;
-pub use layer_norm::*;
-pub use linear::*;
-pub use loss::*;
-pub use lstm::*;
-pub use max_pool2d::*;
-pub use module::*;
-pub use optional::*;
-pub use param::*;
-pub use rms_norm::*;
-pub use rnn::*;
+pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
+pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
+pub use avg_pool2d::AvgPool2d;
+pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
+pub use conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
+pub use conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d};
+pub use dropout::Dropout;
+pub use embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
+pub use flatten::{Flatten, FlattenAxes, StructuralFlatten};
+pub use init::{
+    Fan, Init, InitContext, InitPlan, ParameterRole, constant, kaiming_normal,
+    kaiming_normal_with_a, kaiming_uniform, kaiming_uniform_with_a, normal, ones, rand, randn,
+    uniform, xavier_normal, xavier_uniform, zeros,
+};
+pub use layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm};
+pub use linear::{Linear, LinearBuilder, LinearShape, linear};
+#[cfg(feature = "distributed")]
+pub use linear::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
+pub use loss::{BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss};
+pub use lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell};
+pub use max_pool2d::MaxPool2d;
+pub use module::{
+    LayerNode, Module, NamedLayers, ParameterVisitor, Sequential, ShapeInfo, TrainMode,
+    VisitParameters, assign_sequential_names, clean_type_name, format_layer_summary,
+    format_layer_summary_with_stats, update_node_name_prefix,
+};
+pub use optional::{False, OptionalField, True};
+pub use param::{Buffer, Frozen, Param, TrainState, Trainable};
+pub use rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};
+pub use rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell};
 #[cfg(feature = "std")]
-pub use save::*;
+pub use save::{
+    CheckpointDType, GlobalCheckpointManifest, TensorCheckpointMeta, load_resharded_checkpoint,
+    load_safetensors, load_safetensors_snapshot, save_checkpoint, save_checkpoint_manifest,
+    save_safetensors, slice_bytes_for_rank,
+};
 pub use state::{
     StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue,
     StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
 };
-pub use stats::*;
+pub use stats::{ComputeStats, LayerStats, ModelStats, sum_stats};

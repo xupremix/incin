@@ -37,6 +37,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   event contracts in telemetry and visualization plugin crates.
 - **Core aggregations:** Replaced wildcard exports for indexing, schedulers,
   and precision policy markers with explicit owning-module contracts.
+- **Neural-network exports:** Replaced the `incin_core::nn` wildcard
+  aggregations with explicit layer, optimizer, state, and statistics contracts.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.
