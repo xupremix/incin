@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   license metadata before release packaging.
 - **Core rustdoc links:** Removed invalid `GradMode` scope links and clarified
   the no-`std` policy-scope wording so core rustdoc passes with warnings denied.
+- **Dummy backend dead code:** Removed an unused family of private float
+  operation shims and all stale dead-code allowances from the test backend.
 - **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
   helpers are now test-only, with production builds retaining only the
   candidate conversion and fallback policy they use.

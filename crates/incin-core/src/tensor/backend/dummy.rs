@@ -9,11 +9,11 @@ use crate::tensor::dtype::DType;
 /// Test-only stand-in `Backend` used by `tensor/base.rs`'s unit tests to
 /// exercise `Tensor`'s generic-over-`Backend` machinery without pulling
 /// in a real compute backend. Its `Storage<K>` is literally the shape
-/// (`Vec<usize>`) --- every op below tracks how an operation would
+/// (`Vec<usize>`), and every op below tracks how an operation would
 /// transform the *shape*, using the same arithmetic real backends use,
 /// but performs no actual data computation and holds no element values.
 ///
-/// Dtype is not part of the backend's identity --- a single `DummyBackend<D>`
+/// Dtype is not part of the backend's identity. A single `DummyBackend<D>`
 /// can hold f32, f64, i64, etc. tensors, all represented as shape-only `Vec<usize>`.
 pub struct DummyBackend<D> {
     _marker: core::marker::PhantomData<D>,
@@ -88,7 +88,7 @@ impl<D: Device + Clone + 'static, O: crate::exec::catalog::Operation> Execute<O>
 }
 
 impl<D: Device + Clone + 'static> Backend for DummyBackend<D> {
-    /// No dispatch wrapper --- this stand-in is always its own inner backend.
+    /// No dispatch wrapper; this stand-in is always its own inner backend.
     type InnerBackend = Self;
 }
 
@@ -184,7 +184,7 @@ impl<D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<D>
 
 /// Output spatial size for conv/pool shape math:
 /// `(in + 2*pad - dilation*(kernel-1) - 1) / stride + 1`. Uses saturating
-/// arithmetic throughout (never panics/wraps on pathological inputs ---
+/// arithmetic throughout (never panics or wraps on pathological inputs;
 /// small `in` with a large `kernel`/`dilation`/`padding` would otherwise
 /// underflow the `usize` subtraction), matching the CPU backend's own
 /// `out_size` (`cpu/ops/pool.rs`), which already uses the same
@@ -192,7 +192,6 @@ impl<D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<D>
 /// shape-only bookkeeping for `DummyBackend` (a test-only stand-in with
 /// no real storage), so a saturated/degenerate size is the appropriate
 /// "can't compute a real answer" response, not an error.
-#[allow(dead_code)]
 fn conv_out_size(
     len: usize,
     kernel_size: usize,
@@ -210,7 +209,6 @@ fn conv_out_size(
 /// Output spatial size for `conv_transpose2d` shape math:
 /// `(in - 1) * stride - 2*pad + dilation*(kernel-1) + output_padding + 1`.
 /// Same saturating-arithmetic rationale as `conv_out_size`.
-#[allow(dead_code)]
 fn conv_transpose_out_size(
     len: usize,
     kernel_size: usize,
@@ -269,7 +267,6 @@ impl<D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<New
 /// stand-in whose shape arithmetic disagrees with every real backend's is
 /// not a stand-in, and this crate's own documented examples of
 /// `broadcast_add` were the first thing to run into it.
-#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns the two operands' broadcast shape.
     pub fn add<K: DType>(
@@ -301,63 +298,8 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     }
 }
 
-/// The remaining float operations, all of which preserve their input's
-/// shape and so are the same clone as the ones written out above.
-///
-/// `DummyBackend` exists to exercise shape behavior, so covering these by
-/// hand would add a hundred lines that all say `Ok(t.clone())`. They are
-/// listed rather than inherited because `` no longer supplies a
-/// default body: an operation this backend does not model has to be
-/// visible here.
-macro_rules! shape_preserving_float_ops {
-        (
-            unary: $($unary:ident),* $(,)?;
-            exponent: $($exponent:ident),* $(,)?;
-            bounds: $($bounds:ident),* $(,)?;
-            binary: $($binary:ident),* $(,)?;
-        ) => {
-            $(
-                #[allow(dead_code)]
-                fn $unary<K: DType>(
-                    t: &<Self as StorageBackend>::Storage<K>,
-                ) -> Result<<Self as StorageBackend>::Storage<K>> {
-                    Ok(t.clone())
-                }
-            )*
-            $(
-                #[allow(dead_code)]
-                fn $exponent<K: DType>(
-                    t: &<Self as StorageBackend>::Storage<K>,
-                    _exponent: f64,
-                ) -> Result<<Self as StorageBackend>::Storage<K>> {
-                    Ok(t.clone())
-                }
-            )*
-            $(
-                #[allow(dead_code)]
-                fn $bounds<K: DType>(
-                    t: &<Self as StorageBackend>::Storage<K>,
-                    _min: f64,
-                    _max: f64,
-                ) -> Result<<Self as StorageBackend>::Storage<K>> {
-                    Ok(t.clone())
-                }
-            )*
-            $(
-                #[allow(dead_code)]
-                fn $binary<K: DType>(
-                    lhs: &<Self as StorageBackend>::Storage<K>,
-                    _rhs: &<Self as StorageBackend>::Storage<K>,
-                ) -> Result<<Self as StorageBackend>::Storage<K>> {
-                    Ok(lhs.clone())
-                }
-            )*
-        };
-    }
-
 /// Every activation and scalar op is shape-preserving, so each is a
 /// plain clone of the input shape.
-#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns `t`'s shape unchanged.
     pub fn add_scalar_float<K: DType>(
@@ -458,22 +400,12 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Ok(t.clone())
     }
-
-    shape_preserving_float_ops! {
-        unary: sign, floor, ceil, round, log2, log10, sin, cos, tan, asin,
-               acos, atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt,
-               trunc, frac;
-        exponent: powf;
-        bounds: clamp;
-        binary: atan2, fmod, remainder;
-    }
 }
 
 /// `_all` reductions collapse to an (empty) scalar shape; `_dim`
 /// reductions either remove `dim` or clamp it to size 1 (`_keepdim`),
-/// exactly like a real reduction's shape effect --- again with no real
+/// exactly like a real reduction's shape effect, with no real
 /// values behind either result.
-#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Collapses to an empty (scalar) shape.
     pub fn sum_all<K: DType>(
@@ -611,14 +543,14 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
         }
         Ok(s)
     }
-    /// Always an empty shape --- no indices are actually computed.
+    /// Always an empty shape; no indices are actually computed.
     pub fn argmax<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: Option<usize>,
     ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
         Ok(alloc::vec![])
     }
-    /// Always an empty shape --- no indices are actually computed.
+    /// Always an empty shape; no indices are actually computed.
     pub fn argmin<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: Option<usize>,
@@ -637,7 +569,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     )> {
         Ok((alloc::vec![], alloc::vec![]))
     }
-    /// Always an empty shape --- no indices are actually computed.
+    /// Always an empty shape; no indices are actually computed.
     pub fn argsort<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _dim: usize,
@@ -647,8 +579,8 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     }
 }
 
-/// The `` members whose output shape equals an input's, split by
-/// which operand supplies it. These mirror ``' convention above,
+/// The tensor operation members whose output shape equals an input's, split by
+/// which operand supplies it. These mirror the `DummyBackend::add` convention,
 /// where a binary op reports `lhs`'s shape.
 macro_rules! shape_preserving_tensor_ops {
         (
@@ -691,7 +623,7 @@ macro_rules! shape_preserving_tensor_ops {
         };
     }
 
-/// The `` members whose output shape this stand-in does not
+/// The tensor operation members whose output shape this stand-in does not
 /// model. Returning a plausible-looking wrong shape would be worse than
 /// refusing: shape is the only thing `DummyBackend` asserts, and a test
 /// reading a fabricated one would pass for the wrong reason.
@@ -740,9 +672,8 @@ macro_rules! unmodeled_tensor_ops {
 
 /// Each op tracks its real shape-transformation logic (matmul's last
 /// dim, transpose's swap, flatten's dimension collapse, etc.) since
-/// shape *is* everything this stand-in's storage represents --- but
+/// shape *is* everything this stand-in's storage represents, but
 /// still no element values exist behind any of it.
-#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     shape_preserving_tensor_ops! {
         unary: ;
@@ -987,21 +918,21 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
         out.extend_from_slice(&[lhs[lhs.len() - 2], rhs[rhs.len() - 1]]);
         Ok(out)
     }
-    /// Always `0.0` --- there is no real element value to read.
+    /// Always `0.0`; there is no real element value to read.
     pub fn float_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
         Ok(0.0)
     }
-    /// Always a single `0.0` --- there are no real element values to read.
+    /// Always a single `0.0`; there are no real element values to read.
     pub fn float_to_vec1<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<f64>> {
         Ok(alloc::vec![0.0])
     }
-    /// Always `0` --- there is no real element value to read.
+    /// Always `0`; there is no real element value to read.
     pub fn int_to_scalar<K: DType>(_t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
         Ok(0)
     }
-    /// Always a single `0` --- there are no real element values to read.
+    /// Always a single `0`; there are no real element values to read.
     pub fn int_to_vec1<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<i64>> {
@@ -1129,7 +1060,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
         }
         Ok(out)
     }
-    /// Returns `t`'s shape unchanged --- no element values exist to cast.
+    /// Returns `t`'s shape unchanged; no element values exist to cast.
     pub fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         _dtype: DTypeDescriptor,
@@ -1142,7 +1073,6 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
 /// compute their real output spatial size via `conv_out_size`/
 /// `conv_transpose_out_size` (the saturating helpers above) so tests
 /// can assert on shape correctness even though no data is computed.
-#[allow(dead_code)]
 impl<D: Device + Clone + 'static> DummyBackend<D> {
     /// Returns `t`'s shape unchanged.
     pub fn layer_norm<K: DType>(
@@ -1165,7 +1095,7 @@ impl<D: Device + Clone + 'static> DummyBackend<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Ok(t.clone())
     }
-    /// Always an empty shape --- no real gather is performed.
+    /// Always an empty shape; no real gather is performed.
     pub fn embedding<K: DType, KInt: DType>(
         _t: &<Self as StorageBackend>::Storage<KInt>,
         _w: &<Self as StorageBackend>::Storage<K>,
