@@ -188,7 +188,7 @@ pub mod prelude {
         conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d},
         dropout::Dropout,
         embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding},
-        flatten::{Flatten, FlattenAxes},
+        flatten::{Flatten, FlattenAxes, StructuralFlatten},
         init::{self, Fan, Init, InitContext, InitPlan, ParameterRole},
         layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm},
         linear::{Linear, LinearBuilder, LinearShape, linear},

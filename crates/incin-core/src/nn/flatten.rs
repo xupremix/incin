@@ -3,16 +3,30 @@ use crate::nn::Module;
 use crate::shapes::Dyn;
 use crate::shapes::FlattenAt;
 use crate::shapes::idx::StaticCursor;
-use crate::shapes::idx::{Here, Next};
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
+use crate::tensor::ops::manipulation::FlattenSelector;
 use core::marker::PhantomData;
 
-/// Structural flatten module. Axis positions are selector types rather than
-/// const-generic rank-ladder parameters.
+/// Ergonomic flatten module driven by two axis selectors.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Flatten<Start, End>(PhantomData<fn() -> (Start, End)>);
+pub struct Flatten<Start, End> {
+    start: Start,
+    end: End,
+}
+
+impl<Start, End> Flatten<Start, End> {
+    /// Creates a flattening module for an inclusive axis range.
+    #[must_use]
+    pub const fn new(start: Start, end: End) -> Self {
+        Self { start, end }
+    }
+}
+
+/// Advanced structural flatten module for internal shape-proof code.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StructuralFlatten<Start, End>(PhantomData<fn() -> (Start, End)>);
 
 /// Runtime-axis flattening module for ordinary model code.
 ///
@@ -56,12 +70,6 @@ impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> f
     }
 }
 
-impl<Start, End> Flatten<Start, End> {
-    pub fn new() -> Self {
-        Self(PhantomData)
-    }
-}
-
 impl<S, B, K, G> Module<Tensor<S, B, K, G>> for FlattenAxes
 where
     S: Shape + DynShape,
@@ -81,12 +89,11 @@ where
     }
 }
 
-/// Runtime-rank models commonly flatten the image axes after a dynamic batch
-/// axis.  Keep that migration path on the same module type while the exact
-/// structural implementation above remains available for statically-known
-/// shapes.
-impl<B, K, G> Module<Tensor<Dyn, B, K, G>> for Flatten<Next<Here>, Next<Next<Here>>>
+impl<S, B, K, G, Start: Copy, End: Copy> Module<Tensor<S, B, K, G>> for Flatten<Start, End>
 where
+    S: Shape + DynShape,
+    (Start, End): FlattenSelector<S>,
+    <(Start, End) as FlattenSelector<S>>::Output: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
@@ -95,15 +102,15 @@ where
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    type Output = Tensor<Dyn, B, K, G>;
+    type Output = Tensor<<(Start, End) as FlattenSelector<S>>::Output, B, K, G>;
     type Error = crate::err::Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> Result<Self::Output> {
-        x.flatten_runtime(1, 3)
+    fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
+        x.flatten(self.start, self.end)
     }
 }
 
-impl<S, B, K, G, Start, End> Module<Tensor<S, B, K, G>> for Flatten<Start, End>
+impl<S, B, K, G, Start, End> Module<Tensor<S, B, K, G>> for StructuralFlatten<Start, End>
 where
     Start: StaticCursor,
     End: StaticCursor,

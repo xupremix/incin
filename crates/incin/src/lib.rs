@@ -628,7 +628,7 @@ pub mod prelude {
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
         avg_pool2d::AvgPool2d,
         dropout::Dropout,
-        flatten::{Flatten, FlattenAxes},
+        flatten::{Flatten, FlattenAxes, StructuralFlatten},
         init::Init,
         loss::{
             BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,

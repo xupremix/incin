@@ -23,7 +23,7 @@ fn main() -> incin::Result<()> {
 
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
-        FlattenAxes::new(1, -1), // Flattens (B, 1, 28, 28) -> (B, 784)
+        Flatten::new(1isize, -1isize), // Flattens (B, 1, 28, 28) -> (B, 784)
         Linear::<Dyn, Backend>::build((784, 128))?,
         ReLU,
         Linear::<Dyn, Backend>::build((128, 10))?

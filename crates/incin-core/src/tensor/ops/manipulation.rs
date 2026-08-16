@@ -178,6 +178,18 @@ where
     }
 }
 
+impl<S> FlattenSelector<S> for (isize, isize)
+where
+    S: Shape + DynShape,
+{
+    type Output = Dyn;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let axes = crate::shapes::idx::AxisSelector::new(&[self.0, self.1]).normalize(rank)?;
+        Ok((axes[0], axes[1]))
+    }
+}
+
 impl<S, L, R> AxisPairSelector<S>
     for (
         crate::shapes::idx::StaticAxis<L>,

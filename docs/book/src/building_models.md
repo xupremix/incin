@@ -9,7 +9,7 @@ are none.
 
 ## Flattening runtime image axes
 
-Use `FlattenAxes` when a model receives a runtime-shaped tensor and ordinary
+Use `Flatten::new(axis!(1), axis!(-1))` when a model receives a runtime-shaped tensor and ordinary
 code should describe the axis range directly. The signed end axis `-1` means
 the final axis, so this keeps the leading batch axis and flattens the image
 axes without exposing structural cursor types. For a statically known range,
@@ -18,7 +18,7 @@ call `tensor.flatten(axis!(1), axis!(-1))` to preserve the exact output shape.
 ```rust,no_run
 use incin::prelude::*;
 
-let flatten = FlattenAxes::new(1, -1);
+let flatten = Flatten::new(axis!(1), axis!(-1));
 let images = Cpu.ones(shape![32, 1, 28, 28])?;
 let flat = flatten.forward(images)?;
 assert_eq!(flat.dims().as_ref(), &[32, 784]);
