@@ -2,11 +2,78 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+use incin_core::backend_authoring::{Backend, Capabilities, Execute, SupportsDType};
+use incin_core::exec::catalog::op;
+use incin_core::shapes::Dyn;
+use incin_core::tensor::base::Tensor;
+use incin_core::tensor::device::{ConstDevice, Device};
+use incin_core::tensor::grad::NoGrad;
+
+use crate::loader::{BatchResult, Collate, DataError};
+
 /// Mnist dataset.
 pub struct MnistDataset {
     images: Vec<u8>,
     labels: Vec<u8>,
     train: bool,
+}
+
+/// Collates MNIST samples directly into model-ready tensors.
+///
+/// Images are normalized to `f32` with shape `[batch, 1, 28, 28]`. Labels
+/// remain integer `u8` values and carry [`NoGrad`], so data loading does not
+/// create a training graph.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MnistCollate<B>(core::marker::PhantomData<B>);
+
+impl<B> MnistCollate<B> {
+    /// Creates a collator for `B`.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<B> Collate<(Vec<f32>, u8)> for MnistCollate<B>
+where
+    B: Backend
+        + Execute<op::TensorFromData>
+        + Capabilities
+        + SupportsDType<f32>
+        + SupportsDType<u8>,
+    B::Device: ConstDevice,
+    <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<f32>> + Into<B::Storage<u8>>,
+    B::Storage<f32>: Send,
+    B::Storage<u8>: Send,
+    B::Device: Send + Sync,
+    <B::Device as Device>::Field: Send,
+{
+    type Output = (Tensor<Dyn, B, f32, NoGrad>, Tensor<Dyn, B, u8, NoGrad>);
+
+    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> BatchResult<Self::Output> {
+        const PIXELS_PER_IMAGE: usize = 28 * 28;
+        let batch_size = batch.len();
+        let mut images = Vec::with_capacity(batch_size * PIXELS_PER_IMAGE);
+        let mut labels = Vec::with_capacity(batch_size);
+
+        for (image, label) in batch {
+            if image.len() != PIXELS_PER_IMAGE {
+                return Err(DataError::InvalidBatch(format!(
+                    "MNIST image has {} values, expected {PIXELS_PER_IMAGE}",
+                    image.len()
+                )));
+            }
+            images.extend(image);
+            labels.push(label);
+        }
+
+        let images =
+            Tensor::<Dyn, B, f32, NoGrad>::from_slice(&images, vec![batch_size, 1, 28, 28])
+                .map_err(|error| DataError::InvalidBatch(error.to_string()))?;
+        let labels = Tensor::<Dyn, B, u8, NoGrad>::from_slice(&labels, vec![batch_size])
+            .map_err(|error| DataError::InvalidBatch(error.to_string()))?;
+        Ok((images, labels))
+    }
 }
 
 impl MnistDataset {

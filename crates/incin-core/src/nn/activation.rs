@@ -215,7 +215,7 @@ impl Softmax {
 impl TrainMode for Softmax {}
 
 impl<
-    S: Shape + DynShape,
+    S: Shape + DynShape + crate::shapes::RuntimeRankProjection,
     B: crate::tensor::backend::VariableBackend
         + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
 > Module<Tensor<S, B>> for Softmax

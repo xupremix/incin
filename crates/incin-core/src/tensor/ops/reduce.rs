@@ -16,7 +16,7 @@ use crate::shapes::ShapeBuf;
 use crate::shapes::StaticCursor;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
-use crate::shapes::{DynShape, Shape};
+use crate::shapes::{DynShape, RuntimeRankProjection, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -63,9 +63,12 @@ where
     }
 }
 
-impl<S: Shape> ReduceSelector<S> for isize {
-    type Drop = crate::shapes::Dyn;
-    type Keep = crate::shapes::Dyn;
+impl<S> ReduceSelector<S> for isize
+where
+    S: Shape + RuntimeRankProjection,
+{
+    type Drop = S::Drop;
+    type Keep = S::Keep;
 
     fn resolve(&self, rank: usize) -> Result<usize> {
         crate::shapes::idx::AxisSelector::new(&[*self])
@@ -83,11 +86,11 @@ impl<S: Shape> ReduceSelector<S> for isize {
 
 impl<S, Tag> ReduceSelector<S> for crate::shapes::idx::NamedAxisSelector<Tag>
 where
-    S: Shape + DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
+    S: Shape + DynShape + RuntimeRankProjection + crate::shapes::idx::NamedAxisLookup<Tag>,
     Tag: crate::shapes::AxisTag,
 {
-    type Drop = crate::shapes::Dyn;
-    type Keep = crate::shapes::Dyn;
+    type Drop = S::Drop;
+    type Keep = S::Keep;
 
     fn resolve(&self, _rank: usize) -> Result<usize> {
         self.resolve::<S>()

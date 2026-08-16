@@ -6,5 +6,5 @@ use incin_macros::s;
 
 fn main() {
     let tensor = Tensor::<s![2, 3, 4], CpuBackendImpl>::zeros(()).unwrap();
-    let _ = tensor.flatten::<Next<Next<Here>>, Next<Here>>();
+    let _ = tensor.flatten_structural::<Next<Next<Here>>, Next<Here>>();
 }

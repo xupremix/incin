@@ -57,9 +57,10 @@ failure must remain a recoverable `Result`.
 
 Reductions accept one selector value for static axes, named axes, and runtime
 signed axes. Structural cursor methods remain an advanced escape hatch for
-authoring low-level shape operations. Static selectors preserve the output
-shape at the type level, while named and runtime selectors use the shape facts
-available after resolving the axis.
+authoring low-level shape operations. Static reductions and flattening preserve
+output shape information at the type level. Transpose and runtime selectors
+preserve known rank, while named selectors use the shape facts available after
+resolving the axis.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -74,7 +75,9 @@ let means = x.mean(axis!(-1))?;
 let maxima = x.max_keepdim(axis!(0))?;
 let minima_by_value = x.min(axis!(1))?;
 let argmax = x.argmax(axis!(-1))?;
-let flattened = x.flatten_range(1, -1)?;
+let transposed = x.transpose(axis!(0), axis!(2))?;
+let flattened = x.flatten(axis!(1), axis!(2))?;
+let flattened_runtime = x.flatten_range(1, -1)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -113,10 +116,19 @@ For generic known-rank runtime shapes, `Ranked<R>` also provides
 `sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank
 arithmetic in the type while leaving extents runtime-valued.
 
-Tensor slicing and indexing use `idx![...]`. Axis selection is a separate
-concept, so `axis!(-1)` never changes the `idx![-1]` indexing rules. There is
-no separate `i!` macro because the existing `idx!` syntax already owns tensor
-indexing, slicing, and reshape inference in one type-level grammar.
+Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
+ranges. Reshape inference is separate from indexing and remains available
+through `reshape_idx::<idx![... ]>()` for type-level targets. Axis selection is
+also separate, so `axis!(-1)` never changes `i![-1]` indexing rules.
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![4, 8, 16])?;
+let last = x.get(i![-1, .., ..])?;
+let window = x.get(i![.., 2..6, ..])?;
+# Ok::<(), incin::Error>(())
+```
 
 Named dimensions and const dimensions use different syntax. A named axis is
 written as `s![Batch, Features]`; a const path must be marked explicitly:

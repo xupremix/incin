@@ -20,10 +20,11 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::RuntimeRankProjection;
 use crate::shapes::error::OperationKind;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{Dyn, DynShape, Shape};
+use crate::shapes::{Dyn, DynShape, Shape, StaticAxis};
 use crate::shapes::{FlattenAt, SwapAxes};
 use crate::shapes::{ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -34,6 +35,91 @@ use core::marker::PhantomData;
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
+
+/// Public axis-pair selector used by transpose. Static pairs retain the exact
+/// `SwapAxes` output, while runtime and named pairs retain the input rank.
+pub trait AxisPairSelector<S: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)>;
+}
+
+/// Public static selector pair for flattening an inclusive axis range.
+pub trait FlattenSelector<S: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)>;
+}
+
+impl<S, L, R> FlattenSelector<S>
+    for (
+        crate::shapes::idx::StaticAxis<L>,
+        crate::shapes::idx::StaticAxis<R>,
+    )
+where
+    S: Shape + DynShape + FlattenAt<L, R>,
+    L: StaticCursor,
+    R: StaticCursor,
+    <S as FlattenAt<L, R>>::Output: Shape + DynShape,
+{
+    type Output = <S as FlattenAt<L, R>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let start = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        let end = self.1.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })?;
+        Ok((start, end))
+    }
+}
+
+impl<S, L, R> AxisPairSelector<S>
+    for (
+        crate::shapes::idx::StaticAxis<L>,
+        crate::shapes::idx::StaticAxis<R>,
+    )
+where
+    S: Shape + DynShape + SwapAxes<L, R>,
+    L: StaticCursor,
+    R: StaticCursor,
+    <S as SwapAxes<L, R>>::Output: Shape + DynShape,
+{
+    type Output = <S as SwapAxes<L, R>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let left = self.0.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })?;
+        let right = self.1.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".into())
+        })?;
+        Ok((left, right))
+    }
+}
+
+impl<S, L, R> AxisPairSelector<S>
+    for (
+        crate::shapes::idx::NamedAxisSelector<L>,
+        crate::shapes::idx::NamedAxisSelector<R>,
+    )
+where
+    S: Shape
+        + DynShape
+        + RuntimeRankProjection
+        + crate::shapes::idx::NamedAxisLookup<L>
+        + crate::shapes::idx::NamedAxisLookup<R>,
+    L: crate::shapes::AxisTag,
+    R: crate::shapes::AxisTag,
+    S::Keep: Shape + DynShape,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, _rank: usize) -> Result<(usize, usize)> {
+        Ok((self.0.resolve::<S>()?, self.1.resolve::<S>()?))
+    }
+}
 
 fn is_valid_scalar_type<E: 'static>() -> bool {
     let tid = core::any::TypeId::of::<E>();
@@ -1072,9 +1158,52 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         Ok(out)
     }
 
-    /// Transposes two compile-time structural axis cursors.
+    /// Transposes two static axis selectors while preserving the output shape.
+    pub fn transpose<L, R>(
+        &self,
+        _left: StaticAxis<L>,
+        _right: StaticAxis<R>,
+    ) -> Result<Tensor<S::Keep, B, K, G>>
+    where
+        L: StaticCursor,
+        R: StaticCursor,
+        S: RuntimeRankProjection,
+        S::Keep: Shape + DynShape,
+        B: Execute<op::TransposeExact> + Capabilities,
+        <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    {
+        let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
+            .normalize(self.shape_buf().rank())?;
+        let first = axes[0];
+        let second = axes[1];
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
+        out_dims.swap(first, second);
+        let output_shape = ShapeValue::<S::Keep>::try_new(ShapeBuf::from_slice(&out_dims))
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad).restrict(|| {
+            dispatch::execute_shaped::<op::TransposeExact, B, S::Keep>(
+                &context,
+                TransposeAttributes { first, second },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
+            inner.into(),
+            output_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Advanced structural transpose retained for shape-proof internals.
     #[allow(clippy::type_complexity)]
-    pub fn transpose<L, R>(&self) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
+    pub fn transpose_structural<L, R>(
+        &self,
+    ) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
     where
         L: StaticCursor,
         R: StaticCursor,
@@ -1114,10 +1243,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Runtime-selector transpose. Selectors are normalized before any
-    /// backend operation and the result intentionally carries only `Dyn`.
-    pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>>
+    /// Runtime-selector transpose. Known input rank is preserved in the
+    /// result; a fully dynamic input remains fully dynamic.
+    pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<S::Keep, B, K, G>>
     where
+        S: RuntimeRankProjection,
+        S::Keep: Shape + DynShape,
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
@@ -1125,13 +1256,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .normalize(self.shape_buf().rank())?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(axes[0], axes[1]);
-        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_dims))
+        let output_shape = ShapeValue::<S::Keep>::try_new(ShapeBuf::from_slice(&out_dims))
             .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                dispatch::execute_shaped::<op::TransposeExact, B, Dyn>(
+                dispatch::execute_shaped::<op::TransposeExact, B, S::Keep>(
                     &context,
                     TransposeAttributes {
                         first: axes[0],
@@ -1151,9 +1282,78 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Flattens a range selected by structural cursors.
+    /// Flattens a statically selected inclusive axis range.
+    pub fn flatten<A, BSel>(
+        &self,
+        start: A,
+        end: BSel,
+    ) -> Result<Tensor<<(A, BSel) as FlattenSelector<S>>::Output, B, K, G>>
+    where
+        (A, BSel): FlattenSelector<S>,
+        <(A, BSel) as FlattenSelector<S>>::Output: Shape + DynShape,
+        B: Execute<
+                op::FlattenExact,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
+        let rank = self.shape_buf().rank();
+        let (start, end) = (start, end).resolve(rank)?;
+        if start > end {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxisRange {
+                    operation: OperationKind::Flatten,
+                    start,
+                    end,
+                    rank,
+                },
+            ));
+        }
+        let dims = self.shape_buf().as_ref();
+        let product = dims[start..=end]
+            .iter()
+            .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
+            .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Flatten,
+                expression: "flattened dimension product",
+            })?;
+        let mut out_dims = Vec::with_capacity(rank - (end - start));
+        out_dims.extend_from_slice(&dims[..start]);
+        out_dims.push(product);
+        out_dims.extend_from_slice(&dims[end + 1..]);
+        let output_shape = ShapeValue::<<(A, BSel) as FlattenSelector<S>>::Output>::try_new(
+            ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner =
+            G::grad_mode(&self._grad).restrict(|| {
+                dispatch::execute_shaped::<
+                    op::FlattenExact,
+                    B,
+                    <(A, BSel) as FlattenSelector<S>>::Output,
+                >(
+                    &context,
+                    FlattenAttributes {
+                        start_axis: start,
+                        end_axis: end,
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?;
+        Tensor::from_shape_value(
+            inner,
+            output_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Advanced structural flatten retained for shape-proof internals.
     #[allow(clippy::type_complexity)]
-    pub fn flatten<Start, End>(
+    pub fn flatten_structural<Start, End>(
         &self,
     ) -> Result<Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>>
     where

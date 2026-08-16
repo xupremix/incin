@@ -47,10 +47,10 @@ fn named_selector_reaches_the_canonical_reduction_descriptor() {
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
-    let reduced: Tensor<Dyn, B> = tensor.sum(axis!(Channels)).unwrap();
+    let reduced: Tensor<Ranked<typenum::U1>, B> = tensor.sum(axis!(Channels)).unwrap();
     assert_eq!(reduced.shape_buf().as_ref(), &[2]);
 
-    let kept: Tensor<Dyn, B> = tensor.sum_keepdim(axis!(Channels)).unwrap();
+    let kept: Tensor<Ranked<typenum::U2>, B> = tensor.sum_keepdim(axis!(Channels)).unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
 }
 

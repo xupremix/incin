@@ -22,6 +22,7 @@ mod axis;
 
 /// Internal helper module for tensor index and slicing macro.
 mod idx;
+mod index_expr;
 /// Helper module for logical device mesh topology macro.
 mod mesh;
 /// Helper module for deriving neural network module traits.
@@ -328,6 +329,12 @@ pub fn impl_layer_args(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn idx(input: TokenStream) -> TokenStream {
     idx::idx(input)
+}
+
+/// Build runtime indexing and slicing expressions for `Tensor::get`.
+#[proc_macro]
+pub fn i(input: TokenStream) -> TokenStream {
+    index_expr::index_expr(input)
 }
 
 /// Build an arbitrary static or runtime axis selector.

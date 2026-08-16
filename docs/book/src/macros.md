@@ -68,9 +68,9 @@ Bare paths such as `s![Batch, Features]` continue to mean named dimensions.
 That distinction is required so existing named-shape code keeps its axis
 identity checks.
 
-## `idx!`  -  slicing and reshaping
+## `idx!`  -  type-level reshape targets
 
-Builds the heterogeneous tuple `slice_idx` expects, one entry per axis:
+Builds the heterogeneous type-level target that `reshape_idx` expects:
 
 | Syntax | Meaning |
 |---|---|
@@ -83,13 +83,25 @@ Builds the heterogeneous tuple `slice_idx` expects, one entry per axis:
 use incin::prelude::*;
 
 let t = Tensor::<s![10, 20, 30], DefaultBackend>::zeros(())?;
-let view = t.slice_idx::<idx![0..5, .., 15..30]>()?;
-assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
+let reshaped = t.reshape_idx::<idx![6, -1]>()?;
 # Ok::<(), incin::Error>(())
 ```
 
-The result shape is computed in the type system, so `view` above is a
-`Tensor<s![5, 20, 15], _>`  -  not a `Dyn` you have to re-assert.
+Use `i![...]` for ordinary runtime indexing and slicing. It supports negative
+indices and signed range bounds:
+
+```rust,no_run
+use incin::prelude::*;
+
+let t = Tensor::<s![10, 20], DefaultBackend>::zeros(())?;
+let last_row = t.get(i![-1, ..])?;
+let middle = t.get(i![.., 2..5])?;
+# Ok::<(), incin::Error>(())
+```
+
+The `reshape_idx` result shape is computed in the type system. Runtime indexing
+returns a dynamic shape because the selected range can depend on runtime
+values.
 
 ## `best_device!`  -  compile-time device selection
 

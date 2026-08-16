@@ -1,5 +1,5 @@
 use incin::prelude::*;
-use incin_data::vision::mnist::MnistDataset;
+use incin_data::vision::mnist::{MnistCollate, MnistDataset};
 use incin_data::{DataLoader, Dataset};
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ fn main() -> incin::Result<()> {
     println!("Loaded {} training images", train_data.len());
 
     // Create DataLoader
-    let dataloader = DataLoader::builder(train_data)
+    let dataloader = DataLoader::builder_with_collate(train_data, MnistCollate::<Backend>::new())
         .batch_size(32)
         .shuffle(true)
         .workers(0)
@@ -38,16 +38,6 @@ fn main() -> incin::Result<()> {
     for batch in &dataloader {
         let batch = batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
         let (images, labels) = batch;
-        let batch_size = images.len();
-        let mut image_values = Vec::with_capacity(batch_size * 784);
-        let mut label_values = Vec::with_capacity(batch_size);
-        for image in images {
-            image_values.extend(image);
-        }
-        label_values.extend(labels.into_iter().map(f32::from));
-        let images =
-            Tensor::<Dyn, Backend>::from_slice(&image_values, vec![batch_size, 1, 28, 28])?;
-        let labels = Tensor::<Dyn, Backend>::from_slice(&label_values, vec![batch_size])?;
         // Forward pass
         let output = model.forward(images)?;
 

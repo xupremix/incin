@@ -213,7 +213,7 @@ pub mod prelude {
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
-    pub use incin_macros::{axis, idx, mesh, module, s, shape};
+    pub use incin_macros::{axis, i, idx, mesh, module, s, shape};
 
     pub use super::shapes::prelude::{
         AdaptiveAvgPool2dShape, AppendDim, Axis, AxisIdentity, AxisKey, AxisSchema, AxisSelector,

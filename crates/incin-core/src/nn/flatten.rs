@@ -121,6 +121,6 @@ where
     type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
-        x.flatten::<Start, End>()
+        x.flatten_structural::<Start, End>()
     }
 }

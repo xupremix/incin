@@ -630,6 +630,52 @@ where
     type Output = Ranked<ROut>;
 }
 
+/// Runtime-axis projection for shapes whose rank is known structurally.
+/// Extents are erased, but the rank change remains in the public tensor type.
+pub trait RuntimeRankProjection: Shape {
+    type Keep: Shape;
+    type Drop: Shape;
+}
+
+impl RuntimeRankProjection for Nil {
+    type Keep = Ranked<typenum::U0>;
+    type Drop = Ranked<typenum::U0>;
+}
+
+impl<H: Dim, T> RuntimeRankProjection for DimCons<H, T>
+where
+    T: Shape + RuntimeRankProjection,
+    T::Keep: AddOneRank,
+    <T::Keep as AddOneRank>::Output: Shape,
+{
+    type Keep = <T::Keep as AddOneRank>::Output;
+    type Drop = T::Keep;
+}
+
+impl<R, ROut> RuntimeRankProjection for Ranked<R>
+where
+    R: Unsigned
+        + core::ops::Sub<typenum::U1, Output = ROut>
+        + core::fmt::Debug
+        + Eq
+        + Send
+        + Sync
+        + 'static,
+    ROut: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Keep = Ranked<R>;
+    type Drop = Ranked<ROut>;
+}
+
+impl RuntimeRankProjection for Dyn {
+    type Keep = Dyn;
+    type Drop = Dyn;
+}
+
+impl AddOneRank for Dyn {
+    type Output = Dyn;
+}
+
 impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Ranked<R> {
     const RANK: Option<usize> = Some(R::USIZE);
     const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Mixed;

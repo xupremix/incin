@@ -1,5 +1,4 @@
 #![cfg(feature = "cpu")]
-use incin::advanced::{Here, Next};
 use incin::prelude::*;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -296,14 +295,16 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     // reshape
     let r = t.clone().reshape(shape![3, 2])?;
     assert_eq!(r.dims().as_ref(), &[3, 2]);
+    let indexed = t.get(i![-1, ..])?;
+    assert_eq!(indexed.dims().as_ref(), &[3]);
 
     // flatten all (using 0 and 1 since it's 2D)
-    let f_all = t.clone().flatten::<Here, Next<Here>>()?;
+    let f_all = t.clone().flatten(axis!(0), axis!(1))?;
     assert_eq!(f_all.dims().as_ref(), &[6]);
 
     // flatten partial
     let t3 = Tensor::<s![2, 2, 2], CpuBackendImpl>::ones(())?;
-    let f_part = t3.flatten::<Next<Here>, Next<Next<Here>>>()?;
+    let f_part = t3.flatten(axis!(1), axis!(2))?;
     assert_eq!(f_part.dims().as_ref(), &[2, 4]);
     let f_runtime = t3.flatten_range(-2, -1)?;
     assert_eq!(f_runtime.dims().as_ref(), &[2, 4]);
@@ -317,6 +318,13 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
     // transpose
+    let tr_static: Tensor<incin::prelude::Ranked<incin::typenum::U2>, CpuBackendImpl> =
+        t.clone()
+            .transpose::<incin::advanced::Here, incin::advanced::Next<incin::advanced::Here>>(
+                axis!(0),
+                axis!(1),
+            )?;
+    assert_eq!(tr_static.dims().dims(), &[3, 2]);
     let tr = t.clone().transpose_runtime(0, 1)?;
     assert_eq!(tr.dims().dims(), &[3, 2]);
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);

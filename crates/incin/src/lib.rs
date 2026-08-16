@@ -550,7 +550,7 @@ pub mod macros {
     // invoked once, internally, by `incin-core` itself
     // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
-    pub use incin_macros::{idx, s, shape, tensor};
+    pub use incin_macros::{i, idx, s, shape, tensor};
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
@@ -618,7 +618,7 @@ pub mod prelude {
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{axis, idx, module, s, shape, tensor};
+    pub use incin_macros::{axis, i, idx, module, s, shape, tensor};
 
     pub use super::{
         BatchNorm2d, Buffer, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,

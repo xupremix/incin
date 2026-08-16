@@ -74,43 +74,40 @@ the iterator performs no dataset reads, and each `next()` fetches and collates
 only its next batch synchronously. Worker-backed iteration keeps its explicit
 cancellation and error propagation semantics.
 
-## A model-specific collate function
+## Model-ready MNIST batches
 
-The default MNIST path receives `(Vec<Vec<f32>>, Vec<u8>)`, which keeps dataset
-loading independent of a backend type. Applications that want tensors created
-inside the loader can provide a model-specific `Collate` implementation like
-this:
+The MNIST dataset keeps storage and download logic independent from a backend,
+while its provided collator performs target-aware conversion at the data
+loader boundary. It returns normalized image tensors with shape
+`[batch, 1, 28, 28]` and integer `u8` label tensors with `NoGrad`.
 
-```rust,ignore
-struct MnistCollate;
+```rust,no_run
+use incin::prelude::*;
+use incin_data::vision::mnist::{MnistCollate, MnistDataset};
+use incin_data::DataLoader;
 
-impl Collate<(Vec<f32>, u8)> for MnistCollate {
-    type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
+type Backend = incin_backends::cpu::CpuBackendImpl;
 
-    fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> incin_data::BatchResult<Self::Output> {
-        let batch_size = batch.len();
-        let mut images = Vec::with_capacity(batch_size * 784);
-        let mut labels = Vec::with_capacity(batch_size);
+let dataset = MnistDataset::new("./data/mnist", true)?;
+let loader = DataLoader::builder_with_collate(dataset, MnistCollate::<Backend>::new())
+    .batch_size(32)
+    .shuffle(true)
+    .build()?;
 
-        for (img, label) in batch {
-            images.extend_from_slice(&img);
-            labels.push(label as f32);
-        }
-
-        // Build tensors here with the target backend and return one typed
-        // batch. The full MNIST example keeps this conversion at the model
-        // boundary instead of embedding a backend in the dataset crate.
-        # Ok(unimplemented!())
-    }
+for batch in &loader {
+    let (images, labels) = batch.map_err(|error| incin::Error::Msg(error.to_string()))?;
+    let _logits = images;
+    let _classes = labels;
 }
+# Ok::<(), incin::Error>(())
 ```
 
-`Item` is `Dyn`-shaped here on purpose: batch size varies with the last,
-short batch of an epoch, so the collated tensor's shape is only known at
-run time even though every individual image is a fixed `28x28`.
+This path avoids flattening samples into host vectors and rebuilding tensors in
+the training loop. The complete example is in
+`crates/incin/examples/mnist_training.rs`.
 
 ## Transforms
 
-`incin_data::transforms` has the common image-augmentation set  -
-`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, `Scale`  -
+`incin_data::transforms` has the common image-augmentation set:
+`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, and `Scale`,
 implementing a shared `Transform` trait, composable with `Compose`.
