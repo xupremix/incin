@@ -1,0 +1,2 @@
+# Pinned because the offline book artifact is part of the release output.
+beautifulsoup4==4.12.3

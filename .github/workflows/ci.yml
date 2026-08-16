@@ -383,6 +383,7 @@ jobs:
         python3 tools/check-docs.py
         python3 tools/check-markdown-links.py
         python3 docs/book/build_site.py
+        python3 tools/check-book-site.py
         node --check docs/book/site/book.js
 
     # Rust examples need Cargo's dependency metadata; mdbook test invokes
@@ -395,8 +396,9 @@ jobs:
     # independent render, so it can never drift from it.
     - name: Build the single-page static version
       run: |
-        pip install --quiet beautifulsoup4
-        python3 docs/book/make_single_page.py
+        python3 -m venv /tmp/incin-book-venv
+        /tmp/incin-book-venv/bin/pip install --requirement docs/book/requirements.txt
+        /tmp/incin-book-venv/bin/python docs/book/make_single_page.py
 
     # docs/book/book/ is generated output and is gitignored - it must never
     # be committed. This step makes that explicit rather than relying only

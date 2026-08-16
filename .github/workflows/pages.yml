@@ -8,6 +8,7 @@ on:
     paths:
       - "docs/book/**"
       - "tools/check-docs.py"
+      - "tools/check-book-site.py"
       - "tools/check-markdown-links.py"
       - ".github/workflows/pages.yml"
 
@@ -32,6 +33,7 @@ jobs:
           python3 tools/check-docs.py
           python3 tools/check-markdown-links.py
           python3 docs/book/build_site.py
+          python3 tools/check-book-site.py
           node --check docs/book/site/book.js
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

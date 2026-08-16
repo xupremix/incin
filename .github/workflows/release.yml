@@ -53,7 +53,10 @@ jobs:
           set -euo pipefail
           mdbook build docs/book
           python3 docs/book/build_site.py
-          python3 docs/book/make_single_page.py
+          python3 tools/check-book-site.py
+          python3 -m venv /tmp/incin-book-venv
+          /tmp/incin-book-venv/bin/pip install --requirement docs/book/requirements.txt
+          /tmp/incin-book-venv/bin/python docs/book/make_single_page.py
 
       - name: Archive book
         run: |
