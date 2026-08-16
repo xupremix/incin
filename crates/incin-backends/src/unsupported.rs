@@ -1,6 +1,6 @@
 //! Explicit declarations for operations a backend does not implement.
 //!
-//! `` used to give every method a default body returning
+//! Legacy operation-family traits used to give every method a default body returning
 //! [`Error::UnsupportedBackendOperation`], so a backend covering sixteen of its
 //! forty-two operations looked exactly like one covering all forty-two. The
 //! refusal was real but invisible: it lived in the trait, not in the backend
@@ -111,7 +111,7 @@ pub(crate) use unsupported_creation_ops;
 /// collapse the whole tensor or act along one axis.
 ///
 /// CUDA and Metal both still invoke this; WGPU no longer does, now that
-/// every `` method has a real implementation. Same
+/// every reduction method has a real implementation. The same
 /// feature-gating artifact as `unsupported_creation_ops`/
 /// `unsupported_tensor_ops` above: provably unused only under feature
 /// combinations that build WGPU without CUDA or Metal.
@@ -143,7 +143,8 @@ pub(crate) use unsupported_reduction_ops;
 /// for, one operation name per entry.
 ///
 /// The three macros above group by signature because their traits have only a
-/// handful of shapes. `` has nearly as many distinct signatures as it
+/// handful of shapes. Tensor and indexing operations have nearly as many
+/// distinct signatures as the trait has methods,
 /// has methods, so grouping would mean twenty groups, most with one member, and
 /// every call site spelling out the empty ones. Matching on the operation name
 /// instead keeps the declaration a flat list of exactly the gap:
@@ -158,10 +159,10 @@ pub(crate) use unsupported_reduction_ops;
 /// trait without someone noticing.
 ///
 /// CUDA and Metal both still invoke this; WGPU no longer does, now that
-/// every `` method has a real implementation. That makes the macro
+/// every tensor or indexing method has a real implementation. That makes the macro
 /// provably unused only under feature combinations that build WGPU without
 /// CUDA or Metal (e.g. CI's WGPU-only clippy job), a feature-gating artifact
-/// rather than dead code — see `unsupported_creation_ops`'s identical note
+/// rather than dead code. See `unsupported_creation_ops`'s identical note
 /// above for the first time this happened.
 #[allow(unused_macros)]
 macro_rules! unsupported_tensor_ops {
