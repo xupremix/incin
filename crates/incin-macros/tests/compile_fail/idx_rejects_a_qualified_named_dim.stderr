@@ -4,13 +4,13 @@ error: idx! expects simple identifiers for named runtime axes
 8 |     let _ = t.slice_idx::<idx![some::Module::Batch, ..]>();
   |                                ^^^^^^^^^^^^^^^^^^^
 
-error[E0277]: the trait bound `(): incin_core::shapes::idx::SliceSpec` is not satisfied
+error[E0277]: the trait bound `(): incin::advanced::SliceSpec` is not satisfied
  --> tests/compile_fail/idx_rejects_a_qualified_named_dim.rs:8:15
   |
 8 |     let _ = t.slice_idx::<idx![some::Module::Batch, ..]>();
-  |               ^^^^^^^^^ the trait `incin_core::shapes::idx::SliceSpec` is not implemented for `()`
+  |               ^^^^^^^^^ the trait `incin::advanced::SliceSpec` is not implemented for `()`
   |
-help: the following other types implement trait `incin_core::shapes::idx::SliceSpec`
+help: the following other types implement trait `incin::advanced::SliceSpec`
  --> $WORKSPACE/crates/incin-core/src/shapes/idx.rs
   |
   |   impl SliceSpec for Nil {
@@ -20,4 +20,4 @@ help: the following other types implement trait `incin_core::shapes::idx::SliceS
   | | where
   | |     D::Resolved: Dim,
   | |_____________________^ `DimCons<D, T>`
-  = note: required for `()` to implement `incin_core::shapes::idx::SliceTarget<DimCons<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>>>`
+  = note: required for `()` to implement `SliceTarget<DimCons<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, DimCons<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, Nil>>>`

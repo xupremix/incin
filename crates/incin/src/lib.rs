@@ -697,7 +697,7 @@ pub mod prelude {
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{axis, i, module, s, shape, tensor};
+    pub use incin_macros::{axis, i, idx, module, s, shape, tensor};
 
     pub use super::{
         BatchNorm2d, Buffer, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
