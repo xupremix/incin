@@ -21,10 +21,10 @@ fn parse_axis(input: ParseStream) -> syn::Result<Axis> {
     if input.peek(syn::Ident) || input.peek(syn::token::SelfValue) {
         let fork = input.fork();
         if let Ok(_tag) = fork.parse::<syn::Path>()
-            && fork.peek(Token![:])
+            && fork.peek(Token![=])
         {
             let tag = input.parse::<syn::Path>()?;
-            input.parse::<Token![:]>()?;
+            input.parse::<Token![=]>()?;
             return Ok(Axis::Named {
                 tag,
                 extent: Box::new(parse_axis(input)?),

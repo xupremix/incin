@@ -21,12 +21,12 @@ fn all_literal_axes_produce_a_fully_static_shape() {
 #[test]
 fn named_shape_axes_share_the_s_macro_type_grammar() {
     let batch = 3usize;
-    let runtime: Tensor<s![Batch: dyn, Features: 64], _, f32, NoGrad> =
-        Cpu.zeros(shape![Batch: batch, Features: 64]).unwrap();
+    let runtime: Tensor<s![Batch = dyn, Features = 64], _, f32, NoGrad> =
+        Cpu.zeros(shape![Batch = batch, Features = 64]).unwrap();
     assert_eq!(runtime.dims().as_ref(), &[3, 64]);
 
-    let static_shape: Tensor<s![Batch: 25, Features: 64], _, f32, NoGrad> =
-        Cpu.zeros(shape![Batch: 25, Features: 64]).unwrap();
+    let static_shape: Tensor<s![Batch = 25, Features = 64], _, f32, NoGrad> =
+        Cpu.zeros(shape![Batch = 25, Features = 64]).unwrap();
     assert_eq!(static_shape.dims().as_ref(), &[25, 64]);
 }
 
@@ -98,6 +98,15 @@ fn const_path_axes_produce_static_typenum_dimensions() {
     // An un-prefixed identifier is treated as a runtime axis
     let t5: Tensor<RuntimeShape1, _, f32, NoGrad> = Cpu.zeros(shape![N_CONST]).unwrap();
     assert_eq!(t5.dims().as_ref(), &[32]);
+}
+
+#[test]
+fn named_shape_types_accept_explicit_const_dimensions() {
+    type NamedConstShape = s![Batch = const N_CONST, Features = const M_CONST];
+    let tensor: Tensor<NamedConstShape, _, f32, NoGrad> =
+        Cpu.zeros(shape![Batch = const N_CONST, Features = const M_CONST])
+            .unwrap();
+    assert_eq!(tensor.dims(), [32, 64]);
 }
 
 #[test]

@@ -14,6 +14,8 @@ enum Dim {
     Lit(syn::LitInt),
     /// Path.
     Path(syn::Path),
+    /// A compile-time const dimension.
+    ConstPath(syn::Path),
     /// A semantic axis tag paired with an independent extent specification.
     Named { tag: syn::Path, extent: Box<Dim> },
 }
@@ -21,15 +23,36 @@ enum Dim {
 impl Parse for Dim {
     /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![const]) {
+            let const_token = input.parse::<Token![const]>()?;
+            if input.peek(syn::token::Brace) || input.peek(syn::token::Paren) {
+                return Err(syn::Error::new_spanned(
+                    const_token,
+                    "dimension expressions like `const { ... }` or `const (...)` are not supported in s!",
+                ));
+            }
+            let path = input.parse::<syn::Path>()?;
+            if input.peek(Token![*])
+                || input.peek(Token![+])
+                || input.peek(Token![-])
+                || input.peek(Token![/])
+            {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "arithmetic expressions after `const` are not supported in s!",
+                ));
+            }
+            return Ok(Dim::ConstPath(path));
+        }
         // Keep the named form in the same dimension grammar as anonymous
         // dimensions.  This is deliberately a type-level pairing, not a
         // second runtime shape representation.
         if input.peek(syn::Ident) || input.peek(syn::token::SelfValue) {
             let fork = input.fork();
             if let Ok(tag) = fork.parse::<syn::Path>() {
-                if fork.peek(Token![:]) {
+                if fork.peek(Token![=]) {
                     let tag = input.parse::<syn::Path>()?;
-                    input.parse::<Token![:]>()?;
+                    input.parse::<Token![=]>()?;
                     let extent = input.parse::<Dim>()?;
                     return Ok(Dim::Named {
                         tag,
@@ -186,6 +209,7 @@ fn render_dim(elem: &Dim, path: &proc_macro2::TokenStream) -> proc_macro2::Token
         }
         Dim::Path(p) if p.is_ident("usize") => quote! { usize },
         Dim::Path(p) => quote! { #path NamedDim<#p, usize> },
+        Dim::ConstPath(p) => quote! { #path ConstDim<{ #p }> },
         Dim::Named { tag, extent } => {
             let extent = render_dim(extent, path);
             quote! { #path NamedDim<#tag, #extent> }

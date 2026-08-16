@@ -127,7 +127,7 @@ dim!(BatchSize);
 
 type Image = s![3, 224, 224];
 type Batched = s![BatchSize, 128];   // named axis, size decided at runtime
-type NamedStatic = s![BatchSize: 25, 128]; // named axis with static extent
+type NamedStatic = s![BatchSize = 25, 128]; // named axis with static extent
 type Loose = s![usize, 128];         // unnamed runtime axis
 ```
 

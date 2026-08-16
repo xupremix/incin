@@ -119,7 +119,7 @@ backend specialize on a static shape — see
 
 `dim!(Batch)` gives an axis a compile-time *identity* without a compile-time
 *size*. `dim!(Channels)` can also be paired with a static extent as
-`s![Channels: 64]`; the name and extent are independent. See [the macro
+`s![Channels = 64]`; the name and extent are independent. See [the macro
 reference](./macros.md#dim--named-dimensions).
 
 This matters for real models: batch size and sequence length genuinely are

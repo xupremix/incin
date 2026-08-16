@@ -240,7 +240,7 @@ fn runtime_static_broadcast_keeps_the_provable_output_extent() {
     type AnonymousOut = <s![usize] as BroadcastShape<s![64]>>::Output;
     type NamedOut = <s![Batch] as BroadcastShape<s![64]>>::Output;
     type ExpectedAnonymous = s![64];
-    type ExpectedNamed = s![Batch: 64];
+    type ExpectedNamed = s![Batch = 64];
 
     assert_same::<AnonymousOut, ExpectedAnonymous>();
     assert_same::<NamedOut, ExpectedNamed>();

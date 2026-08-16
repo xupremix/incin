@@ -77,7 +77,7 @@ mod tensor;
 /// ```rust
 /// # use incin::prelude::*;
 /// # dim!(Batch, Features);
-/// type FeaturesBatch = s![Batch: 25, Features: 128];
+/// type FeaturesBatch = s![Batch = 25, Features = 128];
 /// ```
 ///
 /// ## Path resolution

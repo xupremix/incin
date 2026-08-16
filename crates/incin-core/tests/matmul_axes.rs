@@ -65,7 +65,7 @@ fn static_matmul_output_type_preserves_batch_and_matrix_axes() {
 #[test]
 fn anonymous_and_named_equal_static_contractions_are_compatible() {
     type L = s![2, 64];
-    type R = s![Contract: 64, 5];
+    type R = s![Contract = 64, 5];
     type Out = <L as MatMulShape<R>>::Output;
     type Expected = s![2, 5];
 
@@ -77,8 +77,8 @@ fn anonymous_and_named_equal_static_contractions_are_compatible() {
 
 #[test]
 fn matching_named_static_contractions_preserve_the_matrix_result() {
-    type L = s![2, Contract: 64];
-    type R = s![Contract: 64, 5];
+    type L = s![2, Contract = 64];
+    type R = s![Contract = 64, 5];
     type Out = <L as MatMulShape<R>>::Output;
     type Expected = s![2, 5];
 
@@ -87,12 +87,12 @@ fn matching_named_static_contractions_preserve_the_matrix_result() {
 
 #[test]
 fn named_static_and_runtime_contractions_use_numeric_validation() {
-    type StaticLhs = s![3, Features: 64];
-    type StaticRhs = s![Features: 64, 5];
-    type RuntimeLhs = s![3, Features: dyn];
-    type RuntimeRhs = s![Features: dyn, 5];
-    type ReverseRuntimeLhs = s![3, Features: 64];
-    type ReverseRuntimeRhs = s![Features: dyn, 5];
+    type StaticLhs = s![3, Features = 64];
+    type StaticRhs = s![Features = 64, 5];
+    type RuntimeLhs = s![3, Features = dyn];
+    type RuntimeRhs = s![Features = dyn, 5];
+    type ReverseRuntimeLhs = s![3, Features = 64];
+    type ReverseRuntimeRhs = s![Features = dyn, 5];
     type Expected = s![3, 5];
 
     assert_same::<<StaticLhs as MatMulShape<StaticRhs>>::Output, Expected>();
@@ -121,10 +121,10 @@ fn named_static_and_runtime_contractions_use_numeric_validation() {
 
 #[test]
 fn named_mixed_contractions_preserve_the_known_output_extent() {
-    type NamedRuntimeLhs = s![3, Features: dyn];
-    type NamedStaticRhs = s![Features: 64, 5];
-    type StaticNamedLhs = s![3, Features: 64];
-    type NamedRuntimeRhs = s![Features: dyn, 5];
+    type NamedRuntimeLhs = s![3, Features = dyn];
+    type NamedStaticRhs = s![Features = 64, 5];
+    type StaticNamedLhs = s![3, Features = 64];
+    type NamedRuntimeRhs = s![Features = dyn, 5];
     type AnonymousStaticLhs = s![3, 64];
 
     assert_same::<<NamedRuntimeLhs as MatMulShape<NamedStaticRhs>>::Output, s![3, 5]>();
@@ -143,10 +143,10 @@ fn named_mixed_contractions_preserve_the_known_output_extent() {
 
 #[test]
 fn named_batch_broadcast_preserves_name_and_static_extent() {
-    type L = s![Batch: 25, 3, Features: 64];
-    type R = s![Batch: 1, Features: 64, 5];
+    type L = s![Batch = 25, 3, Features = 64];
+    type R = s![Batch = 1, Features = 64, 5];
     type Out = <L as MatMulShape<R>>::Output;
-    type Expected = s![Batch: 25, 3, 5];
+    type Expected = s![Batch = 25, 3, 5];
 
     assert_same::<Out, Expected>();
     let lhs = field::<L>(&[25, 3, 64]);
@@ -162,9 +162,9 @@ fn named_batch_broadcast_preserves_name_and_static_extent() {
 #[test]
 fn matmul_preserves_named_static_output_type() {
     type B = DummyBackend<Cpu>;
-    type L = s![Batch: 25, 3, Features: 64];
-    type R = s![Batch: 1, Features: 64, 5];
-    type Expected = s![Batch: 25, 3, 5];
+    type L = s![Batch = 25, 3, Features = 64];
+    type R = s![Batch = 1, Features = 64, 5];
+    type Expected = s![Batch = 25, 3, 5];
 
     let lhs: Tensor<L, B> = Tensor::ones(()).unwrap();
     let rhs: Tensor<R, B> = Tensor::ones(()).unwrap();

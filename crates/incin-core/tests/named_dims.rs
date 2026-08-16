@@ -68,7 +68,7 @@ fn structural_sum_rules_preserve_typed_outputs() {
 
 #[test]
 fn reduction_rules_reject_axes_that_do_not_match_the_structural_cursor() {
-    type S = s![Batch: 2, Channels: 2];
+    type S = s![Batch = 2, Channels = 2];
     let dims = ShapeBuf::from_slice(&[2, 2]);
 
     assert!(
@@ -190,8 +190,8 @@ fn named_broadcast_output_preserves_the_semantic_axis() {
 
 #[test]
 fn named_static_broadcast_retains_static_extent_proof() {
-    type Left = s![Batch: 25];
-    type Right = s![Batch: 1];
+    type Left = s![Batch = 25];
+    type Right = s![Batch = 1];
     type Out = <Left as BroadcastShape<Right>>::Output;
     type Expected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
 
@@ -209,10 +209,10 @@ fn named_static_broadcast_retains_static_extent_proof() {
 
 #[test]
 fn named_static_broadcast_retains_proof_in_reverse_order_and_with_anonymous_one() {
-    type NamedOne = s![Batch: 1];
-    type NamedTwentyFive = s![Batch: 25];
+    type NamedOne = s![Batch = 1];
+    type NamedTwentyFive = s![Batch = 25];
     type NamedOut = <NamedOne as BroadcastShape<NamedTwentyFive>>::Output;
-    type AnonymousOut = <s![1] as BroadcastShape<s![Batch: 25]>>::Output;
+    type AnonymousOut = <s![1] as BroadcastShape<s![Batch = 25]>>::Output;
     type NamedExpected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
     type AnonymousExpected = DimCons<NamedDim<Batch, typenum::U25>, Nil>;
 
@@ -246,9 +246,9 @@ fn keepdim_rebinds_a_named_axis_to_static_one() {
 
 #[test]
 fn named_static_extents_are_distinct_semantic_axes() {
-    type S = s![Batch: 25, Features: 25];
+    type S = s![Batch = 25, Features = 25];
     type Out = <S as SwapAt<Here, Next<Here>>>::Output;
-    type Expected = s![Features: 25, Batch: 25];
+    type Expected = s![Features = 25, Batch = 25];
 
     assert_same::<Out, Expected>();
     let dims = <Out as Shape>::try_from_dims(&[25, 25]).unwrap();
@@ -257,26 +257,26 @@ fn named_static_extents_are_distinct_semantic_axes() {
 
 #[test]
 fn named_static_keepdim_rebinds_only_extent() {
-    type S = s![Batch: 25, Channels: 64];
+    type S = s![Batch = 25, Channels = 64];
     type Out = <S as ReduceKeepAt<Next<Here>>>::Output;
-    type Expected = s![Batch: 25, Channels: 1];
+    type Expected = s![Batch = 25, Channels = 1];
 
     assert_same::<Out, Expected>();
 }
 
 #[test]
 fn named_runtime_keepdim_rebinds_runtime_extent_to_one() {
-    type S = s![Batch: dyn, Channels: dyn];
+    type S = s![Batch = dyn, Channels = dyn];
     type Out = <S as ReduceKeepAt<Next<Here>>>::Output;
-    type Expected = s![Batch: dyn, Channels: 1];
+    type Expected = s![Batch = dyn, Channels = 1];
 
     assert_same::<Out, Expected>();
 }
 
 #[test]
 fn concrete_static_named_extents_participate_in_element_count_arithmetic() {
-    type Source = s![Batch: 2, Channels: 3];
-    type Target = s![Height: 1, Width: 6];
+    type Source = s![Batch = 2, Channels = 3];
+    type Target = s![Height = 1, Width = 6];
 
     fn assert_reshape<S, T>()
     where

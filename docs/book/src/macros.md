@@ -47,7 +47,7 @@ structural representation as an anonymous static axis:
 use incin::prelude::*;
 
 dim!(Batch);
-type StaticBatch = s![Batch: 25, 128];
+type StaticBatch = s![Batch = 25, 128];
 ```
 
 ## `idx!` — slicing and reshaping
