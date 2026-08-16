@@ -334,7 +334,7 @@ impl<I> Next<I> {
     where
         Self: StaticCursor,
     {
-        AxisSelector::new(&[Self::INDEX]).normalize(rank)
+        AxisSelector::new(&[<Next<I> as StaticCursor>::INDEX]).normalize(rank)
     }
 }
 
@@ -344,11 +344,12 @@ pub struct FromEnd<I>(pub core::marker::PhantomData<I>);
 
 impl<I> FromEnd<I> {
     pub const DEFAULT: Self = FromEnd(core::marker::PhantomData);
+}
 
-    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>>
-    where
-        Self: StaticCursor,
-    {
+impl<I: StaticCursor> FromEnd<I> {
+    pub const INDEX: isize = -(1 + I::INDEX);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[Self::INDEX]).normalize(rank)
     }
 }
@@ -360,16 +361,28 @@ pub trait StaticCursor:
     const INDEX: isize;
 }
 
+/// Compile-time axis cursor accepted by structural reduction helpers.
+/// Unlike `StaticCursor`, this also includes cursors counted from the end.
+pub trait AxisCursor:
+    'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+{
+    const INDEX: isize;
+}
+
+impl<I: StaticCursor> AxisCursor for I {
+    const INDEX: isize = I::INDEX;
+}
+
+impl<I: StaticCursor> AxisCursor for FromEnd<I> {
+    const INDEX: isize = FromEnd::<I>::INDEX;
+}
+
 impl StaticCursor for Here {
     const INDEX: isize = 0;
 }
 
 impl<I: StaticCursor> StaticCursor for Next<I> {
     const INDEX: isize = 1 + I::INDEX;
-}
-
-impl<I: StaticCursor> StaticCursor for FromEnd<I> {
-    const INDEX: isize = -(1 + I::INDEX);
 }
 
 /// Value-level spelling of a compile-time axis cursor.
@@ -381,6 +394,31 @@ impl<I: StaticCursor> StaticAxis<I> {
 
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[I::INDEX]).normalize(rank)
+    }
+}
+
+/// A forward static axis value emitted by `axis!`.  The distinct wrapper keeps
+/// forward and from-end selector dispatch disjoint for the trait solver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct ForwardAxis<I: crate::shapes::shape::ForwardCursor>(core::marker::PhantomData<I>);
+
+impl<I: crate::shapes::shape::ForwardCursor> ForwardAxis<I> {
+    pub const DEFAULT: Self = ForwardAxis(core::marker::PhantomData);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
+        AxisSelector::new(&[I::INDEX]).normalize(rank)
+    }
+}
+
+/// A from-end static axis value emitted by `axis!`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct ReverseAxis<I: StaticCursor>(core::marker::PhantomData<I>);
+
+impl<I: StaticCursor> ReverseAxis<I> {
+    pub const DEFAULT: Self = ReverseAxis(core::marker::PhantomData);
+
+    pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
+        AxisSelector::new(&[FromEnd::<I>::INDEX]).normalize(rank)
     }
 }
 
@@ -515,13 +553,13 @@ impl ToAxisIndex for i32 {
 
 impl ToAxisIndex for Here {
     fn to_axis_index(&self) -> isize {
-        Here::INDEX
+        <Here as StaticCursor>::INDEX
     }
 }
 
 impl<I: StaticCursor> ToAxisIndex for Next<I> {
     fn to_axis_index(&self) -> isize {
-        Next::<I>::INDEX
+        <Next<I> as StaticCursor>::INDEX
     }
 }
 
@@ -534,6 +572,18 @@ impl<I: StaticCursor> ToAxisIndex for FromEnd<I> {
 impl<I: StaticCursor> ToAxisIndex for StaticAxis<I> {
     fn to_axis_index(&self) -> isize {
         I::INDEX
+    }
+}
+
+impl<I: crate::shapes::shape::ForwardCursor> ToAxisIndex for ForwardAxis<I> {
+    fn to_axis_index(&self) -> isize {
+        I::INDEX
+    }
+}
+
+impl<I: StaticCursor> ToAxisIndex for ReverseAxis<I> {
+    fn to_axis_index(&self) -> isize {
+        FromEnd::<I>::INDEX
     }
 }
 

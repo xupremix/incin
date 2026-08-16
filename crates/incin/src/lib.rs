@@ -247,6 +247,7 @@ pub mod __macro_support {
         LayerNode, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor, StatePath,
         StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
     };
+    pub use incin_core::prelude::IndexSpec;
     pub use incin_core::tensor::device::Device;
     pub use incin_core::tensor::transfer::ToDevice;
 }

@@ -6,7 +6,8 @@
 //! or dynamically (using `try_stack` / `dyn_slice`) depending on the operation chosen.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// One dimension's worth of an indexing expression like `t.get((0, 2..5, ..))`,
+/// One dimension's worth of an indexing expression like
+/// `t.get(vec![IndexSpec::Index(0), IndexSpec::Range(2, 5), IndexSpec::All])`,
 /// built via the `From` impls below so callers can write plain Rust ranges
 /// and integers instead of constructing this directly.
 pub enum IndexSpec {
@@ -105,9 +106,10 @@ impl From<core::ops::RangeFull> for IndexSpec {
     }
 }
 
-/// Converts an indexing argument — a single `IndexSpec`-convertible value,
-/// or a tuple of up to 7 of them (one per dimension) — into a flat
-/// `Vec<IndexSpec>` for `get`/`slice`-style methods to consume.
+/// Converts an indexing argument into a flat `Vec<IndexSpec>` for
+/// `get`/`slice`-style methods to consume. The `i![]` macro supplies a vector
+/// directly, so its number of dimensions is not limited by tuple trait
+/// implementations.
 pub trait IndexArgs {
     /// Produces one `IndexSpec` per indexed dimension, in order.
     fn into_specs(self) -> alloc::vec::Vec<IndexSpec>;
@@ -120,30 +122,12 @@ impl<T: Into<IndexSpec>> IndexArgs for T {
     }
 }
 
-macro_rules! impl_index_args_tuple {
-    ($($t:ident),+) => {
-        impl<$($t: Into<IndexSpec>),+> IndexArgs for ($($t,)+) {
-            /// Converts each tuple element to an `IndexSpec`, in order.
-            fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
-                let mut specs = alloc::vec::Vec::new();
-                #[allow(non_snake_case)]
-                let ($($t,)+) = self;
-                $(
-                    specs.push($t.into());
-                )+
-                specs
-            }
-        }
-    };
+impl IndexArgs for alloc::vec::Vec<IndexSpec> {
+    /// Uses the already materialized heterogeneous index list as-is.
+    fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
+        self
+    }
 }
-
-impl_index_args_tuple!(A);
-impl_index_args_tuple!(A, B);
-impl_index_args_tuple!(A, B, C);
-impl_index_args_tuple!(A, B, C, D);
-impl_index_args_tuple!(A, B, C, D, E);
-impl_index_args_tuple!(A, B, C, D, E, F);
-impl_index_args_tuple!(A, B, C, D, E, F, G);
 
 /// Compile-time shape-equality check between two `Shape` types, used to
 /// reject shape-mismatched tensor operations before runtime rather than

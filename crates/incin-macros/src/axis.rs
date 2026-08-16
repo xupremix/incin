@@ -51,15 +51,15 @@ fn cursor(value: isize) -> proc_macro2::TokenStream {
         for _ in 0..magnitude.saturating_sub(1) {
             ty = quote! { #path Next::<#ty> };
         }
-        quote! { #api StaticAxis::<#path FromEnd::<#ty>>::DEFAULT }
+        quote! { #api ReverseAxis::<#ty>::DEFAULT }
     } else if magnitude == 0 {
-        quote! { #api StaticAxis::<#path Here>::DEFAULT }
+        quote! { #api ForwardAxis::<#path Here>::DEFAULT }
     } else {
         let mut ty = quote! { #path Here };
         for _ in 0..magnitude {
             ty = quote! { #path Next::<#ty> };
         }
-        quote! { #api StaticAxis::<#ty>::DEFAULT }
+        quote! { #api ForwardAxis::<#ty>::DEFAULT }
     }
 }
 

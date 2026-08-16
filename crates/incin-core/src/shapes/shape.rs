@@ -11,7 +11,7 @@ use typenum::Unsigned;
 /// `FromEnd` adapters prevents the trait solver from exploring an infinite
 /// reverse-of-reverse candidate chain.
 #[doc(hidden)]
-pub trait ForwardCursor {}
+pub trait ForwardCursor: crate::shapes::idx::StaticCursor {}
 impl ForwardCursor for Here {}
 impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 
@@ -256,12 +256,34 @@ pub trait AtFromEnd<Cursor>: Shape {
     type Output: Dim;
 }
 
-impl<H: Dim, T: Shape, Cursor: ForwardCursor> AtFromEnd<Cursor> for DimCons<H, T>
+#[doc(hidden)]
+pub trait LastDim: Shape {
+    type Output: Dim;
+}
+
+impl<H: Dim> LastDim for DimCons<H, Nil> {
+    type Output = H;
+}
+
+impl<H: Dim, T: Shape> LastDim for DimCons<H, T>
 where
-    DimCons<H, T>: ReverseShape,
-    <DimCons<H, T> as ReverseShape>::Output: At<Cursor>,
+    T: LastDim,
 {
-    type Output = <<DimCons<H, T> as ReverseShape>::Output as At<Cursor>>::Output;
+    type Output = <T as LastDim>::Output;
+}
+
+impl<H: Dim, T: Shape> AtFromEnd<Here> for DimCons<H, T>
+where
+    DimCons<H, T>: LastDim,
+{
+    type Output = <DimCons<H, T> as LastDim>::Output;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor> AtFromEnd<Next<Cursor>> for DimCons<H, T>
+where
+    T: AtFromEnd<Cursor>,
+{
+    type Output = <T as AtFromEnd<Cursor>>::Output;
 }
 
 /// Removes the dimension at structural cursor `Cursor`.
@@ -292,14 +314,34 @@ pub trait RemoveFromEnd<Cursor>: Shape {
     type Output: Shape;
 }
 
-impl<H: Dim, T: Shape, Cursor: ForwardCursor> RemoveFromEnd<Cursor> for DimCons<H, T>
+#[doc(hidden)]
+pub trait RemoveLastDim: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim> RemoveLastDim for DimCons<H, Nil> {
+    type Output = Nil;
+}
+
+impl<H: Dim, H2: Dim, T: Shape> RemoveLastDim for DimCons<H, DimCons<H2, T>>
 where
-    DimCons<H, T>: ReverseShape,
-    <DimCons<H, T> as ReverseShape>::Output: RemoveAt<Cursor>,
-    <<DimCons<H, T> as ReverseShape>::Output as RemoveAt<Cursor>>::Output: ReverseShape,
+    DimCons<H2, T>: RemoveLastDim,
 {
-    type Output =
-        <<<DimCons<H, T> as ReverseShape>::Output as RemoveAt<Cursor>>::Output as ReverseShape>::Output;
+    type Output = DimCons<H, <DimCons<H2, T> as RemoveLastDim>::Output>;
+}
+
+impl<H: Dim, T: Shape> RemoveFromEnd<Here> for DimCons<H, T>
+where
+    DimCons<H, T>: RemoveLastDim,
+{
+    type Output = <DimCons<H, T> as RemoveLastDim>::Output;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor> RemoveFromEnd<Next<Cursor>> for DimCons<H, T>
+where
+    T: RemoveFromEnd<Cursor>,
+{
+    type Output = DimCons<H, <T as RemoveFromEnd<Cursor>>::Output>;
 }
 
 /// Replaces the dimension at structural cursor `Cursor` with `NewDim`.
@@ -332,15 +374,19 @@ pub trait ReplaceFromEnd<Cursor, NewDim: Dim>: Shape {
     type Output: Shape;
 }
 
-impl<H: Dim, T: Shape, Cursor: ForwardCursor, NewDim: Dim> ReplaceFromEnd<Cursor, NewDim>
+impl<H: Dim, T: Shape, NewDim: Dim> ReplaceFromEnd<Here, NewDim> for DimCons<H, T>
+where
+    DimCons<H, T>: ReplaceLastDim<NewDim>,
+{
+    type Output = <DimCons<H, T> as ReplaceLastDim<NewDim>>::Output;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor, NewDim: Dim> ReplaceFromEnd<Next<Cursor>, NewDim>
     for DimCons<H, T>
 where
-    DimCons<H, T>: ReverseShape,
-    <DimCons<H, T> as ReverseShape>::Output: ReplaceAt<Cursor, NewDim>,
-    <<DimCons<H, T> as ReverseShape>::Output as ReplaceAt<Cursor, NewDim>>::Output: ReverseShape,
+    T: ReplaceFromEnd<Cursor, NewDim>,
 {
-    type Output =
-        <<<DimCons<H, T> as ReverseShape>::Output as ReplaceAt<Cursor, NewDim>>::Output as ReverseShape>::Output;
+    type Output = DimCons<H, <T as ReplaceFromEnd<Cursor, NewDim>>::Output>;
 }
 
 /// Inserts `NewDim` before structural cursor `Cursor`.
@@ -406,6 +452,7 @@ impl<H: Dim, T: Shape> SwapAt<Here, Here> for DimCons<H, T> {
 
 impl<H: Dim, T: Shape, R, RD> SwapAt<Here, Next<R>> for DimCons<H, T>
 where
+    R: ForwardCursor,
     T: At<R, Output = RD> + ReplaceAt<R, H>,
     RD: Dim,
 {
@@ -414,6 +461,7 @@ where
 
 impl<H: Dim, T: Shape, L, LD> SwapAt<Next<L>, Here> for DimCons<H, T>
 where
+    L: ForwardCursor,
     T: At<L, Output = LD> + ReplaceAt<L, H>,
     LD: Dim,
 {
@@ -429,31 +477,60 @@ where
     type Output = DimCons<H, <T as SwapAt<L, R>>::Output>;
 }
 
-// From-end selectors recurse over the outer cons cell.  They use a separate
-// dispatch trait so forward proofs never explore reverse candidates.
+// From-end selectors use a separate algebra.  The helper traits below make
+// the two edge cases explicit, so a proof of a forward cursor never explores
+// an unconstrained reverse cursor candidate.
 pub trait SwapFromEndAt<Left, Right>: Shape {
     type Output: Shape;
 }
 
-impl<H: Dim, T: Shape, L, LD> SwapFromEndAt<FromEnd<L>, Here> for DimCons<H, T>
-where
-    L: ForwardCursor,
-    DimCons<H, T>: AtFromEnd<L, Output = LD> + ReplaceAt<FromEnd<L>, H>,
-    <DimCons<H, T> as ReplaceAt<FromEnd<L>, H>>::Output: ReplaceAt<Here, LD>,
-    LD: Dim,
-{
-    type Output =
-        <<DimCons<H, T> as ReplaceAt<FromEnd<L>, H>>::Output as ReplaceAt<Here, LD>>::Output;
+#[doc(hidden)]
+pub trait SwapLastWith<Cursor>: Shape {
+    type Output: Shape;
 }
 
-impl<H: Dim, T: Shape, RD> SwapFromEndAt<Here, FromEnd<Here>> for DimCons<H, T>
+impl<H: Dim, T: Shape, Last> SwapLastWith<Here> for DimCons<H, T>
 where
-    DimCons<H, T>: AtFromEnd<Here, Output = RD> + ReplaceAt<FromEnd<Here>, H>,
-    <DimCons<H, T> as ReplaceAt<FromEnd<Here>, H>>::Output: ReplaceAt<Here, RD>,
-    RD: Dim,
+    DimCons<H, T>: AtFromEnd<Here, Output = Last> + ReplaceAt<FromEnd<Here>, H>,
+    <DimCons<H, T> as ReplaceAt<FromEnd<Here>, H>>::Output: ReplaceAt<Here, Last>,
+    Last: Dim,
 {
     type Output =
-        <<DimCons<H, T> as ReplaceAt<FromEnd<Here>, H>>::Output as ReplaceAt<Here, RD>>::Output;
+        <<DimCons<H, T> as ReplaceAt<FromEnd<Here>, H>>::Output as ReplaceAt<Here, Last>>::Output;
+}
+
+impl<H: Dim, T: Shape, R> SwapLastWith<Next<R>> for DimCons<H, T>
+where
+    T: SwapLastWith<R>,
+{
+    type Output = DimCons<H, <T as SwapLastWith<R>>::Output>;
+}
+
+#[doc(hidden)]
+pub trait SwapFirstWith<Cursor>: Shape {
+    type Output: Shape;
+}
+
+impl<S: Shape> SwapFirstWith<Here> for S {
+    type Output = S;
+}
+
+impl<H: Dim, T: Shape, R, Other> SwapFirstWith<Next<R>> for DimCons<H, T>
+where
+    T: At<R, Output = Other> + ReplaceAt<R, H>,
+    Other: Dim,
+{
+    type Output = DimCons<Other, <T as ReplaceAt<R, H>>::Output>;
+}
+
+impl<S, R> SwapFromEndAt<Here, FromEnd<R>> for S
+where
+    R: ForwardCursor,
+    S: ReverseShape,
+    S::Output: SwapLastWith<R>,
+    <S::Output as SwapLastWith<R>>::Output: ReverseShape,
+{
+    type Output = <<S::Output as SwapLastWith<R>>::Output as ReverseShape>::Output;
 }
 
 impl<H: Dim, T: Shape, L, R> SwapFromEndAt<Next<L>, FromEnd<R>> for DimCons<H, T>
@@ -465,6 +542,17 @@ where
     type Output = DimCons<H, <T as SwapFromEndAt<L, FromEnd<R>>>::Output>;
 }
 
+impl<S, L, R> SwapFromEndAt<FromEnd<L>, FromEnd<R>> for S
+where
+    L: ForwardCursor,
+    R: ForwardCursor,
+    S: ReverseShape,
+    S::Output: SwapAt<L, R>,
+    <S::Output as SwapAt<L, R>>::Output: ReverseShape,
+{
+    type Output = <<S::Output as SwapAt<L, R>>::Output as ReverseShape>::Output;
+}
+
 impl<H: Dim, T: Shape, L, R> SwapFromEndAt<FromEnd<L>, Next<R>> for DimCons<H, T>
 where
     L: ForwardCursor,
@@ -472,18 +560,6 @@ where
     T: SwapFromEndAt<FromEnd<L>, R>,
 {
     type Output = DimCons<H, <T as SwapFromEndAt<FromEnd<L>, R>>::Output>;
-}
-
-impl<H: Dim, T: Shape, L, R> SwapFromEndAt<FromEnd<L>, FromEnd<R>> for DimCons<H, T>
-where
-    L: ForwardCursor,
-    R: ForwardCursor,
-    DimCons<H, T>: ReverseShape,
-    <DimCons<H, T> as ReverseShape>::Output: SwapAt<L, R>,
-    <<DimCons<H, T> as ReverseShape>::Output as SwapAt<L, R>>::Output: ReverseShape,
-{
-    type Output =
-        <<<DimCons<H, T> as ReverseShape>::Output as SwapAt<L, R>>::Output as ReverseShape>::Output;
 }
 
 /// Multiplies all dimensions in a structural shape into a single product dimension.
@@ -559,12 +635,34 @@ where
 /// A forward start with a from-end end is handled by reversing the shape,
 /// flattening the corresponding forward prefix, and reversing the result.
 /// This keeps the range algebra rank-independent and preserves static proof.
-impl<H: Dim, T: Shape> FlattenFromEndAt<crate::shapes::idx::Here, crate::shapes::idx::FromEnd<Here>>
-    for DimCons<H, T>
+#[doc(hidden)]
+pub trait FlattenSuffix<Start>: Shape {
+    type Output: Shape;
+}
+
+impl<S: Shape> FlattenSuffix<Here> for S
 where
-    DimCons<H, T>: ProductDims,
+    S: ProductDims,
 {
-    type Output = DimCons<<DimCons<H, T> as ProductDims>::Output, Nil>;
+    type Output = DimCons<<S as ProductDims>::Output, Nil>;
+}
+
+impl<H: Dim, T: Shape, Start> FlattenSuffix<Next<Start>> for DimCons<H, T>
+where
+    Start: ForwardCursor,
+    T: FlattenSuffix<Start>,
+{
+    type Output = DimCons<H, <T as FlattenSuffix<Start>>::Output>;
+}
+
+impl<End, S> FlattenFromEndAt<Here, FromEnd<End>> for S
+where
+    End: ForwardCursor,
+    S: ReverseShape,
+    S::Output: FlattenSuffix<End>,
+    <S::Output as FlattenSuffix<End>>::Output: ReverseShape,
+{
+    type Output = <<S::Output as FlattenSuffix<End>>::Output as ReverseShape>::Output;
 }
 
 impl<Start, End, H: Dim, T: Shape>

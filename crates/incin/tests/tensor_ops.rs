@@ -339,7 +339,8 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
 
     let t3 = Tensor::<s![2, 3, 4], CpuBackendImpl>::ones(())?;
-    let tr_negative: Tensor<s![4, 3, 2], CpuBackendImpl> = t3.transpose(axis!(0), axis!(-1))?;
+    let neg_axis: incin::advanced::ReverseAxis<incin::advanced::Here> = axis!(-1);
+    let tr_negative: Tensor<s![4, 3, 2], CpuBackendImpl> = t3.transpose(axis!(0), neg_axis)?;
     assert_eq!(tr_negative.dims().as_ref(), &[4, 3, 2]);
 
     // squeeze (must be size 1)
@@ -348,6 +349,42 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     let sq_dims: Vec<usize> = sq.dims().as_ref().to_vec();
     assert_eq!(sq_dims, vec![3]);
 
+    Ok(())
+}
+
+#[test]
+/// Static selectors support arbitrary rank and negative positions without a
+/// generated rank table, while `i![]` accepts an arbitrary number of entries.
+fn test_arbitrary_rank_axis_and_index_selectors() -> Result<()> {
+    type Rank18 = s![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3];
+    let tensor = Tensor::<Rank18, CpuBackendImpl>::ones(())?;
+    let transposed = tensor.transpose(axis!(16), axis!(-1))?;
+    assert_eq!(
+        transposed.dims().as_ref(),
+        &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 2]
+    );
+
+    let indexed = transposed.get(i![
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..,
+        ..
+    ])?;
+    assert_eq!(indexed.rank(), 18);
     Ok(())
 }
 

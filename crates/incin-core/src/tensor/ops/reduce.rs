@@ -39,10 +39,10 @@ pub trait ReduceSelector<S: Shape> {
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
-impl<S, C> ReduceSelector<S> for crate::shapes::idx::StaticAxis<C>
+impl<S, C> ReduceSelector<S> for crate::shapes::idx::ForwardAxis<C>
 where
     S: Shape + DynShape + ReduceAt<C> + ReduceKeepAt<C>,
-    C: StaticCursor,
+    C: StaticCursor + crate::shapes::shape::ForwardCursor,
     <S as ReduceAt<C>>::Output: Shape,
     <S as ReduceKeepAt<C>>::Output: Shape,
 {
@@ -57,6 +57,33 @@ where
             .ok_or_else(|| {
                 crate::err::Error::Shape(crate::shapes::error::ShapeError::InvalidAxis {
                     axis: C::INDEX.unsigned_abs(),
+                    rank,
+                })
+            })
+    }
+}
+
+impl<S, C> ReduceSelector<S> for crate::shapes::idx::ReverseAxis<C>
+where
+    S: Shape
+        + DynShape
+        + ReduceAt<crate::shapes::idx::FromEnd<C>>
+        + ReduceKeepAt<crate::shapes::idx::FromEnd<C>>,
+    C: StaticCursor + crate::shapes::shape::ForwardCursor,
+    <S as ReduceAt<crate::shapes::idx::FromEnd<C>>>::Output: Shape,
+    <S as ReduceKeepAt<crate::shapes::idx::FromEnd<C>>>::Output: Shape,
+{
+    type Drop = <S as ReduceAt<crate::shapes::idx::FromEnd<C>>>::Output;
+    type Keep = <S as ReduceKeepAt<crate::shapes::idx::FromEnd<C>>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[crate::shapes::idx::FromEnd::<C>::INDEX])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Shape(crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: crate::shapes::idx::FromEnd::<C>::INDEX.unsigned_abs(),
                     rank,
                 })
             })
@@ -169,7 +196,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     #[allow(clippy::type_complexity)]
     pub fn sum_at<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
     where
-        C: StaticCursor,
+        C: crate::shapes::idx::AxisCursor,
         S: DynShape + ReduceAt<C>,
         <S as ReduceAt<C>>::Output: DynShape,
         B: Execute<op::SumDim> + crate::exec::Capabilities,
@@ -297,7 +324,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     #[allow(clippy::type_complexity)]
     pub fn sum_keepdim_at<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
     where
-        C: StaticCursor,
+        C: crate::shapes::idx::AxisCursor,
         S: DynShape + ReduceKeepAt<C>,
         <S as ReduceKeepAt<C>>::Output: DynShape,
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,

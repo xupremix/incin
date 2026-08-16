@@ -275,7 +275,9 @@ pub mod prelude {
 pub mod advanced {
     pub use crate::shapes::idx::*;
     pub use crate::shapes::prelude::{At, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt};
-    pub use crate::shapes::{AxisSelector, NamedAxisSelector, StaticAxis, ToAxisIndex};
+    pub use crate::shapes::{
+        AxisSelector, ForwardAxis, NamedAxisSelector, ReverseAxis, StaticAxis, ToAxisIndex,
+    };
     pub use incin_macros::idx;
 }
 

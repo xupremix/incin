@@ -87,7 +87,7 @@ let means = x.mean(axis!(-1))?;
 let maxima = x.max_keepdim(axis!(0))?;
 let minima_by_value = x.min(axis!(1))?;
 let argmax = x.argmax(axis!(-1))?;
-let transposed = x.transpose(axis!(0), axis!(2))?;
+let transposed = x.transpose(axis!(0), axis!(1))?;
 let flattened = x.flatten(axis!(1), axis!(2))?;
 let stacked = x.stack(&x, axis!(0))?;
 let concatenated = x.concat(&x, axis!(-1))?;
@@ -98,9 +98,9 @@ let squeezed = expanded.try_squeeze(1isize)?;
 ```
 
 Numeric axes accept arbitrary signed `isize` values, including negative axes,
-without a finite lookup table. Pass `axis!(...)` to any reduction or pass a
-runtime `isize` directly. Named axes use the same methods when the axis
-identity matters more than its numeric position:
+without a finite lookup table. Pass `axis!(...)` to reductions and other
+single-axis operations, or pass a runtime `isize` directly. Named axes use the
+same methods when the axis identity matters more than its numeric position:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -164,8 +164,15 @@ let probabilities = x.softmax(axis!(1))?;
 ```
 
 For generic known-rank runtime shapes, `sum` and `sum_keepdim` retain the rank
-arithmetic in the type while leaving extents runtime-valued. The older
-`sum_runtime_ranked` spellings remain hidden compatibility helpers.
+arithmetic in the type while leaving extents runtime-valued. The method
+selects the rank proof from the input shape, so callers do not need a separate
+ranked method name.
+
+Static axis values use separate forward and from-end representations. This
+keeps positive and negative proof dispatch independent while their runtime
+normalization still follows the same signed-axis rules. The advanced cursor
+types are available for low-level shape implementations; application code
+should use `axis!(...)` or a signed runtime value.
 
 Named reduction selectors retain known rank. Named dimensions are resolved at
 runtime, while the public output uses the strongest shape proof available for

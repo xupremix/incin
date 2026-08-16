@@ -44,8 +44,8 @@ pub trait SwapAxes<Left, Right>: Shape {
 
 impl<S, L, R> SwapAxes<L, R> for S
 where
-    L: crate::shapes::idx::StaticCursor,
-    R: crate::shapes::idx::StaticCursor,
+    L: crate::shapes::idx::StaticCursor + crate::shapes::shape::ForwardCursor,
+    R: crate::shapes::idx::StaticCursor + crate::shapes::shape::ForwardCursor,
     S: crate::shapes::SwapAt<L, R>,
 {
     type Output = <S as crate::shapes::SwapAt<L, R>>::Output;
@@ -57,9 +57,9 @@ pub trait ReduceAt<Cursor>: Shape {
 
     fn reduce_shape(dims: &crate::shapes::ShapeBuf) -> crate::err::Result<crate::shapes::ShapeBuf>
     where
-        Cursor: crate::shapes::idx::StaticCursor,
+        Cursor: crate::shapes::idx::AxisCursor,
     {
-        let axis = crate::shapes::idx::StaticAxis::<Cursor>::DEFAULT
+        let axis = crate::shapes::idx::AxisSelector::new(&[Cursor::INDEX])
             .normalize(dims.len())?
             .first()
             .copied()

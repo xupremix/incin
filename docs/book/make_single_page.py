@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Builds a single, self-contained static HTML file from an `mdbook build`
-output — no external CSS/JS/font requests, so it can be moved, emailed, or
+output with no external CSS/JS/font requests, so it can be moved, emailed, or
 hosted anywhere by itself.
 
 Starts from mdBook's own built-in `print.html` (every chapter already

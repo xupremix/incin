@@ -11,7 +11,7 @@ use super::spec::ExecutionDescriptor;
 use crate::shapes::ProofLevel;
 use crate::shapes::buf::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
-use crate::shapes::idx::{AxisSelector, StaticCursor};
+use crate::shapes::idx::AxisSelector;
 use crate::shapes::reshape::ReshapeShape;
 use crate::shapes::shape::{DynShape, Shape, ShapeValue};
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
@@ -64,7 +64,7 @@ fn agree(
     Ok(())
 }
 
-fn cursor_axis<C: StaticCursor>(rank: usize) -> Result<usize, ShapeError> {
+fn cursor_axis<C: crate::shapes::idx::AxisCursor>(rank: usize) -> Result<usize, ShapeError> {
     AxisSelector::new(&[C::INDEX])
         .normalize(rank)
         .map_err(|error| match error {
@@ -182,7 +182,7 @@ pub struct ReduceRule;
 
 impl<S, C> ShapeRule<(S, C)> for ReduceRule
 where
-    C: StaticCursor,
+    C: crate::shapes::idx::AxisCursor,
     S: DynShape + ReduceAt<C>,
     <S as ReduceAt<C>>::Output: DynShape,
 {
@@ -246,7 +246,7 @@ pub struct ReduceKeepRule;
 
 impl<S, C> ShapeRule<(S, C)> for ReduceKeepRule
 where
-    C: StaticCursor,
+    C: crate::shapes::idx::AxisCursor,
     S: DynShape + ReduceKeepAt<C>,
     <S as ReduceKeepAt<C>>::Output: DynShape,
 {

@@ -92,8 +92,8 @@ where
 impl<S, B, K, G, Start: Copy, End: Copy> Module<Tensor<S, B, K, G>> for Flatten<Start, End>
 where
     S: Shape + DynShape,
-    (Start, End): FlattenSelector<S>,
-    <(Start, End) as FlattenSelector<S>>::Output: Shape + DynShape,
+    (): FlattenSelector<S, Start, End>,
+    <() as FlattenSelector<S, Start, End>>::Output: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend
         + crate::backend_authoring::Execute<
             crate::backend_authoring::op::FlattenExact,
@@ -102,7 +102,7 @@ where
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    type Output = Tensor<<(Start, End) as FlattenSelector<S>>::Output, B, K, G>;
+    type Output = Tensor<<() as FlattenSelector<S, Start, End>>::Output, B, K, G>;
     type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
