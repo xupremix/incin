@@ -7,6 +7,8 @@ divide cleanly by what they *make*: a type, a value, or an item.
 |---|---|---|
 | `s![...]` | a shape **type** | [Shapes](./shapes.md) |
 | `shape![...]` | a shape **value** for a target | [Shapes](./shapes.md), [Target API](./target_api.md) |
+| `axis!(...)` | an operation-axis **selector** | [Target API](./target_api.md) |
+| `i![...]` | indexing and slicing **arguments** | below |
 | `dim!(...)` | named dimension **types** | below |
 | `tensor![...]` | a `Result<Tensor>` **value** | [Tensors](./tensors.md) |
 | `idx![...]` | a slicing **type** | below |

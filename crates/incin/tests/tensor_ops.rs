@@ -299,6 +299,9 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     assert_eq!(inferred.dims().as_ref(), &[6, 1]);
     let indexed = t.get(i![-1, ..])?;
     assert_eq!(indexed.dims().as_ref(), &[3]);
+    let tail = t.get(i![.., -2..])?;
+    assert_eq!(tail.dims().as_ref(), &[2, 2]);
+    assert!(t.get(i![-3, ..]).is_err());
 
     // flatten all (using 0 and 1 since it's 2D)
     let f_all = t.clone().flatten(axis!(0), axis!(1))?;

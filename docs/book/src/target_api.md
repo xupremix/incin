@@ -121,6 +121,12 @@ available only for low-level shape implementations. `unsqueeze` and
 shapes, while signed runtime selectors retain known rank and validate the
 selected extent for squeezing.
 
+Operations that replace one dimension's runtime extent also retain the
+unaffected shape information. For example, a static selector on `narrow`,
+`index_select`, `chunk`, `split`, or `topk` produces a partially dynamic shape
+such as `s![2, usize]`, while a signed runtime selector produces `Ranked<R>`.
+The values and indices returned by `topk` share that same output shape.
+
 Dimension-selecting operations use the same selector vocabulary. `narrow`,
 `chunk`, `split`, `gather`, `scatter`, `index_select`, and `topk` accept static,
 named, or signed runtime selectors. Runtime selectors are checked against the

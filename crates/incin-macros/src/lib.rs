@@ -7,7 +7,8 @@
 //! ## Provided Macros
 //!
 //! * **`s![...]`**: Defines a shape directly from integer literals (e.g., `s![1, 3, 224, 224]`).
-//! * **`idx![...]`**: Defines an indexing/slicing operation for tensors (e.g., `idx![1..3, .., 0..2]`).
+//! * **`i![...]`**: Defines runtime indexing/slicing arguments for tensors (e.g., `i![1..3, .., -1]`).
+//! * **`idx![...]`**: Defines an advanced type-level slicing target.
 //! * **`#[module]`**: Derives neural network module traits automatically for structs, similar to `#[derive(Module)]` but specifically tailored for Incin.
 //! * **`model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
 //! * **`import_model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
@@ -332,6 +333,9 @@ pub fn idx(input: TokenStream) -> TokenStream {
 }
 
 /// Build runtime indexing and slicing expressions for `Tensor::get`.
+///
+/// Negative indices count from the end. This macro is deliberately separate
+/// from `shape!`, whose `infer` token describes reshape geometry.
 #[proc_macro]
 pub fn i(input: TokenStream) -> TokenStream {
     index_expr::index_expr(input)

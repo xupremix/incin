@@ -1994,7 +1994,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Dynamically concatenates `self` with `other` along `dim`.
+    /// Legacy dynamic concatenation entry point. Prefer [`Self::concat`] with
+    /// an `axis!` selector or signed `isize`.
+    #[doc(hidden)]
     pub fn try_concat<S2>(
         &self,
         other: &Tensor<S2, B, K, G>,
@@ -2256,7 +2258,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Dynamically stacks `self` with `other` along `dim`.
+    /// Legacy dynamic stacking entry point. Prefer [`Self::stack`] with an
+    /// `axis!` selector or signed `isize`.
+    #[doc(hidden)]
     pub fn try_stack(&self, other: &Tensor<S, B, K, G>, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<op::StackExact> + Capabilities,
