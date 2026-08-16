@@ -107,7 +107,7 @@ pub trait Reporter {
 
     /// Reports a traced computation graph snapshot. Convenience wrapper
     /// over [`Reporter::log_graph_snapshot`].
-    fn graph_snapshot(&self, graph: incin_core::prelude::Graph) {
+    fn graph_snapshot(&self, graph: incin_core::graph::Graph) {
         self.log_graph_snapshot(GraphSnapshotEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
             graph,

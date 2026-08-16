@@ -102,7 +102,7 @@ pub struct GraphSnapshotEvent {
     /// Schema version for binary compatibility.
     pub schema_version: u32,
     /// The serialized computation graph.
-    pub graph: incin_core::prelude::Graph,
+    pub graph: incin_core::graph::Graph,
 }
 
 /// Forward-compatible envelope wrapping every wire event variant.

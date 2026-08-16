@@ -5,20 +5,21 @@
 //! and single-flight benchmark caching using the core tuning infrastructure.
 
 use crate::kernel::KernelAccess;
-#[cfg(any(feature = "autotune", test))]
+#[cfg(test)]
 use crate::kernel::KernelKey;
 use crate::metal::mps::{
     MpsMatMulCandidate, MpsNormalizationCandidate, MpsPointwiseCandidate, MpsReductionCandidate,
 };
 use crate::metal::storage::MetalStorageMode;
+use crate::tuning::LaunchCandidate;
 #[cfg(any(feature = "metal", feature = "autotune", test))]
 use crate::tuning::identity::{
     CompilerFingerprint, DeviceFingerprint, SoftwareVersion, TuningEnvironmentFingerprint,
 };
-#[cfg(any(feature = "autotune", test))]
+#[cfg(test)]
 use crate::tuning::{
-    CandidateMeasurement, LaunchCandidate, TunedLaunch, TuningDecision, TuningKey, WorkloadBucket,
-    claim_tuning, select_fastest,
+    CandidateMeasurement, TunedLaunch, TuningDecision, TuningKey, WorkloadBucket, claim_tuning,
+    select_fastest,
 };
 use alloc::vec::Vec;
 use incin_core::error::{Error, Result};
@@ -284,8 +285,7 @@ pub fn default_metal_reduction_candidate(
 // ---------------------------------------------------------------------------
 
 /// Evaluates benchmark measurements and selects the fastest Metal launch candidate.
-#[cfg(any(feature = "autotune", test))]
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn select_fastest_metal(
     metal_candidates: &[MetalLaunchCandidate],
     measurements: &[CandidateMeasurement],
@@ -303,8 +303,7 @@ pub(crate) fn select_fastest_metal(
 }
 
 /// Claims autotuning for a Metal problem key, coordinating concurrent threads.
-#[cfg(any(feature = "autotune", test))]
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn claim_metal_tuning(
     env: TuningEnvironmentFingerprint<incin_core::shapes::Dyn>,
     kernel_key: &KernelKey,

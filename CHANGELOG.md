@@ -12,6 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.
+- **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
+  helpers are now test-only, with production builds retaining only the
+  candidate conversion and fallback policy they use.
 - **Facade API tiers:** Removed backend-authoring traits from the stable
   `incin` root and default prelude, and removed `Graph` from the core prelude.
   The data prelude now also uses an explicit allow-list. The supported
