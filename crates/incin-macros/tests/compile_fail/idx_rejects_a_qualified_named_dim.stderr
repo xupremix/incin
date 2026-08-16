@@ -4,13 +4,13 @@ error: idx! expects simple identifiers for named runtime axes
 8 |     let _ = t.slice_idx::<idx![some::Module::Batch, ..]>();
   |                                ^^^^^^^^^^^^^^^^^^^
 
-error[E0277]: the trait bound `(): incin::advanced::SliceSpec` is not satisfied
+error[E0277]: the trait bound `(): incin_core::shapes::idx::SliceSpec` is not satisfied
  --> tests/compile_fail/idx_rejects_a_qualified_named_dim.rs:8:15
   |
 8 |     let _ = t.slice_idx::<idx![some::Module::Batch, ..]>();
-  |               ^^^^^^^^^ the trait `incin::advanced::SliceSpec` is not implemented for `()`
+  |               ^^^^^^^^^ the trait `incin_core::shapes::idx::SliceSpec` is not implemented for `()`
   |
-help: the following other types implement trait `incin::advanced::SliceSpec`
+help: the following other types implement trait `incin_core::shapes::idx::SliceSpec`
  --> $WORKSPACE/crates/incin-core/src/shapes/idx.rs
   |
   |   impl SliceSpec for Nil {

@@ -743,8 +743,8 @@ pub mod prelude {
 pub mod advanced {
     pub use incin_core::shapes::idx::{
         AxisCursor, AxisSelector, DimIdx, Ellipsis, ForwardAxis, FromEnd, Here, InferDim,
-        NamedAxisLookup, NamedAxisSelector, Next, ReshapeTarget, ReshapeTargetSpec, ReverseAxis,
-        Slice, SliceIdx, SliceSpec, SliceTarget, StaticAxis, StaticCursor, ToAxisIndex,
+        NamedAxisLookup, NamedAxisSelector, Next, ReshapeTarget, ReverseAxis, Slice, SliceIdx,
+        SliceTarget, StaticAxis, StaticCursor, ToAxisIndex,
     };
     pub use incin_core::shapes::{At, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt};
     pub use incin_core::typenum;

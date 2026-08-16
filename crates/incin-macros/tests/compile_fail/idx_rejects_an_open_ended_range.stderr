@@ -4,13 +4,13 @@ error: idx! currently only supports `..` or `start..end`
 7 |     let _ = t.slice_idx::<idx![0.., ..]>();
   |                                ^^^
 
-error[E0277]: the trait bound `(): incin::advanced::SliceSpec` is not satisfied
+error[E0277]: the trait bound `(): incin_core::shapes::idx::SliceSpec` is not satisfied
  --> tests/compile_fail/idx_rejects_an_open_ended_range.rs:7:15
   |
 7 |     let _ = t.slice_idx::<idx![0.., ..]>();
-  |               ^^^^^^^^^ the trait `incin::advanced::SliceSpec` is not implemented for `()`
+  |               ^^^^^^^^^ the trait `incin_core::shapes::idx::SliceSpec` is not implemented for `()`
   |
-help: the following other types implement trait `incin::advanced::SliceSpec`
+help: the following other types implement trait `incin_core::shapes::idx::SliceSpec`
  --> $WORKSPACE/crates/incin-core/src/shapes/idx.rs
   |
   |   impl SliceSpec for Nil {

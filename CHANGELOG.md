@@ -29,6 +29,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   gradient somewhere in the model.
 - **Macro fixtures:** Updated compile-pass macro fixtures to use the explicit
   backend-authoring namespace after the stable root API was narrowed.
+- **Advanced facade:** Removed internal reshape and slice specification traits
+  from the public advanced namespace; the user-facing selector contracts remain.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.
