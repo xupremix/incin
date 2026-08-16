@@ -35,11 +35,13 @@ help: the following other types implement trait `incin_core::shapes::Shape`
   | impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `DimCons<H, T>`
 ...
-  | impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Ranked<R> {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Ranked<R>`
-...
   | impl Shape for Dyn {
   | ^^^^^^^^^^^^^^^^^^ `Dyn`
+  |
+ ::: src/shapes/rank.rs
+  |
+  | impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Ranked<R> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Ranked<R>`
 note: required by a bound in `PipelinePlanBuilder::build_static`
  --> src/dist/pipeline.rs
   |
