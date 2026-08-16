@@ -1,8 +1,4 @@
 //! Core tensor operations, static shape checking, and autograd for Incin.
-// Incin errors intentionally carry rich operation, dtype, device, and shape
-// context. Keep that error contract by allowing clippy's size heuristic at
-// this crate boundary instead of boxing every error variant.
-#![allow(clippy::result_large_err)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
@@ -115,9 +111,8 @@ pub mod backend_authoring {
     /// Here rather than in the prelude because the caller is a backend's tape
     /// emitting telemetry, not a user collecting a graph they built: the
     /// public [`extract_graph`](crate::tensor::tracing::extract_graph) drains and is
-    /// the one a user wants. `crate::tensor` is `pub(crate)`, so a re-export is
-    /// the only way out of the crate at all, and putting a snapshot hook in the
-    /// user prelude implies an audience that does not call it.
+    /// the one a user wants. Keeping the snapshot hook in the authoring namespace
+    /// prevents a backend-only observation point from becoming ordinary user API.
     pub use crate::tensor::tracing::tracing_graph_snapshot;
 
     /// Exact operation markers, typed attributes, and storage-free metadata.

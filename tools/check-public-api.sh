@@ -4,6 +4,8 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
+python3 tools/check-public-api-baseline.py
+
 # The ordinary facade prelude is the stable user tier. Descriptor execution is
 # the canonical public backend contract; legacy adapters are implementation-only.
 if rg -n 'pub use incin_core::prelude::[^;]*(FloatOps|NumericOps|TensorOps|CreationOps|ReductionOps|ModuleOps|LossOps|QuantizedOps|OptimizerOps)' \

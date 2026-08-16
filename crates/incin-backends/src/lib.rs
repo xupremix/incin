@@ -1,7 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// Backend errors preserve rich shape/device/dtype context for callers.
-#![allow(clippy::result_large_err)]
-
 #[macro_use]
 extern crate alloc;
 

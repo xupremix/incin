@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUMMARY = ROOT / "docs/book/src/SUMMARY.md"
 FEATURES = ROOT / "crates/incin/Cargo.toml"
 FEATURE_DOC = ROOT / "docs/book/src/feature_flags.md"
+FACADE_LIB = ROOT / "crates/incin/src/lib.rs"
 
 
 def summary_chapters() -> list[str]:
@@ -29,6 +30,14 @@ def main() -> int:
     for slug in chapters:
         if not (SUMMARY.parent / f"{slug}.md").exists():
             errors.append(f"SUMMARY.md links to missing chapter {slug}.md")
+
+    facade = FACADE_LIB.read_text()
+    included = set(re.findall(r'include_str!\("\.\./\.\./\.\./docs/book/src/([\w-]+)\.md"\)', facade))
+    for slug in chapters:
+        if slug not in included:
+            errors.append(f"book chapter `{slug}.md` is missing from the Cargo-backed doctest aggregation")
+    for slug in sorted(included - set(chapters)):
+        errors.append(f"Cargo-backed doctest aggregation includes chapter not listed in SUMMARY.md: {slug}.md")
 
     doc = FEATURE_DOC.read_text()
     for feature in facade_features():

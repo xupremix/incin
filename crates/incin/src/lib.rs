@@ -77,32 +77,39 @@
 // Keep a Cargo-backed doctest mirror so the user-facing chapters are checked
 // against the real facade and feature set.
 #[cfg(all(doctest, feature = "backend-authoring"))]
-#[doc = include_str!("../../../docs/book/src/introduction.md")]
-#[doc = include_str!("../../../docs/book/src/installation.md")]
-#[doc = include_str!("../../../docs/book/src/quickstart.md")]
-#[doc = include_str!("../../../docs/book/src/tensors.md")]
-#[doc = include_str!("../../../docs/book/src/shapes.md")]
-#[doc = include_str!("../../../docs/book/src/advanced_shapes.md")]
-#[doc = include_str!("../../../docs/book/src/autograd.md")]
-#[doc = include_str!("../../../docs/book/src/building_models.md")]
-#[doc = include_str!("../../../docs/book/src/sequential.md")]
-#[doc = include_str!("../../../docs/book/src/training.md")]
-#[doc = include_str!("../../../docs/book/src/data_loading.md")]
-#[doc = include_str!("../../../docs/book/src/saving_loading.md")]
-#[doc = include_str!("../../../docs/book/src/metrics.md")]
-#[doc = include_str!("../../../docs/book/src/backends.md")]
-#[doc = include_str!("../../../docs/book/src/macros.md")]
-#[doc = include_str!("../../../docs/book/src/errors.md")]
-#[doc = include_str!("../../../docs/book/src/invariants.md")]
-#[doc = include_str!("../../../docs/book/src/feature_flags.md")]
-#[doc = include_str!("../../../docs/book/src/backend_authoring.md")]
-#[doc = include_str!("../../../docs/book/src/experimental.md")]
-#[doc = include_str!("../../../docs/book/src/pytorch_cheatsheet.md")]
-#[doc = include_str!("../../../docs/book/src/whats_not_finished.md")]
+#[doc = concat!(
+    include_str!("../../../docs/book/src/introduction.md"),
+    include_str!("../../../docs/book/src/installation.md"),
+    include_str!("../../../docs/book/src/quickstart.md"),
+    include_str!("../../../docs/book/src/tensors.md"),
+    include_str!("../../../docs/book/src/shapes.md"),
+    include_str!("../../../docs/book/src/advanced_shapes.md"),
+    include_str!("../../../docs/book/src/autograd.md"),
+    include_str!("../../../docs/book/src/building_models.md"),
+    include_str!("../../../docs/book/src/sequential.md"),
+    include_str!("../../../docs/book/src/transformer.md"),
+    include_str!("../../../docs/book/src/training.md"),
+    include_str!("../../../docs/book/src/data_loading.md"),
+    include_str!("../../../docs/book/src/quantization.md"),
+    include_str!("../../../docs/book/src/distributed.md"),
+    include_str!("../../../docs/book/src/metrics.md"),
+    include_str!("../../../docs/book/src/saving_loading.md"),
+    include_str!("../../../docs/book/src/backends.md"),
+    include_str!("../../../docs/book/src/target_api.md"),
+    include_str!("../../../docs/book/src/backend_authoring.md"),
+    include_str!("../../../docs/book/src/proofs_to_execution.md"),
+    include_str!("../../../docs/book/src/custom_operations.md"),
+    include_str!("../../../docs/book/src/macros.md"),
+    include_str!("../../../docs/book/src/feature_flags.md"),
+    include_str!("../../../docs/book/src/invariants.md"),
+    include_str!("../../../docs/book/src/errors.md"),
+    include_str!("../../../docs/book/src/experimental.md"),
+    include_str!("../../../docs/book/src/pytorch_cheatsheet.md"),
+    include_str!("../../../docs/book/src/whats_not_finished.md"),
+)]
 mod book_docs {}
 
 #[cfg(all(doctest, feature = "backend-authoring"))]
-#[doc = include_str!("../../../docs/book/src/target_api.md")]
 mod target_api_book_docs {}
 
 extern crate alloc;
@@ -247,8 +254,8 @@ pub mod __macro_support {
         LayerNode, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor, StatePath,
         StateVisitor, TrainMode, VisitParameters, VisitState, VisitStateMut,
     };
-    pub use incin_core::tensor::ops::index::IndexSpec;
     pub use incin_core::tensor::device::Device;
+    pub use incin_core::tensor::ops::index::IndexSpec;
     pub use incin_core::tensor::transfer::ToDevice;
 }
 

@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   MDBOOK_VERSION: 0.4.52
+  PUBLIC_API_VERSION: 0.52.0
 
 permissions:
   contents: read
@@ -48,6 +49,11 @@ jobs:
 
     - name: Check Formatting
       run: cargo fmt --all -- --check
+
+    - name: Check reviewed public API
+      run: |
+        cargo install cargo-public-api --version "${PUBLIC_API_VERSION}" --locked
+        bash tools/check-public-api.sh
 
     # These three commands used to carry `--workspace --exclude backends
     # --exclude tui_graph_demo --exclude native_training_demo`, which is now
