@@ -104,7 +104,6 @@ macro_rules! impl_data_creation_executors {
     };
 }
 
-#[allow(unused_macros)]
 macro_rules! impl_creation_executors {
     ($backend:ty, $storage:ty) => {
         impl<D: Device>
