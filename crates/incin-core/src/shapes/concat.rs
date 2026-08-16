@@ -1,5 +1,7 @@
 use crate::shapes::Dyn;
+use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::dim::Dim;
+use crate::shapes::idx::FromEnd;
 use crate::shapes::shape::{DimCons, Shape};
 use core::ops::Add;
 
@@ -43,6 +45,18 @@ where
     T1: ConcatShape<T2, SubCursor>,
 {
     type Output = DimCons<H, <T1 as ConcatShape<T2, SubCursor>>::Output>;
+}
+
+impl<S, S2, Cursor, SR, S2R, O, Output> ConcatShape<S2, FromEnd<Cursor>> for S
+where
+    S: Shape + ReverseShape<Output = SR>,
+    S2: Shape + ReverseShape<Output = S2R>,
+    Cursor: crate::shapes::shape::ForwardCursor,
+    SR: ConcatShape<S2R, Cursor, Output = O>,
+    O: Shape + ReverseShape<Output = Output>,
+    Output: Shape,
+{
+    type Output = Output;
 }
 
 // Tuple-specific generated implementations were retired. Structural callers

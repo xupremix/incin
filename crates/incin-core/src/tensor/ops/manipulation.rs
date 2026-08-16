@@ -58,6 +58,55 @@ pub trait ConcatSelector<S: Shape, S2: Shape> {
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
+/// Selects the insertion axis for stacking two tensors.
+pub trait StackSelector<S: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, C> StackSelector<S> for StaticAxis<C>
+where
+    S: Shape + DynShape + crate::shapes::stack::StackShape<C>,
+    C: StaticCursor,
+    <S as crate::shapes::stack::StackShape<C>>::Output: Shape,
+{
+    type Output = <S as crate::shapes::stack::StackShape<C>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        self.normalize(rank + 1)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static stack axis selector resolved to no axis".into())
+        })
+    }
+}
+
+impl<S> StackSelector<S> for isize
+where
+    S: Shape + crate::shapes::shape::AddOneRank,
+{
+    type Output = <S as crate::shapes::shape::AddOneRank>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank + 1)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| crate::err::Error::Msg("runtime stack axis resolved to no axis".into()))
+    }
+}
+
+impl<S, Tag> StackSelector<S> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + crate::shapes::shape::AddOneRank + crate::shapes::idx::NamedAxisLookup<Tag>,
+    Tag: crate::shapes::AxisTag,
+{
+    type Output = <S as crate::shapes::shape::AddOneRank>::Output;
+
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 impl<S, S2, C> ConcatSelector<S, S2> for StaticAxis<C>
 where
     S: Shape + DynShape + crate::shapes::concat::ConcatShape<S2, C>,
@@ -1926,7 +1975,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Structurally inserts a size-two axis at a cursor position.
-    pub fn stack<Axis>(
+    #[doc(hidden)]
+    pub fn stack_structural<Axis>(
         &self,
         other: &Tensor<S, B, K, G>,
     ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, G>>
@@ -1959,6 +2009,48 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 B,
                 <S as crate::shapes::stack::StackShape<Axis>>::Output,
             >(
+                &context,
+                crate::exec::catalog::AxisAttributes { axis: dim },
+                &inputs,
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
+            inner,
+            output_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Stacks `self` with `other` along a static, named, or signed axis selector.
+    pub fn stack<A>(
+        &self,
+        other: &Tensor<S, B, K, G>,
+        axis: A,
+    ) -> Result<Tensor<<A as StackSelector<S>>::Output, B, K, G>>
+    where
+        A: StackSelector<S>,
+        <A as StackSelector<S>>::Output: Shape + DynShape,
+        B: Execute<
+                op::StackExact,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        let mut out_dims: Vec<usize> = self.shape_buf().as_ref().to_vec();
+        out_dims.insert(dim, 2);
+        let output_shape =
+            ShapeValue::<<A as StackSelector<S>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
+                .map_err(crate::err::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&other.inner),
+        ];
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad).restrict(|| {
+            dispatch::execute_shaped::<op::StackExact, B, <A as StackSelector<S>>::Output>(
                 &context,
                 crate::exec::catalog::AxisAttributes { axis: dim },
                 &inputs,

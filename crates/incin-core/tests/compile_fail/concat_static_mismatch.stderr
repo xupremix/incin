@@ -1,8 +1,8 @@
 error[E0277]: Cannot concatenate shape `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>` with `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>` along axis `Next<Here>`
   --> tests/compile_fail/concat_static_mismatch.rs:11:16
    |
-11 |     let _ = t1.concat::<s![4, 3], Next<Here>>(&t2);
-   |                ^^^^^^ Shape mismatch during concatenation
+11 |     let _ = t1.concat_structural::<s![4, 3], Next<Here>>(&t2);
+   |                ^^^^^^^^^^^^^^^^^ Shape mismatch during concatenation
    |
    = help: the trait `ConcatShape<DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>, Next<Here>>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>`
    = note: Concatenation requires all dimensions except the given axis to match exactly

@@ -37,7 +37,11 @@ backend implementation uses the same `Execute<Identity>` request path as the
 built-in catalog and returns its backend storage type.
 
 ```rust,ignore
-use incin_core::backend_authoring::{DescriptorError, LogicalTensorMeta, Operation, OperationKey};
+use incin_core::backend_authoring::{
+    Descriptor, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
+    OperationKey,
+};
+use incin_core::err::BackendError;
 use incin_core::exec::catalog::NoAttributes;
 use std::borrow::Cow;
 
@@ -61,7 +65,37 @@ impl Operation for Identity {
     }
 }
 
-// impl Execute<Identity> for MyBackend { ... }
+// The backend supplies the storage type and executes the validated request.
+impl Execute<Identity> for MyBackend {
+    type Output = MyStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Identity, Self>,
+    ) -> Result<Self::Output, BackendError> {
+        let _input = request.inputs.first().ok_or(BackendError::InvalidInput {
+            operation: incin_core::shapes::error::OperationKind::Storage,
+            reason: "identity needs one input",
+        })?;
+        // Decode the checked handle and launch the backend copy kernel here.
+        todo!("backend-specific storage copy")
+    }
+}
+
+// `infer_invocation` creates a validated `Descriptor<Identity>` before the
+// caller invokes the same canonical dispatch path as built-in operations.
+let invocation = Identity::infer_invocation(NoAttributes, logical_inputs)?;
+let descriptor: &Descriptor<Identity> = invocation.descriptor();
+let output = incin_core::exec::dispatch::execute_shaped::<
+    Identity,
+    MyBackend,
+    incin_core::shapes::Dyn,
+>(
+    &context,
+    NoAttributes,
+    &[input_handle],
+    &output_shape,
+)?;
 ```
 
 The real fixture fills in metadata validation, capability admission, and

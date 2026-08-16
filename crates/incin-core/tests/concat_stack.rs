@@ -132,7 +132,7 @@ fn test_stack_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
 
-    let _out = t1.stack::<Next<Here>>(&t2).unwrap();
+    let _out = t1.stack_structural::<Next<Here>>(&t2).unwrap();
     type Out = <s![2, 3] as StackShape<Next<Here>>>::Output;
     type Expected = DimCons<typenum::U2, DimCons<typenum::U2, DimCons<typenum::U3, Nil>>>;
     assert_same::<Out, Expected>();

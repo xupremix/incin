@@ -52,7 +52,8 @@ assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 ```
 
 `view` above is a `Tensor<s![5, 20, 15], _>`  -  the extents were computed at
-compile time from the slice bounds, not recovered at run time. `reshape_idx`
+compile time from the slice bounds, not recovered at run time. The advanced
+`reshape_idx`
 is the same idea for reshaping, and accepts `-1` (`InferDim`) for one axis
 whose extent should be derived from the others.
 

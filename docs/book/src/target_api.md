@@ -88,6 +88,8 @@ let minima_by_value = x.min(axis!(1))?;
 let argmax = x.argmax(axis!(-1))?;
 let transposed = x.transpose(axis!(0), axis!(2))?;
 let flattened = x.flatten(axis!(1), axis!(2))?;
+let stacked = x.stack(&x, axis!(0))?;
+let concatenated = x.concat(&x, axis!(-1))?;
 let flattened_runtime = x.flatten_range(1, -1)?;
 # Ok::<(), incin::Error>(())
 ```
@@ -110,7 +112,9 @@ let kept = x.mean_keepdim(axis!(Channels))?;
 Runtime selectors validate their normalized position against the tensor rank.
 `mean`, `max`, `min`, and their keep-dimension forms follow the same selector
 rules.
-`flatten_range` and `concat_axis` use the same signed runtime axis convention.
+`flatten_range` uses the same signed runtime axis convention. Use `concat` and
+`stack` with a selector for ordinary code. The structural cursor forms remain
+available only for low-level shape implementations.
 
 Axis-preserving operations use the same selectors:
 
@@ -123,9 +127,9 @@ let probabilities = x.softmax(axis!(1))?;
 # Ok::<(), incin::Error>(())
 ```
 
-For generic known-rank runtime shapes, `Ranked<R>` also provides
-`sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank
-arithmetic in the type while leaving extents runtime-valued.
+For generic known-rank runtime shapes, `sum` and `sum_keepdim` retain the rank
+arithmetic in the type while leaving extents runtime-valued. The older
+`sum_runtime_ranked` spellings remain hidden compatibility helpers.
 
 Named reduction selectors retain known rank and preserve named dimensions at
 runtime. Stable Rust currently cannot express the exact post-reduction named
@@ -135,7 +139,7 @@ trait implementations, so these APIs use `Ranked<R>` at that boundary.
 Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
 ranges. Reshape inference is separate from indexing and uses `shape![..., infer]`.
 The older `reshape_idx::<idx![... ]>()` spelling remains available for
-type-level targets. Axis selection is
+advanced type-level targets. Axis selection is
 also separate, so `axis!(-1)` never changes `i![-1]` indexing rules.
 
 ```rust,no_run

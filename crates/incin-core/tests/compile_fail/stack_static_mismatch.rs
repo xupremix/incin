@@ -8,5 +8,5 @@ fn main() {
     let t2: Tensor<s![4, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
 
     // Trying to stack fails because typenum::U2 != typenum::U4 (they must be the exact same shape)
-    let _ = t1.stack::<Here>(&t2);
+    let _ = t1.stack_structural::<Here>(&t2);
 }

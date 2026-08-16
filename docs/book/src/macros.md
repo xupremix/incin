@@ -68,9 +68,10 @@ Bare paths such as `s![Batch, Features]` continue to mean named dimensions.
 That distinction is required so existing named-shape code keeps its axis
 identity checks.
 
-## `idx!`  -  type-level reshape targets
+## `idx!` - advanced type-level targets
 
-Builds the heterogeneous type-level target that `reshape_idx` expects:
+`shape![..., infer]` is the normal reshape API. The older `idx!` macro builds
+the heterogeneous type-level target used by the advanced `reshape_idx` API:
 
 | Syntax | Meaning |
 |---|---|
@@ -83,7 +84,7 @@ Builds the heterogeneous type-level target that `reshape_idx` expects:
 use incin::prelude::*;
 
 let t = Tensor::<s![10, 20, 30], DefaultBackend>::zeros(())?;
-let reshaped = t.reshape_idx::<idx![6, -1]>()?;
+let reshaped = t.reshape_infer(shape![6, infer])?;
 # Ok::<(), incin::Error>(())
 ```
 
