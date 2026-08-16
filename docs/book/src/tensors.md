@@ -108,7 +108,7 @@ let by_row = x.sum_keepdim::<1>(); // axis is checked at compile time
 let idx = x.argmax::<1>();         // index dtype defaults to u32
 
 // `reshape` changes the geometry and keeps the target shape in the type.
-let reshaped = x.reshape(s![3, 2])?;
+let reshaped = x.reshape(shape![3, 2])?;
 
 // sum_all/mean_all consume the tensor (they're the last op in a reduction
 // chain more often than not), so clone first if you still need the original.

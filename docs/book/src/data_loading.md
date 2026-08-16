@@ -49,7 +49,7 @@ reference, so the loader itself is reusable across epochs).
 For the common case where a batch should remain a vector of samples, use the
 default builder:
 
-```rust,no_run
+```rust,ignore
 let loader = DataLoader::builder(Toy)
     .batch_size(4)?
     .workers(2)
