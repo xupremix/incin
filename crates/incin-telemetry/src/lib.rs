@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate alloc;
 
-/// The `emitter` module.
+/// Asynchronous event emitter and transport fan-out.
 pub mod emitter;
 /// Error types and result alias for telemetry operations.
 pub mod err;

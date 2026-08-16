@@ -4,15 +4,15 @@
 //! incin-viz-internal-only API (PLUGIN-01/PLUGIN-02's "no privileged API"
 //! property).
 
-/// Graph.
+/// Graph snapshot and structure panel.
 pub mod graph;
-/// Loss.
+/// Scalar loss history panel.
 pub mod loss;
-/// Norms.
+/// Gradient and weight norm panel.
 pub mod norms;
-/// Panic test.
+/// Diagnostic panel for displaying panic events.
 pub mod panic_test;
-/// Scalar.
+/// Generic scalar-series panel.
 pub mod scalar;
-/// System.
+/// Runtime and process resource panel.
 pub mod system;

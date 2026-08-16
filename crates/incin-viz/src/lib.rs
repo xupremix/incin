@@ -5,13 +5,13 @@
 #[macro_use]
 extern crate alloc;
 
-/// App.
+/// Application state and event-loop integration for the visualizer.
 pub mod app;
-/// Dispatch.
+/// Dispatches telemetry data and user actions to visualizer panels.
 pub mod dispatch;
-/// Err.
+/// Errors reported while loading or rendering visualizer data.
 pub mod err;
-/// Panels.
+/// Built-in panels for graph, loss, norm, scalar, and system views.
 pub mod panels;
-/// Transport reader.
+/// Reads schema-versioned telemetry events from a run transport.
 pub mod transport_reader;
