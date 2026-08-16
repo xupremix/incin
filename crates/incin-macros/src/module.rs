@@ -764,8 +764,3 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
-#[allow(dead_code)]
-pub(crate) fn forward(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
-}

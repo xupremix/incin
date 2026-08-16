@@ -138,13 +138,8 @@ pub(crate) fn embedding_impl<D: incin_core::tensor::device::Device, K: DType, KI
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
     use incin_core::tensor::device::Cpu;
-
-    /// `B`.
-    #[allow(dead_code)]
-    type B = CpuBackendImpl<Cpu>;
 
     /// The learnable weight matrix parameter.
     fn weight(v: Vec<f32>, vocab: usize, hidden: usize) -> CpuStorage {

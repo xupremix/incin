@@ -983,13 +983,8 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
     use incin_core::tensor::device::Cpu;
-
-    /// `TestBackend`.
-    #[allow(dead_code)]
-    type TestBackend = CpuBackendImpl<Cpu>;
 
     /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
