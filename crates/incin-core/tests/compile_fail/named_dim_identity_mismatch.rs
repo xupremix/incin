@@ -11,5 +11,5 @@ fn main() {
 
     // Batch and Seq are distinct types even though both wrap a `usize` of
     // the same runtime value (32) here — this must NOT compile.
-    let _ = t1.add(&t2);
+    let _ = t1.add_exact(&t2);
 }

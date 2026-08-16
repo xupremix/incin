@@ -11,5 +11,5 @@ fn main() {
 
     // Same dim name (Batch) but a different literal size on the other axis
     // (10 vs 20) — must NOT compile.
-    let _ = t1.add(&t2);
+    let _ = t1.add_exact(&t2);
 }

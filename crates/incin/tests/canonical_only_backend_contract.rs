@@ -199,7 +199,7 @@ fn test_canonical_only_backend_add_and_eq_compile() -> Result<()> {
         core::marker::PhantomData,
     )?;
 
-    let _c = a.add(&b)?;
+    let _c = a.try_add(&b)?;
     let _mask: Tensor<Dyn, CanonicalOnlyBackend, bool, NoGrad> = a.eq(&b)?;
 
     Ok(())

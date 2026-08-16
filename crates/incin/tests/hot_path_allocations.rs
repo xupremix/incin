@@ -110,7 +110,7 @@ fn a_binary_elementwise_operation_stays_within_its_measured_allocation_count() {
     let lhs = Tensor::<Dyn, B>::ones(vec![64, 8]).unwrap();
     let rhs = Tensor::<Dyn, B>::ones(vec![64, 8]).unwrap();
 
-    let counted = allocations_of(|| lhs.add(&rhs).unwrap());
+    let counted = allocations_of(|| lhs.try_add(&rhs).unwrap());
 
     assert!(
         counted <= BINARY_ALLOCATIONS,
@@ -126,8 +126,8 @@ fn broadcasting_an_operand_costs_exactly_what_not_broadcasting_it_costs() {
     let aligned = Tensor::<Dyn, B>::ones(vec![64, 8]).unwrap();
     let broadcast = Tensor::<Dyn, B>::ones(vec![64, 1]).unwrap();
 
-    let aligned_count = allocations_of(|| lhs.add(&aligned).unwrap());
-    let broadcast_count = allocations_of(|| lhs.add(&broadcast).unwrap());
+    let aligned_count = allocations_of(|| lhs.try_add(&aligned).unwrap());
+    let broadcast_count = allocations_of(|| lhs.try_add(&broadcast).unwrap());
 
     // The invariant, asserted exactly. A broadcast operand takes the iteration
     // plan where an aligned one takes a dense fast path, so before PRF-001 it
@@ -170,8 +170,8 @@ fn a_higher_rank_operand_does_not_cost_more_metadata_than_a_rank_two_one() {
     let rank_two_lhs = Tensor::<Dyn, B>::ones(vec![8, 8]).unwrap();
     let rank_two_rhs = Tensor::<Dyn, B>::ones(vec![8, 1]).unwrap();
 
-    let rank_six = allocations_of(|| lhs.add(&rhs).unwrap());
-    let rank_two = allocations_of(|| rank_two_lhs.add(&rank_two_rhs).unwrap());
+    let rank_six = allocations_of(|| lhs.try_add(&rhs).unwrap());
+    let rank_two = allocations_of(|| rank_two_lhs.try_add(&rank_two_rhs).unwrap());
 
     assert_eq!(
         rank_six, rank_two,

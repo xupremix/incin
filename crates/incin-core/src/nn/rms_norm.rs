@@ -212,7 +212,7 @@ where
         }
 
         // x^2
-        let x_sq = x.mul(&x)?;
+        let x_sq = x.mul_exact(&x)?;
 
         // mean(x^2)
         let mean_sq = x_sq

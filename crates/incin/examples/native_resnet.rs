@@ -67,7 +67,7 @@ where
         let out = self.conv2.forward(out)?;
         let out = self.bn2.forward(out)?;
 
-        let out = out.add(&x)?;
+        let out = out.try_add(&x)?;
         out.relu()
     }
 }

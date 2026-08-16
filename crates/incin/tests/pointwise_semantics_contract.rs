@@ -9,9 +9,9 @@ fn ordinary_numeric_pointwise_api() -> Result<()> {
     let a = Tensor::<Dyn, DefaultBackend>::from_slice(&[1.0_f32, 2.0, 3.0], vec![3])?;
     let b = Tensor::<Dyn, DefaultBackend>::from_slice(&[4.0_f32, 5.0, 6.0], vec![3])?;
 
-    assert_eq!(a.add(&b)?.to_vec1::<f32>()?, vec![5.0, 7.0, 9.0]);
-    assert_eq!(a.sub(&b)?.to_vec1::<f32>()?, vec![-3.0, -3.0, -3.0]);
-    assert_eq!(a.mul(&b)?.to_vec1::<f32>()?, vec![4.0, 10.0, 18.0]);
+    assert_eq!(a.try_add(&b)?.to_vec1::<f32>()?, vec![5.0, 7.0, 9.0]);
+    assert_eq!(a.try_sub(&b)?.to_vec1::<f32>()?, vec![-3.0, -3.0, -3.0]);
+    assert_eq!(a.try_mul(&b)?.to_vec1::<f32>()?, vec![4.0, 10.0, 18.0]);
 
     Ok(())
 }
@@ -41,6 +41,44 @@ fn arithmetic_operators_return_tensors_and_checked_methods_return_results() -> R
         operator_neg.to_vec1::<f32>()?,
         checked_neg.to_vec1::<f32>()?
     );
+    Ok(())
+}
+
+#[test]
+fn checked_arithmetic_broadcasts_and_matches_the_operator() -> Result<()> {
+    let lhs = Tensor::<Dyn, DefaultBackend>::from_slice(&[1.0_f32, 2.0], vec![2, 1])?;
+    let rhs = Tensor::<Dyn, DefaultBackend>::from_slice(&[10.0_f32, 20.0, 30.0], vec![1, 3])?;
+
+    let checked = lhs.try_add(&rhs)?;
+    let operator = &lhs + &rhs;
+
+    assert_eq!(checked.dims(), [2, 3]);
+    assert_eq!(checked.to_vec1::<f32>()?, operator.to_vec1::<f32>()?);
+    assert_eq!(
+        checked.to_vec1::<f32>()?,
+        vec![11.0, 21.0, 31.0, 12.0, 22.0, 32.0]
+    );
+    Ok(())
+}
+
+#[test]
+fn exact_arithmetic_keeps_exact_shape_contract() -> Result<()> {
+    let lhs = Tensor::<Dyn, DefaultBackend>::from_slice(&[1.0_f32, 2.0], vec![2, 1])?;
+    let rhs = Tensor::<Dyn, DefaultBackend>::from_slice(&[10.0_f32, 20.0, 30.0], vec![1, 3])?;
+
+    assert!(lhs.add_exact(&rhs).is_err());
+    Ok(())
+}
+
+#[test]
+fn scalar_operators_return_tensors() -> Result<()> {
+    let tensor = Cpu.tensor([2.0_f32, 4.0])?;
+
+    assert_eq!((&tensor * 2.0_f32).to_vec1::<f32>()?, vec![4.0, 8.0]);
+    assert_eq!((&tensor + 1.0_f32).to_vec1::<f32>()?, vec![3.0, 5.0]);
+    assert_eq!((&tensor - 1.0_f32).to_vec1::<f32>()?, vec![1.0, 3.0]);
+    assert_eq!((&tensor / 2.0_f32).to_vec1::<f32>()?, vec![1.0, 2.0]);
+    assert_eq!(tensor.mul_scalar(2.0)?.to_vec1::<f32>()?, vec![4.0, 8.0]);
     Ok(())
 }
 

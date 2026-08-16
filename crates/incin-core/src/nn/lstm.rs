@@ -545,25 +545,25 @@ where
         let i = self
             .wi_i
             .forward(x.clone())?
-            .add(&self.wh_i.forward(h_prev.clone())?)?
+            .add_exact(&self.wh_i.forward(h_prev.clone())?)?
             .sigmoid()?;
         let f = self
             .wi_f
             .forward(x.clone())?
-            .add(&self.wh_f.forward(h_prev.clone())?)?
+            .add_exact(&self.wh_f.forward(h_prev.clone())?)?
             .sigmoid()?;
         let g = self
             .wi_g
             .forward(x.clone())?
-            .add(&self.wh_g.forward(h_prev.clone())?)?
+            .add_exact(&self.wh_g.forward(h_prev.clone())?)?
             .tanh()?;
         let o = self
             .wi_o
             .forward(x)?
-            .add(&self.wh_o.forward(h_prev)?)?
+            .add_exact(&self.wh_o.forward(h_prev)?)?
             .sigmoid()?;
-        let c = f.mul(&c_prev)?.add(&i.mul(&g)?)?;
-        let h = o.mul(&c.clone().tanh()?)?;
+        let c = f.mul_exact(&c_prev)?.add_exact(&i.mul_exact(&g)?)?;
+        let h = o.mul_exact(&c.clone().tanh()?)?;
         Ok((h, c))
     }
 }

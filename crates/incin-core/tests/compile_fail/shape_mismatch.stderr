@@ -1,8 +1,8 @@
 error[E0308]: mismatched types
-  --> tests/compile_fail/shape_mismatch.rs:12:12
+  --> tests/compile_fail/shape_mismatch.rs:12:18
    |
-12 |     t1.add(&t2).unwrap();
-   |        --- ^^^ expected `&Tensor<DimCons<..., ...>, ..., f32, _>`, found `&Tensor<DimCons<..., ...>, ...>`
+12 |     t1.add_exact(&t2).unwrap();
+   |        --------- ^^^ expected `&Tensor<DimCons<..., ...>, ..., f32, _>`, found `&Tensor<DimCons<..., ...>, ...>`
    |        |
    |        arguments to this method are incorrect
    |
@@ -11,5 +11,5 @@ error[E0308]: mismatched types
 note: method defined here
   --> src/tensor/ops/binary.rs
    |
-   |     Add, add, try_add, Add
-   |          ^^^
+   |     Add, add_exact, Add
+   |          ^^^^^^^^^

@@ -9,5 +9,5 @@ fn main() {
     let t2: Tensor<Shape234, DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
 
     // Mismatched shapes should not compile
-    t1.add(&t2).unwrap();
+    t1.add_exact(&t2).unwrap();
 }

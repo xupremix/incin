@@ -16,7 +16,7 @@ fn main() {
     let t3: Tensor<s![Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
 
     // Should compile
-    let _t4 = t1.add(&t3).unwrap();
+    let _t4 = t1.add_exact(&t3).unwrap();
 
     // Should fail with shape mismatch: same dim name (Batch) but a
     // different literal size on the other axis (10 vs 20) — proven as a

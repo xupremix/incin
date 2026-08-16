@@ -21,5 +21,5 @@ fn main() {
     let b: Tensor<Dyn, DummyBackend<MockGpu>, f32, Grad> = Tensor::zeros(vec![2, 2]).unwrap();
     
     // This should fail to compile because Cpu != MockGpu
-    let _c = a.add(&b);
+    let _c = a.add_exact(&b);
 }

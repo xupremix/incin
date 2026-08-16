@@ -386,7 +386,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         <B as Execute<op::SumAll>>::Output: Into<B::Storage<K>>,
     {
         <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let mul = self.mul(rhs)?;
+        let mul = self.mul_exact(rhs)?;
         mul.sum_all()
     }
 

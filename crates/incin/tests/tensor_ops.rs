@@ -141,7 +141,7 @@ fn test_binary_add() -> Result<()> {
     // positive + positive, negative + negative, zeroes, very large (overflow potential but f32 handles it)
     let a = Tensor::<s![4], CpuBackendImpl>::from_slice(&[1.0, -1.0, 0.0, 3e38], ())?;
     let b = Tensor::<s![4], CpuBackendImpl>::from_slice(&[2.0, -2.0, 0.0, 3e38], ())?;
-    let res = to_vec(&a.add(&b)?.into_dyn());
+    let res = to_vec(&a.try_add(&b)?.into_dyn());
     assert_eq!(res[0], 3.0);
     assert_eq!(res[1], -3.0);
     assert_eq!(res[2], 0.0);
@@ -155,7 +155,7 @@ fn test_binary_sub() -> Result<()> {
     // lhs > rhs, lhs < rhs, identical tensors
     let a = Tensor::<s![3], CpuBackendImpl>::from_slice(&[5.0, 1.0, 3.0], ())?;
     let b = Tensor::<s![3], CpuBackendImpl>::from_slice(&[2.0, 4.0, 3.0], ())?;
-    let res = to_vec(&a.sub(&b)?.into_dyn());
+    let res = to_vec(&a.try_sub(&b)?.into_dyn());
     assert_eq!(res, vec![3.0, -3.0, 0.0]);
     Ok(())
 }
@@ -166,7 +166,7 @@ fn test_binary_mul() -> Result<()> {
     // zeroes, element-wise identity, negative terms
     let a = Tensor::<s![3], CpuBackendImpl>::from_slice(&[0.0, 1.0, -2.0], ())?;
     let b = Tensor::<s![3], CpuBackendImpl>::from_slice(&[5.0, 1.0, 3.0], ())?;
-    let res = to_vec(&a.mul(&b)?.into_dyn());
+    let res = to_vec(&a.try_mul(&b)?.into_dyn());
     assert_eq!(res, vec![0.0, 1.0, -6.0]);
     Ok(())
 }
@@ -177,7 +177,7 @@ fn test_binary_div() -> Result<()> {
     // standard division, division by zero, precision limits
     let a = Tensor::<s![3], CpuBackendImpl>::from_slice(&[6.0, 1.0, 1.0], ())?;
     let b = Tensor::<s![3], CpuBackendImpl>::from_slice(&[2.0, 0.0, 1e20], ())?;
-    let res = to_vec(&a.div(&b)?.into_dyn());
+    let res = to_vec(&a.try_div(&b)?.into_dyn());
     assert_eq!(res[0], 3.0);
     assert!(res[1].is_infinite()); // div by zero
     assert!(res[2].abs() < 1e-19);

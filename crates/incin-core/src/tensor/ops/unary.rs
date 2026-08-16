@@ -455,12 +455,13 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = crate::err::Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
+                    .unwrap_or_else(|error| panic!("Incin Mul scalar failed: {error}"))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -470,12 +471,13 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = crate::err::Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
+                    .unwrap_or_else(|error| panic!("Incin Mul scalar failed: {error}"))
             }
         }
         impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -485,12 +487,13 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = crate::err::Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
+                    .unwrap_or_else(|error| panic!("Incin Add scalar failed: {error}"))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -500,12 +503,73 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = crate::err::Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
+                    .unwrap_or_else(|error| panic!("Incin Add scalar failed: {error}"))
+            }
+        }
+
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Sub<$t> for Tensor<S, B, K, G>
+        where
+            B: Execute<op::SubScalar>,
+            <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
+        {
+            type Output = Tensor<S, B, K, G>;
+
+            #[track_caller]
+            fn sub(self, rhs: $t) -> Self::Output {
+                self.sub_scalar(rhs as f64)
+                    .unwrap_or_else(|error| panic!("Incin Sub scalar failed: {error}"))
+            }
+        }
+
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Sub<$t> for &'a Tensor<S, B, K, G>
+        where
+            B: Execute<op::SubScalar>,
+            <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
+        {
+            type Output = Tensor<S, B, K, G>;
+
+            #[track_caller]
+            fn sub(self, rhs: $t) -> Self::Output {
+                self.sub_scalar(rhs as f64)
+                    .unwrap_or_else(|error| panic!("Incin Sub scalar failed: {error}"))
+            }
+        }
+
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Div<$t> for Tensor<S, B, K, G>
+        where
+            B: Execute<op::DivScalar>,
+            <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
+        {
+            type Output = Tensor<S, B, K, G>;
+
+            #[track_caller]
+            fn div(self, rhs: $t) -> Self::Output {
+                self.div_scalar(rhs as f64)
+                    .unwrap_or_else(|error| panic!("Incin Div scalar failed: {error}"))
+            }
+        }
+
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Div<$t> for &'a Tensor<S, B, K, G>
+        where
+            B: Execute<op::DivScalar>,
+            <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
+        {
+            type Output = Tensor<S, B, K, G>;
+
+            #[track_caller]
+            fn div(self, rhs: $t) -> Self::Output {
+                self.div_scalar(rhs as f64)
+                    .unwrap_or_else(|error| panic!("Incin Div scalar failed: {error}"))
             }
         }
     };

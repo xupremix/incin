@@ -41,7 +41,7 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
     let zero = Tensor::<s![2, 2], B, f32, Grad>::zeros(()).unwrap();
     let numerator = TapeStorage::id(a.inner());
-    (a.div(&zero).unwrap(), numerator)
+    (a.try_div(&zero).unwrap(), numerator)
 }
 
 #[allow(clippy::type_complexity)]
@@ -173,9 +173,9 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
     let b = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[5.0, 6.0, 7.0, 8.0], ()).unwrap();
 
-    let product = a.mul(&b).unwrap();
+    let product = a.try_mul(&b).unwrap();
     let plain = gradient_of(&a, &seeded_backward(&product).unwrap());
-    let product_checked = a.mul(&b).unwrap();
+    let product_checked = a.try_mul(&b).unwrap();
     let checked = gradient_of(
         &a,
         &check_gradients(|| seeded_backward(&product_checked)).unwrap(),
@@ -222,7 +222,7 @@ fn a_recipe_failure_propagates_rather_than_aborting() {
     // recipe type is not something a core test can construct.
     let a = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
     let b = Tensor::<s![2, 3], B, f32, Grad>::ones(()).unwrap();
-    let loss = a.add(&b).unwrap().sum_all().unwrap();
+    let loss = a.try_add(&b).unwrap().sum_all().unwrap();
 
     assert!(loss.backward().is_ok());
 }

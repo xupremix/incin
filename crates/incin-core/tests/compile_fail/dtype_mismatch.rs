@@ -6,5 +6,5 @@ fn main() {
     let t2: Tensor<Dyn, DummyBackend<Cpu>, f64> = Tensor::zeros(vec![2]).unwrap();
 
     // Mismatched dtypes should not compile
-    t1.add(&t2).unwrap();
+    t1.add_exact(&t2).unwrap();
 }

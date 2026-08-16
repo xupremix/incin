@@ -388,7 +388,7 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
     let _ = incin_core::prelude::extract_graph();
     let lhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
     let rhs: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
-    let output = lhs.add(&rhs).unwrap();
+    let output = lhs.try_add(&rhs).unwrap();
 
     assert_eq!(output.dims(), [2, 3]);
     let graph = incin_core::prelude::extract_graph();

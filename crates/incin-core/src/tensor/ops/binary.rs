@@ -1,7 +1,8 @@
 //! Binary tensor operations with static and dynamic shape checking.
 //!
-//! This module provides strict element-wise binary operations (`add`, `sub`, `mul`, `div`)
-//! that require exactly matching shapes at compile time via the `ShapeEq` trait.
+//! This module provides explicit exact-shape element-wise operations
+//! (`add_exact`, `sub_exact`, `mul_exact`, `div_exact`) and broadcasting
+//! operations (`try_add`, `try_sub`, `try_mul`, `try_div`).
 //!
 //! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard
 //! `core::ops` traits (like `core::ops::Add`) which automatically leverage compile-time
@@ -236,14 +237,14 @@ where
     )
 }
 
-macro_rules! impl_binary_op {
+macro_rules! impl_exact_binary_op {
     (
         $(#[$meta:meta])*
-        $op:ident, $method:ident, $try_method:ident, $op_marker:ident
+        $op:ident, $method:ident, $op_marker:ident
     ) => {
         impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S, B, K, G1> {
             $(#[$meta])*
-            pub fn $try_method<S2: Shape, G2: RequiresGrad>(
+            pub fn $method<S2: Shape, G2: RequiresGrad>(
                 &self,
                 rhs: &Tensor<S2, B, K, G2>,
             ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
@@ -258,44 +259,28 @@ macro_rules! impl_binary_op {
                     execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _>(self, rhs, grad_out)
                 })
             }
-
-            /// Checked compatibility spelling. Prefer the explicit `try_*`
-            /// method in new code.
-            #[doc(hidden)]
-            pub fn $method<S2: Shape, G2: RequiresGrad>(
-                &self,
-                rhs: &Tensor<S2, B, K, G2>,
-            ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
-            where
-                S: ShapeEq<S2>,
-                G1: GradJoin<G2>,
-                B: Execute<op::$op_marker>,
-                <B as Execute<op::$op_marker>>::Output: Into<B::Storage<K>>,
-            {
-                self.$try_method(rhs)
-            }
         }
     };
 }
 
-impl_binary_op!(
-    /// Adds another tensor element-wise.
-    Add, add, try_add, Add
+impl_exact_binary_op!(
+    /// Adds another tensor element-wise with exact shape equality.
+    Add, add_exact, Add
 );
 
-impl_binary_op!(
-    /// Subtracts another tensor element-wise.
-    Sub, sub, try_sub, Sub
+impl_exact_binary_op!(
+    /// Subtracts another tensor element-wise with exact shape equality.
+    Sub, sub_exact, Sub
 );
 
-impl_binary_op!(
-    /// Multiplies by another tensor element-wise.
-    Mul, mul, try_mul, Mul
+impl_exact_binary_op!(
+    /// Multiplies by another tensor element-wise with exact shape equality.
+    Mul, mul_exact, Mul
 );
 
-impl_binary_op!(
-    /// Divides by another tensor element-wise.
-    Div, div, try_div, Div
+impl_exact_binary_op!(
+    /// Divides by another tensor element-wise with exact shape equality.
+    Div, div_exact, Div
 );
 
 macro_rules! impl_cmp_op {
@@ -381,30 +366,30 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad> Tensor<S, B
     }
 }
 
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise maximum of two tensors.
-    Maximum, maximum, try_maximum, Maximum
+    Maximum, maximum, Maximum
 );
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise minimum of two tensors.
-    Minimum, minimum, try_minimum, Minimum
+    Minimum, minimum, Minimum
 );
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise absolute difference `|self - rhs|`.
-    AbsDiff, abs_diff, try_abs_diff, AbsDiff
+    AbsDiff, abs_diff, AbsDiff
 );
 
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise 2-argument arctangent `atan2(self, rhs)`.
-    Atan2, atan2, try_atan2, Atan2
+    Atan2, atan2, Atan2
 );
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise floating point remainder `self % rhs`.
-    Fmod, fmod, try_fmod, Fmod
+    Fmod, fmod, Fmod
 );
-impl_binary_op!(
+impl_exact_binary_op!(
     /// Element-wise IEEE remainder.
-    Remainder, remainder, try_remainder, Remainder
+    Remainder, remainder, Remainder
 );
 
 impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
@@ -553,13 +538,13 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
 macro_rules! impl_broadcast_binary_op {
     (
         $(#[$meta:meta])*
-        $trait_name:ident, $method:ident, $op:ident
+        $try_method:ident, $method:ident, $op:ident
     ) => {
         impl<S1: Shape + DynShape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S1, B, K, G1>
         {
             $(#[$meta])*
             #[inline]
-            pub fn $method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
+            pub fn $try_method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
             where
                 S2: Shape + DynShape,
                 G2: RequiresGrad,
@@ -574,28 +559,43 @@ macro_rules! impl_broadcast_binary_op {
                     execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _>(self, rhs, grad_out)
                 })
             }
+
+            $(#[$meta])*
+            #[inline]
+            pub fn $method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
+            where
+                S2: Shape + DynShape,
+                G2: RequiresGrad,
+                G1: GradJoin<G2>,
+                S1: crate::shapes::broadcast::BroadcastShape<S2>,
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
+                B: Execute<op::$op>,
+                <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
+            {
+                self.$try_method(rhs)
+            }
         }
     };
 }
 
 impl_broadcast_binary_op!(
     /// Adds two tensors, broadcasting their shapes if necessary according to NumPy semantics.
-    BroadcastAdd, broadcast_add, Add
+    try_add, broadcast_add, Add
 );
 
 impl_broadcast_binary_op!(
     /// Subtracts the right tensor from the left tensor, broadcasting shapes if necessary.
-    BroadcastSub, broadcast_sub, Sub
+    try_sub, broadcast_sub, Sub
 );
 
 impl_broadcast_binary_op!(
     /// Multiplies two tensors element-wise, broadcasting shapes if necessary.
-    BroadcastMul, broadcast_mul, Mul
+    try_mul, broadcast_mul, Mul
 );
 
 impl_broadcast_binary_op!(
     /// Divides the left tensor by the right tensor, broadcasting shapes if necessary.
-    BroadcastDiv, broadcast_div, Div
+    try_div, broadcast_div, Div
 );
 
 macro_rules! impl_std_ops {

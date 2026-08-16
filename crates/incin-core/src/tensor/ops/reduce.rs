@@ -478,7 +478,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         if (p - 1.0).abs() < 1e-6 {
             self.abs()?.sum_all()
         } else if (p - 2.0).abs() < 1e-6 {
-            let sq = self.mul(self)?;
+            let sq = self.mul_exact(self)?;
             sq.sum_all()?.sqrt()
         } else {
             let abs_t = self.abs()?;
@@ -760,7 +760,7 @@ where
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
         let diff = dyn_self.broadcast_sub(&dyn_mean)?;
-        let sq_diff = diff.mul(&diff)?;
+        let sq_diff = diff.mul_exact(&diff)?;
         let sum_sq = sq_diff.sum_all()?;
 
         let n = self.shape_buf().numel().unwrap_or(0) as f32;

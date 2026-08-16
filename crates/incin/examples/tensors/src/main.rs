@@ -40,7 +40,7 @@ fn main() -> incin::Result<()> {
     };
 
     let t: Tensor<s![2, 2, 2, dyn, 10], B> =
-        (Tensor::randn(((), ((), ((), (10_usize, ((), ()))))))? * 2.)?;
+        Tensor::randn(((), ((), ((), (10_usize, ((), ()))))))? * 2.;
 
     let out = model.forward(t)?;
     println!("=== Display ===");

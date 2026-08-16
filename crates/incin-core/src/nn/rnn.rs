@@ -405,7 +405,7 @@ where
         let i = self.wi.forward(x)?;
         let h = self.wh.forward(h_prev)?;
         // h_t = tanh(W_ih x_t + b_ih + W_hh h_{t-1} + b_hh)
-        let sum = i.add(&h)?;
+        let sum = i.add_exact(&h)?;
         sum.tanh()
     }
 }

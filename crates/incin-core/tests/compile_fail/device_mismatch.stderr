@@ -1,8 +1,8 @@
 error[E0308]: mismatched types
-  --> tests/compile_fail/device_mismatch.rs:24:20
+  --> tests/compile_fail/device_mismatch.rs:24:26
    |
-24 |     let _c = a.add(&b);
-   |                --- ^^ expected `&Tensor<Dyn, DummyBackend<Cpu>, f32, _>`, found `&Tensor<Dyn, ..., f32, ...>`
+24 |     let _c = a.add_exact(&b);
+   |                --------- ^^ expected `&Tensor<Dyn, DummyBackend<Cpu>, f32, _>`, found `&Tensor<Dyn, ..., f32, ...>`
    |                |
    |                arguments to this method are incorrect
    |
@@ -11,5 +11,5 @@ error[E0308]: mismatched types
 note: method defined here
   --> src/tensor/ops/binary.rs
    |
-   |     Add, add, try_add, Add
-   |          ^^^
+   |     Add, add_exact, Add
+   |          ^^^^^^^^^
