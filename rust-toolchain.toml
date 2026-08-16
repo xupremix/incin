@@ -1,14 +1,8 @@
 [toolchain]
-# Tracking stable rather than a pinned release. The trade-off is deliberate and
-# has one cost worth knowing about: the trybuild fixtures in
-# crates/incin-core/tests/compile_fail/ record rustc's exact diagnostic text, and
-# rustc rewords diagnostics between releases. A new stable can therefore turn
-# those cases red without anything in this repository changing. What the cases
-# actually assert is pinned separately and does not drift, by error code, in
-# compile_fail_cases_fail_for_their_stated_reason. When a release rewords a
-# diagnostic, confirm that guard still passes and then regenerate with
-# `TRYBUILD=overwrite cargo test -p incin-core --test compile_tests`.
-channel = "stable"
+# Pin the supported compiler because trybuild fixtures record rustc diagnostic
+# text. Upgrade this deliberately, then refresh snapshots after reviewing the
+# resulting diagnostics.
+channel = "1.97.1"
 # channel = "nightly"
 # rustfmt and clippy are named here so the gate exists wherever the toolchain
 # does. Omitting them is what produced a repository whose CI could not run

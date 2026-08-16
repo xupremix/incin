@@ -157,7 +157,7 @@ jobs:
         shell: pwsh
         run: choco install protoc --no-progress -y
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Build LSP and Cargo subcommand
         run: |

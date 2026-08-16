@@ -35,10 +35,10 @@ jobs:
     # `cargo fmt`, because the action installed one toolchain and
     # rust-toolchain.toml selected another that had no rustfmt; the clippy gate
     # below had consequently never executed either. rust-toolchain.toml now
-    # tracks stable and asks for both, and naming them here keeps the job
+    # pins 1.97.1 and asks for both, and naming them here keeps the job
     # correct even if that file changes.
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@1.97.1
       with:
         components: rustfmt, clippy
 
@@ -145,7 +145,7 @@ jobs:
           target
         key: ${{ runner.os }}-powerset-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - uses: taiki-e/install-action@cargo-hack
 
     - name: Install System Dependencies
@@ -232,7 +232,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Validate PROPOSALS.md against docs/plan/ledger.toml
@@ -261,7 +261,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     # The WGPU dependencies are here for the all-backend build below, which
     # compiles wgpu in order to document what sits on top of it.
     - name: Install System Dependencies
@@ -297,7 +297,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     # incin-core resolves against the workspace, which pulls onnx-pb's prost
     # build script into the graph even for a core-only check. Every other job
     # that reaches a build script installs this; this one never did, and nothing
@@ -312,7 +312,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install WGPU system dependencies
       run: |
         sudo apt-get update
@@ -333,7 +333,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Compile CUDA backend without requiring a GPU
@@ -361,7 +361,7 @@ jobs:
         backend: [cpu, cuda, wgpu, metal]
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install system dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libvulkan-dev
     - name: Compile ${{ matrix.backend }} on its own
@@ -372,7 +372,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Install Chromium for browser checks

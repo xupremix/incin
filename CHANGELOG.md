@@ -28,6 +28,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   suppression in CPU-only builds.
 - **Capability macro exports:** Feature-gated backend-specific capability macro
   re-exports so CPU-only builds no longer need unused-import suppressions.
+- **Rust toolchain reproducibility:** Pinned the supported compiler and stable
+  CI, hardware, and release jobs to Rust 1.97.1 to keep diagnostics and builds
+  repeatable.
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.
