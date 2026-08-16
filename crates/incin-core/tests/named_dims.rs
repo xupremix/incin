@@ -90,6 +90,20 @@ fn index_reductions_preserve_selector_output_shapes() {
 }
 
 #[test]
+fn insertion_and_removal_selectors_preserve_shape_proofs() {
+    type B = DummyBackend<Cpu>;
+    type S = s![2, 3];
+    let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
+
+    let _: Tensor<s![2, 1, 3], B> = tensor.unsqueeze(axis!(1)).unwrap();
+    let _: Tensor<Ranked<typenum::U3>, B> = tensor.unsqueeze(1isize).unwrap();
+
+    let singleton: Tensor<s![2, 1, 3], B> = Tensor::ones(()).unwrap();
+    let _: Tensor<s![2, 3], B> = singleton.clone().try_squeeze(axis!(1)).unwrap();
+    let _: Tensor<Ranked<typenum::U2>, B> = singleton.try_squeeze(1isize).unwrap();
+}
+
+#[test]
 fn reduction_rules_reject_axes_that_do_not_match_the_structural_cursor() {
     type S = s![Batch = 2, Channels = 2];
     let dims = ShapeBuf::from_slice(&[2, 2]);

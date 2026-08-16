@@ -131,7 +131,7 @@ let c0 = Tensor::<s![2, 6], B>::zeros(())?;
 
 // The cell is the executable recurrent primitive; the wrapper preserves this
 // contract across a statically-known sequence.
-let x_step = x.try_narrow(1, 0, 1)?.try_squeeze(1)?;
+let x_step = x.try_narrow(1, 0, 1)?.try_squeeze(1isize)?;
 let (h_final, _c_final) = lstm.cell.forward((x_step, (h0, c0)))?;
 assert_eq!(h_final.dims().as_ref(), &[2, 6]);
 # Ok::<(), incin::Error>(())

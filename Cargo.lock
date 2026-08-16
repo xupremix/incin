@@ -2087,6 +2087,7 @@ dependencies = [
  "anyhow",
  "flate2",
  "hf-hub",
+ "incin-backends",
  "incin-core",
  "rand 0.8.6",
  "rayon",

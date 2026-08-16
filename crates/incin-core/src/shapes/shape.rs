@@ -355,6 +355,17 @@ where
     type Output = DimCons<H, <T as InsertAt<SubCursor, NewDim>>::Output>;
 }
 
+impl<S, Cursor, NewDim> InsertAt<crate::shapes::idx::FromEnd<Cursor>, NewDim> for S
+where
+    S: ReverseShape,
+    Cursor: ForwardCursor,
+    S::Output: InsertAt<Cursor, NewDim>,
+    <S::Output as InsertAt<Cursor, NewDim>>::Output: ReverseShape,
+    NewDim: Dim,
+{
+    type Output = <<S::Output as InsertAt<Cursor, NewDim>>::Output as ReverseShape>::Output;
+}
+
 /// Swaps two dimensions in a structural shape.
 ///
 /// This is deliberately expressed in terms of the generic cursor operations
@@ -620,6 +631,40 @@ where
 /// Generic known-rank insertion/stacking.
 pub trait AddOneRank {
     type Output: Shape;
+}
+
+#[doc(hidden)]
+pub trait ShapeRank {
+    type Output: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static;
+}
+
+impl ShapeRank for Nil {
+    type Output = typenum::U0;
+}
+
+impl<H: Dim, T> ShapeRank for DimCons<H, T>
+where
+    T: ShapeRank,
+    <T as ShapeRank>::Output: Add<U1>,
+    <<T as ShapeRank>::Output as Add<U1>>::Output:
+        Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Output = <<T as ShapeRank>::Output as Add<U1>>::Output;
+}
+
+impl AddOneRank for Nil {
+    type Output = Ranked<typenum::U1>;
+}
+
+impl<H: Dim, T> AddOneRank for DimCons<H, T>
+where
+    T: ShapeRank,
+    <T as ShapeRank>::Output: Add<U1>,
+    <<T as ShapeRank>::Output as Add<U1>>::Output: Unsigned + Add<U1>,
+    <<<T as ShapeRank>::Output as Add<U1>>::Output as Add<U1>>::Output:
+        Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Output = Ranked<<<<T as ShapeRank>::Output as Add<U1>>::Output as Add<U1>>::Output>;
 }
 
 impl<R, ROut> AddOneRank for Ranked<R>

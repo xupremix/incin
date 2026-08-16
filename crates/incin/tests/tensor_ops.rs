@@ -329,7 +329,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 
     // squeeze (must be size 1)
     let t_sq = Tensor::<s![1, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0], ())?;
-    let sq = t_sq.try_squeeze(0)?;
+    let sq = t_sq.try_squeeze(0isize)?;
     let sq_dims: Vec<usize> = sq.dims().as_ref().to_vec();
     assert_eq!(sq_dims, vec![3]);
 
@@ -409,7 +409,7 @@ fn test_indexing_narrow() -> Result<()> {
     let invalid_axis = t.clone().try_narrow(2, 0, 1);
     assert!(invalid_axis.is_err());
 
-    let invalid_squeeze = t.clone().try_squeeze(0);
+    let invalid_squeeze = t.clone().try_squeeze(0isize);
     assert!(invalid_squeeze.is_err());
 
     let invalid_topk = t.topk(4, 1, true);

@@ -401,8 +401,8 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
     {
-        let u1 = self.unsqueeze(1)?;
-        let u2 = rhs.unsqueeze(0)?;
+        let u1 = self.unsqueeze_dyn(1)?;
+        let u2 = rhs.unsqueeze_dyn(0)?;
         u1.broadcast_mul(&u2)
     }
 

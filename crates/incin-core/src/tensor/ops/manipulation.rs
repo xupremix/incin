@@ -65,6 +65,58 @@ pub trait StackSelector<S: Shape> {
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
+/// Selects the insertion axis for unsqueeze while retaining the strongest
+/// shape proof available from the input and selector.
+pub trait UnsqueezeSelector<S: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, C> UnsqueezeSelector<S> for StaticAxis<C>
+where
+    S: Shape + DynShape + crate::shapes::InsertAt<C, typenum::U1>,
+    C: StaticCursor,
+    <S as crate::shapes::InsertAt<C, typenum::U1>>::Output: Shape,
+{
+    type Output = <S as crate::shapes::InsertAt<C, typenum::U1>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        self.normalize(rank + 1)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static unsqueeze axis resolved to no axis".into())
+        })
+    }
+}
+
+impl<S> UnsqueezeSelector<S> for isize
+where
+    S: Shape + crate::shapes::shape::AddOneRank,
+{
+    type Output = <S as crate::shapes::shape::AddOneRank>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank + 1)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Msg("runtime unsqueeze axis resolved to no axis".into())
+            })
+    }
+}
+
+impl<S, Tag> UnsqueezeSelector<S> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + crate::shapes::shape::AddOneRank + crate::shapes::idx::NamedAxisLookup<Tag>,
+    Tag: crate::shapes::AxisTag,
+{
+    type Output = <S as crate::shapes::shape::AddOneRank>::Output;
+
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 impl<S, C> StackSelector<S> for StaticAxis<C>
 where
     S: Shape + DynShape + crate::shapes::stack::StackShape<C>,
@@ -967,7 +1019,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Squeezes the tensor dynamically by removing the dimension `dim` if its size is 1.
+    /// Removes the selected dimension if its size is 1.
     ///
     /// # Examples
     /// ```rust
@@ -975,13 +1027,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
-    /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
+    /// let sq = t.try_squeeze(0isize).unwrap(); // shape [5]
     /// ```
-    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G, P>>
+    pub fn try_squeeze<A>(self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where
+        A: crate::tensor::ops::reduce::ReduceSelector<S>,
+        A::Drop: DynShape,
         B: Capabilities + Execute<op::SqueezeExact>,
         <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
     {
+        let dim = axis.resolve(self.shape_buf().rank())?;
         let mut shape = self.shape_buf().as_ref().to_vec();
         let extent = *shape.get(dim).ok_or_else(|| {
             crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
@@ -1004,7 +1059,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = G::grad_mode(&self._grad)
             .restrict(|| squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim))?;
         shape.remove(dim);
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<Dyn>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Drop>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,
@@ -2294,8 +2349,50 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Inserts a 1-sized dimension at position `dim`.
-    pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
+    /// Inserts a 1-sized dimension at the selected axis.
+    pub fn unsqueeze<A>(&self, axis: A) -> Result<Tensor<A::Output, B, K, G>>
+    where
+        A: UnsqueezeSelector<S>,
+        A::Output: DynShape,
+        B: Capabilities + Execute<op::UnsqueezeExact>,
+        <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
+    {
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        if dim > out_shape.len() {
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis {
+                    axis: dim,
+                    rank: out_shape.len() + 1,
+                },
+            ));
+        }
+        out_shape.insert(dim, 1);
+        let output_shape = ShapeValue::<A::Output>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::UnsqueezeExact, B, A::Output>(
+                    &context,
+                    AxisAttributes { axis: dim },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::<A::Output, B, K, G>::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    #[doc(hidden)]
+    pub(crate) fn unsqueeze_dyn(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Capabilities + Execute<op::UnsqueezeExact>,
         <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,

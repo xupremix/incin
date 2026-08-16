@@ -91,6 +91,8 @@ let flattened = x.flatten(axis!(1), axis!(2))?;
 let stacked = x.stack(&x, axis!(0))?;
 let concatenated = x.concat(&x, axis!(-1))?;
 let flattened_runtime = x.flatten(1isize, -1isize)?;
+let expanded = x.unsqueeze(axis!(1))?;
+let squeezed = expanded.try_squeeze(1isize)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -114,7 +116,10 @@ Runtime selectors validate their normalized position against the tensor rank.
 rules.
 `flatten` uses the same signed runtime axis convention. Use `concat` and
 `stack` with a selector for ordinary code. The structural cursor forms remain
-available only for low-level shape implementations.
+available only for low-level shape implementations. `unsqueeze` and
+`try_squeeze` use the same selectors: static selectors retain exact structural
+shapes, while signed runtime selectors retain known rank and validate the
+selected extent for squeezing.
 
 Axis-preserving operations use the same selectors:
 
