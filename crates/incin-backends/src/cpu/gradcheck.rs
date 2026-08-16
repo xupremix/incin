@@ -1,12 +1,7 @@
 //! Shared finite-difference gradient-check helper (D-01, D-02).
 //! Used to verify analytic gradients against numerical finite-difference approximations.
 //!
-//! Exposed as a public API in `incin-cpu` for users who implement custom operations
-//! and want to verify their backward rules using standard central-difference checks.
-//!
 //! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `CpuGrads::get`).
-
-#![allow(dead_code)]
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::tape;
@@ -104,7 +99,11 @@ fn numerical_grad(
 /// Panics with a clear message if `op(inputs)`'s output shape is not scalar
 /// (`[]`) — `gradcheck` requires a scalar-output op so a single central
 /// difference directly approximates the whole gradient contribution.
-pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage], eps: f64) -> f64 {
+pub(crate) fn gradcheck(
+    op: impl Fn(&[CpuStorage]) -> CpuStorage,
+    inputs: &[CpuStorage],
+    eps: f64,
+) -> f64 {
     let out = op(inputs);
     assert!(
         out.shape.is_empty(),
@@ -156,12 +155,6 @@ pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage]
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackendImpl;
-    use incin_core::tensor::device::Cpu;
-
-    /// `TestBackend`.
-    type TestBackend = CpuBackendImpl<Cpu>;
-
     /// `vector`.
     fn vector(v: Vec<f32>) -> CpuStorage {
         let len = v.len();

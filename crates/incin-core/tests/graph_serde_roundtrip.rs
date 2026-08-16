@@ -1,8 +1,8 @@
 extern crate incin_core as incin;
 
-use incin_core::prelude::*;
 use incin_core::graph::Graph;
 use incin_core::prelude::OperationKind;
+use incin_core::prelude::*;
 
 #[cfg(feature = "test-utils")]
 use incin_core::exec::catalog::{ScalarAttributes, TraceDescriptor, op};

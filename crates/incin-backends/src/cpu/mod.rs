@@ -32,7 +32,8 @@ pub use compiled::{
     compiled_support,
 };
 pub(crate) mod creation;
-/// GPU dispatcher modules (CUDA/Metal) — internal only.
+/// Finite-difference checks are compiled only for the CPU unit-test suite.
+#[cfg(test)]
 pub(crate) mod gradcheck;
 pub(crate) mod ops;
 /// Internal storage types.
