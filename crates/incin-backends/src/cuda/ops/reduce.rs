@@ -474,40 +474,6 @@ pub(crate) fn launch_reduce_with_indices_op(
     ))
 }
 
-#[cfg(feature = "cuda")]
-pub(crate) fn launch_reduce_with_indices_host(
-    op_name: &'static str,
-    storage: &CudaStorage,
-    axis: usize,
-    keepdim: bool,
-) -> Result<(CudaStorage, Vec<usize>)> {
-    let (value_storage, index_storage) =
-        launch_reduce_with_indices_op(op_name, storage, axis, keepdim)?;
-    let buffer = &*index_storage.buffer;
-    if buffer.dtype != DTypeId::U32.descriptor() {
-        return Err(Error::DTypeStorageMismatch {
-            expected: DTypeId::U32.descriptor(),
-            got: buffer.dtype,
-        });
-    }
-    let indices = unsafe {
-        let device_values = buffer.data.transmute::<u32>(buffer.len).ok_or_else(|| {
-            Error::Msg("CUDA reduction index view has invalid byte length".into())
-        })?;
-        buffer
-            .device
-            .default_stream()
-            .clone_dtoh(&device_values)
-            .map_err(|error| {
-                Error::Msg(format!("CUDA reduction index download failed: {error:?}"))
-            })?
-    };
-    Ok((
-        value_storage,
-        indices.into_iter().map(|index| index as usize).collect(),
-    ))
-}
-
 /// Converts a `U32`-dtype index `CudaStorage` (what `launch_reduce_with_indices_op`
 /// produces) into an `I64`-dtype one, matching CPU/WGPU's `argmax`/`argmin`
 /// convention (`CpuBuffer::I64`) so downstream consumers that assume

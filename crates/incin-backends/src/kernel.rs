@@ -107,18 +107,14 @@ impl KernelDType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// I64 is part of the stable key vocabulary before the large-index renderer is enabled.
-#[allow(dead_code)]
 pub(crate) enum KernelIndexWidth {
     I32,
-    I64,
 }
 
 impl KernelIndexWidth {
     fn tag(self) -> &'static str {
         match self {
             Self::I32 => "i32",
-            Self::I64 => "i64",
         }
     }
 }
