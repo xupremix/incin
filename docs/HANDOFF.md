@@ -162,7 +162,7 @@ tensor-layer ownership-transfer contract; module fields delegate to it.
 ```text
 cargo check -p incin-core --lib --no-default-features
 cargo test -p incin-core --lib <focused_test>
-cargo test -p incin --test foundation_handoff_contract --features target-api,cpu
+cargo test -p incin --test foundation_handoff_contract --features cpu
 tools/check-architecture.sh
 tools/export-snapshot.sh /tmp/incin-handoff.zip
 ```
@@ -173,8 +173,8 @@ contract. Expand to backend features only when the touched surface requires it.
 ## Feature matrix
 
 The default facade is the normal user path. `cpu` enables the reference backend;
-`cuda`, `wgpu`, and `metal` add optional accelerators; `target-api` enables
-target-first allocation; `compiled`, `distributed`, and import/tooling features
+`cuda`, `wgpu`, and `metal` add optional accelerators; target-first allocation
+is part of the normal API; `compiled`, `distributed`, and import/tooling features
 are higher or experimental surfaces. Check each crate's `Cargo.toml` before
 assuming a feature is available in a fixture.
 

@@ -27,7 +27,6 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `std` | yes | Enables standard-library functionality, serialization, and filesystem APIs. |
 | `nightly` | no | Enables nightly-only APIs in the core and macro crates. |
 | `cpu` | yes | Enables the built-in CPU backend. This is the only default backend. |
-| `target-api` | no | **Experimental.** Device values as user-facing allocation targets. Additive: it adds a construction surface and removes none. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`. |
 | `cpu-blas` | no | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
 | `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
 | `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
@@ -65,7 +64,7 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `target-api`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
+- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `test-utils`, and `compiled`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
@@ -252,7 +251,7 @@ cargo install --path crates/incin-lsp --bin incin-lsp
 - **The Book ("Incinnomicon"):** the current user guide lives in
   [`docs/book/src/SUMMARY.md`](docs/book/src/SUMMARY.md). Build it locally with
   `mdbook build docs/book`. Validate its Rust examples with
-  `cargo test -p incin --features 'target-api backend-authoring' --doc`;
+  `cargo test -p incin --features 'backend-authoring' --doc`;
   `mdbook test` is not the validation command because standalone mdBook
   rustdoc does not receive Cargo's dependency metadata. The older roadmap in
   `docs/growth/07-the-book.md`

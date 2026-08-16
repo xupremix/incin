@@ -34,7 +34,7 @@ features is the one configuration that is genuinely `no_std`.
 
 | Feature | What it enables |
 |---|---|
-| `target-api` | Preferred application allocation targets (`Cpu.zeros(...)`), plus the `_canonical` operation methods. See [The target API](./target_api.md). |
+| `backend-authoring` | Extension contracts for backends and custom operations. See [Backend authoring](./backend_authoring.md). |
 | `backend-authoring` | Extension contracts for backend authors — `Execute`, `ExecutionRequest`, named capability views, and canonical descriptors. See [Backend authoring](./backend_authoring.md). |
 | `train` | The preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
 | `telemetry` | Backend telemetry hooks; `cargo incin doctor` also reports the run directory under this feature. |

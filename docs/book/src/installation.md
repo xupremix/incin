@@ -21,7 +21,7 @@ with no extra setup. That's enough for everything in this book except the
 |---|---|
 | `cpu` | The CPU backend, `DefaultBackend`, `DefaultDevice`. On by default. |
 | `cuda`, `wgpu`, `metal` | The respective accelerator backend. Read [Backends](./backends.md) before reaching for these — coverage is much narrower than CPU today. |
-| `target-api` | Device values as allocation targets (`Cpu.zeros(shape![2, 3])`), and the target-dispatch arithmetic methods covered in [The target API](./target_api.md). |
+| `backend-authoring` | Public contracts for implementing custom backends and operations. |
 | `train` | The preview automatic `Trainer`. |
 | `distributed` | Mesh/placement/collective planning — a design surface, not yet an execution path. |
 
@@ -29,7 +29,7 @@ Enable what you need:
 
 ```toml
 [dependencies]
-incin = { path = "../incin/crates/incin", features = ["target-api"] }
+incin = { path = "../incin/crates/incin", features = ["cpu"] }
 ```
 
 ## Verifying the install

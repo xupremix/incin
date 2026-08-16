@@ -21,7 +21,7 @@ disagree later, believe the generated one and fix this file.
 4. [Tensors: creation, dtype, device](#4-tensors-creation-dtype-device)
 5. [Operations: the stable surface today](#5-operations-the-stable-surface-today)
 6. [The canonical execution architecture](#6-the-canonical-execution-architecture)
-7. [The target API: allocation targets](#7-the-target-api-allocation-targets)
+7. [Target-first construction](#7-target-first-construction)
 8. [Backends and how to author one](#8-backends-and-how-to-author-one)
 9. [Autograd](#9-autograd)
 10. [Modules and the `#[module]` macro](#10-modules-and-the-module-macro)
@@ -157,12 +157,10 @@ a wrong one. Where the stronger, fully-static form matters, write it directly:
 gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), and
 placement (defaults to `Local`). Most code only ever writes the first two.
 
-The stable default-build construction story is the classic typed constructor
-(plus the `tensor!` literal convenience). When the opt-in `target-api` feature
-is enabled, its allocation-target spelling is the preferred application
-surface; it lowers to the same descriptor execution architecture and does not
-introduce a second tensor runtime. Projects that do not opt in retain the
-constructor as their canonical allocation API:
+The stable construction story is target-first. A target such as `Cpu` owns the
+backend and device choice, while the shape specification carries static proof
+or runtime dimensions. The typed constructor remains useful when backend and
+shape types are already explicit:
 
 ```rust
 // 1. The classic constructor: shape is the type parameter, `Arg` is the
@@ -170,14 +168,12 @@ constructor as their canonical allocation API:
 let a = Tensor::<s![2, 3], Backend>::zeros(())?;
 let b = Tensor::<Dyn, Backend>::ones(vec![2, 3])?;
 
-// 2. `tensor!`, the array-literal convenience — shape and dtype inferred
-//    from the literal's own nesting and suffixes, always on the default CPU
-//    backend. No `device:`/`backend:` clause; use a target for that.
+// 2. `tensor!`, the array-literal convenience. Shape and dtype are inferred
+//    from the literal's nesting and suffixes on the default CPU backend.
 let c = tensor![[1.0, 2.0], [3.0, 4.0]]?;         // shape [2,2], f32
 let d = tensor![1, 2, 3]?;                        // i64, matching torch.tensor's default
 
-// 3. (feature = "target-api") An allocation target — see §7 — for anything
-//    that needs to say *where*.
+// 3. A target-first allocation when the call site needs to choose the device.
 let e = Cpu.zeros(shape![2, 3])?;
 ```
 
@@ -285,36 +281,30 @@ The legacy operation-family architecture has been removed from production
 source; backend-local helpers are ordinary implementation functions and do not
 form an alternate stable tensor execution path.
 
-## 7. The target API: allocation targets
+## 7. Target-first construction
 
-With `target-api` enabled, the target API is Incin's preferred application
-allocation UX: choose the device at the call site (`Cpu.zeros(...)`,
-`Wgpu::new(0).zeros(...)`) and let the target select the backend.
-`Tensor::<S, B>::zeros(...)` remains the stable default-build API and the
-explicit constructor form for backend authors or code that intentionally fixes
-`B`.
+Target-first construction is Incin's preferred application UX: choose the
+device at the call site (`Cpu.zeros(...)`, `Wgpu::new(0).zeros(...)`) and let
+the target select the backend. `Tensor::<S, B>::zeros(...)` remains useful
+when code intentionally fixes the backend type.
 
-Feature `target-api`. A **target** is a value that knows where and how to
-allocate — a device (`Cpu`, `Wgpu::new(0)`, ...) or a backend value rebound to
-a specific dtype (`.dtype::<f64>()`). It has no construction step and
-owns no resources; it is a value you pass around, not a runtime handle you
-initialize and hold.
+A **target** is a value that knows where and how to allocate. It has no
+construction step and owns no resources; it is a value passed to a constructor,
+not a runtime handle you initialize and hold.
 
 ```rust
 use incin::prelude::*;
 
 let x = Cpu.zeros(shape![2, 3])?;                  // static shape, static proof
-let y = Cpu.zeros(shape![2, 3])?;                    // same, via the value macro
+let y = Cpu.zeros(shape![2, 3])?;                  // same, via shape!
 let batch = 4;
 let z = Cpu.zeros(shape![batch, 3])?;                // dynamic batch axis
-let w = Cpu.zeros([batch, 3])?;                      // fully dynamic — Shape = Dyn
+let w = Cpu.zeros([batch, 3])?;                    // fully dynamic, Shape = Dyn
 ```
 
-`ShapeSpec` is the trait that makes all four forms above accept the same
-method: `Static<S>` (fully compile-time), `Bound<S>` (mixed — carries the
-runtime axes it needs), and `[usize; N]` (fully dynamic, `Shape = Dyn`) all
-implement it, each producing the `Shape::PROOF` its own staticness earns —
-never more.
+`ShapeSpec` makes static `shape![...]`, mixed runtime shapes, and `[usize; N]`
+work with the same constructor. Each form produces only the proof justified
+by its own staticness.
 
 `.zeros(...)`/`.ones(...)`/`.rand(...)`/`.randn(...)` are the ordinary public
 path and use exact descriptor execution bounds. The `_canonical` constructors
@@ -322,11 +312,8 @@ are lower-level entry points for descriptor-oriented work and
 are available only where a `CanonicalOperation` bound is satisfied (today:
 CPU). Prefer the ordinary forms for application code.
 
-`TensorTarget`/`DtypeTarget` extend the same idea to data-carrying and
-dtype-rebinding constructors — `gpu.tensor([[1.0, 2.0]])`,
-`gpu.dtype::<f64>().zeros(...)`. This whole surface is marked
-feature-gated in the prelude comment (`crates/incin/src/lib.rs:496`) — it
-is real and tested, not a stub, but its API is not yet frozen the way §5's is.
+Target values also support data-carrying and dtype-rebinding constructors such
+as `gpu.tensor([[1.0, 2.0]])` and `gpu.dtype::<f64>().zeros(...)`.
 
 ## 8. Backends and how to author one
 
@@ -447,7 +434,7 @@ public input error).
 | `cpu` | `CpuBackendImpl`, `DefaultBackend`, `DefaultDevice` |
 | `cuda` / `wgpu` / `metal` | The respective accelerator backend |
 | `external-candle` | The third-party Candle adapter under `incin::backend_authoring`... `external::candle` |
-| `target-api` | §7 — `TargetExt`, `Static`, `Bound`, `ShapeSpec`, `shape!` |
+| `backend-authoring` | §8: contracts for writing a backend or custom operation |
 | `backend-authoring` | §8 — the contract for writing a new backend |
 | `distributed` / `distributed-nccl` | `incin::experimental::distributed` — mesh, placement, collective planning |
 | `train` | The preview automatic `Trainer` under `incin::experimental::training` |

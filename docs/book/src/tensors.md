@@ -105,13 +105,11 @@ type B = DefaultBackend;
 
 let x = Tensor::<s![2, 3], B>::ones(())?;
 
-let by_row = x.sum_keepdim::<Next<Here>>()?; // axis is checked at compile time
-let idx = x.argmax(Some(1))?;   // index dtype defaults to u32
+let by_row = x.sum_keepdim::<1>(); // axis is checked at compile time
+let idx = x.argmax::<1>();         // index dtype defaults to u32
 
-// `reshape` changes the geometry. The argument is the target shape's `Arg`
-// — `((), ())` for a fully static rank-2 target, since each static axis
-// contributes a unit.
-let reshaped = x.reshape::<s![3, 2]>(((), ((), ())))?;
+// `reshape` changes the geometry and keeps the target shape in the type.
+let reshaped = x.reshape(s![3, 2])?;
 
 // sum_all/mean_all consume the tensor (they're the last op in a reduction
 // chain more often than not), so clone first if you still need the original.

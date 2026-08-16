@@ -34,7 +34,7 @@ NCCL rows do not claim local hardware execution.
 | `incin-core` | `compiled` | General `core-compiled-distributed` row and compiled integration tests. |
 | `incin-core` | `postcard`, `safetensors`, `serde_json` | `core-serialization` row and serialization tests. |
 | `incin-backends` | `std`, `cpu` | General CPU rows and the focused CPU backend test suite. |
-| `incin-backends` | `compiled`, `target-api`, `telemetry`, `external-candle` | General backend rows and focused crate tests where applicable. |
+| `incin-backends` | `compiled`, `telemetry`, `external-candle` | General backend rows and focused crate tests where applicable. |
 | `incin-backends` | `cpu-blas` | General compile row and dedicated CPU-BLAS test job. |
 | `incin-backends` | `cuda` | General compile row and CUDA hardware job when a CUDA runner is selected. |
 | `incin-backends` | `cuda-vendor` | General `backend-cuda-vendor-compile` row. This is currently a supported compatibility feature layered on `cuda`; no separate vendor-kernel runtime behavior is claimed. |
@@ -47,7 +47,7 @@ NCCL rows do not claim local hardware execution.
 | `incin-backends` | `test-utils` | Test-only support, covered by focused tests rather than a product contract. |
 | `incin` | `std`, `cpu` | General facade rows, workspace tests, and the focused facade suite. |
 | `incin` | `nightly` | Stable CI exclusion because it forwards the core/macro feature gate. |
-| `incin` | `target-api`, `compiled`, `telemetry`, `external-candle`, `backend-authoring` | General facade rows and focused API/compile tests. |
+| `incin` | `compiled`, `telemetry`, `external-candle`, `backend-authoring` | General facade rows and focused API/compile tests. |
 | `incin` | `cpu-blas`, `cuda`, `wgpu`, `metal` | Forwarding features covered by backend rows and dedicated platform jobs. |
 | `incin` | `metal-mps`, `autotune` | Forwarding features covered by the Apple Silicon/CUDA tuning jobs. |
 | `incin` | `train` | General `facade-training` row and trainer integration tests. |

@@ -13,7 +13,7 @@ that can be named as a working implementation.
   and visitor-backed state paths are available and covered by examples/tests.
 - The repository examples compile with `cargo check -p incin --examples`.
 - The Book’s current snippets are Cargo-doctested with:
-  `cargo test -p incin --features 'target-api backend-authoring' --doc`.
+  `cargo test -p incin --features 'backend-authoring' --doc`.
 
 ## Transformer / attention assessment
 
