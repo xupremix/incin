@@ -1,9 +1,10 @@
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 
+use incin::backend_authoring::VariableBackend;
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
-use incin::{StateVisitor, VariableBackend, VisitState};
+use incin::{StateVisitor, VisitState};
 extern crate alloc;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.

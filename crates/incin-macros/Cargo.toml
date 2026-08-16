@@ -37,9 +37,8 @@ onnx-pb = "0.1.4"
 prost = "0.6"
 
 [dev-dependencies]
-incin = { path = "../incin", features = ["distributed"] }
+incin = { path = "../incin", features = ["backend-authoring", "distributed"] }
 incin-core = { path = "../incin-core", features = ["distributed"] }
 trybuild = "1.0.117"
-
 
 

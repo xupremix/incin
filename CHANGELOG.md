@@ -19,6 +19,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Shape root exports:** Replaced wildcard exports from private shape
   implementation modules with explicit scalar, storage, proof, and dimension
   items.
+- **Telemetry graph test:** Updated the graph snapshot test to use the named
+  `incin_core::graph` namespace after removing `Graph` from the ordinary
+  prelude.
+- **Backend-authoring tests:** Updated test consumers to import `Backend` and
+  `VariableBackend` from the explicit authoring namespace.
+- **Transformer CPU test:** Made the gradient assertion deterministic by
+  allowing valid zero-valued individual components while requiring a nonzero
+  gradient somewhere in the model.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.

@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use incin::VariableBackend;
+use incin::backend_authoring::{Backend, VariableBackend};
 use incin::optim::ParameterGroup;
 use incin::prelude::*;
 use incin_macros::mesh;

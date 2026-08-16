@@ -1,9 +1,10 @@
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 
+use incin::backend_authoring::{Backend, VariableBackend};
 use incin::macros::advanced::idx;
 use incin::prelude::*;
-use incin::{DynShape, Shape, VariableBackend};
+use incin::{DynShape, Shape};
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;

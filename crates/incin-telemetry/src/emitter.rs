@@ -599,7 +599,7 @@ mod tests {
         });
         emitter.log_graph_snapshot(GraphSnapshotEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
-            graph: incin_core::prelude::Graph::default(),
+            graph: incin_core::graph::Graph::default(),
         });
 
         // Bounded well beyond PRIORITY_SEND_TIMEOUT/IDLE_WAIT so the test is
