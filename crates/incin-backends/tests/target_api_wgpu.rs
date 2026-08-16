@@ -44,7 +44,7 @@ fn a_partial_shape_survives_onto_the_accelerator() {
 }
 
 #[test]
-fn with_dtype_refuses_a_dtype_the_accelerator_cannot_store() {
+fn dtype_refuses_a_dtype_the_accelerator_cannot_store() {
     let gpu = Wgpu::new(0);
     let device = gpu.device_id().unwrap();
     let refused =

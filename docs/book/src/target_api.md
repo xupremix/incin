@@ -69,6 +69,11 @@ let kept = x.sum_keepdim_axis(axis!(-2))?;
 let first = x.sum_axis(axis!(0))?;
 let indices = x.argmax::<2>()?;
 let minima = x.argmin::<0>()?;
+let means = x.mean_axis(axis!(-1))?;
+let maxima = x.max_keepdim_axis(axis!(0))?;
+let minima_by_value = x.min_axis(axis!(1))?;
+let argmax = x.argmax_axis(axis!(-1))?;
+let flattened = x.flatten_range(1, -1)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -77,7 +82,12 @@ without a finite lookup table. Use `axis!(...)` with `sum_axis` or
 `sum_keepdim_axis` when the selector is chosen as a value. Named axes remain
 available through `sum_named` and `sum_keepdim_named` when the axis identity
 matters more than its numeric position. Runtime selectors validate their
-normalized position against the tensor rank.
+normalized position against the tensor rank. `mean_axis`, `max_axis`,
+`min_axis`, and their keep-dimension forms follow the same selector rules.
+`flatten_range` and `concat_axis` use the same signed runtime axis convention.
+For generic known-rank runtime shapes, `Ranked<R>` also provides
+`sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank
+arithmetic in the type while leaving extents runtime-valued.
 
 Tensor slicing and indexing use `idx![...]`. Axis selection is a separate
 concept, so `axis!(-1)` never changes the `idx![-1]` indexing rules. There is

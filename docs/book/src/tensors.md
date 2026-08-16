@@ -35,7 +35,7 @@ let dynamic = Tensor::<Dyn, B>::zeros(vec![2, 3])?;
 # Ok::<(), incin::Error>(())
 ```
 
-`()` as the constructor argument for a fully static shape is not decoration  -
+`()` as the constructor argument for a fully static shape is intentional:
 a static `Shape::Arg` is a tuple of units, and the empty tuple is the only
 value of that type. Once any axis is runtime-determined (`Dyn`, or a `Bound`
 shape via the [target API](./target_api.md)), the argument carries the actual

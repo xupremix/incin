@@ -24,12 +24,21 @@ The smallest useful implementation has four pieces:
 4. Register capability admission and test the operation through the public
    consumer fixture.
 
-For example, a fused `BiasGelu` operation would accept the activation and bias
-handles, validate their broadcast relationship, infer the output metadata, and
-dispatch one backend kernel. It should not introduce a parallel executor or
-construct a `TensorMeta` from unchecked fields. If the operation is built from
-existing tensor methods instead, document it as a composition rather than as a
-new fused catalog entry.
+The compact `CompanyIdentity` operation in
+`crates/incin-core/tests/custom_operation.rs` is the reference implementation:
+it defines serializable attributes, implements the canonical operation
+contract, validates the input metadata, and executes through the backend
+dispatch path. The downstream fixture invokes that operation through the
+public authoring API, which is the important compatibility check for external
+backend crates.
+
+For a real fused operation such as `BiasGelu`, the same pattern applies. The
+operation accepts activation and bias handles, validates their broadcast
+relationship, infers the output metadata, and dispatches one backend kernel.
+It should not introduce a parallel executor or construct a `TensorMeta` from
+unchecked fields. If the operation is built from existing tensor methods
+instead, document it as a composition rather than as a new fused catalog
+entry.
 
 Custom autodiff registration is not part of the current extension contract.
 Unless a custom operation is composed from existing differentiable tensor

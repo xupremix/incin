@@ -890,7 +890,7 @@ mod tests {
         // Mutex<Iterator> (loader.rs's `batch_indices`) and push collated
         // batches through a shared bounded mpsc channel. A bug here (e.g. two
         // workers racing on the same chunk, or one silently starving) would
-        // show up as a missing or duplicated item — this is exactly the kind
+        // show up as a missing or duplicated item, which is exactly the kind
         // of concurrency bug that's invisible without a real multi-thread run.
         let loader = DataLoader::new(RangeDataset(1000), VecCollate, 10)
             .unwrap()

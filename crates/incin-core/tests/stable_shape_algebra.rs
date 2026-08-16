@@ -365,6 +365,10 @@ fn test_high_rank_tensor_creation() {
     )
     .unwrap();
     assert_eq!(t16.dims().len(), 16);
+    let reduced = t16.sum_runtime_ranked(-1).unwrap();
+    let kept = t16.sum_keepdim_runtime_ranked(0).unwrap();
+    assert_eq!(reduced.dims().len(), 15);
+    assert_eq!(kept.dims().len(), 16);
 
     let t32 = Tensor::<Ranked<typenum::consts::U32>, DummyBackend<Cpu>, f32>::zeros(
         incin_core::shapes::ShapeBuf::from_slice(&[1usize; 32]),

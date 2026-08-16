@@ -182,7 +182,7 @@ fn a_length_mismatch_is_reported_rather_than_truncated() {
 
 /// `dtype` changes what *generated* tensors are made of, and nothing else.
 #[test]
-fn with_dtype_rebinds_the_generated_dtype() {
+fn dtype_rebinds_the_generated_dtype() {
     let fp64 = Cpu.dtype::<f64>().unwrap();
     let x = fp64.zeros(shape![2, 2]).unwrap();
     assert_eq!(x.to_vec1::<f64>().unwrap(), vec![0.0_f64; 4]);
@@ -193,7 +193,7 @@ fn with_dtype_rebinds_the_generated_dtype() {
 /// `Q8_0` blocks, so rebinding to it succeeds; it has no fill kernel for them,
 /// so `zeros` on that view still refuses.
 #[test]
-fn with_dtype_admits_a_dtype_the_device_can_store_but_not_fill() {
+fn dtype_admits_a_dtype_the_device_can_store_but_not_fill() {
     let quantized = Cpu
         .dtype::<Q8_0>()
         .expect("CPU storage holds every dtype, including Q8_0");
@@ -202,7 +202,7 @@ fn with_dtype_admits_a_dtype_the_device_can_store_but_not_fill() {
 
 /// The CPU storage row lists every dtype, so every rebinding of it is admitted.
 #[test]
-fn with_dtype_admits_every_dtype_the_cpu_can_store() {
+fn dtype_admits_every_dtype_the_cpu_can_store() {
     assert!(Cpu.dtype::<f16>().is_ok());
     assert!(Cpu.dtype::<bf16>().is_ok());
     assert!(Cpu.dtype::<f64>().is_ok());

@@ -89,7 +89,7 @@ and requires every topology rank to accept the same result before commit.
 need; they do not execute kernels themselves. Disabling `incin-diagnostics`'
 defaults gives the allocation-only diagnostic core.
 
-The per-backend support tables  -  which operations each backend registers, for
+The per-backend support tables, which operations each backend registers, for
 which element types, layouts and ranks  -  are generated from those registrations
 into [docs/capabilities.md](docs/capabilities.md). `cargo incin doctor` reports
 which of them this machine can actually reach.
@@ -120,17 +120,41 @@ brew install protobuf
 
 ## Quick Start
 
-### Tensor Creation & Shape Macro
+### Concrete CPU quick start
 
 ```rust,ignore
 use incin::prelude::*;
 
-// Statically dimensioned 2x3 tensor on default CPU backend
-let static_tensor: Tensor<s![2, 3]> = Tensor::zeros(())?;
-
-// Dynamically dimensioned tensor
-let dynamic_tensor: Tensor<Dyn> = Tensor::zeros([2, 3])?;
+fn main() -> Result<()> {
+    let a = Cpu.randn(shape![2, 3])?;
+    let b = Cpu.randn(shape![3])?;
+    let sum = &a + &b;
+    let reshaped = sum.reshape(shape![3, 2])?;
+    let reduced = reshaped.sum_keepdim_axis(axis!(-1))?;
+    let _ = reduced;
+    Ok(())
+}
 ```
+
+The concrete form is the shortest path for an application using the default
+CPU backend. For generic code, make the backend and shape parameters explicit:
+
+```rust,ignore
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+fn generic_example() -> Result<()> {
+    let static_tensor: Tensor<s![2, 3], B> = Tensor::zeros(())?;
+    let dynamic_tensor: Tensor<Dyn, B> = Tensor::zeros(shape![2, 3])?;
+    let _sum = &static_tensor + &static_tensor;
+    Ok(())
+}
+```
+
+`shape!` constructs runtime shape values and `s![]` describes compile-time
+shape facts. Axis selectors accept signed values, so `axis!(-1)` selects the
+last axis without constructing cursor types.
 
 ### Module Definition & Forward Pass
 

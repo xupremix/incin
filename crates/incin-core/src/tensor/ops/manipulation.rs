@@ -1276,6 +1276,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
+    /// Flattens an inclusive signed axis range and returns a dynamic shape.
+    pub fn flatten_range(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<
+                op::FlattenExact,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
+        self.flatten_runtime(start, end)
+    }
+
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
     pub fn try_concat_slice(
@@ -1508,6 +1519,21 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             self._device.clone(),
             self._grad.clone(),
         )
+    }
+
+    /// Concatenates tensors along a signed runtime axis.
+    pub fn concat_axis<S2>(
+        &self,
+        other: &Tensor<S2, B, K, G>,
+        axis: isize,
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        S2: Shape,
+        B: Execute<op::ConcatExact> + Capabilities,
+        <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+    {
+        let axis = crate::shapes::idx::AxisSelector::new(&[axis]).normalize(self.rank())?[0];
+        self.try_concat(other, axis)
     }
 
     /// Dynamically stacks a slice of tensors along `dim`.

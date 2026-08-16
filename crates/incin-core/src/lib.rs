@@ -272,4 +272,12 @@ pub mod prelude {
     pub use typenum;
 }
 
+/// Structural shape cursors retained for low-level and legacy integrations.
+/// Ordinary application code should prefer signed numeric axis selectors.
+pub mod advanced {
+    pub use crate::shapes::prelude::{
+        At, FromEnd, Here, Next, ReduceAt, ReduceKeepAt, RemoveAt, SwapAt,
+    };
+}
+
 pub use incin_macros::axis;

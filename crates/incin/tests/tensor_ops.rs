@@ -96,10 +96,18 @@ fn signed_axis_selectors_cover_runtime_and_axis_macro_paths() -> Result<()> {
     let runtime = tensor.sum_runtime(-1)?;
     let macro_selected = tensor.sum_axis(axis!(-1))?;
     let compile_time = tensor.sum::<-1>()?;
+    let mean = tensor.mean_axis(axis!(-1))?;
+    let max = tensor.max_keepdim_axis(axis!(0))?;
+    let min = tensor.min_axis(0isize)?;
+    let argmax = tensor.argmax_axis(axis!(-1))?;
 
     assert_eq!(runtime.to_vec1::<f32>()?, vec![6.0, 15.0]);
     assert_eq!(macro_selected.to_vec1::<f32>()?, vec![6.0, 15.0]);
     assert_eq!(compile_time.to_vec1::<f32>()?, vec![6.0, 15.0]);
+    assert_eq!(mean.to_vec1::<f32>()?, vec![2.0, 5.0]);
+    assert_eq!(max.to_vec1::<f32>()?, vec![4.0, 5.0, 6.0]);
+    assert_eq!(min.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0]);
+    assert_eq!(argmax.to_vec1::<u32>()?, vec![2, 2]);
     Ok(())
 }
 
@@ -297,6 +305,8 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     let t3 = Tensor::<s![2, 2, 2], CpuBackendImpl>::ones(())?;
     let f_part = t3.flatten::<Next<Here>, Next<Next<Here>>>()?;
     assert_eq!(f_part.dims().as_ref(), &[2, 4]);
+    let f_runtime = t3.flatten_range(-2, -1)?;
+    assert_eq!(f_runtime.dims().as_ref(), &[2, 4]);
 
     Ok(())
 }
@@ -338,6 +348,9 @@ fn test_indexing_concat() -> Result<()> {
     let c1 = t1.concat::<s![2, 2], incin::advanced::Next<incin::advanced::Here>>(&t2)?;
     assert_eq!(c1.dims().dims(), &[2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
+
+    let c_runtime = t1.concat_axis(&t2, -1)?;
+    assert_eq!(c_runtime.dims().as_ref(), &[2, 4]);
 
     Ok(())
 }
