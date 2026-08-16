@@ -97,7 +97,6 @@ fn push_compiled_support(
 cpu_compiled_operations!(compiled_support_report);
 
 /// Returns the canonical metadata for operations admitted by compiled CPU.
-#[must_use]
 pub fn compiled_support() -> core::result::Result<Vec<CpuCompiledSupport>, &'static str> {
     compiled_support_report_impl()
 }
@@ -400,7 +399,7 @@ where
     let logical_inputs = inputs
         .iter()
         .map(|storage| incin_core::exec::catalog::LogicalTensorMeta {
-            shape: Some(storage.shape.clone().into()),
+            shape: Some(storage.shape.clone()),
             dtype: Some(storage.dtype),
             device: Some(storage.device),
         })

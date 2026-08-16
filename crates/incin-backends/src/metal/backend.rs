@@ -2905,6 +2905,10 @@ impl<D: Device> MetalBackendImpl<D> {
         Err(unsupported("conv2d"))
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "matches the backend operation contract shared by CPU, CUDA, and Metal"
+    )]
     pub fn conv_transpose2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _w: &<Self as StorageBackend>::Storage<K>,

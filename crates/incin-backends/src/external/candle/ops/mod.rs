@@ -8,6 +8,5 @@ mod float;
 mod loss;
 mod module;
 pub(crate) mod numeric;
-mod quant;
 mod reduce;
 mod tensor;

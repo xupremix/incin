@@ -14,19 +14,6 @@ pub fn candle_readback_error(error: candle_core::Error) -> Error {
 }
 
 impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
-    // Candle has native equivalents for most of these, but this adapter does
-    // not route them yet. Declaring the gap here keeps it visible instead of
-    // leaving it to a trait default that reads as full coverage.
-    crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
-        repeat, pad, triu, tril, diag,
-        cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
-        logical_and, logical_or, logical_not,
-        sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
-        addmm, bmm, scaled_dot_product_attention,
-        unfold, pixel_shuffle, group_norm, instance_norm,
-    }
-
     /// Matrix-multiplies `lhs` and `rhs`. For operands with more than 3
     /// dimensions (which candle's `broadcast_matmul` can't handle directly),
     /// manually broadcasts the leading batch dimensions, flattens them into

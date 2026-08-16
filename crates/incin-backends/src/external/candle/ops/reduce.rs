@@ -5,12 +5,6 @@ use crate::external::candle::executor::CandleStorage;
 use crate::external::*;
 
 impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
-    // This adapter does not route candle's product or cumulative sum yet.
-    crate::unsupported::unsupported_reduction_ops! {
-        all: prod_all;
-        dim: prod_dim, cumsum;
-    }
-
     /// Sums all elements into a scalar tensor.
     pub fn sum_all<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,

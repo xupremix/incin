@@ -20,7 +20,7 @@ use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
     TensorMeta, UnsupportedReason,
 };
-use incin_core::shapes::{OperationKind, Shape, ShapeBuf, StrideBuf};
+use incin_core::shapes::{OperationKind, ShapeBuf, StrideBuf};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DType;
 

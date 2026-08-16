@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **Candle adapter cleanup:** Removed unused unsupported-operation stubs and
+  quantization placeholders from the legacy inherent surface. Unsupported
+  capabilities remain represented by the descriptor capability registry.
 - **`must_use` signal:** Removed 40 redundant method and function annotations
   whose return types were already `Option` or `Result`, while retaining
   annotations on builders, constructors, and semantically important values.

@@ -224,6 +224,10 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
 
     /// 2-D transposed convolution of `t` with kernel `weight`; the bias
     /// and groups arguments are ignored.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "matches the shared backend operation contract while Candle remains an adapter"
+    )]
     pub fn conv_transpose2d<K: incin_core::tensor::dtype::DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
