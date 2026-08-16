@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The Incin Book: tensors, autograd, models, training, and deployment.">
+  <title>The Incin Book</title>
+  <link rel="stylesheet" href="book.css">
+</head>
+<body>
+  <a class="skip-link" href="#chapter">Skip to chapter</a>
+  <header class="topbar">
+    <button id="sidebar-toggle" class="icon-button" type="button" aria-label="Toggle chapter navigation" aria-expanded="true">☰</button>
+    <a class="brand" href="#/introduction">The Incin Book</a>
+    <form id="search-form" role="search">
+      <label class="sr-only" for="search">Search the book</label>
+      <input id="search" type="search" placeholder="Search the book" autocomplete="off">
+      <div id="search-results" class="search-results" role="listbox" hidden></div>
+    </form>
+    <button id="theme-toggle" class="theme-button" type="button" aria-label="Switch theme">Dark</button>
+  </header>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar" aria-label="Chapter navigation">
+      <nav id="chapter-nav">__SIDEBAR__</nav>
+    </aside>
+    <main id="chapter" class="chapter" tabindex="-1" aria-live="polite"></main>
+  </div>
+  <footer class="chapter-nav" aria-label="Chapter navigation">
+    <a id="previous" href="#" rel="prev">← Previous</a>
+    <a id="next" href="#" rel="next">Next →</a>
+  </footer>
+  <script src="book.js" defer></script>
+</body>
+</html>

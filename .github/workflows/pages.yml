@@ -1,0 +1,54 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "docs/book/**"
+      - "tools/check-docs.py"
+      - "tools/check-markdown-links.py"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+
+env:
+  MDBOOK_VERSION: 0.4.52
+
+jobs:
+  build:
+    name: Build documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install mdBook
+        run: cargo install mdbook --version "${MDBOOK_VERSION}" --locked
+      - name: Build and validate documentation
+        run: |
+          set -euo pipefail
+          mdbook build docs/book
+          python3 tools/check-docs.py
+          python3 tools/check-markdown-links.py
+          python3 docs/book/build_site.py
+          node --check docs/book/site/book.js
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/book/site
+
+  deploy:
+    name: Deploy documentation site
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

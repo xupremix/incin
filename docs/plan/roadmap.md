@@ -68,11 +68,11 @@ PRF-003 (simd_lanes const fn)
 
 | Task | What | Expected gain | Effort |
 |------|------|---------------|--------|
-| [PRF-003](docs/plan/tasks/PRF-003.md) | `simd_lanes<T>()` compile-time lane constant | Indirect enabler; 10–30% from eliminated branch | Low |
-| [PRF-004](docs/plan/tasks/PRF-004.md) | `TypedKernel<T>` — kill f64 widening in unary ops | **4–8× on bf16/f16; 2–3× on f32** | Medium |
-| [PRF-005](docs/plan/tasks/PRF-005.md) | `tile_2d` cache-blocking + autotune tile selection | **3–8× matmul/conv off BLAS path** | Low–Medium |
-| [PRF-006](docs/plan/tasks/PRF-006.md) | `vectorize!` combinator for reduce/norm/pool/conv | **3–8× on all currently-scalar ops** | Medium |
-| [TUN-004](docs/plan/tasks/TUN-004.md) | `#[autotune(...)]` proc-macro to expose tuning infra | **15–40% mean improvement** | Medium |
+| [PRF-003](tasks/PRF-003.md) | `simd_lanes<T>()` compile-time lane constant | Indirect enabler; 10–30% from eliminated branch | Low |
+| [PRF-004](tasks/PRF-004.md) | `TypedKernel<T>` — kill f64 widening in unary ops | **4–8× on bf16/f16; 2–3× on f32** | Medium |
+| [PRF-005](tasks/PRF-005.md) | `tile_2d` cache-blocking + autotune tile selection | **3–8× matmul/conv off BLAS path** | Low–Medium |
+| [PRF-006](tasks/PRF-006.md) | `vectorize!` combinator for reduce/norm/pool/conv | **3–8× on all currently-scalar ops** | Medium |
+| [TUN-004](tasks/TUN-004.md) | `#[autotune(...)]` proc-macro to expose tuning infra | **15–40% mean improvement** | Medium |
 
 ### Benchmark workflow (applies to all tasks)
 
@@ -152,7 +152,7 @@ reduction for a transformer forward pass with no change to kernel performance.
 
 ### Mojo (already documented in detail)
 
-See [mojo_inspiration.md](mojo_inspiration.md) and the task files above.
+See the task files above for the concrete proposals.
 The short list: `simd_lanes` (PRF-003), typed kernels (PRF-004), tiling
 (PRF-005), `vectorize!` (PRF-006), `#[autotune]` (TUN-004).
 
@@ -640,4 +640,3 @@ ONNX Runtime, TensorRT, CoreML, and every other inference engine.
 3. Operator overloading (`+`, `-`, `*`, `/`)
 4. Migration guide (markdown page, half a day)
 5. Rewrite MNIST example in 30 lines using the above
-

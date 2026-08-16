@@ -16,6 +16,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  MDBOOK_VERSION: 0.4.52
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
@@ -45,12 +46,13 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Install mdBook
-        run: cargo install mdbook --locked
+        run: cargo install mdbook --version "${MDBOOK_VERSION}" --locked
 
       - name: Build book and single-page HTML
         run: |
           set -euo pipefail
           mdbook build docs/book
+          python3 docs/book/build_site.py
           python3 docs/book/make_single_page.py
 
       - name: Archive book
@@ -60,6 +62,8 @@ jobs:
           tar -czf "incin-book-${version}.tar.gz" \
             -C docs/book/book .
           cp docs/book/book/incin-book.html "incin-book-${version}.html"
+          tar -czf "incin-book-site-${version}.tar.gz" \
+            -C docs/book/site .
 
       - name: Upload book assets
         env:

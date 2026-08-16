@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  MDBOOK_VERSION: 0.4.52
 
 permissions:
   contents: read
@@ -259,7 +260,7 @@ jobs:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc -p incin -p incin-backends -p incin-core --no-deps --no-default-features --features incin/cpu,incin/cuda,incin/wgpu,incin/telemetry,incin/external-candle
     # UX-013. `cargo test --all-targets` in the `test` job does NOT run
-    # doctests — `--all-targets` excludes them — so until this step existed no
+    # doctests; `--all-targets` excludes them, so until this step existed no
     # job compiled a single public example. That is how the workspace reached
     # seventy `ignore`-fenced examples with a green pipeline.
     # `incin-core/distributed` is named because a `cfg`-gated module's examples
@@ -361,15 +362,22 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.cargo/bin/mdbook
-        key: ${{ runner.os }}-mdbook-${{ hashFiles('docs/book/book.toml') }}
+        key: ${{ runner.os }}-mdbook-${{ env.MDBOOK_VERSION }}-${{ hashFiles('docs/book/book.toml') }}
         restore-keys: |
           ${{ runner.os }}-mdbook-
 
     - name: Install mdbook
-      run: command -v mdbook || cargo install mdbook --locked
+      run: command -v mdbook && mdbook --version | grep -F "${MDBOOK_VERSION}" || cargo install mdbook --version "${MDBOOK_VERSION}" --locked
 
     - name: Build the book
       run: mdbook build docs/book
+
+    - name: Build and validate the chaptered site
+      run: |
+        python3 tools/check-docs.py
+        python3 tools/check-markdown-links.py
+        python3 docs/book/build_site.py
+        node --check docs/book/site/book.js
 
     # Rust examples need Cargo's dependency metadata; mdbook test invokes
     # standalone rustdoc and therefore cannot validate these facade imports.

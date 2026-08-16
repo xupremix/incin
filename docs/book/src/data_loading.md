@@ -84,6 +84,7 @@ loader boundary. It returns normalized image tensors with shape
 
 ```rust,no_run
 use incin::prelude::*;
+use incin::MnistTargetExt;
 use incin_data::vision::mnist::MnistDataset;
 
 let dataset = MnistDataset::new("./data/mnist", true)?;

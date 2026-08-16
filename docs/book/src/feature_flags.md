@@ -1,6 +1,7 @@
 # Every feature flag
 
-Read off `crates/incin/Cargo.toml`. The default is `["std", "cpu"]`  -  a
+The facade feature inventory is checked against `crates/incin/Cargo.toml`.
+The default is `["std", "cpu"]`  -  a
 standard-library CPU build.
 
 ## Core
@@ -35,12 +36,12 @@ features is the one configuration that is genuinely `no_std`.
 | Feature | What it enables |
 |---|---|
 | `backend-authoring` | Extension contracts for backends and custom operations. See [Backend authoring](./backend_authoring.md). |
-| `backend-authoring` | Extension contracts for backend authors  -  `Execute`, `ExecutionRequest`, named capability views, and canonical descriptors. See [Backend authoring](./backend_authoring.md). |
 | `train` | The preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
 | `telemetry` | Backend telemetry hooks; `cargo incin doctor` also reports the run directory under this feature. |
 | `autotune` | CUDA launch autotuning. Implies `cuda`. |
 | `compiled` | Curated preview types for compiled plans and guards. Add `cpu` for the executable CPU lowering. |
 | `test-utils` | Test-only backends (`DummyBackend`) and test utilities. |
+| `hardware-tests` | Explicit hardware integration tests. These are never enabled by default. |
 
 ## Distributed
 

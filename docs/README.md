@@ -11,7 +11,7 @@ to be automatically executed. Read it first if you are new to the codebase.
 | Document | Covers |
 |---|---|
 | [GUIDE.md](GUIDE.md) | the crate map, the type-level shape system, tensor creation, the operation surface, the canonical execution architecture, the target API, backend authoring, autograd, modules, errors, feature flags, and the idioms the rest of this tree assumes. Concept-oriented: "how does the shape-proof system work" |
-| [book/src/](book/src/SUMMARY.md) | the full user-facing book, now 23 chapters. Task-oriented chapters cover the core path (tensors, autograd, building models, training, data loading, saving/loading, backends) and the reference section covers macros, feature flags, invariant/proof types, backend authoring, and experimental surfaces. Rust snippets are compiled where they are wired into doctests or fixtures; `mdbook build docs/book` checks the Markdown book itself. Generate a single self-contained HTML file with `python3 docs/book/make_single_page.py` |
+| [book/src/](book/src/SUMMARY.md) | the full user-facing book. The chapter count and hierarchy are checked from `SUMMARY.md`; `mdbook build docs/book` renders the source, `python3 docs/book/build_site.py` builds the chaptered Pages site, and `python3 docs/book/make_single_page.py` builds the separate self-contained offline artifact. |
 
 **Generated.** Written by a test from the Rust source and re-checked on every
 run. If one of these is wrong, the source is wrong. Never edit them by hand.
