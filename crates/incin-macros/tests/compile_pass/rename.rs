@@ -4,7 +4,7 @@
 //! No `use ::incin::prelude::*` anywhere below. Each macro is named through an
 //! alias, and everything the expansion needs it must reach on its own.
 use ::incin as renamed;
-use renamed::{Backend, VariableBackend};
+use renamed::backend_authoring::{Backend, VariableBackend};
 use renamed::prelude::{idx, module, s};
 
 type Shape = s![2, 3];

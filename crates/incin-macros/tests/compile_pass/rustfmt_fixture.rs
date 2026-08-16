@@ -6,7 +6,10 @@
 //! parseable as Rust, rustfmt skips it and this stops being a fixed point.
 use ::incin::experimental::mesh;
 use ::incin::prelude::*;
-use ::incin::{VariableBackend, optim::ParameterGroup};
+use ::incin::{
+    backend_authoring::{Backend, VariableBackend},
+    optim::ParameterGroup,
+};
 
 #[module]
 pub struct Formatted<B: Backend + VariableBackend> {

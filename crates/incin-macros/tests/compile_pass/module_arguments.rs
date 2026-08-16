@@ -1,7 +1,10 @@
 //! `#[module]` accepts its supported argument forms, and the struct stays usable
 //! as an ordinary type after each.
 use ::incin::prelude::*;
-use ::incin::{optim::ParameterGroup, VariableBackend};
+use ::incin::{
+    backend_authoring::{Backend, VariableBackend},
+    optim::ParameterGroup,
+};
 
 #[module]
 pub struct Plain<B: Backend + VariableBackend> {
