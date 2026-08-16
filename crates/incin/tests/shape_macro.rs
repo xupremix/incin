@@ -6,6 +6,7 @@
 //! it exists to preserve, so each case pins the resulting `Tensor` type.
 
 #![cfg(feature = "cpu")]
+#![allow(clippy::type_complexity)]
 
 use incin::prelude::*;
 use incin::types::{DimCons, Nil};

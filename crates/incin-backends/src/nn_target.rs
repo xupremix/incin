@@ -909,6 +909,7 @@ where
         let ib = self.input_bias_init;
         let hb = self.hidden_bias_init;
 
+        #[allow(clippy::type_complexity)]
         let make_wi = |weight_init: incin_core::nn::init::Init,
                        bias_init: incin_core::nn::init::Init|
          -> Result<
@@ -924,6 +925,7 @@ where
             Ok(builder.init(target)?.into())
         };
 
+        #[allow(clippy::type_complexity)]
         let make_wh = |weight_init: incin_core::nn::init::Init,
                        bias_init: incin_core::nn::init::Init|
          -> Result<

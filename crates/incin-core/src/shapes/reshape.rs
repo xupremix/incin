@@ -93,7 +93,7 @@ impl<Source, const N: usize> ReshapeSpec<Source> for [usize; N] where Source: Dy
 
 impl<Source> ReshapeSpec<Source> for alloc::vec::Vec<usize> where Source: DynShape {}
 
-impl<'a, Source> ReshapeSpec<Source> for &'a [usize] where Source: DynShape {}
+impl<Source> ReshapeSpec<Source> for &[usize] where Source: DynShape {}
 
 #[cfg(test)]
 /// `tests`.

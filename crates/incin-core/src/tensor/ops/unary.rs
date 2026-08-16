@@ -531,8 +531,8 @@ where
     }
 }
 
-impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> core::ops::Neg
-    for &'a Tensor<S, B, K, G>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> core::ops::Neg
+    for &Tensor<S, B, K, G>
 where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,

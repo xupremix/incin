@@ -6,6 +6,7 @@
 //! than evidence it compiles.
 
 #![cfg(feature = "cpu")]
+#![allow(clippy::type_complexity)]
 
 // `s!` expands to `::incin::prelude::…`, which does not resolve inside this
 // crate. The repo's own doctests use the same alias.
