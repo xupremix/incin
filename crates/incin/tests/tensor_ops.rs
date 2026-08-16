@@ -320,12 +320,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
     // transpose
-    let tr_static: Tensor<incin::prelude::Ranked<incin::typenum::U2>, CpuBackendImpl> =
-        t.clone()
-            .transpose::<incin::advanced::Here, incin::advanced::Next<incin::advanced::Here>>(
-                axis!(0),
-                axis!(1),
-            )?;
+    let tr_static: Tensor<s![3, 2], CpuBackendImpl> = t.clone().transpose(axis!(0), axis!(1))?;
     assert_eq!(tr_static.dims().dims(), &[3, 2]);
     let tr = t.clone().transpose_runtime(0, 1)?;
     assert_eq!(tr.dims().dims(), &[3, 2]);
@@ -350,16 +345,16 @@ fn test_indexing_concat() -> Result<()> {
     let t2 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
 
     // concat dim 0
-    let c0 = t1.clone().concat::<s![2, 2], incin::advanced::Here>(&t2)?;
+    let c0: Tensor<s![4, 2], CpuBackendImpl> = t1.clone().concat(&t2, axis!(0))?;
     assert_eq!(c0.dims().dims(), &[4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
 
     // concat dim 1
-    let c1 = t1.concat::<s![2, 2], incin::advanced::Next<incin::advanced::Here>>(&t2)?;
+    let c1: Tensor<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(1))?;
     assert_eq!(c1.dims().dims(), &[2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
 
-    let c_runtime = t1.concat_axis(&t2, -1)?;
+    let c_runtime: Tensor<Ranked<incin::typenum::U2>, CpuBackendImpl> = t1.concat(&t2, -1isize)?;
     assert_eq!(c_runtime.dims().as_ref(), &[2, 4]);
 
     Ok(())

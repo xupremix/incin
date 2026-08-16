@@ -23,7 +23,7 @@ fn test_concat_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![4, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
 
-    let _out = t1.concat::<s![4, 3], Here>(&t2).unwrap();
+    let _out = t1.concat_structural::<s![4, 3], Here>(&t2).unwrap();
     type Out = <s![2, 3] as ConcatShape<s![4, 3], Here>>::Output;
     type Expected =
         DimCons<<typenum::U2 as core::ops::Add<typenum::U4>>::Output, DimCons<typenum::U3, Nil>>;

@@ -51,6 +51,60 @@ pub trait FlattenSelector<S: Shape> {
     fn resolve(&self, rank: usize) -> Result<(usize, usize)>;
 }
 
+/// Selects the axis used by a two-tensor concatenation.
+pub trait ConcatSelector<S: Shape, S2: Shape> {
+    type Output: Shape;
+
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, S2, C> ConcatSelector<S, S2> for StaticAxis<C>
+where
+    S: Shape + DynShape + crate::shapes::concat::ConcatShape<S2, C>,
+    S2: Shape,
+    C: StaticCursor,
+    <S as crate::shapes::concat::ConcatShape<S2, C>>::Output: Shape,
+{
+    type Output = <S as crate::shapes::concat::ConcatShape<S2, C>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        self.normalize(rank)?.into_iter().next().ok_or_else(|| {
+            crate::err::Error::Msg("static axis selector resolved to no axis".to_string())
+        })
+    }
+}
+
+impl<S, S2> ConcatSelector<S, S2> for isize
+where
+    S: Shape + RuntimeRankProjection,
+    S2: Shape,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Msg("runtime axis selector resolved to no axis".into())
+            })
+    }
+}
+
+impl<S, S2, Tag> ConcatSelector<S, S2> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + RuntimeRankProjection + crate::shapes::idx::NamedAxisLookup<Tag>,
+    S2: Shape,
+    Tag: crate::shapes::AxisTag,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 impl<S, L, R> FlattenSelector<S>
     for (
         crate::shapes::idx::StaticAxis<L>,
@@ -1199,12 +1253,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         _left: StaticAxis<L>,
         _right: StaticAxis<R>,
-    ) -> Result<Tensor<S::Keep, B, K, G>>
+    ) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
     where
         L: StaticCursor,
         R: StaticCursor,
-        S: RuntimeRankProjection,
-        S::Keep: Shape + DynShape,
+        S: SwapAxes<L, R>,
+        <S as SwapAxes<L, R>>::Output: Shape + DynShape,
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
@@ -1214,12 +1268,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let second = axes[1];
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(first, second);
-        let output_shape = ShapeValue::<S::Keep>::try_new(ShapeBuf::from_slice(&out_dims))
-            .map_err(crate::err::Error::Shape)?;
+        let output_shape =
+            ShapeValue::<<S as SwapAxes<L, R>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
+                .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad).restrict(|| {
-            dispatch::execute_shaped::<op::TransposeExact, B, S::Keep>(
+            dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
                 &context,
                 TransposeAttributes { first, second },
                 &[input],
@@ -1622,10 +1677,30 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Structurally concatenates along a cursor axis, preserving the exact
-    /// recursive shape output at arbitrary rank.
+    /// Concatenates two tensors along a static, named, or runtime axis.
+    ///
+    /// Static selectors preserve the exact shape algebra output. Runtime and
+    /// named selectors preserve the input rank when the input shape carries
+    /// rank information.
+    pub fn concat<S2, A>(
+        &self,
+        other: &Tensor<S2, B, K, G>,
+        axis: A,
+    ) -> Result<Tensor<<A as ConcatSelector<S, S2>>::Output, B, K, G>>
+    where
+        S2: Shape,
+        A: ConcatSelector<S, S2>,
+        <A as ConcatSelector<S, S2>>::Output: Shape,
+        B: Execute<op::ConcatExact> + Capabilities,
+        <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+    {
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        self.concat_resolved::<S2, <A as ConcatSelector<S, S2>>::Output>(other, dim)
+    }
+
+    /// Advanced structural concatenation retained for shape-proof internals.
     #[allow(clippy::type_complexity)]
-    pub fn concat<S2, Axis>(
+    pub fn concat_structural<S2, Axis>(
         &self,
         other: &Tensor<S2, B, K, G>,
     ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, G>>
@@ -1691,6 +1766,20 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
+        self.concat_resolved::<S2, Dyn>(other, dim)
+    }
+
+    fn concat_resolved<S2, Out>(
+        &self,
+        other: &Tensor<S2, B, K, G>,
+        dim: usize,
+    ) -> Result<Tensor<Out, B, K, G>>
+    where
+        S2: Shape,
+        Out: Shape,
+        B: Execute<op::ConcatExact> + Capabilities,
+        <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+    {
         let rank = self.shape_buf().rank();
         let other_rank = other.shape_buf().rank();
         if other_rank != rank {
@@ -1737,7 +1826,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 operation: OperationKind::Concat,
                 expression: "concat extent",
             })?;
-        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+        let output_shape = ShapeValue::<Out>::try_new(ShapeBuf::from_slice(&out_shape))
             .map_err(crate::err::Error::Shape)?;
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(&self.inner),
@@ -1746,7 +1835,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                dispatch::execute_shaped::<op::ConcatExact, B, Dyn>(
+                dispatch::execute_shaped::<op::ConcatExact, B, Out>(
                     &context,
                     crate::exec::catalog::AxisAttributes { axis: dim },
                     &inputs,
@@ -1763,7 +1852,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
-    /// Concatenates tensors along a signed runtime axis.
+    /// Legacy signed-axis spelling. Prefer [`Self::concat`] with an `isize`.
+    #[doc(hidden)]
     pub fn concat_axis<S2>(
         &self,
         other: &Tensor<S2, B, K, G>,

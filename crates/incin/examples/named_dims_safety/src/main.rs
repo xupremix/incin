@@ -8,7 +8,6 @@
 //! Run with `cargo run -p named_dims_safety`.
 #![allow(clippy::type_complexity)]
 
-use incin::advanced::{Here, Next};
 use incin::prelude::*;
 
 dim!(Batch, Seq, Feature);
@@ -17,7 +16,7 @@ dim!(Batch, Seq, Feature);
 /// the output of some per-token feature projection, ready to feed into a
 /// classifier head.
 fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
-    x.sum_at::<Next<Here>>().unwrap()
+    x.sum(axis!(1)).unwrap()
 }
 
 fn main() -> incin::Result<()> {
@@ -51,7 +50,7 @@ fn main() -> incin::Result<()> {
     // this isn't a toy that only works for one hand-picked function.
 
     // Transpose swaps both dims' *types*, not just their runtime values:
-    let transposed = projected.transpose_runtime(0, 1).unwrap();
+    let transposed = projected.transpose(axis!(0), axis!(1)).unwrap();
     println!("transposed shape: {:?}", transposed.dims());
 
     // Concatenating two (Batch, 4)-shaped tensors along the literal axis
@@ -59,7 +58,7 @@ fn main() -> incin::Result<()> {
     // an op it never even participates in the arithmetic of:
     let more: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
     let half: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
-    let joined: Tensor<s![Batch, 8]> = half.concat::<s![Batch, 4], Next<Here>>(&more).unwrap();
+    let joined: Tensor<s![Batch, 8]> = half.concat(&more, axis!(1)).unwrap();
     println!("joined shape: {:?}", joined.dims());
 
     // matmul carries `Batch` straight through too — batched matrix

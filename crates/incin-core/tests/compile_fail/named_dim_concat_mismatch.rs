@@ -11,5 +11,5 @@ fn main() {
     // even though nothing here says they're a different runtime size.
     let a: Tensor<s![Batch, 4], DummyBackend<Cpu>> = Tensor::zeros((32usize, ())).unwrap();
     let b: Tensor<s![OtherBatch, 8], DummyBackend<Cpu>> = Tensor::zeros((32usize, ())).unwrap();
-    let _ = a.concat::<s![OtherBatch, 8], Next<Here>>(&b);
+    let _ = a.concat_structural::<s![OtherBatch, 8], Next<Here>>(&b);
 }
