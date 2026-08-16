@@ -53,37 +53,49 @@ their panic message when a runtime broadcast or backend check fails. Use the
 `try_add`, `try_sub`, `try_mul`, `try_div`, and `try_neg` methods when the
 failure must remain a recoverable `Result`.
 
-## Compile-time axis selectors
+## Axis selectors
 
-Reductions can select a numeric axis with a const generic or with a selector
-value. Structural cursor methods remain an advanced escape hatch when the
-output shape can be proven statically. Ordinary selector methods return the
-runtime shape that is available after resolving the axis.
+Reductions accept one selector value for static axes, named axes, and runtime
+signed axes. Structural cursor methods remain an advanced escape hatch for
+authoring low-level shape operations. Static selectors preserve the output
+shape at the type level, while named and runtime selectors use the shape facts
+available after resolving the axis.
 
 ```rust,no_run
 use incin::prelude::*;
 
 let x = Cpu.ones(shape![4, 8, 16])?;
-let summed = x.sum::<1>()?;
-let kept = x.sum_keepdim_axis(axis!(-2))?;
-let first = x.sum_axis(axis!(0))?;
-let indices = x.argmax::<2>()?;
-let minima = x.argmin::<0>()?;
-let means = x.mean_axis(axis!(-1))?;
-let maxima = x.max_keepdim_axis(axis!(0))?;
-let minima_by_value = x.min_axis(axis!(1))?;
-let argmax = x.argmax_axis(axis!(-1))?;
+let summed = x.sum(axis!(1))?;
+let kept = x.sum_keepdim(axis!(-2))?;
+let first = x.sum(0isize)?;
+let indices = x.argmax(axis!(2))?;
+let minima = x.argmin(0isize)?;
+let means = x.mean(axis!(-1))?;
+let maxima = x.max_keepdim(axis!(0))?;
+let minima_by_value = x.min(axis!(1))?;
+let argmax = x.argmax(axis!(-1))?;
 let flattened = x.flatten_range(1, -1)?;
 # Ok::<(), incin::Error>(())
 ```
 
 Numeric axes accept arbitrary signed `isize` values, including negative axes,
-without a finite lookup table. Use `axis!(...)` with `sum_axis` or
-`sum_keepdim_axis` when the selector is chosen as a value. Named axes remain
-available through `sum_named` and `sum_keepdim_named` when the axis identity
-matters more than its numeric position. Runtime selectors validate their
-normalized position against the tensor rank. `mean_axis`, `max_axis`,
-`min_axis`, and their keep-dimension forms follow the same selector rules.
+without a finite lookup table. Pass `axis!(...)` to any reduction or pass a
+runtime `isize` directly. Named axes use the same methods when the axis
+identity matters more than its numeric position:
+
+```rust,no_run
+use incin::prelude::*;
+
+dim!(Batch, Channels, Width);
+let x = Cpu.ones(shape![Batch, Channels, Width])?;
+let channels = x.sum(axis!(Channels))?;
+let kept = x.mean_keepdim(axis!(Channels))?;
+# Ok::<(), incin::Error>(())
+```
+
+Runtime selectors validate their normalized position against the tensor rank.
+`mean`, `max`, `min`, and their keep-dimension forms follow the same selector
+rules.
 `flatten_range` and `concat_axis` use the same signed runtime axis convention.
 For generic known-rank runtime shapes, `Ranked<R>` also provides
 `sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank

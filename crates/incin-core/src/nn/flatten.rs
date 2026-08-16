@@ -14,6 +14,26 @@ use core::marker::PhantomData;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Flatten<Start, End>(PhantomData<fn() -> (Start, End)>);
 
+/// Runtime-axis flattening module for ordinary model code.
+///
+/// The inclusive axis range uses signed indices, so `FlattenAxes::new(1, -1)`
+/// flattens every dimension after a leading batch axis without exposing proof
+/// cursor types. The output shape is `Dyn` because the selected positions are
+/// runtime values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FlattenAxes {
+    start: isize,
+    end: isize,
+}
+
+impl FlattenAxes {
+    /// Creates a checked runtime-axis flattening module.
+    #[must_use]
+    pub const fn new(start: isize, end: isize) -> Self {
+        Self { start, end }
+    }
+}
+
 impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B>
     for Flatten<Start, End>
 {
@@ -29,6 +49,25 @@ impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::VisitPar
 impl<Start, End> Flatten<Start, End> {
     pub fn new() -> Self {
         Self(PhantomData)
+    }
+}
+
+impl<S, B, K, G> Module<Tensor<S, B, K, G>> for FlattenAxes
+where
+    S: Shape + DynShape,
+    B: crate::tensor::backend::VariableBackend
+        + crate::backend_authoring::Execute<
+            crate::backend_authoring::op::FlattenExact,
+            Output = <B as crate::backend_authoring::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+{
+    type Output = Tensor<Dyn, B, K, G>;
+    type Error = crate::err::Error;
+
+    fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
+        x.flatten_runtime(self.start, self.end)
     }
 }
 

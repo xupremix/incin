@@ -348,20 +348,20 @@ fn the_index_returning_reductions_record_nothing_even_on_grad_tensors() {
     // public method could not succeed at all. The kernel builds the index
     // dtype it is asked for now, so the two agree and the results are
     // unwrapped and checked.
-    assert_eq!(recorded(|| t.argmax::<1>().unwrap()), 0);
+    assert_eq!(recorded(|| t.argmax(axis!(1)).unwrap()), 0);
     assert_eq!(recorded(|| t.argmax_runtime(None).unwrap()), 0);
-    assert_eq!(recorded(|| t.argmin::<1>().unwrap()), 0);
+    assert_eq!(recorded(|| t.argmin(axis!(1)).unwrap()), 0);
     assert_eq!(recorded(|| t.argmin_runtime(None).unwrap()), 0);
 
     // Row 0 is [1, 5, 3] and row 1 is [4, 2, 6], so the maxima sit at 1 and 2
     // and the minima at 0 and 1. Asserting the values rather than only the
     // tape count is what makes the unwrap above worth having.
     assert_eq!(
-        t.argmax::<1>().unwrap().to_vec1::<u32>().unwrap(),
+        t.argmax(axis!(1)).unwrap().to_vec1::<u32>().unwrap(),
         vec![1, 2]
     );
     assert_eq!(
-        t.argmin::<1>().unwrap().to_vec1::<u32>().unwrap(),
+        t.argmin(axis!(1)).unwrap().to_vec1::<u32>().unwrap(),
         vec![0, 1]
     );
 }

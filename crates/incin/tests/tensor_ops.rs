@@ -93,13 +93,13 @@ fn signed_axis_selectors_cover_runtime_and_axis_macro_paths() -> Result<()> {
     let tensor =
         Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
-    let runtime = tensor.sum_runtime(-1)?;
-    let macro_selected = tensor.sum_axis(axis!(-1))?;
-    let compile_time = tensor.sum::<-1>()?;
-    let mean = tensor.mean_axis(axis!(-1))?;
-    let max = tensor.max_keepdim_axis(axis!(0))?;
-    let min = tensor.min_axis(0isize)?;
-    let argmax = tensor.argmax_axis(axis!(-1))?;
+    let runtime = tensor.sum(-1isize)?;
+    let macro_selected = tensor.sum(axis!(-1))?;
+    let compile_time = tensor.sum(axis!(-1))?;
+    let mean = tensor.mean(axis!(-1))?;
+    let max = tensor.max_keepdim(axis!(0))?;
+    let min = tensor.min(0isize)?;
+    let argmax = tensor.argmax(axis!(-1))?;
 
     assert_eq!(runtime.to_vec1::<f32>()?, vec![6.0, 15.0]);
     assert_eq!(macro_selected.to_vec1::<f32>()?, vec![6.0, 15.0]);
@@ -253,11 +253,11 @@ fn test_reduction_sum() -> Result<()> {
     // sum_all
     assert_eq!(to_vec(&t.clone().sum_all()?.into_dyn())[0], 21.0);
     // sum_dim (0)
-    let s0 = t.clone().sum::<0>()?;
+    let s0 = t.clone().sum(axis!(0))?;
     assert_eq!(s0.rank(), 1);
     assert_eq!(to_vec(&s0.into_dyn()), vec![5.0, 7.0, 9.0]);
     // sum_keepdim (1)
-    let s1 = t.sum_keepdim::<1>()?;
+    let s1 = t.sum_keepdim(axis!(1))?;
     assert_eq!(s1.rank(), 2);
     assert_eq!(s1.dims().dims(), &[2, 1]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![6.0, 15.0]);

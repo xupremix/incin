@@ -188,7 +188,7 @@ pub mod prelude {
         conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d},
         dropout::Dropout,
         embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding},
-        flatten::Flatten,
+        flatten::{Flatten, FlattenAxes},
         init::{self, Fan, Init, InitContext, InitPlan, ParameterRole},
         layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm},
         linear::{Linear, LinearBuilder, LinearShape, linear},
@@ -216,18 +216,17 @@ pub mod prelude {
     pub use incin_macros::{axis, idx, mesh, module, s, shape};
 
     pub use super::shapes::prelude::{
-        AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisKey, AxisSchema,
-        AxisSelector, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedNumel,
-        ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons, DimIdx,
-        DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, FromEnd,
-        HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup,
-        NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape, ProductDims,
-        RankExpectation, Ranked, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt, ReplaceLastDim,
-        ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeArgs, ShapeBuf, ShapeError,
-        ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget, SpatialConv1d, SpatialConv2d,
-        SpatialOut, StackShape, StaticAxis, StrideBuf, StructuralConcatShape, SwapAt, ToAxisIndex,
-        TryConcatShape, TryReshape, broadcast_dim_slices, checked_numel_from_dims,
-        shape_buf_from_dims, spatial_out_size,
+        AdaptiveAvgPool2dShape, AppendDim, Axis, AxisIdentity, AxisKey, AxisSchema, AxisSelector,
+        AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedNumel, ConcatShape,
+        ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons, DimIdx, DimensionConstraint,
+        DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, HasChannels1D, HasChannels2D,
+        INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup, NamedAxisSelector, NamedDim, Nil,
+        OperationKind, Pool2dShape, ProductDims, RankExpectation, Ranked, ReplaceAt,
+        ReplaceLastDim, ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeArgs, ShapeBuf,
+        ShapeError, ShapeSpec, ShapeValue, Slice, SliceIdx, SliceTarget, SpatialConv1d,
+        SpatialConv2d, SpatialOut, StackShape, StaticAxis, StrideBuf, StructuralConcatShape,
+        SwapAt, ToAxisIndex, TryConcatShape, TryReshape, broadcast_dim_slices,
+        checked_numel_from_dims, shape_buf_from_dims, spatial_out_size,
     };
     #[cfg(feature = "distributed")]
     pub use super::tensor::prelude::PlacedTensorError;
@@ -264,6 +263,7 @@ pub mod prelude {
     pub use crate::optim::{CosineAnnealingLR, StepLR};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
+    pub use crate::tensor::ops::reduce::ReduceSelector;
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
     pub use alloc::format;

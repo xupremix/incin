@@ -130,7 +130,7 @@ fn main() -> Result<()> {
     let b = Cpu.randn(shape![3])?;
     let sum = &a + &b;
     let reshaped = sum.reshape(shape![3, 2])?;
-    let reduced = reshaped.sum_keepdim_axis(axis!(-1))?;
+    let reduced = reshaped.sum_keepdim(axis!(-1))?;
     let _ = reduced;
     Ok(())
 }

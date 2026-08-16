@@ -9,7 +9,7 @@ use incin::prelude::*;
 
 fn main() -> Result<()> {
     let logits = tensor![[2.0_f32, 1.0], [0.5, 3.0]]?;
-    let preds_idx = logits.argmax::<1>()?.to_vec1::<u32>()?; // argmax's index dtype defaults to u32
+    let preds_idx = logits.argmax(axis!(1))?.to_vec1::<u32>()?; // argmax's index dtype defaults to u32
     let preds: Vec<usize> = preds_idx.iter().map(|&v| v as usize).collect();
     let labels: Vec<usize> = vec![0, 1];
 

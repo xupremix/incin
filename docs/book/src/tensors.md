@@ -104,9 +104,9 @@ type B = DefaultBackend;
 
 let x = Tensor::<s![2, 3], B>::ones(())?;
 
-let by_row = x.sum_keepdim::<1>()?;
-let by_last_row = x.sum_keepdim_axis(axis!(-1))?;
-let idx = x.argmax::<1>()?;         // index dtype defaults to u32
+let by_row = x.sum_keepdim(axis!(1))?;
+let by_last_row = x.sum_keepdim(axis!(-1))?;
+let idx = x.argmax(axis!(1))?;         // index dtype defaults to u32
 
 // `reshape` changes the geometry and keeps the target shape in the type.
 let reshaped = x.reshape(shape![3, 2])?;

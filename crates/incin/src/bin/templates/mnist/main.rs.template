@@ -24,7 +24,7 @@ fn main() -> incin::Result<()> {
     );
 
     let model = seq![
-        Flatten::<1, 3>::new(),
+        FlattenAxes::new(1, -1),
         Linear::<Dyn, Backend>::build((784, 128))?,
         ReLU,
         Linear::<Dyn, Backend>::build((128, 10))?

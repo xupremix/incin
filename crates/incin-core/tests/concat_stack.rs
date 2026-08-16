@@ -2,6 +2,7 @@
 
 extern crate incin_core as incin;
 
+use incin_core::advanced::{Here, Next};
 use incin_core::prelude::Cpu;
 use incin_core::prelude::*;
 use incin_core::test_utils::DummyBackend;

@@ -1,4 +1,3 @@
-use incin::advanced::{Here, Next};
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
 use incin_data::{DataLoader, Dataset};
@@ -24,7 +23,7 @@ fn main() -> incin::Result<()> {
 
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
-        Flatten::<Next<Here>, Next<Next<Here>>>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
+        FlattenAxes::new(1, -1), // Flattens (B, 1, 28, 28) -> (B, 784)
         Linear::<Dyn, Backend>::build((784, 128))?,
         ReLU,
         Linear::<Dyn, Backend>::build((128, 10))?
@@ -48,8 +47,7 @@ fn main() -> incin::Result<()> {
         label_values.extend(labels.into_iter().map(f32::from));
         let images =
             Tensor::<Dyn, Backend>::from_slice(&image_values, vec![batch_size, 1, 28, 28])?;
-        let labels =
-            Tensor::<Dyn, Backend>::from_slice(&label_values, vec![batch_size])?.require_grad();
+        let labels = Tensor::<Dyn, Backend>::from_slice(&label_values, vec![batch_size])?;
         // Forward pass
         let output = model.forward(images)?;
 

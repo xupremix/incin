@@ -23,6 +23,77 @@ use crate::tensor::base::Tensor;
 use crate::tensor::dtype::{DType, DTypeId};
 use crate::tensor::grad::RequiresGrad;
 
+/// A user-facing reduction selector with a statically known or runtime axis.
+///
+/// Static selectors retain the shape algebra's output type. Runtime integer
+/// selectors intentionally use `Dyn`; known-rank callers can use the ranked
+/// methods below when they need rank preservation independent of the axis
+/// position.
+pub trait ReduceSelector<S: Shape> {
+    /// Shape after removing the selected axis.
+    type Drop: Shape;
+    /// Shape after retaining the selected axis as extent one.
+    type Keep: Shape;
+
+    /// Resolve the selector against the input rank.
+    fn resolve(&self, rank: usize) -> Result<usize>;
+}
+
+impl<S, C> ReduceSelector<S> for crate::shapes::idx::StaticAxis<C>
+where
+    S: Shape + DynShape + ReduceAt<C> + ReduceKeepAt<C>,
+    C: StaticCursor,
+    <S as ReduceAt<C>>::Output: Shape,
+    <S as ReduceKeepAt<C>>::Output: Shape,
+{
+    type Drop = <S as ReduceAt<C>>::Output;
+    type Keep = <S as ReduceKeepAt<C>>::Output;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[C::INDEX])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Shape(crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: C::INDEX.unsigned_abs(),
+                    rank,
+                })
+            })
+    }
+}
+
+impl<S: Shape> ReduceSelector<S> for isize {
+    type Drop = crate::shapes::Dyn;
+    type Keep = crate::shapes::Dyn;
+
+    fn resolve(&self, rank: usize) -> Result<usize> {
+        crate::shapes::idx::AxisSelector::new(&[*self])
+            .normalize(rank)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                crate::err::Error::Shape(crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: self.unsigned_abs(),
+                    rank,
+                })
+            })
+    }
+}
+
+impl<S, Tag> ReduceSelector<S> for crate::shapes::idx::NamedAxisSelector<Tag>
+where
+    S: Shape + DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
+    Tag: crate::shapes::AxisTag,
+{
+    type Drop = crate::shapes::Dyn;
+    type Keep = crate::shapes::Dyn;
+
+    fn resolve(&self, _rank: usize) -> Result<usize> {
+        self.resolve::<S>()
+    }
+}
+
 fn reduction_descriptor<O>(shape: &ShapeBuf, axis: usize) -> Result<Descriptor<O>>
 where
     O: CanonicalOperation + Operation<Attributes = AxisAttributes>,
@@ -80,25 +151,14 @@ macro_rules! impl_reduction_op {
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
     Tensor<S, B, K, G, P>
 {
-    /// Sums over an arbitrary signed compile-time axis.
-    pub fn sum<const AXIS: isize>(&self) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Sums over a static, named, or runtime axis selector.
+    pub fn sum<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::SumDim> + crate::exec::Capabilities,
         <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
     {
-        self.sum_runtime(AXIS)
-    }
-
-    /// Sums over a runtime or `axis!` numeric selector.
-    pub fn sum_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
-        B: Execute<op::SumDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
-    {
-        self.sum_runtime(axis.to_axis_index())
+        self.execute_reduction::<op::SumDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
     }
 
     /// Sums over a compile-time structural axis cursor.
@@ -159,127 +219,74 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
-    /// Sums over an arbitrary signed compile-time axis while retaining it.
-    pub fn sum_keepdim<const AXIS: isize>(&self) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Sums over a static, named, or runtime axis selector while retaining it.
+    pub fn sum_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        self.sum_keepdim_runtime(AXIS)
+        self.execute_reduction::<op::SumKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Sums over a runtime or `axis!` numeric selector while retaining it.
-    pub fn sum_keepdim_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the mean over a static, named, or runtime axis selector.
+    pub fn mean<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where
-        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
-    {
-        self.sum_keepdim_runtime(axis.to_axis_index())
-    }
-
-    /// Computes the mean over a signed axis selector.
-    pub fn mean_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
+        A: ReduceSelector<S>,
         B: Execute<op::MeanDim> + crate::exec::Capabilities,
         <B as Execute<op::MeanDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MeanDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MeanDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Computes the mean over a signed axis selector and retains that axis.
-    pub fn mean_keepdim_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the mean over a static, named, or runtime axis selector and retains it.
+    pub fn mean_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::MeanKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::MeanKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MeanKeepDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MeanKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Computes the maximum over a signed axis selector.
-    pub fn max_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the maximum over a static, named, or runtime axis selector.
+    pub fn max<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::MaxDim> + crate::exec::Capabilities,
         <B as Execute<op::MaxDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MaxDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MaxDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Computes the maximum over a signed axis selector and retains that axis.
-    pub fn max_keepdim_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the maximum over a static, named, or runtime axis selector and retains it.
+    pub fn max_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::MaxKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::MaxKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MaxKeepDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MaxKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Computes the minimum over a signed axis selector.
-    pub fn min_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the minimum over a static, named, or runtime axis selector.
+    pub fn min<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::MinDim> + crate::exec::Capabilities,
         <B as Execute<op::MinDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MinDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MinDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
     }
 
-    /// Computes the minimum over a signed axis selector and retains that axis.
-    pub fn min_keepdim_axis<A: crate::shapes::idx::ToAxisIndex>(
-        &self,
-        axis: A,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    /// Computes the minimum over a static, named, or runtime axis selector and retains it.
+    pub fn min_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::MinKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::MinKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis.to_axis_index()])
-            .normalize(self.shape_buf().rank())?[0];
-        self.execute_named_reduction(reduction_descriptor::<op::MinKeepDim>(
-            &self.shape_buf_value(),
-            axis,
-        )?)
+        self.execute_reduction::<op::MinKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
     /// Sums over a compile-time structural axis cursor while retaining it.
@@ -345,87 +352,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
-    /// Sums one runtime-selected axis and erases only the unavailable output
-    /// position facts.
-    pub fn sum_runtime(&self, axis: isize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    fn execute_reduction<O, Out>(&self, axis: usize) -> Result<Tensor<Out, B, K, G, P>>
     where
-        B: Execute<op::SumDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
-    {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis])
-            .normalize(self.shape_buf().rank())?
-            .into_iter()
-            .next()
-            .expect("one axis selector always yields one axis");
-        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
-        self.execute_named_reduction(descriptor)
-    }
-
-    /// Sums one runtime-selected axis while retaining it as a length-one axis.
-    pub fn sum_keepdim_runtime(&self, axis: isize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
-        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
-    {
-        let axis = crate::shapes::idx::AxisSelector::new(&[axis])
-            .normalize(self.shape_buf().rank())?
-            .into_iter()
-            .next()
-            .expect("one axis selector always yields one axis");
-        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
-        self.execute_named_reduction(descriptor)
-    }
-
-    /// Sums the axis identified by a semantic tag.
-    ///
-    /// Stable Rust cannot currently turn recursive semantic lookup into the
-    /// structural `RemoveAt` output type without overlapping implementations.
-    /// This honest fallback resolves the selector against the current shape
-    /// and returns a runtime-rank shape. Missing and duplicate names remain
-    /// typed shape errors.
-    pub fn sum_named<Tag>(
-        &self,
-        selector: crate::shapes::idx::NamedAxisSelector<Tag>,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
-        Tag: crate::shapes::AxisTag,
-        S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<op::SumDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
-    {
-        let axis = selector.resolve::<S>()?;
-        let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
-        self.execute_named_reduction(descriptor)
-    }
-
-    /// Named-axis sum retaining the selected axis as a runtime length-one
-    /// dimension.
-    pub fn sum_keepdim_named<Tag>(
-        &self,
-        selector: crate::shapes::idx::NamedAxisSelector<Tag>,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
-        Tag: crate::shapes::AxisTag,
-        S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
-        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
-    {
-        let axis = selector.resolve::<S>()?;
-        let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
-        self.execute_named_reduction(descriptor)
-    }
-
-    fn execute_named_reduction<O>(
-        &self,
-        descriptor: Descriptor<O>,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
-    where
+        Out: crate::shapes::Shape,
         O: crate::exec::catalog::CanonicalOperation
             + crate::exec::catalog::Operation<Attributes = crate::exec::catalog::AxisAttributes>,
         B: Execute<O> + crate::exec::Capabilities,
         <B as Execute<O>>::Output: Into<B::Storage<K>>,
     {
-        self.execute_named_reduction_as::<O, crate::shapes::Dyn>(descriptor)
+        self.execute_named_reduction_as::<O, Out>(reduction_descriptor::<O>(
+            &self.shape_buf_value(),
+            axis,
+        )?)
     }
 
     fn execute_named_reduction_as<O, Out>(
@@ -668,27 +606,17 @@ where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 {
-    /// Computes argmax along a compile-time numeric axis.
-    pub fn argmax<const AXIS: isize>(
-        &self,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
-    where
-        B: Execute<op::ArgMax> + crate::exec::Capabilities,
-        <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
-    {
-        self.argmax_runtime(Some(AXIS))
-    }
-
-    /// Computes argmax over an `axis!` or runtime signed selector.
-    pub fn argmax_axis<A: crate::shapes::idx::ToAxisIndex>(
+    /// Computes argmax along a static, named, or runtime axis selector.
+    pub fn argmax<A>(
         &self,
         axis: A,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
     {
-        self.argmax_runtime(Some(axis.to_axis_index()))
+        self.argmax_runtime(Some(axis.resolve(self.rank())? as isize))
     }
 
     /// Computes argmax over a runtime-selected axis.
@@ -743,27 +671,17 @@ where
         )
     }
 
-    /// Computes argmin along a compile-time signed axis.
-    pub fn argmin<const AXIS: isize>(
-        &self,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
-    where
-        B: Execute<op::ArgMin> + crate::exec::Capabilities,
-        <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
-    {
-        self.argmin_runtime(Some(AXIS))
-    }
-
-    /// Computes argmin over an `axis!` or runtime signed selector.
-    pub fn argmin_axis<A: crate::shapes::idx::ToAxisIndex>(
+    /// Computes argmin along a static, named, or runtime axis selector.
+    pub fn argmin<A>(
         &self,
         axis: A,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
+        A: ReduceSelector<S>,
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
     {
-        self.argmin_runtime(Some(axis.to_axis_index()))
+        self.argmin_runtime(Some(axis.resolve(self.rank())? as isize))
     }
 
     /// Computes argmin over a runtime-selected axis.

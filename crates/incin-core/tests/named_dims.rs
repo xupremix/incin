@@ -5,6 +5,7 @@ extern crate incin_core as incin;
 use incin_core::exec::catalog::AxisAttributes;
 use incin_core::exec::{ReduceKeepRule, ReduceRule, ShapeRule};
 use incin_core::prelude::*;
+use incin_core::shapes::ReduceKeepAt;
 use incin_core::shapes::StaticExtent;
 use incin_core::shapes::SwapAt;
 use incin_core::shapes::idx::{Here, Next};
@@ -46,10 +47,10 @@ fn named_selector_reaches_the_canonical_reduction_descriptor() {
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
-    let reduced: Tensor<Dyn, B> = tensor.sum_named(Channels::selector()).unwrap();
+    let reduced: Tensor<Dyn, B> = tensor.sum(axis!(Channels)).unwrap();
     assert_eq!(reduced.shape_buf().as_ref(), &[2]);
 
-    let kept: Tensor<Dyn, B> = tensor.sum_keepdim_named(Channels::selector()).unwrap();
+    let kept: Tensor<Dyn, B> = tensor.sum_keepdim(axis!(Channels)).unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
 }
 
@@ -59,11 +60,21 @@ fn structural_sum_rules_preserve_typed_outputs() {
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
-    let reduced = tensor.sum::<1>().unwrap();
+    let reduced = tensor.sum(axis!(1)).unwrap();
     assert_eq!(reduced.shape_buf().as_ref(), &[2]);
 
-    let kept = tensor.sum_keepdim::<1>().unwrap();
+    let kept = tensor.sum_keepdim(axis!(1)).unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
+}
+
+#[test]
+fn selector_reductions_preserve_static_drop_and_keep_shapes() {
+    type B = DummyBackend<Cpu>;
+    type S = s![Batch, Channels, Height];
+    let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize, 4usize)).unwrap();
+
+    let _: Tensor<s![Batch, Height], B> = tensor.sum(axis!(1)).unwrap();
+    let _: Tensor<s![Batch, Channels, Height = 1], B> = tensor.sum_keepdim(axis!(-1)).unwrap();
 }
 
 #[test]
@@ -86,14 +97,14 @@ fn runtime_reduction_validates_axes_beyond_inline_storage() {
     type B = DummyBackend<Cpu>;
     let tensor: Tensor<Dyn, B> = Tensor::ones(vec![1usize; 71]).unwrap();
 
-    let reduced = tensor.sum_runtime(70).unwrap();
+    let reduced = tensor.sum(70isize).unwrap();
     assert_eq!(reduced.shape_buf().rank(), 70);
 
-    let kept = tensor.sum_keepdim_runtime(70).unwrap();
+    let kept = tensor.sum_keepdim(70isize).unwrap();
     assert_eq!(kept.shape_buf().as_ref()[70], 1);
 
     assert!(matches!(
-        tensor.sum_runtime(71),
+        tensor.sum(71isize),
         Err(Error::Shape(ShapeError::InvalidAxis { axis: 71, rank: 71 }))
     ));
 }
@@ -134,7 +145,7 @@ fn named_lookup_resolves_current_position_without_storing_one() {
 #[test]
 fn named_axis_macro_expands_to_the_runtime_lookup_selector() {
     type S = s![Batch, Channels, Height, Width];
-    let selector = axis!(named Channels);
+    let selector = axis!(Channels);
     assert_eq!(selector.resolve::<S>().unwrap(), 1);
 }
 

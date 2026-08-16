@@ -1,6 +1,7 @@
 use crate::shapes::Shape;
+use crate::shapes::broadcast::ReverseShape;
 use crate::shapes::idx::{FromEnd, Here, Next, StaticCursor};
-use crate::shapes::{Dim, DimCons, RemoveAt, RemoveFromEnd, SwapAt};
+use crate::shapes::{Dim, DimCons, Dyn, RemoveAt, RemoveFromEnd, SwapAt};
 
 /// Unified selector-facing swap operation. Both positive and from-end
 /// selectors use the one structural `SwapAt` algebra.
@@ -112,6 +113,34 @@ where
     type Output = DimCons<H, <T as ReduceKeepAt<Cursor>>::Output>;
 }
 
-impl<Cursor> ReduceKeepAt<Cursor> for crate::shapes::Dyn {
+impl ReduceKeepAt<Here> for crate::shapes::Dyn {
     type Output = crate::shapes::Dyn;
+}
+
+impl<Cursor> ReduceKeepAt<Next<Cursor>> for Dyn {
+    type Output = Dyn;
+}
+
+impl<Cursor> ReduceKeepAt<FromEnd<Cursor>> for Dyn {
+    type Output = Dyn;
+}
+
+impl<H: Dim, T: Shape> ReduceKeepAt<FromEnd<Here>> for DimCons<H, T>
+where
+    DimCons<H, T>: ReverseShape,
+    <DimCons<H, T> as ReverseShape>::Output: ReduceKeepAt<Here>,
+    <<DimCons<H, T> as ReverseShape>::Output as ReduceKeepAt<Here>>::Output: ReverseShape,
+{
+    type Output = <<<DimCons<H, T> as ReverseShape>::Output as ReduceKeepAt<Here>>::Output
+        as ReverseShape>::Output;
+}
+
+impl<H: Dim, T: Shape, Cursor> ReduceKeepAt<FromEnd<Next<Cursor>>> for DimCons<H, T>
+where
+    DimCons<H, T>: ReverseShape,
+    <DimCons<H, T> as ReverseShape>::Output: ReduceKeepAt<Next<Cursor>>,
+    <<DimCons<H, T> as ReverseShape>::Output as ReduceKeepAt<Next<Cursor>>>::Output: ReverseShape,
+{
+    type Output = <<<DimCons<H, T> as ReverseShape>::Output as ReduceKeepAt<Next<Cursor>>>::Output
+        as ReverseShape>::Output;
 }

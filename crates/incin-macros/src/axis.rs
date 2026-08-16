@@ -53,7 +53,7 @@ fn cursor(value: isize) -> proc_macro2::TokenStream {
         }
         quote! { #api StaticAxis::<#path FromEnd::<#ty>>::DEFAULT }
     } else if magnitude == 0 {
-        quote! { #path Here }
+        quote! { #api StaticAxis::<#path Here>::DEFAULT }
     } else {
         let mut ty = quote! { #path Here };
         for _ in 0..magnitude {
@@ -124,6 +124,14 @@ pub(crate) fn axis(input: TokenStream) -> TokenStream {
         && let Some(AxisItem::Named(path)) = list.items.first()
     {
         return quote! { ::incin::prelude::NamedAxisSelector::<#path>::default() }.into();
+    }
+    if list.items.len() == 1
+        && let Some(AxisItem::Expr(Expr::Path(path))) = list.items.first()
+        && path.qself.is_none()
+        && path.path.segments.len() == 1
+    {
+        let tag = &path.path;
+        return quote! { ::incin::prelude::NamedAxisSelector::<#tag>::default() }.into();
     }
     if list
         .items

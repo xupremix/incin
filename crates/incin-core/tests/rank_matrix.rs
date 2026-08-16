@@ -4,7 +4,9 @@
 
 extern crate incin_core as incin;
 
+use incin_core::advanced::{Here, Next};
 use incin_core::prelude::*;
+use incin_core::shapes::ReduceAt;
 use incin_core::shapes::shape_ops::SwapAxes;
 use incin_macros::s;
 
