@@ -273,6 +273,7 @@ pub mod advanced {
     pub use crate::shapes::{
         AxisSelector, ForwardAxis, NamedAxisSelector, ReverseAxis, StaticAxis, ToAxisIndex,
     };
+    pub use crate::typenum;
     pub use incin_macros::idx;
 }
 

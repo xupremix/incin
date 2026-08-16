@@ -837,9 +837,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// use incin::prelude::*;
     /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get(vec![
-    ///     crate::tensor::ops::index::IndexSpec::Index(0),
-    ///     crate::tensor::ops::index::IndexSpec::Range(1, 3),
-    ///     crate::tensor::ops::index::IndexSpec::All,
+    ///     IndexSpec::Index(0),
+    ///     IndexSpec::Range(1, 3),
+    ///     IndexSpec::All,
     /// ])?;
     /// # Ok(()) }
     /// ```
@@ -1212,6 +1212,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # extern crate incin_core as incin;
     /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
     /// use incin::prelude::*;
+    /// use incin::advanced::idx;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
     /// ```
