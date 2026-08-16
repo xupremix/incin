@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Core advanced indexing facade:** Applied the same explicit export boundary
   to `incin_core::advanced`, keeping hidden implementation traits out of the
   downstream namespace.
+- **Public API guard:** Stable `incin` and `incin-core` facade files now fail
+  validation if a wildcard re-export is reintroduced.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.

@@ -6,6 +6,14 @@ cd "$repo_dir"
 
 python3 tools/check-public-api-baseline.py
 
+# Stable facades must name every exported item.  Internal module aggregation
+# may still use local globs, but a wildcard in either consumer-facing facade
+# would silently expand the supported API.
+if rg -n '^\s*pub use .*::\*' crates/incin/src/lib.rs crates/incin-core/src/lib.rs; then
+    echo "public API check failed: wildcard export leaked into a stable facade" >&2
+    exit 1
+fi
+
 # The ordinary facade prelude is the stable user tier. Descriptor execution is
 # the canonical public backend contract; legacy adapters are implementation-only.
 if rg -n 'pub use incin_core::prelude::[^;]*(FloatOps|NumericOps|TensorOps|CreationOps|ReductionOps|ModuleOps|LossOps|QuantizedOps|OptimizerOps)' \
