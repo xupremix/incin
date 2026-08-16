@@ -2757,6 +2757,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into `chunks` equal parts along `dim`.
+    ///
+    /// The explicit output type preserves the selector's shape proof. The
+    /// nested generic return is intentionally allowed here because replacing
+    /// it with a dynamic tensor would discard that proof.
+    #[allow(clippy::type_complexity)]
     pub fn chunk<A>(
         &self,
         chunks: usize,
@@ -2794,6 +2799,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into sections of size `split_size` along `dim`.
+    ///
+    /// The explicit output type preserves the selector's shape proof. The
+    /// nested generic return is intentionally allowed here because replacing
+    /// it with a dynamic tensor would discard that proof.
+    #[allow(clippy::type_complexity)]
     pub fn split<A>(
         &self,
         split_size: usize,

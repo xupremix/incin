@@ -1,4 +1,7 @@
 #![cfg(feature = "cpu")]
+// These explicit types are the assertions: they verify that selector-based
+// operations retain known dimensions instead of erasing them to `Dyn`.
+#![allow(clippy::type_complexity)]
 use incin::prelude::*;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
