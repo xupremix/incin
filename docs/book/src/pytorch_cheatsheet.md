@@ -19,7 +19,7 @@
 | `scheduler.step(); optim.param_groups[0]['lr']` | `sched.step(); optim.lr = sched.get_lr();` | `lr` is a public field you copy the scheduler's value into, not managed for you. |
 | `nn.MSELoss()(pred, target)` | `MSELoss::<Mean>::new().forward(&pred, &target)?` | Reduction mode (`Mean`/`Sum`/`NoneReduction`) is the loss's own type parameter. |
 | `torch.save(model.state_dict(), "m.pt")` | `save_safetensors::<B, _, _>(&model, "m.safetensors")?` | safetensors, not pickle  -  see [Saving and loading](./saving_loading.md). |
-| `DataLoader(dataset, batch_size=4)` | `DataLoader::builder(dataset).batch_size(4).build()?` | Builder setters are infallible; validation happens in `build`. The default collator returns an ordered `Vec<Item>` batch. |
+| `DataLoader(dataset, batch_size=4)` | `DataLoader::builder(dataset).batch_size(4).build()?` | Builder setters are infallible; validation happens in `build`. Scalar samples become `Vec<T>` and tuple samples are collated field-wise. |
 | `logits.argmax(dim=1)` | `logits.argmax::<1>()?` | The axis is a const generic, so ordinary code does not construct `Here` and `Next` selectors. |
 | `x.to(device)` | `x.to_device::<D2>(&device_arg)?` | Device is part of the type on the receiving end, `Tensor<S, TransferTo<D2>::Output, ...>`. |
 | `x.view(-1, 4)` / `x.reshape(...)` | `x.reshape(shape![usize, 4])?` | A static target keeps its compile-time proof. Runtime extents are checked during the reshape. |

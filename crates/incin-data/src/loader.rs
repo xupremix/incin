@@ -62,18 +62,63 @@ pub trait Collate<T>: Send + Sync {
     fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output>;
 }
 
-/// The default collation policy, which preserves every sample in a batch.
+/// The default collation policy for common scalar and tuple samples.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DefaultCollate;
 
-impl<T> Collate<T> for DefaultCollate
-where
-    T: Send + 'static,
-{
-    type Output = Vec<T>;
+macro_rules! impl_scalar_collate {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl Collate<$ty> for DefaultCollate {
+            type Output = Vec<$ty>;
 
-    fn collate(&self, batch: Vec<T>) -> BatchResult<Self::Output> {
+            fn collate(&self, batch: Vec<$ty>) -> BatchResult<Self::Output> {
+                Ok(batch)
+            }
+        })+
+    };
+}
+
+impl_scalar_collate!(
+    bool, u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, f32, f64, String
+);
+
+impl<T: Send + 'static> Collate<Vec<T>> for DefaultCollate {
+    type Output = Vec<Vec<T>>;
+
+    fn collate(&self, batch: Vec<Vec<T>>) -> BatchResult<Self::Output> {
         Ok(batch)
+    }
+}
+
+impl<A: Send + 'static, B: Send + 'static> Collate<(A, B)> for DefaultCollate {
+    type Output = (Vec<A>, Vec<B>);
+
+    fn collate(&self, batch: Vec<(A, B)>) -> BatchResult<Self::Output> {
+        let mut first = Vec::with_capacity(batch.len());
+        let mut second = Vec::with_capacity(batch.len());
+        for (a, b) in batch {
+            first.push(a);
+            second.push(b);
+        }
+        Ok((first, second))
+    }
+}
+
+impl<A: Send + 'static, B: Send + 'static, C: Send + 'static> Collate<(A, B, C)>
+    for DefaultCollate
+{
+    type Output = (Vec<A>, Vec<B>, Vec<C>);
+
+    fn collate(&self, batch: Vec<(A, B, C)>) -> BatchResult<Self::Output> {
+        let mut first = Vec::with_capacity(batch.len());
+        let mut second = Vec::with_capacity(batch.len());
+        let mut third = Vec::with_capacity(batch.len());
+        for (a, b, c) in batch {
+            first.push(a);
+            second.push(b);
+            third.push(c);
+        }
+        Ok((first, second, third))
     }
 }
 
@@ -296,6 +341,7 @@ impl<D> DataLoader<D, DefaultCollate>
 where
     D: Dataset + 'static,
     D::Item: Send + 'static,
+    DefaultCollate: Collate<D::Item>,
 {
     /// Creates a loader using [`DefaultCollate`], which returns `Vec<D::Item>`
     /// for each batch.
@@ -666,6 +712,26 @@ mod tests {
         let loader = DataLoader::from_dataset(RangeDataset(5), 2).unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
         assert_eq!(batches, vec![vec![0, 1], vec![2, 3], vec![4]]);
+    }
+
+    #[test]
+    fn default_collation_batches_tuple_fields() {
+        struct PairDataset;
+        impl Dataset for PairDataset {
+            type Item = (u32, u8);
+
+            fn len(&self) -> usize {
+                3
+            }
+
+            fn get(&self, index: usize) -> Result<Option<Self::Item>, DataError> {
+                Ok((index < 3).then_some((index as u32, index as u8)))
+            }
+        }
+
+        let loader = DataLoader::from_dataset(PairDataset, 2).unwrap();
+        let batches = collect_with_timeout((&loader).into_iter());
+        assert_eq!(batches, vec![(vec![0, 1], vec![0, 1]), (vec![2], vec![2])]);
     }
 
     #[test]

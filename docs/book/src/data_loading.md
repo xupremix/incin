@@ -60,11 +60,11 @@ let loader = DataLoader::builder(Toy)
 Custom collation remains available through `DataLoader::new` and
 `DataLoader::builder_with_collate`.
 
-The default collator is deliberately conservative. It returns
-`Vec<D::Item>` and does not guess how tuple fields should be stacked. This
-keeps arbitrary dataset items supported. Convert the returned samples to
-tensors in the training loop, or provide a custom `Collate` implementation
-when batching must also perform padding, stacking, or label conversion.
+The default collator batches scalar samples as `Vec<T>`, and batches tuple
+samples field-wise, such as `(A, B)` into `(Vec<A>, Vec<B>)`. It preserves
+vector-valued samples as `Vec<Vec<T>>`. Use a custom `Collate` implementation
+when batching must perform tensor creation, padding, or other domain-specific
+conversion.
 
 Errors are values, not end-of-epoch signals. A dataset or worker failure is
 returned as `Err(DataError)` from iteration and must be handled by the caller;
@@ -75,7 +75,7 @@ cancellation and error propagation semantics.
 
 ## A model-specific collate function
 
-The default MNIST path keeps a batch as `Vec<(Vec<f32>, u8)>`, so the example
+The default MNIST path receives `(Vec<Vec<f32>>, Vec<u8>)`, so the example
 does not require custom loader plumbing. Applications that want tensors
 created inside the loader can provide a model-specific `Collate` implementation
 like this:
