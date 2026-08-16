@@ -1,11 +1,11 @@
-error[E0277]: the trait bound `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>: FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Here>` is not satisfied
+error[E0277]: the trait bound `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>: FlattenAt<Next<Here>, Here>` is not satisfied
  --> tests/compile_fail/flatten_invalid_range.rs:9:20
   |
 9 |     let _ = tensor.flatten::<Next<Next<Here>>, Next<Here>>();
   |                    ^^^^^^^ unsatisfied trait bound
   |
-help: the trait `FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Here>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>`
-      but trait `FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shapes::Next<incin::shapes::Here>>` is implemented for it
+help: the trait `FlattenAt<Next<Here>, Here>` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>`
+      but trait `FlattenAt<Next<Here>, Next<Here>>` is implemented for it
  --> src/shapes/shape.rs
   |
   | / impl<H: Dim, T: Shape, Start, End>
@@ -13,5 +13,5 @@ help: the trait `FlattenAt<incin::shapes::Next<incin::shapes::Here>, incin::shap
   | | where
   | |     T: FlattenAt<Start, End>,
   | |_____________________________^
-  = help: for that trait implementation, expected `incin::shapes::Next<incin::shapes::Here>`, found `incin::shapes::Here`
-  = note: required for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>>` to implement `FlattenAt<incin::shapes::Next<incin::shapes::Next<incin::shapes::Here>>, incin::shapes::Next<incin::shapes::Here>>`
+  = help: for that trait implementation, expected `Next<Here>`, found `Here`
+  = note: required for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, Nil>>>` to implement `FlattenAt<Next<Next<Here>>, Next<Here>>`

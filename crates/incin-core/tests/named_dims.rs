@@ -71,10 +71,12 @@ fn structural_sum_rules_preserve_typed_outputs() {
 fn selector_reductions_preserve_static_drop_and_keep_shapes() {
     type B = DummyBackend<Cpu>;
     type S = s![Batch, Channels, Height];
+    type Dropped = s![Batch, Height];
+    type Kept = s![Batch, Channels, Height = 1];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize, 4usize)).unwrap();
 
-    let _: Tensor<s![Batch, Height], B> = tensor.sum(axis!(1)).unwrap();
-    let _: Tensor<s![Batch, Channels, Height = 1], B> = tensor.sum_keepdim(axis!(-1)).unwrap();
+    let _: Tensor<Dropped, B> = tensor.sum(axis!(1)).unwrap();
+    let _: Tensor<Kept, B> = tensor.sum_keepdim(axis!(-1)).unwrap();
 }
 
 #[test]

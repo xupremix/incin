@@ -1,7 +1,7 @@
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::prelude::*;
+use incin_core::{advanced::{Here, Next}, prelude::*};
 use incin_macros::s;
 
 fn main() {

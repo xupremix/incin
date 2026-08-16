@@ -46,6 +46,16 @@ impl<Start, End, B: crate::tensor::backend::VariableBackend> crate::nn::VisitPar
     }
 }
 
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> for FlattenAxes {
+    fn visit_parameters<V: crate::nn::ParameterVisitor<B>>(
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl<Start, End> Flatten<Start, End> {
     pub fn new() -> Self {
         Self(PhantomData)
