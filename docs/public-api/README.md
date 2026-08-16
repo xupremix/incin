@@ -12,4 +12,6 @@ API change is reviewed and the snapshot is updated in the same commit.
 The baseline intentionally covers the facade first. `incin-core` and
 `incin-backends` expose separate authoring and backend contracts; their
 explicit namespaces and architecture checks remain the review boundary while
-their public surface is being reduced incrementally.
+their public surface is being reduced incrementally. Package boundaries are
+checked independently by `tools/check-package.sh` for every top-level shipped
+crate, so this API baseline does not stand in for archive validation.
