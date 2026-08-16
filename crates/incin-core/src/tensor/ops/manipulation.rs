@@ -1298,6 +1298,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Transposes two static axis selectors while preserving the output shape.
+    #[allow(clippy::type_complexity)]
     pub fn transpose<L, R>(
         &self,
         _left: StaticAxis<L>,
@@ -1731,6 +1732,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Static selectors preserve the exact shape algebra output. Runtime and
     /// named selectors preserve the input rank when the input shape carries
     /// rank information.
+    #[allow(clippy::type_complexity)]
     pub fn concat<S2, A>(
         &self,
         other: &Tensor<S2, B, K, G>,

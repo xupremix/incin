@@ -47,12 +47,24 @@ where
     type Output = DimCons<H, <T1 as ConcatShape<T2, SubCursor>>::Output>;
 }
 
-impl<S, S2, Cursor, SR, S2R, O, Output> ConcatShape<S2, FromEnd<Cursor>> for S
+impl<S, S2, SR, S2R, O, Output> ConcatShape<S2, FromEnd<crate::shapes::idx::Here>> for S
 where
     S: Shape + ReverseShape<Output = SR>,
     S2: Shape + ReverseShape<Output = S2R>,
+    SR: ConcatShape<S2R, crate::shapes::idx::Here, Output = O>,
+    O: Shape + ReverseShape<Output = Output>,
+    Output: Shape,
+{
+    type Output = Output;
+}
+
+impl<S, S2, Cursor, SR, S2R, O, Output> ConcatShape<S2, FromEnd<crate::shapes::idx::Next<Cursor>>>
+    for S
+where
     Cursor: crate::shapes::shape::ForwardCursor,
-    SR: ConcatShape<S2R, Cursor, Output = O>,
+    S: Shape + ReverseShape<Output = SR>,
+    S2: Shape + ReverseShape<Output = S2R>,
+    SR: ConcatShape<S2R, crate::shapes::idx::Next<Cursor>, Output = O>,
     O: Shape + ReverseShape<Output = Output>,
     Output: Shape,
 {

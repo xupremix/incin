@@ -316,6 +316,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 
 #[test]
 /// Test manipulation transpose squeeze.
+#[allow(clippy::type_complexity)]
 fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
@@ -340,6 +341,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 // -----------------------------------------------------------------------------
 #[test]
 /// Test indexing concat.
+#[allow(clippy::type_complexity)]
 fn test_indexing_concat() -> Result<()> {
     let t1 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     let t2 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
