@@ -32,18 +32,21 @@ pub use telemetry::{TuningExplain, TuningProvenance};
 use crate::kernel::KernelAccess;
 #[cfg(any(feature = "autotune", test))]
 use crate::kernel::KernelKey;
+#[cfg(any(feature = "autotune", feature = "cuda", test))]
 use alloc::vec::Vec;
 #[cfg(any(feature = "autotune", test))]
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::String,
 };
+#[cfg(any(feature = "autotune", feature = "cuda", test))]
 use incin_core::error::{Error, Result};
+#[cfg(any(feature = "cuda", test))]
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 #[cfg(any(feature = "autotune", test))]
 use std::sync::{Condvar, Mutex, OnceLock};
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 const POINTWISE_TUNING_THRESHOLD: usize = 1024;
 #[cfg(any(feature = "autotune", test))]
 const MAX_TUNING_ENTRIES: usize = 1024;
@@ -74,15 +77,6 @@ impl WorkloadBucket {
         Self {
             elements_log2: size_log2_bucket(rows),
             reduction_log2: size_log2_bucket(reduction_size),
-            packed_alignment: false,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn normalization(batch_size: usize, norm_size: usize) -> Self {
-        Self {
-            elements_log2: size_log2_bucket(batch_size),
-            reduction_log2: size_log2_bucket(norm_size),
             packed_alignment: false,
         }
     }
@@ -126,7 +120,7 @@ pub struct LaunchCandidate {
     pub access: KernelAccess,
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn preferred_pointwise_width(dtype: DTypeDescriptor) -> u8 {
     match dtype.builtin_id() {
         Some(DTypeId::F16 | DTypeId::BF16 | DTypeId::F64) => 2,
@@ -135,7 +129,7 @@ pub(crate) fn preferred_pointwise_width(dtype: DTypeDescriptor) -> u8 {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn pointwise_candidates(
     dtype: DTypeDescriptor,
     elements: usize,
@@ -163,7 +157,7 @@ pub(crate) fn pointwise_candidates(
     candidates
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn default_pointwise_candidate(
     candidates: &[LaunchCandidate],
 ) -> Result<LaunchCandidate> {
@@ -179,7 +173,7 @@ pub(crate) fn default_pointwise_candidate(
         .ok_or_else(|| Error::Msg("pointwise candidate set has no 256-thread fallback".into()))
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn reduction_candidates(contiguous_last_axis: bool) -> Vec<LaunchCandidate> {
     let access = if contiguous_last_axis {
         KernelAccess::WarpReduction
@@ -192,7 +186,7 @@ pub(crate) fn reduction_candidates(contiguous_last_axis: bool) -> Vec<LaunchCand
         .collect()
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn default_reduction_candidate(
     candidates: &[LaunchCandidate],
 ) -> Result<LaunchCandidate> {
@@ -203,7 +197,7 @@ pub(crate) fn default_reduction_candidate(
         .ok_or_else(|| Error::Msg("reduction candidate set has no 256-thread fallback".into()))
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn normalization_candidates(is_layer_norm: bool) -> Vec<LaunchCandidate> {
     let access = if is_layer_norm {
         KernelAccess::Welford
@@ -216,7 +210,7 @@ pub(crate) fn normalization_candidates(is_layer_norm: bool) -> Vec<LaunchCandida
         .collect()
 }
 
-#[allow(dead_code)]
+#[cfg(any(feature = "cuda", test))]
 pub(crate) fn default_normalization_candidate(
     candidates: &[LaunchCandidate],
 ) -> Result<LaunchCandidate> {

@@ -13,8 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   through the documented `incin_core::shapes` facade while their implementation
   modules are private. Unreferenced WGPU dispatch paths and CUDA kernel sources
   were removed, and backend layout and quantized-storage modules are now gated
-  by the features that use them. The book CI job installs Chromium in the job
-  that runs the browser checks.
+  by the features that use them. WGPU lifetime owners and CUDA tuning helpers
+  no longer rely on broad dead-code allowances. The book CI job installs
+  Chromium in the job that runs the browser checks.
 
 ### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.

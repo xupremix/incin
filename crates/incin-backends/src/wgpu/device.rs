@@ -4,10 +4,10 @@ use incin_core::shapes::error::OperationKind;
 use wgpu::{Adapter, Backends, Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
 
 pub(crate) struct WgpuDeviceState {
-    #[allow(dead_code)]
-    pub(crate) instance: Instance,
-    #[allow(dead_code)]
-    pub(crate) adapter: Adapter,
+    // Keep both owners alive for the lifetime of the device and queue. WGPU
+    // does not expose a read path for either after initialization.
+    pub(crate) _instance: Instance,
+    pub(crate) _adapter: Adapter,
     pub(crate) device: Device,
     pub(crate) queue: Queue,
 }
@@ -57,8 +57,8 @@ pub(crate) fn try_get_device_state() -> Result<Arc<WgpuDeviceState>> {
         })
     })?;
     let state = Arc::new(WgpuDeviceState {
-        instance,
-        adapter,
+        _instance: instance,
+        _adapter: adapter,
         device,
         queue,
     });
