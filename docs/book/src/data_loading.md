@@ -103,6 +103,6 @@ run time even though every individual image is a fixed `28x28`.
 
 ## Transforms
 
-`incin_data::transforms` has the common image-augmentation set —
-`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, `Scale` —
+`incin_data::transforms` has the common image-augmentation set  -
+`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, `Scale`  -
 implementing a shared `Transform` trait, composable with `Compose`.

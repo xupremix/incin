@@ -2,7 +2,7 @@
 
 Gradient tracking is a type parameter, `G`, defaulting to `NoGrad`. A
 `Tensor<S, B, K, Grad>` records a tape entry for the operations that produce
-it; a `Tensor<S, B, K, NoGrad>` never does — the distinction is visible in
+it; a `Tensor<S, B, K, NoGrad>` never does  -  the distinction is visible in
 the type, not just at runtime.
 
 ```rust,no_run
@@ -13,7 +13,7 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
 let b = Tensor::<s![2, 2], B>::full(3.0, ())?;
 
-let c = a.mul(&b)?;
+let c = &a * &b;
 let loss = c.sum_all()?;
 
 let grads = loss.backward()?;
@@ -39,7 +39,7 @@ let b = Tensor::<s![2, 2], B>::ones(())?;
 
 // Nothing inside this closure records a tape entry, regardless of what
 // operations run or what G their operands carry.
-let c = incin_core::exec::GradMode::Disabled.scope(|| a.mul(&b))?;
+let c = incin_core::exec::GradMode::Disabled.scope(|| &a * &b);
 # Ok::<(), incin::Error>(())
 ```
 
@@ -59,7 +59,7 @@ let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 # Ok::<(), incin::Error>(())
 ```
 
-This is the usual shape for a loss function's `target` argument — see
+This is the usual shape for a loss function's `target` argument  -  see
 [Training](./training.md): the label data isn't something you differentiate
 with respect to, so it's typed `NoGrad` rather than merely happening to have
 no gradient at runtime.

@@ -3,7 +3,7 @@
 Incin is a Rust deep learning framework built around one idea: a tensor's shape
 can live in the type system, and the compiler will check it. Write
 `Tensor<s![768, 256], Backend>` and a `matmul` against something the wrong
-width does not compile — you don't wait for a runtime crash three epochs into
+width does not compile  -  you don't wait for a runtime crash three epochs into
 a training run. Dynamic shapes are just as first-class (`Tensor<Dyn, Backend>`)
 for the parts of a model that genuinely are dynamic (batch size, sequence
 length), and the two compose in the same program.
@@ -12,7 +12,7 @@ This book is a hands-on tour. Rust snippets are checked where they are wired
 into doctests or executable fixtures; prose snippets are not promised to be
 automatically executed. The examples below are drawn from the current crate
 and its CPU-focused smoke tests. Where something is not finished, the book
-says so plainly rather than describing design intent as if it were shipped — see
+says so plainly rather than describing design intent as if it were shipped  -  see
 [What's not finished yet](./whats_not_finished.md) for the current honest
 state, especially around GPU backends.
 
@@ -20,7 +20,7 @@ state, especially around GPU backends.
 
 - **Getting started** gets a tensor on screen in five lines.
 - **Core concepts** covers the type-level shape system, autograd, and the
-  error contract — the things that shape every other chapter.
+  error contract  -  the things that shape every other chapter.
 - **Building models** and **Training** are the day-to-day chapters: layers,
   losses, optimizers, data loading, checkpoints.
 - **Backends** is the honest one: what runs where, today, measured rather
@@ -31,7 +31,7 @@ state, especially around GPU backends.
 ## Where else to look
 
 `docs/GUIDE.md` in the repository is the architectural companion to this
-book — the type-level shape system's internals, the canonical execution
+book  -  the type-level shape system's internals, the canonical execution
 path, backend authoring, and the idioms the codebase itself follows. This
 book is task-oriented ("how do I train a model"); `GUIDE.md` is
 concept-oriented ("how does the shape-proof system work"). The generated

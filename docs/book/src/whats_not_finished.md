@@ -2,14 +2,14 @@
 
 Kept separate from the rest of the book so it can be updated independently,
 and so nothing above has to hedge every sentence. Everything here was
-verified directly against the source, not inferred from documentation —
+verified directly against the source, not inferred from documentation  -
 where a claim depends on something more likely to drift (operation counts,
 op tables), it points at the generated document that stays current instead
 of repeating a number that won't.
 
 ## Blocks real usage today
 
-- **GPU training.** See [Backends](./backends.md) — CUDA and WGPU cover
+- **GPU training.** See [Backends](./backends.md)  -  CUDA and WGPU cover
   basic arithmetic, reductions, `matmul`, and `conv2d`/pooling; neither has
   any activation, normalization, loss, `embedding`, or `dropout`. Metal is
   narrower still. Training anything in this book's [Building
@@ -21,7 +21,7 @@ of repeating a number that won't.
   it from primitives.
 - **No gradient clipping.** Nothing in `incin_core::optim` clips gradients
   by norm or value. Learning rate scheduling is fine (`ConstantLR`,
-  `LinearLR`, `CosineAnnealingLR`, `StepLR`) — this is specifically about
+  `LinearLR`, `CosineAnnealingLR`, `StepLR`)  -  this is specifically about
   clipping.
 
 ## Facade gaps (the functionality exists, but not through `incin`)
@@ -43,7 +43,7 @@ of repeating a number that won't.
   that cannot fit `Execute<O>` easier to maintain.
 - **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
   complete planning layer behind the `distributed` feature but no execution
-  path yet — a design surface, not a training feature to reach for.
+  path yet  -  a design surface, not a training feature to reach for.
 - **The automatic `Trainer`** (`incin::experimental::training`, `train`
   feature) has a real single-device training loop (`fit`), but explicitly
   refuses a multi-device plan (`TrainError::CollectivesUnavailable`) rather
@@ -51,13 +51,13 @@ of repeating a number that won't.
 
 ## Where the current, generated truth lives
 
-- `docs/capabilities.md` — exactly which operations each backend supports,
+- `docs/capabilities.md`  -  exactly which operations each backend supports,
   for which dtypes, regenerated from the actual registrations.
-- `docs/OPERATION_SEMANTICS.md` — the full semantic contract (broadcasting,
+- `docs/OPERATION_SEMANTICS.md`  -  the full semantic contract (broadcasting,
   dtype, gradient, output rules) for every catalog operation.
-- `audit-evidence/FND-005/cpu-migration-status.md` — canonical-path
+- `audit-evidence/FND-005/cpu-migration-status.md`  -  canonical-path
   migration status, machine-checked against source on every test run.
 
 If any claim in this book ever disagrees with one of those three, the
-generated document is right and this book is stale — please file it as
+generated document is right and this book is stale  -  please file it as
 such.

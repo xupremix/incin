@@ -89,8 +89,8 @@ and requires every topology rank to accept the same result before commit.
 need; they do not execute kernels themselves. Disabling `incin-diagnostics`'
 defaults gives the allocation-only diagnostic core.
 
-The per-backend support tables — which operations each backend registers, for
-which element types, layouts and ranks — are generated from those registrations
+The per-backend support tables  -  which operations each backend registers, for
+which element types, layouts and ranks  -  are generated from those registrations
 into [docs/capabilities.md](docs/capabilities.md). `cargo incin doctor` reports
 which of them this machine can actually reach.
 
@@ -185,17 +185,17 @@ fn main() -> Result<()> {
 - `incin-telemetry`: Event emission, transport streams, and graph snapshot recording.
 - `incin-viz`: Terminal UI (TUI) model graph visualizer.
 - `incin-diagnostics`: Typenum-to-decimal shape diagnostic humanization,
-  shared by the CLI and the editor LSP proxy — see [CLI](#cli--cargo-incin)
+  shared by the CLI and the editor LSP proxy  -  see [CLI](#cli--cargo-incin)
   and [Editor / IDE Support](#editor--ide-support) below.
 - `incin-lsp`: Transparent LSP proxy that routes rust-analyzer through
   `incin-diagnostics` so shape errors and inlay hints are humanized live in
   your editor.
 
-## CLI — `cargo incin`
+## CLI  -  `cargo incin`
 
 `cargo-incin` wraps `cargo check`/`build`/`test`/`run`, rewriting the
 compiler's typenum shape errors (`UInt<UInt<...>>` walls) into plain decimals
-live in your terminal — the same translation the editor extensions use. It
+live in your terminal  -  the same translation the editor extensions use. It
 also inspects exported model files and translates pasted error text ad hoc.
 
 ### Install
@@ -226,7 +226,7 @@ Flags: `--raw` (skip translation, show the compiler's raw output), `--explain`
 The same humanization is available live inside your editor via `incin-lsp`,
 a thin proxy that sits between your editor and rust-analyzer and rewrites
 diagnostics and shape inlay hints through `incin-diagnostics` before they
-reach you — no forked rust-analyzer, no per-editor parsing logic. See
+reach you  -  no forked rust-analyzer, no per-editor parsing logic. See
 `docs/growth/02-ide-extensions.md` for the full architecture and verification
 status of each client below.
 
@@ -246,8 +246,8 @@ cargo install --path crates/incin-lsp --bin incin-lsp
 ## Documentation
 
 - **Growth & architecture plans** (`docs/growth/`): task-by-task execution
-  plans for adoption-facing features — named dimensions, this CLI/IDE
-  tooling, deployment, and more — each with its own dated status ledger.
+  plans for adoption-facing features  -  named dimensions, this CLI/IDE
+  tooling, deployment, and more  -  each with its own dated status ledger.
 - **The Book ("Incinnomicon"):** the current user guide lives in
   [`docs/book/src/SUMMARY.md`](docs/book/src/SUMMARY.md). Build it locally with
   `mdbook build docs/book`. Validate its Rust examples with

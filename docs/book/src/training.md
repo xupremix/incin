@@ -3,7 +3,7 @@
 ## Losses
 
 Every loss module's `forward` takes references, and the target argument is
-`NoGrad` — the label data isn't something you differentiate with respect to,
+`NoGrad`  -  the label data isn't something you differentiate with respect to,
 and that's stated in the type rather than left as a convention to remember:
 
 ```rust,no_run
@@ -19,7 +19,7 @@ let loss2 = L1Loss::<Mean>::new().forward(&pred, &target)?;
 ```
 
 `Mean` is one of three reduction modes (`Mean`, `Sum`, `NoneReduction`) that
-parameterize a loss's own type — `MSELoss<Sum>` sums instead of averaging,
+parameterize a loss's own type  -  `MSELoss<Sum>` sums instead of averaging,
 and `MSELoss<NoneReduction>` returns the per-element loss unreduced, each a
 different type rather than a runtime flag.
 
@@ -84,7 +84,7 @@ one for another is a one-line change.
 
 ## The whole loop
 
-Putting it together — model, loss, optimizer, scheduler, several steps:
+Putting it together  -  model, loss, optimizer, scheduler, several steps:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -115,5 +115,5 @@ fn train() -> Result<()> {
 ```
 
 For a real dataset instead of a fixed tensor, see [Data
-loading](./data_loading.md) — the loop shape is identical, just with a
+loading](./data_loading.md)  -  the loop shape is identical, just with a
 `DataLoader` iteration in place of the fixed `x`.

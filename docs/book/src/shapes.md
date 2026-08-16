@@ -2,10 +2,10 @@
 
 A `Shape` is a type, and three kinds of type implement it:
 
-- **A tuple of `typenum` dims** — every axis known at compile time.
+- **A tuple of `typenum` dims**  -  every axis known at compile time.
   `s![2, 3, 224, 224]` expands to exactly this.
-- **`Dyn`** — rank itself is unknown until a value exists.
-- **A tuple mixing `usize` and `typenum` dims** — rank known, some axes are
+- **`Dyn`**  -  rank itself is unknown until a value exists.
+- **A tuple mixing `usize` and `typenum` dims**  -  rank known, some axes are
   not. `s![usize, 128]`, or a named axis via `dim!(Batch)` used as
   `s![Batch, 128]`.
 
@@ -46,11 +46,11 @@ type B = DefaultBackend;
 
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3, 2], B>::ones(())?;
-let c = a.add(&b)?; // does not compile: `s![2, 3]` does not equal `s![3, 2]`
+let c = &a + &b; // does not compile: `s![2, 3]` does not equal `s![3, 2]`
 # Ok::<(), incin::Error>(())
 ```
 
-A layer's weight shape is part of its type too — `Linear<s![768, 256],
+A layer's weight shape is part of its type too. `Linear<s![768, 256],
 Backend>` only accepts a `[.., 768]` input and only produces a `[.., 256]`
 output, checked the same way.
 
@@ -71,7 +71,7 @@ let reasserted: Tensor<s![2, 3], B> = dynamic.to_shape::<s![2, 3]>()?;
 ```
 
 `into_dyn` always succeeds (a static shape is always a valid dynamic one).
-`to_shape` is fallible — it checks the runtime dims against the target shape
+`to_shape` is fallible  -  it checks the runtime dims against the target shape
 and returns a typed error if they disagree, rather than panicking.
 
 ## `s!` vs `shape!`
@@ -90,8 +90,6 @@ let x = Cpu.zeros(shape![batch, 784])?;    // Tensor<s![usize, 784], ..>
 # Ok::<(), incin::Error>(())
 ```
 
-An integer literal in `shape![...]` is a static axis; anything else
-(including a named `const`) is a runtime axis — the inference is syntactic,
-so `const N: usize = 32; shape![N, 784]` produces a runtime axis even though
-the value happens to be a compile-time constant. Where the stronger form
-matters, name it explicitly with `s![32, 784]`.
+An integer literal in `shape![...]` is a static axis. A named `const` is also
+available when written explicitly as `shape![const N, 784]`; this preserves
+the constant extent instead of silently turning it into `Dyn`.

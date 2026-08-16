@@ -4,7 +4,7 @@
 rest of the type-level machinery: reshaping vs re-asserting, slicing, the
 broadcast rules, and the traits that decide what compiles.
 
-## `reshape` vs `to_shape` — the distinction that bites
+## `reshape` vs `to_shape`  -  the distinction that bites
 
 They sound interchangeable and are not:
 
@@ -23,7 +23,7 @@ let d = x.clone().into_dyn();
 let same = d.to_shape::<s![2, 6]>()?;
 assert_eq!(same.dims().as_ref(), &[2, 6]);
 
-// to_shape to different dims fails at run time — it is not a reshape.
+// to_shape to different dims fails at run time  -  it is not a reshape.
 assert!(x.into_dyn().to_shape::<s![3, 4]>().is_err());
 # Ok::<(), incin::Error>(())
 ```
@@ -51,7 +51,7 @@ assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 # Ok::<(), incin::Error>(())
 ```
 
-`view` above is a `Tensor<s![5, 20, 15], _>` — the extents were computed at
+`view` above is a `Tensor<s![5, 20, 15], _>`  -  the extents were computed at
 compile time from the slice bounds, not recovered at run time. `reshape_idx`
 is the same idea for reshaping, and accepts `-1` (`InferDim`) for one axis
 whose extent should be derived from the others.
@@ -63,8 +63,8 @@ wrote the operation:
 
 | Form | Rule | Fails how |
 |---|---|---|
-| `a.add(&b)` | `ShapeEq` — exact match | compile error |
-| `a + b` | `BroadcastShape` — numpy-style | compile error if unbroadcastable |
+| `a.try_add(&b)` | `ShapeEq` exact match | compile error |
+| `a + b` | `BroadcastShape`  -  numpy-style | compile error if unbroadcastable |
 | `a.broadcast_add(&b)` | `BroadcastShape` | compile error if unbroadcastable |
 
 ```rust,no_run
@@ -74,15 +74,15 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::ones(())?;
 
-let via_operator = (a.clone() + b.clone())?;   // broadcasts
+let via_operator = a.clone() + b.clone();      // broadcasts
 let via_method = a.broadcast_add(&b)?;          // same thing
 assert_eq!(via_operator.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())
 ```
 
 Crucially, an incompatible broadcast is a **compile** error, not a runtime
-one — the resolution happens in `BroadcastShape`'s associated `Output`. Two
-shapes that cannot align produce "Cannot broadcast axis … against …" from
+one  -  the resolution happens in `BroadcastShape`'s associated `Output`. Two
+shapes that cannot align produce "Cannot broadcast axis ... against ..." from
 `rustc`, before anything runs.
 
 `broadcast_left` exists for the left-aligned case that right-aligned
@@ -100,11 +100,11 @@ broadcasting cannot express.
 
 Two constants on `Shape` carry the proof information the execution path uses:
 
-- **`PROOF`** — `Static` (rank and every extent known), `Mixed` (known rank,
+- **`PROOF`**  -  `Static` (rank and every extent known), `Mixed` (known rank,
   some runtime axis), or `Dynamic` (rank itself unknown). Both default to the
   weakest honest answer, so a `Shape` implemented outside the crate is
   credited with nothing it hasn't demonstrated.
-- **`STATIC_NUMEL`** — `Some(n)` when the type alone settles the element
+- **`STATIC_NUMEL`**  -  `Some(n)` when the type alone settles the element
   count, `None` otherwise.
 
 `STATIC_NUMEL` exists in that `Option` form for a specific reason: stable Rust
@@ -112,7 +112,7 @@ cannot branch on whether a generic `S` exposes a stronger static-shape trait
 without specialization. Restating the count on the base trait means any `S` can
 be asked, and because `S` is a type parameter, `if let Some(n) =
 S::STATIC_NUMEL` collapses to one arm at monomorphization. That is what lets a
-backend specialize on a static shape — see
+backend specialize on a static shape  -  see
 [Backend authoring](./backend_authoring.md).
 
 ## Named dimensions and the middle ground

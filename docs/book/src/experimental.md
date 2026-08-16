@@ -13,7 +13,7 @@ The quantized backend-authoring contract has three operations: `quantize`
 dequantizing first). The only quantized representation any backend implements
 is `Q8_0`.
 
-There is **no `Tensor::quantize` method** — quantization is reachable only
+There is **no `Tensor::quantize` method**  -  quantization is reachable only
 through the backend trait, not the stable tensor surface. The CPU backend
 implements all three. They are registered `training = false` because their
 kernels push no tape entry: advertising them for training would promise a
@@ -32,7 +32,7 @@ inconsistent plans.
 
 What does not exist: the execution. `Trainer::fit` refuses a multi-device plan
 with `TrainError::CollectivesUnavailable` rather than silently running on one
-device — which is the right failure, but it is a failure. Transports are
+device  -  which is the right failure, but it is a failure. Transports are
 separate opt-ins (`distributed-reference` for an in-process deterministic
 transport, `distributed-nccl` for two-host CUDA), and there is no end-to-end
 distributed training path.
@@ -43,7 +43,7 @@ typed distributed plan should look like, not something to train a model with.
 ## Autotune
 
 Feature `autotune` (implies `cuda`). Tuning configuration and inspection types
-for CUDA launch parameters — `AutotunePolicy`, `KernelSignature`,
+for CUDA launch parameters  -  `AutotunePolicy`, `KernelSignature`,
 `PersistentTuningCache`, `TuningSelection` and friends, exposed under
 `incin::experimental::tuning`. Cache records are validated on deserialization
 (see [Invariants](./invariants.md)) rather than trusted as bytes.
@@ -66,7 +66,7 @@ reports the telemetry run directory.
 
 ## Visualization
 
-The `incin-viz` crate — a TUI for inspecting graphs, with a plugin API in
+The `incin-viz` crate  -  a TUI for inspecting graphs, with a plugin API in
 `incin-viz-plugin-api`. The `tui_graph_demo` example in the repository is the
 working entry point.
 
@@ -91,5 +91,5 @@ is genuinely the caller's). It works for single-device training.
 
 It is in `experimental` because the interface may change without a migration
 path, and because the multi-device half of its plan surface does not execute.
-Writing the loop yourself — as [Training](./training.md) shows — is neither
+Writing the loop yourself  -  as [Training](./training.md) shows  -  is neither
 harder nor less supported.

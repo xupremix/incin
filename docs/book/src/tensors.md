@@ -35,7 +35,7 @@ let dynamic = Tensor::<Dyn, B>::zeros(vec![2, 3])?;
 # Ok::<(), incin::Error>(())
 ```
 
-`()` as the constructor argument for a fully static shape is not decoration —
+`()` as the constructor argument for a fully static shape is not decoration  -
 a static `Shape::Arg` is a tuple of units, and the empty tuple is the only
 value of that type. Once any axis is runtime-determined (`Dyn`, or a `Bound`
 shape via the [target API](./target_api.md)), the argument carries the actual
@@ -67,22 +67,21 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 2], B>::ones(())?;
 let b = Tensor::<s![2, 2], B>::ones(())?;
 
-let sum = a.add(&b)?;
-let diff = a.sub(&b)?;
-let prod = a.mul(&b)?;
-let quot = a.div(&b)?;
+let sum = &a + &b;
+let diff = &a - &b;
+let prod = &a * &b;
+let quot = &a / &b;
 let eq = a.eq(&b)?;       // elementwise comparison
 let both = a.eq(&b)?.logical_and(&a.eq(&b)?)?;
 # Ok::<(), incin::Error>(())
 ```
 
-These method calls require the two operands' shape types to match exactly
-(`ShapeEq`). `+`, `-`, `*`, and `/` are also overloaded (in every combination
-of owned and referenced operands) and behave differently: they broadcast
-numpy-style between different shapes instead of requiring an exact match —
-`a + b` is `a.broadcast_add(&b)` under an operator, not `a.add(&b)` under
-one. Both forms still return `Result`, so `?` (or, for the operator form,
-wrapping the expression in parens: `(a + b)?`) is required either way.
+The checked methods `try_add`, `try_sub`, `try_mul`, and `try_div` require the
+two operands' shape types to match exactly (`ShapeEq`). `+`, `-`, `*`, and `/`
+are also overloaded in every owned and referenced combination. They broadcast
+between compatible shapes and return a tensor directly. Operator failures
+panic with operation context; use the checked methods when the failure must
+remain a `Result`.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -91,7 +90,7 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::full(2.0, ())?; // shorter shape, broadcasts against `a`
 
-let sum = (a.clone() + b.clone())?;         // operator: broadcasts
+let sum = a.clone() + b.clone();            // operator: broadcasts
 let sum2 = a.broadcast_add(&b)?;            // same operation, method-call form
 assert_eq!(sum.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())
@@ -136,5 +135,5 @@ assert_eq!(values, vec![1.0, 1.0, 1.0]);
 # Ok::<(), incin::Error>(())
 ```
 
-Reading a value back is a synchronization point on a device backend — cheap
+Reading a value back is a synchronization point on a device backend  -  cheap
 on CPU, worth batching on an accelerator.

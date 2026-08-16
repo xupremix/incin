@@ -2,12 +2,12 @@
 
 A tour of the whole system: every subsystem, how the pieces fit, and the
 idiomatic way to use each one. Where `docs/README.md`'s other documents are
-contracts, status reports, or generated inventories, this one is prose — read
+contracts, status reports, or generated inventories, this one is prose  -  read
 it first if you are new to the tree, then use the others as reference.
 
 Every claim below was checked against the source it describes while this was
 written (2026-08-06). Where a feature is a prototype, partial, or has a
-documented gap, that is stated plainly rather than smoothed over — the
+documented gap, that is stated plainly rather than smoothed over  -  the
 generated documents this guide points to (`docs/capabilities.md`,
 `docs/OPERATION_SEMANTICS.md`, `audit-evidence/FND-005/cpu-migration-status.md`)
 are the ones that stay current automatically; if this guide and one of them
@@ -50,14 +50,14 @@ re-exports the rest.
 You will almost always write `use incin::prelude::*;` and nothing else. The
 `prelude` module (`crates/incin/src/lib.rs:471`) is the curated, high-frequency
 surface; `incin::state`, `incin::backend_authoring` and `incin::experimental` are opt-in and
-named that way on purpose — reaching for them is a signal, not an accident.
+named that way on purpose  -  reaching for them is a signal, not an accident.
 
 ## 2. The mental model
 
 Three ideas run through everything else in this guide:
 
 **Shapes are usually types, not values.** `Tensor<s![2, 3, 224, 224], B>` says
-what shape a value has in a way `rustc` checks at every call site — a `matmul`
+what shape a value has in a way `rustc` checks at every call site  -  a `matmul`
 between operands whose inner dimensions disagree does not compile. `Dyn` opts
 a shape out of that when it is not known until runtime; you can mix the two in
 one program, and the two rows in the Quick Start example in
@@ -67,7 +67,7 @@ one program, and the two rows in the Quick Start example in
 carries its backend in `B`. `CpuBackendImpl<D>`, `CudaBackendImpl<D>`,
 and so on each implement the traits `Tensor` needs; which one a given tensor
 uses is fixed at compile time by which `B` you wrote, not decided by a global
-"current device". There is deliberately no such global — see
+"current device". There is deliberately no such global  -  see
 [`incin-auto-device-selection`](../docs/README.md) territory: `best_device!()`
 picks `B` at compile time from enabled features, `detect_device()` probes
 hardware at runtime and returns a value, and the two answer different
@@ -87,10 +87,10 @@ execution model.
 `Shape` (`crates/incin-core/src/shapes/shape.rs`) is the trait every shape
 type implements. Three families implement it:
 
-- **A recursive `DimCons` shape**, e.g. `DimCons<U2, DimCons<U3, Nil>>` —
+- **A recursive `DimCons` shape**, e.g. `DimCons<U2, DimCons<U3, Nil>>`  -
   every axis known at compile time. `s![2, 3]` expands to exactly this.
-- **`Dyn`** — rank itself is unknown until a value exists. `Tensor<Dyn, B>`.
-- **A recursive shape mixing `usize` and `Dim` types** — rank is known, some
+- **`Dyn`**  -  rank itself is unknown until a value exists. `Tensor<Dyn, B>`.
+- **A recursive shape mixing `usize` and `Dim` types**  -  rank is known, some
   axes are not. `s![usize, 3]`, or a named axis via `dim!(Batch)` used as
   `s![Batch, 128]`.
 
@@ -100,11 +100,11 @@ implementation on stable Rust without specialization. Instead both are restated
 as an `Option` on `Shape` itself, defaulting to "unknown", so any `S: Shape`
 can be asked without an extra bound:
 
-- **`Shape::PROOF: ProofLevel`** — `Static` (every axis fixed by the type),
+- **`Shape::PROOF: ProofLevel`**  -  `Static` (every axis fixed by the type),
   `Mixed` (rank known, at least one axis is not), or `Dynamic` (rank itself
   is runtime). This is what a `Validated<O>` carries as its
-  [`proof_level()`](../crates/incin-core/src/exec/proof.rs) — see §6.
-- **`Shape::STATIC_NUMEL: Option<usize>`** — the element count, when every
+  [`proof_level()`](../crates/incin-core/src/exec/proof.rs)  -  see §6.
+- **`Shape::STATIC_NUMEL: Option<usize>`**  -  the element count, when every
   axis is static; `None` otherwise. `if let Some(n) = S::STATIC_NUMEL`
   collapses to one arm at monomorphization, not a runtime branch, so a
   generic executor can specialize on it for free. `Dim::STATIC_EXTENT` is the
@@ -131,14 +131,14 @@ type NamedStatic = s![BatchSize = 25, 128]; // named axis with static extent
 type Loose = s![usize, 128];         // unnamed runtime axis
 ```
 
-`idx![0..5, .., 15..30]` is the slicing analogue — it builds the type
+`idx![0..5, .., 15..30]` is the slicing analogue  -  it builds the type
 `.slice_idx::<...>()` expects, translating `a..b` to a bounded `Slice`, `..`
 to "take the whole axis", and `-1` to `InferDim` for reshape.
 
 ### Why two type-level systems (`s!` vs `shape!`)
 
 `s!` names a *type*. Allocation targets (§7) need a *value* to pass to a
-constructor, and that value has to encode the same static/runtime split —
+constructor, and that value has to encode the same static/runtime split  -
 `shape!` is that value-level counterpart:
 
 ```rust
@@ -147,13 +147,13 @@ let x = gpu.zeros(shape![batch, 784])?; // Tensor<s![usize, 784], ..>
 ```
 
 `shape!`'s inference is syntactic: a literal is static, anything else
-(including a named `const`) is a runtime axis — read as a weaker shape, never
+(including a named `const`) is a runtime axis  -  read as a weaker shape, never
 a wrong one. Where the stronger, fully-static form matters, write it directly:
 `s![32, 784]`.
 
 ## 4. Tensors: creation, dtype, device
 
-`Tensor<S, B, K, G, P>` — shape, backend, element type (defaults to `f32`),
+`Tensor<S, B, K, G, P>`  -  shape, backend, element type (defaults to `f32`),
 gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), and
 placement (defaults to `Local`). Most code only ever writes the first two.
 
@@ -178,12 +178,12 @@ let e = Cpu.zeros(shape![2, 3])?;
 ```
 
 Dtype comes from `K`. `Dyn` as the dtype parameter (`Tensor<S, B, Dyn>`) keeps
-the element type itself as a runtime tag rather than a compile-time one —
+the element type itself as a runtime tag rather than a compile-time one  -
 different question from `S = Dyn`, and the two compose independently.
 
 Device comes from `B`: `Tensor<S, CpuBackendImpl<Cpu>>` vs `Tensor<S,
 CudaBackendImpl<Cuda>>`, or the `incin::Tensor` alias's default,
-`DefaultBackend = IncinBackend<Cpu>` — present only when the `cpu`
+`DefaultBackend = IncinBackend<Cpu>`  -  present only when the `cpu`
 feature is on, and *not* substituted by anything else when it is off: every
 alias in `crates/incin/src/lib.rs` that defaults `B` to it is declared twice,
 once with the default and once (behind `#[cfg(not(feature = "cpu"))]`)
@@ -208,7 +208,7 @@ code uses the ordinary tensor methods.
 ## 6. The canonical execution architecture
 
 This section explains the internal architecture behind the ordinary tensor
-methods. Application code normally does not call the dispatcher directly —
+methods. Application code normally does not call the dispatcher directly  -
 skip to §7 if you just want to allocate tensors on a specific device.
 
 ### Why it exists
@@ -223,29 +223,29 @@ architecture described below.
 
 ### The pieces, in the order data flows through them
 
-1. **`OPERATION_CATALOG`** (`crates/incin-core/src/operation_catalog.rs`) —
+1. **`OPERATION_CATALOG`** (`crates/incin-core/src/operation_catalog.rs`)  -
    one macro-generated declaration of all 174 operations: an identity (`op::X`
    marker type), a `SemanticProfile` (broadcasting/dtype/gradient/output
    rules), an `Attributes` type, an operand arity, and an `ExecutionSite`
-   (whether `Execute` can carry it at all — more on this below). Every other
+   (whether `Execute` can carry it at all  -  more on this below). Every other
    piece in this list is generated *from* this declaration, which is what
    makes "advertised" and "implemented" impossible to drift apart.
-2. **`Descriptor<O>`** — attributes plus inferred output metadata for one
+2. **`Descriptor<O>`**  -  attributes plus inferred output metadata for one
    `op::X`. Building one runs `O`'s `infer_outputs`, so the shape a backend
    receives was derived from the real operand metadata, never accepted as a
    caller's claim.
-3. **`Validated<O>`** — a `Descriptor<O>` plus a `ProofLevel`
+3. **`Validated<O>`**  -  a `Descriptor<O>` plus a `ProofLevel`
    (`Static`/`Mixed`/`Dynamic`, read off the frontend's `Shape::PROOF`, §3).
-   The only public constructor is validation itself — see
+   The only public constructor is validation itself  -  see
    `docs/INVARIANT_TYPES.md`'s "proof token" row. `proof_level()` is the one
    public accessor.
-4. **`Execute<O>`** (`crates/incin-core/src/tensor/backend.rs`) — what a
+4. **`Execute<O>`** (`crates/incin-core/src/tensor/backend.rs`)  -  what a
    backend implements per exact operation. The required method is
    `execute_shaped<S: Shape>(&self, request: ExecutionRequest<'_, O, Self>)`;
    `execute(...)` is a **provided** default that calls `execute_shaped::<Dyn>`.
    That direction is deliberate: a required `execute` with a defaulted
    `execute_shaped` would let a backend implement only the erased form and
-   never specialize on `S` at all, silently. `S` is not decoration — the CPU
+   never specialize on `S` at all, silently. `S` is not decoration  -  the CPU
    creation family reads `S::STATIC_NUMEL` to skip a runtime element-count
    computation entirely when the caller's shape is fully static (see
    `crates/incin-backends/src/cpu/stride.rs`'s `numel_for`); that is a real,
@@ -253,15 +253,15 @@ architecture described below.
    percent end-to-end for the cheapest allocation), not a type-system
    flourish with no consumer.
 5. **`Capabilities` / `CapabilityQuery` / `SupportLevel`**
-   (`crates/incin-core/src/exec/capability.rs`) — before a backend is asked to
+   (`crates/incin-core/src/exec/capability.rs`)  -  before a backend is asked to
    execute, `dispatch::execute[_shaped]` queries its exact capability row for
    this `(operation, dtype, layout, rank, training, math_mode)`. `Unsupported`
    carries a typed `UnsupportedReason`, never a string a caller has to parse.
 6. **`dispatch::execute_shaped::<O, B, S>`** /
    **`dispatch::execute::<O, B>`** (= `execute_shaped::<O, B, Dyn>`)
-   (`crates/incin-core/src/exec/dispatch.rs`) — the single route: validate,
+   (`crates/incin-core/src/exec/dispatch.rs`)  -  the single route: validate,
    query capability, call `Execute::execute_shaped`. `S` here is a type
-   argument the *caller* supplies, not derived from the descriptor — it has to
+   argument the *caller* supplies, not derived from the descriptor  -  it has to
    travel beside the attributes rather than be read off them, or a caller
    could claim `ShapeEvidence::of::<s![2, 3]>()` next to metadata describing
    something else and be believed.
@@ -319,14 +319,14 @@ as `gpu.tensor([[1.0, 2.0]])` and `gpu.dtype::<f64>().zeros(...)`.
 
 `incin::backend_authoring` (feature `backend-authoring`) is the contract a new
 backend implements: `StorageBackend` (associated `Storage<K>`, `Device`,
-`metadata()`), `Capabilities`, named optional capability views, and — per
-operation — `Execute<Descriptor<op::X>>`.
+`metadata()`), `Capabilities`, named optional capability views, and  -  per
+operation  -  `Execute<Descriptor<op::X>>`.
 
 **`StorageBackend::Storage<K>`** is a physical allocation plus
-`TensorMeta` (shape, strides, offset, dtype, device, alignment, capacity — a
+`TensorMeta` (shape, strides, offset, dtype, device, alignment, capacity  -  a
 proof token per `docs/INVARIANT_TYPES.md`, constructed only through
 `TensorMeta::try_new`/`contiguous`). A foreign tensor type that carries no
-such metadata can still join the canonical contract by wrapping itself —
+such metadata can still join the canonical contract by wrapping itself  -
 `incin_backends::external::candle::CandleStorage` is the worked example:
 The adapter's raw `candle_core::Tensor` remains private to its storage boundary,
 while separate `Execute<MatMulSpec>`/`Execute<ReshapeSpec>` implementations
@@ -334,7 +334,7 @@ operate on the validated wrapper. Joining the descriptor contract does not
 expose or recreate the removed operation-family API.
 
 **Capability declarations** (`crates/incin-backends/src/capability.rs`) are
-grouped by *rule shape*, not by operation family — migrating an operation onto
+grouped by *rule shape*, not by operation family  -  migrating an operation onto
 the canonical path is one more name in an existing list, not a new match arm
 in every consumer (`docs/FROZEN_FOUNDATIONS.md`'s "the completeness proof"
 row). `cpu::canonical`'s `assert_every_advertised_row_executes!` makes an
@@ -344,7 +344,7 @@ advertised-but-unimplemented row a compile error, not a runtime surprise.
 implies `std`; the crate itself is `#![cfg_attr(not(feature = "std"),
 no_std)]`. A module that is not feature-gated (like `layout.rs`, shared
 between all backends) still has to build in the bare, no-feature
-configuration — where nothing implies `std`, and `Vec` must come from
+configuration  -  where nothing implies `std`, and `Vec` must come from
 `alloc` explicitly rather than the prelude. The CI job `backend-isolation`
 checks each backend feature standalone (`--no-default-features --features
 std,<backend>`) precisely because a backend accidentally depending on another
@@ -365,7 +365,7 @@ same canonical operation contract, not competing kernel paths.
 
 `Tensor::backward()` walks the tape and returns `Gradients`;
 `Backend::get_grad::<K>(&tensor, &grads)` reads one tensor's gradient back
-out. Both are `GraphState`-sited operations (§6) — outside what `Execute` can
+out. Both are `GraphState`-sited operations (§6)  -  outside what `Execute` can
 carry, by design, since they act on tape state rather than producing an
 allocation.
 
@@ -416,12 +416,12 @@ constructor accepts runtime shape arguments.
 
 `incin_core::prelude::Error` is the top-level fallible-path type; every
 constructor in this guide returns `Result<T, Error>` (aliased `Result<T>`).
-`BackendError` is the narrower type an `Execute` executor returns — typed
-variants (`InvalidInput`, `Execution`, `unsupported(name, reason)`, …), never
+`BackendError` is the narrower type an `Execute` executor returns  -  typed
+variants (`InvalidInput`, `Execution`, `unsupported(name, reason)`, ...), never
 a bare string a caller has to pattern-match against text. See
 `docs/ERROR_CONTRACT.md` for the full category list and which categories are
 allowed to panic (essentially none, outside an established internal
-invariant already checked at a boundary — `docs/INVARIANT_TYPES.md`'s
+invariant already checked at a boundary  -  `docs/INVARIANT_TYPES.md`'s
 "Checked sizes and arithmetic" section states the rule precisely: an `expect`
 is permitted only *after* a value has crossed a checked construction
 boundary, and represents an internal invariant violation rather than a
@@ -435,11 +435,11 @@ public input error).
 | `cuda` / `wgpu` / `metal` | The respective accelerator backend |
 | `external-candle` | The third-party Candle adapter under `incin::backend_authoring`... `external::candle` |
 | `backend-authoring` | §8: contracts for writing a backend or custom operation |
-| `backend-authoring` | §8 — the contract for writing a new backend |
-| `distributed` / `distributed-nccl` | `incin::experimental::distributed` — mesh, placement, collective planning |
+| `backend-authoring` | §8  -  the contract for writing a new backend |
+| `distributed` / `distributed-nccl` | `incin::experimental::distributed`  -  mesh, placement, collective planning |
 | `train` | The preview automatic `Trainer` under `incin::experimental::training` |
 | `autotune` | Preview kernel tuning cache and inspection types |
-| `compiled` | Structural compiled-execution prototype — does not execute graphs yet |
+| `compiled` | Structural compiled-execution prototype  -  does not execute graphs yet |
 | `std` | Lifts `no_std` restrictions; several backend/target/test-utils features imply it |
 | `test-utils` | `DummyBackend` and other test-only scaffolding, exported for downstream test code |
 
@@ -460,11 +460,11 @@ describes.
 - **Checked arithmetic at every boundary, not just the obvious ones.**
   Element counts, byte lengths, and stride products all use
   `checked_mul`/`ShapeBuf::checked_numel`/`CheckedNumel`/`CheckedByteLen`
-  rather than a bare `.iter().product()` — an oversized or crafted shape
+  rather than a bare `.iter().product()`  -  an oversized or crafted shape
   overflowing `usize` silently under release-mode wraparound is exactly the
   class of bug this exists to make impossible (`docs/INVARIANT_TYPES.md`).
 - **Invariant-bearing values have exactly one door in.** `TensorMeta`,
-  `Validated<O>`, `ShapeBuf`, every ID type — constructed only through the
+  `Validated<O>`, `ShapeBuf`, every ID type  -  constructed only through the
   function that checks the invariant, never assembled field-by-field by a
   caller. If you find yourself wanting to build one directly, the invariant
   you are about to skip is the reason not to.
@@ -475,7 +475,7 @@ describes.
 - **Generated documents are load-bearing, not decorative.** `docs/README.md`
   lists which files are generated from source and how to regenerate them; a
   test fails if the committed copy and a fresh regeneration disagree. Never
-  hand-edit one — edit the source and regenerate.
+  hand-edit one  -  edit the source and regenerate.
 - **A capability claim and an executor are the same edit.** The pattern in
   §6 and §8: one declaration feeds the capability row and the canonical
   executor, so a row that claims support the tree does not
@@ -484,24 +484,24 @@ describes.
   guide or the codebase's own doc comments cite a number (the 12.6ns/call
   pointwise-descriptor saving, the order-of-magnitude static-numel saving in
   §6), it was measured on this tree, in release mode, and reported as
-  measured — not rounded up into a bigger claim than the data supports.
+  measured  -  not rounded up into a bigger claim than the data supports.
 
 ## 14. What's next
 
 The authoritative, current version of this section is
-`docs/FROZEN_FOUNDATIONS.md`'s "Next steps, in dependency order" — read that
+`docs/FROZEN_FOUNDATIONS.md`'s "Next steps, in dependency order"  -  read that
 directly; it is regenerated in spirit every time a step completes; below is a
 snapshot as of this writing plus the smaller, additive work this session left
 queued.
 
 **FND-005's remaining path** (each step blocked by the one above it):
 
-1. Let a descriptor carry a payload and a weight set — unblocks
+1. Let a descriptor carry a payload and a weight set  -  unblocks
    `tensor_from_data`/`tensor_from_bytes` (need a data payload the current
    `CreationAttributes` has no field for) and `rnn`/`lstm` (need weight
    matrices the current `RecurrentAttributes` cannot name).
 2. Add a distribution registry mapping a name and parameter buffer to a
-   sampler — unblocks `sample`.
+   sampler  -  unblocks `sample`.
 3. Widen `Execute` to reach the sixteen non-backend-sited operations, or
    split them into a contract that can carry them.
 4. Finish extracting the remaining optional methods and associated types from
@@ -516,7 +516,7 @@ queued.
 
 **Smaller, additive threads also open**, none of them source-breaking:
 
-- Route Metal through `DispatchBackend` — `DispatchStorage`/`DispatchVar`/
+- Route Metal through `DispatchBackend`  -  `DispatchStorage`/`DispatchVar`/
   `DispatchGrads` currently have no Metal variant, so a `Dyn`-device
   operation on Apple Silicon returns `BackendUnavailable` even where Metal
   itself implements the operation.

@@ -29,7 +29,7 @@ impl StorageBackend for MyBackend {
 }
 ```
 
-`TensorMeta` is a proof token (see [Invariants](./invariants.md)) — shape,
+`TensorMeta` is a proof token (see [Invariants](./invariants.md))  -  shape,
 strides, offset, dtype, device, layout, alignment and capacity, all checked to
 agree. Your storage type must be able to produce one. If your device's native
 tensor type is foreign and carries no such metadata, pair it with one in a
@@ -59,11 +59,11 @@ impl Capabilities for MyBackend {
 
 A `CapabilityQuery` carries operation, dtype, layout, rank, training flag and
 math mode. `SupportLevel` is `Native`, `Composed` (you rewrite it into other
-operations), `Fallback`, or `Unsupported(reason)` — and the reason is typed,
+operations), `Fallback`, or `Unsupported(reason)`  -  and the reason is typed,
 so a refusal names the specific constraint that failed.
 
 The rule the whole design rests on: **an advertised operation must execute.**
-The CPU backend makes this mechanical — the same declaration that generates
+The CPU backend makes this mechanical  -  the same declaration that generates
 its capability rows generates a compile-time obligation that each has an
 `Execute` impl, so advertising something unimplemented does not build. Copy
 that pattern if you can; the alternative is a capability table that is
@@ -82,7 +82,7 @@ impl Execute<op::Add> for MyBackend {
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(OperationKind::Add, "add expects two operands"));
         };
-        // `request.operation` is `Validated` — its output shape was derived
+        // `request.operation` is `Validated`  -  its output shape was derived
         // and checked before you were reached. Read it rather than
         // re-deriving it.
         let out_shape = request.operation.descriptor().output_shape();
@@ -100,9 +100,9 @@ operations can return a tuple.
 
 ## The checklist
 
-1. `StorageBackend` — name, storage type, device type, metadata accessor.
+1. `StorageBackend`  -  name, storage type, device type, metadata accessor.
 2. Your storage type produces a valid `TensorMeta`.
-3. `Capabilities` — claim exactly what you execute, refuse with typed reasons.
+3. `Capabilities`  -  claim exactly what you execute, refuse with typed reasons.
 4. `Execute<op::X>` for each advertised operation.
 5. A capability-matrix test that *runs* each advertised row rather than
    asserting the table against itself.

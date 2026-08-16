@@ -1,6 +1,6 @@
 # Quickstart
 
-A tensor, some arithmetic, and a gradient — the shortest useful program:
+A tensor, some arithmetic, and a gradient  -  the shortest useful program:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     let a = Tensor::<s![2, 2], DefaultBackend>::ones(())?.require_grad();
     let b = Tensor::<s![2, 2], DefaultBackend>::full(3.0, ())?;
 
-    let c = a.mul(&b)?;
+    let c = &a * &b;
     let loss = c.sum_all()?;
 
     let grads = loss.backward()?;
@@ -22,8 +22,8 @@ fn main() -> Result<()> {
 }
 ```
 
-`s![2, 2]` is a **type**, not a value — `a`'s shape is checked at compile
-time. `a.mul(&b)` requires `b`'s shape type to match exactly (`ShapeEq`); a
+`s![2, 2]` is a **type**, not a value  -  `a`'s shape is checked at compile
+time. `a.try_mul(&b)` requires `b`'s shape type to match exactly (`ShapeEq`); a
 `[2, 3]` operand there is a compile error, not a panic three lines later.
 
 ## A tiny model
@@ -73,5 +73,5 @@ fn main() -> Result<()> {
 ```
 
 That's the whole shape of a training step: forward, a loss module, `backward`,
-`optimizer.step`. The rest of this book fills in the pieces — more layer
+`optimizer.step`. The rest of this book fills in the pieces  -  more layer
 types, real datasets, schedulers, metrics, and checkpointing.

@@ -16,11 +16,11 @@ divide cleanly by what they *make*: a type, a value, or an item.
 | `mesh!`, `placement!`, `parallel!` | distributed **types** | [Experimental](./experimental.md) |
 | `model!`, `import_model!` | a **module** from an ONNX file | [Saving and loading](./saving_loading.md) |
 
-## `dim!` — named dimensions
+## `dim!`  -  named dimensions
 
 Declares a dimension type whose *size is a runtime value* but whose *identity
 is compile-time*. Two tensors both carrying `Batch` are known to agree on that
-axis; a `Batch` used where a `Seq` is expected does not compile — even though
+axis; a `Batch` used where a `Seq` is expected does not compile  -  even though
 neither size is known until run time.
 
 ```rust,no_run
@@ -37,7 +37,7 @@ This is the middle ground the shape system exists to make available:
 `s![8, 128]` is fully static and `s![usize, 128]` is anonymously dynamic, but
 `s![Batch, 128]` is dynamic *and* named, so the compiler still catches an axis
 mix-up. `Dim::STATIC_SIZE` is `false` for a named dimension, which is why it
-weakens a shape's proof to `Mixed` — naming an axis makes it checkable, not
+weakens a shape's proof to `Mixed`  -  naming an axis makes it checkable, not
 statically sized.
 
 Names and extents are independent. A named static axis uses the same canonical
@@ -50,7 +50,7 @@ dim!(Batch);
 type StaticBatch = s![Batch = 25, 128];
 ```
 
-## `idx!` — slicing and reshaping
+## `idx!`  -  slicing and reshaping
 
 Builds the heterogeneous tuple `slice_idx` expects, one entry per axis:
 
@@ -58,7 +58,7 @@ Builds the heterogeneous tuple `slice_idx` expects, one entry per axis:
 |---|---|
 | `0..5` | a statically bounded slice, `Slice<U0, U5>` |
 | `..` | take the whole axis |
-| `...` | ellipsis — fill the axes not otherwise named |
+| `...` | ellipsis  -  fill the axes not otherwise named |
 | `-1` | `InferDim`, an inferred extent (reshaping) |
 
 ```rust,no_run
@@ -71,9 +71,9 @@ assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 ```
 
 The result shape is computed in the type system, so `view` above is a
-`Tensor<s![5, 20, 15], _>` — not a `Dyn` you have to re-assert.
+`Tensor<s![5, 20, 15], _>`  -  not a `Dyn` you have to re-assert.
 
-## `best_device!` — compile-time device selection
+## `best_device!`  -  compile-time device selection
 
 Expands to a device *type* chosen from the enabled Cargo features, optionally
 at a given ordinal:
@@ -87,7 +87,7 @@ type Second = incin_core::best_device!(incin_core::typenum::U1);
 It performs no discovery: no filesystem, no network, no hardware probe. It is
 a naming convenience over the feature-gated aliases and nothing more. For
 *runtime* hardware detection use `incin_backends::detect_device()`, which is a
-different question with a different answer — a build may have `cuda` compiled
+different question with a different answer  -  a build may have `cuda` compiled
 in on a machine with no CUDA device.
 
 The `cfg` resolution happens inside `incin-core` rather than in the macro body
@@ -99,7 +99,7 @@ disabled in every downstream crate and silently select CPU.
 
 Every macro here expands to absolute `::incin::...` (or `::incin_core::...`)
 paths, so it resolves against the crate rather than whatever the caller has in
-scope — including a module of the caller's own named `incin`.
+scope  -  including a module of the caller's own named `incin`.
 
 The one form none of them survives is a *package rename* in the caller's
 `Cargo.toml`:

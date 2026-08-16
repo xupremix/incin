@@ -11,7 +11,7 @@ incin = { path = "../incin/crates/incin" }
 incin = { git = "https://github.com/xupremix/incin" }
 ```
 
-The default feature set is `["std", "cpu"]` — a standard-library CPU build
+The default feature set is `["std", "cpu"]`  -  a standard-library CPU build
 with no extra setup. That's enough for everything in this book except the
 [Backends](./backends.md) chapter.
 
@@ -20,10 +20,10 @@ with no extra setup. That's enough for everything in this book except the
 | Feature | What it enables |
 |---|---|
 | `cpu` | The CPU backend, `DefaultBackend`, `DefaultDevice`. On by default. |
-| `cuda`, `wgpu`, `metal` | The respective accelerator backend. Read [Backends](./backends.md) before reaching for these — coverage is much narrower than CPU today. |
+| `cuda`, `wgpu`, `metal` | The respective accelerator backend. Read [Backends](./backends.md) before reaching for these  -  coverage is much narrower than CPU today. |
 | `backend-authoring` | Public contracts for implementing custom backends and operations. |
 | `train` | The preview automatic `Trainer`. |
-| `distributed` | Mesh/placement/collective planning — a design surface, not yet an execution path. |
+| `distributed` | Mesh/placement/collective planning  -  a design surface, not yet an execution path. |
 
 Enable what you need:
 
