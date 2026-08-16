@@ -40,3 +40,43 @@ Arithmetic operators return tensors directly and include operation context in
 their panic message when a runtime broadcast or backend check fails. Use the
 `try_add`, `try_sub`, `try_mul`, `try_div`, and `try_neg` methods when the
 failure must remain a recoverable `Result`.
+
+## Compile-time axis selectors
+
+Reductions can select a numeric axis with a const generic. The output keeps
+the shape information that the structural reduction rules can prove:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![4, 8, 16])?;
+let summed = x.sum::<1>()?;
+let kept = x.sum_keepdim::<1>()?;
+let indices = x.argmax::<2>()?;
+let minima = x.argmin::<0>()?;
+# Ok::<(), incin::Error>(())
+```
+
+The ergonomic const selector currently supports numeric axes `0` through
+`15`. Higher-rank or runtime-selected code can use the structural and runtime
+selector APIs. Named axes remain available through `sum_named` and
+`sum_keepdim_named` when the axis identity matters more than its numeric
+position.
+
+Named dimensions and const dimensions use different syntax. A named axis is
+written as `s![Batch, Features]`; a const path must be marked explicitly:
+
+```rust,no_run
+use incin::prelude::*;
+
+const BATCH: usize = 32;
+const FEATURES: usize = 128;
+dim!(Batch, Features);
+let x = Cpu.zeros(shape![Batch = const BATCH, Features = const FEATURES])?;
+type X = s![Batch = const BATCH, Features = const FEATURES];
+let _: Tensor<X, _, f32, NoGrad> = x;
+# Ok::<(), incin::Error>(())
+```
+
+The explicit `const` marker preserves the existing bare `s![Batch, ...]`
+named-dimension grammar and makes the meaning of a path unambiguous.

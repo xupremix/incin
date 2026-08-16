@@ -51,7 +51,7 @@ default builder:
 
 ```rust,ignore
 let loader = DataLoader::builder(Toy)
-    .batch_size(4)?
+    .batch_size(4)
     .workers(2)
     .shuffle(true)
     .build();
@@ -59,6 +59,12 @@ let loader = DataLoader::builder(Toy)
 
 Custom collation remains available through `DataLoader::new` and
 `DataLoader::builder_with_collate`.
+
+The default collator is deliberately conservative. It returns
+`Vec<D::Item>` and does not guess how tuple fields should be stacked. This
+keeps arbitrary dataset items supported. Convert the returned samples to
+tensors in the training loop, or provide a custom `Collate` implementation
+when batching must also perform padding, stacking, or label conversion.
 
 Errors are values, not end-of-epoch signals. A dataset or worker failure is
 returned as `Err(DataError)` from iteration and must be handled by the caller;

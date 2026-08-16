@@ -50,6 +50,24 @@ dim!(Batch);
 type StaticBatch = s![Batch = 25, 128];
 ```
 
+For a compile-time value held in a const item, use the explicit `const`
+marker. This is distinct from a named runtime dimension:
+
+```rust,no_run
+use incin::prelude::*;
+
+const BATCH: usize = 25;
+dim!(Batch, Features);
+type Fixed = s![Batch = const BATCH, Features = 128];
+let _: Tensor<Fixed, DefaultBackend> =
+    Cpu.zeros(shape![Batch = const BATCH, Features = 128])?;
+# Ok::<(), incin::Error>(())
+```
+
+Bare paths such as `s![Batch, Features]` continue to mean named dimensions.
+That distinction is required so existing named-shape code keeps its axis
+identity checks.
+
 ## `idx!`  -  slicing and reshaping
 
 Builds the heterogeneous tuple `slice_idx` expects, one entry per axis:
