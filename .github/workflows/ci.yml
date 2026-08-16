@@ -251,6 +251,10 @@ jobs:
       run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
+    - name: Validate publishable package boundaries
+      run: |
+        cargo metadata --locked --format-version 1 --no-deps >/dev/null
+        bash tools/check-package.sh
 
   docs:
     name: Documentation Build

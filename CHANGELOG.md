@@ -27,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Backend documentation:** Repaired stale placeholder references in the
   unsupported-operation macro documentation so each explanation names the
   operation family it describes.
+- **CI package gate:** The ledger job now validates locked Cargo metadata and
+  every publishable package archive, catching omitted sources, binaries, and
+  license metadata before release packaging.
 - **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
   helpers are now test-only, with production builds retaining only the
   candidate conversion and fallback policy they use.
