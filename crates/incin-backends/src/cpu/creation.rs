@@ -8,14 +8,8 @@
 use incin_core::error::{ConversionFailure, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
-#[allow(unused_imports)]
 use rand::Rng;
-#[allow(unused_imports)]
-use rand::SeedableRng;
-#[allow(unused_imports)]
-use rand_distr::{Distribution, StandardNormal};
-#[allow(unused_imports)]
-use rayon::prelude::*;
+use rand_distr::StandardNormal;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::var;
