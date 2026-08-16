@@ -130,6 +130,9 @@ pub(crate) fn quantized_matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Re
             let sum = if use_avx2 {
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
+                    // SAFETY: feature detection above proves AVX2 is
+                    // available, and the block count and row offsets were
+                    // derived from the validated Q8_0 matrix dimensions.
                     unsafe {
                         vec_dot_q8_0_avx2(
                             blocks_per_row,
@@ -165,7 +168,11 @@ pub(crate) fn quantized_matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Re
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 #[inline]
-/// `vec_dot_q8_0_avx2`.
+/// Computes one Q8_0 dot product with AVX2.
+///
+/// # Safety
+/// The caller must run this only when AVX2 is available. The row offsets and
+/// block count must keep every load within the two Q8_0 slices.
 unsafe fn vec_dot_q8_0_avx2(
     n: usize,
     lhs: &[crate::cpu::storage::BlockQ8_0],

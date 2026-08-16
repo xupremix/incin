@@ -610,6 +610,12 @@ fn scalar_gemm(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2", enable = "fma")]
 #[inline]
+/// Computes the AVX2/FMA part of a matrix product.
+///
+/// # Safety
+/// The caller must run this only when AVX2 and FMA are available. `rhs_data`
+/// and `out` must contain every element addressed by the derived row and
+/// column offsets.
 unsafe fn gemm_avx2(
     m: usize,
     k: usize,
@@ -635,6 +641,9 @@ unsafe fn gemm_avx2(
             let out_row = row * n;
 
             for col in (0..n_vec).step_by(8) {
+                // SAFETY: AVX2 and FMA are guaranteed by the caller, and the
+                // loop bounds keep each eight-element load and store inside
+                // the validated row slices.
                 unsafe {
                     let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row + col));
                     let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row + col));
@@ -652,6 +661,11 @@ unsafe fn gemm_avx2(
 
 #[cfg(target_arch = "aarch64")]
 #[inline]
+/// Computes the NEON part of a matrix product.
+///
+/// # Safety
+/// `rhs_data` and `out` must contain every element addressed by the derived
+/// row and column offsets. NEON is required by the aarch64 target contract.
 unsafe fn gemm_neon(
     m: usize,
     k: usize,
@@ -668,12 +682,16 @@ unsafe fn gemm_neon(
     for row in 0..m {
         for depth in 0..k {
             let scale = lhs.get(row, depth) as f32;
+            // SAFETY: NEON is part of the aarch64 baseline selected for this
+            // function by its target architecture.
             let scale_vec = unsafe { vdupq_n_f32(scale) };
 
             let rhs_row = rhs.index(depth, 0);
             let out_row = row * n;
 
             for col in (0..n_vec).step_by(4) {
+                // SAFETY: the loop bounds keep each four-element load and
+                // store inside the validated row slices.
                 unsafe {
                     let b = vld1q_f32(rhs_data.as_ptr().add(rhs_row + col));
                     let c = vld1q_f32(out.as_ptr().add(out_row + col));
@@ -693,6 +711,11 @@ unsafe fn gemm_neon(
 
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 #[inline]
+/// Computes the SIMD128 part of a matrix product.
+///
+/// # Safety
+/// `rhs_data` and `out` must contain every element addressed by the derived
+/// row and column offsets. The function is compiled only with `simd128`.
 unsafe fn gemm_wasm(
     m: usize,
     k: usize,
@@ -715,6 +738,8 @@ unsafe fn gemm_wasm(
             let out_row = row * n;
 
             for col in (0..n_vec).step_by(4) {
+                // SAFETY: the loop bounds keep each four-element load and
+                // store inside the validated row slices.
                 unsafe {
                     let b = v128_load(rhs_data.as_ptr().add(rhs_row + col).cast());
                     let c = v128_load(out.as_ptr().add(out_row + col).cast());

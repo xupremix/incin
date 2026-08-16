@@ -110,6 +110,9 @@ impl CpuBuffer {
 
     /// Read raw bytes of this buffer (useful for sending to GPU).
     pub fn as_bytes(&self) -> &[u8] {
+        // SAFETY: every match arm uses the allocation's actual element count
+        // and byte width. The returned slice borrows the same live Vec for the
+        // duration of this borrow, so it cannot outlive the allocation.
         unsafe {
             match self {
                 CpuBuffer::F32(v) => {
