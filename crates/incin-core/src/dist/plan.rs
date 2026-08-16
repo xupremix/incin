@@ -5,7 +5,7 @@
 //! must not infer independently: group, sequence, element and byte counts,
 //! dtype, reduction, placements, stream, and dependency.
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, string::String, vec, vec::Vec};
 
 use half::{bf16, f16};
 use typenum::{B1, IsLessOrEqual, NonZero, U2, U4294967295, Unsigned};

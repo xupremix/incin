@@ -80,6 +80,14 @@ impl WorkloadBucket {
             packed_alignment: false,
         }
     }
+
+    pub(crate) fn normalization(batch_size: usize, norm_size: usize) -> Self {
+        Self {
+            elements_log2: size_log2_bucket(batch_size),
+            reduction_log2: size_log2_bucket(norm_size),
+            packed_alignment: false,
+        }
+    }
 }
 
 #[cfg(any(feature = "autotune", test))]

@@ -12,15 +12,21 @@
 //! communicator bootstrap: rendezvous proves process identity and lifecycle,
 //! while a transport still proves its own plan and communicator identity.
 
-use alloc::string::{String, ToString};
+use alloc::string::String;
+#[cfg(feature = "std")]
+use alloc::string::ToString;
 use alloc::sync::Arc;
+#[cfg(feature = "std")]
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicU8, Ordering};
 
-use typenum::{U0, U1, U2, Unsigned};
+#[cfg(feature = "std")]
+use typenum::U2;
+use typenum::{U0, U1, Unsigned};
 
+#[cfg(feature = "std")]
 use crate::dist::mesh::ValidMesh;
 use crate::shapes::Dyn;
 
@@ -169,6 +175,7 @@ pub enum ContextFailure {
 }
 
 impl ContextFailure {
+    #[cfg(feature = "std")]
     const fn from_code(code: u16) -> Self {
         match code {
             1 => Self::Transport,

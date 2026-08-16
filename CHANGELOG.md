@@ -16,6 +16,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   by the features that use them. WGPU lifetime owners and CUDA tuning helpers
   no longer rely on broad dead-code allowances. The book CI job installs
   Chromium in the job that runs the browser checks.
+- **Feature isolation:** Distributed context imports and protocol decoding are
+  now gated with `std`, while compiled distributed plans retain their
+  no-std-compatible ownership imports. The supported `compiled,distributed`
+  and `distributed` feature contracts both compile cleanly.
+- **ONNX export surface:** Removed the unreferenced captured-graph export
+  helper from the private exporter module; the reviewed eager-graph exporter
+  remains the supported ONNX path.
 
 ### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.

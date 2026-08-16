@@ -11,7 +11,7 @@ use crate::dist::placement::{
     Replicated, Sharded,
 };
 use crate::exec::ExecutionDescriptor;
-use crate::shapes::buf::ShapeBuf;
+use crate::shapes::ShapeBuf;
 use crate::shapes::shape::Shape;
 use alloc::vec::Vec;
 use core::fmt;
