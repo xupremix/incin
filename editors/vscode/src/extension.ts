@@ -1,9 +1,9 @@
-// This extension does NOT talk LSP itself and contains no typenum parsing —
+// This extension does NOT talk LSP itself and contains no typenum parsing;
 // all humanization logic lives in the `incin-diagnostics` Rust crate, used
 // by the `incin-lsp` proxy binary. All this extension does is point the
 // *existing* rust-analyzer extension's server binary at `incin-lsp` instead
 // of rust-analyzer directly (`incin-lsp` then spawns the real rust-analyzer
-// itself) — see docs/growth/02-ide-extensions.md for the full architecture.
+// itself). See docs/growth/02-ide-extensions.md for the full architecture.
 import * as vscode from "vscode";
 
 const RA_SECTION = "rust-analyzer";
@@ -26,7 +26,7 @@ async function looksLikeAIncinProject(): Promise<boolean> {
  * INCIN_LSP_* into `rust-analyzer.server.extraEnv`. The `extraEnv` setting
  * is a best-effort integration point: verify it still exists in whichever
  * rust-analyzer extension version is installed before relying on runtime
- * toggling — if it's ever renamed/removed upstream, `server.path` alone
+ * toggling. If it's ever renamed/removed upstream, `server.path` alone
  * still gets diagnostics + hints working with incin-lsp's default config.
  */
 async function applyIncinLspConfig(hintsEnabled: boolean): Promise<void> {
@@ -52,7 +52,7 @@ async function restartRustAnalyzer(): Promise<void> {
     await vscode.commands.executeCommand("rust-analyzer.restartServer");
   } catch {
     vscode.window.showInformationMessage(
-      "Incin: settings updated — reload the window for them to take effect."
+      "Incin: settings updated; reload the window for them to take effect."
     );
   }
 }

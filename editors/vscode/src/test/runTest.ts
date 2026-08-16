@@ -3,7 +3,7 @@
 // extension loaded from source, opens a throwaway workspace containing a
 // Cargo.toml that mentions "incin", and runs src/test/suite/extension.test.ts
 // inside it. This exercises the extension's own activation and
-// settings-rewriting logic for real — it does not spin up rust-analyzer or
+// settings-rewriting logic for real; it does not spin up rust-analyzer or
 // incin-lsp themselves, so it cannot prove the end-to-end humanized-
 // diagnostic pipeline; see docs/growth/02-ide-extensions.md for what that
 // would additionally require.
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
 
   // Deliberately does NOT point at the system's snap-packaged `code`: snap's
   // sandboxing was confirmed (empirically, in this same investigation) to
-  // silently swallow `--extensionTestsPath` — the process exits 0 without
+  // silently swallow `--extensionTestsPath`; the process exits 0 without
   // ever invoking this module's `run()`. Letting test-electron download and
   // use its own unconfined VS Code build is the standard, documented, and
   // (here) actually-working path.
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
     process.env.INCIN_TEST_VSCODE_PATH || (await downloadAndUnzipVSCode());
 
   // package.json declares `rust-lang.rust-analyzer` as an extensionDependency
-  // (deliberately — see docs/growth/02-ide-extensions.md's 2026-07-23
+  // (deliberately; see docs/growth/02-ide-extensions.md's 2026-07-23
   // follow-up), so this extension flatly refuses to activate without it, even
   // in the test/dev host. The fresh profile test-electron manages has no
   // extensions at all, so it must be installed before `runTests()`.

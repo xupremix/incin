@@ -30,7 +30,7 @@ suite("Incin VS Code extension", () => {
     // restart its server, which means actually spawning whatever
     // `incin.lspPath` resolves to. Point it at a real, always-present,
     // instantly-exiting binary so that restart attempt doesn't fail with an
-    // unrelated ENOENT — this test is only about the config value flipping,
+    // unrelated ENOENT; this test is only about the config value flipping,
     // not about incin-lsp's own behavior.
     await vscode.workspace
       .getConfiguration("incin")

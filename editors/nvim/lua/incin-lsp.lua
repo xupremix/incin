@@ -1,22 +1,22 @@
 -- Configures Neovim's `rust_analyzer` LSP client to launch through the
 -- incin-lsp proxy instead of talking to rust-analyzer directly. Contains no
--- typenum-parsing logic itself — all humanization lives in the
+-- typenum-parsing logic itself; all humanization lives in the
 -- incin-diagnostics Rust crate behind incin-lsp. See
 -- docs/growth/02-ide-extensions.md for the full architecture.
 --
 -- Targets Neovim's native `vim.lsp.config`/`vim.lsp.enable` (0.11+): it
 -- merges onto whichever base `rust_analyzer` config is already registered
 -- (Neovim's bundled default, or nvim-lspconfig's, if installed) rather than
--- replacing it, so filetype/root-dir detection etc. keep working — only
+-- replacing it, so filetype/root-dir detection etc. keep working; only
 -- `cmd`/`cmd_env` are overridden here.
 --
 -- Important, confirmed against a real nvim-lspconfig v2.11 install: if your
 -- config calls `require("lspconfig").rust_analyzer.setup(...)` yourself
 -- (directly, or indirectly via `mason-lspconfig.setup({ handlers = {...} })`
--- — the common kickstart.nvim-derived pattern), that goes through
+-- the common kickstart.nvim-derived pattern), that goes through
 -- nvim-lspconfig's own legacy manager (`lspconfig/configs.lua`), which does
 -- **not** call `vim.lsp.config`/`vim.lsp.enable` at all. `M.setup()` below is
--- a no-op in that case — use `M.merge_into()` instead, inside whatever
+-- a no-op in that case; use `M.merge_into()` instead, inside whatever
 -- table *you* pass to that `.setup()` call.
 
 local M = {}
@@ -55,8 +55,8 @@ end
 --- Only takes effect if `rust_analyzer` is actually started via
 --- `vim.lsp.enable` (Neovim's native 0.11+ mechanism, or a plain
 --- `vim.lsp.start` call). If your config drives `nvim-lspconfig`'s own
---- `require("lspconfig").rust_analyzer.setup(...)` — directly or through
---- `mason-lspconfig`'s `handlers` — that bypasses this entirely; use
+--- `require("lspconfig").rust_analyzer.setup(...)` directly or through
+--- `mason-lspconfig`'s `handlers` bypasses this entirely; use
 --- `M.merge_into()` instead.
 --- @param opts? IncinLspOpts
 function M.setup(opts)
@@ -65,7 +65,7 @@ function M.setup(opts)
 end
 
 --- Merges the incin-lsp `cmd`/`cmd_env` override into an existing
---- nvim-lspconfig-shaped server config table — for `mason-lspconfig`
+--- nvim-lspconfig-shaped server config table for `mason-lspconfig`
 --- `handlers`, a direct `require("lspconfig").rust_analyzer.setup(...)`
 --- call, or anywhere else you already build that table yourself instead of
 --- calling `setup()` above. Does not mutate `server`; returns a new table.

@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `fold_static_numel` helper.
 - **CPU allocation imports:** Removed unused random and Rayon import
   suppressions from the CPU creation kernel.
+- **Editor prose:** Replaced dash-heavy comments and user-facing text in the
+  Neovim, VS Code, and RustRover integrations with ordinary punctuation.
 - **CPU test helper isolation:** The finite-difference gradient checker is now
   compiled only for CPU unit tests instead of shipping as dormant production
   code behind a module-wide dead-code allowance.
