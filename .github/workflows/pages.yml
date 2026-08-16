@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install mdBook
         run: cargo install mdbook --version "${MDBOOK_VERSION}" --locked
+      - name: Install Chromium for browser checks
+        run: sudo apt-get update && sudo apt-get install -y chromium
       - name: Build and validate documentation
         run: |
           set -euo pipefail
@@ -34,6 +36,7 @@ jobs:
           python3 tools/check-markdown-links.py
           python3 docs/book/build_site.py
           python3 tools/check-book-site.py
+          python3 tools/test-book-site.py
           node --check docs/book/site/book.js
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
