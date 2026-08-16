@@ -103,9 +103,9 @@ where
 {
     dataset: D,
     collate_fn: C,
-    batch_size: NonZeroUsize,
+    batch_size: usize,
     workers: usize,
-    prefetch: NonZeroUsize,
+    prefetch: usize,
     drop_last: bool,
     shuffle: bool,
     seed: u64,
@@ -119,13 +119,9 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// Sets the batch size.
-    pub fn batch_size(mut self, batch_size: usize) -> CoreResult<Self> {
-        self.batch_size =
-            NonZeroUsize::new(batch_size).ok_or_else(|| Error::InvalidModuleState {
-                operation: "data_loader_builder",
-                reason: ErrorMessage::new("batch size must be non-zero"),
-            })?;
-        Ok(self)
+    pub fn batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
     }
 
     /// Sets the number of worker threads.
@@ -136,12 +132,9 @@ where
     }
 
     /// Sets the bounded worker prefetch capacity.
-    pub fn prefetch(mut self, prefetch: usize) -> CoreResult<Self> {
-        self.prefetch = NonZeroUsize::new(prefetch).ok_or_else(|| Error::InvalidModuleState {
-            operation: "data_loader_builder",
-            reason: ErrorMessage::new("prefetch capacity must be non-zero"),
-        })?;
-        Ok(self)
+    pub fn prefetch(mut self, prefetch: usize) -> Self {
+        self.prefetch = prefetch;
+        self
     }
 
     /// Drops the final incomplete batch when enabled.
@@ -181,19 +174,29 @@ where
 
     /// Builds the configured loader.
     #[must_use]
-    pub fn build(self) -> DataLoader<D, C> {
-        DataLoader {
+    pub fn build(self) -> CoreResult<DataLoader<D, C>> {
+        let batch_size =
+            NonZeroUsize::new(self.batch_size).ok_or_else(|| Error::InvalidModuleState {
+                operation: "data_loader_builder",
+                reason: ErrorMessage::new("batch size must be non-zero"),
+            })?;
+        let prefetch =
+            NonZeroUsize::new(self.prefetch).ok_or_else(|| Error::InvalidModuleState {
+                operation: "data_loader_builder",
+                reason: ErrorMessage::new("prefetch capacity must be non-zero"),
+            })?;
+        Ok(DataLoader {
             dataset: Arc::new(self.dataset),
             collate_fn: Arc::new(self.collate_fn),
-            batch_size: self.batch_size.get(),
+            batch_size: batch_size.get(),
             num_workers: self.workers,
             shuffle: self.shuffle,
             drop_last: self.drop_last,
-            prefetch: self.prefetch,
+            prefetch,
             seed: self.seed,
             epoch: self.epoch,
             timeout: self.timeout,
-        }
+        })
     }
 }
 
@@ -230,9 +233,9 @@ where
         DataLoaderBuilder {
             dataset,
             collate_fn,
-            batch_size: NonZeroUsize::new(1).expect("constant is non-zero"),
+            batch_size: 1,
             workers: 0,
-            prefetch: NonZeroUsize::new(2).expect("constant is non-zero"),
+            prefetch: 2,
             drop_last: false,
             shuffle: false,
             seed: 0,
@@ -312,9 +315,9 @@ where
         DataLoaderBuilder {
             dataset,
             collate_fn: DefaultCollate,
-            batch_size: NonZeroUsize::new(1).expect("constant is non-zero"),
+            batch_size: 1,
             workers: 0,
-            prefetch: NonZeroUsize::new(2).expect("constant is non-zero"),
+            prefetch: 2,
             drop_last: false,
             shuffle: false,
             seed: 0,
@@ -669,10 +672,10 @@ mod tests {
     fn default_builder_keeps_loader_configuration_composable() {
         let loader = DataLoader::default_builder(RangeDataset(4))
             .batch_size(3)
-            .unwrap()
             .shuffle(true)
             .seed(7)
-            .build();
+            .build()
+            .unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
         assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 4);
     }
@@ -930,14 +933,13 @@ mod tests {
         let make = || {
             DataLoader::builder_with_collate(RangeDataset(10), VecCollate)
                 .batch_size(3)
-                .unwrap()
                 .drop_last(true)
                 .shuffle(true)
                 .seed(17)
                 .epoch(4)
                 .prefetch(1)
-                .unwrap()
                 .build()
+                .unwrap()
         };
         let first_loader = make();
         let second_loader = make();

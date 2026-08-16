@@ -98,8 +98,8 @@ pub fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()
     let gradients: BTreeMap<_, _> = parameters
         .iter()
         .map(|(name, variable)| {
-            let parameter = Cpu::var_as_tensor::<f32>(variable)?;
-            let storage = Cpu::get_grad::<f32>(&parameter, grads.as_backend())?
+            let storage = Cpu::var_as_tensor::<f32>(variable)?;
+            let storage = Cpu::get_grad::<f32>(&storage, grads.as_backend())?
                 .ok_or_else(|| Error::Msg(format!("missing gradient for {name}")))?;
             let bytes = Cpu::to_bytes::<f32>(&storage)?;
             let values = bytes

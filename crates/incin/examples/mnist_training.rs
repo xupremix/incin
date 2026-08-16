@@ -16,10 +16,10 @@ fn main() -> incin::Result<()> {
 
     // Create DataLoader
     let dataloader = DataLoader::builder(train_data)
-        .batch_size(32)?
+        .batch_size(32)
         .shuffle(true)
         .workers(0)
-        .build();
+        .build()?;
 
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![

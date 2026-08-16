@@ -19,7 +19,6 @@ extern crate incin_core as incin;
 use std::panic;
 
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
-use incin_core::backend_authoring::AutogradBackend;
 use incin_core::exec::{
     Determinism, ExecutionPolicy, GradMode, MathMode, NanPolicy, check_gradients,
 };
@@ -47,7 +46,7 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
 #[allow(clippy::type_complexity)]
 fn seeded_backward(
     loss: &Tensor<s![2, 2], B, f32, Grad>,
-) -> Result<incin_core::optim::Gradients<<B as AutogradBackend>::Grads>> {
+) -> Result<incin_core::optim::Gradients<B>> {
     let seed = Tensor::<s![2, 2], B, f32>::ones(()).unwrap();
     loss.backward_with(&seed)
 }
@@ -189,16 +188,9 @@ fn a_checked_pass_over_finite_gradients_agrees_with_an_unchecked_one() {
 #[allow(clippy::type_complexity)]
 fn gradient_of(
     t: &Tensor<s![2, 2], B, f32, Grad>,
-    grads: &incin_core::optim::Gradients<<B as AutogradBackend>::Grads>,
+    grads: &incin_core::optim::Gradients<B>,
 ) -> Vec<f32> {
-    let g = B::get_grad::<f32>(t.inner(), grads.as_backend())
-        .unwrap()
-        .unwrap();
-    let bytes = B::to_bytes::<f32>(&g).unwrap();
-    bytes
-        .chunks_exact(4)
-        .map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))
-        .collect()
+    grads.require(t).unwrap().to_vec1::<f32>().unwrap()
 }
 
 #[test]

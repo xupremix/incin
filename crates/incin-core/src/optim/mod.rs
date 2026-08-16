@@ -27,7 +27,7 @@ pub use scheduler::*;
 /// and apply the appropriate parameter update rule to all tracked variables.
 pub trait Optimizer<B: VariableBackend + AutogradBackend> {
     /// Steps the optimizer using the given gradients, updating the tracked parameters.
-    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
+    fn step(&mut self, grads: &Gradients<B>) -> Result<()>;
 }
 
 /// A homogeneous, optimizer-owned collection of trainable variables.
@@ -543,7 +543,7 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
 
 impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B, K> {
     /// `step`.
-    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+    fn step(&mut self, grads: &Gradients<B>) -> Result<()> {
         const OPERATION: &str = "sgd_step";
         validate_learning_rate(OPERATION, self.lr)?;
         let mut updates = alloc::vec::Vec::new();
@@ -710,7 +710,7 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
 
 impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<B, K> {
     /// `step`.
-    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+    fn step(&mut self, grads: &Gradients<B>) -> Result<()> {
         const OPERATION: &str = "adamw_step";
         validate_adam_config(
             OPERATION,
@@ -911,7 +911,7 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
 
 impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B, K> {
     /// `step`.
-    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+    fn step(&mut self, grads: &Gradients<B>) -> Result<()> {
         const OPERATION: &str = "adam_step";
         validate_adam_config(OPERATION, self.lr, self.beta1, self.beta2, self.eps, None)?;
         let next_step = self.step.checked_add(1).ok_or(Error::ArithmeticOverflow {

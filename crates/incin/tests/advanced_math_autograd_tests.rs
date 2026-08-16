@@ -1,6 +1,5 @@
 #![cfg(feature = "cpu")]
 
-use incin::backend_authoring::*;
 use incin::prelude::*;
 
 #[test]
@@ -78,15 +77,10 @@ fn test_autograd_tape_closures() -> Result<()> {
     let sum = out.sum_all()?;
     let grads = sum.backward()?;
 
-    let grad_true_storage = DefaultBackend::get_grad::<f32>(true_val.inner(), grads.as_backend())?
-        .expect("grad_true should exist");
-    let grad_true_vec = DefaultBackend::float_to_vec1::<f32>(&grad_true_storage)?;
+    let grad_true_vec = grads.require(&true_val)?.to_vec1::<f32>()?;
     assert_eq!(grad_true_vec, vec![1.0, 0.0, 1.0]);
 
-    let grad_false_storage =
-        DefaultBackend::get_grad::<f32>(false_val.inner(), grads.as_backend())?
-            .expect("grad_false should exist");
-    let grad_false_vec = DefaultBackend::float_to_vec1::<f32>(&grad_false_storage)?;
+    let grad_false_vec = grads.require(&false_val)?.to_vec1::<f32>()?;
     assert_eq!(grad_false_vec, vec![0.0, 1.0, 0.0]);
 
     Ok(())

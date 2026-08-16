@@ -588,6 +588,19 @@ fn validate_reshard_proof<O>(
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> {
+    pub(crate) fn from_gradient_storage(
+        source: &Tensor<S, B, K, G, Local>,
+        inner: B::Storage<K>,
+    ) -> Result<Tensor<S, B, K, NoGrad, Local>> {
+        Tensor::from_parts(
+            inner,
+            source.shape_buf().clone(),
+            source._dtype.clone(),
+            source._device.clone(),
+            NoGrad::init(()),
+        )
+    }
+
     /// Joins component parts after this module has witnessed their invariants.
     fn from_parts_witnessed(
         inner: B::Storage<K>,
@@ -1050,7 +1063,7 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
     pub fn backward_with(
         &self,
         seed: &Tensor<S, B, K, NoGrad, P>,
-    ) -> Result<crate::autograd::Gradients<B::Grads>> {
+    ) -> Result<crate::autograd::Gradients<B>> {
         if self.shape_buf() != seed.shape_buf() {
             return Err(Error::Backend(crate::err::BackendError::InvalidInput {
                 operation: crate::shapes::error::OperationKind::Storage,
@@ -1069,7 +1082,7 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
 
 impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
     /// Computes the backward pass for a scalar tensor.
-    pub fn backward(&self) -> Result<crate::autograd::Gradients<B::Grads>> {
+    pub fn backward(&self) -> Result<crate::autograd::Gradients<B>> {
         B::backward(&self.inner).map(crate::autograd::Gradients::from_backend)
     }
 }

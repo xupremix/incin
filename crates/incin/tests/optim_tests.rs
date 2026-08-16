@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use incin::backend_authoring::AutogradBackend;
 use incin::backend_authoring::{HostInterop, VariableBackend};
 use incin::optim::ParameterGroup;
 use incin::prelude::*;
@@ -51,7 +50,7 @@ fn state_bytes(
 /// Get linear and grads.
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackendImpl>,
-    incin::Gradients<<CpuBackendImpl as AutogradBackend>::Grads>,
+    incin::Gradients<CpuBackendImpl>,
 )> {
     let linear = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
     let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;
