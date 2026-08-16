@@ -80,29 +80,25 @@ macro_rules! impl_reduction_op {
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
     Tensor<S, B, K, G, P>
 {
-    /// Sums over a compile-time numeric axis.
-    ///
-    /// Numeric axes from `0` through `7` retain the static output-shape proof.
-    #[allow(clippy::type_complexity)]
-    pub fn sum<const AXIS: usize>(
-        &self,
-    ) -> Result<
-        Tensor<
-            <S as ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output,
-            B,
-            K,
-            G,
-            P,
-        >,
-    >
+    /// Sums over an arbitrary signed compile-time axis.
+    pub fn sum<const AXIS: isize>(&self) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
-        (): crate::shapes::idx::ConstAxis<AXIS>,
-        S: DynShape + ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>,
-        <S as ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output: DynShape,
         B: Execute<op::SumDim> + crate::exec::Capabilities,
         <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
     {
-        self.sum_at::<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>()
+        self.sum_runtime(AXIS)
+    }
+
+    /// Sums over a runtime or `axis!` numeric selector.
+    pub fn sum_axis<A: crate::shapes::idx::ToAxisIndex>(
+        &self,
+        axis: A,
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    where
+        B: Execute<op::SumDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.sum_runtime(axis.to_axis_index())
     }
 
     /// Sums over a compile-time structural axis cursor.
@@ -163,27 +159,25 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
-    /// Sums over a compile-time numeric axis while retaining it.
-    #[allow(clippy::type_complexity)]
-    pub fn sum_keepdim<const AXIS: usize>(
-        &self,
-    ) -> Result<
-        Tensor<
-            <S as ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output,
-            B,
-            K,
-            G,
-            P,
-        >,
-    >
+    /// Sums over an arbitrary signed compile-time axis while retaining it.
+    pub fn sum_keepdim<const AXIS: isize>(&self) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
-        (): crate::shapes::idx::ConstAxis<AXIS>,
-        S: DynShape + ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>,
-        <S as ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output: DynShape,
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        self.sum_keepdim_at::<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>()
+        self.sum_keepdim_runtime(AXIS)
+    }
+
+    /// Sums over a runtime or `axis!` numeric selector while retaining it.
+    pub fn sum_keepdim_axis<A: crate::shapes::idx::ToAxisIndex>(
+        &self,
+        axis: A,
+    ) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    where
+        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.sum_keepdim_runtime(axis.to_axis_index())
     }
 
     /// Sums over a compile-time structural axis cursor while retaining it.
@@ -251,25 +245,31 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
 
     /// Sums one runtime-selected axis and erases only the unavailable output
     /// position facts.
-    pub fn sum_runtime(&self, axis: usize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    pub fn sum_runtime(&self, axis: isize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         B: Execute<op::SumDim> + crate::exec::Capabilities,
         <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis =
-            crate::shapes::idx::AxisSelector::normalize_unsigned(axis, self.shape_buf().rank())?;
+        let axis = crate::shapes::idx::AxisSelector::new(&[axis])
+            .normalize(self.shape_buf().rank())?
+            .into_iter()
+            .next()
+            .expect("one axis selector always yields one axis");
         let descriptor = reduction_descriptor::<op::SumDim>(&self.shape_buf_value(), axis)?;
         self.execute_named_reduction(descriptor)
     }
 
     /// Sums one runtime-selected axis while retaining it as a length-one axis.
-    pub fn sum_keepdim_runtime(&self, axis: usize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
+    pub fn sum_keepdim_runtime(&self, axis: isize) -> Result<Tensor<crate::shapes::Dyn, B, K, G, P>>
     where
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
     {
-        let axis =
-            crate::shapes::idx::AxisSelector::normalize_unsigned(axis, self.shape_buf().rank())?;
+        let axis = crate::shapes::idx::AxisSelector::new(&[axis])
+            .normalize(self.shape_buf().rank())?
+            .into_iter()
+            .next()
+            .expect("one axis selector always yields one axis");
         let descriptor = reduction_descriptor::<op::SumKeepDim>(&self.shape_buf_value(), axis)?;
         self.execute_named_reduction(descriptor)
     }
@@ -500,7 +500,7 @@ where
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 {
     /// Computes argmax along a compile-time numeric axis.
-    pub fn argmax<const AXIS: usize>(
+    pub fn argmax<const AXIS: isize>(
         &self,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
@@ -514,14 +514,18 @@ where
     #[doc(hidden)]
     pub fn argmax_runtime(
         &self,
-        dim: Option<usize>,
+        dim: Option<isize>,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
     where
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
     {
         let normalized = dim
-            .map(|d| crate::shapes::idx::AxisSelector::normalize_unsigned(d, self.rank()))
+            .map(|d| {
+                crate::shapes::idx::AxisSelector::new(&[d])
+                    .normalize(self.rank())
+                    .map(|axes| axes[0])
+            })
             .transpose()?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         if let Some(d) = normalized {

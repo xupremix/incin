@@ -586,7 +586,8 @@ pub mod prelude {
     pub use incin_core::shapes::stack::StackShape;
     pub use incin_core::shapes::{
         AppendDim, At, Axis, AxisSelector, BroadcastExtent, BroadcastShape, FromEnd, ReduceAt,
-        ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar, SwapAt, TryReshape,
+        ReduceKeepAt, RemoveAt, ReshapeShape, SameCount, Scalar, StaticAxis, SwapAt, ToAxisIndex,
+        TryReshape,
     };
 
     #[cfg(feature = "cuda")]

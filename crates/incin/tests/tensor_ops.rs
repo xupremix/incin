@@ -88,6 +88,21 @@ fn test_unary_softmax() -> Result<()> {
 }
 
 #[test]
+fn signed_axis_selectors_cover_runtime_and_axis_macro_paths() -> Result<()> {
+    let tensor =
+        Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+
+    let runtime = tensor.sum_runtime(-1)?;
+    let macro_selected = tensor.sum_axis(axis!(-1))?;
+    let compile_time = tensor.sum::<-1>()?;
+
+    assert_eq!(runtime.to_vec1::<f32>()?, vec![6.0, 15.0]);
+    assert_eq!(macro_selected.to_vec1::<f32>()?, vec![6.0, 15.0]);
+    assert_eq!(compile_time.to_vec1::<f32>()?, vec![6.0, 15.0]);
+    Ok(())
+}
+
+#[test]
 /// Test unary misc.
 fn test_unary_misc() -> Result<()> {
     // neg

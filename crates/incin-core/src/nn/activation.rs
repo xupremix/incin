@@ -231,7 +231,7 @@ where
     #[inline]
     /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
-        x.softmax(self.dim)
+        x.softmax(self.dim as isize)
     }
 }
 

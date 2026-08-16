@@ -1219,7 +1219,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Runtime flatten range with checked normalization and a dynamic output.
-    pub fn flatten_runtime(&self, start: usize, end: usize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn flatten_runtime(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<
                 op::FlattenExact,
@@ -1227,6 +1227,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             > + Capabilities,
     {
         let rank = self.shape_buf().rank();
+        let axes = crate::shapes::idx::AxisSelector::new(&[start, end]).normalize(rank)?;
+        let start = axes[0];
+        let end = axes[1];
         if start > end || end >= rank {
             return Err(crate::err::Error::Shape(
                 crate::shapes::ShapeError::InvalidAxisRange {

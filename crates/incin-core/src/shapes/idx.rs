@@ -372,19 +372,8 @@ impl<I: StaticCursor> StaticCursor for FromEnd<I> {
     const INDEX: isize = -(1 + I::INDEX);
 }
 
-/// Maps the ergonomic const-generic axis spelling to the structural cursor
-/// used by the shape proof traits.
-pub trait ConstAxis<const AXIS: usize> {
-    /// Structural cursor for `AXIS`.
-    type Cursor: StaticCursor;
-}
-
-macro_rules! const_axis_map {
-    ($($axis:literal => $cursor:ty),+ $(,)?) => {
-        $(impl ConstAxis<$axis> for () { type Cursor = $cursor; })+
-    };
-}
-
+/* Legacy finite const-axis map removed. Axis selectors now resolve through
+   `AxisSelector` and `axis!` without a hard-coded range.
 const_axis_map!(
     0 => Here,
     1 => Next<Here>,
@@ -402,7 +391,7 @@ const_axis_map!(
     13 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>,
     14 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>>,
     15 => Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Next<Here>>>>>>>>>>>>>>>,
-);
+); */
 
 /// Value-level spelling of a compile-time axis cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
