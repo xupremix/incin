@@ -50,6 +50,11 @@ jobs:
     - name: Check Formatting
       run: cargo fmt --all -- --check
 
+    - name: Check Rust documentation
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc --workspace --no-deps
+
     - name: Check reviewed public API
       run: |
         cargo install cargo-public-api --version "${PUBLIC_API_VERSION}" --locked
