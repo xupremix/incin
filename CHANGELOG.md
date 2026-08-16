@@ -34,6 +34,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the no-`std` policy-scope wording so core rustdoc passes with warnings denied.
 - **Dummy backend dead code:** Removed an unused family of private float
   operation shims and all stale dead-code allowances from the test backend.
+- **Dynamic marker scope:** Restricted the private `Dyn::marker` test helper to
+  unit-test builds, removing the last production dead-code allowance in core.
+- **Compile-fail diagnostics:** Updated the `Dyn` privacy regression snapshot
+  to reflect that the test-only marker helper is no longer suggested to users.
 - **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
   helpers are now test-only, with production builds retaining only the
   candidate conversion and fallback policy they use.

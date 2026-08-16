@@ -12,7 +12,7 @@ pub struct Dyn(());
 
 impl Dyn {
     #[inline]
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn marker() -> Self {
         Self(())
     }
