@@ -398,10 +398,6 @@ name = "distributed-nccl"
 enables = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 
 [[feature_crate.feature]]
-name = "target-api"
-enables = []
-
-[[feature_crate.feature]]
 name = "test-utils"
 enables = ["incin-core/test-utils"]
 
@@ -486,10 +482,6 @@ enables = ["incin-core/compiled", "incin-backends/compiled"]
 [[feature_crate.feature]]
 name = "hardware-tests"
 enables = []
-
-[[feature_crate.feature]]
-name = "target-api"
-enables = ["incin-backends/target-api"]
 
 [[feature_crate.feature]]
 name = "test-utils"
