@@ -76,6 +76,10 @@ identity checks.
 the output type, while the inferred extent is carried as `usize`. The older `idx!` macro builds
 the heterogeneous type-level target used by the advanced `reshape_idx` API:
 
+`idx!` is available from `incin::prelude::*`. The explicit
+`incin::macros::advanced::idx` path remains available for code that keeps
+advanced macros separate from the ordinary prelude.
+
 | Syntax | Meaning |
 |---|---|
 | `0..5` | a statically bounded slice, `Slice<U0, U5>` |
