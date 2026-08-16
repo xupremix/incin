@@ -2,4 +2,16 @@ error[E0599]: no method named `eq_canonical` found for struct `incin_core::tenso
  --> tests/target_api_compile_fail/eq_canonical_absent.rs:6:15
   |
 6 |     let _ = a.eq_canonical(&b);
-  |               ^^^^^^^^^^^^ method not found in `incin_core::tensor::base::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl>`
+  |               ^^^^^^^^^^^^
+  |
+help: there is a method `concat` with a similar name, but with different arguments
+ --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation.rs
+  |
+  | /     pub fn concat<S2, A>(
+  | |         &self,
+  | |         other: &Tensor<S2, B, K, G>,
+  | |         axis: A,
+... |
+  | |         B: Execute<op::ConcatExact> + Capabilities,
+  | |         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+  | |_____________________________________________________________________^
