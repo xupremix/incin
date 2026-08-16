@@ -12,7 +12,8 @@ are none.
 Use `FlattenAxes` when a model receives a runtime-shaped tensor and ordinary
 code should describe the axis range directly. The signed end axis `-1` means
 the final axis, so this keeps the leading batch axis and flattens the image
-axes without exposing structural cursor types.
+axes without exposing structural cursor types. For a statically known range,
+call `tensor.flatten(axis!(1), axis!(-1))` to preserve the exact output shape.
 
 ```rust,no_run
 use incin::prelude::*;

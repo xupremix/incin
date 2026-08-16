@@ -6,7 +6,7 @@
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
 //! * **Backend Agnostic**: CPU is enabled by default; native CUDA and WGPU are explicit opt-ins. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
-//! * **Macro-driven Ergonomics**: Stable macros such as `s![]` define shapes and `idx![]` express slicing and reshaping. Partial ONNX expansion is available separately as `experimental::model!`.
+//! * **Macro-driven Ergonomics**: Stable macros such as `s![]`, `shape![]`, `axis![]`, and `i![]` define shapes, selectors, and indexing. Partial ONNX expansion is available separately as `experimental::model!`.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
 //! ## Quick Start

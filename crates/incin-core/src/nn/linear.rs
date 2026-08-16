@@ -446,7 +446,7 @@ where
     type Error = Error;
 
     fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
+        let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         let bias_t = self.bias.as_ref().unwrap().as_tensor()?;
         let out_final = out.broadcast_add::<Dyn, Train::TensorGrad>(&bias_t)?;
@@ -478,7 +478,7 @@ where
     type Error = Error;
 
     fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
+        let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         x.matmul(&weight_t)
     }
 }
@@ -501,7 +501,7 @@ where
     type Error = Error;
 
     fn forward(&self, x: Tensor<Dyn, B, K>) -> core::result::Result<Tensor<Dyn, B, K>, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
+        let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         if let Some(b) = &self.bias {
             let bias_t = b.as_tensor()?;
@@ -562,7 +562,7 @@ where
         let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
+        let weight_t = weight_dyn.transpose(0isize, 1isize)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 
@@ -613,7 +613,7 @@ where
         let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
+        let weight_t = weight_dyn.transpose(0isize, 1isize)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_final = x_dyn.matmul(&weight_t)?;
 
@@ -655,7 +655,7 @@ where
         let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
+        let weight_t = weight_dyn.transpose(0isize, 1isize)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 

@@ -202,6 +202,19 @@ where
     }
 }
 
+impl<S> AxisPairSelector<S> for (isize, isize)
+where
+    S: Shape + RuntimeRankProjection,
+    S::Keep: Shape + DynShape,
+{
+    type Output = S::Keep;
+
+    fn resolve(&self, rank: usize) -> Result<(usize, usize)> {
+        let axes = crate::shapes::idx::AxisSelector::new(&[self.0, self.1]).normalize(rank)?;
+        Ok((axes[0], axes[1]))
+    }
+}
+
 impl<S, L, R> AxisPairSelector<S>
     for (
         crate::shapes::idx::NamedAxisSelector<L>,
@@ -1297,40 +1310,41 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         Ok(out)
     }
 
-    /// Transposes two static axis selectors while preserving the output shape.
+    /// Transposes two axis selectors while preserving the strongest available
+    /// output shape proof.
     #[allow(clippy::type_complexity)]
     pub fn transpose<L, R>(
         &self,
-        _left: StaticAxis<L>,
-        _right: StaticAxis<R>,
-    ) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
+        left: L,
+        right: R,
+    ) -> Result<Tensor<<(L, R) as AxisPairSelector<S>>::Output, B, K, G>>
     where
-        L: StaticCursor,
-        R: StaticCursor,
-        S: SwapAxes<L, R>,
-        <S as SwapAxes<L, R>>::Output: Shape + DynShape,
+        (L, R): AxisPairSelector<S>,
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
-        let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
-            .normalize(self.shape_buf().rank())?;
-        let first = axes[0];
-        let second = axes[1];
+        let (first, second) = (left, right).resolve(self.shape_buf().rank())?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(first, second);
-        let output_shape =
-            ShapeValue::<<S as SwapAxes<L, R>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
-                .map_err(crate::err::Error::Shape)?;
+        let output_shape = ShapeValue::<<(L, R) as AxisPairSelector<S>>::Output>::try_new(
+            ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
-        let inner = G::grad_mode(&self._grad).restrict(|| {
-            dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
-                &context,
-                TransposeAttributes { first, second },
-                &[input],
-                &output_shape,
-            )
-        })?;
+        let inner =
+            G::grad_mode(&self._grad).restrict(|| {
+                dispatch::execute_shaped::<
+                    op::TransposeExact,
+                    B,
+                    <(L, R) as AxisPairSelector<S>>::Output,
+                >(
+                    &context,
+                    TransposeAttributes { first, second },
+                    &[input],
+                    &output_shape,
+                )
+            })?;
         Tensor::from_shape_value(
             inner.into(),
             output_shape,
@@ -1386,6 +1400,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Runtime-selector transpose. Known input rank is preserved in the
     /// result; a fully dynamic input remains fully dynamic.
+    #[doc(hidden)]
     pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<S::Keep, B, K, G>>
     where
         S: RuntimeRankProjection,
@@ -1393,10 +1408,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
-        let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
-            .normalize(self.shape_buf().rank())?;
+        let (first, second) = <(isize, isize) as AxisPairSelector<S>>::resolve(
+            &(left, right),
+            self.shape_buf().rank(),
+        )?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
-        out_dims.swap(axes[0], axes[1]);
+        out_dims.swap(first, second);
         let output_shape = ShapeValue::<S::Keep>::try_new(ShapeBuf::from_slice(&out_dims))
             .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
@@ -1405,10 +1422,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             .restrict(|| {
                 dispatch::execute_shaped::<op::TransposeExact, B, S::Keep>(
                     &context,
-                    TransposeAttributes {
-                        first: axes[0],
-                        second: axes[1],
-                    },
+                    TransposeAttributes { first, second },
                     &[input],
                     &output_shape,
                 )

@@ -13,7 +13,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 
 - **Compile-Time Shape Verification**: static `s![]` shapes catch incompatible tensor operations during compilation.
 - **Named Dimensions**: `dim!` makes semantic axis names part of the tensor type.
-- **Python-Style Slicing**: `idx![]` provides checked range and index expressions.
+- **Python-Style Slicing**: `i![]` provides checked runtime range and index expressions.
 - **ONNX Model Importing**: `import_model!` generates typed Rust modules at compile time. Runtime ONNX weight loading is not implemented; use safetensors for runtime loading.
 - **Native Backends**: CPU is the default; CUDA and WGPU are explicit features.
 - **External Backends**: Candle interoperability is available explicitly through `external-candle` and `incin::external::candle`.
@@ -175,13 +175,13 @@ impl<B: Backend> MLP<B> {
 }
 ```
 
-### Slicing with `idx!`
+### Slicing with `i!`
 
 ```rust,ignore
 use incin::prelude::*;
 
 let t = Tensor::<Dyn>::zeros([2, 3, 4])?;
-let sliced = t.slice(idx![.., 1..3, 0])?;
+let sliced = t.get(i![.., 1..3, 0])?;
 ```
 
 ### ONNX Model Import

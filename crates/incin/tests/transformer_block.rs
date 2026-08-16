@@ -48,7 +48,7 @@ impl Module<Input> for TransformerBlock {
         let key = self.key.forward(input.clone())?;
         let value = self.value.forward(input.clone())?;
         let scores = query
-            .matmul(&key.transpose_runtime(0, 1)?)?
+            .matmul(&key.transpose(0isize, 1isize)?)?
             .mul_scalar(1.0 / (8.0_f32).sqrt())?;
         let attention = scores.softmax(1)?;
         let attended = attention.matmul(&value)?;

@@ -37,7 +37,7 @@ the tool for changing a layout.
 static rank-2 target, because each static axis contributes a unit. A target
 with runtime axes takes their sizes there instead.
 
-## Slicing with `idx!`
+## Slicing with `i!`
 
 ```rust,no_run
 use incin::prelude::*;
@@ -46,16 +46,14 @@ type B = DefaultBackend;
 let t = Tensor::<s![10, 20, 30], B>::zeros(())?;
 
 // One entry per axis. The result shape is computed in the type system.
-let view = t.slice_idx::<idx![0..5, .., 15..30]>()?;
+let view = t.get(i![0..5, .., 15..30])?;
 assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 # Ok::<(), incin::Error>(())
 ```
 
-`view` above is a `Tensor<s![5, 20, 15], _>`  -  the extents were computed at
-compile time from the slice bounds, not recovered at run time. The advanced
-`reshape_idx`
-is the same idea for reshaping, and accepts `-1` (`InferDim`) for one axis
-whose extent should be derived from the others.
+`view` is dynamically shaped because indexing is a runtime operation. For
+shape inference, use `shape![..., infer]` with `reshape_infer`; `-1` is not
+used as an indexing sentinel.
 
 ## Broadcasting
 
