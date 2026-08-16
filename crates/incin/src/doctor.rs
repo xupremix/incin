@@ -92,11 +92,14 @@ pub trait Host {
 /// A Cargo feature and whether this build enabled it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Feature {
+    /// Cargo feature name.
     pub name: String,
+    /// Whether the feature is enabled in this build.
     pub enabled: bool,
 }
 
 impl Feature {
+    /// Creates a feature observation for a report.
     #[must_use]
     pub fn new(name: &str, enabled: bool) -> Self {
         Self {
@@ -109,11 +112,14 @@ impl Feature {
 /// An instruction-set extension a CPU kernel branches on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IsaFeature {
+    /// CPU extension name.
     pub name: String,
+    /// Whether the host reports support for the extension.
     pub available: bool,
 }
 
 impl IsaFeature {
+    /// Creates an instruction-set observation for a report.
     #[must_use]
     pub fn new(name: &str, available: bool) -> Self {
         Self {
@@ -154,14 +160,18 @@ impl CacheState {
 /// One cache directory the runtime uses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Cache {
+    /// Stable name of the cache.
     pub name: String,
+    /// Configured cache path, when one was discoverable.
     pub path: Option<String>,
+    /// Observed state of the cache path.
     pub state: CacheState,
     /// Why the state is what it is, when the state alone does not say.
     pub detail: Option<String>,
 }
 
 impl Cache {
+    /// Creates a cache observation from an optional path and state.
     #[must_use]
     pub fn new(name: &str, path: Option<PathBuf>, state: CacheState) -> Self {
         Self {
@@ -172,6 +182,7 @@ impl Cache {
         }
     }
 
+    /// Adds a human-readable explanation to the observation.
     #[must_use]
     pub fn with_detail(mut self, detail: &str) -> Self {
         self.detail = Some(detail.to_string());
@@ -186,20 +197,30 @@ impl Cache {
 /// fields rather than one tri-state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DeviceReport {
+    /// Device family name.
     pub kind: String,
+    /// Whether support for the family was compiled into this build.
     pub compiled_in: bool,
+    /// Whether a device of this family answered the probe.
     pub available: bool,
+    /// Device ordinal when one was reported.
     pub ordinal: Option<usize>,
 }
 
 /// One representative operation, asked of one available device.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Probe {
+    /// Device name used for the probe.
     pub device: String,
+    /// Operation family that was queried.
     pub operation: String,
+    /// Dtype used for the query.
     pub dtype: String,
+    /// Rank used for the query.
     pub rank: usize,
+    /// Whether the query exercised training support.
     pub training: bool,
+    /// Registry support result rendered for the report.
     pub support: String,
     /// The registry's reason, when the answer was `unsupported`.
     pub reason: Option<String>,
@@ -234,9 +255,13 @@ impl Severity {
 /// is not free to change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Finding {
+    /// Importance of the finding.
     pub severity: Severity,
+    /// Stable machine-readable finding code.
     pub code: String,
+    /// Human-readable explanation.
     pub message: String,
+    /// Optional remediation guidance.
     pub remedy: Option<String>,
 }
 
@@ -254,20 +279,30 @@ impl Finding {
 /// Versions of the two things a bug report is always asked for first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Toolchain {
+    /// Incin version that produced the report.
     pub incin: String,
+    /// Rust compiler version, when it could be queried.
     pub rustc: Option<String>,
 }
 
 /// The complete diagnostic report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Report {
+    /// Version of the report schema.
     pub schema_version: u32,
+    /// Toolchain versions that produced the report.
     pub toolchain: Toolchain,
+    /// Cargo features observed in the build.
     pub features: Vec<Feature>,
+    /// CPU extensions used by kernel dispatch.
     pub cpu_isa: Vec<IsaFeature>,
+    /// Backend availability observations.
     pub devices: Vec<DeviceReport>,
+    /// Runtime cache observations.
     pub caches: Vec<Cache>,
+    /// Representative operation probes.
     pub probes: Vec<Probe>,
+    /// Findings derived from the observations.
     pub findings: Vec<Finding>,
 }
 

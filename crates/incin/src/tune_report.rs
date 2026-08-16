@@ -1,6 +1,8 @@
 //! `cargo incin tune` — autotune cache management report (`UX-006`).
 
+/// Process exit code for a successful tune command.
 pub const EXIT_OK: i32 = 0;
+/// Process exit code for invalid tune-command arguments or unsafe requests.
 pub const EXIT_USAGE: i32 = 2;
 
 /// Runs `cargo incin tune` CLI subcommand.

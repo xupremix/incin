@@ -55,6 +55,11 @@ jobs:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc --workspace --no-deps
 
+    - name: Check facade documentation coverage
+      env:
+        RUSTDOCFLAGS: -D warnings -D missing_docs
+      run: cargo doc -p incin --lib --no-deps
+
     - name: Check reviewed public API
       run: |
         cargo install cargo-public-api --version "${PUBLIC_API_VERSION}" --locked

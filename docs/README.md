@@ -21,7 +21,7 @@ Release packaging is also versioned: the release workflow pins mdBook,
 Node.js, and the VS Code packaging tool, and uploads the book, VS Code,
 Neovim, IntelliJ-platform, `incin-lsp`, and `cargo-incin` artifacts together.
 
-Rust documentation is a CI contract as well as a generated output: `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps` must pass before changes are considered complete. This catches broken intra-doc links and rustdoc warnings across the workspace.
+Rust documentation is a CI contract as well as a generated output: `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps` must pass before changes are considered complete. The user-facing facade additionally runs `RUSTDOCFLAGS='-D warnings -D missing_docs' cargo doc -p incin --lib --no-deps`. These checks catch broken intra-doc links, rustdoc warnings, and undocumented facade additions.
 
 **Generated.** Written by a test from the Rust source and re-checked on every
 run. If one of these is wrong, the source is wrong. Never edit them by hand.

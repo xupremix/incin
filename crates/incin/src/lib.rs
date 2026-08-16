@@ -76,6 +76,8 @@
 // mdBook's standalone tester does not receive Cargo's `--extern` arguments.
 // Keep a Cargo-backed doctest mirror so the user-facing chapters are checked
 // against the real facade and feature set.
+#![warn(missing_docs)]
+
 #[cfg(all(doctest, feature = "backend-authoring"))]
 #[doc = concat!(
     include_str!("../../../docs/book/src/introduction.md"),
@@ -509,16 +511,13 @@ pub type DefaultDevice = incin_core::tensor::device::Cuda;
 
 #[cfg(feature = "train")]
 mod plan_report;
-#[cfg(feature = "cpu")]
-/// Default backend on the CPU, equivalent to `IncinBackend<Cpu>`.
-/// The automatic `Trainer` (`UX-001`). Preview tier, so it ships behind the
-/// non-default `train` feature.
 #[cfg(feature = "train")]
 mod train;
 #[cfg(feature = "std")]
 mod tune_report;
 
 #[cfg(feature = "cpu")]
+/// Default backend on the CPU, equivalent to `IncinBackend<Cpu>`.
 pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
