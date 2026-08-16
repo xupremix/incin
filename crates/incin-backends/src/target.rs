@@ -78,7 +78,7 @@ pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
 use incin_core::shapes::dynamic::Dyn;
 use incin_core::shapes::{ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
 use incin_core::tensor::base::Tensor;
-#[cfg(feature = "cpu")]
+#[cfg(any(feature = "cpu", feature = "external-candle"))]
 use incin_core::tensor::device::Cpu;
 #[cfg(feature = "metal")]
 use incin_core::tensor::device::Metal;
