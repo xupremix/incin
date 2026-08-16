@@ -961,15 +961,19 @@ pub trait ShapeSpec {
 /// is produced by `shape![..., infer]` and resolved only when a source tensor
 /// supplies its element count.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InferShape {
+pub struct InferShape<S: Shape + DynShape = Dyn> {
     extents: alloc::vec::Vec<Option<usize>>,
+    marker: core::marker::PhantomData<fn() -> S>,
 }
 
-impl InferShape {
+impl<S: Shape + DynShape> InferShape<S> {
     /// Creates an inference specification. Exactly one extent must be `None`.
     #[must_use]
     pub fn new(extents: alloc::vec::Vec<Option<usize>>) -> Self {
-        Self { extents }
+        Self {
+            extents,
+            marker: core::marker::PhantomData,
+        }
     }
 
     /// Resolves the inferred extent against a source element count.

@@ -914,8 +914,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Reshapes with one runtime-inferred extent from `shape![..., infer]`.
-    pub fn reshape_infer(&self, spec: crate::shapes::InferShape) -> Result<Tensor<Dyn, B, K, G, P>>
+    pub fn reshape_infer<S2>(
+        &self,
+        spec: crate::shapes::InferShape<S2>,
+    ) -> Result<Tensor<S2, B, K, G, P>>
     where
+        S2: Shape + DynShape,
         B: Execute<op::ReshapeExact> + Capabilities,
         <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
     {
@@ -923,13 +927,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             &self.shape_buf_value(),
             crate::shapes::error::OperationKind::Reshape,
         )?;
-        let output_shape = ShapeValue::<Dyn>::try_new(spec.resolve(source_numel)?)
+        let output_shape = ShapeValue::<S2>::try_new(spec.resolve(source_numel)?)
             .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                dispatch::execute_shaped::<op::ReshapeExact, B, Dyn>(
+                dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
                     &context,
                     ShapeAttributes {
                         shape: output_shape.shape_buf().as_ref().to_vec(),
@@ -939,7 +943,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 )
             })?
             .into();
-        Tensor::<Dyn, B, K, G, P>::from_shape_value_placed(
+        Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
             output_shape,
             self._dtype.clone(),

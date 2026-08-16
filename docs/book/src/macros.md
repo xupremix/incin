@@ -72,7 +72,8 @@ identity checks.
 
 ## `idx!` - advanced type-level targets
 
-`shape![..., infer]` is the normal reshape API. The older `idx!` macro builds
+`shape![..., infer]` is the normal reshape API. Known literal extents remain in
+the output type, while the inferred extent is carried as `usize`. The older `idx!` macro builds
 the heterogeneous type-level target used by the advanced `reshape_idx` API:
 
 | Syntax | Meaning |
@@ -87,6 +88,7 @@ use incin::prelude::*;
 
 let t = Tensor::<s![10, 20, 30], DefaultBackend>::zeros(())?;
 let reshaped = t.reshape_infer(shape![6, infer])?;
+// The result keeps the partial shape s![6, usize].
 # Ok::<(), incin::Error>(())
 ```
 

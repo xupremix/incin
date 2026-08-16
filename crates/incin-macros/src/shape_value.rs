@@ -152,8 +152,31 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
                 compile_error!("named extents are not supported in shape![..., infer]")
             },
         });
+        let path = quote! { ::incin::prelude:: };
+        let types_path = quote! { ::incin::types:: };
+        let type_axes: Vec<_> = parsed
+            .axes
+            .iter()
+            .map(|axis| match axis {
+                Axis::StaticLit(int) => {
+                    let value: usize = int.base10_parse().unwrap_or(0);
+                    crate::shape::lit_to_typenum(value, &path)
+                }
+                Axis::ConstPath(const_path) => quote! { #path ConstDim<{ #const_path }> },
+                Axis::Runtime(_) | Axis::Infer => quote! { usize },
+                Axis::Named { tag, .. } => syn::Error::new_spanned(
+                    tag,
+                    "named extents are not supported in shape![..., infer]",
+                )
+                .to_compile_error(),
+            })
+            .collect();
+        let mut shape_ty = quote! { #types_path Nil };
+        for d in type_axes.iter().rev() {
+            shape_ty = quote! { #types_path DimCons<#d, #shape_ty> };
+        }
         return quote! {
-            ::incin::prelude::InferShape::new(vec![#(#extents),*])
+            ::incin::prelude::InferShape::<#shape_ty>::new(vec![#(#extents),*])
         }
         .into();
     }

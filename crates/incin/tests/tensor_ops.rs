@@ -295,7 +295,8 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
     // reshape
     let r = t.clone().reshape(shape![3, 2])?;
     assert_eq!(r.dims().as_ref(), &[3, 2]);
-    let inferred = t.clone().reshape_infer(shape![6, infer])?;
+    let inferred: Tensor<s![6, usize], CpuBackendImpl> =
+        t.clone().reshape_infer(shape![6, infer])?;
     assert_eq!(inferred.dims().as_ref(), &[6, 1]);
     let indexed = t.get(i![-1, ..])?;
     assert_eq!(indexed.dims().as_ref(), &[3]);

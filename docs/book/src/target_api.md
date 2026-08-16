@@ -37,13 +37,14 @@ let tensor = Tensor::<s![2, 2], Backend>::ones(())?;
 ```
 
 Runtime reshape inference is a value-level shape specification, separate from
-indexing:
+indexing. Known extents remain in the output shape proof:
 
 ```rust,no_run
 use incin::prelude::*;
 
 let x = Tensor::<s![2, 3], DefaultBackend>::ones(())?;
 let y = x.reshape_infer(shape![6, infer])?;
+// y carries the partial shape s![6, usize].
 # Ok::<(), incin::Error>(())
 ```
 
