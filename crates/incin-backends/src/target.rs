@@ -851,7 +851,7 @@ macro_rules! impl_unit_arg_target {
     };
 }
 
-#[allow(unused_macros)]
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "metal"))]
 macro_rules! impl_self_arg_target {
     ($($device:ty),* $(,)?) => {
         $(
