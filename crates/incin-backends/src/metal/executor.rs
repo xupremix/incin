@@ -3,7 +3,7 @@
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::error::BackendError;
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
-use incin_core::shapes::{OperationKind, Shape};
+use incin_core::shapes::OperationKind;
 use incin_core::tensor::device::{Device, DeviceKind};
 
 use super::backend::MetalBackendImpl;

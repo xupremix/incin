@@ -78,11 +78,13 @@ pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
 use incin_core::shapes::dynamic::Dyn;
 use incin_core::shapes::{ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
 use incin_core::tensor::base::Tensor;
-use incin_core::tensor::device::{Cpu, Device, DeviceId};
+#[cfg(feature = "cpu")]
+use incin_core::tensor::device::Cpu;
+#[cfg(feature = "metal")]
+use incin_core::tensor::device::Metal;
 #[cfg(feature = "cuda")]
 use incin_core::tensor::device::{Cuda, CudaN};
-#[cfg(feature = "metal")]
-use incin_core::tensor::device::{Metal, MetalN};
+use incin_core::tensor::device::{Device, DeviceId};
 #[cfg(feature = "wgpu")]
 use incin_core::tensor::device::{Wgpu, WgpuN};
 use incin_core::tensor::dtype::{
@@ -825,6 +827,7 @@ pub enum GeneratedFill {
 // Device values as targets
 // ============================================================================
 
+#[cfg(feature = "cpu")]
 macro_rules! impl_unit_arg_target {
     ($($device:ty),* $(,)?) => {
         $(

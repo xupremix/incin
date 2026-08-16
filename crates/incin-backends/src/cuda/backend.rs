@@ -2,10 +2,10 @@ use crate::cuda::storage::CudaStorage;
 use alloc::sync::Arc;
 use incin_core::backend_authoring::*;
 use incin_core::error::{BackendError, Error, Result};
-use incin_core::shapes::{Dyn, OperationKind, ShapeError, StrideBuf};
+use incin_core::shapes::{OperationKind, ShapeError};
 use incin_core::tensor::device::{Cuda, Device, DeviceId, DeviceKind};
 use incin_core::tensor::dtype::{
-    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
+    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, QuantDType,
 };
 
 pub(crate) use crate::cuda::capability::{

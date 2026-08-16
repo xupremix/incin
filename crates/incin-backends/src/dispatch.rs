@@ -323,6 +323,7 @@ macro_rules! dispatch_module_same_device {
     }};
 }
 
+#[cfg(feature = "cpu")]
 macro_rules! cpu_unary_call {
     (sub_scalar, $value:expr, $scalar:expr) => {
         crate::cpu::ops::shape_ops::sub_scalar_storage($value, $scalar)
@@ -497,6 +498,7 @@ macro_rules! dispatch_unary {
 /// semantics. Keeping this separate from `dispatch_unary!` makes it explicit
 /// that reduction dispatch does not need to re-enter the legacy trait family
 /// on the CPU path.
+#[cfg(feature = "cpu")]
 macro_rules! cpu_reduction_call {
     (sum_all, $value:expr) => {
         crate::cpu::ops::reduce::sum_all($value)
@@ -565,6 +567,7 @@ macro_rules! dispatch_reduction_unary {
     };
 }
 
+#[cfg(feature = "cpu")]
 macro_rules! cpu_shape_call {
     (reshape, $value:expr, $shape:expr) => {
         crate::cpu::ops::shape_ops::reshape_storage($value, $shape)
@@ -708,6 +711,7 @@ macro_rules! dispatch_slice {
     }};
 }
 
+#[cfg(feature = "cpu")]
 macro_rules! cpu_binary_call {
     (add, $lhs:expr, $rhs:expr) => {
         crate::cpu::ops::elementwise::add_storage($lhs, $rhs)

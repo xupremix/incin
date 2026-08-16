@@ -28,6 +28,7 @@ pub(crate) struct OperandIteration {
 
 impl OperandIteration {
     #[inline]
+    #[cfg(any(feature = "cpu", test))]
     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
         let strides = self.strides.strides();
         debug_assert_eq!(strides.len(), output_shape.len());

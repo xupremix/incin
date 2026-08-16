@@ -4,7 +4,9 @@
 //! source maintenance proportional to operation families rather than to the
 //! Cartesian product of operations, dtypes, layouts, and devices.
 
-use alloc::{boxed::Box, string::String};
+#[cfg(any(feature = "cuda", test))]
+use alloc::boxed::Box;
+use alloc::string::String;
 use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::PrecisionRequest;

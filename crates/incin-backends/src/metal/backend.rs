@@ -3,17 +3,15 @@
 use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
-use incin_core::error::{BackendError, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
+use incin_core::error::{BackendError, Error, Result};
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
+use incin_core::shapes::ShapeError;
 use incin_core::shapes::error::OperationKind;
-use incin_core::shapes::{Dyn, ShapeError, StrideBuf};
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Metal};
-use incin_core::tensor::dtype::{
-    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
-};
+use incin_core::tensor::dtype::{ConstDType, DType, DTypeDescriptor, FloatDType, QuantDType};
 
-pub(crate) use crate::metal::capability::{native_precision, validate_metal_storage_dtype};
+pub(crate) use crate::metal::capability::validate_metal_storage_dtype;
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
 use crate::metal::tape::MetalGrads;
 

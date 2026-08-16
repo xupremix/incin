@@ -7,12 +7,12 @@ use incin_core::tensor::device::Device;
 impl<D: Device> PrecisionCapabilities for DispatchBackend<D> {
     fn native_precision(
         &self,
-        request: &PrecisionRequest,
+        _request: &PrecisionRequest,
     ) -> incin_core::error::Result<ResolvedPrecision> {
         #[cfg(feature = "cpu")]
         {
             crate::cpu::CpuBackendImpl::<incin_core::tensor::device::Cpu>::new()
-                .native_precision(request)
+                .native_precision(_request)
         }
         #[cfg(not(feature = "cpu"))]
         {
