@@ -218,7 +218,7 @@ pub mod prelude {
     pub use super::shapes::prelude::{
         AdaptiveAvgPool2dShape, AppendDim, At, Axis, AxisIdentity, AxisKey, AxisSchema,
         AxisSelector, AxisTag, BroadcastDim, BroadcastExtent, BroadcastShape, CheckedNumel,
-        ConcatShape, ConcreteStaticExtent, ConstDim, ConvOutDim, Dim, DimCons, DimIdx,
+        ConcatShape, ConcreteStaticExtent, ConstAxis, ConstDim, ConvOutDim, Dim, DimCons, DimIdx,
         DimensionConstraint, DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, FromEnd,
         HasChannels1D, HasChannels2D, Here, INLINE_RANK, InferDim, InlineOrHeap, NamedAxisLookup,
         NamedAxisSelector, NamedDim, Next, Nil, OperationKind, Pool2dShape, ProductDims,

@@ -59,10 +59,10 @@ fn structural_sum_rules_preserve_typed_outputs() {
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
-    let reduced = tensor.sum::<Next<Here>>().unwrap();
+    let reduced = tensor.sum::<1>().unwrap();
     assert_eq!(reduced.shape_buf().as_ref(), &[2]);
 
-    let kept = tensor.sum_keepdim::<Next<Here>>().unwrap();
+    let kept = tensor.sum_keepdim::<1>().unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
 }
 

@@ -16,7 +16,7 @@ dim!(Batch, Seq, Feature);
 /// the output of some per-token feature projection, ready to feed into a
 /// classifier head.
 fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
-    x.sum::<Next<Here>>().unwrap()
+    x.sum::<1>().unwrap()
 }
 
 fn main() -> incin::Result<()> {

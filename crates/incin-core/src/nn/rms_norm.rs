@@ -216,7 +216,7 @@ where
 
         // mean(x^2)
         let mean_sq = x_sq
-            .sum_keepdim::<FromEnd<Here>>()?
+            .sum_keepdim_at::<FromEnd<Here>>()?
             .div_scalar(channels as f64)?
             .into_dyn();
 

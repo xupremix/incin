@@ -229,11 +229,11 @@ fn test_reduction_sum() -> Result<()> {
     // sum_all
     assert_eq!(to_vec(&t.clone().sum_all()?.into_dyn())[0], 21.0);
     // sum_dim (0)
-    let s0 = t.clone().sum::<Here>()?;
+    let s0 = t.clone().sum::<0>()?;
     assert_eq!(s0.rank(), 1);
     assert_eq!(to_vec(&s0.into_dyn()), vec![5.0, 7.0, 9.0]);
     // sum_keepdim (1)
-    let s1 = t.sum_keepdim::<Next<Here>>()?;
+    let s1 = t.sum_keepdim::<1>()?;
     assert_eq!(s1.rank(), 2);
     assert_eq!(s1.dims().dims(), &[2, 1]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![6.0, 15.0]);

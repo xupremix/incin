@@ -73,7 +73,7 @@ fn test_foundation_user_contract_operations_and_nn() -> Result<()> {
     let positive = y.gt(&zero.into_dyn())?;
 
     let clipped = y.masked_fill(&positive.logical_not()?, 0.0)?;
-    let score = clipped.sum::<Next<Here>>()?;
+    let score = clipped.sum::<1>()?;
     assert_eq!(score.dims(), [2]);
 
     // Frozen linear layer

@@ -80,9 +80,35 @@ macro_rules! impl_reduction_op {
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
     Tensor<S, B, K, G, P>
 {
-    /// Sums over a compile-time structural axis cursor.
+    /// Sums over a compile-time numeric axis.
+    ///
+    /// Numeric axes from `0` through `7` retain the static output-shape proof.
     #[allow(clippy::type_complexity)]
-    pub fn sum<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
+    pub fn sum<const AXIS: usize>(
+        &self,
+    ) -> Result<
+        Tensor<
+            <S as ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output,
+            B,
+            K,
+            G,
+            P,
+        >,
+    >
+    where
+        (): crate::shapes::idx::ConstAxis<AXIS>,
+        S: DynShape + ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>,
+        <S as ReduceAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output: DynShape,
+        B: Execute<op::SumDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.sum_at::<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>()
+    }
+
+    /// Sums over a compile-time structural axis cursor.
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    pub fn sum_at<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
     where
         C: StaticCursor,
         S: DynShape + ReduceAt<C>,
@@ -137,9 +163,33 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
-    /// Sums over a compile-time structural axis cursor while retaining it.
+    /// Sums over a compile-time numeric axis while retaining it.
     #[allow(clippy::type_complexity)]
-    pub fn sum_keepdim<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
+    pub fn sum_keepdim<const AXIS: usize>(
+        &self,
+    ) -> Result<
+        Tensor<
+            <S as ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output,
+            B,
+            K,
+            G,
+            P,
+        >,
+    >
+    where
+        (): crate::shapes::idx::ConstAxis<AXIS>,
+        S: DynShape + ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>,
+        <S as ReduceKeepAt<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>>::Output: DynShape,
+        B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.sum_keepdim_at::<<() as crate::shapes::idx::ConstAxis<AXIS>>::Cursor>()
+    }
+
+    /// Sums over a compile-time structural axis cursor while retaining it.
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    pub fn sum_keepdim_at<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
     where
         C: StaticCursor,
         S: DynShape + ReduceKeepAt<C>,
@@ -449,10 +499,20 @@ where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 {
-    /// Computes the argmax of the tensor.
-    /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
-    /// If `dim` is `Some(d)`, the argmax is computed along that dimension.
-    pub fn argmax(
+    /// Computes argmax along a compile-time numeric axis.
+    pub fn argmax<const AXIS: usize>(
+        &self,
+    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+    where
+        B: Execute<op::ArgMax> + crate::exec::Capabilities,
+        <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
+    {
+        self.argmax_runtime(Some(AXIS))
+    }
+
+    /// Computes argmax over a runtime-selected axis.
+    #[doc(hidden)]
+    pub fn argmax_runtime(
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
@@ -498,10 +558,20 @@ where
         )
     }
 
-    /// Computes the argmin of the tensor.
-    /// If `dim` is `None`, the tensor is flattened and the argmin over the entire tensor is returned as a 0D scalar.
-    /// If `dim` is `Some(d)`, the argmin is computed along that dimension.
-    pub fn argmin(
+    /// Computes argmin along a compile-time numeric axis.
+    pub fn argmin<const AXIS: usize>(
+        &self,
+    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+    where
+        B: Execute<op::ArgMin> + crate::exec::Capabilities,
+        <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
+    {
+        self.argmin_runtime(Some(AXIS))
+    }
+
+    /// Computes argmin over a runtime-selected axis.
+    #[doc(hidden)]
+    pub fn argmin_runtime(
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>

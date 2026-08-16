@@ -457,8 +457,8 @@ fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
 
     let _ = incin_core::prelude::extract_graph();
     let input: Tensor<S, B, f32> = Tensor::zeros(()).unwrap();
-    let _reduced = input.sum::<Next<Here>>().unwrap();
-    let _kept = input.sum_keepdim::<Next<Here>>().unwrap();
+    let _reduced = input.sum::<1>().unwrap();
+    let _kept = input.sum_keepdim::<1>().unwrap();
 
     let graph = incin_core::prelude::extract_graph();
     let node = graph
