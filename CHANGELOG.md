@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Changed
+- **Editor documentation prose:** Replaced em-dash-heavy phrasing in the
+  VS Code, Neovim, and RustRover integration READMEs with ordinary punctuation
+  so current user-facing documentation follows the repository prose style.
 - **Candle adapter cleanup:** Removed unused unsupported-operation stubs and
   quantization placeholders from the legacy inherent surface. Unsupported
   capabilities remain represented by the descriptor capability registry.

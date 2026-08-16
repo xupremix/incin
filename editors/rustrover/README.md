@@ -3,7 +3,7 @@
 RustRover uses its own Rust engine, not rust-analyzer, so the `incin-lsp`
 proxy (which wraps rust-analyzer specifically) doesn't transparently apply
 here the way it does for VS Code/Neovim. Per
-`docs/growth/02-ide-extensions.md` §02.7, there are two honest options —
+`docs/growth/02-ide-extensions.md` §02.7, there are two honest options:
 **this directory ships the verified one**; the other is documented but
 explicitly marked unverified so it isn't oversold.
 
@@ -11,17 +11,17 @@ explicitly marked unverified so it isn't oversold.
 
 - `cargo-incin` on your `PATH` (`cargo install --path crates/incin` from
   the Incin repo root). `incin-check.sh` checks for this itself and prints
-  the same install command if it's missing, so this isn't a silent failure —
+  the same install command if it's missing, so this isn't a silent failure;
   but installing it upfront saves the round trip.
 - A RustRover (or any IntelliJ-platform Rust IDE) install with **External
-  Tools** and, optionally, **File Watchers** available — both are core
+  Tools** and, optionally, **File Watchers** available; both are core
   platform features, no plugin required for Option A.
 
-## Option A — External Tool + File Watcher (✅ verified, shipped here)
+## Option A: External Tool + File Watcher (✅ verified, shipped here)
 
 Runs `cargo incin check` and surfaces its already-humanized output in
 RustRover's own tool window. Less magical than inline squiggles (no inlay
-hints, no red underline at the exact token — just readable text in a panel),
+hints, no red underline at the exact token; just readable text in a panel),
 but it needs no plugin, works on any RustRover version, and the script itself
 (`incin-check.sh`) has been run against this repo as part of building this
 integration.
@@ -41,7 +41,7 @@ keyboard shortcut (`Settings → Keymap → External Tools`). For check-on-save,
 wrap the same script in a **File Watcher** (`Settings → Tools → File
 Watchers → +custom`) triggered on `*.rs` file changes.
 
-## Option B — Native LSP integration (⚠️ unverified — do not rely on this yet)
+## Option B: Native LSP integration (⚠️ unverified; do not rely on this yet)
 
 Newer JetBrains IDE platform versions expose an external-LSP-server API
 (`com.intellij.platform.lsp`) that could, in principle, run `incin-lsp`
@@ -49,7 +49,7 @@ directly the same way VS Code/Neovim do, giving inline diagnostics and inlay
 hints instead of a separate tool window.
 
 **This has not been built or tested against a real RustRover install in this
-repo** — doing so needs the IntelliJ Platform SDK, Gradle, and a specific
+repo**; doing so needs the IntelliJ Platform SDK, Gradle, and a specific
 RustRover version to target, none of which were available while building
 this integration. Before attempting it:
 1. Confirm your installed RustRover version actually exposes the LSP API
@@ -58,6 +58,6 @@ this integration. Before attempting it:
    in a way that conflicts with a second LSP client attaching to them.
 
 Until someone verifies this against a real install, **Option A is the
-supported path** — don't advertise LSP-mode RustRover support in marketing
+supported path**; do not advertise LSP-mode RustRover support in marketing
 material ahead of that verification (see the DO-NOT list in
 `docs/growth/02-ide-extensions.md`).
