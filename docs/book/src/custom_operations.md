@@ -32,6 +32,42 @@ dispatch path. The downstream fixture invokes that operation through the
 public authoring API, which is the important compatibility check for external
 backend crates.
 
+Here is the compact shape of the author-facing operation declaration. The
+backend implementation uses the same `Execute<Identity>` request path as the
+built-in catalog and returns its backend storage type.
+
+```rust,ignore
+use incin_core::backend_authoring::{DescriptorError, LogicalTensorMeta, Operation, OperationKey};
+use incin_core::exec::catalog::NoAttributes;
+use std::borrow::Cow;
+
+#[derive(Clone, Debug)]
+struct Identity;
+
+impl Operation for Identity {
+    type Attributes = NoAttributes;
+
+    const KEY: OperationKey = OperationKey {
+        namespace: Cow::Borrowed("example.org"),
+        name: Cow::Borrowed("identity"),
+        version: 1,
+    };
+
+    fn infer_outputs(
+        _: &Self::Attributes,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+        Ok(inputs.first().cloned().into_iter().collect())
+    }
+}
+
+// impl Execute<Identity> for MyBackend { ... }
+```
+
+The real fixture fills in metadata validation, capability admission, and
+backend execution. Keep the operation key stable once published, serialize
+all attributes, and route execution through the validated descriptor request.
+
 For a real fused operation such as `BiasGelu`, the same pattern applies. The
 operation accepts activation and bias handles, validates their broadcast
 relationship, infers the output metadata, and dispatches one backend kernel.

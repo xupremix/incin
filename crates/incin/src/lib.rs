@@ -565,7 +565,7 @@ pub mod prelude {
     pub use incin_core::nn::module::Module;
     pub use incin_core::nn::state::{StatePath, StateRole, StateSnapshot, StateValue};
     pub use incin_core::shapes::{
-        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, InferDim,
+        AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, Ellipsis, InferDim, InferShape,
         NamedAxisLookup, NamedAxisSelector, NamedDim, Ranked, Shape, ShapeArgs, ShapeSpec,
         ShapeValue, Slice,
     };

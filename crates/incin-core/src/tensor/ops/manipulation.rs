@@ -637,6 +637,42 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
+    /// Reshapes with one runtime-inferred extent from `shape![..., infer]`.
+    pub fn reshape_infer(&self, spec: crate::shapes::InferShape) -> Result<Tensor<Dyn, B, K, G, P>>
+    where
+        B: Execute<op::ReshapeExact> + Capabilities,
+        <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    {
+        let source_numel = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Reshape,
+        )?;
+        let output_shape = ShapeValue::<Dyn>::try_new(spec.resolve(source_numel)?)
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::ReshapeExact, B, Dyn>(
+                    &context,
+                    ShapeAttributes {
+                        shape: output_shape.shape_buf().as_ref().to_vec(),
+                    },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::<Dyn, B, K, G, P>::from_shape_value_placed(
+            inner,
+            output_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+            self._placement.clone(),
+        )
+    }
+
     /// Reshapes a tensor based on python-like slicing syntax via the `idx!` macro.
     ///
     /// # Examples
@@ -1283,6 +1319,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Flattens a statically selected inclusive axis range.
+    /// Flattens an axis interval selected by compile-time axis selectors.
+    ///
+    /// The associated output shape is kept in the public signature so the
+    /// selector remains visible to type-level callers. Clippy cannot express
+    /// that intent without reporting the signature as a complex type.
+    #[allow(clippy::type_complexity)]
     pub fn flatten<A, BSel>(
         &self,
         start: A,

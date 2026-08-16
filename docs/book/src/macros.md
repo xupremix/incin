@@ -77,7 +77,7 @@ Builds the heterogeneous type-level target that `reshape_idx` expects:
 | `0..5` | a statically bounded slice, `Slice<U0, U5>` |
 | `..` | take the whole axis |
 | `...` | ellipsis  -  fill the axes not otherwise named |
-| `-1` | `InferDim`, an inferred extent (reshaping) |
+| `-1` | `InferDim`, an inferred extent in a type-level target |
 
 ```rust,no_run
 use incin::prelude::*;
@@ -101,7 +101,8 @@ let middle = t.get(i![.., 2..5])?;
 
 The `reshape_idx` result shape is computed in the type system. Runtime indexing
 returns a dynamic shape because the selected range can depend on runtime
-values.
+values. For value-level runtime inference, use `shape![6, infer]` with
+`reshape_infer`.
 
 ## `best_device!`  -  compile-time device selection
 

@@ -10,6 +10,7 @@ enum Axis {
     StaticLit(syn::LitInt),
     ConstPath(syn::Path),
     Runtime(syn::Expr),
+    Infer,
     Named { tag: syn::Path, extent: Box<Axis> },
 }
 
@@ -44,6 +45,15 @@ fn parse_axis(input: ParseStream) -> syn::Result<Axis> {
                 minus,
                 "a shape! dimension cannot be negative",
             ));
+        }
+    }
+    if input.peek(syn::Ident) {
+        let fork = input.fork();
+        if let Ok(ident) = fork.parse::<syn::Ident>()
+            && ident == "infer"
+        {
+            input.parse::<syn::Ident>()?;
+            return Ok(Axis::Infer);
         }
     }
     if input.peek(Token![const]) {
@@ -115,10 +125,42 @@ impl Parse for ShapeInput {
 
 pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as ShapeInput);
+    if parsed.axes.iter().any(|axis| matches!(axis, Axis::Infer)) {
+        if parsed
+            .axes
+            .iter()
+            .filter(|axis| matches!(axis, Axis::Infer))
+            .count()
+            != 1
+        {
+            return syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "shape! accepts exactly one `infer` extent",
+            )
+            .to_compile_error()
+            .into();
+        }
+        let extents = parsed.axes.iter().map(|axis| match axis {
+            Axis::StaticLit(int) => {
+                let value = int.base10_parse::<usize>().unwrap_or(0);
+                quote! { Some(#value) }
+            }
+            Axis::ConstPath(path) => quote! { Some(#path) },
+            Axis::Runtime(expr) => quote! { Some(#expr) },
+            Axis::Infer => quote! { None },
+            Axis::Named { .. } => quote! {
+                compile_error!("named extents are not supported in shape![..., infer]")
+            },
+        });
+        return quote! {
+            ::incin::prelude::InferShape::new(vec![#(#extents),*])
+        }
+        .into();
+    }
     fn is_static(axis: &Axis) -> bool {
         match axis {
             Axis::StaticLit(_) | Axis::ConstPath(_) => true,
-            Axis::Runtime(_) => false,
+            Axis::Runtime(_) | Axis::Infer => false,
             Axis::Named { extent, .. } => is_static(extent),
         }
     }
@@ -140,6 +182,7 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
             }
             Axis::ConstPath(p) => quote! { #path ConstDim<{ #p }> },
             Axis::Runtime(_) => quote! { usize },
+            Axis::Infer => unreachable!("infer was handled before type generation"),
             Axis::Named { tag, extent } => {
                 let extent = match extent.as_ref() {
                     Axis::StaticLit(int) => {
@@ -148,6 +191,7 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
                     }
                     Axis::ConstPath(p) => quote! { #path ConstDim<{ #p }> },
                     Axis::Runtime(_) => quote! { usize },
+                    Axis::Infer => unreachable!("infer was handled before type generation"),
                     Axis::Named { .. } => {
                         return syn::Error::new_spanned(
                             tag,
@@ -168,9 +212,11 @@ pub(crate) fn shape_value(input: TokenStream) -> TokenStream {
             Axis::StaticLit(_) => quote! { () },
             Axis::ConstPath(_) => quote! { () },
             Axis::Runtime(expr) => quote! { #expr },
+            Axis::Infer => unreachable!("infer was handled before argument generation"),
             Axis::Named { extent, .. } => match extent.as_ref() {
                 Axis::StaticLit(_) | Axis::ConstPath(_) => quote! { () },
                 Axis::Runtime(expr) => quote! { #expr },
+                Axis::Infer => unreachable!("infer was handled before argument generation"),
                 Axis::Named { .. } => quote! { () },
             },
         })

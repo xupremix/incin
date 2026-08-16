@@ -886,6 +886,57 @@ pub trait ShapeSpec {
     fn resolve(self) -> Result<ShapeValue<Self::Shape>, crate::err::Error>;
 }
 
+/// Runtime reshape specification with one inferred extent.
+///
+/// This value-level type keeps reshape inference separate from indexing. It
+/// is produced by `shape![..., infer]` and resolved only when a source tensor
+/// supplies its element count.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InferShape {
+    extents: alloc::vec::Vec<Option<usize>>,
+}
+
+impl InferShape {
+    /// Creates an inference specification. Exactly one extent must be `None`.
+    #[must_use]
+    pub fn new(extents: alloc::vec::Vec<Option<usize>>) -> Self {
+        Self { extents }
+    }
+
+    /// Resolves the inferred extent against a source element count.
+    pub fn resolve(self, source_numel: usize) -> crate::err::Result<ShapeBuf> {
+        let missing = self
+            .extents
+            .iter()
+            .filter(|extent| extent.is_none())
+            .count();
+        if missing != 1 || self.extents.is_empty() {
+            return Err(crate::err::Error::Msg(
+                "reshape inference requires exactly one `infer` extent".into(),
+            ));
+        }
+        let known_numel = self
+            .extents
+            .iter()
+            .flatten()
+            .try_fold(1usize, |acc, &extent| acc.checked_mul(extent))
+            .ok_or_else(|| crate::err::Error::Msg("reshape extent product overflowed".into()))?;
+        if known_numel == 0 || !source_numel.is_multiple_of(known_numel) {
+            return Err(crate::err::Error::Msg(
+                "inferred reshape extent is not integral".into(),
+            ));
+        }
+        let inferred = source_numel / known_numel;
+        Ok(ShapeBuf::from_slice(
+            &self
+                .extents
+                .into_iter()
+                .map(|extent| extent.unwrap_or(inferred))
+                .collect::<alloc::vec::Vec<_>>(),
+        ))
+    }
+}
+
 /// Unvalidated shape constructor input produced by the `shape!` macro.
 ///
 /// This is deliberately a specification, not a `ShapeValue`: dimensions are

@@ -36,6 +36,17 @@ let tensor = Tensor::<s![2, 2], Backend>::ones(())?;
 # Ok::<(), incin::Error>(())
 ```
 
+Runtime reshape inference is a value-level shape specification, separate from
+indexing:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Tensor::<s![2, 3], DefaultBackend>::ones(())?;
+let y = x.reshape_infer(shape![6, infer])?;
+# Ok::<(), incin::Error>(())
+```
+
 Layer construction follows the same target-first boundary through the
 canonical builder extension. The older direct `Linear::new` and
 `new_on_target` spellings are not part of the public prelude.
@@ -116,9 +127,15 @@ For generic known-rank runtime shapes, `Ranked<R>` also provides
 `sum_runtime_ranked` and `sum_keepdim_runtime_ranked`; these retain the rank
 arithmetic in the type while leaving extents runtime-valued.
 
+Named reduction selectors retain known rank and preserve named dimensions at
+runtime. Stable Rust currently cannot express the exact post-reduction named
+type through the blanket named-axis lookup implementation without overlapping
+trait implementations, so these APIs use `Ranked<R>` at that boundary.
+
 Tensor indexing and slicing use `i![...]` with signed indices and ordinary Rust
-ranges. Reshape inference is separate from indexing and remains available
-through `reshape_idx::<idx![... ]>()` for type-level targets. Axis selection is
+ranges. Reshape inference is separate from indexing and uses `shape![..., infer]`.
+The older `reshape_idx::<idx![... ]>()` spelling remains available for
+type-level targets. Axis selection is
 also separate, so `axis!(-1)` never changes `i![-1]` indexing rules.
 
 ```rust,no_run
