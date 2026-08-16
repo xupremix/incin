@@ -41,6 +41,8 @@ pub mod reshape;
 pub mod shape;
 /// `shape_ops`.
 pub mod shape_ops;
+/// Small shape metadata helpers shared by the public shape surface.
+pub mod shape_utils;
 /// `spatial`.
 pub mod spatial;
 /// `stack`.
@@ -59,6 +61,7 @@ pub use rank::*;
 pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
+pub use shape_utils::*;
 pub use spatial::*;
 
 /// `prelude`.
@@ -76,6 +79,7 @@ pub mod prelude {
     pub use super::reshape::*;
     pub use super::shape::*;
     pub use super::shape_ops::*;
+    pub use super::shape_utils::*;
     pub use super::spatial::*;
     pub use super::stack::*;
 }

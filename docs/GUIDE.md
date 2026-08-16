@@ -131,8 +131,11 @@ type NamedStatic = s![BatchSize = 25, 128]; // named axis with static extent
 type Loose = s![usize, 128];         // unnamed runtime axis
 ```
 
-`i![0..5, .., 15..30]` is the indexing form for `Tensor::get`. Reshape
-inference is separate and uses `shape![..., infer]` with `reshape_infer`.
+`i![0..5, .., 15..30]` is the indexing form for `Tensor::get`. The macro
+produces a vector of index specifications rather than a fixed set of tuple
+implementations, so the same form works at any tensor rank. Reshape inference
+is separate and uses `shape![..., infer]` with `reshape_infer`, while
+`axis!(...)` selects operation axes.
 
 ### Why two type-level systems (`s!` vs `shape!`)
 

@@ -156,6 +156,11 @@ fn generic_example() -> Result<()> {
 shape facts. Axis selectors accept signed values, so `axis!(-1)` selects the
 last axis without constructing cursor types.
 
+`i![]` expands to an unbounded index list, so indexing does not stop at a
+fixed tuple arity. Static transpose and flatten selectors also support
+arbitrary positive and negative axis positions; known static shapes retain
+their exact output proof.
+
 ### Module Definition & Forward Pass
 
 ```rust,ignore

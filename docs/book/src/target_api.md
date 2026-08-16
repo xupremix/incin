@@ -196,6 +196,32 @@ let window = x.get(i![.., 2..6, ..])?;
 # Ok::<(), incin::Error>(())
 ```
 
+The macro expands to a runtime index list rather than a fixed-arity tuple.
+This keeps indexing independent of tensor rank, so the same syntax works for
+high-rank tensors:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![1, 1, 1, 1, 1, 1, 1, 1])?;
+let view = x.get(i![.., .., .., .., .., .., .., ..])?;
+assert_eq!(view.rank(), 8);
+# Ok::<(), incin::Error>(())
+```
+
+Static transpose selectors use the same arbitrary-rank rule. Positive and
+negative literals carry separate compile-time proofs, and the runtime
+normalizer checks both against the actual rank before dispatch:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.ones(shape![1, 1, 1, 1, 1, 1, 1, 1, 2, 3])?;
+let y = x.transpose(axis!(8), axis!(-1))?;
+assert_eq!(y.dims().as_ref(), &[1, 1, 1, 1, 1, 1, 1, 1, 3, 2]);
+# Ok::<(), incin::Error>(())
+```
+
 Named dimensions and const dimensions use different syntax. A named axis is
 written as `s![Batch, Features]`; a const path must be marked explicitly:
 

@@ -105,6 +105,10 @@ let middle = t.get(i![.., 2..5])?;
 # Ok::<(), incin::Error>(())
 ```
 
+`i![]` expands to a vector of index specifications, not a bounded tuple. It
+therefore accepts any number of entries, including one entry for every axis of
+a high-rank tensor. Indexing and reshape inference remain separate APIs.
+
 The `reshape_idx` result shape is computed in the type system. Runtime indexing
 returns a dynamic shape because the selected range can depend on runtime
 values. For value-level runtime inference, use `shape![6, infer]` with
