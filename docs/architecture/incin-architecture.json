@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Incin repository architecture",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/xupremix/incin.git",
+      "revision": "5e90b4bef0127de60dd5f8dc05840cc21f600eba"
+    },
+    "views": [
+      { "id": "runtime", "label": "Runtime layering", "focus": ["facade", "core", "backends", "cpu", "optional"], "note": "Follow the supported facade into core contracts and backend execution." },
+      { "id": "authoring", "label": "Backend authoring", "focus": ["authoring", "core", "backends", "macros"], "note": "Inspect the explicit extension boundary and its macro support." },
+      { "id": "delivery", "label": "Documentation and delivery", "focus": ["book", "ci", "tools"], "note": "Follow source documentation through validation and release artifacts." }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Library consumers", "sublabel": "facade, book, examples", "pos": [40, 300], "size": [150, 68], "sources": [{ "path": "crates/incin/src/lib.rs", "line": 1, "label": "consumer facade" }] },
+    { "id": "facade", "type": "frontend", "label": "incin facade", "sublabel": "supported public API", "tag": "reviewed baseline", "pos": [250, 300], "size": [160, 68], "sources": [{ "path": "crates/incin/src/lib.rs", "line": 1, "label": "public entry point" }] },
+    { "id": "core", "type": "backend", "label": "incin-core", "sublabel": "contracts, tensors, proofs", "pos": [480, 300], "size": [170, 68], "sources": [{ "path": "crates/incin-core/src/lib.rs", "line": 1, "label": "core contracts" }] },
+    { "id": "backends", "type": "backend", "label": "incin-backends", "sublabel": "dispatch and implementations", "pos": [720, 300], "size": [185, 68], "sources": [{ "path": "crates/incin-backends/src/lib.rs", "line": 1, "label": "backend boundary" }] },
+    { "id": "cpu", "type": "backend", "label": "CPU backend", "sublabel": "canonical execution", "pos": [980, 220], "size": [155, 68], "sources": [{ "path": "crates/incin-backends/src/cpu/mod.rs", "line": 1, "label": "CPU implementation" }] },
+    { "id": "optional", "type": "cloud", "label": "Optional backends", "sublabel": "CUDA, WGPU, Metal, external", "pos": [980, 390], "size": [175, 68], "sources": [{ "path": "crates/incin-backends/src/lib.rs", "line": 1, "label": "feature-gated backends" }] },
+    { "id": "authoring", "type": "security", "label": "backend_authoring", "sublabel": "explicit extension contract", "pos": [480, 120], "size": [180, 68], "sources": [{ "path": "crates/incin/src/lib.rs", "line": 210, "label": "authoring namespace" }] },
+    { "id": "macros", "type": "backend", "label": "incin-macros", "sublabel": "compile-time expansion", "pos": [720, 120], "size": [175, 68], "sources": [{ "path": "crates/incin-macros/src/lib.rs", "line": 1, "label": "procedural macros" }] },
+    { "id": "book", "type": "frontend", "label": "Book and Pages site", "sublabel": "chaptered SPA + offline artifact", "pos": [250, 560], "size": [200, 68], "sources": [{ "path": "docs/book/src/SUMMARY.md", "line": 1, "label": "book hierarchy" }] },
+    { "id": "tools", "type": "backend", "label": "Repository governance", "sublabel": "API, docs, safety, package checks", "pos": [520, 560], "size": [210, 68], "sources": [{ "path": "tools/check-public-api.sh", "line": 1, "label": "mechanical policies" }] },
+    { "id": "ci", "type": "cloud", "label": "CI and release", "sublabel": "validation, Pages, artifacts", "pos": [800, 560], "size": [180, 68], "sources": [{ "path": ".github/workflows/ci.yml", "line": 1, "label": "CI workflow" }, { "path": ".github/workflows/release.yml", "line": 1, "label": "release workflow" }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Runtime crates", "wraps": ["facade", "core", "backends", "cpu", "optional", "authoring", "macros"] },
+    { "kind": "region", "label": "Delivery system", "wraps": ["book", "tools", "ci"] }
+  ],
+  "connections": [
+    { "id": "users-facade", "from": "users", "to": "facade", "label": "supported API", "variant": "emphasis", "labelDy": -28 },
+    { "id": "facade-core", "from": "facade", "to": "core", "label": "re-exports concepts", "labelDy": -28 },
+    { "id": "core-backends", "from": "core", "to": "backends", "label": "Backend and Execute contracts", "labelDy": -28 },
+    { "id": "backends-cpu", "from": "backends", "to": "cpu", "fromSide": "right", "toSide": "left" },
+    { "id": "backends-optional", "from": "backends", "to": "optional", "fromSide": "right", "toSide": "left" },
+    { "id": "authoring-core", "from": "authoring", "to": "core", "label": "extension contracts", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "macros-authoring", "from": "macros", "to": "authoring", "label": "derive and expansion support", "fromSide": "left", "toSide": "right", "labelDy": -28 },
+    { "id": "book-facade", "from": "book", "to": "facade", "label": "consumer examples", "fromSide": "top", "toSide": "bottom" },
+    { "id": "tools-book", "from": "tools", "to": "book", "fromSide": "left", "toSide": "right" },
+    { "id": "ci-tools", "from": "ci", "to": "tools", "label": "enforced policies", "fromSide": "left", "toSide": "right", "labelDy": -28 },
+    { "id": "ci-book", "from": "ci", "to": "book", "variant": "dashed", "fromSide": "top", "toSide": "right" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Runtime contract", "items": ["incin is the supported facade", "core and backends own execution"] },
+    { "dot": "violet", "title": "Extension boundary", "items": ["backend_authoring is explicit", "macros support compile-time plumbing"] },
+    { "dot": "emerald", "title": "Delivery discipline", "items": ["book sources remain authoritative", "CI builds Pages and release artifacts"] }
+  ]
+}

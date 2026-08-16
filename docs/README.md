@@ -14,6 +14,7 @@ to be automatically executed. Read it first if you are new to the codebase.
 | [book/src/](book/src/SUMMARY.md) | the full user-facing book. The chapter count and hierarchy are checked from `SUMMARY.md`; `mdbook build docs/book` renders the source, `python3 docs/book/build_site.py` builds the chaptered Pages site, `python3 tools/check-book-site.py` validates its static shell and routes, and `python3 docs/book/make_single_page.py` builds the separate self-contained offline artifact. |
 | [security/unsafe-ledger.md](security/unsafe-ledger.md) | production unsafe-code inventory and the checker that keeps new unsafe-bearing files visible during review. |
 | [public-api/hidden-items.md](public-api/hidden-items.md) | reviewed inventory of hidden exports used for macro, proof, backend, and compatibility plumbing. |
+| [architecture/](architecture/) | validated repository architecture map covering runtime layering, extension boundaries, and documentation delivery. |
 
 Rust documentation is a CI contract as well as a generated output: `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps` must pass before changes are considered complete. This catches broken intra-doc links and rustdoc warnings across the workspace.
 
