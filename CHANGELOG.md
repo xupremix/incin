@@ -23,6 +23,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **ONNX export surface:** Removed the unreferenced captured-graph export
   helper from the private exporter module; the reviewed eager-graph exporter
   remains the supported ONNX path.
+- **Release packaging:** The editor release job now uses pinned Node.js and
+  VS Code packaging-tool versions, and names the IntelliJ-platform archive
+  independently from the RustRover integration directory. Release assets
+  include the book, editor integrations, `incin-lsp`, and `cargo-incin`; the
+  VS Code manifest now identifies the repository for package consumers.
 
 ### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.

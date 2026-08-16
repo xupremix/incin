@@ -17,6 +17,8 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   MDBOOK_VERSION: 0.4.52
+  NODE_VERSION: 22.14.0
+  VSCE_VERSION: 3.6.0
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
@@ -82,6 +84,11 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Build VS Code extension
         working-directory: editors/vscode
         run: |
@@ -89,15 +96,15 @@ jobs:
           npm ci
           npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
           npm run compile
-          npx --yes @vscode/vsce@latest package --out "incin-lsp-vscode-${RELEASE_TAG#v}.vsix"
+          npx --yes "@vscode/vsce@${VSCE_VERSION}" package --out "incin-lsp-vscode-${RELEASE_TAG#v}.vsix"
 
-      - name: Archive Neovim and RustRover integrations
+      - name: Archive Neovim and IntelliJ integrations
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           tar -czf "incin-lsp-nvim-${version}.tar.gz" \
             -C editors/nvim README.md lua
-          tar -czf "incin-rustrover-${version}.tar.gz" \
+          tar -czf "incin-lsp-intellij-${version}.tar.gz" \
             -C editors/rustrover README.md incin-check.sh
 
       - name: Upload editor assets
@@ -108,7 +115,7 @@ jobs:
           gh release upload "$RELEASE_TAG" \
             "editors/vscode/incin-lsp-vscode-${RELEASE_TAG#v}.vsix" \
             incin-lsp-nvim-* \
-            incin-rustrover-* \
+            incin-lsp-intellij-* \
             --clobber
 
   rust-binaries:

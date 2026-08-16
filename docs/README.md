@@ -17,6 +17,10 @@ to be automatically executed. Read it first if you are new to the codebase.
 | [public-api/hidden-items.md](public-api/hidden-items.md) | reviewed inventory of hidden exports used for macro, proof, backend, and compatibility plumbing. |
 | [architecture/](architecture/) | validated repository architecture map covering runtime layering, extension boundaries, and documentation delivery. |
 
+Release packaging is also versioned: the release workflow pins mdBook,
+Node.js, and the VS Code packaging tool, and uploads the book, VS Code,
+Neovim, IntelliJ-platform, `incin-lsp`, and `cargo-incin` artifacts together.
+
 Rust documentation is a CI contract as well as a generated output: `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps` must pass before changes are considered complete. This catches broken intra-doc links and rustdoc warnings across the workspace.
 
 **Generated.** Written by a test from the Rust source and re-checked on every
