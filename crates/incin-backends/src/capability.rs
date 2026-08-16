@@ -405,11 +405,11 @@ macro_rules! metal_descriptor_operations {
     };
 }
 
-#[allow(unused_imports)]
+#[cfg(feature = "cuda")]
 pub(crate) use cuda_descriptor_operations;
-#[allow(unused_imports)]
+#[cfg(feature = "metal")]
 pub(crate) use metal_descriptor_operations;
-#[allow(unused_imports)]
+#[cfg(feature = "wgpu")]
 pub(crate) use wgpu_descriptor_operations;
 
 macro_rules! descriptor_capability_rules {
