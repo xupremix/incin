@@ -19,7 +19,7 @@ use alloc::string::{String, ToString};
 
 pub mod scheduler;
 pub use crate::autograd::Gradients;
-pub use scheduler::*;
+pub use scheduler::{ConstantLR, CosineAnnealingLR, LRScheduler, LinearLR, StepLR};
 
 /// Trait defining a generic optimization algorithm.
 ///

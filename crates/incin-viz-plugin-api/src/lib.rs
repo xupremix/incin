@@ -67,7 +67,7 @@ pub mod render_ctx;
 /// Convenient re-exports for building visualizer plugins.
 pub mod prelude {
     pub use crate::err::{Error, Result};
-    pub use crate::event::*;
+    pub use crate::event::{KeyCode, KeyModifiers, PanelEvent, PanelKeyEvent, PanelMouseEvent};
     pub use crate::keymap::{Action, KeymapProvider};
     pub use crate::panel::Panel;
     pub use crate::plugin::Plugin;

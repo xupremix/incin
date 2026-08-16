@@ -33,6 +33,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   from the public advanced namespace; the user-facing selector contracts remain.
 - **Core prelude:** Moved backend-authoring, tracing, and storage-encoding
   contracts to named modules, and added `incin_core::onnx` for ONNX helpers.
+- **Telemetry preludes:** Replaced event-module wildcard exports with explicit
+  event contracts in telemetry and visualization plugin crates.
+- **Core aggregations:** Replaced wildcard exports for indexing, schedulers,
+  and precision policy markers with explicit owning-module contracts.
 - **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
   out of the public shape prelude and removed the unused public
   `fold_static_numel` helper.

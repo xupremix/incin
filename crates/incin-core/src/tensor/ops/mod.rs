@@ -13,4 +13,4 @@ pub mod reduce;
 /// `unary`.
 pub mod unary;
 
-pub use index::*;
+pub use index::{DTypeEq, IndexArgs, IndexSpec, ShapeEq};

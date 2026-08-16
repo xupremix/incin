@@ -23,6 +23,9 @@ pub mod transport;
 /// Convenient re-exports for telemetry usage.
 pub mod prelude {
     pub use crate::emitter::Emitter;
-    pub use crate::events::*;
+    pub use crate::events::{
+        CURRENT_SCHEMA_VERSION, EpochEvent, Event, GradientNormEvent, GraphSnapshotEvent,
+        HyperparamEvent, MemoryEvent, ScalarEvent, WeightNormEvent,
+    };
     pub use crate::reporter::Reporter;
 }

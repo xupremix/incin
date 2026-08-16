@@ -674,7 +674,7 @@ pub mod precision {
     }
 }
 
-pub use precision::*;
+pub use precision::{Bf16Mixed, Default, Exact, F16Mixed, MixedBf16, MixedF16};
 
 impl PrecisionSpec for Dyn {
     type Field = RuntimePrecisionPolicy;
