@@ -19,18 +19,29 @@ let x = Tensor::<s![2, 3], OnCpu>::zeros(())?;
 ## The honest coverage picture
 
 Every layer, loss, optimizer, and operation in this book runs on **CPU**.
-Measured directly against `docs/capabilities.md` (generated from the actual
-backend registrations, not aspirational): CUDA and WGPU each implement
-roughly twenty to thirty operations  -  basic arithmetic (`add`/`sub`/`mul`/
-`div`), reductions, `matmul`, and `conv2d`/pooling. Neither has **any**
-activation function (`relu`, `gelu`, `sigmoid`, `tanh`, ...), normalization
-(`layer_norm`, `batch_norm`, `group_norm`), loss function, `embedding`, or
-`dropout`. Metal's coverage is narrower still.
+Counted directly from `docs/capabilities.md`, which is generated from the
+backend registrations rather than written by hand:
 
-Concretely: you can allocate tensors and run basic matrix arithmetic on an
-accelerator today, but you cannot train the models in this book's [Building
-models](./building_models.md) chapter  -  or a CNN, an RNN, or anything with a
-normalization layer  -  on GPU. CPU is where real training happens right now.
+| Backend | Operations advertised | Tier |
+|---|---:|---|
+| CPU | 158 | complete, and the only one verified by execution |
+| WGPU | 42 | preview |
+| CUDA | 22 | preview |
+| Metal | 21 | preview |
+
+The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
+`matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
+activations  -  `relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
+`sqrt`, `log`, `tanh`, `sigmoid`, `swish`  -  which CUDA and Metal do not.
+
+What **no** accelerator backend has: normalization (`layer_norm`,
+`batch_norm`, `group_norm`), any loss function, `embedding`, or `dropout`.
+
+Concretely: you can allocate tensors, run matrix arithmetic, and apply an
+activation on a GPU today, but you cannot train the models in this book's
+[Building models](./building_models.md) chapter  -  or a CNN, an RNN, or
+anything with a normalization layer  -  on one. CPU is where real training
+happens right now.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with

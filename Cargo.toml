@@ -48,9 +48,16 @@ exclude = []
 
 [workspace.package]
 edition = "2024"
-version = "0.0.0"
+version = "0.1.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/xupremix/incin"
+homepage = "https://github.com/xupremix/incin"
+authors = ["xupremix <xupremix.me@gmail.com>"]
+# The oldest toolchain the workspace has actually been built on, not a guess:
+# `cargo +1.88.0 check --workspace --all-targets` passes and 1.87 is refused by
+# the dependency graph. CI's `msrv` job is what keeps this honest.
+rust-version = "1.88"
 
 [workspace.lints.rust]
 # Evaluating ShapeEq associated consts as statements triggers compile-time shape assertions.
@@ -71,6 +78,9 @@ candle-nn = { version = "0.9.1", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
 half = { version = "2.7.1", default-features = false, features = ["bytemuck"] }
 bytemuck = { version = "1.25", default-features = false }
+# The ONNX protobuf runtime. Pinned once here because `incin-core` and
+# `incin-macros` both include the same generated module and must agree on it.
+prost = { version = "0.14.4", default-features = false, features = ["derive"] }
 # miette = "7.6.0"
 [profile.dev]
 debug = 0

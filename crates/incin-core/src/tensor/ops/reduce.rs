@@ -503,7 +503,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
@@ -517,7 +517,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
@@ -531,7 +531,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
@@ -545,7 +545,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()

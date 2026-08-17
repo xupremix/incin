@@ -23,8 +23,7 @@ use std::thread;
 
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
 use incin_core::exec::{
-    AllocatorPolicy, Determinism, ExecutionContext, ExecutionPolicy, FallbackPolicy, GradMode,
-    MathMode, TapeStorage,
+    ExecutionContext, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, TapeStorage,
 };
 use incin_core::prelude::*;
 use incin_macros::s;
@@ -97,29 +96,21 @@ fn a_fresh_thread_permits_recording() {
 fn a_context_carries_the_mode_it_was_built_with() {
     let context = ExecutionContext::new(B::default()).with_grad_mode(GradMode::Disabled);
     assert_eq!(context.grad_mode(), GradMode::Disabled);
-    // The other four axes are untouched. Grouping them into one policy value
+    // The other axes are untouched. Grouping them into one policy value
     // makes it possible to set one and clobber the rest, so this is the
     // assertion that catches a builder written as a whole-policy assignment.
     assert_eq!(context.math_mode(), MathMode::Precise);
-    assert_eq!(context.determinism(), Determinism::Permitted);
-    assert_eq!(context.fallback(), FallbackPolicy::Deny);
-    assert_eq!(context.allocator(), AllocatorPolicy::Direct);
+    assert_eq!(context.fallback(), FallbackPolicy::AllowComposition);
 }
 
 #[test]
 fn a_no_grad_scope_leaves_the_other_policy_axes_alone() {
-    let moved = ExecutionPolicy::new()
-        .with_math_mode(MathMode::Fast)
-        .with_determinism(Determinism::Required);
+    let moved = ExecutionPolicy::new().with_math_mode(MathMode::Fast);
 
     moved.scope(|| {
         GradMode::Disabled.scope(|| {
             assert_eq!(GradMode::current(), GradMode::Disabled);
             assert_eq!(ExecutionPolicy::current().math_mode, MathMode::Fast);
-            assert_eq!(
-                ExecutionPolicy::current().determinism,
-                Determinism::Required
-            );
         });
         assert_eq!(GradMode::current(), GradMode::Enabled);
     });

@@ -8,7 +8,12 @@
 use incin_core::error::{ConversionFailure, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
-use rand::Rng;
+// `Rng` became the low-level trait in rand 0.10; the sampling methods moved to
+// `RngExt`. `SeedableRng` is only reachable on the no-std path, which seeds a
+// `SmallRng` because there is no thread-local generator to ask.
+use rand::RngExt as _;
+#[cfg(not(feature = "std"))]
+use rand::SeedableRng as _;
 use rand_distr::StandardNormal;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -122,7 +127,7 @@ pub(crate) fn zeros_with_total(
     device: &DeviceId,
 ) -> Result<CpuStorage> {
     let buffer = fill_buffer(total, 0.0, dtype, device, "zeros")?;
-    Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, shape))
 }
 
 /// `ones`, given an already-known element count. See [`zeros_with_total`].
@@ -133,7 +138,7 @@ pub(crate) fn ones_with_total(
     device: &DeviceId,
 ) -> Result<CpuStorage> {
     let buffer = fill_buffer(total, 1.0, dtype, device, "ones")?;
-    Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, shape))
 }
 
 /// `rand`, given an already-known element count. See [`zeros_with_total`].
@@ -145,10 +150,12 @@ pub(crate) fn rand_with_total(
 ) -> Result<CpuStorage> {
     let builtin_id = super::validate_cpu_dtype(dtype, "rand")?;
     #[cfg(feature = "std")]
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     #[cfg(not(feature = "std"))]
     let mut rng = rand::rngs::SmallRng::seed_from_u64(0x1337);
-    let data: Vec<f64> = (0..total).map(|_| rng.gen_range(0.0f64..1.0f64)).collect();
+    let data: Vec<f64> = (0..total)
+        .map(|_| rng.random_range(0.0f64..1.0f64))
+        .collect();
     let buffer = match builtin_id {
         DTypeId::F32 => CpuBuffer::F32(data.iter().map(|&x| x as f32).collect()),
         DTypeId::F64 => CpuBuffer::F64(data),
@@ -168,7 +175,7 @@ pub(crate) fn rand_with_total(
         }
     };
 
-    Ok(CpuStorage::from_contiguous(final_buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(final_buffer, shape))
 }
 
 /// `randn`, given an already-known element count. See [`zeros_with_total`].
@@ -180,7 +187,7 @@ pub(crate) fn randn_with_total(
 ) -> Result<CpuStorage> {
     let builtin_id = super::validate_cpu_dtype(dtype, "randn")?;
     #[cfg(feature = "std")]
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     #[cfg(not(feature = "std"))]
     let mut rng = rand::rngs::SmallRng::seed_from_u64(0x1337);
     let data: Vec<f64> = (0..total).map(|_| rng.sample(StandardNormal)).collect();
@@ -203,7 +210,7 @@ pub(crate) fn randn_with_total(
         }
     };
 
-    Ok(CpuStorage::from_contiguous(final_buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(final_buffer, shape))
 }
 
 /// `full`, given an already-known element count. See [`zeros_with_total`].
@@ -215,7 +222,7 @@ pub(crate) fn full_with_total(
     device: &DeviceId,
 ) -> Result<CpuStorage> {
     let buffer = fill_buffer(total, val, dtype, device, "full")?;
-    Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, shape))
 }
 
 /// `arange`, given an already-known element count. See [`zeros_with_total`].
@@ -281,7 +288,7 @@ pub(crate) fn arange_with_total(
             });
         }
     };
-    Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, shape))
 }
 
 /// `linspace`, given an already-known element count. See [`zeros_with_total`].
@@ -360,7 +367,7 @@ pub(crate) fn linspace_with_total(
             });
         }
     };
-    Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, shape))
 }
 
 /// `var_zeros`, given an already-known element count. See [`zeros_with_total`].

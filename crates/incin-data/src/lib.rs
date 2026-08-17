@@ -52,8 +52,10 @@ extern crate alloc;
 /// Dataset.
 pub mod dataset;
 /// Downloader.
+#[cfg(feature = "download")]
 pub mod downloader;
 /// Hub.
+#[cfg(feature = "hub")]
 pub mod hub;
 /// Loader.
 pub mod loader;
@@ -63,12 +65,14 @@ pub mod transforms;
 pub mod vision;
 
 pub use dataset::Dataset;
+#[cfg(feature = "download")]
 pub use downloader::Downloader;
 pub use loader::{BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DefaultCollate};
 pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
 
 /// Prelude.
 pub mod prelude {
+    #[cfg(feature = "hub")]
     pub use super::hub::{HubApi, HubRepo, download, from_pretrained};
     pub use super::loader::{
         BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DataLoaderIter,

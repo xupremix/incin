@@ -7,7 +7,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use anyhow::{Result, bail};
-use rand::Rng;
+use rand::RngExt as _;
 
 /// Core trait for a data transformation step.
 pub trait Transform: Send + Sync {
@@ -174,8 +174,8 @@ impl Transform for RandomHorizontalFlip {
         if shape.len() != 3 {
             bail!("RandomHorizontalFlip requires 3D shape [C, H, W]");
         }
-        let mut rng = rand::thread_rng();
-        if rng.gen_bool(self.p) {
+        let mut rng = rand::rng();
+        if rng.random_bool(self.p) {
             let channels = shape[0];
             let height = shape[1];
             let width = shape[2];

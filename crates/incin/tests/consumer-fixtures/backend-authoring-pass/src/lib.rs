@@ -156,6 +156,22 @@ impl AutogradBackend for CompanyBackend {
         _: &<Self as StorageBackend>::Storage<K>,
         _: &Self::Grads,
     ) -> incin::prelude::Result<Option<<Self as StorageBackend>::Storage<K>>> { Ok(None) }
+
+    /// Required since 0.1.0, so that post-backward transforms such as
+    /// `clip_grad_norm` can be written once against the trait. A backend that
+    /// records no gradients reports the refusal rather than accepting the
+    /// write, because a silent accept turns clipping into a no-op the caller
+    /// cannot detect.
+    fn set_grad<K: DType>(
+        _: &<Self as StorageBackend>::Storage<K>,
+        _: &mut Self::Grads,
+        _: <Self as StorageBackend>::Storage<K>,
+    ) -> incin::prelude::Result<()> {
+        Err(incin::Error::UnsupportedBackendOperation {
+            op: "set_grad",
+            backend: <Self as StorageBackend>::BACKEND_NAME,
+        })
+    }
 }
 
 /// A deliberately inference-only backend. It has no host serialization,

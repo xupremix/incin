@@ -63,7 +63,7 @@ wrote the operation:
 | Form | Rule | Fails how |
 |---|---|---|
 | `a.try_add(&b)` | broadcasting | recoverable error |
-| `a + b` | `BroadcastShape`  -  numpy-style | compile error if unbroadcastable |
+| `a + b` | `BroadcastShape`  -  numpy-style | recoverable error |
 | `a.broadcast_add(&b)` | `BroadcastShape` | compile error if unbroadcastable |
 
 ```rust,no_run
@@ -73,16 +73,15 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::ones(())?;
 
-let via_operator = a.clone() + b.clone();      // broadcasts
+let via_operator = (a.clone() + b.clone())?;   // broadcasts
 let via_method = a.broadcast_add(&b)?;          // same thing
 assert_eq!(via_operator.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())
 ```
 
-Crucially, an incompatible broadcast is a **compile** error, not a runtime
-one  -  the resolution happens in `BroadcastShape`'s associated `Output`. Two
-shapes that cannot align produce "Cannot broadcast axis ... against ..." from
-`rustc`, before anything runs.
+The type-level `BroadcastShape` proof determines the output type. Runtime
+shape or backend validation still returns an `Err`, so propagate or handle the
+operator result before using the tensor.
 
 `broadcast_left` exists for the left-aligned case that right-aligned
 broadcasting cannot express.

@@ -2,9 +2,8 @@
 
 extern crate incin_core as incin;
 
-use incin_core::prelude::Cpu;
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 use typenum::consts::{U1, U3, U4, U8, U16};
 
@@ -15,15 +14,15 @@ type D6<A, B, C, D, E, F> =
 
 #[test]
 fn test_rms_norm_static() {
-    let _t1: Tensor<s![2, 3, 4], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
-    let norm: RMSNorm<s![4], DummyBackend<Cpu>> = RMSNorm::build(0.001).unwrap();
+    let _t1: Tensor<s![2, 3, 4], CpuBackendImpl> = Tensor::zeros(()).unwrap();
+    let norm: RMSNorm<s![4], CpuBackendImpl> = RMSNorm::build(0.001).unwrap();
 
     let _ = norm;
 }
 
 #[test]
 fn test_nn_layers_accept_structural_shapes() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
 
     let _: Linear<D2<U3, U4>, B> = Linear::build(()).unwrap();
     let _: Conv1d<D6<U16, U3, U3, U1, U1, U1>, B> = Conv1d::build(()).unwrap();
@@ -45,7 +44,7 @@ fn test_dropout() {
 
 #[test]
 fn test_structural_reduction_static() {
-    let t1: Tensor<s![2, 3, 4], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3, 4], CpuBackendImpl> = Tensor::zeros(()).unwrap();
     let _var_all = t1.var_all(true).unwrap();
     let _std_all = t1.std_all(false).unwrap();
 }

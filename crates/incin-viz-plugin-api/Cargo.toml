@@ -1,18 +1,28 @@
 [package]
+authors.workspace = true
 description = "Plugin API for incin visualization tools"
-repository = "https://github.com/xupremix/incin"
+repository.workspace = true
 publish = true
 name = "incin-viz-plugin-api"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["plugin", "visualization", "incin", "api", "tui"]
+categories = ["science", "development-tools"]
+documentation = "https://docs.rs/incin-viz-plugin-api"
 
 [dependencies]
-incin-telemetry = { path = "../incin-telemetry", version = "0.0.0" }
+incin-telemetry = { path = "../incin-telemetry", version = "0.1.0" }
 thiserror.workspace = true
 ratatui-core = "0.1.2"
 ratatui-widgets = "0.3.2"
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

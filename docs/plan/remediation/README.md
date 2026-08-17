@@ -8,6 +8,8 @@ directories under `audit-evidence/`.
 
 | Document | What it is | Still driving work? |
 |---|---|---|
+| [architecture-stabilization.md](architecture-stabilization.md) | Active post-audit dependency order and proof gates | Yes - current stabilization gate |
+| [r5-legacy-backend-api-scope.md](r5-legacy-backend-api-scope.md) | Measurement of the legacy backend operation API ahead of R5 | Yes - input to R5 |
 | [foundation-first-remediation-prompt.md](foundation-first-remediation-prompt.md) | The FND-000..FND-005 remediation brief the current sequence follows | Yes - FND-005 is active |
 | [codebase-truth-audit.md](codebase-truth-audit.md) | Source audit that established the starting-state contradictions | Historical input to FND-000 |
 | [next-steps-execution-prompt.md](next-steps-execution-prompt.md) | The execution prompt that preceded the foundation-first brief | Superseded |

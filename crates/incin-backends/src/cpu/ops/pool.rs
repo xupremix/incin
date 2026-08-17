@@ -130,7 +130,7 @@ fn scatter_pool_grad_2d(
         vals[winning_flat_src_idx[flat_out]] += g as f32;
         increment_index(&mut out_idx, &grad_out.shape);
     }
-    CpuStorage::from_contiguous(CpuBuffer::F32(vals), input_shape.to_vec())
+    CpuStorage::from_contiguous(CpuBuffer::F32(vals), input_shape)
 }
 
 /// Canonical max-pool implementation shared by the CPU executor.
@@ -146,7 +146,7 @@ pub(crate) fn max_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
 
     let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -220,7 +220,7 @@ pub(crate) fn avg_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
 
     let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -350,7 +350,7 @@ pub(crate) fn adaptive_avg_pool2d_impl<D: incin_core::tensor::device::Device, K:
 
     let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -456,6 +456,22 @@ mod tests {
             CpuBuffer::F32(v) => v.clone(),
             _ => panic!("expected F32 buffer"),
         }
+    }
+
+    // --- output-size arithmetic edge cases ---
+
+    /// The pooling window shares `conv2d`'s output-size arithmetic, so it
+    /// shares the same underflow hazard: a 5x5 window with dilation 3 spans
+    /// 13 elements against a 2x2 input. It must saturate rather than
+    /// underflow the `usize` subtraction.
+    #[test]
+    fn max_pool2d_with_a_window_larger_than_its_input_yields_an_empty_output_not_a_panic() {
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+
+        let out = max_pool2d_impl::<Cpu, f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
+
+        assert_eq!(out.shape.as_ref(), &[1, 1, 1, 1]);
+        assert_eq!(f32_vec(&out).len(), 1);
     }
 
     // --- max_pool2d forward ---

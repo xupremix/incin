@@ -17,6 +17,12 @@ use incin::prelude::*;
 
 type Backend = incin::DefaultBackend;
 
+/// The model type both halves of the deliverable name.
+///
+/// `SeqTy!` expands to the nested container type, which is long enough that
+/// spelling it at each use site obscures the signatures it appears in.
+type Model = SeqTy!(Linear<Dyn, Backend>, ReLU, Linear<Dyn, Backend>);
+
 // ============================================================================
 // Machines that do not exist
 // ============================================================================
@@ -79,7 +85,7 @@ impl Machine for NothingCompiledIn {
 /// Written once, at the top, and referred to by both the CPU run and the
 /// three-GPU plan. If this function ever needed a device argument the row's
 /// deliverable would be false, so its signature is itself the assertion.
-fn model() -> Result<SeqTy!(Linear<Dyn, Backend>, ReLU, Linear<Dyn, Backend>)> {
+fn model() -> Result<Model> {
     // The hidden ReLU is deliberately not the last layer. `ReLU(Linear(ones))`
     // can put every unit on the flat side for an unlucky random init, and a
     // model whose gradient is exactly zero would make the "did the parameters
@@ -312,7 +318,7 @@ fn the_model_trains_on_the_cpu() -> Result<()> {
     // Taken on this model instance before training, and again after. A fresh
     // model would not do: `Linear::build` initializes randomly, so two
     // instances differ for reasons that have nothing to do with the optimizer.
-    let probe = |model: &SeqTy!(Linear<Dyn, Backend>, ReLU, Linear<Dyn, Backend>)| {
+    let probe = |model: &Model| {
         let (input, target) = &data[0];
         model
             .forward(input.clone())

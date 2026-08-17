@@ -72,7 +72,7 @@ fn main() -> incin::Result<()> {
     // identically-shaped named-dim tensors, as in PyTorch with static checks
     // by the compiler instead of at runtime:
     let bias: Tensor<s![Batch, Feature]> = Tensor::zeros((batch, feature)).unwrap();
-    let biased = &projected + &bias;
+    let biased = (&projected + &bias)?;
     println!("biased shape: {:?}", biased.dims());
 
     println!("Compiled successfully. Every shape above was checked before this program ran.");

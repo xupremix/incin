@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     let a = Tensor::<s![2, 2], DefaultBackend>::ones(())?.require_grad();
     let b = Tensor::<s![2, 2], DefaultBackend>::full(3.0, ())?;
 
-    let c = &a * &b;
+    let c = (&a * &b)?;
     let loss = c.sum_all()?;
 
     let grads = loss.backward()?;

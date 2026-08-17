@@ -20,13 +20,13 @@
 //! here wrote, joining the same contract through the same trait.
 
 use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
-use incin_core::backend_authoring::{Execute, ExecutionRequest, op};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, ExecutionDescriptor, OperationIdentity, SupportLevel,
     TensorMeta, UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
+    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StrideBuf,
 };
 
 type MatMulOperation = op::MatMulExact;

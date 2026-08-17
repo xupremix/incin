@@ -230,7 +230,9 @@ pub(crate) fn launch_im2col_2d(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -304,7 +306,9 @@ pub(crate) fn launch_col2im_2d(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(target_shape);
+    let strides = crate::layout::contiguous_strides(target_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }
 
@@ -361,7 +365,9 @@ pub(crate) fn launch_im2col_1d(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -424,6 +430,8 @@ pub(crate) fn launch_col2im_1d(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(target_shape);
+    let strides = crate::layout::contiguous_strides(target_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }

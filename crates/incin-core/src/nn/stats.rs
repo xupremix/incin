@@ -175,20 +175,14 @@ impl LayerStats {
     }
 }
 
+// Everything below needs only the arithmetic of `LayerStats` itself, so it
+// stays an in-crate unit test. The layer-level and model-level numbers need a
+// real backend to build `Linear` against, and a backend crate cannot be linked
+// into this crate's own unit tests without duplicating `incin-core`; those
+// tests live in `tests/model_stats.rs`.
 #[cfg(test)]
 mod tests {
-    // `s!` is written for consumers of the `incin` facade, so it expands to
-    // `::incin::prelude::…`. `s![@ ..]` is the in-crate form and expands to
-    // the owning modules directly — which is what this module needs, since
-    // `incin-core` does not depend on `incin`. The integration crates under
-    // `tests/` use `extern crate incin_core as incin;`, which does create the
-    // crate-root entry the absolute path resolves against; a `use crate as
-    // incin` alias, which is what stood here before `CI-005`, does not.
     use super::*;
-    use crate::backend_authoring::{Backend, VariableBackend};
-    use crate::nn::{Linear, NamedLayers, ReLU, Sequential};
-    use crate::tensor::device::Cpu;
-    use incin_macros::{module, s};
 
     #[test]
     fn layer_stats_add_sums_both_fields() {
@@ -226,89 +220,6 @@ mod tests {
                 macs: 100,
                 flops: 200
             }
-        );
-    }
-
-    // Same shape as `docs/growth/04-compile-time-stats.md`'s own worked
-    // example (784 -> 128 -> 10), which independently states the expected
-    // totals (101,770 params / 101,632 MACs at batch=1) — matching those
-    // exactly here is doubly-confirming: both this implementation and the
-    // doc's hand math agree.
-    #[module(internal)]
-    struct TestMlp<Bk: Backend + VariableBackend> {
-        #[allow(clippy::type_complexity)]
-        fc1: Linear<s![@ 784, 128], Bk>,
-        #[allow(clippy::type_complexity)]
-        fc2: Linear<s![@ 128, 10], Bk>,
-    }
-
-    type TestBackend = crate::test_utils::DummyBackend<Cpu>;
-
-    fn build_test_mlp() -> TestMlp<TestBackend> {
-        TestMlp {
-            fc1: Linear::build(()).unwrap(),
-            fc2: Linear::build(()).unwrap(),
-        }
-    }
-
-    #[test]
-    fn mlp_stats_match_the_growth_doc_hand_computed_numbers_at_batch_1() {
-        let model = build_test_mlp();
-        let stats = model.stats(1);
-        // fc1: 784*128 + 128 = 100,480 params; 784*128*1 = 100,352 MACs.
-        // fc2: 128*10 + 10 = 1,290 params; 128*10*1 = 1,280 MACs.
-        assert_eq!(stats.params, 101_770);
-        assert_eq!(stats.macs, 101_632);
-        assert_eq!(stats.flops, 203_264);
-    }
-
-    #[test]
-    fn mlp_macs_scale_linearly_with_batch_but_params_do_not() {
-        let model = build_test_mlp();
-        let stats4 = model.stats(4);
-        assert_eq!(stats4.params, 101_770, "params must not depend on batch");
-        assert_eq!(stats4.macs, 101_632 * 4);
-    }
-
-    #[test]
-    fn sequential_of_linear_and_relu_sums_correctly_and_relu_contributes_nothing() {
-        let seq = Sequential(Linear::<s![@ 16, 8], TestBackend>::build(()).unwrap(), ReLU);
-        let stats = seq.stats(2);
-        // Only the Linear side has params/MACs; ReLU is a verified 0/0 no-op.
-        assert_eq!(stats.params, 16 * 8 + 8);
-        assert_eq!(stats.macs, 16 * 8 * 2);
-    }
-
-    #[test]
-    fn summary_with_stats_appends_a_readable_totals_footer() {
-        let model = build_test_mlp();
-        let text = crate::nn::module::format_layer_summary_with_stats(
-            &model.layer_structure(""),
-            model.stats(1),
-        );
-        assert!(
-            text.contains("Total params: 101770"),
-            "missing/wrong params footer in:\n{text}"
-        );
-        assert!(
-            text.contains("MACs: 101632"),
-            "missing/wrong MACs footer in:\n{text}"
-        );
-        assert!(
-            text.contains("FLOPs: 203264"),
-            "missing/wrong FLOPs footer in:\n{text}"
-        );
-    }
-
-    #[test]
-    fn named_layers_summary_with_stats_convenience_method_matches_the_free_function() {
-        let model = build_test_mlp();
-        assert_eq!(
-            model.summary_with_stats(1),
-            crate::nn::module::format_layer_summary_with_stats(
-                &model.layer_structure(""),
-                model.stats(1)
-            )
         );
     }
 }

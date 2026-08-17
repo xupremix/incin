@@ -8,6 +8,12 @@
 //! `[64, 8] + [64, 1]` add spent twenty-one allocations, of which exactly one
 //! held the result.
 //!
+//! That reasoning held up: when the eager path later measured 4.4x above its
+//! recorded latency baseline, the cause was found by counting allocations
+//! rather than by profiling, and the counts below fell by roughly 60%. The
+//! ceilings are worth keeping tight for exactly that reason — a loose ceiling
+//! stops being a regression gate.
+//!
 //! Two kinds of assertion appear below and they carry different weight. The
 //! aligned and broadcast paths have separate ceilings because the broadcast
 //! path validates and constructs its right-aligned output shape, while the
@@ -92,18 +98,42 @@ fn allocations_of<R>(mut body: impl FnMut() -> R) -> usize {
     counted
 }
 
-/// The count measured on x86-64 for a rank-2 binary elementwise operation.
+/// The count measured on x86-64 for a rank-2 binary elementwise operation whose
+/// operands already agree in shape.
 ///
-/// One allocation holds the output data and one holds the `Arc` around it; the
-/// tape takes two, for its input-id list and its boxed backward closure. The
-/// rest are rank-2 dimension and stride vectors handed between the tensor
+/// One allocation holds the output data and one holds the `Arc` around it. The
+/// rest are the dimension and stride buffers handed between the tensor
 /// frontend, the backend's shape accessor, descriptor validation, and the
 /// storage constructor.
-const BINARY_ALLOCATIONS: usize = 27;
+///
+/// Two of these five hold the result — the output data buffer and the `Arc`
+/// around it. Everything else on the path is metadata, and by this row only
+/// three allocations of it survive.
+///
+/// It was 27 until `PRF-002`. The causes, in the order they were found: the
+/// descriptor path inferred each output shape twice, once to derive it and once
+/// to verify the derivation against itself; shape inference produced a
+/// `Vec<usize>` that was then copied into a `ShapeBuf`, which stores rank 8 and
+/// below inline and so needed no heap at all; `broadcast_shape` round-tripped
+/// its accumulator per operand; the invocation kept a second copy of the input
+/// metadata its descriptor already owned; `CpuStorage`'s constructors took
+/// owned `Vec`s for geometry that `TensorMeta` stores inline; and the CPU
+/// backend built a tape entry even when the effective `GradMode` was going to
+/// discard it. None is counted here now: these operands are `NoGrad`, so a
+/// recorded tape entry would be a value nothing could read. See
+/// `docs/benchmarks/runtime-2026-08-17.md`.
+const BINARY_ALIGNED_ALLOCATIONS: usize = 5;
 
-/// The same count for a rank-2 unary elementwise operation, which records one
-/// input on the tape rather than two.
-const UNARY_ALLOCATIONS: usize = 20;
+/// The same, when one operand must be broadcast.
+///
+/// Higher than the aligned count because the right-aligned output shape is
+/// derived and validated rather than reused, and the backend resolves its
+/// iteration plan against two different operand shapes.
+const BINARY_BROADCAST_ALLOCATIONS: usize = 10;
+
+/// The same count for a rank-2 unary elementwise operation, which has one
+/// operand shape to carry rather than two.
+const UNARY_ALLOCATIONS: usize = 4;
 
 #[test]
 fn a_binary_elementwise_operation_stays_within_its_measured_allocation_count() {
@@ -113,9 +143,9 @@ fn a_binary_elementwise_operation_stays_within_its_measured_allocation_count() {
     let counted = allocations_of(|| lhs.try_add(&rhs).unwrap());
 
     assert!(
-        counted <= BINARY_ALLOCATIONS,
+        counted <= BINARY_ALIGNED_ALLOCATIONS,
         "a rank-2 binary elementwise op allocated {counted} times, above the \
-         recorded {BINARY_ALLOCATIONS}"
+         recorded {BINARY_ALIGNED_ALLOCATIONS}"
     );
     println!("binary elementwise allocations: {counted}");
 }
@@ -133,13 +163,13 @@ fn broadcasting_an_operand_stays_within_its_measured_ceiling() {
     // right-aligned output shape. The backend iteration plan remains
     // rank-independent, so this stays within the measured ceiling.
     assert_eq!(
-        aligned_count, 24,
+        aligned_count, BINARY_ALIGNED_ALLOCATIONS,
         "aligned operation allocation count changed to {aligned_count}"
     );
     assert!(
-        broadcast_count <= BINARY_ALLOCATIONS,
+        broadcast_count <= BINARY_BROADCAST_ALLOCATIONS,
         "broadcast operation allocated {broadcast_count} times, above the \
-         recorded {BINARY_ALLOCATIONS}"
+         recorded {BINARY_BROADCAST_ALLOCATIONS}"
     );
     println!("aligned {aligned_count}, broadcasting {broadcast_count}");
 }

@@ -2,10 +2,9 @@
 
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::advanced::{Here, Next};
-use incin_core::prelude::Cpu;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 trait Same<T> {}
@@ -20,8 +19,8 @@ where
 #[test]
 /// Test concat static success.
 fn test_concat_static_success() {
-    let t1: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
-    let t2: Tensor<s![4, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3], CpuBackendImpl> = Tensor::zeros(()).unwrap();
+    let t2: Tensor<s![4, 3], CpuBackendImpl> = Tensor::zeros(()).unwrap();
 
     let _out = t1.concat_structural::<s![4, 3], Here>(&t2).unwrap();
     type Out = <s![2, 3] as ConcatShape<s![4, 3], Here>>::Output;
@@ -33,8 +32,8 @@ fn test_concat_static_success() {
 #[test]
 /// Test try concat dynamic.
 fn test_try_concat_dynamic() {
-    let t1: Tensor<s![dyn, 3], DummyBackend<Cpu>> = Tensor::zeros((2, ())).unwrap();
-    let t2: Tensor<s![dyn, 3], DummyBackend<Cpu>> = Tensor::zeros((4, ())).unwrap();
+    let t1: Tensor<s![dyn, 3], CpuBackendImpl> = Tensor::zeros((2, ())).unwrap();
+    let t2: Tensor<s![dyn, 3], CpuBackendImpl> = Tensor::zeros((4, ())).unwrap();
 
     let out = t1.try_concat(&t2, 0).unwrap();
     assert_eq!(out.shape_buf().as_ref(), &[6, 3]);
@@ -42,8 +41,8 @@ fn test_try_concat_dynamic() {
 
 #[test]
 fn test_try_concat_rejects_mismatched_ranks() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2]).unwrap();
 
     assert!(matches!(
         t1.try_concat(&t2, 0),
@@ -57,8 +56,8 @@ fn test_try_concat_rejects_mismatched_ranks() {
 
 #[test]
 fn test_try_concat_rejects_invalid_axis() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 3]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([4, 3]).unwrap();
 
     assert!(matches!(
         t1.try_concat(&t2, 2),
@@ -68,8 +67,8 @@ fn test_try_concat_rejects_invalid_axis() {
 
 #[test]
 fn test_try_concat_rejects_mismatched_non_concat_extent() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 4]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([4, 4]).unwrap();
 
     assert!(matches!(
         t1.try_concat(&t2, 0),
@@ -85,8 +84,8 @@ fn test_try_concat_rejects_mismatched_non_concat_extent() {
 
 #[test]
 fn test_try_concat_slice_rejects_mismatched_ranks() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2]).unwrap();
 
     assert!(matches!(
         Tensor::try_concat_slice(&[&t1, &t2], 0),
@@ -100,8 +99,8 @@ fn test_try_concat_slice_rejects_mismatched_ranks() {
 
 #[test]
 fn test_try_concat_slice_rejects_invalid_axis() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 3]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([4, 3]).unwrap();
 
     assert!(matches!(
         Tensor::try_concat_slice(&[&t1, &t2], 2),
@@ -111,8 +110,8 @@ fn test_try_concat_slice_rejects_invalid_axis() {
 
 #[test]
 fn test_try_concat_slice_rejects_mismatched_non_concat_extent() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([4, 4]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([4, 4]).unwrap();
 
     assert!(matches!(
         Tensor::try_concat_slice(&[&t1, &t2], 0),
@@ -129,8 +128,8 @@ fn test_try_concat_slice_rejects_mismatched_non_concat_extent() {
 #[test]
 /// Test stack static success.
 fn test_stack_static_success() {
-    let t1: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
-    let t2: Tensor<s![2, 3], DummyBackend<Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3], CpuBackendImpl> = Tensor::zeros(()).unwrap();
+    let t2: Tensor<s![2, 3], CpuBackendImpl> = Tensor::zeros(()).unwrap();
 
     let _out = t1.stack_structural::<Next<Here>>(&t2).unwrap();
     type Out = <s![2, 3] as StackShape<Next<Here>>>::Output;
@@ -141,8 +140,8 @@ fn test_stack_static_success() {
 #[test]
 /// Test try stack dynamic.
 fn test_try_stack_dynamic() {
-    let t1: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
-    let t2: Tensor<Dyn, DummyBackend<Cpu>> = Tensor::zeros([2, 3]).unwrap();
+    let t1: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
+    let t2: Tensor<Dyn, CpuBackendImpl> = Tensor::zeros([2, 3]).unwrap();
 
     let out = t1.try_stack(&t2, 1).unwrap();
     assert_eq!(out.shape_buf().as_ref(), &[2, 2, 3]);

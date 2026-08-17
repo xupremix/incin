@@ -1825,9 +1825,9 @@ impl<D: Device> CudaBackendImpl<D> {
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<CudaStorage> {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        let values = (0..checked_numel(shape)?).map(|_| rng.r#gen()).collect();
+        use rand::RngExt as _;
+        let mut rng = rand::rng();
+        let values = (0..checked_numel(shape)?).map(|_| rng.random()).collect();
         cuda_from_f32(shape, dtype, device, values, "rand")
     }
 
@@ -1837,7 +1837,7 @@ impl<D: Device> CudaBackendImpl<D> {
         device: &DeviceId,
     ) -> Result<CudaStorage> {
         use rand_distr::{Distribution, StandardNormal};
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let values = (0..checked_numel(shape)?)
             .map(|_| StandardNormal.sample(&mut rng))
             .collect();
@@ -3352,6 +3352,16 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CudaBackendIm
     ) -> Result<Option<Self::Storage<K>>> {
         let t: &CudaStorage = t;
         Ok(grads.get(t.id).cloned())
+    }
+
+    fn set_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &mut Self::Grads,
+        value: Self::Storage<K>,
+    ) -> Result<()> {
+        let t: &CudaStorage = t;
+        grads.set(t.id, value);
+        Ok(())
     }
 }
 

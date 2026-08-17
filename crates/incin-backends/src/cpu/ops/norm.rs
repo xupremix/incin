@@ -69,7 +69,7 @@ pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
         None => {
             let n = crate::cpu::stride::checked_numel(&weight.shape)?;
             bias_storage =
-                CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32; n]), weight.shape.to_vec());
+                CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32; n]), &weight.shape);
             &bias_storage
         }
     };

@@ -513,3 +513,78 @@ fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
     assert_eq!(output.shape().dims(), &[1, 1, 2, 2]);
     assert_eq!(read(&output), vec![3.5, 5.5, 11.5, 13.5]);
 }
+
+/// Every unary activation with a WGSL kernel is reachable through canonical
+/// dispatch, not merely through a direct `Execute` call.
+///
+/// This is the case that was missing when `wgpu/executor.rs` implemented
+/// thirteen unary activations that `WGPU_CAPABILITIES` never advertised. A
+/// direct `backend().execute(..)` — which is what every other case in this file
+/// does — would have passed the whole time, because it never asks the
+/// capability registry anything. `dispatch::execute` does ask, so it is the
+/// only call that can tell an implemented operation from a reachable one.
+#[test]
+fn every_advertised_unary_activation_is_reachable_through_canonical_dispatch() {
+    use incin_core::backend_authoring::execute;
+    use incin_core::backend_authoring::operations::NoAttributes;
+
+    let context = ExecutionContext::new(TestBackend::new());
+
+    // The operands are macro arguments rather than outer locals because
+    // `macro_rules` hygiene binds an identifier in a macro body at the
+    // definition site: a later `let values = ..` would not be the `values` this
+    // expands to, and the second group would have been checked against the
+    // first group's numbers.
+    macro_rules! check {
+        ($marker:ty, $values:expr, $reference:expr) => {{
+            let values: [f32; 5] = $values;
+            let input = storage(&[5], &values);
+            let inputs = [TensorHandle::from_storage::<TestBackend, f32, Local>(
+                &input,
+            )];
+            let output = execute::<$marker, TestBackend>(&context, NoAttributes, &inputs)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{} must be reachable through canonical dispatch: {error}",
+                        <$marker as CanonicalOperation>::ID.name()
+                    )
+                });
+            let reference: fn(f32) -> f32 = $reference;
+            for (index, (actual, source)) in read(&output).into_iter().zip(values).enumerate() {
+                let expected = reference(source);
+                assert!(
+                    (actual - expected).abs() <= 1e-4,
+                    "{} element {index}: got {actual}, expected {expected}",
+                    <$marker as CanonicalOperation>::ID.name()
+                );
+            }
+        }};
+    }
+
+    const SIGNED: [f32; 5] = [-2.0, -0.5, 0.0, 0.5, 2.0];
+    // `sqrt` and `log` are undefined on the negative half of `SIGNED`, so they
+    // get a strictly positive operand rather than a tolerance wide enough to
+    // hide a wrong answer.
+    const POSITIVE: [f32; 5] = [0.25, 1.0, 2.0, 4.0, 9.0];
+
+    check!(op::Relu, SIGNED, |x| x.max(0.0));
+    check!(op::Step, SIGNED, |x| if x > 0.0 { 1.0 } else { 0.0 });
+    check!(op::Abs, SIGNED, f32::abs);
+    check!(op::Neg, SIGNED, |x| -x);
+    check!(op::Tanh, SIGNED, f32::tanh);
+    check!(op::Sigmoid, SIGNED, |x| 1.0 / (1.0 + (-x).exp()));
+    check!(op::Exp, SIGNED, f32::exp);
+    check!(op::Swish, SIGNED, |x| x / (1.0 + (-x).exp()));
+    check!(op::Elu, SIGNED, |x| if x >= 0.0 {
+        x
+    } else {
+        x.exp() - 1.0
+    });
+    check!(op::Mish, SIGNED, |x: f32| x * (1.0 + x.exp()).ln().tanh());
+    check!(op::Gelu, SIGNED, |x: f32| {
+        let inner = (2.0f32 / core::f32::consts::PI).sqrt() * (x + 0.044_715 * x * x * x);
+        0.5 * x * (1.0 + inner.tanh())
+    });
+    check!(op::Sqrt, POSITIVE, f32::sqrt);
+    check!(op::Log, POSITIVE, f32::ln);
+}

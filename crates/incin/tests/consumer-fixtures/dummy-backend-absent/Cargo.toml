@@ -1,0 +1,9 @@
+[package]
+name = "incin-facade-dummy-backend-absent"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+incin = { path = "../../..", features = ["test-utils"] }

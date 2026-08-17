@@ -4,7 +4,6 @@ use incin_core::graph::Graph;
 use incin_core::prelude::OperationKind;
 use incin_core::prelude::*;
 
-#[cfg(feature = "test-utils")]
 use incin_core::exec::catalog::{ScalarAttributes, TraceDescriptor, op};
 
 #[test]
@@ -21,7 +20,6 @@ fn graph_round_trips_through_serde_json() {
     assert_eq!(g, roundtripped);
 }
 
-#[cfg(feature = "test-utils")]
 #[test]
 fn captured_descriptor_projection_preserves_typed_attributes() {
     let descriptor = incin_core::exec::catalog::Descriptor::<op::AddScalar>::infer_runtime(

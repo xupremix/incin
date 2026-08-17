@@ -73,13 +73,19 @@ impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::HostR
                     candle_core::DType::U8 | candle_core::DType::U32 | candle_core::DType::I64 => {
                         unreachable!()
                     }
+                    other => {
+                        return Err(anyhow::anyhow!(
+                            "the Candle bridge has no float conversion for element type {other:?}"
+                        )
+                        .into());
+                    }
                 };
                 values
                     .into_iter()
                     .map(|value| {
                         incin_core::error::convert_f64_to_i64(
                             "candle_int_to_vec1",
-                            from_candle_dtype(dtype),
+                            from_candle_dtype(dtype)?,
                             value,
                             incin_core::error::FloatToIntPolicy::Exact,
                         )
@@ -162,6 +168,14 @@ impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::HostI
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
                 Ok(bytemuck::cast_slice(&v).to_vec())
             }
+            // Candle keeps adding element types (0.9.2 brought I16, I32 and
+            // four float8 variants). Incin maps the seven it has a dtype for
+            // and refuses the rest by name, so a new Candle release is a typed
+            // error at the boundary rather than a build break in this file.
+            other => Err(anyhow::anyhow!(
+                "the Candle bridge has no host readback for element type {other:?}"
+            )
+            .into()),
         }
     }
     /// Reinterprets `bytes` as typed scalar elements matching `dtype`, constructs
@@ -235,6 +249,14 @@ impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::HostI
                     .collect();
                 candle_core::Tensor::from_slice(&bf16s, shape, &d)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+            }
+            // See the note in `to_bytes`: unmapped Candle element types are
+            // refused by name rather than matched exhaustively.
+            other => {
+                return Err(anyhow::anyhow!(
+                    "the Candle bridge cannot build a tensor of element type {other:?}"
+                )
+                .into());
             }
         };
         CandleStorage::try_new(raw)
@@ -335,6 +357,15 @@ impl<D: incin_core::tensor::device::Device> incin_core::backend_authoring::Autog
         } else {
             Ok(None)
         }
+    }
+
+    fn set_grad<K: incin_core::tensor::dtype::DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        grads: &mut Self::Grads,
+        value: <Self as StorageBackend>::Storage<K>,
+    ) -> Result<()> {
+        grads.insert(t.tensor(), value.tensor().clone());
+        Ok(())
     }
 }
 

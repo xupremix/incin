@@ -2907,26 +2907,65 @@ impl AttributeContract for LossAttributes {
     }
 }
 
+/// [`broadcast_shape`] over the inputs of an invocation, without materialising
+/// the list of borrowed shape slices.
+fn broadcast_input_shapes(
+    operation: OperationKind,
+    inputs: &[LogicalTensorMeta],
+) -> Result<ShapeBuf, DescriptorError> {
+    let mut shapes = inputs.iter().filter_map(|input| input.shape.as_deref());
+    let Some(first) = shapes.next() else {
+        return Ok(ShapeBuf::scalar());
+    };
+
+    // Operands that already agree broadcast to themselves. This is the ordinary
+    // elementwise case, and taking it directly skips a fallible right-aligned
+    // loop and its allocation for every operand after the first.
+    if shapes.clone().all(|shape| shape == first) {
+        validate_shape(operation, first)?;
+        return Ok(ShapeBuf::from_slice(first));
+    }
+
+    let mut output: Vec<usize> = first.to_vec();
+    for shape in shapes {
+        output = crate::shapes::broadcast::broadcast_dim_slices(&output, shape).map_err(|_| {
+            invalid(
+                operation,
+                "shape",
+                "input shapes are not broadcast-compatible",
+            )
+        })?;
+    }
+    validate_shape(operation, &output)?;
+    Ok(ShapeBuf::from_slice(&output))
+}
+
 fn broadcast_shape(
     operation: OperationKind,
     shapes: &[&[usize]],
-) -> Result<Vec<usize>, DescriptorError> {
-    let mut output = ShapeBuf::scalar();
-    for shape in shapes {
-        let next = crate::shapes::broadcast::broadcast_dim_slices(output.as_ref(), shape).map_err(
-            |_| {
-                invalid(
-                    operation,
-                    "shape",
-                    "input shapes are not broadcast-compatible",
-                )
-            },
-        )?;
-        output = ShapeBuf::from_slice(&next);
+) -> Result<ShapeBuf, DescriptorError> {
+    // `broadcast_dim_slices` already returns the owned dims, so the result of
+    // each step becomes the accumulator directly. The previous form copied it
+    // into a `ShapeBuf` and then back out into a `Vec` on every iteration,
+    // which is three allocations for the two-operand case that dominates.
+    //
+    // Seeding with the first shape rather than with a scalar is the same
+    // computation: broadcasting rank-0 against `s` yields `s`.
+    let mut output: Vec<usize> = match shapes.split_first() {
+        Some((first, _)) => first.to_vec(),
+        None => Vec::new(),
+    };
+    for shape in shapes.iter().skip(1) {
+        output = crate::shapes::broadcast::broadcast_dim_slices(&output, shape).map_err(|_| {
+            invalid(
+                operation,
+                "shape",
+                "input shapes are not broadcast-compatible",
+            )
+        })?;
     }
-    let output = output.as_ref().to_vec();
     validate_shape(operation, &output)?;
-    Ok(output)
+    Ok(ShapeBuf::from_slice(&output))
 }
 
 fn transformed_shape<A: AttributeContract>(
@@ -2934,7 +2973,7 @@ fn transformed_shape<A: AttributeContract>(
     attributes: &A,
     inputs: &[LogicalTensorMeta],
     output_index: usize,
-) -> Result<Option<Option<Vec<usize>>>, DescriptorError> {
+) -> Result<Option<Option<ShapeBuf>>, DescriptorError> {
     let Some(transform) = attributes.shape_transform() else {
         return Ok(None);
     };
@@ -3350,7 +3389,7 @@ fn transformed_shape<A: AttributeContract>(
         }
     };
     validate_shape(operation, &output)?;
-    Ok(Some(Some(output)))
+    Ok(Some(Some(ShapeBuf::from_slice(&output))))
 }
 
 fn inferred_shape<A: AttributeContract>(
@@ -3359,16 +3398,17 @@ fn inferred_shape<A: AttributeContract>(
     attributes: &A,
     inputs: &[LogicalTensorMeta],
     output_index: usize,
-) -> Result<Option<Option<Vec<usize>>>, DescriptorError> {
-    let first = inputs
-        .first()
-        .and_then(|input| input.shape.as_ref().map(|shape| shape.as_ref().to_vec()));
+) -> Result<Option<Option<ShapeBuf>>, DescriptorError> {
+    // Materialised lazily. Computing it up front cost an allocation on every
+    // operation whose rule never reads it, which is every broadcast, matmul and
+    // reduction: the overwhelming majority of a training step.
+    let first = || inputs.first().and_then(|input| input.shape.clone());
     let inferred = match row.output {
-        OutputRule::Created => Some(attributes.declared_shape().map(<[usize]>::to_vec)),
-        OutputRule::Preserve | OutputRule::ExplicitDType => Some(first),
+        OutputRule::Created => Some(attributes.declared_shape().map(ShapeBuf::from_slice)),
+        OutputRule::Preserve | OutputRule::ExplicitDType => Some(first()),
         OutputRule::ShapeAttributes => {
             if let Some(shape) = attributes.declared_shape() {
-                Some(Some(shape.to_vec()))
+                Some(Some(ShapeBuf::from_slice(shape)))
             } else {
                 transformed_shape(operation, attributes, inputs, output_index)?
             }
@@ -3377,11 +3417,10 @@ fn inferred_shape<A: AttributeContract>(
             if inputs.iter().any(|input| input.shape.is_none()) {
                 Some(None)
             } else {
-                let shapes: Vec<&[usize]> = inputs
-                    .iter()
-                    .filter_map(|input| input.shape.as_deref())
-                    .collect();
-                Some(Some(broadcast_shape(operation, &shapes)?))
+                // Folded over the inputs rather than collected into a
+                // `Vec<&[usize]>` first: the borrowed slices were built only to
+                // be walked once.
+                Some(Some(broadcast_input_shapes(operation, inputs)?))
             }
         }
         OutputRule::MatMul => {
@@ -3424,7 +3463,7 @@ fn inferred_shape<A: AttributeContract>(
                 return transformed_shape(operation, attributes, inputs, output_index);
             }
             if operation == OperationKind::Argsort {
-                Some(Some(shape.to_vec()))
+                Some(Some(ShapeBuf::from_slice(shape)))
             } else if matches!(
                 operation,
                 OperationKind::MseLoss
@@ -3434,12 +3473,12 @@ fn inferred_shape<A: AttributeContract>(
             ) {
                 match attributes.loss_reduction() {
                     Some(LossReduction::None) if operation == OperationKind::CrossEntropyLoss => {
-                        Some(inputs.get(1).and_then(|input| {
-                            input.shape.as_ref().map(|shape| shape.as_ref().to_vec())
-                        }))
+                        Some(inputs.get(1).and_then(|input| input.shape.clone()))
                     }
-                    Some(LossReduction::None) => Some(Some(shape.to_vec())),
-                    Some(LossReduction::Mean | LossReduction::Sum) => Some(Some(Vec::new())),
+                    Some(LossReduction::None) => Some(Some(ShapeBuf::from_slice(shape))),
+                    Some(LossReduction::Mean | LossReduction::Sum) => {
+                        Some(Some(ShapeBuf::scalar()))
+                    }
                     None => None,
                 }
             } else if matches!(
@@ -3455,7 +3494,7 @@ fn inferred_shape<A: AttributeContract>(
             ) || matches!(operation, OperationKind::ArgMax | OperationKind::ArgMin)
                 && attributes.axis().is_none()
             {
-                Some(Some(Vec::new()))
+                Some(Some(ShapeBuf::scalar()))
             } else if let Some(axis) = attributes.axis() {
                 if axis >= shape.len() {
                     return Err(invalid(
@@ -3479,18 +3518,14 @@ fn inferred_shape<A: AttributeContract>(
                 } else {
                     output.remove(axis);
                 }
-                Some(Some(output))
+                Some(Some(ShapeBuf::from_slice(&output)))
             } else {
                 None
             }
         }
         OutputRule::DataDependent | OutputRule::HostValue => Some(None),
         OutputRule::Indexing | OutputRule::TypedInference => match operation {
-            OperationKind::Gather => Some(
-                inputs
-                    .get(1)
-                    .and_then(|input| input.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
-            ),
+            OperationKind::Gather => Some(inputs.get(1).and_then(|input| input.shape.clone())),
             OperationKind::IndexSelect => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
@@ -3501,7 +3536,7 @@ fn inferred_shape<A: AttributeContract>(
                         crate::shapes::ShapeBuf::from_slice(indices).checked_numel(operation)?;
                     let mut output = source.to_vec();
                     output[axis] = count;
-                    Some(Some(output))
+                    Some(Some(ShapeBuf::from_slice(&output)))
                 }
                 _ => Some(None),
             },
@@ -3512,7 +3547,7 @@ fn inferred_shape<A: AttributeContract>(
                 (Some(indices), Some(weight)) if weight.len() == 2 => {
                     let mut output = indices.to_vec();
                     output.push(weight[1]);
-                    Some(Some(output))
+                    Some(Some(ShapeBuf::from_slice(&output)))
                 }
                 (None, _) | (_, None) => Some(None),
                 _ => {
@@ -3523,12 +3558,12 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
-            OperationKind::Dot => Some(Some(Vec::new())),
+            OperationKind::Dot => Some(Some(ShapeBuf::scalar())),
             OperationKind::Outer => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
             ) {
-                (Some(lhs), Some(rhs)) => Some(Some(vec![lhs[0], rhs[0]])),
+                (Some(lhs), Some(rhs)) => Some(Some(ShapeBuf::from_slice(&[lhs[0], rhs[0]]))),
                 _ => Some(None),
             },
             OperationKind::Addmm => match (
@@ -3619,7 +3654,7 @@ fn inferred_shape<A: AttributeContract>(
                     let mut output = input.to_vec();
                     let last = output.len() - 1;
                     output[last] = weight[0];
-                    Some(Some(output))
+                    Some(Some(ShapeBuf::from_slice(&output)))
                 }
                 (None, _) | (_, None) => Some(None),
                 _ => {
@@ -3630,26 +3665,18 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
-            OperationKind::SgdStep => Some(
-                inputs
-                    .first()
-                    .and_then(|v| v.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
-            ),
+            OperationKind::SgdStep => Some(inputs.first().and_then(|v| v.shape.clone())),
             OperationKind::AdamStep | OperationKind::AdamWStep => {
                 let source = match output_index {
                     0 => 0,
                     1 => 2,
                     _ => 3,
                 };
-                Some(
-                    inputs
-                        .get(source)
-                        .and_then(|v| v.shape.as_ref().map(|shape| shape.as_ref().to_vec())),
-                )
+                Some(inputs.get(source).and_then(|v| v.shape.clone()))
             }
             OperationKind::Quantize
             | OperationKind::Dequantize
-            | OperationKind::QuantizedMatMul => Some(first),
+            | OperationKind::QuantizedMatMul => Some(first()),
             _ => return Err(DescriptorError::MissingInference { operation }),
         },
     };
@@ -3662,6 +3689,7 @@ fn verify_outputs<A: AttributeContract>(
     attributes: &A,
     inputs: &[LogicalTensorMeta],
     outputs: &[LogicalTensorMeta],
+    provenance: OutputProvenance,
 ) -> Result<(), DescriptorError> {
     let first_dtype = inputs.first().and_then(|input| input.dtype);
     let is_float = |dtype: DTypeDescriptor| dtype.is_float();
@@ -3846,6 +3874,16 @@ fn verify_outputs<A: AttributeContract>(
     }
 
     for (index, output) in outputs.iter().enumerate() {
+        if provenance == OutputProvenance::Derived {
+            // `infer_outputs` already refused a missing inference over known
+            // inputs, and produced device, dtype and shape from this very
+            // function, so only the shape well-formedness check below is not
+            // already implied.
+            if let Some(shape) = &output.shape {
+                validate_shape(operation, shape)?;
+            }
+            continue;
+        }
         let expected = expected_output(operation, row, attributes, inputs, index)?;
         if output.device != expected.device {
             return Err(DescriptorError::MetadataMismatch {
@@ -3901,10 +3939,30 @@ fn inputs_are_known(inputs: &[LogicalTensorMeta]) -> bool {
 /// `Some(None)` when a branch applies but the inputs it reads are unknown.
 /// Verification and inference both read this one function, so an inferred
 /// output can never disagree with a verified one.
+/// Whether the outputs handed to validation were derived by [`infer_outputs`]
+/// in the same call, or supplied from outside.
+///
+/// The distinction is only about *re-derivation*. `verify_outputs` compares
+/// supplied outputs against `expected_output`, which is the check that stops a
+/// caller fabricating output metadata. When the outputs came from
+/// `infer_outputs` moments earlier, that comparison re-runs the same function
+/// over the same inputs and can only ever agree — it was costing a full second
+/// shape inference, and its allocations, on every operation the framework
+/// executes. Every other check in `verify_outputs` runs either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputProvenance {
+    /// Produced by `infer_outputs` in this call. Re-deriving is a tautology.
+    Derived,
+    /// Stated from outside. The expectation comparison is load-bearing. Only
+    /// the test suite can produce this today; see `validate`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Supplied,
+}
+
 struct ExpectedOutput {
     device: Option<DeviceId>,
     dtype: Option<DTypeDescriptor>,
-    shape: Option<Option<Vec<usize>>>,
+    shape: Option<Option<ShapeBuf>>,
 }
 
 fn expected_output<A: AttributeContract>(
@@ -3971,7 +4029,9 @@ fn infer_outputs<A: AttributeContract>(
             None => None,
         };
         outputs.push(LogicalTensorMeta {
-            shape: shape.map(|shape| ShapeBuf::from_slice(&shape)),
+            // Already a `ShapeBuf`: inference builds one directly, so an
+            // ordinary rank never touches the heap on the way here.
+            shape,
             dtype: expected.dtype,
             device: expected.device,
         });
@@ -4035,7 +4095,6 @@ fn operand_ranks(
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidatedInvocation<O: Operation> {
     validated: crate::exec::Validated<Descriptor<O>>,
-    inputs: Vec<LogicalTensorMeta>,
 }
 
 impl<O: Operation> ValidatedInvocation<O> {
@@ -4048,14 +4107,13 @@ impl<O: Operation> ValidatedInvocation<O> {
             validated: crate::exec::Validated::new(
                 Descriptor {
                     attributes,
-                    inputs: inputs.clone(),
+                    inputs,
                     outputs,
                     identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
                 crate::exec::ProofLevel::Dynamic,
             ),
-            inputs,
         })
     }
 
@@ -4094,14 +4152,13 @@ impl<O: Operation> ValidatedInvocation<O> {
             validated: crate::exec::Validated::new_with_evidence(
                 Descriptor {
                     attributes,
-                    inputs: inputs.clone(),
+                    inputs,
                     outputs,
                     identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
                 crate::exec::ShapeEvidence::of::<S>(),
             ),
-            inputs,
         })
     }
 
@@ -4114,9 +4171,15 @@ impl<O: Operation> ValidatedInvocation<O> {
         self.validated.descriptor()
     }
 
+    /// The input metadata this invocation was validated against.
+    ///
+    /// Borrowed from the descriptor rather than held a second time. The two
+    /// copies were always equal — the second was built by cloning the first —
+    /// and keeping it cost a `Vec<LogicalTensorMeta>` allocation on every
+    /// operation the framework executes.
     #[must_use]
     pub fn inputs(&self) -> &[LogicalTensorMeta] {
-        &self.inputs
+        self.validated.descriptor().inputs()
     }
 }
 
@@ -4126,11 +4189,36 @@ where
 {
     /// Internal lowering entry point. The output is supplied by the typed
     /// frontend proof; callers outside `incin-core` cannot assert it.
+    /// Validate an invocation whose outputs were stated rather than derived.
+    ///
+    /// Only the descriptor test suite reaches this: both production lowering
+    /// paths derive their outputs from [`infer_outputs`] and cannot state them.
+    /// It is kept because it is the entry point that exercises the
+    /// fabrication check in `verify_outputs` — the one that proves a stated
+    /// output disagreeing with the catalog's own inference is refused — and
+    /// there is no other way to construct that case.
+    #[cfg(test)]
     pub(crate) fn validate(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
         outputs: Vec<LogicalTensorMeta>,
         proof: crate::exec::ProofLevel,
+    ) -> Result<Self, DescriptorError> {
+        Self::validate_with_provenance(
+            attributes,
+            inputs,
+            outputs,
+            proof,
+            OutputProvenance::Supplied,
+        )
+    }
+
+    fn validate_with_provenance(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        outputs: Vec<LogicalTensorMeta>,
+        proof: crate::exec::ProofLevel,
+        provenance: OutputProvenance,
     ) -> Result<Self, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
@@ -4361,17 +4449,16 @@ where
                 }
             }
         }
-        verify_outputs(O::ID, row, &attributes, &inputs, &outputs)?;
+        verify_outputs(O::ID, row, &attributes, &inputs, &outputs, provenance)?;
         let descriptor = Descriptor {
             attributes,
-            inputs: inputs.clone(),
+            inputs,
             outputs,
             identity: crate::exec::OperationIdentity::Builtin(O::ID),
             marker: PhantomData,
         };
         Ok(Self {
             validated: crate::exec::Validated::new(descriptor, proof),
-            inputs,
         })
     }
 
@@ -4386,11 +4473,12 @@ where
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
         attributes.validate(O::ID, &inputs)?;
         let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
-        Self::validate(
+        Self::validate_with_provenance(
             attributes,
             inputs,
             outputs,
             crate::exec::ProofLevel::Dynamic,
+            OutputProvenance::Derived,
         )
     }
 
@@ -4415,8 +4503,10 @@ where
         }
         let first_output = &outputs[0];
         if let Some(inferred_shape) = &first_output.shape {
-            let expected_dims = expected.dims();
-            if inferred_shape != &expected_dims {
+            // `ShapeValue::dims` allocates; `shape_buf` borrows. This runs on
+            // every typed operation, which is every operation the stable tensor
+            // surface performs.
+            if inferred_shape.as_ref() != expected.shape_buf().as_ref() {
                 return Err(DescriptorError::InvalidAttribute {
                     operation: O::ID,
                     attribute: "shape",
@@ -4425,15 +4515,19 @@ where
             }
         }
 
-        let validated = Self::validate(attributes, inputs, outputs, expected.proof_level())?;
-        let inputs = validated.inputs;
+        let validated = Self::validate_with_provenance(
+            attributes,
+            inputs,
+            outputs,
+            expected.proof_level(),
+            OutputProvenance::Derived,
+        )?;
         let descriptor = validated.validated.into_descriptor();
         Ok(Self {
             validated: crate::exec::Validated::new_with_evidence(
                 descriptor,
                 crate::exec::ShapeEvidence::of::<S>(),
             ),
-            inputs,
         })
     }
 }

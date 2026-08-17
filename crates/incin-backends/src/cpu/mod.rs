@@ -330,7 +330,7 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                 });
             }
         };
-        Ok(storage::CpuStorage::from_contiguous(buffer, shape.to_vec()))
+        Ok(storage::CpuStorage::from_contiguous(buffer, shape))
     }
 }
 
@@ -353,6 +353,15 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImp
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
         Ok(grads.get(t.id).cloned())
+    }
+
+    fn set_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &mut Self::Grads,
+        value: Self::Storage<K>,
+    ) -> Result<()> {
+        grads.set(t.id, value);
+        Ok(())
     }
 }
 

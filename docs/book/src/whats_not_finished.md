@@ -9,20 +9,19 @@ of repeating a number that won't.
 
 ## Blocks real usage today
 
-- **GPU training.** See [Backends](./backends.md)  -  CUDA and WGPU cover
-  basic arithmetic, reductions, `matmul`, and `conv2d`/pooling; neither has
-  any activation, normalization, loss, `embedding`, or `dropout`. Metal is
-  narrower still. Training anything in this book's [Building
-  models](./building_models.md) chapter is CPU-only right now.
+- **GPU training.** See [Backends](./backends.md)  -  the previews cover
+  basic arithmetic, reductions, `matmul`, and `conv2d`/pooling, and WGPU adds
+  thirteen unary activations. None of them has normalization, a loss
+  function, `embedding`, or `dropout`, so training anything in this book's
+  [Building models](./building_models.md) chapter is CPU-only right now.
 - **No transformer/attention modules.** The raw
   `scaled_dot_product_attention` operation exists; there is no
   `MultiHeadAttention` or `TransformerEncoderLayer` composed module, and no
   `GRU` alongside `LSTM`/`RNN`. Building a transformer means hand-composing
   it from primitives.
-- **No gradient clipping.** Nothing in `incin_core::optim` clips gradients
-  by norm or value. Learning rate scheduling is fine (`ConstantLR`,
-  `LinearLR`, `CosineAnnealingLR`, `StepLR`)  -  this is specifically about
-  clipping.
+- **No gradient clipping by value.** `clip_grad_norm` clips by total norm;
+  there is no per-element value clip. Learning rate scheduling is complete
+  (`ConstantLR`, `LinearLR`, `CosineAnnealingLR`, `StepLR`).
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 
@@ -31,8 +30,14 @@ of repeating a number that won't.
 - **The lower-level `save_safetensors`/`load_safetensors` helpers** remain
   available under `incin_core::nn::save` for compatibility, while normal
   facade users should use `incin::prelude::{Format, ModelExt}`. The facade
-  path currently supports the same typed snapshot contract through
-  `ModelExt::save` and `ModelExt::load`.
+  path supports the same typed snapshot contract through `ModelExt::save`
+  and `ModelExt::load`.
+- **No shape-only test backend.** There used to be a `DummyBackend` behind a
+  `test-utils` feature; it stored a shape instead of data and claimed to
+  execute every operation, so a test written against it passed whether or not
+  the operation could run. It is gone. `incin::test_utils` now gates
+  deterministic fault injection only, and a test that needs a backend uses a
+  real one.
 
 ## Architecture in progress (affects contributors more than users)
 
@@ -41,6 +46,15 @@ of repeating a number that won't.
   operation-family traits have been removed from production source. Remaining
   work is splitting large backend files and making exceptional execution sites
   that cannot fit `Execute<O>` easier to maintain.
+- **The accelerator backends still expose operation helpers that bypass
+  canonical dispatch.** `WgpuBackendImpl`, `CudaBackendImpl`,
+  `MetalBackendImpl`, and `DispatchBackend` carry public inherent `add`,
+  `matmul`, `conv2d` and siblings that take runtime dimensions, mint no
+  descriptor, and consult no capability table. The CPU backend has none  -  it
+  was contracted already, which is part of why it is the complete one. Do not
+  build on these: they are slated to become crate-private. Use the descriptor
+  path described in [The target API and canonical
+  dispatch](./target_api.md).
 - **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
   complete planning layer behind the `distributed` feature but no execution
   path yet  -  a design surface, not a training feature to reach for.

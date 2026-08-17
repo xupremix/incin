@@ -9,6 +9,7 @@
 mod budgets;
 mod docs;
 mod ledger;
+mod onnx;
 
 use std::process::ExitCode;
 
@@ -18,6 +19,7 @@ fn main() -> ExitCode {
         Some("budgets") => budgets::check(),
         Some("ledger") => ledger::check(),
         Some("docs") => docs::run(std::env::args().nth(2).as_deref() == Some("--check")),
+        Some("onnx") => onnx::run(std::env::args().nth(2).as_deref() == Some("--check")),
         Some("feature-matrix") => {
             let status = std::process::Command::new("tools/feature-matrix.sh")
                 .status()
@@ -53,5 +55,7 @@ fn usage() {
     eprintln!("                    inventory (GOV-005)");
     eprintln!("    docs            Regenerate README.md's feature tables from the Cargo");
     eprintln!("                    manifests; --check fails instead of writing (UX-013)");
+    eprintln!("    onnx            Regenerate incin-core's checked-in ONNX protobuf module");
+    eprintln!("                    from proto/onnx.proto; --check fails instead of writing");
     eprintln!("    feature-matrix  Check the supported backend/facade feature contract matrix");
 }

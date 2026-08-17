@@ -295,7 +295,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
@@ -321,7 +321,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
@@ -458,13 +458,12 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
-                    .unwrap_or_else(|error| panic!("Incin Mul scalar failed: {error}"))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -474,13 +473,12 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor * scalar`, returning the same typed failure contract as
             /// [`Tensor::mul_scalar`].
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
-                    .unwrap_or_else(|error| panic!("Incin Mul scalar failed: {error}"))
             }
         }
         impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -490,13 +488,12 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
-                    .unwrap_or_else(|error| panic!("Incin Add scalar failed: {error}"))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -506,13 +503,12 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
             #[inline]
             /// `tensor + scalar`, returning the same typed failure contract as
             /// [`Tensor::add_scalar`].
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
-                    .unwrap_or_else(|error| panic!("Incin Add scalar failed: {error}"))
             }
         }
 
@@ -522,12 +518,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
 
-            #[track_caller]
             fn sub(self, rhs: $t) -> Self::Output {
                 self.sub_scalar(rhs as f64)
-                    .unwrap_or_else(|error| panic!("Incin Sub scalar failed: {error}"))
             }
         }
 
@@ -537,12 +531,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
 
-            #[track_caller]
             fn sub(self, rhs: $t) -> Self::Output {
                 self.sub_scalar(rhs as f64)
-                    .unwrap_or_else(|error| panic!("Incin Sub scalar failed: {error}"))
             }
         }
 
@@ -552,12 +544,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
 
-            #[track_caller]
             fn div(self, rhs: $t) -> Self::Output {
                 self.div_scalar(rhs as f64)
-                    .unwrap_or_else(|error| panic!("Incin Div scalar failed: {error}"))
             }
         }
 
@@ -567,12 +557,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Result<Tensor<S, B, K, G>>;
 
-            #[track_caller]
             fn div(self, rhs: $t) -> Self::Output {
                 self.div_scalar(rhs as f64)
-                    .unwrap_or_else(|error| panic!("Incin Div scalar failed: {error}"))
             }
         }
     };
@@ -589,12 +577,10 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    type Output = Result<Tensor<S, B, K, G>>;
 
-    #[track_caller]
     fn neg(self) -> Self::Output {
         self.try_neg()
-            .unwrap_or_else(|error| panic!("Incin Neg failed: {error}"))
     }
 }
 
@@ -604,11 +590,9 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    type Output = Result<Tensor<S, B, K, G>>;
 
-    #[track_caller]
     fn neg(self) -> Self::Output {
         self.try_neg()
-            .unwrap_or_else(|error| panic!("Incin Neg failed: {error}"))
     }
 }

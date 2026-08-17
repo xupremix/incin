@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.0.0", features = ["wgpu"] }
+incin = { path = "../..", version = "0.1.0", features = ["wgpu"] }
 
 [lints]
 workspace = true

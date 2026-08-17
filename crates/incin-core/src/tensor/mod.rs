@@ -6,7 +6,7 @@ pub mod arg;
 pub mod arg_into;
 /// Compile-time device selection from enabled features.
 pub mod auto_device;
-/// The `Backend` trait family and the test-only `DummyBackend` stand-in.
+/// The `Backend` trait family.
 pub(crate) mod backend;
 /// The `Tensor` type itself and its core inherent methods.
 pub mod base;

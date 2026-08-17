@@ -91,7 +91,9 @@ pub(crate) fn launch_embedding_forward(
             })?;
     }
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape);
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, out_strides, 0)
 }
 
@@ -162,6 +164,8 @@ pub(crate) fn launch_embedding_backward(
     }
 
     let out_shape = vec![vocab_size, hidden_size];
-    let out_strides = crate::layout::contiguous_strides(&out_shape);
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(grad_w_b), out_shape, out_strides, 0)
 }

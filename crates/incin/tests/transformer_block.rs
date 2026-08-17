@@ -52,13 +52,13 @@ impl Module<Input> for TransformerBlock {
             .mul_scalar(1.0 / (8.0_f32).sqrt())?;
         let attention = scores.softmax(1)?;
         let attended = attention.matmul(&value)?;
-        let attention_residual = input + &self.projection.forward(attended)?;
+        let attention_residual = (input + &self.projection.forward(attended)?)?;
         let feed_forward = self.feed_forward_out.forward(
             self.feed_forward_in
                 .forward(attention_residual.clone())?
                 .gelu()?,
         )?;
-        Ok(attention_residual + &feed_forward)
+        attention_residual + &feed_forward
     }
 }
 

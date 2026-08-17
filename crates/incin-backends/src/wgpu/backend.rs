@@ -422,7 +422,7 @@ fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<WgpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+    crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -505,7 +505,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = binary_op::<K>(lhs, rhs, 0, "add")?;
         let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -525,7 +525,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = binary_op::<K>(lhs, rhs, 1, "sub")?;
         let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -547,7 +547,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -570,7 +570,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -625,7 +625,7 @@ fn push_unary_tape_entry(
     out_id: crate::wgpu::storage::TensorId,
     grad_fn: impl Fn(&WgpuStorage) -> Result<WgpuStorage> + Send + Sync + 'static,
 ) {
-    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+    crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &WgpuStorage| grad_fn(grad_out).map(|grad| vec![grad])),
@@ -893,7 +893,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         let mask_cap = mask_b.clone();
         let (true_id, false_id, out_id) = (true_b.id, false_b.id, out_storage.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![true_id, false_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -957,7 +957,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         let t_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out_storage.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -1750,7 +1750,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -1787,7 +1787,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = WgpuStorage::new(t.buffer.clone(), shape.to_vec());
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -1825,7 +1825,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = WgpuStorage::new(out_buf, new_shape);
 
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -1894,7 +1894,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         region_start[dim] = start;
         let (t_id, out_id) = (t.id, out.id);
 
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2012,7 +2012,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
         let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
         let offsets = cumulative_offsets;
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids,
             // Collecting an iterator of `Result` straight into `Result<Vec<_>>`
@@ -2228,7 +2228,7 @@ pub fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usi
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+    crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2272,7 +2272,7 @@ pub fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: 
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+    crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2357,7 +2357,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = reduce_all_to_storage(t, 0)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2375,7 +2375,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = scalar_op::<K>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2410,7 +2410,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = reduce_dim_to_storage(t, dim, 0, false)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2430,7 +2430,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = reduce_dim_to_storage(t, dim, 0, true)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2449,7 +2449,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = scalar_op::<K>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -2472,7 +2472,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = scalar_op::<K>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -3207,7 +3207,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         let (indices_capture, weight_shape) = (indices.clone(), weight.shape.to_vec());
         let (weight_id, out_id) = (weight.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![weight_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
@@ -3392,7 +3392,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let input_shape = t.shape.to_vec();
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -3496,7 +3496,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let input_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         let window_count = (kh * kw) as f32;
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -3611,7 +3611,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let input_shape = t.shape.to_vec();
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -3708,7 +3708,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         // Push tape entry for conv1d.
         let (inp_capture, w_capture) = (t.clone(), weight.clone());
         let (inp_id, w_id, out_id) = (t.id, weight.id, out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -3876,7 +3876,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         // Wire autograd tape entry.
         let (inp_capture, w_capture) = (t.clone(), weight.clone());
         let (inp_id, w_id, out_id) = (t.id, weight.id, conv_out.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -4101,7 +4101,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         // Wire autograd tape (groups==1 only; matches CPU backend's documented scope).
         let (inp_capture, w_capture) = (t.clone(), weight.clone());
         let (inp_id, w_id, out_id) = (t.id, weight.id, out_storage.id);
-        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
@@ -4409,6 +4409,15 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for WgpuBackendIm
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
         Ok(grads.get(t.id).cloned())
+    }
+
+    fn set_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &mut Self::Grads,
+        value: Self::Storage<K>,
+    ) -> Result<()> {
+        grads.set(t.id, value);
+        Ok(())
     }
 }
 impl<D: Device> VariableBackend for WgpuBackendImpl<D> {

@@ -1,13 +1,13 @@
 extern crate incin_core as incin;
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::io::{GgufExporter, QuantScheme, inspect_file};
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 use std::path::Path;
 
 fn main() -> Result<()> {
     println!("🔍 Incin Model File Inspector Example");
 
-    let layer = Linear::<s![16, 32], DummyBackend<Cpu>>::build(())?;
+    let layer = Linear::<s![16, 32], CpuBackendImpl>::build(())?;
     let path = Path::new("inspect_demo.gguf");
 
     GgufExporter::from_module(&layer)

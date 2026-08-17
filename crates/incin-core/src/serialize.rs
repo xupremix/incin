@@ -9,7 +9,7 @@ use crate::tensor::backend::Backend;
 #[cfg(feature = "std")]
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 #[cfg(feature = "std")]
-use crate::tensor::prelude::{Device, DeviceId};
+use crate::tensor::prelude::Device;
 #[cfg(feature = "std")]
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
@@ -48,6 +48,42 @@ fn dtype_from_safetensors(dtype: safetensors::tensor::Dtype) -> anyhow::Result<D
     .descriptor())
 }
 
+/// The schema version stamped into every state file this crate writes.
+///
+/// It describes the *envelope* — how paths, roles, dtypes, and payload bytes
+/// are arranged — and is deliberately independent of the crate version and of
+/// any individual dtype's own descriptor version. Bump it when a reader of the
+/// previous version would misread a file rather than fail to parse it.
+pub const STATE_FORMAT_VERSION: u32 = 1;
+
+/// The safetensors metadata key carrying [`STATE_FORMAT_VERSION`].
+///
+/// Foreign safetensors files (a Hugging Face checkpoint, say) do not carry it.
+/// That is the point: this key is what distinguishes a file this crate wrote,
+/// whose role and dtype conventions the reader may assume, from one it did
+/// not.
+#[cfg(feature = "std")]
+const STATE_FORMAT_VERSION_KEY: &str = "incin.format.version";
+
+/// Accepts a version this build can read, and refuses one it cannot with a
+/// message naming both numbers, so a user who meets a newer file learns which
+/// version would read it rather than a parse error from the middle of a
+/// payload.
+#[cfg(feature = "std")]
+fn accept_state_format_version(found: Option<u32>, format: &str) -> anyhow::Result<u32> {
+    match found {
+        Some(version) if version <= STATE_FORMAT_VERSION => Ok(version),
+        Some(version) => Err(anyhow::anyhow!(
+            "{format} state file declares format version {version}, but this build reads at most \
+             version {STATE_FORMAT_VERSION}; upgrade incin to read it"
+        )),
+        None => Err(anyhow::anyhow!(
+            "{format} state file carries no `{STATE_FORMAT_VERSION_KEY}`, so it was not written by \
+             a versioned incin build; re-save it with this version"
+        )),
+    }
+}
+
 #[cfg(feature = "std")]
 pub(crate) fn serialize_snapshot_safetensors(
     snapshot: &StateSnapshot,
@@ -57,6 +93,10 @@ pub(crate) fn serialize_snapshot_safetensors(
     let mut storage = Vec::new();
     let mut views = BTreeMap::new();
     let mut metadata = std::collections::HashMap::new();
+    metadata.insert(
+        STATE_FORMAT_VERSION_KEY.to_string(),
+        STATE_FORMAT_VERSION.to_string(),
+    );
     for (name, value) in snapshot.iter() {
         metadata.insert(
             format!("incin.state.role.{}", name.as_str()),
@@ -75,7 +115,7 @@ pub(crate) fn serialize_snapshot_safetensors(
     for (name, bytes, shape, dtype) in &storage {
         views.insert(name.clone(), TensorView::new(*dtype, shape.clone(), bytes)?);
     }
-    safetensors::tensor::serialize_to_file(&views, &Some(metadata), path)?;
+    safetensors::tensor::serialize_to_file(&views, Some(metadata), path)?;
     Ok(())
 }
 
@@ -88,6 +128,15 @@ pub(crate) fn deserialize_snapshot_safetensors(
     let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
     let mut snapshot = StateSnapshot::new();
     let metadata = header.metadata().as_ref();
+    let declared = metadata
+        .and_then(|items| items.get(STATE_FORMAT_VERSION_KEY))
+        .map(|raw| {
+            raw.parse::<u32>().map_err(|_| {
+                anyhow::anyhow!("safetensors state file has a non-numeric format version {raw:?}")
+            })
+        })
+        .transpose()?;
+    accept_state_format_version(declared, "safetensors")?;
     for (name, view) in tensors.tensors() {
         let role = metadata
             .and_then(|items| items.get(&format!("incin.state.role.{}", name)))
@@ -114,17 +163,20 @@ pub(crate) fn serialize_snapshot_postcard(
     snapshot: &StateSnapshot,
     path: &std::path::Path,
 ) -> anyhow::Result<()> {
-    let wire = snapshot
-        .iter()
-        .map(|(path, value)| StateWireEntry {
-            path: path.as_str().to_string(),
-            shape: value.shape().dims().to_vec(),
-            dtype: value.dtype(),
-            bytes: value.bytes().to_vec(),
-            role: value.role(),
-        })
-        .collect::<Vec<_>>();
-    std::fs::write(path, postcard::to_stdvec(&wire)?)?;
+    let envelope = StateWireEnvelope {
+        version: STATE_FORMAT_VERSION,
+        entries: snapshot
+            .iter()
+            .map(|(path, value)| StateWireEntry {
+                path: path.as_str().to_string(),
+                shape: value.shape().dims().to_vec(),
+                dtype: value.dtype(),
+                bytes: value.bytes().to_vec(),
+                role: value.role(),
+            })
+            .collect::<Vec<_>>(),
+    };
+    std::fs::write(path, postcard::to_stdvec(&envelope)?)?;
     Ok(())
 }
 
@@ -132,9 +184,16 @@ pub(crate) fn serialize_snapshot_postcard(
 pub(crate) fn deserialize_snapshot_postcard(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
-    let wire: Vec<StateWireEntry> = postcard::from_bytes(&std::fs::read(path)?)?;
+    // A postcard payload is a bare byte sequence with no self-describing
+    // header, so an unversioned file cannot be told apart from a versioned one
+    // by inspection: it decodes as whatever the current struct says it is. The
+    // version leads the envelope so a mismatch is reported here rather than as
+    // a truncated payload several fields later.
+    let envelope: StateWireEnvelope = postcard::from_bytes(&std::fs::read(path)?)
+        .map_err(|error| anyhow::anyhow!("postcard state file is not a state envelope: {error}"))?;
+    accept_state_format_version(Some(envelope.version), "postcard")?;
     let mut snapshot = StateSnapshot::new();
-    for entry in wire {
+    for entry in envelope.entries {
         snapshot.insert(
             StatePath::new(entry.path)?,
             StateValue::new(
@@ -146,6 +205,16 @@ pub(crate) fn deserialize_snapshot_postcard(
         )?;
     }
     Ok(snapshot)
+}
+
+/// The postcard payload's outermost record. `version` is first so a reader
+/// meeting a newer file refuses on the number rather than on a field it cannot
+/// interpret.
+#[cfg(feature = "std")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct StateWireEnvelope {
+    version: u32,
+    entries: Vec<StateWireEntry>,
 }
 
 #[cfg(feature = "std")]
@@ -172,7 +241,11 @@ pub trait ModelExt<B: Backend + crate::tensor::backend::VariableBackend> {
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
 
-    fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
+    /// Restores state in place, leaving every parameter where it already
+    /// lives. There is no device argument: `load` used to take one and ignore
+    /// it, which read as a relocation the call never performed. Moving a model
+    /// between devices is `ToDevice`, a separate and explicit operation.
+    fn load(&mut self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;
 }
@@ -199,7 +272,7 @@ impl<
         .map_err(|e| Error::Msg(e.to_string()))
     }
 
-    fn load(&mut self, format: Format, path: &std::path::Path, _device: &DeviceId) -> Result<()>
+    fn load(&mut self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
@@ -313,5 +386,121 @@ mod tests {
             std::env::temp_dir().join(format!("incin-state-q8-{}.safetensors", std::process::id()));
         assert!(serialize_snapshot_safetensors(&snapshot, &safetensors_path).is_err());
         std::fs::remove_file(safetensors_path).ok();
+    }
+
+    /// A unique path per test, so the suite's threads cannot collide on one
+    /// temporary file.
+    fn scratch(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("incin-state-{name}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn every_written_safetensors_file_declares_the_state_format_version() {
+        let path = scratch("version-stamp.safetensors");
+        serialize_snapshot_safetensors(&fixture(), &path).expect("serialize snapshot");
+
+        let bytes = std::fs::read(&path).expect("written file is readable");
+        let (_, header) =
+            safetensors::SafeTensors::read_metadata(&bytes).expect("written file has a header");
+        assert_eq!(
+            header
+                .metadata()
+                .as_ref()
+                .and_then(|items| items.get(STATE_FORMAT_VERSION_KEY))
+                .map(String::as_str),
+            Some(STATE_FORMAT_VERSION.to_string().as_str()),
+            "a state file without a version stamp cannot be told from a foreign safetensors file"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn a_safetensors_file_without_a_version_is_refused_as_unversioned() {
+        // Written through safetensors directly, with role metadata but no
+        // version key: exactly the shape of a file an unversioned build wrote,
+        // and of a foreign checkpoint that never carried incin conventions.
+        let path = scratch("unversioned.safetensors");
+        let data = vec![0u8; 4];
+        let view =
+            safetensors::tensor::TensorView::new(safetensors::tensor::Dtype::F32, vec![1], &data)
+                .expect("view is well formed");
+        let mut views = BTreeMap::new();
+        views.insert("entry_0".to_string(), view);
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            "incin.state.role.entry_0".to_string(),
+            "parameter".to_string(),
+        );
+        safetensors::tensor::serialize_to_file(&views, Some(metadata), &path)
+            .expect("fixture file is written");
+
+        let error = deserialize_snapshot_safetensors(&path)
+            .expect_err("an unversioned state file must be refused")
+            .to_string();
+        assert!(
+            error.contains(STATE_FORMAT_VERSION_KEY),
+            "the refusal must name the missing key, got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn a_newer_state_version_is_refused_with_both_numbers_named() {
+        let future = STATE_FORMAT_VERSION + 1;
+
+        let error = accept_state_format_version(Some(future), "safetensors")
+            .expect_err("a future version must be refused")
+            .to_string();
+        assert!(
+            error.contains(&future.to_string())
+                && error.contains(&STATE_FORMAT_VERSION.to_string()),
+            "the refusal must name the file's version and this build's, got: {error}"
+        );
+
+        // The current version and every earlier one stay readable, which is
+        // what makes the check a compatibility boundary rather than a pin.
+        assert!(accept_state_format_version(Some(STATE_FORMAT_VERSION), "postcard").is_ok());
+    }
+
+    #[test]
+    fn a_postcard_file_carrying_a_newer_version_is_refused_before_its_payload() {
+        // Serialized from the envelope struct with a bumped version, so the
+        // entries after it are well formed. Only the version is wrong, which
+        // is what proves the refusal came from the version check and not from
+        // a decode failure further in.
+        let path = scratch("future.postcard");
+        let envelope = StateWireEnvelope {
+            version: STATE_FORMAT_VERSION + 1,
+            entries: Vec::new(),
+        };
+        std::fs::write(
+            &path,
+            postcard::to_stdvec(&envelope).expect("encode envelope"),
+        )
+        .expect("fixture file is written");
+
+        let error = deserialize_snapshot_postcard(&path)
+            .expect_err("a future postcard version must be refused")
+            .to_string();
+        assert!(
+            error.contains("postcard") && error.contains(&(STATE_FORMAT_VERSION + 1).to_string()),
+            "the refusal must name the format and the version, got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn a_postcard_file_that_is_not_a_state_envelope_is_refused_by_name() {
+        let path = scratch("garbage.postcard");
+        std::fs::write(&path, [0xffu8; 32]).expect("fixture file is written");
+
+        let error = deserialize_snapshot_postcard(&path)
+            .expect_err("a non-envelope payload must be refused")
+            .to_string();
+        assert!(
+            error.contains("not a state envelope"),
+            "the refusal must say what the file is not, got: {error}"
+        );
+        std::fs::remove_file(path).ok();
     }
 }

@@ -20,7 +20,7 @@ use std::panic;
 
 use incin_backends::cpu::{CpuBackendImpl, tape_depth};
 use incin_core::exec::{
-    Determinism, ExecutionPolicy, GradMode, MathMode, NanPolicy, check_gradients,
+    ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy, check_gradients,
 };
 use incin_core::exec::{TapeStorage, TensorId};
 use incin_core::prelude::*;
@@ -72,7 +72,7 @@ fn the_check_is_an_axis_beside_the_others_not_a_replacement_for_them() {
 
     assert_eq!(policy.nan_policy, NanPolicy::Reject);
     assert_eq!(policy.math_mode, MathMode::Fast);
-    assert_eq!(policy.determinism, Determinism::Permitted);
+    assert_eq!(policy.fallback, FallbackPolicy::AllowComposition);
     assert_eq!(policy.grad_mode, GradMode::Enabled);
 }
 

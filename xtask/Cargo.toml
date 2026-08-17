@@ -6,9 +6,13 @@ publish = false
 description = "Repository maintenance tasks for the Incin workspace."
 
 [dependencies]
-toml = "0.8"
+toml = "1.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The ONNX protobuf generator. It lives here rather than in an `incin-core`
+# build script so that `protoc` is a maintainer tool rather than a build
+# requirement for every downstream user; see `xtask/src/onnx.rs`.
+prost-build = "0.14.4"
 
 [lints]
 workspace = true

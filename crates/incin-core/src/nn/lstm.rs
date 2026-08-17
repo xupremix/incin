@@ -289,7 +289,7 @@ pub fn lstm<S: LstmShape>(shape: ShapeValue<S>) -> LSTMBuilder<S> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// // Fully static, both biases present (default)

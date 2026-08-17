@@ -108,7 +108,10 @@ fn parse_table(src: &str) -> BTreeMap<String, Task> {
 /// Parses the TOML mirror, returning the tasks and the set of ids whose
 /// `completed_evidence` field is non-empty.
 fn parse_mirror(src: &str) -> Result<(BTreeMap<String, Task>, BTreeSet<String>), String> {
-    let doc: toml::Value = src.parse().map_err(|e| format!("{MIRROR}: {e}"))?;
+    // `toml` 1.x routes `FromStr` for `Value` through a different parser than
+    // `from_str` and rejects a whole document there; `from_str` is the spelling
+    // that still deserializes one.
+    let doc: toml::Value = toml::from_str(src).map_err(|e| format!("{MIRROR}: {e}"))?;
     let entries = doc
         .get("task")
         .and_then(toml::Value::as_array)

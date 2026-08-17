@@ -1,13 +1,13 @@
 #![allow(unused_imports)]
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::*;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 /// B.
-type B = DummyBackend<incin_core::prelude::Cpu>;
+type B = CpuBackendImpl;
 
 #[test]
 /// Test linear permutations.

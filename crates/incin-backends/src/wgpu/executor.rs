@@ -364,21 +364,88 @@ macro_rules! impl_wgpu_unary_float {
     )*};
 }
 
-impl_wgpu_unary_float![
-    (Relu, relu),
-    (Step, step),
-    (Mish, mish),
-    (Elu, elu),
-    (Gelu, gelu),
-    (Abs, abs),
-    (Exp, exp),
-    (Neg, neg),
-    (Sqrt, sqrt),
-    (Log, log),
-    (Tanh, tanh),
-    (Sigmoid, sigmoid),
-    (Swish, swish),
-];
+/// The unary float operations this backend has a WGSL kernel for, written once.
+///
+/// Two consumers read this list: the macro that writes the `Execute` impls, and
+/// the assertion that every one of them is advertised by the capability
+/// registry. Naming them twice is exactly how thirteen working shaders ended up
+/// unreachable — the impls existed, the capability rows did not, and the only
+/// compile-time check ran in the direction that could not notice.
+macro_rules! wgpu_unary_float_operations {
+    ($callback:ident) => {
+        $callback! {
+            (Relu, relu),
+            (Step, step),
+            (Mish, mish),
+            (Elu, elu),
+            (Gelu, gelu),
+            (Abs, abs),
+            (Exp, exp),
+            (Neg, neg),
+            (Sqrt, sqrt),
+            (Log, log),
+            (Tanh, tanh),
+            (Sigmoid, sigmoid),
+            (Swish, swish),
+        }
+    };
+}
+
+wgpu_unary_float_operations!(impl_wgpu_unary_float);
+
+/// Every operation with a kernel here is reachable through canonical dispatch.
+///
+/// The companion assertion below this one proves the converse. Together they
+/// pin the executor and the capability registry to the same set: an operation
+/// cannot be advertised without a kernel, and a kernel cannot exist without
+/// being advertised.
+macro_rules! assert_wgpu_unary_operations_are_advertised {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {
+        const _: () = {
+            const fn same_name(left: &str, right: &str) -> bool {
+                let (left, right) = (left.as_bytes(), right.as_bytes());
+                if left.len() != right.len() {
+                    return false;
+                }
+                let mut index = 0;
+                while index < left.len() {
+                    if left[index] != right[index] {
+                        return false;
+                    }
+                    index += 1;
+                }
+                true
+            }
+
+            const fn advertised(kind: OperationKind) -> bool {
+                let rules = crate::capability::WGPU_CAPABILITIES;
+                let mut index = 0;
+                while index < rules.len() {
+                    if same_name(rules[index].operation.name(), kind.name()) {
+                        return true;
+                    }
+                    index += 1;
+                }
+                false
+            }
+
+            $(
+                assert!(
+                    advertised(<op::$operation as CanonicalOperation>::ID),
+                    concat!(
+                        "the WGPU backend implements Execute<op::",
+                        stringify!($operation),
+                        "> but WGPU_CAPABILITIES does not advertise it, so canonical \
+                         dispatch would refuse the call. Add it to the matching group in \
+                         `wgpu_descriptor_operations!`."
+                    )
+                );
+            )*
+        };
+    };
+}
+
+wgpu_unary_float_operations!(assert_wgpu_unary_operations_are_advertised);
 
 macro_rules! assert_every_advertised_wgpu_row_executes {
     (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {

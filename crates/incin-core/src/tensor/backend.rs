@@ -1,8 +1,4 @@
-#[cfg(any(test, feature = "test-utils"))]
-use crate::err::BackendError;
 use crate::err::{FloatToIntPolicy, Result, convert_f64_to_i64};
-#[cfg(any(test, feature = "test-utils"))]
-use crate::exec::TensorMeta;
 use crate::exec::capability::Capabilities;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::DTypeId;
@@ -18,9 +14,6 @@ mod variable;
 pub use variable::VariableBackend;
 mod capability;
 pub use capability::{HostInterop, HostReadback, TransferBackend};
-/// Shape-only backend used by tests and the opt-in `test-utils` feature.
-#[cfg(any(test, feature = "test-utils"))]
-pub mod dummy;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// A backend-agnostic scalar, tagged by whether it originated as a float or

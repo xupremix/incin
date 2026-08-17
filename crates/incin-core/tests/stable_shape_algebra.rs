@@ -41,7 +41,7 @@ fn test_const_dim_and_extent_classification() {
 
 #[test]
 fn repeat_rejects_a_repeat_vector_with_the_wrong_rank() {
-    type B = incin_core::test_utils::DummyBackend<Cpu>;
+    type B = incin_backends::cpu::CpuBackendImpl;
     #[allow(clippy::type_complexity)]
     let tensor: Tensor<s![2, 3], B> = Tensor::ones(()).unwrap();
 
@@ -337,8 +337,8 @@ fn test_backend_rank_support() {
     assert_eq!(range, RankSupport::Range { min: 2, max: 4 });
 }
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::shapes::idx::ToAxisIndex;
-use incin_core::test_utils::DummyBackend;
 
 #[test]
 fn test_derived_dimension_argument_validation_is_fallible() {
@@ -361,7 +361,7 @@ fn test_static_axis_macro_type_preservation() {
 
 #[test]
 fn test_high_rank_tensor_creation() {
-    let t16 = Tensor::<Ranked<typenum::consts::U16>, DummyBackend<Cpu>, f32>::zeros(
+    let t16 = Tensor::<Ranked<typenum::consts::U16>, CpuBackendImpl, f32>::zeros(
         incin_core::shapes::ShapeBuf::from_slice(&[1usize; 16]),
     )
     .unwrap();
@@ -371,13 +371,13 @@ fn test_high_rank_tensor_creation() {
     assert_eq!(reduced.dims().len(), 15);
     assert_eq!(kept.dims().len(), 16);
 
-    let t32 = Tensor::<Ranked<typenum::consts::U32>, DummyBackend<Cpu>, f32>::zeros(
+    let t32 = Tensor::<Ranked<typenum::consts::U32>, CpuBackendImpl, f32>::zeros(
         incin_core::shapes::ShapeBuf::from_slice(&[1usize; 32]),
     )
     .unwrap();
     assert_eq!(t32.dims().len(), 32);
 
-    let t64 = Tensor::<Ranked<typenum::consts::U64>, DummyBackend<Cpu>, f32>::zeros(
+    let t64 = Tensor::<Ranked<typenum::consts::U64>, CpuBackendImpl, f32>::zeros(
         incin_core::shapes::ShapeBuf::from_slice(&[1usize; 64]),
     )
     .unwrap();
@@ -387,7 +387,7 @@ fn test_high_rank_tensor_creation() {
 #[test]
 fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<CpuBackendImpl>;
     type S = s![2, 3];
 
     let _ = extract_graph();
@@ -404,7 +404,7 @@ fn exact_tracing_dispatch_unwraps_inner_storage_and_records_the_descriptor() {
 #[test]
 fn exact_tracing_records_boolean_comparison_output_dtype() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<CpuBackendImpl>;
     type S = s![2, 3];
 
     let _ = extract_graph();
@@ -430,7 +430,7 @@ fn exact_tracing_records_boolean_comparison_output_dtype() {
 #[test]
 fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<CpuBackendImpl>;
     type S = s![2, 3];
 
     let _ = extract_graph();
@@ -457,7 +457,7 @@ fn exact_tracing_records_canonical_unary_and_shape_descriptors() {
 #[test]
 fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<CpuBackendImpl>;
     type S = s![2, 3];
 
     let _ = extract_graph();
@@ -488,7 +488,7 @@ fn exact_tracing_reduction_keeps_canonical_axis_descriptor() {
 #[test]
 fn typed_tracing_preserves_runtime_and_static_input_axes() {
     let _guard = TRACE_TEST_LOCK.lock().unwrap();
-    type B = TracingBackend<DummyBackend<Cpu>>;
+    type B = TracingBackend<CpuBackendImpl>;
     type S = s![usize, 768];
 
     let _ = extract_graph();

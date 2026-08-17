@@ -90,13 +90,11 @@ pub use conformance::{
     ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,
 };
 pub use context::ExecutionContext;
-pub use dispatch::CanonicalError;
+pub use dispatch::{CanonicalError, PolicyViolation};
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 #[cfg(feature = "std")]
 pub use policy::check_gradients;
-pub use policy::{
-    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy,
-};
+pub use policy::{Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy};
 pub use precision::{
     LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
     PrecisionRole, PrecisionSpec, ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,

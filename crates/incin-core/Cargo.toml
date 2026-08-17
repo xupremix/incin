@@ -1,12 +1,17 @@
 [package]
 description = "Core tensor operations and static shape checking for incin"
-repository = "https://github.com/xupremix/incin"
-authors = ["xupremix <xupremix.me@gmail.com>"]
+repository.workspace = true
+authors.workspace = true
 name = "incin-core"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["machine-learning", "tensor", "shape", "type-level", "autograd"]
+categories = ["science", "mathematics", "no-std"]
+documentation = "https://docs.rs/incin-core"
 
 [lints]
 workspace = true
@@ -42,8 +47,6 @@ cuda = []
 wgpu = []
 # Enables Metal device marker metadata used by Metal-capable backend crates.
 metal = []
-# Feature-gated test utilities and mock/dummy backends.
-test-utils = []
 # Compiled execution preview types.
 compiled = []
 
@@ -52,38 +55,49 @@ compiled = []
 # cuda = ["dep:candle-core?/cuda", "dep:candle-nn?/cuda"]
 
 [dependencies]
-spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
-incin-macros = { path = "../incin-macros", version = "0.0.0", default-features = false }
+spin = { version = "0.12.2", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
+incin-macros = { path = "../incin-macros", version = "0.1.0", default-features = false }
 thiserror = { workspace = true, default-features = false }
 half = { workspace = true, default-features = false }
 bytemuck = { workspace = true, default-features = false }
 anyhow = { version = "1.0.103", default-features = false }
 typenum = { version = "1.20.1", default-features = false, features = ["const-generics"] }
-safetensors = { version = "0.4.1", optional = true } # safetensors requires std
+safetensors = { version = "0.8.0", optional = true } # safetensors requires std
 serde_json = { version = "1.0.120", optional = true }
 postcard = { version = "1.1.3", optional = true, features = ["alloc", "use-std"] }
 serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }
-prost = { version = "0.14.4", default-features = false, features = ["derive"] }
+prost = { workspace = true }
 bytes = { version = "1.12.0", default-features = false }
 ggml-quants = "0.1.0"
-hashbrown = { version = "0.14", default-features = false, features = ["alloc", "inline-more", "ahash", "serde"] }
+# `ahash` stopped being a hashbrown feature in 0.15; the default hasher is
+# foldhash now and is selected by the `default-hasher` feature.
+hashbrown = { version = "0.17", default-features = false, features = ["alloc", "inline-more", "default-hasher", "serde"] }
 
 
 [dev-dependencies]
 trybuild = "1.0.117"
 serde_json = "1.0.120"
 tempfile = "3.27"
-incin-core = { path = ".", features = ["test-utils"] }
 incin-backends = { path = "../incin-backends", default-features = false, features = ["std", "cpu", "wgpu"] }
 
 [[example]]
 name = "onnx_export"
-required-features = ["test-utils"]
+required-features = ["std"]
 
 [[example]]
 name = "model_inspect"
-required-features = ["test-utils"]
+required-features = ["std"]
 
-[build-dependencies]
-prost-build = "0.14.4"
-# miette = { workspace = true }
+# No `[build-dependencies]` and no build script. `src/generated/onnx.rs` is a
+# checked-in `prost-build` output; regenerate it with `cargo xtask onnx`. A
+# build script here would make `protoc` a mandatory system dependency of every
+# downstream crate, which is not a cost an ONNX exporter should impose on a
+# dependency graph that does not use it.
+
+[package.metadata.docs.rs]
+# docs.rs builds the default feature set unless told otherwise, which would
+# document a fraction of this crate. Hardware-only features are deliberately
+# absent: docs.rs has no GPU and a build that cannot link is worse than a
+# page that says the feature exists.
+features = ["std", "compiled", "distributed"]
+rustdoc-args = ["--cfg", "docsrs"]

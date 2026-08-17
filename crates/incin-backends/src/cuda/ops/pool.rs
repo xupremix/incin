@@ -179,7 +179,9 @@ pub(crate) fn launch_max_pool2d_forward(
             })?;
     }
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape);
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     let output =
         CudaStorage::try_from_parts(Arc::new(out_b), out_shape.clone(), out_strides.clone(), 0)?;
     let max_indices = CudaStorage::try_from_parts(Arc::new(idx_b), out_shape, out_strides, 0)?;
@@ -232,7 +234,9 @@ pub(crate) fn launch_scatter_pool_grad_2d(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
@@ -294,7 +298,9 @@ pub(crate) fn launch_avg_pool2d_forward(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -359,7 +365,9 @@ pub(crate) fn launch_avg_pool2d_backward(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
@@ -410,7 +418,9 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -467,6 +477,8 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
             })?;
     }
 
-    let strides = crate::layout::contiguous_strides(input_shape);
+    let strides = crate::layout::contiguous_strides(input_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }

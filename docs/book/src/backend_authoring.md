@@ -42,6 +42,14 @@ owners: add them only when the backend supports readback, mutable parameters,
 or training. An inference-only backend can stop after `StorageBackend`,
 `Capabilities`, `Backend`, and the `Execute` implementations it advertises.
 
+If you do implement `AutogradBackend`, note that it requires `set_grad`
+alongside `backward` and `get_grad`. It is required rather than defaulted on
+purpose: post-backward transforms such as `clip_grad_norm` are written once
+against the trait, and a default returning `Ok(())` would turn clipping into a
+silent no-op the caller could not detect. A backend that records no gradients
+should return `Error::UnsupportedBackendOperation` rather than accept the
+write.
+
 ## Capabilities: claim only what you run
 
 ```rust,ignore
@@ -61,6 +69,12 @@ A `CapabilityQuery` carries operation, dtype, layout, rank, training flag and
 math mode. `SupportLevel` is `Native`, `Composed` (you rewrite it into other
 operations), `Fallback`, or `Unsupported(reason)`  -  and the reason is typed,
 so a refusal names the specific constraint that failed.
+
+Canonical dispatch admits `Native` unconditionally. `Composed` requires an
+execution context with `FallbackPolicy::AllowComposition` (the default) or
+`AllowTransfer`; `Fallback` requires `AllowTransfer`. A policy refusal is
+`CanonicalError::Policy(PolicyViolation)`, distinct from unsupported capability
+and execution failures, and occurs before `Execute<O>::execute` is called.
 
 The rule the whole design rests on: **an advertised operation must execute.**
 The CPU backend makes this mechanical  -  the same declaration that generates
@@ -104,7 +118,8 @@ operations can return a tuple.
 2. Your storage type produces a valid `TensorMeta`.
 3. `Capabilities`  -  claim exactly what you execute, refuse with typed reasons.
 4. `Execute<op::X>` for each advertised operation.
-5. A capability-matrix test that *runs* each advertised row rather than
+5. `AutogradBackend` including `set_grad`, if the backend trains at all.
+6. A capability-matrix test that *runs* each advertised row rather than
    asserting the table against itself.
 
 Step 6 is the one that catches real mistakes. The repository's own capability

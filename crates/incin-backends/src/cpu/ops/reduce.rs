@@ -169,7 +169,7 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
         }
     };
 
-    Ok(CpuStorage::from_contiguous(new_buffer, out_shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(new_buffer, &out_shape))
 }
 
 /// Sum-reduce `storage` over `axis`, *removing* that axis from the shape
@@ -212,7 +212,7 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> Result<Cp
             });
         }
     };
-    Ok(CpuStorage::from_contiguous(new_buffer, shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(new_buffer, shape))
 }
 
 /// Reduce along `axis`, tracking the WINNING flat-index-into-source at each
@@ -296,7 +296,7 @@ fn scatter_axis_grad(
         vals[winning_flat_src_idx[flat_out]] = g as f32;
         increment_index(&mut out_idx, &grad_out.shape);
     }
-    CpuStorage::from_contiguous(CpuBuffer::F32(vals), original_shape.to_vec())
+    CpuStorage::from_contiguous(CpuBuffer::F32(vals), original_shape)
 }
 
 // ---------------------------------------------------------------------------
@@ -306,22 +306,110 @@ fn scatter_axis_grad(
 /// Sum every element of `t` into a single-element scalar storage (shape
 /// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
 /// scalar gradient uniformly back across `t`'s original shape.
-pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
+/// A contiguous typed buffer, readable one element at a time as `f64`.
+///
+/// The whole-tensor reducers walked a logical odometer and read each element
+/// through [`CpuStorage::get`]: a stride dot product over a heap-allocated index
+/// vector, then a match on the buffer behind an `Arc`, for every element. That
+/// is roughly twenty cycles to fetch one number against one to add it, and it is
+/// why a 1024-element `sum_all` measured 6.8 ns per element.
+///
+/// Reading through this instead leaves one small match per element whose
+/// discriminant stays in a register, which the optimiser hoists out of the loop.
+/// The accumulator type and the traversal order are unchanged in every reducer
+/// below, so the dense and odometer paths produce bit-identical results.
+/// Accumulating `f32` in `f32` would be faster still and would silently change
+/// every reduced value.
+enum DenseReader<'a> {
+    F32(&'a [f32]),
+    F64(&'a [f64]),
+    U8(&'a [u8]),
+    U32(&'a [u32]),
+    I64(&'a [i64]),
+    F16(&'a [half::f16]),
+    BF16(&'a [half::bf16]),
+}
+
+impl DenseReader<'_> {
+    /// The element at contiguous position `index`, widened to `f64` exactly as
+    /// [`CpuStorage::get`] widens it.
+    #[inline]
+    fn at(&self, index: usize) -> f64 {
+        match self {
+            Self::F32(values) => f64::from(values[index]),
+            Self::F64(values) => values[index],
+            Self::U8(values) => f64::from(values[index]),
+            Self::U32(values) => f64::from(values[index]),
+            Self::I64(values) => values[index] as f64,
+            Self::F16(values) => f64::from(values[index].to_f32()),
+            Self::BF16(values) => f64::from(values[index].to_f32()),
+        }
+    }
+}
+
+/// A [`DenseReader`] over `t`, or `None` when the general path must run.
+///
+/// `None` means a non-contiguous view, or a block-quantised buffer whose
+/// elements are not addressable individually.
+fn dense_reader(t: &CpuStorage) -> Option<DenseReader<'_>> {
+    if !crate::cpu::stride::is_contiguous(&t.shape, &t.strides) {
+        return None;
+    }
+    let total = crate::cpu::stride::validated_numel(&t.shape);
+    let start = t.offset_elements;
+    let end = start.checked_add(total)?;
+    Some(match &*t.buffer {
+        CpuBuffer::F32(values) => DenseReader::F32(values.get(start..end)?),
+        CpuBuffer::F64(values) => DenseReader::F64(values.get(start..end)?),
+        CpuBuffer::U8(values) => DenseReader::U8(values.get(start..end)?),
+        CpuBuffer::U32(values) => DenseReader::U32(values.get(start..end)?),
+        CpuBuffer::I64(values) => DenseReader::I64(values.get(start..end)?),
+        CpuBuffer::F16(values) => DenseReader::F16(values.get(start..end)?),
+        CpuBuffer::BF16(values) => DenseReader::BF16(values.get(start..end)?),
+        _ => return None,
+    })
+}
+
+/// Fold every element of `t` in traversal order, taking the dense path when the
+/// storage allows it.
+///
+/// The fold closure is shared by both paths, which is what makes them agree by
+/// construction rather than by inspection. `f` receives the accumulator, the
+/// flat position in traversal order, and the widened value; for a contiguous
+/// tensor that position is also the memory index, which is what the `max_all`
+/// and `min_all` gradients record.
+fn fold_all_f64<A>(t: &CpuStorage, init: A, mut f: impl FnMut(A, usize, f64) -> A) -> A {
+    let total = crate::cpu::stride::validated_numel(&t.shape);
+    let mut accumulator = init;
+    if let Some(reader) = dense_reader(t) {
+        for index in 0..total {
+            accumulator = f(accumulator, index, reader.at(index));
+        }
+        return accumulator;
+    }
     let mut idx = vec![0usize; t.shape.len()];
-    let mut sum = 0f64;
-    for _ in 0..total {
-        sum += t.get(&idx);
+    for index in 0..total {
+        accumulator = f(accumulator, index, t.get(&idx));
         if !t.shape.is_empty() {
             increment_index(&mut idx, &t.shape);
         }
     }
+    accumulator
+}
+
+/// The `f64` sum of every element of `t`.
+fn total_sum_f64(t: &CpuStorage) -> f64 {
+    fold_all_f64(t, 0f64, |sum, _, value| sum + value)
+}
+
+pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
+    let sum = total_sum_f64(t);
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![sum as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();
     let t_clone = t.clone(); // dtype reference for fill_like
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -340,14 +428,7 @@ pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
 /// gradient by `1/n` before broadcasting back to the original shape.
 pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
     let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-    let mut idx = vec![0usize; t.shape.len()];
-    let mut sum = 0f64;
-    for _ in 0..total {
-        sum += t.get(&idx);
-        if !t.shape.is_empty() {
-            increment_index(&mut idx, &t.shape);
-        }
-    }
+    let sum = total_sum_f64(t);
     let mean = if total > 0 { sum / total as f64 } else { 0.0 };
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![mean as f32]), vec![]);
 
@@ -355,7 +436,7 @@ pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
     let t_clone = t.clone();
     let n = total as f64;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -375,25 +456,24 @@ pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
 /// Backward scatters the incoming scalar gradient to ONLY the single
 /// global winning flat index, zero everywhere else.
 pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-    let mut idx = vec![0usize; t.shape.len()];
-    let mut best_val = f64::NEG_INFINITY;
-    let mut best_flat_idx = 0usize;
-    for flat in 0..total {
-        let v = t.get(&idx);
-        if v > best_val {
-            best_val = v;
-            best_flat_idx = flat;
-        }
-        if !t.shape.is_empty() {
-            increment_index(&mut idx, &t.shape);
-        }
-    }
+    // Strict `>`, so the first of equal maxima wins and the recorded gradient
+    // position is the same one the odometer would have chosen.
+    let (best_val, best_flat_idx) = fold_all_f64(
+        t,
+        (f64::NEG_INFINITY, 0usize),
+        |(best, best_index), index, value| {
+            if value > best {
+                (value, index)
+            } else {
+                (best, best_index)
+            }
+        },
+    );
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -403,7 +483,7 @@ pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
             vals[best_flat_idx] = scalar_grad as f32;
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -414,25 +494,22 @@ pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
 /// Minimum over every element of `t`, as a scalar (shape `[]`). Mirror of
 /// `max_all` with strict `<` comparison.
 pub(crate) fn min_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-    let mut idx = vec![0usize; t.shape.len()];
-    let mut best_val = f64::INFINITY;
-    let mut best_flat_idx = 0usize;
-    for flat in 0..total {
-        let v = t.get(&idx);
-        if v < best_val {
-            best_val = v;
-            best_flat_idx = flat;
-        }
-        if !t.shape.is_empty() {
-            increment_index(&mut idx, &t.shape);
-        }
-    }
+    let (best_val, best_flat_idx) = fold_all_f64(
+        t,
+        (f64::INFINITY, 0usize),
+        |(best, best_index), index, value| {
+            if value < best {
+                (value, index)
+            } else {
+                (best, best_index)
+            }
+        },
+    );
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -442,7 +519,7 @@ pub(crate) fn min_all(t: &CpuStorage) -> Result<CpuStorage> {
             vals[best_flat_idx] = scalar_grad as f32;
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -465,7 +542,7 @@ pub(crate) fn sum_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -487,7 +564,7 @@ pub(crate) fn sum_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
             }
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -513,7 +590,7 @@ pub(crate) fn sum_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -530,7 +607,7 @@ pub(crate) fn sum_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
             }
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -560,11 +637,11 @@ pub(crate) fn mean_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
         vals.push((summed.get(&idx) / axis_len) as f32);
         increment_index(&mut idx, &out_shape);
     }
-    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), &out_shape);
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -585,7 +662,7 @@ pub(crate) fn mean_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
             }
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -618,11 +695,11 @@ pub(crate) fn mean_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
         vals.push((summed.get(&idx) / axis_len) as f32);
         increment_index(&mut idx, &out_shape);
     }
-    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
+    let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), &out_shape);
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -639,7 +716,7 @@ pub(crate) fn mean_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
             }
             Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
-                original_shape.to_vec(),
+                &original_shape,
             )])
         }),
     });
@@ -668,7 +745,7 @@ pub(crate) fn max_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -700,7 +777,7 @@ pub(crate) fn max_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -735,7 +812,7 @@ pub(crate) fn min_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -768,7 +845,7 @@ pub(crate) fn min_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -815,10 +892,8 @@ pub(crate) fn argmax<KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<
                     multi[d] as i64
                 })
                 .collect();
-            let keepdim_out = CpuStorage::from_contiguous(
-                index_buffer::<KInt>("argmax", &idx_vals)?,
-                out_shape.to_vec(),
-            );
+            let keepdim_out =
+                CpuStorage::from_contiguous(index_buffer::<KInt>("argmax", &idx_vals)?, &out_shape);
             let mut squeeze_shape = keepdim_out.shape.to_vec();
             squeeze_shape.remove(d);
             Ok(keepdim_out
@@ -871,10 +946,8 @@ pub(crate) fn argmin<KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<
                     multi[d] as i64
                 })
                 .collect();
-            let keepdim_out = CpuStorage::from_contiguous(
-                index_buffer::<KInt>("argmin", &idx_vals)?,
-                out_shape.to_vec(),
-            );
+            let keepdim_out =
+                CpuStorage::from_contiguous(index_buffer::<KInt>("argmin", &idx_vals)?, &out_shape);
             let mut squeeze_shape = keepdim_out.shape.to_vec();
             squeeze_shape.remove(d);
             Ok(keepdim_out
@@ -905,15 +978,7 @@ pub(crate) fn argmin<KInt: DType>(t: &CpuStorage, dim: Option<usize>) -> Result<
 }
 
 pub(crate) fn prod_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-    let mut idx = vec![0usize; t.shape.len()];
-    let mut prod = 1.0f64;
-    for _ in 0..total {
-        prod *= t.get(&idx);
-        if !t.shape.is_empty() {
-            increment_index(&mut idx, &t.shape);
-        }
-    }
+    let prod = fold_all_f64(t, 1.0f64, |product, _, value| product * value);
     let buffer = t.buffer.from_f64_values(vec![prod])?;
     Ok(CpuStorage::from_contiguous(buffer, vec![]))
 }
@@ -963,7 +1028,7 @@ pub(crate) fn cumsum(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
         increment_index(&mut idx, &t.shape);
     }
     let buffer = t.buffer.from_f64_values(out_data)?;
-    Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, &t.shape))
 }
 
 /// `topk`.
@@ -1032,11 +1097,8 @@ pub(crate) fn topk<KInt: DType>(
         }
     }
     Ok((
-        CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, out_shape.to_vec()),
-        CpuStorage::from_contiguous(
-            index_buffer::<KInt>("topk", &out_indices)?,
-            out_shape.to_vec(),
-        ),
+        CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, &out_shape),
+        CpuStorage::from_contiguous(index_buffer::<KInt>("topk", &out_indices)?, &out_shape),
     ))
 }
 
@@ -1092,7 +1154,7 @@ pub(crate) fn argsort<KInt: DType>(
     }
     Ok(CpuStorage::from_contiguous(
         index_buffer::<KInt>("argsort", &out)?,
-        shape.to_vec(),
+        &shape,
     ))
 }
 
@@ -1279,7 +1341,7 @@ mod tests {
         // Manually build a loss = 2.0 * sum_out by pushing a tape entry
         let loss = CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32]), vec![]);
         let (sum_id, loss_id) = (sum_out.id, loss.id);
-        tape::push(TapeEntry {
+        tape::push_with(|| TapeEntry {
             output_id: loss_id,
             input_ids: vec![sum_id],
             backward: Box::new(|_grad_out: &CpuStorage| {

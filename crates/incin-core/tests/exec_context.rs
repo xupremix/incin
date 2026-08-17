@@ -12,10 +12,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use incin_core::backend_authoring::StorageBackend;
-use incin_core::exec::{
-    AllocatorPolicy, Determinism, ExecutionContext, ExecutionPolicy, FallbackPolicy, MathMode,
-    TensorMeta,
-};
+use incin_core::exec::{ExecutionContext, ExecutionPolicy, FallbackPolicy, MathMode, TensorMeta};
 use incin_core::prelude::{Cpu, DType};
 
 /// A backend that owns no device and executes nothing. The context under test
@@ -45,27 +42,20 @@ impl StorageBackend for Probe {
 fn every_axis_moved() -> ExecutionPolicy {
     ExecutionPolicy::new()
         .with_math_mode(MathMode::Fast)
-        .with_determinism(Determinism::Required)
         .with_fallback(FallbackPolicy::AllowTransfer)
-        .with_allocator(AllocatorPolicy::Pooled)
         .with_training(true)
 }
 
 #[test]
-fn a_fresh_context_denies_fallback_and_promises_no_determinism() {
+fn a_fresh_context_allows_composition_but_denies_transfer() {
     let context = ExecutionContext::new(Probe(1));
 
-    // Spelled out rather than compared against `ExecutionPolicy::default()`,
-    // because the point of the assertion is which defaults were chosen. Deny
-    // is the one that matters: a context nobody configured must not be able to
-    // copy to the host behind the caller's back.
+    // Spelled out rather than compared against `ExecutionPolicy::default()` so
+    // the selected composition/transfer boundary remains visible.
     assert_eq!(context.math_mode(), MathMode::Precise);
-    assert_eq!(context.determinism(), Determinism::Permitted);
-    assert_eq!(context.fallback(), FallbackPolicy::Deny);
-    assert_eq!(context.allocator(), AllocatorPolicy::Direct);
-    assert!(!context.fallback().allows_composition());
+    assert_eq!(context.fallback(), FallbackPolicy::AllowComposition);
+    assert!(context.fallback().allows_composition());
     assert!(!context.fallback().allows_transfer());
-    assert!(!context.determinism().is_required());
     assert!(!context.training());
 }
 
@@ -75,21 +65,10 @@ fn each_builder_moves_one_axis_and_leaves_the_others_alone() {
 
     let fast = ExecutionContext::new(Probe(2)).with_math_mode(MathMode::Fast);
     assert_eq!(fast.math_mode(), MathMode::Fast);
-    assert_eq!(fast.determinism(), base.determinism());
     assert_eq!(fast.fallback(), base.fallback());
-    assert_eq!(fast.allocator(), base.allocator());
-
-    let deterministic = ExecutionContext::new(Probe(2)).with_determinism(Determinism::Required);
-    assert_eq!(deterministic.determinism(), Determinism::Required);
-    assert_eq!(deterministic.math_mode(), base.math_mode());
 
     let composing = ExecutionContext::new(Probe(2)).with_fallback(FallbackPolicy::AllowComposition);
     assert_eq!(composing.fallback(), FallbackPolicy::AllowComposition);
-    assert_eq!(composing.allocator(), base.allocator());
-
-    let pooled = ExecutionContext::new(Probe(2)).with_allocator(AllocatorPolicy::Pooled);
-    assert_eq!(pooled.allocator(), AllocatorPolicy::Pooled);
-    assert_eq!(pooled.math_mode(), base.math_mode());
 
     let training = ExecutionContext::new(Probe(2)).with_training(true);
     assert!(training.training());
@@ -110,9 +89,7 @@ fn transfer_implies_composition_but_composition_does_not_imply_transfer() {
 fn the_backend_survives_every_builder_and_comes_back_out_unchanged() {
     let context = ExecutionContext::new(Probe(7))
         .with_math_mode(MathMode::Fast)
-        .with_determinism(Determinism::Required)
         .with_fallback(FallbackPolicy::AllowTransfer)
-        .with_allocator(AllocatorPolicy::Pooled)
         .with_training(true);
 
     assert_eq!(context.backend(), &Probe(7));
@@ -133,9 +110,7 @@ fn a_context_built_from_a_scope_keeps_its_policy_after_the_scope_ends() {
 #[test]
 fn scopes_nest_and_the_inner_one_restores_the_outer_rather_than_the_default() {
     let outer = ExecutionPolicy::new().with_math_mode(MathMode::Fast);
-    let inner = ExecutionPolicy::new()
-        .with_math_mode(MathMode::Precise)
-        .with_determinism(Determinism::Required);
+    let inner = ExecutionPolicy::new().with_math_mode(MathMode::Precise);
 
     assert_eq!(ExecutionPolicy::current(), ExecutionPolicy::new());
 
@@ -147,7 +122,7 @@ fn scopes_nest_and_the_inner_one_restores_the_outer_rather_than_the_default() {
 
             // A third level, to prove the restore is a stack and not a single
             // saved slot that the second entry would have overwritten.
-            let innermost = inner.with_allocator(AllocatorPolicy::Pooled);
+            let innermost = inner.with_training(true);
             innermost.scope(|| assert_eq!(ExecutionPolicy::current(), innermost));
 
             assert_eq!(ExecutionPolicy::current(), inner);
@@ -196,9 +171,8 @@ fn one_thread_s_scope_is_invisible_to_every_other_thread() {
 
     let workers = [
         ExecutionPolicy::new().with_math_mode(MathMode::Fast),
-        ExecutionPolicy::new().with_determinism(Determinism::Required),
         ExecutionPolicy::new().with_fallback(FallbackPolicy::AllowTransfer),
-        ExecutionPolicy::new().with_allocator(AllocatorPolicy::Pooled),
+        ExecutionPolicy::new().with_training(true),
     ];
 
     let observed = thread::scope(|scope| {
@@ -254,6 +228,6 @@ fn an_explicit_context_ignores_whatever_scope_it_is_used_inside() {
     every_axis_moved().scope(|| {
         assert_eq!(ExecutionPolicy::current(), every_axis_moved());
         assert_eq!(context.policy(), ExecutionPolicy::new());
-        assert_eq!(context.fallback(), FallbackPolicy::Deny);
+        assert_eq!(context.fallback(), FallbackPolicy::AllowComposition);
     });
 }

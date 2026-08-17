@@ -66,7 +66,7 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend, i64>::zeros(()).unwrap();
@@ -135,7 +135,7 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();

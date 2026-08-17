@@ -305,10 +305,6 @@ enables = []
 name = "compiled"
 enables = []
 
-[[feature_crate.feature]]
-name = "test-utils"
-enables = []
-
 [[feature_crate]]
 package = "incin-macros"
 manifest = "crates/incin-macros/Cargo.toml"
@@ -327,6 +323,19 @@ name = "distributed"
 enables = ["incin/distributed"]
 
 [[feature_crate]]
+package = "incin-data"
+manifest = "crates/incin-data/Cargo.toml"
+default = ["download"]
+
+[[feature_crate.feature]]
+name = "download"
+enables = ["dep:ureq", "dep:flate2"]
+
+[[feature_crate.feature]]
+name = "hub"
+enables = ["dep:hf-hub"]
+
+[[feature_crate]]
 package = "incin-diagnostics"
 manifest = "crates/incin-diagnostics/Cargo.toml"
 default = ["std"]
@@ -342,7 +351,7 @@ default = ["std", "cpu"]
 
 [[feature_crate.feature]]
 name = "std"
-enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand_distr/std", "half/std"]
+enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand/thread_rng", "rand_distr/std", "half/std"]
 
 [[feature_crate.feature]]
 name = "cpu"
@@ -399,7 +408,7 @@ enables = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 
 [[feature_crate.feature]]
 name = "test-utils"
-enables = ["incin-core/test-utils"]
+enables = []
 
 [[feature_crate.feature]]
 name = "compiled"
@@ -485,4 +494,8 @@ enables = []
 
 [[feature_crate.feature]]
 name = "test-utils"
-enables = ["incin-core/test-utils", "incin-backends/test-utils"]
+enables = ["incin-backends/test-utils"]
+
+[[feature_crate.feature]]
+name = "data-hub"
+enables = ["incin-data/hub"]

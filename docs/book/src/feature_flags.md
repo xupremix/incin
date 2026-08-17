@@ -40,8 +40,9 @@ features is the one configuration that is genuinely `no_std`.
 | `telemetry` | Backend telemetry hooks; `cargo incin doctor` also reports the run directory under this feature. |
 | `autotune` | CUDA launch autotuning. Implies `cuda`. |
 | `compiled` | Curated preview types for compiled plans and guards. Add `cpu` for the executable CPU lowering. |
-| `test-utils` | Test-only backends (`DummyBackend`) and test utilities. |
+| `test-utils` | Deterministic fault-injection hooks for tests. No stand-in backend. |
 | `hardware-tests` | Explicit hardware integration tests. These are never enabled by default. |
+| `data-hub` | The Hugging Face Hub client at `incin::hub`. Off by default because it brings an async runtime and a second TLS stack into the graph for an API most builds never call. |
 
 ## Distributed
 
@@ -65,6 +66,8 @@ workspace feature vocabulary while making their intended audience explicit.
 |---|---|---|
 | `paranoid-validation` | `incin-core` | Rechecks sealed execution proofs in validation-oriented builds; it is not required by release execution. |
 | `cuda-vendor` | `incin-backends` | Enables the CUDA vendor-library selection layer on top of `cuda`; it does not claim vendor-kernel runtime parity by itself. |
+| `download` | `incin-data` | HTTP dataset downloading and gzip decompression. On by default for `incin-data`; a build that ships its own data can turn it off. |
+| `hub` | `incin-data` | The Hugging Face Hub client itself. The facade reaches it through `data-hub` rather than enabling it directly. |
 
 ## `no_std`
 

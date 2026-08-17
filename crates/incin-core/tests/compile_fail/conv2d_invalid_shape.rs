@@ -1,10 +1,10 @@
 extern crate incin_core as incin;
 use incin_core::prelude::*;
 use incin_macros::s;
-use incin_core::test_utils::DummyBackend;
+use incin_backends::cpu::CpuBackendImpl;
 
 /// Backend.
-type Backend = DummyBackend<incin_core::prelude::Cpu>;
+type Backend = CpuBackendImpl;
 
 fn main() {
     let t = Tensor::<s![1, 3, 2, 2], Backend>::zeros(()).unwrap();

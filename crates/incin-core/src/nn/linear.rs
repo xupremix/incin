@@ -161,7 +161,7 @@ where
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// // A fully static linear layer: 512 inputs → 256 outputs

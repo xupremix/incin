@@ -773,11 +773,14 @@ pub trait BuiltinDType: ConstDType {
 // TensorElement — ordinary Rust POD scalar element
 // ============================================================================
 
-pub mod sealed {
+mod sealed {
     pub trait TensorElementSealed {}
 }
 
-/// Marker trait enforcing that a tensor element type is POD, Zeroable, safe, and sealed (`SEC-005`).
+/// Marker trait enforcing that a tensor element type is POD, Zeroable, safe,
+/// and sealed (`SEC-005`). The set of implementors is limited to Incin's
+/// built-in scalar element types; custom logical [`DType`] implementations
+/// remain supported, but cannot provide a custom [`TensorElement`].
 ///
 /// Only scalar (non-block) dtypes have a `TensorElement`. Block-quantized
 /// dtypes such as `Q8_0` do NOT implement this — their physical representation

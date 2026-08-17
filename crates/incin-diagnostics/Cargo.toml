@@ -1,12 +1,17 @@
 [package]
-repository = "https://github.com/xupremix/incin"
-authors = ["xupremix <xupremix.me@gmail.com>"]
+repository.workspace = true
+authors.workspace = true
 name = "incin-diagnostics"
 description = "Typenum-to-decimal diagnostic humanization shared by cargo-incin and Incin's IDE tooling."
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["diagnostics", "typenum", "incin", "shape", "errors"]
+categories = ["development-tools", "development-tools::debugging"]
+documentation = "https://docs.rs/incin-diagnostics"
 
 [features]
 # Diagnostic rewriting uses the standard library by default.
@@ -16,3 +21,7 @@ std = []
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

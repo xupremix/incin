@@ -51,6 +51,19 @@ thread_local! {
     static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
+/// Record one operation, building the entry only if it will be kept.
+///
+/// [`push`] already discards entries when the effective `GradMode` does not
+/// record, but by then the entry exists: its saved shapes, its input-id vector
+/// and its boxed backward closure have all been allocated for a value nothing
+/// can read. See `cpu::tape::push_with`, which this mirrors.
+pub(crate) fn push_with(entry: impl FnOnce() -> TapeEntry) {
+    if !incin_core::exec::GradMode::current().records() {
+        return;
+    }
+    push(entry());
+}
+
 /// Push a `TapeEntry` unless `GradMode` forbids recording.
 pub fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
@@ -68,6 +81,15 @@ pub struct WgpuGrads {
 
 impl WgpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
+    /// Replace the gradient recorded for `id`.
+    ///
+    /// A replacement rather than an accumulation, which is why it is spelled
+    /// differently from anything the reverse walk calls. See
+    /// `AutogradBackend::set_grad`.
+    pub fn set(&mut self, id: TensorId, value: WgpuStorage) {
+        self.grads.insert(id, value);
+    }
+
     pub fn get(&self, id: TensorId) -> Option<&WgpuStorage> {
         self.grads.get(id)
     }

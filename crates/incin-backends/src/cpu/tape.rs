@@ -82,6 +82,15 @@ pub struct CpuGrads {
 
 impl CpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
+    /// Replace the gradient recorded for `id`.
+    ///
+    /// A replacement rather than an accumulation, which is why it is spelled
+    /// differently from anything the reverse walk calls. See
+    /// `AutogradBackend::set_grad`.
+    pub fn set(&mut self, id: TensorId, value: CpuStorage) {
+        self.grads.insert(id, value);
+    }
+
     pub fn get(&self, id: TensorId) -> Option<&CpuStorage> {
         self.grads.get(id)
     }
@@ -108,6 +117,24 @@ thread_local! {
 ///
 /// The `GradMode` gate (`GRD-002`) and the recording itself both live in
 /// `Tape::push` now; this is the thread-local lookup and the telemetry hook.
+/// Record one operation, building the entry only if it will be kept.
+///
+/// [`push`] already discards entries when the effective `GradMode` does not
+/// record, but by then the entry exists: its saved shapes, its input-id vector,
+/// and its boxed backward closure have all been allocated for a value nothing
+/// can read. On a `NoGrad` forward pass — inference, evaluation, anything under
+/// `no_grad` — that was four heap allocations per elementwise operation.
+///
+/// Callers that allocate to build an entry use this and construct inside the
+/// closure. The gate is a thread-local read of the execution policy, which is
+/// what `push` was going to consult anyway.
+pub(crate) fn push_with(entry: impl FnOnce() -> TapeEntry) {
+    if !incin_core::exec::GradMode::current().records() {
+        return;
+    }
+    push(entry());
+}
+
 pub(crate) fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
     // Emit a scalar tracking tape depth when telemetry is enabled.
@@ -234,7 +261,7 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
         }
     };
 
-    CpuStorage::from_contiguous(new_buffer, a.shape.to_vec())
+    CpuStorage::from_contiguous(new_buffer, &a.shape)
 }
 
 /// Right-align `grad.shape` and `target_shape`; sum-reduce over any leading

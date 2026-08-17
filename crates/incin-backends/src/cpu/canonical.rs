@@ -3114,7 +3114,7 @@ mod tests {
     type TestBackend = CpuBackendImpl<Cpu>;
 
     fn storage(values: &[f32], shape: &[usize]) -> CpuStorage {
-        CpuStorage::try_from_contiguous(CpuBuffer::F32(values.to_vec()), shape.to_vec())
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(values.to_vec()), shape)
             .expect("test storage must be well formed")
     }
 

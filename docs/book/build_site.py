@@ -19,6 +19,7 @@ ROOT = Path(__file__).parent
 SRC = ROOT / "book"
 SOURCE = ROOT / "src"
 SITE = ROOT / "site"
+REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/develop/"
 
 
 class TextExtractor(HTMLParser):
@@ -63,6 +64,11 @@ def chapter_body(path: Path, slug: str) -> str:
     body = match.group(1)
     body = re.sub(r"\s*<nav class=\"nav-wrapper\".*?</nav>\s*", "", body, flags=re.DOTALL)
 
+    # Some mdBook playground renderings contain an accidental second pre
+    # wrapper. Keep the playground itself, including its hidden doctest spans.
+    while re.search(r"<pre>\s*<pre\b", body):
+        body = re.sub(r"<pre>\s*(<pre\b[^>]*>.*?</pre>)\s*</pre>", r"\1", body, count=1, flags=re.DOTALL)
+
     def rewrite(match: re.Match[str]) -> str:
         target, fragment = match.group(1), match.group(2) or ""
         if target in {f["slug"] + ".html" for f in chapters_global}:
@@ -70,6 +76,16 @@ def chapter_body(path: Path, slug: str) -> str:
         return match.group(0)
 
     body = re.sub(r'href="(?:\./)?([\w-]+\.html)(#[^"]*)?"', rewrite, body)
+    body = re.sub(
+        r'href="(#[^/"][^"]*)"',
+        lambda match: f'href="#/{slug}{match.group(1)}"',
+        body,
+    )
+    body = re.sub(
+        r'href="(?:\.\./)+((?:crates|docs|tools|examples)/[^"#]+)(#[^"]*)?"',
+        lambda match: f'href="{REPOSITORY_SOURCE}{match.group(1)}{match.group(2) or ""}"',
+        body,
+    )
     body = body.replace('href="print.html"', 'href="/"')
     return body.strip()
 

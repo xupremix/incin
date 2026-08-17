@@ -38,6 +38,22 @@ mod parallel_block;
 
 /// Helper module for parsing ONNX model graphs into Rust structs.
 mod onnx;
+/// The ONNX protobuf message types `onnx` parses into.
+///
+/// A checked-in `prost-build` output rather than the `onnx-pb` crate. `onnx-pb`
+/// has not been released since 2020, pinned this crate to `prost 0.6` beside
+/// `incin-core`'s `prost 0.14`, and ran `protoc` from a build script — which
+/// made a protobuf compiler a build requirement for everyone who depended on
+/// the facade. The file is byte-identical to `incin-core`'s copy and both are
+/// written by `cargo xtask onnx`, whose `--check` mode is the CI gate.
+#[allow(
+    dead_code,
+    clippy::doc_overindented_list_items,
+    clippy::enum_variant_names
+)]
+mod onnx_pb {
+    include!("generated/onnx.rs");
+}
 /// Helper module for importing model weights from safetensors.
 mod safetensors;
 /// Helper module for static shape macro expansion.
@@ -375,8 +391,8 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 ///
 /// ## Examples
 /// ```rust
+/// use incin::backend_authoring::VariableBackend;
 /// use incin::prelude::*;
-/// use incin::VariableBackend;
 ///
 /// #[module]
 /// pub struct MyModel<B: VariableBackend> {

@@ -98,7 +98,7 @@ pub(crate) fn elementwise_binary(
                 lhs.buffer.from_f64_values(out)?
             }
         };
-        return Ok(CpuStorage::from_contiguous(buffer, out_shape.to_vec()));
+        return Ok(CpuStorage::from_contiguous(buffer, out_shape));
     }
 
     let plan = IterationPlan::binary(
@@ -129,14 +129,14 @@ pub(crate) fn elementwise_binary(
         })
         .collect();
     let out_buffer = lhs.buffer.from_f64_values(out)?;
-    Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(out_buffer, out_shape))
 }
 
 pub(crate) fn canonical_relu(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Relu, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -157,7 +157,7 @@ pub(crate) fn canonical_unary(op: UnaryOp, t: &CpuStorage) -> Result<CpuStorage>
 pub(crate) fn canonical_neg(t: &CpuStorage) -> Result<CpuStorage> {
     let out = negate(t);
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![negate(grad_out)])),
@@ -168,7 +168,7 @@ pub(crate) fn canonical_neg(t: &CpuStorage) -> Result<CpuStorage> {
 pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Step, t)?;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -176,7 +176,7 @@ pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
             let zeros = vec![0.0f64; total];
             Ok(vec![CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(zeros)?,
-                grad_out.shape.to_vec(),
+                &grad_out.shape,
             )])
         }),
     });
@@ -186,7 +186,7 @@ pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
 pub(crate) fn canonical_add_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::AddScalar(scalar), t)?;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
@@ -197,7 +197,7 @@ pub(crate) fn canonical_add_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuSto
 pub(crate) fn canonical_mul_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::MulScalar(scalar), t)?;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -212,7 +212,7 @@ pub(crate) fn canonical_mul_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuSto
             }
             Ok(vec![CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(scaled)?,
-                grad_out.shape.to_vec(),
+                &grad_out.shape,
             )])
         }),
     });
@@ -239,7 +239,7 @@ pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStora
     let out = elementwise_binary(y, x, &y.shape, |y_value, x_value| y_value.atan2(x_value))?;
     let (y_id, x_id, out_id) = (y.id, x.id, out.id);
     let (y_capture, x_capture) = (y.clone(), x.clone());
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![y_id, x_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -277,7 +277,7 @@ pub(crate) fn canonical_exp(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Exp, t)?;
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -292,7 +292,7 @@ pub(crate) fn canonical_abs(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Abs, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -316,7 +316,7 @@ pub(crate) fn canonical_sqrt(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Sqrt, t)?;
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -333,7 +333,7 @@ pub(crate) fn canonical_mish(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -353,7 +353,7 @@ pub(crate) fn canonical_elu(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Elu, t)?;
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -378,7 +378,7 @@ pub(crate) fn canonical_log(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Log, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -393,7 +393,7 @@ pub(crate) fn canonical_tanh(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Tanh, t)?;
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -410,7 +410,7 @@ pub(crate) fn canonical_sigmoid(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Sigmoid, t)?;
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -434,7 +434,7 @@ where
     let out = elementwise_unary_typed(op, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -460,7 +460,7 @@ pub(crate) fn canonical_swish(t: &CpuStorage) -> Result<CpuStorage> {
     let t_capture = t.clone();
     let out_capture = out.clone();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -478,7 +478,7 @@ pub(crate) fn canonical_swish(t: &CpuStorage) -> Result<CpuStorage> {
                 .collect();
             Ok(vec![CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(grad)?,
-                grad_out.shape.to_vec(),
+                &grad_out.shape,
             )])
         }),
     });
@@ -584,7 +584,7 @@ pub(crate) fn elementwise_unary(
                 t.buffer.from_f64_values(out)?
             }
         };
-        return Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()));
+        return Ok(CpuStorage::from_contiguous(buffer, &t.shape));
     }
 
     let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
@@ -596,7 +596,7 @@ pub(crate) fn elementwise_unary(
         })
         .collect();
     let out_buffer = t.buffer.from_f64_values(out)?;
-    Ok(CpuStorage::from_contiguous(out_buffer, t.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(out_buffer, &t.shape))
 }
 
 fn elementwise_unary_typed(op: UnaryOp, input: &CpuStorage) -> Result<CpuStorage> {
@@ -656,17 +656,21 @@ pub(crate) fn add_storage_with_shape(
 ) -> Result<CpuStorage> {
     let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, out_shape)?;
 
-    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![lhs_id, rhs_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            Ok(vec![
-                tape::unbroadcast(grad_out, &lhs_shape)?,
-                tape::unbroadcast(grad_out, &rhs_shape)?,
-            ])
-        }),
+        backward: {
+            // Allocated here rather than at the call site: an unrecorded
+            // operation must not pay for the shapes its gradient would need.
+            let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+            Box::new(move |grad_out: &CpuStorage| {
+                Ok(vec![
+                    tape::unbroadcast(grad_out, &lhs_shape)?,
+                    tape::unbroadcast(grad_out, &rhs_shape)?,
+                ])
+            })
+        },
     });
     Ok(out)
 }
@@ -692,17 +696,21 @@ pub(crate) fn sub_storage_with_shape(
 ) -> Result<CpuStorage> {
     let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, out_shape)?;
 
-    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
-        output_id: out_id,
-        input_ids: vec![lhs_id, rhs_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            Ok(vec![
-                tape::unbroadcast(grad_out, &lhs_shape)?,
-                tape::unbroadcast(&negate(grad_out), &rhs_shape)?,
-            ])
-        }),
+    tape::push_with(|| {
+        // Allocated inside the closure so an unrecorded operation does not
+        // pay for the shapes its gradient would have needed.
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                Ok(vec![
+                    tape::unbroadcast(grad_out, &lhs_shape)?,
+                    tape::unbroadcast(&negate(grad_out), &rhs_shape)?,
+                ])
+            }),
+        }
     });
     Ok(out)
 }
@@ -731,21 +739,33 @@ pub(crate) fn mul_storage_with_shape(
     // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
     // since the backward closure needs their VALUES, not just shapes.
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
-        output_id: out_id,
-        input_ids: vec![lhs_id, rhs_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad_lhs =
-                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &rhs_capture, &grad_out.shape)?;
-            let grad_rhs =
-                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &lhs_capture, &grad_out.shape)?;
-            Ok(vec![
-                tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-            ])
-        }),
+    tape::push_with(|| {
+        // Allocated inside the closure so an unrecorded operation does not
+        // pay for the shapes its gradient would have needed.
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad_lhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
+                    grad_out,
+                    &rhs_capture,
+                    &grad_out.shape,
+                )?;
+                let grad_rhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
+                    grad_out,
+                    &lhs_capture,
+                    &grad_out.shape,
+                )?;
+                Ok(vec![
+                    tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
+            }),
+        }
     });
     Ok(out)
 }
@@ -776,29 +796,37 @@ pub(crate) fn div_storage_with_shape(
     // unbroadcast — best-effort correctness, not exercised by this
     // phase's example/tests.
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
-        output_id: out_id,
-        input_ids: vec![lhs_id, rhs_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-            let grad_lhs =
-                elementwise_binary_numeric(BinaryOp::Div, grad_out, &rhs_capture, &grad_out.shape)?;
-            // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-            let grad_rhs = elementwise_binary_numeric(
-                BinaryOp::Mul,
-                grad_out,
-                &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
-                    -l / (r * r)
-                })?,
-                &grad_out.shape,
-            )?;
-            Ok(vec![
-                tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-            ])
-        }),
+    tape::push_with(|| {
+        // Allocated inside the closure so an unrecorded operation does not
+        // pay for the shapes its gradient would have needed.
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
+                let grad_lhs = elementwise_binary_numeric(
+                    BinaryOp::Div,
+                    grad_out,
+                    &rhs_capture,
+                    &grad_out.shape,
+                )?;
+                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
+                let grad_rhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
+                    grad_out,
+                    &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
+                        -l / (r * r)
+                    })?,
+                    &grad_out.shape,
+                )?;
+                Ok(vec![
+                    tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
+            }),
+        }
     });
     Ok(out)
 }

@@ -19,7 +19,6 @@ use incin_core::prelude::{
     BackendError, Cpu, DTypeId, Device, DeviceId, Local, ShapeBuf, ShapeValue,
 };
 use incin_core::tensor::tracing::{TracingBackend, extract_graph};
-use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct IdentityAttributes {
@@ -514,7 +513,7 @@ fn built_in_backend_can_compile_an_open_custom_operation() {
     {
     }
 
-    assert_custom_execution::<DummyBackend<Cpu>>();
+    assert_custom_execution::<CpuBackendImpl>();
 }
 
 #[test]

@@ -1,10 +1,126 @@
 # Changelog
 
-> The workspace intentionally remains at `0.0.0`. Dated version headings below
-> are development snapshots retained for traceability, not published releases.
+> Dated headings below `0.1.0` are development snapshots retained for
+> traceability, not published releases.
 
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [0.1.0] - 2026-08-17
+
+The first release intended for crates.io. CPU is the complete, verified
+backend; the GPU backends, distributed planning, compiled execution, and the
+automatic trainer ship as previews. See `docs/MIGRATION.md` for what an
+upgrade from a `0.0.0` snapshot has to act on.
+
+### Removed
+- **`protoc` as a build dependency.** `incin-core`'s build script ran
+  `prost-build` unconditionally, making a system protobuf compiler mandatory
+  for every crate that depended on the facade. The generated ONNX module is
+  checked in and regenerated with `cargo xtask onnx`; `cargo xtask onnx
+  --check` verifies it in CI, which is now the only job that installs protoc.
+- **`onnx-pb`**, unreleased since 2020, and the second `prost` major it pinned
+  into the dependency tree.
+- **`DummyBackend`, the shape-only stand-in backend**, and
+  `incin-core`'s `test-utils` feature that carried it. It implemented
+  `Execute<O>` for *every* catalog operation and stored a shape instead of
+  data, so a test written against it passed whether or not any backend could
+  run the operation and whatever values the operation produced. Its tests were
+  migrated to the real CPU backend, which strengthened several of them: the
+  distribution tests now check the support of the distribution they name
+  rather than only the shape of the tensor, and `ones` is now distinguishable
+  from `zeros`. `incin::test_utils` survives with fault injection only, and a
+  consumer fixture proves enabling `test-utils` does not bring the stand-in
+  back.
+- **`tokio` and a duplicate `rustls`** from the default dependency graph; the
+  Hub client that pulled them is now behind the `data-hub` feature.
+
+### Added
+- **`clip_grad_norm`** — total-norm gradient clipping over a `ParameterGroup`,
+  returning the norm before rescaling. The one training primitive the framework
+  was missing.
+- **`AutogradBackend::set_grad`** — the backend primitive clipping needs.
+  Required rather than defaulted; see `docs/MIGRATION.md`.
+- **WGPU unary activations are reachable.** `relu`, `step`, `mish`, `elu`,
+  `gelu`, `abs`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, and `swish`
+  had working shaders and `Execute` implementations but were never advertised
+  by the capability registry, so canonical dispatch refused them. They are
+  advertised now, verified numerically against reference implementations on a
+  software adapter.
+- **A capability assertion in both directions.** The compile-time check that
+  every advertised WGPU row has an executor is joined by one proving every
+  written executor is advertised, so a kernel cannot become unreachable again.
+- **Metal in the generated capability matrix.** `METAL_CAPABILITIES` existed
+  and `metal` was a documented feature, but the document had no column for it.
+- **Publish metadata** on all ten publishable crates: keywords, categories,
+  documentation links, and `[package.metadata.docs.rs]` feature sets, checked
+  by `tools/check-publish-metadata.py`.
+- **`rust-version = "1.88"`**, verified by a CI job pinned to that toolchain.
+- **Supply-chain gate** — `deny.toml` and a `cargo deny check` CI job covering
+  advisories, licences, duplicates, and registry provenance.
+- **`data-hub` facade feature** for the Hugging Face Hub client, and
+  `download`/`hub` features on `incin-data`.
+- **`STATE_FORMAT_VERSION`** — an explicit schema version on both state
+  formats. Safetensors carries it as `incin.format.version` metadata; postcard
+  carries it as the first field of its envelope, ahead of the payload, so a
+  version mismatch is reported as one rather than as a decode failure partway
+  through. A file newer than the reader is refused with both numbers named.
+  `CHECKPOINT_MANIFEST_VERSION` does the same for the sharded-checkpoint
+  manifest, whose `version` field existed but was never read back.
+
+### Changed
+- **The CPU AVX2 kernels are reachable.** They were gated on
+  `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` — false
+  in any stock `cargo build`, since the default `x86_64` target is the baseline
+  ISA. Every default build therefore dead-code-eliminated the SIMD path and ran
+  a scalar loop. The kernels already carried
+  `#[target_feature(enable = "avx2")]`, so the fix is the runtime detection that
+  attribute exists for: `simd::avx2_detected()`, cached in a relaxed atomic.
+  On an AVX2 machine, `eager/add_f32/65536` goes from 60.7 µs to **6.43 µs**,
+  back inside its recorded budget, and `add_f32/1024` from 1.66 µs to 776 ns.
+  A test now fails if the gate is narrowed back to a compile-time condition.
+- **Whole-tensor reductions read contiguous storage directly.** `sum_all`,
+  `mean_all`, `prod_all`, `max_all`, and `min_all` walked a logical odometer and
+  fetched every element through a stride dot product plus a dtype match — about
+  twenty cycles to read one number. `sum_f32/1024` goes from 6.97 µs to 5.41 µs
+  under the full benchmark suite and from 6.97 µs to 1.32 µs in isolation;
+  `sum_f32/65536` from 399 µs to 306 µs. The `f64` accumulator and the traversal
+  order are unchanged, so reduced values are bit-identical.
+- **Fewer allocations per operation.** The descriptor path inferred each output
+  shape twice — once to derive it, once to verify the derivation against itself
+  — `broadcast_shape` round-tripped its accumulator through a `ShapeBuf` on
+  every operand, and the CPU backend built autograd tape entries even when the
+  effective `GradMode` was going to discard them. A rank-2 elementwise add went
+  from 27 allocations to 5 and a unary from 20 to 5, and the ceilings in
+  `hot_path_allocations.rs` were rebased onto the new counts. Shape inference
+  also produces a `ShapeBuf` throughout rather than a `Vec<usize>` that was then
+  copied into one; `ShapeBuf` stores rank 8 and below inline, so an ordinary
+  rank now reaches the descriptor without touching the heap. No validation was
+  removed. See `docs/benchmarks/runtime-2026-08-17.md`.
+- **`ModelExt::load` no longer takes a device.** The argument was ignored, so
+  the signature described a relocation the call never performed. `load`
+  restores state in place; moving a model between devices stays `ToDevice`.
+- **An optimizer step that reaches no parameter is an error.** `SGD`, `Adam`,
+  and `AdamW` returned `Ok(())` when no parameter in the group received a
+  gradient, so a training loop could run to completion with parameters that
+  never moved — including when `backward` ran on a different thread from the
+  forward pass, since a tape is thread-local. Skipping some parameters remains
+  legal.
+- **`docs/plan/roadmap.md` derives its completion table from
+  `docs/plan/ledger.toml`.** The two disagreed about the same task IDs; a new
+  check keeps them equal, and the roadmap now states what "complete" means and
+  how many rows carry recorded deviations.
+- **README and crate documentation** describe CPU as the complete backend and
+  the GPU backends as previews covering documented subsets, matching the
+  generated capability matrix.
+- **Dependencies:** `rand` 0.8 → 0.10, `rand_distr` 0.4 → 0.6, `hashbrown`
+  0.14 → 0.17, `spin` 0.9 → 0.12, `safetensors` 0.4 → 0.8, `pollster` 0.3 →
+  1.0, `criterion` 0.5 → 0.8.
+
+### Fixed
+- **Candle 0.9.2 element types.** New `I16`, `I32`, and float8 variants are
+  refused by name at the bridge rather than breaking the build or being
+  reinterpreted as a same-width type Incin does have.
 
 ## [Unreleased]
 

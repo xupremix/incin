@@ -41,6 +41,15 @@ impl MetalGrads {
     }
 
     /// Look up the accumulated gradient for a given tensor id, if any.
+    /// Replace the gradient recorded for `id`.
+    ///
+    /// A replacement rather than an accumulation, which is why it is spelled
+    /// differently from anything the reverse walk calls. See
+    /// `AutogradBackend::set_grad`.
+    pub fn set(&mut self, id: TensorId, value: MetalStorage) {
+        self.grads.insert(id, value);
+    }
+
     pub fn get(&self, id: TensorId) -> Option<&MetalStorage> {
         self.grads.get(id)
     }

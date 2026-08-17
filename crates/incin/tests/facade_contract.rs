@@ -61,6 +61,13 @@ fn stable_facade_consumer_contracts() {
         false,
         &["could not find `test_utils` in `incin`"],
     );
+    // The stand-in backend is gone from the feature that used to carry it,
+    // not merely from the default surface.
+    check_fixture(
+        "dummy-backend-absent",
+        false,
+        &["no `DummyBackend` in `test_utils`"],
+    );
     check_fixture(
         "default-alias-absent",
         false,

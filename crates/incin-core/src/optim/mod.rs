@@ -4,7 +4,7 @@ use crate::nn::param::{Param, TrainState};
 use crate::nn::{ParameterVisitor, StatePath, VisitParameters};
 use crate::shapes::Dyn;
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
-use crate::tensor::backend::{AutogradBackend, VariableBackend};
+use crate::tensor::backend::{AutogradBackend, HostReadback, VariableBackend};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::{ConstDType, DType};
 use crate::{
@@ -19,7 +19,9 @@ use alloc::string::{String, ToString};
 
 pub mod scheduler;
 pub use crate::autograd::Gradients;
-pub use scheduler::{ConstantLR, CosineAnnealingLR, LRScheduler, LinearLR, StepLR};
+pub use scheduler::{ConstantLR, LRScheduler, LinearLR};
+#[cfg(feature = "std")]
+pub use scheduler::{CosineAnnealingLR, StepLR};
 
 /// Trait defining a generic optimization algorithm.
 ///
@@ -241,6 +243,37 @@ fn invalid_optimizer_config(operation: &'static str, reason: &'static str) -> Er
         operation,
         reason: ErrorMessage::new(reason),
     }
+}
+
+/// Refuse a step in which no parameter in a non-empty group received a
+/// gradient.
+///
+/// Every optimizer here skips a parameter it has no gradient for, which is
+/// correct on its own: a parameter the forward pass did not use has nothing to
+/// apply. Skipping *every* parameter is a different event. It means the
+/// backward pass did not reach this group at all — because it was never run,
+/// because the graph was detached, or because the tape that recorded the
+/// forward pass belongs to another thread and the reverse walk on this one
+/// found nothing to drain. In each case the previous behaviour was to commit
+/// nothing and return `Ok(())`, so the training loop ran to completion with
+/// parameters that never moved. A run that finishes wrong is the failure mode
+/// this crate refuses everywhere else, and it costs one comparison per step to
+/// refuse it here too.
+fn require_gradients_reached_the_group(
+    operation: &'static str,
+    parameters: usize,
+    updated: usize,
+) -> Result<()> {
+    if parameters > 0 && updated == 0 {
+        return Err(invalid_optimizer_config(
+            operation,
+            "no parameter in this group received a gradient: the backward pass did not \
+             reach it. A tape is thread-local, so a backward call on a thread other than \
+             the one that recorded the forward pass drains an empty graph and produces \
+             exactly this state.",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_learning_rate(operation: &'static str, lr: f64) -> Result<()> {
@@ -477,6 +510,100 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
     Ok((updated, m_t, v_t))
 }
 
+/// Rescales a parameter group's gradients so their global L2 norm is at most
+/// `max_norm`, and returns the norm they had before rescaling.
+///
+/// This is the standard total-norm form: the norm is taken over the
+/// concatenation of every gradient in the group, not per parameter, so the
+/// direction of the update is preserved and only its length changes. A group
+/// already under the threshold is left untouched and the returned norm is the
+/// one it had.
+///
+/// Call it between the backward pass and [`Optimizer::step`]:
+///
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// use incin::optim::{ParameterGroup, clip_grad_norm};
+/// use incin::prelude::*;
+///
+/// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
+/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let mut gradients = model.forward(input)?.sum_all()?.backward()?;
+///
+/// let group = ParameterGroup::<DefaultBackend, f32>::from_module(&model)?;
+/// let before = clip_grad_norm(&group, &mut gradients, 1.0)?;
+/// assert!(before >= 0.0);
+///
+/// let mut optimizer = SGD::<DefaultBackend>::from_module(&model, 0.01)?;
+/// optimizer.step(&gradients)?;
+/// # Ok(()) }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error when `max_norm` is not finite and positive, when a
+/// gradient cannot be read back to the host, or when the backend refuses the
+/// rescale.
+pub fn clip_grad_norm<B, K>(
+    params: &ParameterGroup<B, K>,
+    grads: &mut Gradients<B>,
+    max_norm: f64,
+) -> Result<f64>
+where
+    B: VariableBackend + AutogradBackend + OptimizerBackend<K> + HostReadback,
+    K: ConstDType,
+{
+    const OPERATION: &str = "clip_grad_norm";
+    if !max_norm.is_finite() || max_norm <= 0.0 {
+        return Err(invalid_optimizer_config(
+            OPERATION,
+            "the maximum norm must be finite and greater than zero",
+        ));
+    }
+
+    // Two passes over the group, because the scale factor is a property of the
+    // whole set: nothing can be rescaled until every gradient has been
+    // measured. The first pass also collects the storage handles so the second
+    // does not repeat the parameter lookup.
+    let mut squared_total = 0.0f64;
+    let mut present = alloc::vec::Vec::new();
+    for (_, var) in params.iter() {
+        let tensor = B::var_as_tensor::<K>(var)?;
+        let Some(grad) = B::get_grad::<K>(&tensor, grads.as_backend())? else {
+            continue;
+        };
+        for value in B::float_to_vec1::<K>(&grad)? {
+            squared_total += value * value;
+        }
+        present.push((tensor, grad));
+    }
+
+    let total_norm = squared_total.sqrt();
+    if !total_norm.is_finite() {
+        return Err(invalid_optimizer_config(
+            OPERATION,
+            "the gradient norm is not finite, so no finite rescale exists. Inspect the \
+             backward pass rather than clipping a NaN into range.",
+        ));
+    }
+    if total_norm <= max_norm {
+        return Ok(total_norm);
+    }
+
+    // The epsilon keeps the divisor away from zero. It cannot matter here —
+    // this branch already established `total_norm > max_norm > 0` — but it
+    // keeps the expression the same one every reference implementation writes,
+    // which is worth more than the branch it would save.
+    let scale = max_norm / (total_norm + 1e-6);
+    for (tensor, grad) in present {
+        let scaled = B::optimizer_mul_scalar(&grad, scale)?;
+        B::set_grad::<K>(&tensor, grads.as_backend_mut(), scaled)?;
+    }
+    Ok(total_norm)
+}
+
 /// Stochastic Gradient Descent (SGD) optimizer.
 ///
 /// Applies the update rule: `w ← w - lr * ∂L/∂w`.
@@ -485,13 +612,17 @@ fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
-/// let gradients = Tensor::<s![], DefaultBackend>::zeros(())?
-///     .require_grad()
-///     .backward()?;
+///
+/// // The gradients must come from a backward pass over *this* model. A step
+/// // whose gradients reach none of the group's parameters is refused rather
+/// // than silently committing nothing.
+/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let loss = model.forward(input)?.sum_all()?;
+/// let gradients = loss.backward()?;
 ///
 /// let mut optimizer = SGD::<DefaultBackend>::from_module(&model, 0.01)?;
 /// optimizer.step(&gradients)?;
@@ -562,6 +693,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
                 });
             }
         }
+        require_gradients_reached_the_group(OPERATION, self.params.len(), updates.len())?;
         commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
         Ok(())
     }
@@ -577,13 +709,17 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
-/// let gradients = Tensor::<s![], DefaultBackend>::zeros(())?
-///     .require_grad()
-///     .backward()?;
+///
+/// // The gradients must come from a backward pass over *this* model. A step
+/// // whose gradients reach none of the group's parameters is refused rather
+/// // than silently committing nothing.
+/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let loss = model.forward(input)?.sum_all()?;
+/// let gradients = loss.backward()?;
 ///
 /// let mut optimizer = AdamW::<DefaultBackend>::from_module(&model, 1e-4)?;
 /// optimizer.step(&gradients)?;
@@ -750,6 +886,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
                 });
             }
         }
+        require_gradients_reached_the_group(OPERATION, self.params.len(), updates.len())?;
         commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
         for update in updates {
             self.m.insert(
@@ -781,13 +918,17 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
-/// let gradients = Tensor::<s![], DefaultBackend>::zeros(())?
-///     .require_grad()
-///     .backward()?;
+///
+/// // The gradients must come from a backward pass over *this* model. A step
+/// // whose gradients reach none of the group's parameters is refused rather
+/// // than silently committing nothing.
+/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let loss = model.forward(input)?.sum_all()?;
+/// let gradients = loss.backward()?;
 ///
 /// let mut optimizer = Adam::<DefaultBackend>::from_module(&model, 1e-3)?;
 /// optimizer.step(&gradients)?;
@@ -944,6 +1085,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B
                 });
             }
         }
+        require_gradients_reached_the_group(OPERATION, self.params.len(), updates.len())?;
         commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
         for update in updates {
             self.m.insert(

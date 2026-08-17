@@ -17,25 +17,25 @@ fn ordinary_numeric_pointwise_api() -> Result<()> {
 }
 
 #[test]
-fn arithmetic_operators_return_tensors_and_checked_methods_return_results() -> Result<()> {
+fn arithmetic_operators_return_results_matching_checked_methods() -> Result<()> {
     let a = Cpu.tensor([1.0_f32, 2.0, 3.0])?;
     let b = Cpu.tensor([4.0_f32, 5.0, 6.0])?;
 
-    let operator_sum = &a + &b;
+    let operator_sum = (&a + &b)?;
     let checked_sum = a.try_add(&b)?;
     assert_eq!(
         operator_sum.to_vec1::<f32>()?,
         checked_sum.to_vec1::<f32>()?
     );
 
-    let operator_product = a.clone() * &b;
+    let operator_product = (a.clone() * &b)?;
     let checked_product = a.try_mul(&b)?;
     assert_eq!(
         operator_product.to_vec1::<f32>()?,
         checked_product.to_vec1::<f32>()?
     );
 
-    let operator_neg = -&b;
+    let operator_neg = (-&b)?;
     let checked_neg = b.try_neg()?;
     assert_eq!(
         operator_neg.to_vec1::<f32>()?,
@@ -50,7 +50,7 @@ fn checked_arithmetic_broadcasts_and_matches_the_operator() -> Result<()> {
     let rhs = Tensor::<Dyn, DefaultBackend>::from_slice(&[10.0_f32, 20.0, 30.0], vec![1, 3])?;
 
     let checked = lhs.try_add(&rhs)?;
-    let operator = &lhs + &rhs;
+    let operator = (&lhs + &rhs)?;
 
     assert_eq!(checked.dims(), [2, 3]);
     assert_eq!(checked.to_vec1::<f32>()?, operator.to_vec1::<f32>()?);
@@ -71,33 +71,26 @@ fn exact_arithmetic_keeps_exact_shape_contract() -> Result<()> {
 }
 
 #[test]
-fn scalar_operators_return_tensors() -> Result<()> {
+fn scalar_operators_return_results() -> Result<()> {
     let tensor = Cpu.tensor([2.0_f32, 4.0])?;
 
-    assert_eq!((&tensor * 2.0_f32).to_vec1::<f32>()?, vec![4.0, 8.0]);
-    assert_eq!((&tensor + 1.0_f32).to_vec1::<f32>()?, vec![3.0, 5.0]);
-    assert_eq!((&tensor - 1.0_f32).to_vec1::<f32>()?, vec![1.0, 3.0]);
-    assert_eq!((&tensor / 2.0_f32).to_vec1::<f32>()?, vec![1.0, 2.0]);
+    assert_eq!((&tensor * 2.0_f32)?.to_vec1::<f32>()?, vec![4.0, 8.0]);
+    assert_eq!((&tensor + 1.0_f32)?.to_vec1::<f32>()?, vec![3.0, 5.0]);
+    assert_eq!((&tensor - 1.0_f32)?.to_vec1::<f32>()?, vec![1.0, 3.0]);
+    assert_eq!((&tensor / 2.0_f32)?.to_vec1::<f32>()?, vec![1.0, 2.0]);
     assert_eq!(tensor.mul_scalar(2.0)?.to_vec1::<f32>()?, vec![4.0, 8.0]);
     Ok(())
 }
 
 #[test]
-fn checked_runtime_failure_is_a_panic_through_the_operator() -> Result<()> {
+fn invalid_runtime_operator_returns_an_error_without_panicking() -> Result<()> {
     let a = Tensor::<Dyn, DefaultBackend>::from_slice(&[1.0_f32, 2.0], vec![2])?;
     let b = Tensor::<Dyn, DefaultBackend>::from_slice(&[3.0_f32, 4.0, 5.0], vec![3])?;
     assert!(a.try_add(&b).is_err());
 
-    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = &a + &b;
-    }));
-    let message = panic.expect_err("an invalid runtime add must panic");
-    let message = message
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| message.downcast_ref::<&str>().copied())
-        .unwrap_or_default();
-    assert!(message.contains("Incin Add failed"));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| &a + &b));
+    assert!(outcome.is_ok(), "operator evaluation must not panic");
+    assert!(outcome.unwrap().is_err());
     Ok(())
 }
 

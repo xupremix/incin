@@ -6,7 +6,9 @@ use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::backend_authoring::Execute;
 use incin_core::exec::catalog::op;
-use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
+use incin_core::tensor::tracing::{
+    TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
+};
 
 /// Nb.
 type NB = CpuBackendImpl;

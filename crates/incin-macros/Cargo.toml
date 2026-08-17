@@ -1,12 +1,17 @@
 [package]
 description = "Procedural macros and static dimension verification for incin"
-repository = "https://github.com/xupremix/incin"
-authors = ["xupremix <xupremix.me@gmail.com>"]
+repository.workspace = true
+authors.workspace = true
 name = "incin-macros"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["machine-learning", "macros", "tensor", "shape", "proc-macro"]
+categories = ["science", "development-tools"]
+documentation = "https://docs.rs/incin-macros"
 
 [lib]
 proc-macro = true
@@ -30,15 +35,23 @@ distributed = ["incin/distributed"]
 proc-macro2 = { workspace = true}
 syn = { workspace = true }
 quote = { workspace = true }
-safetensors = "0.4.5"
+safetensors = "0.8.0"
 serde_json = "1.0.150"
 serde = { version = "1.0", features = ["derive"] }
-onnx-pb = "0.1.4"
-prost = "0.6"
+# The ONNX message types are `src/generated/onnx.rs`, not the `onnx-pb` crate;
+# see the `onnx_pb` module in `src/lib.rs`. Kept on the same `prost` major as
+# `incin-core` so the workspace resolves one copy rather than two.
+prost = { workspace = true }
 
 [dev-dependencies]
 incin = { path = "../incin", features = ["backend-authoring", "distributed"] }
 incin-core = { path = "../incin-core", features = ["distributed"] }
 trybuild = "1.0.117"
 
-
+[package.metadata.docs.rs]
+# docs.rs builds the default feature set unless told otherwise, which would
+# document a fraction of this crate. Hardware-only features are deliberately
+# absent: docs.rs has no GPU and a build that cannot link is worse than a
+# page that says the feature exists.
+features = ["std"]
+rustdoc-args = ["--cfg", "docsrs"]

@@ -1,18 +1,24 @@
 [package]
+authors.workspace = true
 description = "Observability and run telemetry for incin"
-repository = "https://github.com/xupremix/incin"
+repository.workspace = true
 publish = true
 name = "incin-telemetry"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["telemetry", "metrics", "machine-learning", "incin", "observability"]
+categories = ["science", "development-tools::profiling"]
+documentation = "https://docs.rs/incin-telemetry"
 
 [dependencies]
 crossbeam-channel = "0.5.16"
 dirs = "6.0.0"
 interprocess = "2.4.2"
-incin-core = { path = "../incin-core", version = "0.0.0" }
+incin-core = { path = "../incin-core", version = "0.1.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.120"
 thiserror.workspace = true
@@ -20,3 +26,7 @@ uuid = { version = "1.23.4", features = ["v7"] }
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

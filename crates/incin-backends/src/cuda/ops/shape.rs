@@ -158,7 +158,9 @@ fn launch_shape_op(
             .map_err(|e| incin_core::error::Error::Msg(format!("shape_op launch failed: {e:?}")))?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
@@ -350,6 +352,8 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
                 })?;
     }
 
-    let strides = crate::layout::contiguous_strides(&out_shape);
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }

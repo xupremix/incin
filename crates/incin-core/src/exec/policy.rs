@@ -2,11 +2,9 @@
 //!
 //! Every type here answers a question that is orthogonal to *what* an
 //! operation computes: how far its floating-point arithmetic may be
-//! transformed, whether repeated runs must agree, what an executor is allowed
-//! to do when it has no kernel, and where the memory comes from. They are
-//! separate axes because they compose independently, and because collapsing
-//! any two of them into one enum is what forces a cache to alias two requests
-//! a caller deliberately distinguished.
+//! transformed, what an executor is allowed to do when it has no kernel, and
+//! whether execution records gradients. These are the decisions stable
+//! execution currently enforces.
 //!
 //! [`ExecutionPolicy`] groups the whole set. It is the half of an
 //! [`ExecutionContext`](crate::exec::ExecutionContext) that names no backend,
@@ -14,8 +12,6 @@
 
 /// Floating-point transformation policy.
 ///
-/// Determinism is deliberately orthogonal and lives in [`Determinism`]; a
-/// deterministic request must not alias either numerical mode in a cache.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MathMode {
     #[default]
@@ -33,16 +29,11 @@ impl MathMode {
     }
 }
 
-/// Whether repeated executions of the same request must produce identical
-/// results.
+/// Whether a tuning request requires deterministic candidates.
 ///
-/// `Permitted` is the default and does not mean results *will* vary; it means
-/// nothing is promised. A reduction whose kernel accumulates in an order that
-/// depends on how many blocks the device scheduled is permitted, and returns
-/// the same answer to within rounding on every run without guaranteeing it.
-/// `Required` is a filter, not a request: an executor that cannot prove it has
-/// a deterministic path must refuse rather than fall back to a probably-stable
-/// one.
+/// This remains separate from [`ExecutionPolicy`]: backend tuning enforces it
+/// when selecting candidates, while general descriptor execution has no
+/// corresponding deterministic-kernel admission contract.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Determinism {
     #[default]
@@ -69,18 +60,16 @@ impl Determinism {
 /// What an executor may do when the requested operation has no kernel on the
 /// device the context owns.
 ///
-/// The default forbids everything, which is the whole point. A silent host
+/// The default permits same-device composition but not transfer. A silent host
 /// round-trip is the single easiest way to turn a GPU program into a slower
-/// CPU program without anything in the code saying so, and PROPOSALS.md
-/// sec. 1.2.4 requires a fallback to be an explicitly enabled policy rather
-/// than a decision an executor makes on the caller's behalf.
+/// CPU program without anything in the code saying so.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FallbackPolicy {
-    /// Refuse. An unsupported operation is an error naming the device.
-    #[default]
+    /// Refuse composed and transfer fallback.
     Deny,
     /// Allow an operation to be composed from other operations on the same
     /// device. No data crosses a device boundary and no layout is rewritten.
+    #[default]
     AllowComposition,
     /// Allow moving or materializing data, including a host round-trip.
     /// Implies everything `AllowComposition` allows.
@@ -108,33 +97,6 @@ impl FallbackPolicy {
     #[must_use]
     pub const fn allows_transfer(self) -> bool {
         matches!(self, Self::AllowTransfer)
-    }
-}
-
-/// Where an executor's intermediate memory comes from.
-///
-/// This names a strategy, not an allocator implementation: the vocabulary has
-/// to exist before a context can carry it, and a caller choosing `Direct` for
-/// a reproducible memory profile is making a different request than one
-/// choosing `Pooled` for throughput.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AllocatorPolicy {
-    /// Every allocation goes to the device allocator and is released when it
-    /// is dropped. Predictable, and slower under churn.
-    #[default]
-    Direct,
-    /// Freed blocks are retained and handed out again. Faster under churn, and
-    /// reports a high-water mark rather than a live total.
-    Pooled,
-}
-
-impl AllocatorPolicy {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Direct => "direct",
-            Self::Pooled => "pooled",
-        }
     }
 }
 
@@ -322,9 +284,7 @@ impl NanPolicy {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExecutionPolicy {
     pub math_mode: MathMode,
-    pub determinism: Determinism,
     pub fallback: FallbackPolicy,
-    pub allocator: AllocatorPolicy,
     pub training: bool,
     pub grad_mode: GradMode,
     pub nan_policy: NanPolicy,
@@ -332,9 +292,8 @@ pub struct ExecutionPolicy {
 }
 
 impl ExecutionPolicy {
-    /// The default policy, spelled out: precise arithmetic, no determinism
-    /// promise, no fallback of any kind, a direct allocator, evaluation mode,
-    /// and gradient recording permitted.
+    /// The default policy, spelled out: precise arithmetic, same-device
+    /// composition allowed, evaluation mode, and gradient recording permitted.
     ///
     /// `GradMode::Enabled` is the only default here that permits rather than
     /// forbids, and it has to be: the ambient value is the *ceiling* a
@@ -345,9 +304,7 @@ impl ExecutionPolicy {
     pub const fn new() -> Self {
         Self {
             math_mode: MathMode::Precise,
-            determinism: Determinism::Permitted,
-            fallback: FallbackPolicy::Deny,
-            allocator: AllocatorPolicy::Direct,
+            fallback: FallbackPolicy::AllowComposition,
             training: false,
             grad_mode: GradMode::Enabled,
             nan_policy: NanPolicy::Permit,
@@ -362,20 +319,8 @@ impl ExecutionPolicy {
     }
 
     #[must_use]
-    pub const fn with_determinism(mut self, determinism: Determinism) -> Self {
-        self.determinism = determinism;
-        self
-    }
-
-    #[must_use]
     pub const fn with_fallback(mut self, fallback: FallbackPolicy) -> Self {
         self.fallback = fallback;
-        self
-    }
-
-    #[must_use]
-    pub const fn with_allocator(mut self, allocator: AllocatorPolicy) -> Self {
-        self.allocator = allocator;
         self
     }
 

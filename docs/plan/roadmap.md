@@ -2,48 +2,68 @@
 
 ## Where we are
 
-### Completion state (as of 2026-07-30)
+### Completion state
 
-| Theme | Done | Active | Planned | Total |
-|-------|:----:|:------:|:-------:|:-----:|
-| `gov` — governance & baselines | 7 | 0 | 0 | 7 |
-| `exec` — execution contract | 8 | 1 | 0 | 9 |  
-| `shp` — shape & dim system | 6 | 0 | 2 | 8 |
-| `grd` — autograd | 5 | 0 | 2 | 7 |
-| `dist` — distributed | 5 | 5 | 6 | 16 |
-| `tune` — autotune | 3 | 0 | 6 | 9 |
-| `perf` — kernel performance | 2 | 0 | 2 | 4 |
-| `ux` — user experience | 2 | 0 | 13 | 15 |
-| `ci` — CI & gates | 3 | 0 | 5 | 8 |
-| `compile` — compile-time | 0 | 0 | 6 | 6 |
-| `metal` — Metal backend | 0 | 0 | 6 | 6 |
-| `rel` — release | 0 | 0 | 4 | 4 |
-| **Total** | **47** | **7** | **46** | **100** |
+Derived from `docs/plan/ledger.toml`, which is the record with per-row
+evidence attached. This section used to carry its own hand-maintained counts,
+which drifted: it said 47 of 100 tasks were done while the ledger recorded 101
+of 101, and a reader had no way to tell which number to believe.
 
-### What's already solid ✅
+**What "complete" means here.** A row is complete when the deliverable its
+`deliverable` field names exists and its `evidence` command passes. That is not
+the same as "the feature works everywhere". `MTL-001` is complete because the
+Metal feature gate, storage modes, device capabilities, and unified-memory
+guards exist — and its own `deviations` field records that every operation
+returns `UnsupportedBackendOperation` until `MTL-002` and `MTL-003` write the
+shaders. 31 rows carry a `deviations` entry like that. Reading the
+status column without the deviations column is how "101 complete" turns into a
+claim the codebase does not support.
+
+For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
+`docs/capabilities.md`, neither of which is derived from this table.
+
+| Theme | Rows | Notes |
+|-------|:----:|-------|
+| `dist` — distributed | 16 | Planning and placement layer only; there is no distributed execution path. |
+| `ux` — user experience | 15 | |
+| `exec` — execution contract | 10 | |
+| `tune` — autotune | 9 | Infrastructure complete; the call-site API is not exposed. |
+| `ci` — CI & gates | 8 | |
+| `shp` — shape & dim system | 8 | |
+| `gov` — governance & baselines | 7 | |
+| `grd` — autograd | 7 | Higher-order gradients are not in this set. |
+| `compile` — compile-time | 6 | |
+| `metal` — Metal backend | 6 | `MTL-001` only; the shader and MPS rows are what make it execute. |
+| `perf` — kernel performance | 5 | |
+| `rel` — release | 4 | |
+| **Total** | **101** | 31 rows carry recorded deviations. |
+
+### What's already solid
 
 - **Compile-time shape verification** — `s![]`, `dim!`, `idx![]`, typenum
   arithmetic, compile-fail test suite. Ahead of every other Rust ML framework.
-- **Typed multi-backend dispatch** — `Backend` trait, `DispatchBackend<T,D>`,
-  CPU/CUDA/WGPU/Candle bridges, typed `Tensor<S,B,K,G>`.
-- **Autograd** — reverse-mode tape, `GRD-001..005` complete, grad parity tests.
-- **Autotune infrastructure** — UUID/topology identities, atomic persistent cache,
-  profile-guided + coordinated-warmup services (`TUN-000..003`). The backend is
-  done; the call-site API isn't exposed yet (→ TUN-004).
-- **Distributed** — typed meshes, physical binding, placement proofs, NCCL
-  transport, 5/16 tasks complete and 5 active.
-- **Governance** — Criterion baselines, budget gates, ledger validator, decision
-  log.
+- **Canonical execution** — one catalog identity, one validated descriptor, one
+  capability query, and one `Execute<O>` path per operation, with a
+  compile-time assertion in both directions that advertised rows and written
+  executors are the same set.
+- **CPU completeness** — all 158 backend-executable catalog operations have CPU
+  executors, and training runs on them.
+- **Autograd** — reverse-mode tape, `GRD-001..005`, finite-difference gradient
+  checks across the CPU operation families.
+- **Governance** — Criterion baselines, budget gates, generated capability and
+  feature documentation, public-API baseline, unsafe ledger, supply-chain gate.
 
-### What's missing or weak ⚠️
+### What's missing or weak
 
-- **CPU kernel performance** — ~9 000 lines of op code with no SIMD: reduce,
-  norm, pool, conv, and all non-f32 elementwise. Every unary op widens to f64.
+- **GPU breadth** — CUDA, WGPU, and Metal cover arithmetic, reductions,
+  `matmul`, and convolution/pooling (plus unary activations on WGPU). None
+  covers normalization, loss, or embedding, so training is CPU-only.
+- **CPU kernel performance** — no SIMD in reduce, norm, pool, conv, or the
+  non-f32 elementwise paths.
 - **Compiled/fused execution** — eager only; no op fusion, no graph-level
-  optimization (`EXE-009` active).
-- **Metal backend** — 0/6 tasks started.
-- **UX** — 13 planned tasks around ergonomics, error messages, Python bindings.
-- **Higher-order grad** — `GRD-006/007` planned (Jacobian, Hessian).
+  optimization.
+- **Distributed execution** — the planner is real, the execution path is not.
+- **Higher-order gradients** — `GRD-006/007`.
 
 ---
 

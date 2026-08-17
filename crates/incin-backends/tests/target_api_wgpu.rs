@@ -14,6 +14,7 @@
 extern crate incin_core as incin;
 
 use incin_backends::prelude::*;
+use incin_core::backend_authoring::SupportsDType;
 use incin_core::prelude::*;
 
 #[test]

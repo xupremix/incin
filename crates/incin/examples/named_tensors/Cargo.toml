@@ -5,7 +5,7 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.0.0" }
+incin = { path = "../..", version = "0.1.0" }
 
 [lints]
 workspace = true

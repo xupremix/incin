@@ -77,6 +77,14 @@ pub struct TensorCheckpointMeta {
     pub placement_kind: String,
 }
 
+/// The schema version of the sharded-checkpoint manifest.
+///
+/// Independent of [`crate::serialize::STATE_FORMAT_VERSION`]: the manifest
+/// describes topology and global shapes, the state format describes the
+/// payload, and either can change without the other.
+#[cfg(feature = "std")]
+pub const CHECKPOINT_MANIFEST_VERSION: u32 = 1;
+
 /// Global checkpoint manifest recording overall topology and global parameter shapes.
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -91,7 +99,7 @@ impl GlobalCheckpointManifest {
     /// Create a new global checkpoint manifest for a specified world size.
     pub fn new(world_size: usize) -> Self {
         Self {
-            version: 1,
+            version: CHECKPOINT_MANIFEST_VERSION,
             world_size,
             tensors: BTreeMap::new(),
         }
@@ -148,6 +156,16 @@ pub fn load_checkpoint_manifest<P: AsRef<Path>>(path: P) -> Result<GlobalCheckpo
         .map_err(|e| Error::Msg(format!("Failed to read checkpoint manifest: {}", e)))?;
     let manifest: GlobalCheckpointManifest = serde_json::from_str(&data)
         .map_err(|e| Error::Msg(format!("Failed to parse checkpoint manifest: {}", e)))?;
+    // The manifest has carried a version since it was introduced, but nothing
+    // read it back, so a newer manifest would have been interpreted under this
+    // build's rules instead of refused.
+    if manifest.version > CHECKPOINT_MANIFEST_VERSION {
+        return Err(Error::Msg(format!(
+            "Checkpoint manifest declares version {}, but this build reads at most version {}; \
+             upgrade incin to read it",
+            manifest.version, CHECKPOINT_MANIFEST_VERSION
+        )));
+    }
     Ok(manifest)
 }
 

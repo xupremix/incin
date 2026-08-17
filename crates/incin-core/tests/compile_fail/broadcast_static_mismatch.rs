@@ -2,7 +2,7 @@ extern crate incin_core as incin;
 
 use incin::prelude::*;
 
-type B = incin::test_utils::DummyBackend<incin::prelude::Cpu>;
+type B = incin_backends::cpu::CpuBackendImpl;
 
 fn main() {
     // Static broadcast incompatibility must be rejected at the canonical

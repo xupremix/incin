@@ -4,8 +4,9 @@
 //! GOV-005. Keep the family/workload/shape spelling stable; add a new ID when
 //! semantics change instead of silently reusing an old series.
 
-use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use incin::prelude::*;
+use std::hint::black_box;
 use std::time::Duration;
 
 type B = incin::DefaultBackend;
@@ -121,7 +122,7 @@ fn cuda_baselines(c: &mut Criterion) {
 
     let input = Tensor::<Dyn, CudaB>::ones(vec![65_536]).unwrap();
     group.bench_function("cuda/add_f32/65536", |b| {
-        b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+        b.iter(|| black_box((black_box(&input) + black_box(&input)).unwrap()))
     });
 
     let lhs = Tensor::<Dyn, CudaB>::ones(vec![64, 64]).unwrap();
@@ -150,7 +151,7 @@ fn metal_baselines(c: &mut Criterion) {
 
     let input = Tensor::<Dyn, MetalB>::ones(vec![65_536]).unwrap();
     group.bench_function("metal/add_f32/65536", |b| {
-        b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+        b.iter(|| black_box((black_box(&input) + black_box(&input)).unwrap()))
     });
 
     let lhs = Tensor::<Dyn, MetalB>::ones(vec![64, 64]).unwrap();

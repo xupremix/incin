@@ -1,12 +1,22 @@
 # Incin
 
-Incin is a deep learning framework in Rust focused on compile-time shape verification, developer ergonomics, and native multi-backend execution.
+Incin is a deep learning framework in Rust focused on compile-time shape
+verification and developer ergonomics. It enforces shape and type bounds at
+compile time, so tensor dimension mismatches are build errors rather than
+runtime panics.
 
-Incin enforces shape and type bounds at compile time to prevent tensor shape mismatches and runtime out-of-bounds panics.
+**CPU is the complete, verified backend.** Every operation in the canonical
+catalog that a backend can execute has a CPU executor, and training runs there.
+The CUDA, WGPU, and Metal backends are previews: each covers a documented
+subset — arithmetic, reductions, `matmul`, and convolution/pooling, plus the
+unary activations on WGPU — and none of them covers normalization, loss, or
+embedding, so a model built from the guide's layers trains on CPU today.
+[`docs/capabilities.md`](docs/capabilities.md) is generated from the backend
+registrations and is the authoritative answer for any given operation.
 
 ## Features
 
-A normal `incin = "0.0.0"` dependency enables only the standard library and
+A normal `incin = "0.1.0"` dependency enables only the standard library and
 the native CPU backend. CUDA, WGPU, telemetry, autotuning, nightly experiments,
 and third-party backends are opt-in. Enabling an accelerator does not change
 `DefaultBackend`, which remains CPU whenever the `cpu` feature is enabled.
@@ -15,9 +25,9 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 - **Named Dimensions**: `dim!` makes semantic axis names part of the tensor type.
 - **Python-Style Slicing**: `i![]` provides checked runtime range and index expressions.
 - **ONNX Model Importing**: `import_model!` generates typed Rust modules at compile time. Runtime ONNX weight loading is not implemented; use safetensors for runtime loading.
-- **Native Backends**: CPU is the default; CUDA and WGPU are explicit features.
+- **Backends**: CPU is the default and the complete one. CUDA, WGPU, and Metal are explicit opt-in features covering the subsets in the generated capability matrix.
 - **External Backends**: Candle interoperability is available explicitly through `external-candle` and `incin::external::candle`.
-- **Data and Tooling**: parallel loading, diagnostics, telemetry, visualization, and editor integrations live in focused workspace crates.
+- **Data and Tooling**: dataset loading, diagnostics, telemetry, visualization, and editor integrations live in focused workspace crates.
 
 ### Facade feature matrix
 
@@ -28,20 +38,21 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `nightly` | no | Enables nightly-only APIs in the core and macro crates. |
 | `cpu` | yes | Enables the built-in CPU backend. This is the only default backend. |
 | `cpu-blas` | no | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
-| `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
-| `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
-| `metal` | no | Enables the native Metal backend for Apple Silicon. Metal is never enabled implicitly. |
+| `cuda` | no | Preview: the native CUDA backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
+| `wgpu` | no | Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
+| `metal` | no | Preview: the native Metal backend for Apple Silicon. Its executors are stubs pending MTL-002/003; see docs/capabilities.md. Never enabled implicitly. |
 | `metal-mps` | no | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
 | `autotune` | no | Enables CUDA launch autotuning. |
 | `train` | no | Enables the preview trainer at `incin::experimental::training`. The interface may change without a migration path. |
-| `distributed` | no | Enables typed meshes, static/runtime tensor placements, and distributed lowering proofs. Transports remain separate opt-in backend features. |
+| `distributed` | no | Preview: typed meshes, static/runtime tensor placements, and distributed lowering proofs. This is a planning and validation layer; there is no distributed execution path. Transports remain separate opt-in backend features. |
 | `distributed-reference` | no | Enables the deterministic in-process collective transport used by conformance tests and local distributed-plan development. |
 | `distributed-nccl` | no | Two-host process-per-rank CUDA transport and its TCP bootstrap. |
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
-| `test-utils` | no | Test-only backends and test utilities. |
+| `test-utils` | no | Deterministic fault-injection hooks for tests. No stand-in backend: a test that needs a backend uses a real one. |
 | `backend-authoring` | no | Extension contracts for backend authors. |
-| `compiled` | no | Curated preview types for compiled execution. |
+| `data-hub` | no | The Hugging Face Hub client at `incin::hub`. Off by default because it brings an async runtime and a second TLS stack into the dependency graph for an API most training code never calls; dataset downloading does not need it. |
+| `compiled` | no | Preview: curated types for compiled execution. The interface may change without a migration path. |
 | `hardware-tests` | no | Opt-in only: ignored multi-host CUDA runtime fixtures require actual hardware and are not part of compile-only feature coverage. |
 <!-- END GENERATED: facade-features -->
 
@@ -49,26 +60,27 @@ Examples:
 
 ```toml
 # Bare/default CPU installation
-incin = "0.0.0"
+incin = "0.1.0"
 
 # WGPU in addition to the default CPU backend
-incin = { version = "0.0.0", features = ["wgpu"] }
+incin = { version = "0.1.0", features = ["wgpu"] }
 
 # CUDA-only application (use explicit CUDA backend/device types)
-incin = { version = "0.0.0", default-features = false, features = ["std", "cuda"] }
+incin = { version = "0.1.0", default-features = false, features = ["std", "cuda"] }
 
 # Third-party Candle interoperability
-incin = { version = "0.0.0", features = ["external-candle"] }
+incin = { version = "0.1.0", features = ["external-candle"] }
 ```
 
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
 - `incin-backends`: defaults to `std,cpu`; optional `compiled`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
-- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `test-utils`, and `compiled`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, and `compiled`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
-- `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
+- `incin-data`: defaults to `download`; optional `hub`.
+- `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
 <!-- END GENERATED: crate-features -->
 
 The two-host launcher uses one process per rank. `DistributedContext::from_env`

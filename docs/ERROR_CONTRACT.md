@@ -13,6 +13,7 @@ never embedded in diagnostics.
 | Dtype and conversion | `Error::DTypeMismatch`, `Error::InvalidConversion` |
 | Device and placement | `Error::PlacementMismatch`, `Error::DeviceMismatch`, storage/device variants |
 | Unsupported operation/capability | `BackendError::Unsupported`, `Error::UnsupportedBackendOperation`, `Error::UnsupportedDType` |
+| Support policy refusal | `CanonicalError::Policy(PolicyViolation)`, preserved as `Error::Policy` |
 | Arithmetic/allocation overflow | `Error::ArithmeticOverflow`, `Error::AllocationOverflow`, `ShapeError::ArithmeticOverflow` |
 | Backend execution | `Error::Backend(BackendError::Execution)` |
 | Autograd/non-finite policy | `Error::Backward(BackwardError)` |

@@ -443,7 +443,7 @@ public input error).
 | `autotune` | Preview kernel tuning cache and inspection types |
 | `compiled` | Structural compiled-execution prototype  -  does not execute graphs yet |
 | `std` | Lifts `no_std` restrictions; several backend/target/test-utils features imply it |
-| `test-utils` | `DummyBackend` and other test-only scaffolding, exported for downstream test code |
+| `test-utils` | Deterministic fault-injection hooks for downstream test code. There is no stand-in backend: a test that needs a backend uses a real one |
 
 `cargo incin doctor` (via `cargo run --bin cargo-incin -- doctor`, or the
 library's `doctor` module directly) reports which of these are active,

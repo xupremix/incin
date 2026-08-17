@@ -233,15 +233,22 @@ impl Deref for CpuStorage {
 impl CpuStorage {
     /// Build a `CpuStorage` from a contiguous (row-major) buffer and
     /// shape. Strides are computed via `stride::contiguous_strides`.
+    /// Takes the geometry by reference rather than by owned `Vec`.
+    ///
+    /// `TensorMeta` stores rank 8 and below inline, so the vectors were built
+    /// only to be copied into it and dropped — one allocation each, on every
+    /// storage this backend constructs, which is at least one per operation.
+    /// `impl AsRef<[usize]>` keeps the existing owned call sites compiling
+    /// while letting the hot ones pass the slice they already hold.
     pub fn try_from_parts(
         buffer: Arc<CpuBuffer>,
-        shape: Vec<usize>,
-        strides: Vec<usize>,
+        shape: impl AsRef<[usize]>,
+        strides: impl AsRef<[usize]>,
         offset_elements: usize,
     ) -> Result<Self> {
         let meta = TensorMeta::try_new(
-            shape.as_slice().into(),
-            strides.as_slice().into(),
+            shape.as_ref().into(),
+            strides.as_ref().into(),
             offset_elements,
             buffer.descriptor(),
             DeviceId::cpu(),
@@ -256,12 +263,13 @@ impl CpuStorage {
         })
     }
 
-    pub fn try_from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Result<Self> {
-        let strides = stride::checked_contiguous_strides(&shape)?;
-        Self::try_from_parts(Arc::new(data), shape, strides, 0)
+    pub fn try_from_contiguous(data: CpuBuffer, shape: impl AsRef<[usize]>) -> Result<Self> {
+        let shape = shape.as_ref();
+        let strides = stride::checked_contiguous_strides(shape)?;
+        Self::try_from_parts(Arc::new(data), shape, strides.strides(), 0)
     }
 
-    pub(crate) fn from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Self {
+    pub(crate) fn from_contiguous(data: CpuBuffer, shape: impl AsRef<[usize]>) -> Self {
         Self::try_from_contiguous(data, shape)
             .expect("backend-created contiguous CPU storage must match its allocation")
     }
@@ -299,10 +307,7 @@ impl CpuStorage {
             }
         };
 
-        Ok(CpuStorage::from_contiguous(
-            new_buffer,
-            other.shape.to_vec(),
-        ))
+        Ok(CpuStorage::from_contiguous(new_buffer, &other.shape))
     }
 
     /// Resolve a logical multi-index through `self.strides`/`self.offset_elements`
@@ -404,8 +409,8 @@ impl CpuStorage {
         if stride::is_contiguous(&self.shape, &self.strides) {
             Self::try_from_parts(
                 self.buffer.clone(),
-                new_shape.to_vec(),
-                stride::checked_contiguous_strides(new_shape)?,
+                new_shape,
+                stride::checked_contiguous_strides(new_shape)?.strides(),
                 self.offset_elements,
             )
         } else {
@@ -473,7 +478,7 @@ impl CpuStorage {
 
         Self::try_from_parts(
             self.buffer.clone(),
-            target_shape.to_vec(),
+            target_shape,
             new_strides,
             self.offset_elements,
         )
@@ -566,7 +571,7 @@ impl CpuStorage {
             }
         };
 
-        Ok(CpuStorage::from_contiguous(new_buffer, self.shape.to_vec()))
+        Ok(CpuStorage::from_contiguous(new_buffer, &self.shape))
     }
 }
 
@@ -649,10 +654,7 @@ pub(crate) fn scatter_into_zeros(
         }
     };
 
-    Ok(CpuStorage::from_contiguous(
-        new_buffer,
-        original_shape.to_vec(),
-    ))
+    Ok(CpuStorage::from_contiguous(new_buffer, original_shape))
 }
 
 #[cfg(test)]

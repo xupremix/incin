@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BOOK = ROOT / "docs/book"
 SITE = BOOK / "site"
+REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/develop/"
 
 
 def chapters() -> list[str]:
@@ -49,12 +50,27 @@ def main() -> None:
     if missing_chapters:
         sys.exit(f"book site is missing chapters: {', '.join(missing_chapters)}")
 
+    chapter_links = []
+    for chapter in chapters():
+        text = (SITE / "chapters" / f"{chapter}.html").read_text(encoding="utf-8")
+        if "<pre><pre" in text:
+            sys.exit(f"chapter retains nested pre wrappers: {chapter}")
+        chapter_links.extend(re.findall(r'href="([^"]+)"', text))
+    bad_links = [link for link in chapter_links if link.startswith(("../", "./")) or re.match(r"^[\w-]+\.html", link)]
+    if bad_links:
+        sys.exit(f"chapter-relative links remain: {', '.join(bad_links[:5])}")
+    source_links = [link for link in chapter_links if "crates/" in link or "docs/" in link or "tools/" in link]
+    if source_links and any(not link.startswith(REPOSITORY_SOURCE) for link in source_links):
+        sys.exit("repository source links are not mapped to GitHub")
+
     required_client_hooks = (
         "window.location.hash",
         "history.pushState",
         'fetch(basePath() + "chapters/"',
         'localStorage.getItem("incin-book-theme")',
         "aria-current",
+        "aria-selected",
+        "replaceState",
     )
     missing_hooks = [hook for hook in required_client_hooks if hook not in js_text]
     if missing_hooks:

@@ -20,13 +20,21 @@ use core::fmt::Write as _;
 use incin_core::exec::{CapabilityRule, OPERATION_CATALOG};
 use incin_core::tensor::device::DeviceKind;
 
-use crate::capability::{CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES};
+use crate::capability::{
+    CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, WGPU_CAPABILITIES,
+};
 
 /// The devices the document covers, in the order it prints them.
+///
+/// Metal is here even though every one of its rows is narrow, because a device
+/// with a registration and a documented Cargo feature but no column reads as an
+/// oversight rather than as the narrow support it is. An empty cell is a
+/// truthful claim; a missing column is not a claim at all.
 const DEVICES: &[(DeviceKind, &[CapabilityRule])] = &[
     (DeviceKind::Cpu, CPU_CAPABILITIES),
     (DeviceKind::Cuda, CUDA_CAPABILITIES),
     (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+    (DeviceKind::Metal, METAL_CAPABILITIES),
 ];
 
 /// The complete text of `docs/capabilities.md`.

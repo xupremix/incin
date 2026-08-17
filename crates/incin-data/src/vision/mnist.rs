@@ -121,8 +121,26 @@ impl MnistDataset {
 
         std::fs::create_dir_all(dir)?;
 
-        crate::downloader::Downloader::download_and_extract_gz(images_url, dir, images_name)?;
-        crate::downloader::Downloader::download_and_extract_gz(labels_url, dir, labels_name)?;
+        // Fetching the archives is the `download` feature's job. Without it the
+        // rest of this function still works against files already on disk, so
+        // the refusal names the missing step rather than the missing module.
+        #[cfg(feature = "download")]
+        {
+            crate::downloader::Downloader::download_and_extract_gz(images_url, dir, images_name)?;
+            crate::downloader::Downloader::download_and_extract_gz(labels_url, dir, labels_name)?;
+        }
+        #[cfg(not(feature = "download"))]
+        {
+            let _ = (images_url, labels_url);
+            if !dir.join(images_name).is_file() || !dir.join(labels_name).is_file() {
+                return Err(anyhow::anyhow!(
+                    "MNIST archives are not present in {} and this build cannot fetch them: \
+                     enable the `download` feature of incin-data, or extract \
+                     {images_name} and {labels_name} into that directory yourself",
+                    dir.display()
+                ));
+            }
+        }
 
         let images_file = dir.join(images_name);
         let labels_file = dir.join(labels_name);

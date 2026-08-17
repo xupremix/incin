@@ -427,7 +427,7 @@ where
 /// ```rust,no_run
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// let cell = RNNCell::new(

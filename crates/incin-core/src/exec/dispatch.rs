@@ -29,20 +29,24 @@ use crate::exec::capability::{
 use crate::exec::catalog::{DescriptorError, LogicalTensorMeta, Operation};
 use crate::exec::context::ExecutionContext;
 use crate::exec::meta::TensorMeta;
+use crate::exec::policy::FallbackPolicy;
 
 use crate::exec::request::TensorHandle;
 use crate::tensor::backend::{Execute, ExecutionRequest};
 
 /// Why a canonical invocation did not produce a value.
 ///
-/// The two arms are kept apart on purpose. A [`DescriptorError`] means the
-/// request was never legal and no backend was reached; a [`BackendError`] means
-/// a legal request failed at or after launch. Collapsing them would lose the
-/// distinction that decides whether the caller or the device is at fault.
+/// The variants are kept apart on purpose. A [`DescriptorError`] means the
+/// request was never legal, [`PolicyViolation`] means its requested support is
+/// disallowed before launch, and a [`BackendError`] means a legal request
+/// failed at or after launch. Collapsing them would lose the distinction that
+/// decides whether the caller, policy, or device is at fault.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CanonicalError {
     /// The invocation failed contract validation before any backend ran.
     Descriptor(DescriptorError),
+    /// A valid invocation required support the execution policy does not allow.
+    Policy(PolicyViolation),
     /// The backend refused or failed a validated invocation.
     Backend(BackendError),
 }
@@ -51,8 +55,32 @@ impl fmt::Display for CanonicalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Descriptor(error) => write!(f, "{error}"),
+            Self::Policy(error) => write!(f, "{error}"),
             Self::Backend(error) => write!(f, "{error}"),
         }
+    }
+}
+
+/// A capability level that a valid invocation reported but its policy denies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyViolation {
+    /// The exact built-in or custom operation whose reported support was denied.
+    pub operation: OperationIdentity,
+    /// The support level reported by the capability query.
+    pub support: SupportLevel,
+    /// The fallback policy effective for this invocation.
+    pub fallback: FallbackPolicy,
+}
+
+impl fmt::Display for PolicyViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "operation {} reports {:?} support, denied by fallback policy {}",
+            self.operation.display_name(),
+            self.support,
+            self.fallback.as_str()
+        )
     }
 }
 
@@ -119,13 +147,39 @@ fn admit<B: Capabilities>(
     }
 }
 
+/// Convert a capability answer into canonical admission, including the
+/// context's fallback policy. Keeping this in one place ensures no dispatch
+/// route can reach `Execute` with a composed or transfer fallback it did not
+/// explicitly permit.
+fn admit_support(
+    backend: &'static str,
+    operation: &OperationIdentity,
+    support: SupportLevel,
+    fallback: FallbackPolicy,
+) -> Result<(), CanonicalError> {
+    match support {
+        SupportLevel::Native => Ok(()),
+        SupportLevel::Composed if fallback.allows_composition() => Ok(()),
+        SupportLevel::Fallback if fallback.allows_transfer() => Ok(()),
+        SupportLevel::Unsupported(reason) => Err(CanonicalError::unsupported(backend, reason)),
+        support @ (SupportLevel::Composed | SupportLevel::Fallback) => {
+            Err(CanonicalError::Policy(PolicyViolation {
+                operation: operation.clone(),
+                support,
+                fallback,
+            }))
+        }
+    }
+}
+
 fn admit_operation<O, B>(
     backend: &B,
     operation: &OperationIdentity,
     metadata: &TensorMeta,
     context_training: bool,
     math_mode: crate::exec::policy::MathMode,
-) -> Result<SupportLevel, UnsupportedReason>
+    fallback: FallbackPolicy,
+) -> Result<(), CanonicalError>
 where
     O: Operation,
     B: Capabilities + Execute<O>,
@@ -142,10 +196,7 @@ where
         OperationIdentity::Builtin(_) => Capabilities::support(backend, &query),
         OperationIdentity::Custom(_) => Execute::<O>::supports_custom(backend, &query),
     };
-    match support {
-        SupportLevel::Unsupported(reason) => Err(reason),
-        level => Ok(level),
-    }
+    admit_support(B::BACKEND_NAME, operation, support, fallback)
 }
 
 fn admit_metadata_free_operation<O, B>(
@@ -153,7 +204,8 @@ fn admit_metadata_free_operation<O, B>(
     operation: &OperationIdentity,
     training: bool,
     math_mode: crate::exec::policy::MathMode,
-) -> Result<(), UnsupportedReason>
+    fallback: FallbackPolicy,
+) -> Result<(), CanonicalError>
 where
     O: Operation,
     B: Execute<O>,
@@ -161,10 +213,72 @@ where
     let OperationIdentity::Custom(_) = operation else {
         return Ok(());
     };
-    match Execute::<O>::supports_custom_operation(backend, operation, training, math_mode) {
-        SupportLevel::Unsupported(reason) => Err(reason),
-        SupportLevel::Native | SupportLevel::Composed | SupportLevel::Fallback => Ok(()),
+    admit_support(
+        B::BACKEND_NAME,
+        operation,
+        Execute::<O>::supports_custom_operation(backend, operation, training, math_mode),
+        fallback,
+    )
+}
+
+fn admit_invocation<O, B>(
+    context: &ExecutionContext<B>,
+    invocation: &crate::exec::catalog::ValidatedInvocation<O>,
+    inputs: &[TensorHandle<'_>],
+) -> Result<(), CanonicalError>
+where
+    O: Operation,
+    B: Capabilities + Execute<O>,
+{
+    let training = context.training();
+    let fallback = context.fallback();
+    let identity = invocation.descriptor().identity();
+    for handle in inputs {
+        admit_operation::<O, B>(
+            context.backend(),
+            identity,
+            handle.metadata(),
+            training,
+            context.math_mode(),
+            fallback,
+        )?;
     }
+    if !inputs.is_empty() {
+        return Ok(());
+    }
+
+    let mut queried = false;
+    for output in invocation.descriptor().outputs() {
+        let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
+            continue;
+        };
+        queried = true;
+        let query = CapabilityQuery {
+            operation: identity.clone(),
+            dtype,
+            layout: crate::exec::meta::LayoutClass::Contiguous,
+            rank: shape.len(),
+            training,
+            math_mode: context.math_mode(),
+        };
+        let support = match identity {
+            OperationIdentity::Builtin(_) => Capabilities::support(context.backend(), &query),
+            OperationIdentity::Custom(_) => {
+                Execute::<O>::supports_custom(context.backend(), &query)
+            }
+        };
+        admit_support(B::BACKEND_NAME, identity, support, fallback)?;
+    }
+    if !queried {
+        admit_metadata_free_operation::<O, B>(
+            context.backend(),
+            identity,
+            training,
+            context.math_mode(),
+            fallback,
+        )?;
+    }
+    Ok(())
 }
 
 /// Validate and run one operation on `context`'s backend.
@@ -175,8 +289,9 @@ where
 /// # Errors
 ///
 /// Returns [`CanonicalError::Descriptor`] when the invocation fails contract
-/// validation, and [`CanonicalError::Backend`] when the backend's capability
-/// registry refuses it or execution itself fails.
+/// validation, [`CanonicalError::Policy`] when its reported support is denied
+/// by the effective fallback policy, and [`CanonicalError::Backend`] when the
+/// backend's capability registry refuses it or execution itself fails.
 pub fn execute<O, B>(
     context: &ExecutionContext<B>,
     attributes: O::Attributes,
@@ -209,54 +324,7 @@ where
 
     validate_execution_payload::<O>(&invocation, payload)?;
 
-    let training = context.training();
-    let identity = invocation.descriptor().identity();
-    for handle in inputs {
-        if let Err(reason) = admit_operation::<O, B>(
-            context.backend(),
-            identity,
-            handle.metadata(),
-            training,
-            context.math_mode(),
-        ) {
-            return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
-        }
-    }
-    if inputs.is_empty() {
-        let mut queried = false;
-        for output in invocation.descriptor().outputs() {
-            let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
-                continue;
-            };
-            queried = true;
-            let query = CapabilityQuery {
-                operation: identity.clone(),
-                dtype,
-                layout: crate::exec::meta::LayoutClass::Contiguous,
-                rank: shape.len(),
-                training,
-                math_mode: context.math_mode(),
-            };
-            let support = match identity {
-                OperationIdentity::Builtin(_) => Capabilities::support(context.backend(), &query),
-                OperationIdentity::Custom(_) => {
-                    <B as Execute<O>>::supports_custom(context.backend(), &query)
-                }
-            };
-            if let SupportLevel::Unsupported(reason) = support {
-                return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
-            }
-        }
-        if !queried {
-            admit_metadata_free_operation::<O, B>(
-                context.backend(),
-                identity,
-                training,
-                context.math_mode(),
-            )
-            .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-        }
-    }
+    admit_invocation::<O, B>(context, &invocation, inputs)?;
 
     context
         .backend()
@@ -306,68 +374,7 @@ where
 
     validate_execution_payload::<O>(&invocation, payload)?;
 
-    let training = context.training();
-    let identity = invocation.descriptor().identity();
-    {
-        for handle in inputs {
-            admit_operation::<O, B>(
-                context.backend(),
-                identity,
-                handle.metadata(),
-                training,
-                context.math_mode(),
-            )
-            .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-        }
-        // An operation with no operands would otherwise run that loop zero times
-        // and reach the backend without a single capability query, which is the one
-        // way through here that skips the registry entirely. Every creation
-        // operation in the catalog has an operand arity of zero, so this is not a
-        // hypothetical gap: it is the whole creation family.
-        //
-        // What such an operation must be supported *for* is the allocation it was
-        // asked to produce, and the descriptor already carries that: the inferred
-        // output metadata names the dtype, the device and the rank. A fresh
-        // allocation is contiguous by construction, so the layout is not inferred
-        // from anything, it is a fact about what the backend is being told to make.
-        if inputs.is_empty() {
-            let mut queried = false;
-            for output in invocation.descriptor().outputs() {
-                let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
-                    continue;
-                };
-                queried = true;
-                let query = CapabilityQuery {
-                    operation: identity.clone(),
-                    dtype,
-                    layout: crate::exec::meta::LayoutClass::Contiguous,
-                    rank: shape.len(),
-                    training,
-                    math_mode: context.math_mode(),
-                };
-                let support = match identity {
-                    OperationIdentity::Builtin(_) => {
-                        Capabilities::support(context.backend(), &query)
-                    }
-                    OperationIdentity::Custom(_) => {
-                        <B as Execute<O>>::supports_custom(context.backend(), &query)
-                    }
-                };
-                if let SupportLevel::Unsupported(reason) = support {
-                    return Err(CanonicalError::unsupported(B::BACKEND_NAME, reason));
-                }
-            }
-            if !queried {
-                admit_metadata_free_operation::<O, B>(
-                    context.backend(),
-                    identity,
-                    training,
-                    context.math_mode(),
-                )
-                .map_err(|reason| CanonicalError::unsupported(B::BACKEND_NAME, reason))?;
-            }
-        }
-    }
+    admit_invocation::<O, B>(context, &invocation, inputs)?;
 
     context
         .backend()

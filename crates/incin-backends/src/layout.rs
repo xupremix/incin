@@ -21,11 +21,11 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use incin_core::error::{Error, Result};
-#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
-use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::broadcast::broadcast_dim_slices;
 #[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
 use incin_core::shapes::error::OperationKind;
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
+use incin_core::shapes::{ShapeBuf, StrideBuf};
 
 /// Compute row-major (C-contiguous) strides for `shape`.
 ///
@@ -33,12 +33,15 @@ use incin_core::shapes::error::OperationKind;
 /// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
 /// returns an empty stride vector.
 #[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
-pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<StrideBuf> {
+    // Returned as a `StrideBuf`, which stores rank 8 and below inline. Copying
+    // it into a `Vec` cost an allocation per storage construction, which is one
+    // per operation, to reach a value the caller then hands straight to
+    // `TensorMeta` — where it becomes a `StrideBuf` again.
     incin_core::shapes::StrideBuf::contiguous_for(
         &ShapeBuf::from_slice(shape),
         OperationKind::Storage,
     )
-    .map(|strides| strides.strides().to_vec())
     .map_err(Into::into)
 }
 
@@ -47,7 +50,7 @@ pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> 
 /// Panics where the checked form returns an error, so it is only for shapes
 /// that some constructor has already accepted.
 #[cfg(any(feature = "cpu", feature = "cuda", feature = "metal"))]
-pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+pub(crate) fn contiguous_strides(shape: &[usize]) -> StrideBuf {
     checked_contiguous_strides(shape)
         .expect("validated storage shape must have representable contiguous strides")
 }

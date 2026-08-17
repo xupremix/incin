@@ -596,16 +596,16 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<
-                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                B,
-                K,
-                JoinedGrad<G1, G2>,
+            type Output = Result<
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
-            #[track_caller]
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
-                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
@@ -625,16 +625,16 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<
-                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                B,
-                K,
-                JoinedGrad<G1, G2>,
+            type Output = Result<
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
-            #[track_caller]
             fn $method(self, rhs: &'b Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
-                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
@@ -653,16 +653,16 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<
-                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                B,
-                K,
-                JoinedGrad<G1, G2>,
+            type Output = Result<
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
-            #[track_caller]
             fn $method(self, rhs: &'a Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(rhs)
-                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
 
@@ -681,16 +681,16 @@ macro_rules! impl_std_ops {
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<
-                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                B,
-                K,
-                JoinedGrad<G1, G2>,
+            type Output = Result<
+                Tensor<
+                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                    B,
+                    K,
+                    JoinedGrad<G1, G2>,
+                >,
             >;
-            #[track_caller]
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
                 self.$backend_method(&rhs)
-                    .unwrap_or_else(|error| panic!("Incin {} failed: {error}", stringify!($trait)))
             }
         }
     };

@@ -84,7 +84,7 @@ pub trait VisitParameters<B: VariableBackend> {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// let mut model = seq!(
@@ -165,6 +165,7 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 ///
 /// ```rust
 /// # extern crate incin_core as incin;
+/// use incin::backend_authoring::VariableBackend;
 /// use incin::prelude::*;
 ///
 /// #[module]
@@ -662,7 +663,7 @@ macro_rules! seq {
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 ///
 /// type Net = SeqTy!(

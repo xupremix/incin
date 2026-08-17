@@ -10,6 +10,7 @@
   const results = document.getElementById("search-results");
   let manifest = null;
   let searchIndex = [];
+  let selectedResult = -1;
 
   function basePath() {
     return window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname.replace(/[^/]+$/, "");
@@ -24,8 +25,13 @@
     if (!item) { element.hidden = true; return; }
     element.hidden = false; element.href = "#/" + item.slug; element.textContent = label + item.title;
   }
+  function setSidebarOpen(open) {
+    sidebar.classList.toggle("open", open);
+    document.getElementById("sidebar-toggle").setAttribute("aria-expanded", String(open));
+  }
   async function load(slug, heading) {
     const item = manifest.chapters.find((entry) => entry.slug === slug) || manifest.chapters[0];
+    if (item.slug !== slug) history.replaceState({}, "", "#/" + item.slug);
     const response = await fetch(basePath() + "chapters/" + item.slug + ".html");
     if (!response.ok) throw new Error("Chapter failed to load: " + response.status);
     chapter.innerHTML = await response.text();
@@ -37,7 +43,7 @@
     const index = chapterIndex(item.slug);
     setLink(previous, manifest.chapters[index - 1], "← Previous: ");
     setLink(next, manifest.chapters[index + 1], "Next: ");
-    sidebar.classList.remove("open");
+    setSidebarOpen(false);
     requestAnimationFrame(() => {
       const target = heading && document.getElementById(heading);
       if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
@@ -54,18 +60,37 @@
     root.dataset.theme = nextTheme; localStorage.setItem("incin-book-theme", nextTheme);
     document.getElementById("theme-toggle").textContent = nextTheme === "dark" ? "Light" : "Dark";
   }
-  function doSearch() {
-    const query = search.value.trim().toLowerCase();
-    results.replaceChildren(); results.hidden = !query;
-    if (!query) return;
-    searchIndex.filter((item) => (item.title + " " + item.text).toLowerCase().includes(query)).slice(0, 12).forEach((item) => {
-      const link = document.createElement("a"); link.href = "#/" + item.slug; link.textContent = item.title; link.setAttribute("role", "option"); results.append(link);
+  function updateSearchSelection() {
+    results.querySelectorAll("a[role=option]").forEach((link, index) => {
+      link.setAttribute("aria-selected", String(index === selectedResult));
     });
   }
-  document.getElementById("sidebar-toggle").addEventListener("click", function () { const open = sidebar.classList.toggle("open"); this.setAttribute("aria-expanded", String(open)); });
+  function doSearch() {
+    const query = search.value.trim().toLowerCase();
+    results.replaceChildren(); results.hidden = !query; selectedResult = -1;
+    if (!query) return;
+    searchIndex.filter((item) => (item.title + " " + item.text).toLowerCase().includes(query)).slice(0, 12).forEach((item) => {
+      const link = document.createElement("a"); link.href = "#/" + item.slug; link.textContent = item.title; link.setAttribute("role", "option"); link.setAttribute("aria-selected", "false"); results.append(link);
+    });
+  }
+  setSidebarOpen(false);
+  document.getElementById("sidebar-toggle").addEventListener("click", function () { setSidebarOpen(!sidebar.classList.contains("open")); });
   document.getElementById("theme-toggle").addEventListener("click", switchTheme);
   document.getElementById("search-form").addEventListener("submit", (event) => event.preventDefault());
   search.addEventListener("input", doSearch);
+  search.addEventListener("keydown", (event) => {
+    const options = results.querySelectorAll("a[role=option]");
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!options.length) return;
+      event.preventDefault();
+      selectedResult = (selectedResult + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length;
+      updateSearchSelection();
+    } else if (event.key === "Enter" && selectedResult >= 0) {
+      event.preventDefault(); options[selectedResult].click();
+    } else if (event.key === "Escape") {
+      results.hidden = true; selectedResult = -1;
+    }
+  });
   document.addEventListener("click", navigate);
   window.addEventListener("popstate", loadRoute);
   window.addEventListener("hashchange", loadRoute);

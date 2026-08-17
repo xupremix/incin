@@ -45,4 +45,5 @@
 - [Invariants and proof types](./invariants.md)
 - [Experimental surfaces](./experimental.md)
 - [Coming from PyTorch](./pytorch_cheatsheet.md)
+- [What changed in 0.1.0](./release_notes.md)
 - [What's not finished yet](./whats_not_finished.md)

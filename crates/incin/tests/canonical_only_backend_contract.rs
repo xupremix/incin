@@ -107,6 +107,20 @@ impl AutogradBackend for CanonicalOnlyBackend {
     ) -> Result<Option<Self::Storage<K>>> {
         Ok(None)
     }
+
+    /// This fixture records no gradients, so it has none to replace. It reports
+    /// the refusal rather than accepting the write, which is the contract
+    /// `AutogradBackend::set_grad` states.
+    fn set_grad<K: DType>(
+        _tensor: &Self::Storage<K>,
+        _grads: &mut Self::Grads,
+        _value: Self::Storage<K>,
+    ) -> Result<()> {
+        Err(incin::Error::UnsupportedBackendOperation {
+            op: "set_grad",
+            backend: <Self as incin::backend_authoring::StorageBackend>::BACKEND_NAME,
+        })
+    }
 }
 
 impl Capabilities for CanonicalOnlyBackend {
@@ -202,5 +216,165 @@ fn test_canonical_only_backend_add_and_eq_compile() -> Result<()> {
     let _c = a.try_add(&b)?;
     let _mask: Tensor<Dyn, CanonicalOnlyBackend, bool, NoGrad> = a.eq(&b)?;
 
+    Ok(())
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FailingAddBackend;
+
+impl StorageBackend for FailingAddBackend {
+    const BACKEND_NAME: &'static str = "FailingAddBackend";
+    type Storage<K: DType> = CanonicalStorage<K>;
+    type Device = Cpu;
+
+    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
+        &storage.meta
+    }
+}
+
+impl Backend for FailingAddBackend {
+    type InnerBackend = Self;
+}
+
+impl incin_core::backend_authoring::HostInterop for FailingAddBackend {
+    fn to_bytes<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<u8>> {
+        Ok(vec![])
+    }
+    fn from_bytes<K: DType>(
+        _bytes: &[u8],
+        dims: &[usize],
+        dtype: DTypeDescriptor,
+        _device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        let meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(dims),
+            dtype,
+            DeviceId::CPU,
+            Alignment::new(1)?,
+            dims.iter().product(),
+        )?;
+        Ok(CanonicalStorage {
+            meta,
+            _phantom: core::marker::PhantomData,
+        })
+    }
+}
+
+impl VariableBackend for FailingAddBackend {
+    type Var<K: DType> = ();
+
+    fn var_as_tensor<K: DType>(_var: &Self::Var<K>) -> Result<Self::Storage<K>> {
+        Err(Error::Backend(BackendError::Unsupported {
+            backend: Self::BACKEND_NAME,
+            reason: UnsupportedReason::MissingDeviceFeature {
+                feature: "var_as_tensor",
+            },
+        }))
+    }
+
+    fn var_from_tensor<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Var<K>> {
+        Ok(())
+    }
+
+    fn assign_var<K: DType>(_var: &mut Self::Var<K>, _tensor: &Self::Storage<K>) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl incin_core::backend_authoring::HostReadback for FailingAddBackend {
+    fn float_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<f64>> {
+        Ok(vec![])
+    }
+
+    fn int_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<Vec<i64>> {
+        Ok(vec![])
+    }
+}
+
+impl AutogradBackend for FailingAddBackend {
+    type Grads = ();
+
+    fn backward<K: DType>(_tensor: &Self::Storage<K>) -> Result<Self::Grads> {
+        Ok(())
+    }
+
+    fn get_grad<K: DType>(
+        _tensor: &Self::Storage<K>,
+        _grads: &Self::Grads,
+    ) -> Result<Option<Self::Storage<K>>> {
+        Ok(None)
+    }
+
+    /// This fixture records no gradients, so it has none to replace. It reports
+    /// the refusal rather than accepting the write, which is the contract
+    /// `AutogradBackend::set_grad` states.
+    fn set_grad<K: DType>(
+        _tensor: &Self::Storage<K>,
+        _grads: &mut Self::Grads,
+        _value: Self::Storage<K>,
+    ) -> Result<()> {
+        Err(incin::Error::UnsupportedBackendOperation {
+            op: "set_grad",
+            backend: <Self as incin::backend_authoring::StorageBackend>::BACKEND_NAME,
+        })
+    }
+}
+
+impl Capabilities for FailingAddBackend {
+    fn support(&self, _query: &CapabilityQuery) -> SupportLevel {
+        SupportLevel::Native
+    }
+}
+
+impl<K: DType> SupportsDType<K> for FailingAddBackend {
+    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeDescriptor> {
+        Ok(K::descriptor(field))
+    }
+}
+
+impl Execute<op::Add> for FailingAddBackend {
+    type Output = CanonicalStorage<f32>;
+
+    fn execute(
+        &self,
+        _request: ExecutionRequest<'_, op::Add, Self>,
+    ) -> core::result::Result<Self::Output, BackendError> {
+        Err(BackendError::Execution {
+            operation: OperationKind::Add,
+            message: incin_core::error::ErrorMessage::from("simulated failure"),
+        })
+    }
+}
+
+#[test]
+fn operator_returns_structured_backend_failure_without_panicking() -> Result<()> {
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[3]),
+        <f32 as ConstDType>::DESCRIPTOR,
+        DeviceId::CPU,
+        Alignment::new(1)?,
+        3,
+    )?;
+    let tensor = || {
+        Tensor::<Dyn, FailingAddBackend, f32, NoGrad>::try_from_storage(
+            CanonicalStorage {
+                meta: meta.clone(),
+                _phantom: core::marker::PhantomData,
+            },
+            ShapeBuf::from_slice(&[3]),
+            core::marker::PhantomData,
+            core::marker::PhantomData,
+            core::marker::PhantomData,
+        )
+    };
+    let lhs = tensor()?;
+    let rhs = tensor()?;
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| lhs + rhs));
+    assert!(outcome.is_ok(), "operator evaluation must not panic");
+    assert!(matches!(
+        outcome.unwrap(),
+        Err(Error::Backend(BackendError::Execution { .. }))
+    ));
     Ok(())
 }

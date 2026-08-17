@@ -94,7 +94,7 @@ pub(crate) fn embedding_impl<D: incin_core::tensor::device::Device, K: DType, KI
     let t_shape = t.shape.to_vec();
     let (w_id, out_id) = (w.id, out.id);
     let w_shape_for_backward = w.shape.to_vec();
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![w_id],
         backward: Box::new(move |grad_out: &CpuStorage| {

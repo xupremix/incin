@@ -2,6 +2,7 @@
 
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::advanced::NamedAxisSelector;
 use incin_core::exec::catalog::AxisAttributes;
 use incin_core::exec::{ReduceKeepRule, ReduceRule, ShapeRule};
@@ -11,7 +12,6 @@ use incin_core::shapes::StaticExtent;
 use incin_core::shapes::SwapAt;
 use incin_core::shapes::idx::{Here, Next};
 use incin_core::shapes::reshape::{ElementCount, ReshapeShape};
-use incin_core::test_utils::DummyBackend;
 use incin_macros::{axis, s};
 use typenum::Unsigned;
 
@@ -44,7 +44,7 @@ fn named_runtime_axes_are_stored_in_shape_buf() {
 
 #[test]
 fn named_selector_reaches_the_canonical_reduction_descriptor() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
@@ -57,7 +57,7 @@ fn named_selector_reaches_the_canonical_reduction_descriptor() {
 
 #[test]
 fn structural_sum_rules_preserve_typed_outputs() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
@@ -70,7 +70,7 @@ fn structural_sum_rules_preserve_typed_outputs() {
 
 #[test]
 fn selector_reductions_preserve_static_drop_and_keep_shapes() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type S = s![Batch, Channels, Height];
     type Dropped = s![Batch, Height];
     type Kept = s![Batch, Channels, Height = 1];
@@ -82,7 +82,7 @@ fn selector_reductions_preserve_static_drop_and_keep_shapes() {
 
 #[test]
 fn index_reductions_preserve_selector_output_shapes() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type S = s![2, 3, 4];
     type ArgmaxOutput = Tensor<s![2, 4], B, u32, NoGrad>;
     let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
@@ -93,7 +93,7 @@ fn index_reductions_preserve_selector_output_shapes() {
 
 #[test]
 fn insertion_and_removal_selectors_preserve_shape_proofs() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type S = s![2, 3];
     type Expanded = Tensor<s![2, 1, 3], B>;
     type Squeezed = Tensor<s![2, 3], B>;
@@ -124,7 +124,7 @@ fn reduction_rules_reject_axes_that_do_not_match_the_structural_cursor() {
 
 #[test]
 fn runtime_reduction_validates_axes_beyond_inline_storage() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     let tensor: Tensor<Dyn, B> = Tensor::ones(vec![1usize; 71]).unwrap();
 
     let reduced = tensor.sum(70isize).unwrap();

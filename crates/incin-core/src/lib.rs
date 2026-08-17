@@ -37,7 +37,7 @@ pub(crate) mod serialize;
 #[cfg(feature = "std")]
 /// Named serialization surface for applications that do not use the prelude.
 pub mod serialization {
-    pub use crate::serialize::{Format, ModelExt};
+    pub use crate::serialize::{Format, ModelExt, STATE_FORMAT_VERSION};
 }
 #[cfg(feature = "std")]
 /// ONNX import and export helpers for graph interchange.
@@ -155,11 +155,6 @@ pub mod backend_authoring {
 /// Expert type-level shape vocabulary kept outside the normal prelude.
 pub mod types {
     pub use crate::shapes::{ConcreteStaticExtent, DimCons, Nil, ReplaceAt, StructuralConcatShape};
-}
-
-#[cfg(any(test, feature = "test-utils"))]
-pub mod test_utils {
-    pub use crate::tensor::backend::dummy::DummyBackend;
 }
 
 /// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.

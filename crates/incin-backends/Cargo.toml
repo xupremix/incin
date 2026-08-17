@@ -1,11 +1,17 @@
 [package]
+authors.workspace = true
 description = "Compute backends (CPU, WGPU, CUDA) for incin"
-repository = "https://github.com/xupremix/incin"
+repository.workspace = true
 name = "incin-backends"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["machine-learning", "tensor", "gpu", "wgpu", "cuda"]
+categories = ["science", "hardware-support"]
+documentation = "https://docs.rs/incin-backends"
 
 [features]
 # A bare dependency is a standard-library CPU build. GPU and external
@@ -17,6 +23,7 @@ std = [
     "anyhow/std",
     "rand/std",
     "rand/std_rng",
+    "rand/thread_rng",
     "rand_distr/std",
     "half/std"
 ]
@@ -59,25 +66,27 @@ distributed-reference = ["distributed"]
 distributed-nccl = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 # Deterministic fault-injection hooks used only by integration tests. This is
 # deliberately opt-in and is never part of a product build.
-test-utils = ["incin-core/test-utils"]
+test-utils = []
 
 [dependencies]
-incin-core = { path = "../incin-core", default-features = false, version = "0.0.0" }
+incin-core = { path = "../incin-core", default-features = false, version = "0.1.0" }
 # `const-generics` supplies typenum's `Const<N>`/`ToUInt`/`U<N>` bridge, which
 # is how `target.rs` turns a Rust array length into the type-level dimension a
 # static shape needs. The feature only adds items, so enabling it here cannot
 # affect anything else in the graph.
 typenum = { version = "1.20.1", default-features = false, features = ["const-generics"] }
 anyhow = { version = "1.0.103", default-features = false }
-spin = { version = "0.9.8", default-features = false, features = ["rwlock", "mutex", "spin_mutex"] }
-rand = { version = "0.8", default-features = false, features = ["alloc", "small_rng"] }
-rand_distr = { version = "0.4", default-features = false, features = ["alloc"] }
+spin = { version = "0.12.2", default-features = false, features = ["rwlock", "mutex", "spin_mutex"] }
+# `small_rng` stopped being a feature in rand 0.10; `SmallRng` is
+# unconditional now, which is what the no-std creation path uses.
+rand = { version = "0.10", default-features = false, features = ["alloc"] }
+rand_distr = { version = "0.6", default-features = false, features = ["alloc"] }
 half = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
 bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
 ggml-quants = "0.1.0"
-incin-telemetry = { path = "../incin-telemetry", version = "0.0.0", optional = true }
-hashbrown = { version = "0.14", default-features = false, features = ["alloc", "inline-more", "ahash"] }
+incin-telemetry = { path = "../incin-telemetry", version = "0.1.0", optional = true }
+hashbrown = { version = "0.17", default-features = false, features = ["alloc", "inline-more", "default-hasher"] }
 rayon = "1.10.0"
 matrixmultiply = { version = "0.3.11", optional = true }
 log = "0.4.22"
@@ -87,7 +96,7 @@ serde_json = "1.0.120"
 
 # WGPU Backend
 wgpu = { version = "22.0.0", optional = true }
-pollster = { version = "0.3.0", optional = true }
+pollster = { version = "1.0.1", optional = true }
 
 # CUDA Backend
 cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc", "cublas", "cudnn", "f16"] }
@@ -102,3 +111,11 @@ tempfile = "3.27"
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+# docs.rs builds the default feature set unless told otherwise, which would
+# document a fraction of this crate. Hardware-only features are deliberately
+# absent: docs.rs has no GPU and a build that cannot link is worse than a
+# page that says the feature exists.
+features = ["std", "cpu", "compiled", "telemetry", "distributed"]
+rustdoc-args = ["--cfg", "docsrs"]

@@ -225,14 +225,17 @@ pub enum Error {
     #[error("{0}")]
     /// A canonical invocation failed contract validation before any backend ran.
     ///
-    /// The counterpart to [`Error::Backend`]: together they are the two arms of
-    /// [`CanonicalError`](crate::exec::CanonicalError), and having both here is
-    /// what lets a `dispatch::execute` failure reach a caller unchanged. Without
-    /// this variant the only way to surface a descriptor rejection was to render
-    /// it into a string and post it as some other variant, which is how a dtype
-    /// refusal ended up reported as an execution failure of an operation the
-    /// caller had not asked for.
+    /// Alongside [`Error::Policy`] and [`Error::Backend`], this preserves every
+    /// [`CanonicalError`](crate::exec::CanonicalError) category at the public
+    /// boundary. Without this variant the only way to surface a descriptor
+    /// rejection was to render it into a string and post it as some other
+    /// variant, which is how a dtype refusal ended up reported as an execution
+    /// failure of an operation the caller had not asked for.
     Descriptor(crate::exec::catalog::DescriptorError),
+
+    #[error("{0}")]
+    /// A valid invocation required a support level the execution policy denies.
+    Policy(crate::exec::PolicyViolation),
 
     #[error(transparent)]
     /// A backward pass failed (`GRD-005`).
@@ -444,7 +447,7 @@ impl From<std::io::Error> for Error {
 impl From<crate::exec::CanonicalError> for Error {
     /// Carry a canonical failure across without flattening it.
     ///
-    /// Both arms have an exact counterpart here, so this loses nothing: the
+    /// Every arm has an exact counterpart here, so this loses nothing: the
     /// distinction between "the request was never legal" and "the backend
     /// refused a legal request" survives, and a [`BackendError::Unsupported`]
     /// still names the backend that produced it. Callers that used to render
@@ -453,6 +456,7 @@ impl From<crate::exec::CanonicalError> for Error {
     fn from(error: crate::exec::CanonicalError) -> Self {
         match error {
             crate::exec::CanonicalError::Descriptor(error) => Self::Descriptor(error),
+            crate::exec::CanonicalError::Policy(error) => Self::Policy(error),
             crate::exec::CanonicalError::Backend(error) => Self::Backend(error),
         }
     }

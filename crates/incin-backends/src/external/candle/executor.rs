@@ -44,7 +44,7 @@ impl CandleStorage {
     pub fn try_new(tensor: candle_core::Tensor) -> Result<Self> {
         let shape = ShapeBuf::from_slice(tensor.dims());
         let strides = StrideBuf::from_slice(tensor.stride());
-        let dtype = from_candle_dtype(tensor.dtype());
+        let dtype = from_candle_dtype(tensor.dtype())?;
         let device = from_candle_device(tensor.device())?;
         let capacity = shape.checked_numel(OperationKind::Storage)?;
         let meta = TensorMeta::try_new(

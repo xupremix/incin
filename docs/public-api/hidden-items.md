@@ -63,7 +63,7 @@ expansion, backend implementation, compatibility path, or type-level proof.
 
 | Source location | Class | Reason |
 | --- | --- | --- |
-| `crates/incin/src/lib.rs:245` | A | Macro expansions need stable access to facade allocation and backend support. |
+| `crates/incin/src/lib.rs:246` | A | Macro expansions need stable access to facade allocation and backend support. |
 | `crates/incin-backends/src/cpu/var.rs:95` | C | Test-only fault injection owns its scoped guard; it is not consumer API. |
 | `crates/incin-backends/src/cpu/var.rs:109` | C | Test-only fault injection is exported only for deterministic rollback tests. |
 | `crates/incin-backends/src/dispatch.rs:87` | C | The unavailable storage variant keeps the backend-neutral enum total when Metal is disabled. |
@@ -82,9 +82,9 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-core/src/dist/placement.rs:170` | C | Dynamic placement carries runtime metadata without exposing construction. |
 | `crates/incin-core/src/exec/catalog.rs:1609` | C | Descriptor lowering selects transforms internally; callers cannot forge this enum. |
 | `crates/incin-core/src/exec/proof.rs:237` | C | Paranoid validation is an internal hook for auditing an already sealed proof. |
-| `crates/incin-core/src/lib.rs:49` | A | Macros expanded inside the crate need the private support re-exports. |
-| `crates/incin-core/src/nn/module.rs:692` | A | The exported sequence macro is a compatibility name used by generated code. |
-| `crates/incin-core/src/nn/module.rs:700` | A | The exported sequence macro is a compatibility name used by generated code. |
+| `crates/incin-core/src/lib.rs:54` | A | Macros expanded inside the crate need the private support re-exports. |
+| `crates/incin-core/src/nn/module.rs:693` | A | The exported sequence macro is a compatibility name used by generated code. |
+| `crates/incin-core/src/nn/module.rs:701` | A | The exported sequence macro is a compatibility name used by generated code. |
 | `crates/incin-core/src/shapes/dim.rs:179` | C | Broadcast type selection is solver machinery for public shape proofs. |
 | `crates/incin-core/src/shapes/dim.rs:192` | C | Static broadcast aliases are solver machinery for public shape proofs. |
 | `crates/incin-core/src/shapes/dim.rs:195` | C | Static broadcast aliases are solver machinery for public shape proofs. |
@@ -117,4 +117,4 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-core/src/tensor/ops/reduce.rs:697` | C | Runtime argmax lowers the canonical reduction API. |
 | `crates/incin-core/src/tensor/ops/reduce.rs:721` | C | Runtime argmin lowers the canonical reduction API. |
 | `crates/incin-core/src/tensor/ops/unary.rs:173` | B | The old negation spelling remains as a documented compatibility path. |
-| `crates/incin-macros/src/lib.rs:288` | A | The exported helper macro is the expansion entry point for layer arguments. |
+| `crates/incin-macros/src/lib.rs:304` | A | The exported helper macro is the expansion entry point for layer arguments. |

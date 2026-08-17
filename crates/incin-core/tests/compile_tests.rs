@@ -80,6 +80,7 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("shape_trait_is_sealed", "E0277"),
         ("dim_trait_is_sealed", "E0277"),
         ("concrete_static_extent_is_sealed", "E0277"),
+        ("tensor_element_is_sealed", "E0277"),
         // Macros, which emit their own diagnostics and carry no error code.
         ("macro_idx_invalid", "expected `..=`"),
         (

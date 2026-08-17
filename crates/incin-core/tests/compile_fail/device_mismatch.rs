@@ -1,25 +1,22 @@
+//! Two tensors that live on different devices cannot be combined. The proof
+//! uses the two real backends this crate's dev-dependencies provide, so the
+//! rejection is the one a user actually meets rather than one a stand-in
+//! backend arranged.
+//!
+//! The tensors arrive as parameters rather than being constructed here. A
+//! constructor call would contribute its own device-argument errors, and a
+//! fixture that fails for two reasons no longer proves the one it names.
+
+use incin_backends::cpu::CpuBackendImpl;
+use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-/// Mock gpu.
-pub struct MockGpu;
-impl ConstDevice for MockGpu {}
-impl Device for MockGpu {
-    /// Arg.
-    type Arg = ();
-    /// Field.
-    type Field = core::marker::PhantomData<Self>;
-    /// To incin.
-    fn to_incin(_: &Self::Field) -> Result<DeviceId> { Ok(DeviceId::cpu()) }
-    /// Init.
-    fn init(_: Self::Arg) -> Self::Field { core::marker::PhantomData }
+fn add_across_devices(
+    a: &Tensor<Dyn, CpuBackendImpl, f32, Grad>,
+    b: &Tensor<Dyn, WgpuBackendImpl<Wgpu>, f32, Grad>,
+) {
+    // This should fail to compile because Cpu != Wgpu.
+    let _c = a.add_exact(b);
 }
 
-fn main() {
-    let a: Tensor<Dyn, DummyBackend<Cpu>, f32, Grad> = Tensor::zeros(vec![2, 2]).unwrap();
-    let b: Tensor<Dyn, DummyBackend<MockGpu>, f32, Grad> = Tensor::zeros(vec![2, 2]).unwrap();
-    
-    // This should fail to compile because Cpu != MockGpu
-    let _c = a.add_exact(&b);
-}
+fn main() {}

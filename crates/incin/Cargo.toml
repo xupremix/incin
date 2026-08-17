@@ -1,12 +1,17 @@
 [package]
 description = "Machine learning framework for setting fire to dimensionality bugs"
-repository = "https://github.com/xupremix/incin"
-authors = ["xupremix <xupremix.me@gmail.com>"]
+repository.workspace = true
+authors.workspace = true
 name = "incin"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["machine-learning", "deep-learning", "tensor", "neural-network", "autograd"]
+categories = ["science", "mathematics", "no-std"]
+documentation = "https://docs.rs/incin"
 
 exclude = [
     "*.onnx",
@@ -30,11 +35,11 @@ cpu = ["incin-backends/cpu"]
 # Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete
 # without it; see incin-backends for what it does and does not change.
 cpu-blas = ["std", "cpu", "incin-backends/cpu-blas"]
-# Enables the native CUDA backend. CUDA is never enabled implicitly.
+# Preview: the native CUDA backend, covering the subset in docs/capabilities.md. Never enabled implicitly.
 cuda = ["incin-core/cuda", "incin-backends/cuda"]
-# Enables the cross-platform WGPU backend. WGPU is never enabled implicitly.
+# Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly.
 wgpu = ["incin-backends/wgpu"]
-# Enables the native Metal backend for Apple Silicon. Metal is never enabled implicitly.
+# Preview: the native Metal backend for Apple Silicon. Its executors are stubs pending MTL-002/003; see docs/capabilities.md. Never enabled implicitly.
 metal = ["incin-backends/metal"]
 # Enables MPS and MPSGraph structured primitives for Apple Silicon.
 metal-mps = ["incin-backends/metal-mps"]
@@ -49,8 +54,9 @@ autotune = ["cuda", "incin-backends/autotune"]
 # Enables the preview trainer at `incin::experimental::training`. The
 # interface may change without a migration path.
 train = ["std"]
-# Enables typed meshes, static/runtime tensor placements, and distributed
-# lowering proofs. Transports remain separate opt-in backend features.
+# Preview: typed meshes, static/runtime tensor placements, and distributed
+# lowering proofs. This is a planning and validation layer; there is no
+# distributed execution path. Transports remain separate opt-in backend features.
 distributed = ["incin-core/distributed"]
 # Enables the deterministic in-process collective transport used by
 # conformance tests and local distributed-plan development.
@@ -61,23 +67,28 @@ distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 # directory under this feature, which is why the dependency is direct here and
 # not only through incin-backends.
 telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
-# Test-only backends and test utilities.
-test-utils = ["incin-core/test-utils", "incin-backends/test-utils"]
+# Deterministic fault-injection hooks for tests. No stand-in backend: a test
+# that needs a backend uses a real one.
+test-utils = ["incin-backends/test-utils"]
 # Extension contracts for backend authors.
 backend-authoring = []
-# Curated preview types for compiled execution.
+# The Hugging Face Hub client at `incin::hub`. Off by default because it brings
+# an async runtime and a second TLS stack into the dependency graph for an API
+# most training code never calls; dataset downloading does not need it.
+data-hub = ["incin-data/hub"]
+# Preview: curated types for compiled execution. The interface may change without a migration path.
 compiled = ["incin-core/compiled", "incin-backends/compiled"]
 # Opt-in only: ignored multi-host CUDA runtime fixtures require actual hardware
 # and are not part of compile-only feature coverage.
 hardware-tests = []
 
 [dependencies]
-incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
-incin-macros = { path = "../incin-macros/", version = "0.0.0", default-features = false }
-incin-backends = { path = "../incin-backends", version = "0.0.0", default-features = false }
-incin-data = { version = "0.0.0", path = "../incin-data" }
-incin-diagnostics = { version = "0.0.0", path = "../incin-diagnostics" }
-incin-telemetry = { version = "0.0.0", path = "../incin-telemetry", optional = true }
+incin-core = { path = "../incin-core", version = "0.1.0", default-features = false }
+incin-macros = { path = "../incin-macros/", version = "0.1.0", default-features = false }
+incin-backends = { path = "../incin-backends", version = "0.1.0", default-features = false }
+incin-data = { version = "0.1.0", path = "../incin-data" }
+incin-diagnostics = { version = "0.1.0", path = "../incin-diagnostics" }
+incin-telemetry = { version = "0.1.0", path = "../incin-telemetry", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -91,7 +102,7 @@ required-features = ["std"]
 incin = { path = ".", features = ["backend-authoring", "test-utils", "wgpu", "cpu"] }
 hashbrown = "0.14.5"
 bytemuck = "1"
-criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 trybuild = "1.0.117"
 
 # The examples and the benchmark are binaries, so the crate-level `#![cfg]` the
@@ -122,3 +133,11 @@ required-features = ["cpu"]
 [[example]]
 name = "native_resnet"
 required-features = ["backend-authoring", "cpu"]
+
+[package.metadata.docs.rs]
+# docs.rs builds the default feature set unless told otherwise, which would
+# document a fraction of this crate. Hardware-only features are deliberately
+# absent: docs.rs has no GPU and a build that cannot link is worse than a
+# page that says the feature exists.
+features = ["cpu", "std", "backend-authoring", "train", "compiled", "telemetry", "distributed", "test-utils"]
+rustdoc-args = ["--cfg", "docsrs"]

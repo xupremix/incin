@@ -11,6 +11,9 @@ use crate::metal::mps::{
     MpsMatMulCandidate, MpsNormalizationCandidate, MpsPointwiseCandidate, MpsReductionCandidate,
 };
 use crate::metal::storage::MetalStorageMode;
+// Only the cache round-trip below names the core representation, and that pair
+// is itself gated on autotune.
+#[cfg(any(feature = "autotune", test))]
 use crate::tuning::LaunchCandidate;
 #[cfg(any(feature = "metal", feature = "autotune", test))]
 use crate::tuning::identity::{

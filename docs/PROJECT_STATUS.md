@@ -18,10 +18,22 @@ it is not repeated here as if it were a current API description.
 | State and serialization | Typed state traversal supports exact snapshots and transactional restore. | State tests and Transformer round-trip proof. |
 | Exported snapshots | Export validation includes source coverage, dependency checks, public API checks, and a minimal Cargo check. | `tools/export-snapshot.sh`; generated output policy is documented below. |
 | Documentation | Rustdoc, Book examples, and generated operation/capability documents are checked against source. | `docs/README.md`, `mdbook build docs/book`, and project validation commands. |
+| Test backends | Every test that needs a backend uses a real one. There is no shape-only stand-in, so a passing test implies the operation both exists and computes. | `crates/incin/tests/consumer-fixtures/dummy-backend-absent`; `crates/incin-core/tests/distributions.rs`. |
 
 ## Feature boundaries
 
-- CPU is the verified execution backend in this environment.
+- CPU is the verified execution backend in this environment, and the complete
+  one: all 158 backend-executable catalog operations have CPU executors.
+- CUDA, WGPU, and Metal are previews. Each advertises a documented subset —
+  arithmetic, reductions, `matmul`, and convolution/pooling, plus the unary
+  activations on WGPU — and none advertises normalization, loss, or embedding.
+  `docs/capabilities.md` is generated from the registrations and is
+  authoritative per operation.
+- Building the workspace does not require `protoc`. The ONNX protobuf module is
+  checked in and regenerated with `cargo xtask onnx`.
+- `incin::test_utils` gates deterministic fault injection only. The shape-only
+  `DummyBackend` is removed, including from the feature that used to carry it.
+- The declared MSRV is 1.88, held by a CI job pinned to that toolchain.
 - CUDA and Metal are feature-compiled where dependencies permit, but no
   hardware execution claim is made without the device.
 - WGPU has a supported software-adapter path for its documented subset.

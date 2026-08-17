@@ -813,7 +813,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
@@ -833,7 +833,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get(vec![
@@ -1055,7 +1055,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape(shape![6]).unwrap();
@@ -1210,7 +1210,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// use incin::advanced::idx;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
@@ -1326,7 +1326,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0isize, 2, 5).unwrap(); // shape [5]
@@ -1386,7 +1386,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0isize).unwrap(); // shape [5]

@@ -2385,6 +2385,24 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for DispatchBacke
             _ => Err(Error::DeviceMismatch { left: DeviceId::cpu(), right: DeviceId::cpu() }),
         }
     }
+
+    fn set_grad<K: DType>(
+        storage: &Self::Storage<K>,
+        grads: &mut Self::Grads,
+        value: Self::Storage<K>,
+    ) -> Result<()> {
+        match (storage, grads, value) {
+            #[cfg(feature = "cpu")]
+            (DispatchStorage::Cpu(target), DispatchGrads::Cpu(gs), DispatchStorage::Cpu(value)) => <crate::cpu::CpuBackendImpl<Cpu> as incin_core::backend_authoring::AutogradBackend>::set_grad::<K>(target, gs, value),
+            #[cfg(feature = "wgpu")]
+            (DispatchStorage::Wgpu(target), DispatchGrads::Wgpu(gs), DispatchStorage::Wgpu(value)) => <crate::wgpu::WgpuBackendImpl<Wgpu> as incin_core::backend_authoring::AutogradBackend>::set_grad::<K>(target, gs, value),
+            #[cfg(feature = "cuda")]
+            (DispatchStorage::Cuda(target), DispatchGrads::Cuda(gs), DispatchStorage::Cuda(value)) => <crate::cuda::CudaBackendImpl<Cuda> as incin_core::backend_authoring::AutogradBackend>::set_grad::<K>(target, gs, value),
+            #[cfg(feature = "metal")]
+            (DispatchStorage::Metal(target), DispatchGrads::Metal(gs), DispatchStorage::Metal(value)) => <crate::metal::MetalBackendImpl<Metal> as incin_core::backend_authoring::AutogradBackend>::set_grad::<K>(target, gs, value),
+            _ => Err(Error::DeviceMismatch { left: DeviceId::cpu(), right: DeviceId::cpu() }),
+        }
+    }
 }
 
 impl<D: Device> VariableBackend for DispatchBackend<D> {

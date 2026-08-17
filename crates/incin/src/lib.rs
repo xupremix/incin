@@ -5,7 +5,7 @@
 //! ## Key Features
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
-//! * **Backend Agnostic**: CPU is enabled by default; native CUDA and WGPU are explicit opt-ins. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
+//! * **Backends**: CPU is enabled by default and is the complete backend — every backend-executable operation in the canonical catalog has a CPU executor. The native CUDA, WGPU, and Metal backends are explicit opt-ins and are previews: each covers a documented subset of the catalog, so a model built from the layers in this crate trains on CPU. `docs/capabilities.md` is generated from the backend registrations and answers this per operation. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
 //! * **Macro-driven Ergonomics**: Stable macros such as `s![]`, `shape![]`, `axis![]`, and `i![]` define shapes, selectors, and indexing. Partial ONNX expansion is available separately as `experimental::model!`.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
@@ -107,6 +107,7 @@
     include_str!("../../../docs/book/src/errors.md"),
     include_str!("../../../docs/book/src/experimental.md"),
     include_str!("../../../docs/book/src/pytorch_cheatsheet.md"),
+    include_str!("../../../docs/book/src/release_notes.md"),
     include_str!("../../../docs/book/src/whats_not_finished.md"),
 )]
 mod book_docs {}
@@ -409,25 +410,28 @@ pub mod backend_authoring {
 }
 
 #[cfg(feature = "test-utils")]
-/// Test utilities and test backend implementations.
+/// Deterministic fault injection for tests that need a backend operation to
+/// fail on demand. There is no stand-in backend here: a test that needs a
+/// backend uses a real one.
 pub mod test_utils {
     #[cfg(feature = "cpu")]
     pub use incin_backends::test_utils::{AssignFailureGuard, fail_assign_on};
-    pub use incin_core::test_utils::DummyBackend;
 }
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
+    pub use incin_core::nn::loss::{
+        BCEWithLogitsShape, CrossEntropyReductionShape, CrossEntropyShape, L1ReductionShape,
+        L1Shape, MSEShape, Mean, NoneReduction, Reduction, ReductionMode, Sum,
+    };
     pub use incin_core::nn::param;
     pub use incin_core::nn::{
-        AdaptiveAvgPool2d, AvgPool2d, BCEWithLogitsLoss, BCEWithLogitsShape, BatchNorm2d,
-        BatchNormShape, Buffer, ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape,
-        CrossEntropyLoss, CrossEntropyReductionShape, CrossEntropyShape, Dropout, ELU, Embedding,
-        EmbeddingShape, False, Flatten, GELU, Init, L1Loss, L1ReductionShape, L1Shape, LSTM,
-        LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
-        MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
-        OptionalField, Param, ParameterVisitor, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU,
-        Reduction, ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, Sum, Swish, Tanh,
+        AdaptiveAvgPool2d, AvgPool2d, BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Buffer,
+        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossEntropyLoss, Dropout, ELU,
+        Embedding, EmbeddingShape, False, Flatten, GELU, Init, L1Loss, LSTM, LSTMCell, LayerNode,
+        LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d,
+        Mish, ModelStats, Module, NamedLayers, OptionalField, Param, ParameterVisitor, RMSNorm,
+        RMSNormShape, RNN, RNNCell, ReLU, RnnShape, Sequential, Sigmoid, Softmax, Swish, Tanh,
         TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
         format_layer_summary, format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm,
         rnn, sum_stats,
@@ -441,7 +445,7 @@ pub mod nn {
 pub mod optim {
     pub use incin_core::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, OptimizerBackend,
-        ParameterGroup, SGD,
+        ParameterGroup, SGD, clip_grad_norm,
     };
     #[cfg(feature = "std")]
     pub use incin_core::optim::{CosineAnnealingLR, StepLR};
@@ -472,6 +476,7 @@ pub mod transforms {
 }
 
 /// HuggingFace Hub downloading & pretrained model loading utilities.
+#[cfg(feature = "data-hub")]
 pub mod hub {
     pub use incin_data::hub::{HubApi, HubRepo, download, from_pretrained};
 }
@@ -723,7 +728,7 @@ pub mod prelude {
     };
 
     #[cfg(feature = "std")]
-    pub use incin_core::serialization::{Format, ModelExt};
+    pub use incin_core::serialization::{Format, ModelExt, STATE_FORMAT_VERSION};
 
     pub use incin_core::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,

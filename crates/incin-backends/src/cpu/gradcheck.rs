@@ -53,7 +53,7 @@ fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
         stride::contiguous_strides(&contiguous_shape).len(),
         storage.strides.len()
     );
-    CpuStorage::from_contiguous(buffer, contiguous_shape.to_vec())
+    CpuStorage::from_contiguous(buffer, &contiguous_shape)
 }
 
 /// Read the scalar at flat buffer position `flat_idx` (logical row-major

@@ -8,6 +8,7 @@ use incin_backends::cpu::{Cpu, CpuBackendImpl};
 use incin_backends::target::{DtypeTarget, TargetExt};
 use incin_core::backend_authoring::SupportsDType;
 use incin_core::prelude::*;
+use incin_core::tensor::dtype::StorageEncoding;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct TestOpaque16;

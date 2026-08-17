@@ -1,4 +1,5 @@
-use onnx_pb::{GraphProto, ModelProto, NodeProto, ValueInfoProto};
+use crate::onnx_pb;
+use crate::onnx_pb::{GraphProto, ModelProto, NodeProto, ValueInfoProto};
 use prost::Message;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,6 +24,27 @@ fn compile_error(message: impl AsRef<str>) -> proc_macro2::TokenStream {
     quote! { compile_error!(#message); }
 }
 
+/// Read a proto2 `optional` string the way the ONNX specification defines it.
+///
+/// The generated message types model every `optional` field as `Option`, while
+/// the specification's default for an absent name, domain, or op type is the
+/// empty string. Reading through here keeps the import rules below written
+/// against the value rather than against the encoding, which is what they were
+/// written against when these types came from a proto3 schema.
+fn text(field: &Option<String>) -> &str {
+    field.as_deref().unwrap_or_default()
+}
+
+/// The same, for an absent 32-bit field whose specified default is zero.
+fn int32(field: Option<i32>) -> i32 {
+    field.unwrap_or_default()
+}
+
+/// The same, for an absent 64-bit field whose specified default is zero.
+fn int64(field: Option<i64>) -> i64 {
+    field.unwrap_or_default()
+}
+
 fn display_domain(domain: &str) -> &str {
     if domain.is_empty() { "ai.onnx" } else { domain }
 }
@@ -31,14 +53,16 @@ fn opset_for(model: &ModelProto, domain: &str) -> Option<i64> {
     model
         .opset_import
         .iter()
-        .filter(|entry| entry.domain == domain || (domain == "ai.onnx" && entry.domain.is_empty()))
-        .map(|entry| entry.version)
+        .filter(|entry| {
+            text(&entry.domain) == domain || (domain == "ai.onnx" && text(&entry.domain).is_empty())
+        })
+        .map(|entry| int64(entry.version))
         .max()
 }
 
 fn node_identity(node: &NodeProto, index: usize) -> String {
-    if !node.name.is_empty() {
-        node.name.clone()
+    if !text(&node.name).is_empty() {
+        text(&node.name).to_string()
     } else if let Some(output) = node.output.first().filter(|name| !name.is_empty()) {
         output.clone()
     } else {
@@ -47,14 +71,14 @@ fn node_identity(node: &NodeProto, index: usize) -> String {
 }
 
 fn node_diagnostic(model: &ModelProto, node: &NodeProto, index: usize, reason: &str) -> String {
-    let domain = display_domain(&node.domain);
+    let domain = display_domain(text(&node.domain));
     let opset = opset_for(model, domain)
         .map(|version| version.to_string())
         .unwrap_or_else(|| "unknown".to_string());
     format!(
         "unsupported ONNX node: identity='{}', operation='{}', domain='{}', opset={}: {}",
         node_identity(node, index),
-        node.op_type,
+        text(&node.op_type),
         domain,
         opset,
         reason
@@ -68,13 +92,14 @@ fn extract_rank(value: &ValueInfoProto) -> Result<RankMetadata, String> {
     let Some(onnx_pb::type_proto::Value::TensorType(tensor)) = &value_type.value else {
         return Err(format!(
             "malformed ONNX metadata for value '{}': expected a tensor type",
-            value.name
+            text(&value.name)
         ));
     };
-    if tensor.elem_type != onnx_pb::tensor_proto::DataType::Float as i32 {
+    if int32(tensor.elem_type) != onnx_pb::tensor_proto::DataType::Float as i32 {
         return Err(format!(
             "unsupported ONNX value dtype for '{}': element type {} (only FLOAT is currently supported)",
-            value.name, tensor.elem_type
+            text(&value.name),
+            int32(tensor.elem_type)
         ));
     }
     let Some(shape) = &tensor.shape else {
@@ -88,7 +113,9 @@ fn extract_rank(value: &ValueInfoProto) -> Result<RankMetadata, String> {
                 let checked_dim = usize::try_from(*dim_value).map_err(|_| {
                     format!(
                         "malformed ONNX metadata for value '{}': dimension {} is negative ({})",
-                        value.name, axis, dim_value
+                        text(&value.name),
+                        axis,
+                        dim_value
                     )
                 })?;
                 dims.push(OnnxDim::Const(checked_dim));
@@ -152,7 +179,7 @@ fn parse_graph_nodes(
     let mut statements = Vec::with_capacity(graph.node.len());
 
     for (index, node) in graph.node.iter().enumerate() {
-        let domain = display_domain(&node.domain);
+        let domain = display_domain(text(&node.domain));
         if opset_for(model, domain).is_none() {
             return Err(node_diagnostic(
                 model,
@@ -169,7 +196,7 @@ fn parse_graph_nodes(
                 "custom operator domains are not implemented",
             ));
         }
-        if matches!(node.op_type.as_str(), "If" | "Loop") {
+        if matches!(text(&node.op_type), "If" | "Loop") {
             return Err(node_diagnostic(
                 model,
                 node,
@@ -186,7 +213,7 @@ fn parse_graph_nodes(
             ));
         }
 
-        let (input_count, output_count) = match node.op_type.as_str() {
+        let (input_count, output_count) = match text(&node.op_type) {
             "Identity" | "Relu" => (1, 1),
             "Add" | "MatMul" => (2, 1),
             _ => {
@@ -226,7 +253,7 @@ fn parse_graph_nodes(
         }
         let output = format_ident!("_node_{index}_output");
 
-        let statement = match node.op_type.as_str() {
+        let statement = match text(&node.op_type) {
             "Identity" => {
                 let input = &inputs[0];
                 quote! { let #output = #input.clone(); }
@@ -285,7 +312,7 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
     if let Some(initializer) = graph.initializer.first() {
         return Err(format!(
             "ONNX initializer loading is not implemented: initializer '{}' must not be replaced with fabricated values",
-            initializer.name
+            text(&initializer.name)
         ));
     }
     if !graph.sparse_initializer.is_empty() {
@@ -302,14 +329,14 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
         .chain(graph.output.iter())
         .chain(graph.value_info.iter())
     {
-        if value.name.is_empty() {
+        if text(&value.name).is_empty() {
             return Err("malformed ONNX metadata: value name is empty".to_string());
         }
         let rank = extract_rank(value)?;
-        if ranks.insert(value.name.clone(), rank).is_some() {
+        if ranks.insert(text(&value.name).to_string(), rank).is_some() {
             return Err(format!(
                 "malformed ONNX metadata: value '{}' is described more than once",
-                value.name
+                text(&value.name)
             ));
         }
     }
@@ -318,27 +345,27 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
     let mut input_parameters = Vec::new();
     let mut seen_inputs = BTreeSet::new();
     for (index, input) in graph.input.iter().enumerate() {
-        if !seen_inputs.insert(input.name.clone()) {
+        if !seen_inputs.insert(text(&input.name).to_string()) {
             return Err(format!(
                 "malformed ONNX graph: input '{}' is declared more than once",
-                input.name
+                text(&input.name)
             ));
         }
-        let dims = require_known_rank(&input.name, &ranks)?;
+        let dims = require_known_rank(text(&input.name), &ranks)?;
         let shape = shape_tokens(dims);
         let ident = format_ident!("_input_{index}");
-        values.insert(input.name.clone(), ident.clone());
+        values.insert(text(&input.name).to_string(), ident.clone());
         input_parameters.push(quote! { #ident: ::incin::prelude::Tensor<#shape, B, K> });
     }
 
     let statements = parse_graph_nodes(model, graph, &mut values)?;
     let output_info = &graph.output[0];
-    let output_dims = require_known_rank(&output_info.name, &ranks)?;
+    let output_dims = require_known_rank(text(&output_info.name), &ranks)?;
     let output_shape = shape_tokens(output_dims);
-    let final_output = values.get(&output_info.name).ok_or_else(|| {
+    let final_output = values.get(text(&output_info.name)).ok_or_else(|| {
         format!(
             "malformed ONNX graph: declared output '{}' is never produced",
-            output_info.name
+            text(&output_info.name)
         )
     })?;
 
@@ -400,7 +427,7 @@ pub(crate) fn parse_onnx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use onnx_pb::{
+    use crate::onnx_pb::{
         OperatorSetIdProto, TensorProto, TensorShapeProto, TypeProto,
         tensor_shape_proto::{Dimension, dimension},
         type_proto,
@@ -417,10 +444,10 @@ mod tests {
                 .collect(),
         });
         ValueInfoProto {
-            name: name.to_string(),
+            name: Some(name.to_string()),
             r#type: Some(TypeProto {
                 value: Some(type_proto::Value::TensorType(type_proto::Tensor {
-                    elem_type: onnx_pb::tensor_proto::DataType::Float as i32,
+                    elem_type: Some(onnx_pb::tensor_proto::DataType::Float as i32),
                     shape,
                 })),
                 ..Default::default()
@@ -432,8 +459,8 @@ mod tests {
     fn model_with(node: NodeProto) -> ModelProto {
         ModelProto {
             opset_import: vec![OperatorSetIdProto {
-                domain: String::new(),
-                version: 18,
+                domain: Some(String::new()),
+                version: Some(18),
             }],
             graph: Some(GraphProto {
                 node: vec![node],
@@ -449,8 +476,8 @@ mod tests {
         NodeProto {
             input: vec!["x".to_string()],
             output: vec!["y".to_string()],
-            name: "identity_0".to_string(),
-            op_type: "Identity".to_string(),
+            name: Some("identity_0".to_string()),
+            op_type: Some("Identity".to_string()),
             ..Default::default()
         }
     }
@@ -485,7 +512,7 @@ mod tests {
     fn initializers_are_not_represented_by_zero_filled_parameters() {
         let mut model = model_with(identity_node());
         model.graph.as_mut().unwrap().initializer.push(TensorProto {
-            name: "weight".to_string(),
+            name: Some("weight".to_string()),
             ..Default::default()
         });
         let error = expand_model(&model, &format_ident!("Imported")).unwrap_err();
@@ -497,8 +524,8 @@ mod tests {
     fn if_and_loop_fail_during_expansion_with_complete_node_identity() {
         for operation in ["If", "Loop"] {
             let mut node = identity_node();
-            node.op_type = operation.to_string();
-            node.name = "control_0".to_string();
+            node.op_type = Some(operation.to_string());
+            node.name = Some("control_0".to_string());
             let error = expand_model(&model_with(node), &format_ident!("Imported")).unwrap_err();
             assert!(error.contains("identity='control_0'"), "{error}");
             assert!(
@@ -517,8 +544,8 @@ mod tests {
     #[test]
     fn unsupported_nodes_report_identity_operation_domain_and_opset() {
         let mut node = identity_node();
-        node.name = "custom_0".to_string();
-        node.op_type = "Mystery".to_string();
+        node.name = Some("custom_0".to_string());
+        node.op_type = Some("Mystery".to_string());
         let error = expand_model(&model_with(node), &format_ident!("Imported")).unwrap_err();
         assert_eq!(
             error,

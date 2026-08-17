@@ -50,6 +50,45 @@ optim.step(&grads)?;
 assemble a homogeneous group explicitly. Both use `step(&grads)`. The
 learning rate is a public field (`optim.lr`), not hidden behind a setter.
 
+A step that reaches *no* parameter in the group is an error, not a silent
+`Ok(())`. That case is nearly always a bug  -  a `Gradients` from a different
+model, or a `backward` that ran on a different thread from the forward pass,
+since the tape is thread-local. Skipping *some* parameters stays legal.
+
+One consequence worth knowing: a committed step reassigns parameter storage,
+so the `Gradients` value that produced it no longer matches anything. Collect
+fresh gradients for each step rather than reusing one across two.
+
+## Gradient clipping
+
+`clip_grad_norm` rescales every gradient in a group so their total L2 norm is
+at most `max_norm`, and returns the norm *before* rescaling  -  which is the
+number worth logging, since it tells you whether clipping actually engaged.
+
+```rust,no_run
+use incin::optim::{ParameterGroup, clip_grad_norm};
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let model = Linear::<s![4, 2], B>::build(())?;
+let mut optim = AdamW::<B>::from_module(&model, 1e-2)?;
+let group = ParameterGroup::<B, f32>::from_module(&model)?;
+
+let x = Tensor::<s![3, 4], B>::ones(())?;
+let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
+let pred = model.forward(x.require_grad())?;
+let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+
+let mut grads = loss.backward()?;
+let before = clip_grad_norm(&group, &mut grads, 1.0)?;
+optim.step(&grads)?;
+println!("gradient norm before clipping: {before}");
+# Ok::<(), incin::Error>(())
+```
+
+Clip before `step`, never after: the optimizer reads the gradients it is
+given, so clipping afterwards changes nothing that was already applied.
+
 ## Learning rate schedulers
 
 A scheduler doesn't own the optimizer; it tracks its own state and you copy

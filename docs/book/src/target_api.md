@@ -60,10 +60,10 @@ assert_eq!(layer.weight.shape_dims(), vec![3, 4]);
 # Ok::<(), incin::Error>(())
 ```
 
-Arithmetic operators return tensors directly and include operation context in
-their panic message when a runtime broadcast or backend check fails. Use the
-`try_add`, `try_sub`, `try_mul`, `try_div`, and `try_neg` methods when the
-failure must remain a recoverable `Result`.
+Arithmetic operators return `Result<Tensor<...>>`; propagate their failures
+with `?` or handle them explicitly. This applies to `+`, `-`, `*`, `/`, unary
+`-`, and tensor-scalar variants. The `try_add`, `try_sub`, `try_mul`,
+`try_div`, and `try_neg` methods expose the same recoverable error contract.
 
 ## Axis selectors
 

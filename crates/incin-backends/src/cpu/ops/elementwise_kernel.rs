@@ -249,6 +249,28 @@ impl BinaryOp {
     }
 }
 
+/// Whether the AVX2 `f32` kernels may be called.
+///
+/// The decision lives here rather than inline at each call so that there is one
+/// place to change and one thing to test. It was inline, and it read
+/// `simd_lanes::<f32>() >= 8` alone — true only when the compiler was told to
+/// assume AVX2, which a stock `cargo build` never is. See
+/// `simd::avx2_detected`.
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[inline]
+pub(crate) fn avx2_f32_available() -> bool {
+    const LANES: usize = crate::simd::simd_lanes::<f32>();
+    LANES >= 8 || crate::simd::avx2_detected()
+}
+
+/// [`avx2_f32_available`] for `f64`, where an AVX2 register holds four lanes.
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[inline]
+pub(crate) fn avx2_f64_available() -> bool {
+    const LANES: usize = crate::simd::simd_lanes::<f64>();
+    LANES >= 4 || crate::simd::avx2_detected()
+}
+
 pub(crate) fn execute_binary(
     op: BinaryOp,
     lhs: &CpuStorage,
@@ -291,7 +313,7 @@ pub(crate) fn execute_binary(
 
     Ok(output
         .transpose()?
-        .map(|buffer| CpuStorage::from_contiguous(buffer, output_shape.to_vec())))
+        .map(|buffer| CpuStorage::from_contiguous(buffer, output_shape)))
 }
 
 fn execute_layout_f32(
@@ -436,7 +458,7 @@ pub(crate) fn execute_unary(op: UnaryOp, input: &CpuStorage) -> Result<Option<Cp
 
     Ok(output
         .transpose()?
-        .map(|buffer| CpuStorage::from_contiguous(buffer, input.shape.to_vec())))
+        .map(|buffer| CpuStorage::from_contiguous(buffer, &input.shape)))
 }
 
 fn execute_unary_layout<T>(
@@ -538,16 +560,17 @@ where
     allow(unreachable_code)
 )]
 fn map_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
-    // simd_lanes::<f32>() is a const fn — the compiler resolves it at compile
-    // time and can dead-code-eliminate the branch entirely on targets without
-    // AVX2, avoiding the runtime feature-detection call on every invocation.
+    // Either the compiler was told to assume AVX2, or this machine was asked.
+    // Only the first is free, and only the second is true of a stock build, so
+    // both are consulted: gating on the constant alone left these kernels
+    // unreachable in every default `cargo build`.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
-        const LANES: usize = crate::simd::simd_lanes::<f32>();
-        if LANES >= 8 {
+        if avx2_f32_available() {
             if lhs.len() < DENSE_PARALLEL_GRAIN {
-                // SAFETY: LANES >= 8 proves AVX2 (or wider) is a compile-time
-                // target feature, so the avx2 intrinsic path is always valid.
+                // SAFETY: the guard proves AVX2 is available, either as a
+                // compile-time target feature or by runtime detection, which is
+                // exactly the precondition of a `#[target_feature]` function.
                 return unsafe { avx2_binary_f32(op, lhs, rhs) };
             }
             return parallel_avx2_binary_f32(op, lhs, rhs);
@@ -576,16 +599,15 @@ fn map_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
     allow(unreachable_code)
 )]
 fn map_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
-    // simd_lanes::<f64>() is a const fn — the compiler resolves it at compile
-    // time and can dead-code-eliminate the branch entirely on targets without
-    // AVX2, avoiding the runtime feature-detection call on every invocation.
+    // Either the compiler was told to assume AVX2, or this machine was asked.
+    // Gating on the constant alone left these kernels unreachable in every
+    // default `cargo build`; see `simd::avx2_detected`.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
-        const LANES: usize = crate::simd::simd_lanes::<f64>();
-        if LANES >= 4 {
+        if avx2_f64_available() {
             if lhs.len() < DENSE_PARALLEL_GRAIN {
-                // SAFETY: LANES >= 4 proves AVX2 (or wider) is a compile-time
-                // target feature, so the avx2 intrinsic path is always valid.
+                // SAFETY: the guard proves AVX2 is available, by compile-time
+                // target feature or by runtime detection.
                 return unsafe { avx2_binary_f64(op, lhs, rhs) };
             }
             return parallel_avx2_binary_f64(op, lhs, rhs);
@@ -614,16 +636,15 @@ fn map_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
     allow(unreachable_code)
 )]
 fn map_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -> Vec<f32> {
-    // simd_lanes::<f32>() is a const fn — the compiler resolves it at compile
-    // time and can dead-code-eliminate the branch entirely on targets without
-    // AVX2, avoiding the runtime feature-detection call on every invocation.
+    // Either the compiler was told to assume AVX2, or this machine was asked.
+    // Gating on the constant alone left these kernels unreachable in every
+    // default `cargo build`; see `simd::avx2_detected`.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
-        const LANES: usize = crate::simd::simd_lanes::<f32>();
-        if LANES >= 8 {
+        if avx2_f32_available() {
             if dense.len() < DENSE_PARALLEL_GRAIN {
-                // SAFETY: LANES >= 8 proves AVX2 (or wider) is a compile-time
-                // target feature, so the avx2 intrinsic path is always valid.
+                // SAFETY: the guard proves AVX2 is available, by compile-time
+                // target feature or by runtime detection.
                 return unsafe { avx2_scalar_f32(op, dense, scalar, scalar_left) };
             }
             return parallel_avx2_scalar_f32(op, dense, scalar, scalar_left);
@@ -656,16 +677,15 @@ fn map_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -
     allow(unreachable_code)
 )]
 fn map_scalar_f64(op: BinaryOp, dense: &[f64], scalar: f64, scalar_left: bool) -> Vec<f64> {
-    // simd_lanes::<f64>() is a const fn — the compiler resolves it at compile
-    // time and can dead-code-eliminate the branch entirely on targets without
-    // AVX2, avoiding the runtime feature-detection call on every invocation.
+    // Either the compiler was told to assume AVX2, or this machine was asked.
+    // Gating on the constant alone left these kernels unreachable in every
+    // default `cargo build`; see `simd::avx2_detected`.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
-        const LANES: usize = crate::simd::simd_lanes::<f64>();
-        if LANES >= 4 {
+        if avx2_f64_available() {
             if dense.len() < DENSE_PARALLEL_GRAIN {
-                // SAFETY: LANES >= 4 proves AVX2 (or wider) is a compile-time
-                // target feature, so the avx2 intrinsic path is always valid.
+                // SAFETY: the guard proves AVX2 is available, by compile-time
+                // target feature or by runtime detection.
                 return unsafe { avx2_scalar_f64(op, dense, scalar, scalar_left) };
             }
             return parallel_avx2_scalar_f64(op, dense, scalar, scalar_left);
@@ -1439,12 +1459,9 @@ macro_rules! define_avx2_iteration_kernel {
             rhs: &[$element],
             plan: &IterationPlan,
         ) -> Option<Vec<$element>> {
-            if simd_lanes::<$element>() < 8 {
-                #[cfg(feature = "std")]
-                if !std::arch::is_x86_feature_detected!("avx2") {
-                    return None;
-                }
-                #[cfg(not(feature = "std"))]
+            if simd_lanes::<$element>() < 8 && !crate::simd::avx2_detected() {
+                // Not `avx2_f32_available`: this macro is instantiated for
+                // several element types and reads the lane count for each.
                 return None;
             }
             if plan.numel == 0 {
@@ -1777,6 +1794,36 @@ fn erf_approx_f64(value: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    /// The AVX2 kernels must be reachable in the build users actually get.
+    ///
+    /// `avx2_f32_available` was inline at four call sites and read
+    /// `simd_lanes::<f32>() >= 8` alone. That constant is false in a stock
+    /// `cargo build`, so all four branches were dead code and the CPU backend
+    /// fell through to a scalar loop — a 9x difference on `add_f32/65536`,
+    /// invisible to every test because the kernels themselves stayed correct.
+    ///
+    /// This is the assertion that would have caught it. It fails if the gate is
+    /// ever narrowed back to a compile-time-only condition.
+    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[test]
+    fn the_avx2_gate_opens_on_a_machine_that_supports_avx2() {
+        // Deliberately the raw macro and not `simd::avx2_detected`: the point is
+        // to ask the hardware independently of the predicate under test. Routing
+        // this through the same predicate would make the assertion compare a
+        // value with itself and always pass.
+        if !std::arch::is_x86_feature_detected!("avx2") {
+            return;
+        }
+        assert!(
+            avx2_f32_available(),
+            "this machine supports AVX2 but the f32 kernel gate is closed"
+        );
+        assert!(
+            avx2_f64_available(),
+            "this machine supports AVX2 but the f64 kernel gate is closed"
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -1873,7 +1920,7 @@ mod tests {
     // See tools/soundness.sh.
     #[cfg_attr(miri, ignore)]
     fn parallel_vector_chunks_preserve_operations_and_tails() {
-        if simd_lanes::<f32>() < 8 && !std::arch::is_x86_feature_detected!("avx2") {
+        if !avx2_f32_available() {
             return;
         }
 
@@ -2224,7 +2271,7 @@ mod tests {
             }
             if layout == "dense_broadcast" {
                 #[cfg(all(feature = "std", target_arch = "x86_64"))]
-                if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
+                if avx2_f32_available() {
                     return if elements >= PARALLEL_GRAIN {
                         "rayon_avx2_broadcast"
                     } else {
@@ -2246,13 +2293,13 @@ mod tests {
             }
             if elements >= DENSE_PARALLEL_GRAIN {
                 #[cfg(all(feature = "std", target_arch = "x86_64"))]
-                if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
+                if avx2_f32_available() {
                     return "rayon_avx2";
                 }
                 return "rayon";
             }
             #[cfg(all(feature = "std", target_arch = "x86_64"))]
-            if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
+            if avx2_f32_available() {
                 return "avx2";
             }
             "scalar"

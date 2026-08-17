@@ -56,8 +56,13 @@ use crate::tensor::device::WgpuN;
 /// ```rust
 /// # extern crate incin_core as incin;
 /// use incin::prelude::*;
-/// type Dev = incin_core::tensor::auto_device::BestDevice;
-/// let t = Tensor::<s![2, 3], incin_core::test_utils::DummyBackend<Dev>>::zeros(()).unwrap();
+/// // Naming the selector and building its stored field costs nothing and
+/// // cannot fail, whichever family the features picked.
+/// let field = <BestDevice as Device>::init(());
+/// // Resolving it is where the hardware question is finally asked, which is
+/// // why this returns a `Result` instead of a `DeviceId`.
+/// let resolved = <BestDevice as Device>::to_incin(&field);
+/// # let _ = resolved;
 /// ```
 #[cfg(feature = "cuda")]
 pub type BestDevice = CudaN<typenum::U0>;

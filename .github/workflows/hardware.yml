@@ -139,13 +139,6 @@ jobs:
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
 
-      - name: Install protobuf compiler
-        run: |
-          set -euo pipefail
-          if command -v protoc >/dev/null 2>&1; then exit 0; fi
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-
       - name: Record device and driver
         run: |
           set -euo pipefail
@@ -198,7 +191,7 @@ jobs:
       - name: Install WGPU system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
 
       - name: Record adapter
         run: |
@@ -223,13 +216,6 @@ jobs:
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Install protobuf compiler
-        run: |
-          set -euo pipefail
-          if command -v protoc >/dev/null 2>&1; then exit 0; fi
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
 
       - name: Record adapter
         run: |
@@ -257,12 +243,6 @@ jobs:
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Install protobuf compiler
-        run: |
-          set -euo pipefail
-          if command -v protoc >/dev/null 2>&1; then exit 0; fi
-          brew install protobuf
 
       - name: Record Metal system details
         run: |
@@ -292,13 +272,6 @@ jobs:
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
 
-      - name: Install protobuf compiler
-        run: |
-          set -euo pipefail
-          if command -v protoc >/dev/null 2>&1; then exit 0; fi
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-
       - name: Data Parallel (DP2) Networked Training Test
         run: cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network
 
@@ -318,13 +291,6 @@ jobs:
 
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
-
-      - name: Install protobuf compiler
-        run: |
-          set -euo pipefail
-          if command -v protoc >/dev/null 2>&1; then exit 0; fi
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
 
       - name: Multi-Process Rendezvous & Shutdown Test
         run: cargo test -p incin --features distributed-nccl --test rendezvous

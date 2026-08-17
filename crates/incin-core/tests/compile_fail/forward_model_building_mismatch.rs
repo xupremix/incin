@@ -1,13 +1,13 @@
 extern crate incin_core as incin;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
+use incin_backends::cpu::CpuBackendImpl;
 
 
 fn main() {
-    let l1 = Linear::<s![10, 20], DummyBackend<Cpu>>::build(()).unwrap();
-    let l2 = Linear::<s![30, 40], DummyBackend<Cpu>>::build(()).unwrap();
+    let l1 = Linear::<s![10, 20], CpuBackendImpl>::build(()).unwrap();
+    let l2 = Linear::<s![30, 40], CpuBackendImpl>::build(()).unwrap();
 
-    let input = Tensor::<s![2, 10], DummyBackend<Cpu>>::zeros(()).unwrap();
+    let input = Tensor::<s![2, 10], CpuBackendImpl>::zeros(()).unwrap();
     let x = l1.forward(input).unwrap();
     
     // Output of l1 is Tensor<[2, 20]>.

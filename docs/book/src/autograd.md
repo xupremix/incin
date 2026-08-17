@@ -12,7 +12,7 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 2], B>::ones(())?.require_grad();
 let b = Tensor::<s![2, 2], B>::full(3.0, ())?;
 
-let c = &a * &b;
+let c = (&a * &b)?;
 let loss = c.sum_all()?;
 
 let grads = loss.backward()?;
@@ -39,7 +39,7 @@ let b = Tensor::<s![2, 2], B>::ones(())?;
 
 // Nothing inside this closure records a tape entry, regardless of what
 // operations run or what G their operands carry.
-let c = incin_core::exec::GradMode::Disabled.scope(|| &a * &b);
+let c = incin_core::exec::GradMode::Disabled.scope(|| &a * &b)?;
 # Ok::<(), incin::Error>(())
 ```
 

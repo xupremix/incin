@@ -19,9 +19,7 @@ fn test_safetensors_save_and_load_roundtrip_cpu() {
     assert!(file_path.exists());
 
     let mut loaded_module = Linear::<s![2, 2], B>::build(()).unwrap();
-    loaded_module
-        .load(Format::Safetensors, &file_path, &DeviceId::cpu())
-        .unwrap();
+    loaded_module.load(Format::Safetensors, &file_path).unwrap();
     assert_eq!(
         collect_state::<B, _>(&loaded_module).unwrap().len(),
         collect_state::<B, _>(&module).unwrap().len()

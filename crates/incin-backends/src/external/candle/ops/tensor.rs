@@ -285,10 +285,19 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
             candle_core::DType::F64 => {
                 c_tensor.to_scalar::<f64>().map_err(candle_readback_error)?
             }
+            // Candle 0.9.2 added I16, I32 and four float8 variants. Incin has
+            // no dtype for them, so they are refused by name here rather than
+            // reinterpreted as a same-width type Incin does have.
+            _ => {
+                return Err(incin_core::error::Error::UnsupportedBackendOperation {
+                    op: operation,
+                    backend: "Candle",
+                });
+            }
         };
         incin_core::error::convert_f64_to_i64(
             operation,
-            from_candle_dtype(c_tensor.dtype()),
+            from_candle_dtype(c_tensor.dtype())?,
             value,
             incin_core::error::FloatToIntPolicy::Exact,
         )
@@ -299,7 +308,7 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
     ) -> Result<Vec<i64>> {
         let operation = "candle_int_to_vec1";
         let c_tensor = t.tensor();
-        let dtype = from_candle_dtype(c_tensor.dtype());
+        let dtype = from_candle_dtype(c_tensor.dtype())?;
         let values = match c_tensor.dtype() {
             candle_core::DType::U8 => {
                 return Ok(c_tensor
@@ -339,6 +348,15 @@ impl<D: incin_core::tensor::device::Device> CandleBackend<D> {
                 .map(f64::from)
                 .collect(),
             candle_core::DType::F64 => c_tensor.to_vec1::<f64>().map_err(candle_readback_error)?,
+            // Candle 0.9.2 added I16, I32 and four float8 variants. Incin has
+            // no dtype for them, so they are refused by name here rather than
+            // reinterpreted as a same-width type Incin does have.
+            _ => {
+                return Err(incin_core::error::Error::UnsupportedBackendOperation {
+                    op: operation,
+                    backend: "Candle",
+                });
+            }
         };
         values
             .into_iter()

@@ -21,7 +21,7 @@ pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStor
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -34,7 +34,7 @@ pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStor
 pub(crate) fn transpose_storage(t: &CpuStorage, dim1: usize, dim2: usize) -> Result<CpuStorage> {
     let out = t.transpose(dim1, dim2)?;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.transpose(dim1, dim2)?])),
@@ -53,7 +53,7 @@ pub(crate) fn narrow_storage(
     let mut region_start = vec![0usize; original_shape.len()];
     region_start[dim] = start;
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -197,7 +197,7 @@ pub(crate) fn concat_storage(tensors: &[&CpuStorage], dim: usize) -> Result<CpuS
         .iter()
         .map(|tensor| tensor.shape[dim])
         .collect::<Vec<_>>();
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id,
         input_ids,
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -354,7 +354,7 @@ pub(crate) fn broadcast_as_storage(t: &CpuStorage, shape: &[usize]) -> Result<Cp
 
     let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -439,7 +439,7 @@ pub(crate) fn masked_fill_storage(
         }
     }
     let buffer = t.buffer.from_f64_values(out)?;
-    Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(buffer, &t.shape))
 }
 
 pub(crate) fn repeat_storage(t: &CpuStorage, repeats: &[usize]) -> Result<CpuStorage> {
@@ -525,7 +525,7 @@ pub(crate) fn lerp_storage(
     }
     Ok(CpuStorage::from_contiguous(
         start.buffer.from_f64_values(out)?,
-        start.shape.to_vec(),
+        &start.shape,
     ))
 }
 
@@ -551,7 +551,7 @@ pub(crate) fn where_storage(
     let out_storage = CpuStorage::from_contiguous(on_true.buffer.from_f64_values(out)?, out_shape);
     let (mask_cap, on_true_cap, on_false_cap) = (mask.clone(), on_true.clone(), on_false.clone());
     let (true_id, false_id, out_id) = (on_true.id, on_false.id, out_storage.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![true_id, false_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -574,11 +574,11 @@ pub(crate) fn where_storage(
             }
             let grad_true = CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(grad_true)?,
-                grad_out.shape.to_vec(),
+                &grad_out.shape,
             );
             let grad_false = CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(grad_false)?,
-                grad_out.shape.to_vec(),
+                &grad_out.shape,
             );
             Ok(vec![
                 tape::unbroadcast(&grad_true, &on_true_cap.shape)?,
@@ -659,7 +659,7 @@ pub(crate) fn tensor_to_dtype_storage(
             });
         }
     };
-    Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
+    Ok(CpuStorage::from_contiguous(new_buffer, &t.shape))
 }
 
 pub(crate) fn gather_storage(t: &CpuStorage, dim: usize, index: &CpuStorage) -> Result<CpuStorage> {
@@ -679,7 +679,7 @@ pub(crate) fn gather_storage(t: &CpuStorage, dim: usize, index: &CpuStorage) -> 
     let out_storage = CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape);
     let (t_cap, index_cap) = (t.clone(), index.clone());
     let (t_id, out_id) = (t.id, out_storage.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -704,7 +704,7 @@ pub(crate) fn gather_storage(t: &CpuStorage, dim: usize, index: &CpuStorage) -> 
             }
             Ok(vec![CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(grad_t_data)?,
-                t_cap.shape.to_vec(),
+                &t_cap.shape,
             )])
         }),
     });
@@ -771,7 +771,7 @@ pub(crate) fn scatter_storage(
     }
     Ok(CpuStorage::from_contiguous(
         t.buffer.from_f64_values(out_data)?,
-        t.shape.to_vec(),
+        &t.shape,
     ))
 }
 
@@ -881,7 +881,7 @@ pub(crate) fn elementwise_float_binary(
     }
     Ok(CpuStorage::from_contiguous(
         lhs.buffer.from_f64_values(out)?,
-        lhs.shape.to_vec(),
+        &lhs.shape,
     ))
 }
 
@@ -895,10 +895,7 @@ pub(crate) fn logical_not_storage(t: &CpuStorage) -> Result<CpuStorage> {
             crate::cpu::storage::increment_index(&mut idx, &t.shape);
         }
     }
-    Ok(CpuStorage::from_contiguous(
-        CpuBuffer::Bool(out),
-        t.shape.to_vec(),
-    ))
+    Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), &t.shape))
 }
 
 pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
@@ -1000,7 +997,7 @@ pub(crate) fn group_norm_storage(t: &CpuStorage, groups: usize, eps: f64) -> Res
     }
     Ok(CpuStorage::from_contiguous(
         t.buffer.from_f64_values(out)?,
-        t.shape.to_vec(),
+        &t.shape,
     ))
 }
 
@@ -1032,7 +1029,7 @@ fn triangular_storage(t: &CpuStorage, k: i64, upper: bool) -> Result<CpuStorage>
     }
     Ok(CpuStorage::from_contiguous(
         t.buffer.from_f64_values(out)?,
-        t.shape.to_vec(),
+        &t.shape,
     ))
 }
 

@@ -1,14 +1,14 @@
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::onnx::export_to_onnx;
 use incin_core::prelude::*;
 use incin_core::tensor::tracing::{
     TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
 };
-use incin_core::test_utils::DummyBackend;
 extern crate alloc;
 use std::path::Path;
 
 /// B.
-type B = TracingBackend<DummyBackend<Cpu>>;
+type B = TracingBackend<CpuBackendImpl>;
 
 fn main() -> anyhow::Result<()> {
     // Create a simple model

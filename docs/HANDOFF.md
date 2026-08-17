@@ -70,8 +70,9 @@ the inference-safe storage movement contract; variable-capable backends add
 `TransferTo` for typed variable handles. `VariableBackend::Var<K>` carries the
 variable dtype at the Rust type level; there is no erased `RawVar` escape hatch.
 The core `backend.rs` identity contract is intentionally small and the
-operation path is the descriptor `Execute<O>` contract. The shape-only test
-backend lives in `backend/dummy.rs`.
+operation path is the descriptor `Execute<O>` contract. There is no shape-only
+test backend: every test that needs a backend uses a real one, so a passing
+test implies the operation both exists and computes.
 Host byte serialization and tensor formatting belong to `HostInterop`; neither
 is required by the base `Backend` contract. `AutogradBackend` is likewise an
 independent capability, so an inference-only backend need not implement it.
@@ -221,7 +222,7 @@ of problem:
 | `crates/incin-core/src/exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
 | `crates/incin-core/src/tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once catalog ownership is stable |
 | `crates/incin-core/src/shapes/shape.rs` | structural shape algebra, validation, and proof-preserving transformations | keep cursor-independent shape operations together; extract arithmetic and validation families only with independent proof tests |
-| `crates/incin-core/src/tensor/backend/dummy.rs` | shape-only test backend and test operation coverage | keep test-only behavior isolated from production backend identity |
+| `crates/incin-core/src/generated/onnx.rs`, `crates/incin-macros/src/generated/onnx.rs` | checked-in `prost-build` output for `proto/onnx.proto` | never hand-edit; regenerate with `cargo xtask onnx` |
 | `crates/incin-core/src/dist/{plan,context}.rs` | distributed placement/planning prototypes | remain feature-gated and split only with a concrete ownership seam |
 | `crates/incin-core/src/tensor/base.rs` | central Tensor invariant and constructor implementation | keep invariant-preserving constructors together; extract only neutral value helpers |
 | `crates/incin-core/src/tensor/dtype.rs` | logical dtype descriptors, built-in dtype implementations, and storage encodings share one registry boundary | keep identity/validation/encoding contracts together; split only along a stable registry seam |

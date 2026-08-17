@@ -342,7 +342,19 @@ macro_rules! wgpu_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            elementwise = [Add, Sub, Mul, Div],
+            // The unary activations here are not new kernels. `wgpu/executor.rs`
+            // has implemented `Execute` for every one of them, against the op
+            // modes in `shaders/unary.wgsl`, since the executor was written —
+            // they were simply never listed here, so the capability query
+            // answered `Unsupported` and no caller could reach them. A shader
+            // with no capability row is dead code that reads as coverage, which
+            // is what `assert_every_wgpu_executor_is_advertised` now prevents
+            // from recurring.
+            elementwise = [
+                Add, Sub, Mul, Div,
+                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
+                Tanh, Sigmoid, Swish
+            ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             filling = [Zeros, Ones, Full, Arange, Linspace],

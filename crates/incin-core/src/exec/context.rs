@@ -2,9 +2,8 @@
 //!
 //! `EXE-006` needed only the backend, per decision D-002, and that is what this
 //! type carried. `GRD-001` gives it the policy PROPOSALS.md sec. 1.2.5
-//! declares, so that a decision like "this run must be reproducible" or "never
-//! silently copy to the host" is a value the caller passes rather than a
-//! global someone else configured.
+//! declares, so that a decision like "never silently copy to the host" is a
+//! value the caller passes rather than a global someone else configured.
 //!
 //! `GRD-002` supplies the `GradMode` sec. 1.2.5 lists, derived from the
 //! existing `Grad`/`NoGrad` markers rather than declared beside them. One
@@ -13,9 +12,7 @@
 //! type when it lands. It is not declared early as an inert field, because a
 //! field a caller can set and nothing reads is worse than a missing one.
 
-use crate::exec::policy::{
-    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode,
-};
+use crate::exec::policy::{ExecutionPolicy, FallbackPolicy, GradMode, MathMode};
 use crate::tensor::backend::StorageBackend;
 
 /// Explicit owner of the backend used by descriptor execution, and of the
@@ -99,18 +96,8 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
-    pub const fn determinism(&self) -> Determinism {
-        self.policy.determinism
-    }
-
-    #[must_use]
     pub const fn fallback(&self) -> FallbackPolicy {
         self.policy.fallback
-    }
-
-    #[must_use]
-    pub const fn allocator(&self) -> AllocatorPolicy {
-        self.policy.allocator
     }
 
     /// The ceiling this context puts on gradient recording.
@@ -135,20 +122,8 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
-    pub const fn with_determinism(mut self, determinism: Determinism) -> Self {
-        self.policy.determinism = determinism;
-        self
-    }
-
-    #[must_use]
     pub const fn with_fallback(mut self, fallback: FallbackPolicy) -> Self {
         self.policy.fallback = fallback;
-        self
-    }
-
-    #[must_use]
-    pub const fn with_allocator(mut self, allocator: AllocatorPolicy) -> Self {
-        self.policy.allocator = allocator;
         self
     }
 

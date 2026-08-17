@@ -145,7 +145,7 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![lhs_id, rhs_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -291,7 +291,7 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![lhs_id, rhs_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -443,7 +443,10 @@ fn simd_gemm(
     if rhs.col_stride != 1 {
         return false;
     }
-    if !is_x86_feature_detected!("avx2") || !is_x86_feature_detected!("fma") {
+    // One cached predicate rather than two macro calls. The macros cache too,
+    // but keeping every AVX2 decision in `simd` is what stops the elementwise
+    // kernels' compile-time-only gate from being reintroduced somewhere else.
+    if !crate::simd::avx2_fma_detected() {
         return false;
     }
     // SAFETY: avx2 and fma were just detected on this CPU, and every load

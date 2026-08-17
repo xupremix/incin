@@ -10,6 +10,7 @@ keyboard navigation, search, and theme persistence across navigation.
 from __future__ import annotations
 
 import http.server
+import importlib.util
 import shutil
 import subprocess
 import tempfile
@@ -74,8 +75,11 @@ async function run() {
 
   const heading = doc().querySelector("#chapter h2[id], #chapter h3[id]");
   check(heading, "quickstart has no addressable heading");
-  win().location.hash = "#/quickstart#" + heading.id;
-  await until(() => win().location.hash.endsWith("#" + heading.id), "heading route");
+  const headingLink = heading.querySelector("a.header");
+  check(headingLink, "heading permalink is missing");
+  headingLink.click();
+  await until(() => win().location.hash === "#/quickstart#" + heading.id, "heading route");
+  check(doc().getElementById(heading.id), "heading was not retained after permalink click");
 
   win().history.back();
   await until(() => win().location.hash === "#/quickstart", "browser back");
@@ -84,6 +88,34 @@ async function run() {
   doc().getElementById("chapter").focus();
   doc().dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
   await until(() => win().location.hash === next.hash, "keyboard next navigation");
+
+  const transformer = [...doc().querySelectorAll("a[data-slug]")]
+    .find((link) => link.dataset.slug === "transformer");
+  check(transformer, "transformer sidebar link is missing");
+  transformer.click();
+  await until(() => win().location.hash === "#/transformer", "transformer route");
+  const sourceLink = doc().querySelector('a[href^="https://github.com/xupremix/incin/blob/"]');
+  check(sourceLink, "repository source link was not mapped to GitHub");
+  check(!doc().querySelector("#chapter pre > pre"), "nested pre wrapper remains");
+  check(doc().querySelector("#chapter .playground"), "playground styling hook is missing");
+  const boring = doc().querySelector("#chapter .boring");
+  check(boring && win().getComputedStyle(boring).display === "none", "hidden doctest line is visible");
+
+  search.value = "tensor";
+  search.dispatchEvent(new Event("input", {bubbles: true}));
+  search.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  check(doc().querySelector('#search-results a[aria-selected="true"]'), "search keyboard selection is missing");
+
+  const toggle = doc().getElementById("sidebar-toggle");
+  toggle.click();
+  check(toggle.getAttribute("aria-expanded") === "true" && doc().getElementById("sidebar").classList.contains("open"), "sidebar open state disagrees with aria-expanded");
+  doc().getElementById("quickstart").click();
+  await until(() => win().location.hash === "#/quickstart", "sidebar close after navigation");
+  check(toggle.getAttribute("aria-expanded") === "false" && !doc().getElementById("sidebar").classList.contains("open"), "sidebar close state disagrees with aria-expanded");
+
+  win().location.hash = "#/does-not-exist";
+  await until(() => win().location.hash === "#/introduction", "unknown route normalization");
+  check(doc().title.startsWith("Introduction"), "unknown route retained fallback/content disagreement");
 
   result.textContent = "BOOK_TEST=PASS";
 }
@@ -120,32 +152,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    global SITE
     browser = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
     if browser is None:
         raise SystemExit("a Chromium-compatible browser is required for the book browser test")
-    if not (SITE / "index.html").exists():
-        raise SystemExit("generated book site is missing; run docs/book/build_site.py first")
+    builder_spec = importlib.util.spec_from_file_location("incin_book_builder", ROOT / "docs/book/build_site.py")
+    if builder_spec is None or builder_spec.loader is None:
+        raise SystemExit("unable to load book site builder")
+    builder = importlib.util.module_from_spec(builder_spec)
+    builder_spec.loader.exec_module(builder)
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        with tempfile.TemporaryDirectory(prefix="incin-book-browser-") as profile:
-            command = [
-                browser,
-                "--headless=new",
-                "--no-sandbox",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--user-data-dir=" + profile,
-                "--virtual-time-budget=12000",
-                "--dump-dom",
-                f"http://127.0.0.1:{server.server_port}/book-test.html",
-            ]
-            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
-    finally:
-        server.shutdown()
-        thread.join(timeout=5)
+    with tempfile.TemporaryDirectory(prefix="incin-book-site-") as output:
+        builder.SITE = Path(output)
+        builder.main()
+        SITE = Path(output)
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory(prefix="incin-book-browser-") as profile:
+                command = [
+                    browser,
+                    "--headless=new",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--user-data-dir=" + profile,
+                    "--virtual-time-budget=12000",
+                    "--dump-dom",
+                    f"http://127.0.0.1:{server.server_port}/book-test.html",
+                ]
+                result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
 
     output = result.stdout + result.stderr
     if result.returncode != 0 or "BOOK_TEST=PASS" not in output:

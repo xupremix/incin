@@ -11,14 +11,21 @@ type ClusterShard = placement![Sharded(1) on ClusterMesh];
 type ClusterPartial = placement![Partial(Sum) on ClusterMesh];
 type ClusterPipe = placement![PipelineStage(1) on ClusterMesh];
 
+/// The embedding projection, named so the field below reads as one type rather
+/// than as the expanded typenum tree `s!` produces for these sizes.
+type Embed<B> = Linear<s![512, 1024], B>;
+type Proj<B> = Linear<s![1024, 2048], B>;
+
 #[module]
 #[allow(dead_code)]
-pub struct DistributedTransformer<B: Backend + incin_core::backend_authoring::VariableBackend> {
+pub struct DistributedTransformer<
+    B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::VariableBackend,
+> {
     #[parallel(mesh = ClusterMesh, stage = 0)]
-    embed: Linear<s![512, 1024], B>,
+    embed: Embed<B>,
 
     #[shard(mesh = ClusterMesh, axis = 1)]
-    proj: Linear<s![1024, 2048], B>,
+    proj: Proj<B>,
 }
 
 #[test]

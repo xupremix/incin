@@ -2,8 +2,8 @@
 
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 incin_core::dim!(Batch, Contract, Features, Time);
@@ -161,7 +161,7 @@ fn named_batch_broadcast_preserves_name_and_static_extent() {
 
 #[test]
 fn matmul_preserves_named_static_output_type() {
-    type B = DummyBackend<Cpu>;
+    type B = CpuBackendImpl;
     type L = s![Batch = 25, 3, Features = 64];
     type R = s![Batch = 1, Features = 64, 5];
     type Expected = s![Batch = 25, 3, 5];

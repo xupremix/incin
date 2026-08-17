@@ -1,15 +1,20 @@
 [package]
-repository = "https://github.com/xupremix/incin"
-authors = ["xupremix <xupremix.me@gmail.com>"]
+repository.workspace = true
+authors.workspace = true
 name = "incin-lsp"
 description = "Transparent LSP proxy that rewrites typenum shape diagnostics and inlay hints between an editor and rust-analyzer."
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords = ["lsp", "language-server", "incin", "diagnostics", "rust-analyzer"]
+categories = ["development-tools", "development-tools::debugging"]
+documentation = "https://docs.rs/incin-lsp"
 
 [dependencies]
-incin-diagnostics = { path = "../incin-diagnostics", version = "0.0.0" }
+incin-diagnostics = { path = "../incin-diagnostics", version = "0.1.0" }
 serde_json = "1.0.120"
 
 [[bin]]
@@ -24,3 +29,7 @@ doc = false
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

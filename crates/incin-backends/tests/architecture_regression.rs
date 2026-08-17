@@ -4,7 +4,8 @@
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::dispatch::DispatchBackend;
 use incin_backends::target::{EngineOn, Native, TargetBackendFor, TensorTarget};
-use incin_core::prelude::{Cpu, Dyn, StorageBackend};
+use incin_core::backend_authoring::StorageBackend;
+use incin_core::prelude::{Cpu, Dyn};
 
 trait Same<T> {}
 impl<T> Same<T> for T {}

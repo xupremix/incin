@@ -45,7 +45,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
 
     - name: Check Formatting
       run: cargo fmt --all -- --check
@@ -151,7 +151,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
 
     # The claim the default feature set makes is that installing incin gets a
     # CPU build and nothing else. That claim is about the dependency graph, so
@@ -214,11 +214,6 @@ jobs:
       with:
         components: miri, rust-src
 
-    - name: Install System Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
-
     # Split rather than run as `all` so a miri failure and a sanitizer failure
     # are distinguishable from the job log without opening it.
     - name: Miri
@@ -247,10 +242,81 @@ jobs:
     # checked by `incin-backends`' `generated_docs` suite instead.
     - name: Check README.md's generated feature tables
       run: cargo xtask docs --check
+    # `incin-core` and `incin-macros` include a checked-in `prost-build` output
+    # rather than running `protoc` from a build script, so that a protobuf
+    # compiler is not a build requirement for every downstream user. This is
+    # the check that keeps the checked-in file equal to what proto/onnx.proto
+    # compiles to; it is the only place in CI that needs protoc at all.
+    - name: Check the generated ONNX protobuf module
+      run: cargo xtask onnx --check
+    # The roadmap summarises the ledger. It used to maintain its own counts and
+    # drifted until the two documents disagreed about the same task IDs.
+    - name: Check the roadmap against the ledger
+      run: python3 tools/check-roadmap-counts.py
     - name: Run Supported Feature Contract Matrix
       run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
+    - name: Validate publishable package boundaries
+      run: |
+        cargo metadata --locked --format-version 1 --no-deps >/dev/null
+        bash tools/check-package.sh
+
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    # Pinned to the exact version `rust-version` claims. A `rust-version` that
+    # nothing builds at is a guess; this is what makes it a fact. Raising the
+    # floor means changing both this line and the workspace manifest, which is
+    # the point.
+    - uses: dtolnay/rust-toolchain@1.88.0
+    - name: Cache Cargo modules
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-msrv-${{ hashFiles('**/Cargo.lock') }}
+    - name: Build every target at the declared MSRV
+      run: cargo check --workspace --all-targets --locked
+
+  supply-chain:
+    name: Advisories, Licences, and Duplicates
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: dtolnay/rust-toolchain@1.97.1
+    - name: Install cargo-deny
+      run: cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked
+      env:
+        CARGO_DENY_VERSION: 0.20.2
+    # Advisories, licence allow-list, banned/duplicate crates, and registry
+    # provenance, all configured in deny.toml. Duplicates the workspace cannot
+    # resolve are `skip` entries there with a stated reason, so a new duplicate
+    # is a reviewable change rather than background noise.
+    - name: Check the dependency graph
+      run: cargo deny check
+
+  publish-metadata:
+    name: Publish Metadata and Packaging
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: dtolnay/rust-toolchain@1.97.1
+    # Not `cargo publish --dry-run`: that resolves every path dependency
+    # against the registry, and the versions of an unreleased workspace are not
+    # there, so it fails for a reason that says nothing about whether the
+    # manifests are publishable. This checks the part that is checkable before
+    # the first release and stays checkable after it — that every publishable
+    # crate carries the fields crates.io and docs.rs read, within the limits the
+    # registry enforces, all at one version.
+    - name: Check crates.io and docs.rs metadata
+      run: python3 tools/check-publish-metadata.py
+    # Archive contents: that nothing a package needs is missing from it, and
+    # nothing is in it that should not be.
     - name: Validate publishable package boundaries
       run: |
         cargo metadata --locked --format-version 1 --no-deps >/dev/null
@@ -267,7 +333,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
     - name: Build docs with warnings denied
       env:
         RUSTDOCFLAGS: -D warnings
@@ -298,12 +364,6 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@1.97.1
-    # incin-core resolves against the workspace, which pulls onnx-pb's prost
-    # build script into the graph even for a core-only check. Every other job
-    # that reaches a build script installs this; this one never did, and nothing
-    # noticed because the job had not run since before the toolchain broke.
-    - name: Install protobuf compiler
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Check incin-core without default features
       run: cargo check -p incin-core --no-default-features
 
@@ -316,7 +376,7 @@ jobs:
     - name: Install WGPU system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
     - name: Run WGPU tests with CPU parity
       run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
     # `--workspace` rather than the three package names the CPU job used to
@@ -334,8 +394,6 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@1.97.1
-    - name: Install protobuf compiler
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Compile CUDA backend without requiring a GPU
       run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda
 
@@ -363,7 +421,7 @@ jobs:
     - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@1.97.1
     - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libvulkan-dev
+      run: sudo apt-get update && sudo apt-get install -y libvulkan-dev
     - name: Compile ${{ matrix.backend }} on its own
       run: cargo check -p incin-backends --no-default-features --features std,${{ matrix.backend }}
 
@@ -373,8 +431,6 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@1.97.1
-    - name: Install protobuf compiler
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Install Chromium for browser checks
       run: sudo apt-get install -y chromium
 

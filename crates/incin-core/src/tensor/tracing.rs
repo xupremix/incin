@@ -326,6 +326,24 @@ impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backen
     ) -> Result<Option<<Self as crate::tensor::backend::StorageBackend>::Storage<K>>> {
         Ok(None)
     }
+
+    /// Tracing records a graph rather than gradients, so there is no map to
+    /// write into. Reported rather than accepted, for the reason
+    /// `AutogradBackend::set_grad` gives.
+    fn set_grad<K: super::dtype::DType>(
+        _var: &<Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+        _grads: &mut Self::Grads,
+        _value: <Self as crate::tensor::backend::StorageBackend>::Storage<K>,
+    ) -> Result<()> {
+        Err(crate::err::Error::Backend(
+            crate::err::BackendError::unsupported(
+                <Self as crate::tensor::backend::StorageBackend>::BACKEND_NAME,
+                crate::exec::UnsupportedReason::Operation {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                },
+            ),
+        ))
+    }
 }
 
 impl<B: VariableBackend> VariableBackend for TracingBackend<B> {

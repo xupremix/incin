@@ -64,7 +64,7 @@ fn test_postcard_snapshot_round_trip() -> Result<()> {
     let path = std::env::temp_dir().join(format!("incin-state-{}.postcard", std::process::id()));
     layer.save(Format::Postcard, &path)?;
     let mut restored = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
-    restored.load(Format::Postcard, &path, &DeviceId::cpu())?;
+    restored.load(Format::Postcard, &path)?;
     std::fs::remove_file(path).ok();
     Ok(())
 }

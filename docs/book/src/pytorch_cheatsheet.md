@@ -5,7 +5,7 @@
 | `torch.zeros(2, 3)` | `Cpu.zeros(shape![2, 3])?` | Concrete code uses the target-first constructor. Generic code can use `Tensor::<s![2, 3], B>::zeros(())?`. |
 | `torch.zeros(2, 3, dtype=torch.float64)` | `Tensor::<s![2, 3], B, f64>::zeros(())?` | dtype is the third type parameter, `K`. |
 | `torch.tensor([1, 2, 3])` | `tensor![1, 2, 3]?` | Both default to `i64` for bare integer literals. |
-| `a + b` | `&a + &b` | Operators return a tensor and panic with operation context if runtime validation fails. Use `a.try_add(&b)?` when the failure must remain a `Result`. |
+| `a + b` | `(&a + &b)?` | Tensor operators return `Result<Tensor<...>>`; use `?` or explicit error handling. |
 | `a @ b` | `a.matmul(&b)?` | |
 | `x.requires_grad_()` | `x.require_grad()` | Changes the type (`G` becomes `Grad`), not just a runtime flag. |
 | `x.detach()` | `x.detach()` | Also a type change, to `NoGrad`. |

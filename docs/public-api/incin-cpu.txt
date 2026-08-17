@@ -8,7 +8,6 @@ pub mod incin
 pub mod incin::advanced
 pub mod incin::data
 pub mod incin::experimental
-pub mod incin::hub
 pub mod incin::macros
 pub mod incin::macros::advanced
 pub mod incin::metrics
@@ -150,10 +149,6 @@ pub use incin::experimental::model
 pub use incin::experimental::parallel
 pub use incin::experimental::placement
 pub use incin::f16
-pub use incin::hub::HubApi
-pub use incin::hub::HubRepo
-pub use incin::hub::download
-pub use incin::hub::from_pretrained
 pub use incin::macros::advanced::idx
 pub use incin::macros::i
 pub use incin::macros::s
@@ -256,6 +251,7 @@ pub use incin::optim::Optimizer
 pub use incin::optim::OptimizerBackend
 pub use incin::optim::ParameterGroup
 pub use incin::optim::SGD
+pub use incin::optim::clip_grad_norm
 pub use incin::prelude::Accuracy
 pub use incin::prelude::Adam
 pub use incin::prelude::AdamW

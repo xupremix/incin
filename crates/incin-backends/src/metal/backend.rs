@@ -3004,6 +3004,15 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for MetalBackendI
     ) -> Result<Option<Self::Storage<K>>> {
         Ok(grads.get(t.id()).cloned())
     }
+
+    fn set_grad<K: DType>(
+        t: &Self::Storage<K>,
+        grads: &mut Self::Grads,
+        value: Self::Storage<K>,
+    ) -> Result<()> {
+        grads.set(t.id(), value);
+        Ok(())
+    }
 }
 impl<D: Device> VariableBackend for MetalBackendImpl<D> {
     type Var<K: DType> = MetalVar;

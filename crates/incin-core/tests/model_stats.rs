@@ -4,11 +4,11 @@
 //! this test doubles as a check that the doc's illustrative numbers and the
 //! real implementation actually agree.
 extern crate incin_core as incin;
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::backend_authoring::{Backend, VariableBackend};
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
 
-type TestBackend = DummyBackend<Cpu>;
+type TestBackend = CpuBackendImpl;
 
 #[module]
 struct Mlp<B: Backend + VariableBackend> {
@@ -100,4 +100,24 @@ fn summary_with_stats_appends_a_readable_totals_footer() {
     // Still a superset of the plain summary (extends by composition, per
     // format_layer_summary_with_stats's own doc comment).
     assert!(out.contains(&model.summary()));
+}
+
+#[test]
+fn the_summary_with_stats_method_matches_the_free_function_it_wraps() {
+    // `summary_with_stats` is a convenience over
+    // `format_layer_summary_with_stats(&layer_structure(""), stats(1))`.
+    // Asserting the two agree keeps the method from drifting into a second,
+    // separately-maintained formatter.
+    let model = Mlp::<TestBackend> {
+        fc1: Linear::build(()).unwrap(),
+        fc2: Linear::build(()).unwrap(),
+    };
+
+    assert_eq!(
+        model.summary_with_stats(1),
+        incin_core::nn::module::format_layer_summary_with_stats(
+            &model.layer_structure(""),
+            model.compute_stats(1).into_model_stats(),
+        )
+    );
 }

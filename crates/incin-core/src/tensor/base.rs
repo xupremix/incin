@@ -46,7 +46,7 @@ use core::marker::PhantomData;
 /// Creating and inspecting statically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
@@ -57,7 +57,7 @@ use core::marker::PhantomData;
 /// Using dynamically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::tensor::device::Cpu>;
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
 /// use incin::prelude::*;
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
@@ -631,12 +631,16 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         grad: G::Field,
     ) -> Result<Self> {
         validate_gradient_dtype::<B, K, G>(&dtype, &grad)?;
-        let expected = shape.shape_buf().as_ref().to_vec();
+        // Compared as slices: this runs on every shape-preserving operation, and
+        // allocating both sides to compare them cost two allocations per op on
+        // the path that succeeds. The error arm still owns its operands, but it
+        // only runs when the operation has already failed.
+        let expected = shape.shape_buf();
         let got = B::shape(&inner);
-        if expected != got.as_ref() {
+        if expected.as_ref() != got.as_ref() {
             return Err(Error::ShapeMismatch {
                 op: "from_shape_value",
-                expected,
+                expected: expected.as_ref().to_vec(),
                 got: got.as_ref().to_vec(),
                 msg: "Backend operation returned storage with an unexpected shape".into(),
             });
@@ -1276,53 +1280,7 @@ impl<
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::shapes::Dyn;
-
-    use alloc::vec;
-
-    #[test]
-    fn test_tensor_creation() {
-        let t: Tensor<
-            Dyn,
-            crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>,
-        > = Tensor::zeros(vec![2, 3]).unwrap();
-        assert_eq!(t.rank(), 2);
-        assert_eq!(t.numel(), 6);
-        assert_eq!(t.dims(), vec![2, 3]);
-    }
-
-    #[test]
-    fn test_tensor_ones() {
-        let t: Tensor<
-            Dyn,
-            crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>,
-        > = Tensor::ones(vec![4]).unwrap();
-        assert_eq!(t.rank(), 1);
-        assert_eq!(t.numel(), 4);
-    }
-
-    #[test]
-    // `DummyBackend`'s conv/pool shape math must never panic on a
-    /// pathological input, e.g. an input smaller than an (over-dilated)
-    /// kernel plus padding — `2*padding + input` underflowing `dilation *
-    /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in
-    /// debug builds (or silently wrap in release).
-    fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
-        type B = crate::tensor::backend::dummy::DummyBackend<crate::tensor::device::Cpu>;
-
-        // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`
-        // = 3*4+1 = 13, far larger than `input + 2*padding` = 2 + 0 = 2.
-        let input: <B as crate::tensor::backend::StorageBackend>::Storage<f32> =
-            alloc::vec![1, 1, 2, 2];
-        let weight: <B as crate::tensor::backend::StorageBackend>::Storage<f32> =
-            alloc::vec![1, 1, 5, 5];
-        let out = B::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
-        assert_eq!(out.len(), 4);
-
-        let pool_out = B::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
-        assert_eq!(pool_out.len(), 4);
-    }
-}
+// `Tensor`'s generic-over-`Backend` machinery is exercised in
+// `tests/constructor_ranks.rs` against the real CPU backend. A backend crate
+// cannot be linked into this crate's own unit tests without duplicating
+// `incin-core`, so the proofs live in the integration tests instead.

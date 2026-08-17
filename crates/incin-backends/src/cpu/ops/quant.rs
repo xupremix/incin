@@ -40,7 +40,7 @@ pub(crate) fn quantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
     }
     Ok(CpuStorage::from_contiguous(
         CpuBuffer::Q8_0(blocks),
-        t.shape.to_vec(),
+        &t.shape,
     ))
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn dequantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
     }
     Ok(CpuStorage::from_contiguous(
         CpuBuffer::F32(f32_data),
-        t.shape.to_vec(),
+        &t.shape,
     ))
 }
 
@@ -120,7 +120,7 @@ pub(crate) fn quantized_matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Re
     let mut out_data = alloc::vec![0.0f32; out_total];
     let blocks_per_row = k / 32;
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    let use_avx2 = is_x86_feature_detected!("avx2");
+    let use_avx2 = crate::simd::avx2_detected();
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     let use_avx2 = false;
     for i in 0..m {

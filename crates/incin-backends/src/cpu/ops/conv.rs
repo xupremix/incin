@@ -227,7 +227,7 @@ fn col2im_1d(
         }
     }
 
-    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape)
 }
 
 // ---------------------------------------------------------------------------
@@ -398,7 +398,7 @@ fn col2im_2d(
         }
     }
 
-    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape)
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +459,7 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
 
     let (input_capture, weight_capture) = (input.clone(), weight.clone());
     let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -639,7 +639,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
 
     let (input_capture, weight_capture) = (input.clone(), weight.clone());
     let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -827,7 +827,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DT
 
     let (input_capture, weight_capture) = (input.clone(), weight.clone());
     let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
-    tape::push(TapeEntry {
+    tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
@@ -969,10 +969,7 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
         )?;
     }
 
-    Ok(CpuStorage::from_contiguous(
-        CpuBuffer::F32(out),
-        out_shape.to_vec(),
-    ))
+    Ok(CpuStorage::from_contiguous(CpuBuffer::F32(out), &out_shape))
 }
 
 // ---------------------------------------------------------------------------
@@ -997,6 +994,28 @@ mod tests {
             CpuBuffer::F32(v) => v.clone(),
             _ => panic!("expected F32 buffer"),
         }
+    }
+
+    // --- output-size arithmetic edge cases ---
+
+    /// `out_size` subtracts an effective kernel from a padded input length.
+    /// When the kernel is larger than the padded input — here a 5x5 kernel
+    /// with dilation 3, an effective span of `3*4+1 = 13` against a padded
+    /// input of 2 — a raw `usize` subtraction underflows: a panic in debug
+    /// builds and a wrapped, astronomically large output extent in release.
+    /// The saturating form must instead produce an empty spatial extent and
+    /// return normally.
+    #[test]
+    fn conv2d_with_a_kernel_larger_than_its_input_yields_an_empty_output_not_a_panic() {
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![0.5; 25], vec![1, 1, 5, 5]);
+
+        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
+
+        assert_eq!(out.shape.as_ref(), &[1, 1, 1, 1]);
+        // `saturating_sub` floors the numerator at 0, so the formula's
+        // trailing `+ 1` leaves exactly one degenerate output position.
+        assert_eq!(f32_vec(&out).len(), 1);
     }
 
     // --- conv1d forward ---

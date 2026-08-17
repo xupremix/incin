@@ -2,7 +2,8 @@
 //! by trait resolution rather than reaching a runtime creation method.
 
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::prelude::{SupportsDType, Wgpu};
+use incin_core::backend_authoring::SupportsDType;
+use incin_core::prelude::Wgpu;
 
 fn requires_f64<B: SupportsDType<f64>>() {}
 
