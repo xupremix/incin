@@ -1604,6 +1604,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             )));
         }
 
+        let num_elements = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Storage,
+        )?;
+        if num_elements != 1 {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "to_scalar requires a tensor with exactly 1 element, but tensor has {num_elements} elements"
+            )));
+        }
+
         let bytes = B::to_bytes(&self.inner)?;
         let dtype = self.dtype();
 
@@ -1616,7 +1626,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
-            if bytes.is_empty() {
+            if bytes.len() != 1 {
                 return Err(crate::err::Error::Msg(
                     "cannot convert an empty tensor to a bool scalar".into(),
                 ));

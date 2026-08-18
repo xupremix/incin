@@ -5,7 +5,7 @@
 //!
 //! 1. **Which backend was this binary built to target?** Answered at compile
 //!    time by `BestDevice` / [`best_device!`](crate::best_device), from the
-//!    enabled Cargo features, in the order CUDA → WGPU → CPU.
+//!    enabled Cargo features, in the order CUDA -> Metal -> WGPU -> CPU.
 //! 2. **Which backend can actually run here?** Answered at runtime by probing
 //!    real hardware. That lives in `incin-backends::detect_device`, returns a
 //!    [`DeviceId`](crate::tensor::device::DeviceId), and is used with the fully
@@ -23,7 +23,7 @@
 //! Those rules exist because the build host and the run host are routinely
 //! different machines:
 //!
-//! * `docker build` does not expose the GPU even on a GPU host — `--gpus` is a
+//! * `docker build` does not expose the GPU even on a GPU host -- `--gpus` is a
 //!   *run* flag. A probing macro would compile every containerized deployment
 //!   to CPU, which is the most common way an ML binary ships.
 //! * Cross-compilation probes the wrong machine by construction.
@@ -36,17 +36,19 @@
 //! safe; probing at runtime is correct about the machine that actually
 //! executes. Between them there is no case left for probing at build time.
 
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 use crate::tensor::device::Cpu;
 #[cfg(feature = "cuda")]
 use crate::tensor::device::CudaN;
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+#[cfg(all(feature = "metal", not(feature = "cuda")))]
+use crate::tensor::device::MetalN;
+#[cfg(all(feature = "wgpu", not(any(feature = "cuda", feature = "metal"))))]
 use crate::tensor::device::WgpuN;
 
 /// The most capable device family this build can target, at ordinal 0.
 ///
 /// Resolved from the features enabled on `incin-core` itself, in the order
-/// CUDA → WGPU → CPU. `incin-backends` forwards its own `cuda`/`wgpu` features
+/// CUDA -> Metal -> WGPU -> CPU. `incin-backends` forwards its own `cuda`/`metal`/`wgpu` features
 /// here, so enabling `incin-backends/cuda` is what makes this `CudaN<U0>`.
 ///
 /// This names a *logical selector*. It does not assert that the hardware
@@ -68,28 +70,36 @@ use crate::tensor::device::WgpuN;
 pub type BestDevice = CudaN<typenum::U0>;
 
 /// The most capable device family this build can target, at ordinal 0.
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+#[cfg(all(feature = "metal", not(feature = "cuda")))]
+pub type BestDevice = MetalN<typenum::U0>;
+
+/// The most capable device family this build can target, at ordinal 0.
+#[cfg(all(feature = "wgpu", not(any(feature = "cuda", feature = "metal"))))]
 pub type BestDevice = WgpuN<typenum::U0>;
 
 /// The most capable device family this build can target, at ordinal 0.
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 pub type BestDevice = Cpu;
 
 /// [`BestDevice`] at a caller-chosen ordinal.
 ///
 /// `N` selects the device ordinal for the GPU families. The CPU has no
 /// ordinal, so when this build resolves to [`Cpu`] the parameter is accepted
-/// and ignored rather than failing to compile — code written for a GPU build
+/// and ignored rather than failing to compile -- code written for a GPU build
 /// still compiles on a CPU-only one, which is the whole point of the alias.
 #[cfg(feature = "cuda")]
 pub type BestDeviceAt<N> = CudaN<N>;
 
 /// [`BestDevice`] at a caller-chosen ordinal.
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+#[cfg(all(feature = "metal", not(feature = "cuda")))]
+pub type BestDeviceAt<N> = MetalN<N>;
+
+/// [`BestDevice`] at a caller-chosen ordinal.
+#[cfg(all(feature = "wgpu", not(any(feature = "cuda", feature = "metal"))))]
 pub type BestDeviceAt<N> = WgpuN<N>;
 
 /// [`BestDevice`] at a caller-chosen ordinal, which the CPU ignores.
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 pub type BestDeviceAt<N> = CpuAt<N>;
 
 /// [`Cpu`] carrying an ignored ordinal parameter.
@@ -97,17 +107,17 @@ pub type BestDeviceAt<N> = CpuAt<N>;
 /// Exists only so [`BestDeviceAt`] has the same arity in every build. A bare
 /// `type BestDeviceAt<N> = Cpu;` would also compile, but this spells out that
 /// the ordinal is deliberately discarded rather than accidentally dropped.
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 pub type CpuAt<N> = <(Cpu, core::marker::PhantomData<N>) as IgnoreOrdinal>::Device;
 
 /// Projects an ordinal-carrying pair back to its device.
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 pub trait IgnoreOrdinal {
     /// The device, with the ordinal discarded.
     type Device;
 }
 
-#[cfg(not(any(feature = "cuda", feature = "wgpu")))]
+#[cfg(not(any(feature = "cuda", feature = "metal", feature = "wgpu")))]
 impl<N> IgnoreOrdinal for (Cpu, core::marker::PhantomData<N>) {
     type Device = Cpu;
 }

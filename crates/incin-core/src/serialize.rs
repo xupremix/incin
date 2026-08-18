@@ -54,6 +54,7 @@ fn dtype_from_safetensors(dtype: safetensors::tensor::Dtype) -> anyhow::Result<D
 /// are arranged — and is deliberately independent of the crate version and of
 /// any individual dtype's own descriptor version. Bump it when a reader of the
 /// previous version would misread a file rather than fail to parse it.
+#[cfg(feature = "std")]
 pub const STATE_FORMAT_VERSION: u32 = 1;
 
 /// The safetensors metadata key carrying [`STATE_FORMAT_VERSION`].
@@ -138,13 +139,15 @@ pub(crate) fn deserialize_snapshot_safetensors(
         .transpose()?;
     accept_state_format_version(declared, "safetensors")?;
     for (name, view) in tensors.tensors() {
-        let role = metadata
-            .and_then(|items| items.get(&format!("incin.state.role.{}", name)))
-            .map(|role| match role.as_str() {
+        let role = match metadata.and_then(|items| items.get(&format!("incin.state.role.{}", name)))
+        {
+            Some(role_str) => match role_str.as_str() {
+                "parameter" => StateRole::Parameter,
                 "buffer" => StateRole::Buffer,
-                _ => StateRole::Parameter,
-            })
-            .unwrap_or(StateRole::Parameter);
+                other => anyhow::bail!("unknown state role {other:?} for entry {name}"),
+            },
+            None => StateRole::Parameter,
+        };
         snapshot.insert(
             StatePath::new(name)?,
             StateValue::new(
@@ -460,6 +463,34 @@ mod tests {
         // The current version and every earlier one stay readable, which is
         // what makes the check a compatibility boundary rather than a pin.
         assert!(accept_state_format_version(Some(STATE_FORMAT_VERSION), "postcard").is_ok());
+    }
+
+    #[test]
+    fn an_unknown_state_role_is_refused() {
+        let temp = tempfile::NamedTempFile::new().expect("temp file");
+        let path = temp.path().to_path_buf();
+        let data = vec![1u8, 2, 3, 4];
+        let view = safetensors::tensor::TensorView::new(safetensors::Dtype::U8, vec![1, 4], &data)
+            .expect("tensor view is built");
+        let mut views = BTreeMap::new();
+        views.insert("entry_0".to_string(), view);
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            STATE_FORMAT_VERSION_KEY.to_string(),
+            STATE_FORMAT_VERSION.to_string(),
+        );
+        metadata.insert(
+            "incin.state.role.entry_0".to_string(),
+            "invalid_role".to_string(),
+        );
+        safetensors::tensor::serialize_to_file(&views, Some(metadata), &path)
+            .expect("fixture file is written");
+
+        let error = deserialize_snapshot_safetensors(&path)
+            .expect_err("unknown state role must be refused")
+            .to_string();
+        assert!(error.contains("unknown state role"));
+        std::fs::remove_file(path).ok();
     }
 
     #[test]

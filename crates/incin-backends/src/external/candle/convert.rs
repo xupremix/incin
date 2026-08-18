@@ -12,8 +12,8 @@ pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
         #[cfg(feature = "cuda")]
         DeviceKind::Cuda => Ok(candle::Device::new_cuda(dev.ordinal())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-        #[cfg(feature = "wgpu")]
-        DeviceKind::Wgpu => Ok(candle::Device::new_metal(dev.ordinal())
+        #[cfg(feature = "metal")]
+        DeviceKind::Metal => Ok(candle::Device::new_metal(dev.ordinal())
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
         _ => Err(Error::UnsupportedBackendOperation {
             op: "to_candle_device",
@@ -32,7 +32,7 @@ pub fn from_candle_device(device: &candle::Device) -> Result<DeviceId> {
     match device.location() {
         candle::DeviceLocation::Cpu => Ok(DeviceId::cpu()),
         candle::DeviceLocation::Cuda { gpu_id } => Ok(DeviceId::cuda(gpu_id)),
-        candle::DeviceLocation::Metal { gpu_id } => Ok(DeviceId::wgpu(gpu_id)),
+        candle::DeviceLocation::Metal { gpu_id } => Ok(DeviceId::metal(gpu_id)),
     }
 }
 
