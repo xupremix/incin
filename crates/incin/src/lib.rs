@@ -445,7 +445,7 @@ pub mod nn {
 pub mod optim {
     pub use incin_core::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, OptimizerBackend,
-        ParameterGroup, SGD, clip_grad_norm,
+        ParameterGroup, SGD, clip_grad_norm, clip_grad_value,
     };
     #[cfg(feature = "std")]
     pub use incin_core::optim::{CosineAnnealingLR, StepLR};

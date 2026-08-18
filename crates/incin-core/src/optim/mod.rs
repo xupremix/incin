@@ -11,7 +11,7 @@ use crate::{
     backend_authoring::{Capabilities, Execute},
     exec::request::TensorHandle,
     exec::{
-        catalog::{NoAttributes, ScalarAttributes, op},
+        catalog::{ClampAttributes, NoAttributes, ScalarAttributes, op},
         dispatch,
     },
 };
@@ -198,6 +198,34 @@ where
     }
 }
 
+/// Per-element gradient clamping, as a capability separate from
+/// [`OptimizerBackend`] rather than a required method on it.
+///
+/// `Execute<op::Clamp>` is a CPU-only descriptor today — CUDA, WGPU, and
+/// Metal do not implement it. Making [`clip_grad_value`] a method on
+/// `OptimizerBackend` itself would have added that bound to every backend's
+/// existing, working conformance, breaking `Adam`/`SGD`/`AdamW` for every
+/// non-CPU backend the moment this landed. This trait exists so a backend
+/// that can already run `Adam` keeps being able to, whether or not it can
+/// also clamp; `clip_grad_value` requires this trait specifically, not
+/// `OptimizerBackend`.
+pub trait ValueClippingBackend<K: DType>: OptimizerBackend<K> {
+    /// Clamps every element of `storage` into `[min, max]`, independently of
+    /// every other element — the per-element counterpart to the group-wide
+    /// rescale [`clip_grad_norm`] performs.
+    fn optimizer_clamp(storage: &Self::Storage<K>, min: f64, max: f64) -> Result<Self::Storage<K>>;
+}
+
+impl<B, K: DType> ValueClippingBackend<K> for B
+where
+    B: OptimizerBackend<K> + Capabilities + Execute<op::Clamp>,
+    <B as Execute<op::Clamp>>::Output: Into<B::Storage<K>>,
+{
+    fn optimizer_clamp(storage: &B::Storage<K>, min: f64, max: f64) -> Result<B::Storage<K>> {
+        execute_clamp::<op::Clamp, B, K>(storage, min, max)
+    }
+}
+
 fn execute_binary<O, B, K>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>
 where
     O: crate::exec::catalog::Operation<Attributes = NoAttributes>,
@@ -250,6 +278,28 @@ where
     dispatch::execute_shaped::<O, B, Dyn>(&context, ScalarAttributes { value }, &[input], &expected)
         .map(Into::into)
         .map_err(Error::from)
+}
+
+fn execute_clamp<O, B, K>(storage: &B::Storage<K>, min: f64, max: f64) -> Result<B::Storage<K>>
+where
+    O: crate::exec::catalog::Operation<Attributes = ClampAttributes>,
+    B: VariableBackend + Capabilities + Execute<O>,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&B::shape(storage)))
+        .map_err(Error::Shape)?;
+    let input = TensorHandle::from_storage::<B, K, Local>(storage);
+    let context = crate::exec::ExecutionContext::from_scope(B::default())
+        .with_grad_mode(crate::exec::GradMode::Disabled);
+    dispatch::execute_shaped::<O, B, Dyn>(
+        &context,
+        ClampAttributes { min, max },
+        &[input],
+        &expected,
+    )
+    .map(Into::into)
+    .map_err(Error::from)
 }
 
 fn invalid_optimizer_config(operation: &'static str, reason: &'static str) -> Error {
@@ -616,6 +666,70 @@ where
         B::set_grad::<K>(&tensor, grads.as_backend_mut(), scaled)?;
     }
     Ok(total_norm)
+}
+
+/// Clamps every element of every gradient in a parameter group into
+/// `[-clip_value, clip_value]`, independently of every other element.
+///
+/// This is the per-element counterpart to [`clip_grad_norm`]'s group-wide
+/// rescale: a gradient with one exploding element and otherwise-reasonable
+/// ones is left with that one element flattened to the bound rather than
+/// having its whole direction rescaled by the outlier. The two are not
+/// interchangeable and neither dominates the other — `clip_grad_norm`
+/// preserves the gradient's direction, this does not.
+///
+/// Call it between the backward pass and [`Optimizer::step`], exactly where
+/// [`clip_grad_norm`] is called:
+///
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// use incin::optim::{ParameterGroup, clip_grad_value};
+/// use incin::prelude::*;
+///
+/// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
+/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let mut gradients = model.forward(input)?.sum_all()?.backward()?;
+///
+/// let group = ParameterGroup::<DefaultBackend, f32>::from_module(&model)?;
+/// clip_grad_value(&group, &mut gradients, 1.0)?;
+///
+/// let mut optimizer = SGD::<DefaultBackend>::from_module(&model, 0.01)?;
+/// optimizer.step(&gradients)?;
+/// # Ok(()) }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error when `clip_value` is not finite and positive, or when
+/// the backend refuses the clamp.
+pub fn clip_grad_value<B, K>(
+    params: &ParameterGroup<B, K>,
+    grads: &mut Gradients<B>,
+    clip_value: f64,
+) -> Result<()>
+where
+    B: VariableBackend + AutogradBackend + ValueClippingBackend<K>,
+    K: ConstDType,
+{
+    const OPERATION: &str = "clip_grad_value";
+    if !clip_value.is_finite() || clip_value <= 0.0 {
+        return Err(invalid_optimizer_config(
+            OPERATION,
+            "the clip value must be finite and greater than zero",
+        ));
+    }
+
+    for (_, var) in params.iter() {
+        let tensor = B::var_as_tensor::<K>(var)?;
+        let Some(grad) = B::get_grad::<K>(&tensor, grads.as_backend())? else {
+            continue;
+        };
+        let clamped = B::optimizer_clamp(&grad, -clip_value, clip_value)?;
+        B::set_grad::<K>(&tensor, grads.as_backend_mut(), clamped)?;
+    }
+    Ok(())
 }
 
 /// Stochastic Gradient Descent (SGD) optimizer.

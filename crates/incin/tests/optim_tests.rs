@@ -410,3 +410,106 @@ fn clipping_rejects_a_threshold_that_is_not_positive_and_finite() {
             .expect_err("a threshold of {threshold} must be refused");
     }
 }
+
+fn gradient_values(
+    group: &ParameterGroup<CpuBackendImpl, f32>,
+    grads: &incin::Gradients<CpuBackendImpl>,
+) -> Vec<f64> {
+    let mut values = Vec::new();
+    for (_, var) in group.iter() {
+        let tensor = <CpuBackendImpl as VariableBackend>::var_as_tensor::<f32>(var).unwrap();
+        if let Some(grad) =
+            <CpuBackendImpl as incin::backend_authoring::AutogradBackend>::get_grad::<f32>(
+                &tensor,
+                grads.as_backend(),
+            )
+            .unwrap()
+        {
+            values.extend(
+                <CpuBackendImpl as incin::backend_authoring::HostReadback>::float_to_vec1::<f32>(
+                    &grad,
+                )
+                .unwrap(),
+            );
+        }
+    }
+    values
+}
+
+/// `clip_grad_value` clamps every element independently into
+/// `[-clip_value, clip_value]`, unlike `clip_grad_norm`'s whole-set rescale:
+/// an element already inside the bound is untouched, one outside it is
+/// flattened exactly to the bound it crossed.
+#[test]
+fn clip_grad_value_clamps_every_element_independently() {
+    use incin::optim::clip_grad_value;
+
+    let model = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let group = ParameterGroup::<CpuBackendImpl, f32>::from_module(&model).unwrap();
+    let mut grads = grads_for(&model).unwrap();
+
+    let before = gradient_values(&group, &grads);
+    assert!(
+        before.iter().any(|&v| v.abs() > 0.0),
+        "the fixture must produce a non-zero gradient to clip"
+    );
+
+    // A bound tight enough that at least one element must actually clip,
+    // loose enough that at least one stays untouched, so both branches of
+    // the per-element clamp are exercised rather than only one.
+    let max_abs = before.iter().cloned().fold(0.0_f64, |a, b| a.max(b.abs()));
+    let clip_value = max_abs / 2.0;
+    assert!(
+        clip_value > 0.0,
+        "the fixture's largest-magnitude gradient must be nonzero"
+    );
+
+    clip_grad_value(&group, &mut grads, clip_value).unwrap();
+    let after = gradient_values(&group, &grads);
+
+    assert_eq!(before.len(), after.len());
+    assert!(
+        after.iter().any(|&v| (v.abs() - clip_value).abs() <= 1e-5),
+        "at least one element must have been flattened exactly to the bound"
+    );
+    for (&pre, &post) in before.iter().zip(after.iter()) {
+        assert!(
+            post.abs() <= clip_value + 1e-5,
+            "every element must be within the bound after clamping: {post} vs {clip_value}"
+        );
+        if pre.abs() <= clip_value {
+            assert!(
+                (pre - post).abs() <= 1e-5,
+                "an element already inside the bound must be left untouched: {pre} vs {post}"
+            );
+        }
+    }
+}
+
+/// A gradient set already inside the bound is left exactly as it was.
+#[test]
+fn clip_grad_value_below_the_bound_changes_nothing() {
+    use incin::optim::clip_grad_value;
+
+    let model = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let group = ParameterGroup::<CpuBackendImpl, f32>::from_module(&model).unwrap();
+    let mut grads = grads_for(&model).unwrap();
+
+    let before = gradient_values(&group, &grads);
+    clip_grad_value(&group, &mut grads, 1.0e9).unwrap();
+    assert_eq!(before, gradient_values(&group, &grads));
+}
+
+/// A non-positive bound is a configuration error, not a silent clamp to zero.
+#[test]
+fn clip_grad_value_rejects_a_bound_that_is_not_positive_and_finite() {
+    use incin::optim::clip_grad_value;
+
+    let model = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let group = ParameterGroup::<CpuBackendImpl, f32>::from_module(&model).unwrap();
+    let mut grads = grads_for(&model).unwrap();
+
+    for bound in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        clip_grad_value(&group, &mut grads, bound).expect_err("a bound of {bound} must be refused");
+    }
+}
