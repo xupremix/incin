@@ -127,38 +127,6 @@ impl MpsMatMulCandidate {
 pub const MATMUL_MPS_THRESHOLD: usize = 512;
 
 // ---------------------------------------------------------------------------
-// Normalization candidates
-// ---------------------------------------------------------------------------
-
-/// Execution path for layer-norm / batch-norm operations on Metal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MpsNormalizationCandidate {
-    /// Use `MPSGraph` normalization nodes.
-    MpsGraph,
-    /// Use incin's native MSL normalization kernel.
-    Native,
-}
-
-impl MpsNormalizationCandidate {
-    /// Returns the preferred candidate for the given normalized-axis length.
-    ///
-    /// MPS Graph normalization is most beneficial for wide normalization axes
-    /// where memory bandwidth is the bottleneck and MPSGraph can schedule its
-    /// own tiling.
-    #[must_use]
-    pub fn preferred(norm_size: usize) -> Self {
-        if MPS_AVAILABLE && norm_size >= NORMALIZATION_MPS_THRESHOLD {
-            Self::MpsGraph
-        } else {
-            Self::Native
-        }
-    }
-}
-
-/// Normalization-size threshold above which MPSGraph normalization is preferred.
-pub const NORMALIZATION_MPS_THRESHOLD: usize = 512;
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -210,16 +178,6 @@ mod tests {
         // the threshold.
         let tall_narrow = MpsMatMulCandidate::preferred(MATMUL_MPS_THRESHOLD + 1, 1, 1);
         assert_eq!(tall_narrow, MpsMatMulCandidate::Native);
-    }
-
-    #[test]
-    fn normalization_candidate_thresholds_are_consistent() {
-        const {
-            assert!(NORMALIZATION_MPS_THRESHOLD > 0);
-        }
-
-        let small = MpsNormalizationCandidate::preferred(NORMALIZATION_MPS_THRESHOLD - 1);
-        assert_eq!(small, MpsNormalizationCandidate::Native);
     }
 
     #[test]

@@ -3,13 +3,12 @@
 use core::marker::PhantomData;
 
 use incin_core::backend_authoring::*;
-use incin_core::error::{BackendError, Error, Result};
+use incin_core::error::{Error, Result};
 use incin_core::exec::TensorMeta;
 use incin_core::shapes::ShapeBuf;
-use incin_core::shapes::ShapeError;
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Metal};
-use incin_core::tensor::dtype::{ConstDType, DType, DTypeDescriptor, FloatDType, QuantDType};
+use incin_core::tensor::dtype::{DType, DTypeDescriptor};
 
 pub(crate) use crate::metal::capability::validate_metal_storage_dtype;
 use crate::metal::storage::{MetalStorage, MetalStorageMode};
@@ -141,7 +140,7 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<
 impl<D: Device> MetalBackendImpl<D> {
     /// `full`. Same host-fill-then-upload pattern `ones` above already
     /// uses.
-    pub fn full<K: DType>(
+    pub(crate) fn full<K: DType>(
         val: f64,
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -156,7 +155,7 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
     /// `arange`.
-    pub fn arange<K: DType>(
+    pub(crate) fn arange<K: DType>(
         start: f64,
         step: f64,
         shape: &[usize],
@@ -172,7 +171,7 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
     /// `linspace`.
-    pub fn linspace<K: DType>(
+    pub(crate) fn linspace<K: DType>(
         start: f64,
         end: f64,
         shape: &[usize],
@@ -195,7 +194,7 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    pub fn zeros<K: DType>(
+    pub(crate) fn zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -210,7 +209,7 @@ impl<D: Device> MetalBackendImpl<D> {
         )
     }
 
-    pub fn ones<K: DType>(
+    pub(crate) fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -224,7 +223,7 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    pub fn rand<K: DType>(
+    pub(crate) fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -238,7 +237,7 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
-    pub fn randn<K: DType>(
+    pub(crate) fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -250,42 +249,6 @@ impl<D: Device> MetalBackendImpl<D> {
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
-    }
-
-    pub fn var_zeros<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::Var<K>> {
-        let s = Self::zeros::<K>(shape, dtype, device)?;
-        Ok(MetalVar { storage: s })
-    }
-
-    pub fn var_ones<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::Var<K>> {
-        let s = Self::ones::<K>(shape, dtype, device)?;
-        Ok(MetalVar { storage: s })
-    }
-
-    pub fn var_rand<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::Var<K>> {
-        let s = Self::rand::<K>(shape, dtype, device)?;
-        Ok(MetalVar { storage: s })
-    }
-
-    pub fn var_randn<K: DType>(
-        shape: &[usize],
-        dtype: DTypeDescriptor,
-        device: &DeviceId,
-    ) -> Result<<Self as VariableBackend>::Var<K>> {
-        let s = Self::randn::<K>(shape, dtype, device)?;
-        Ok(MetalVar { storage: s })
     }
 }
 
@@ -430,128 +393,6 @@ fn scalar_op_metal(
 ) -> Result<MetalStorage> {
     let s_f32 = scalar as f32;
     unary_op_metal(t, move |x| f(x, s_f32))
-}
-
-/// Builds a fresh contiguous F32 `MetalStorage` of `shape` from `data`,
-/// reusing `t`'s dtype/device/mode/ordinal — the same
-/// `TensorMeta::contiguous` + `MetalStorage::from_bytes` construction
-/// `binary_op_metal`/`unary_op_metal` above already use, factored out for
-/// the structural/index ops below, which build a fresh shape rather than
-/// reusing the input's.
-fn upload_f32_metal(t: &MetalStorage, shape: Vec<usize>, data: Vec<f32>) -> Result<MetalStorage> {
-    let out_bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
-    let meta = TensorMeta::contiguous(
-        ShapeBuf::from_slice(&shape),
-        t.metadata().dtype(),
-        t.device(),
-        MetalStorage::alignment(),
-        data.len(),
-    )?;
-    MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
-}
-
-/// Shared implementation for `max_all`/`min_all`: reduces to a scalar and
-/// wires a gradient that routes `grad_out`'s value to only the winning
-/// element's original position, matching CPU's own `max_all`/`min_all`
-/// exactly (first-encountered winner under a strict `>`/`<` comparison).
-fn extremum_all_metal(t: &MetalStorage, is_max: bool) -> Result<MetalStorage> {
-    let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-    let mut best_val = if is_max {
-        f32::NEG_INFINITY
-    } else {
-        f32::INFINITY
-    };
-    let mut best_flat = 0usize;
-    for (flat, &v) in data.iter().enumerate() {
-        if (is_max && v > best_val) || (!is_max && v < best_val) {
-            best_val = v;
-            best_flat = flat;
-        }
-    }
-    let out = upload_f32_metal(t, vec![], vec![best_val])?;
-
-    let total = data.len();
-    let (t_id, out_id) = (t.id(), out.id());
-    crate::metal::tape::push(crate::metal::tape::TapeEntry {
-        output_id: out_id,
-        input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &MetalStorage| {
-            let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
-            let mut vals = vec![0.0f32; total];
-            vals[best_flat] = grad_data[0];
-            upload_f32_metal(grad_out, vec![total], vals).map(|s| vec![s])
-        }),
-    });
-    Ok(out)
-}
-
-/// Shared implementation for `max_dim`/`min_dim`/`max_keepdim`/`min_keepdim`:
-/// reduces along `dim`, recording each output position's winning source
-/// position, and wires a gradient that scatters `grad_out`'s value to only
-/// those recorded positions — matching CPU's own `max_axis_with_indices`/
-/// `scatter_axis_grad` exactly.
-fn extremum_dim_metal(
-    t: &MetalStorage,
-    dim: usize,
-    keepdim: bool,
-    is_max: bool,
-) -> Result<MetalStorage> {
-    let in_shape = t.metadata().shape().dims().to_vec();
-    let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-    let mut keep_shape = in_shape.clone();
-    keep_shape[dim] = 1;
-    let out_total = num_elements(&keep_shape)?;
-    let mut best_val = vec![
-        if is_max {
-            f32::NEG_INFINITY
-        } else {
-            f32::INFINITY
-        };
-        out_total
-    ];
-    let mut best_flat_src = vec![0usize; out_total];
-    let out_strides = crate::layout::contiguous_strides(&keep_shape);
-
-    let src_total = num_elements(&in_shape)?;
-    let mut idx = vec![0usize; in_shape.len()];
-    for (src_flat, &v) in data.iter().take(src_total).enumerate() {
-        let mut out_idx = idx.clone();
-        out_idx[dim] = 0;
-        let flat_out: usize = out_idx
-            .iter()
-            .zip(out_strides.iter())
-            .map(|(&i, &s)| i * s)
-            .sum();
-        if (is_max && v > best_val[flat_out]) || (!is_max && v < best_val[flat_out]) {
-            best_val[flat_out] = v;
-            best_flat_src[flat_out] = src_flat;
-        }
-        crate::layout::increment_index(&mut idx, &in_shape);
-    }
-
-    let out_shape = if keepdim {
-        keep_shape
-    } else {
-        let mut s = in_shape.clone();
-        s.remove(dim);
-        s
-    };
-    let out = upload_f32_metal(t, out_shape, best_val)?;
-
-    let (t_id, out_id) = (t.id(), out.id());
-    crate::metal::tape::push(crate::metal::tape::TapeEntry {
-        output_id: out_id,
-        input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &MetalStorage| {
-            let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
-            let mut vals = vec![0.0f32; src_total];
-            for (flat_out, &g) in grad_data.iter().enumerate().take(out_total) {
-                vals[best_flat_src[flat_out]] = g;
-            }
-            upload_f32_metal(grad_out, in_shape.clone(), vals).map(|s| vec![s])
-        }),
-    });
-    Ok(out)
 }
 
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
@@ -785,7 +626,7 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
 // ───  ─────────────────────────────────────────────────────────────
 
 impl<D: Device> MetalBackendImpl<D> {
-    pub fn add<K: DType>(
+    pub(crate) fn add<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -808,7 +649,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn sub<K: DType>(
+    pub(crate) fn sub<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -832,7 +673,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn mul<K: DType>(
+    pub(crate) fn mul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -858,7 +699,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn div<K: DType>(
+    pub(crate) fn div<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -900,7 +741,7 @@ impl<D: Device> MetalBackendImpl<D> {
         binary: atan2, fmod, remainder;
     }
 
-    pub fn add_scalar_float<K: DType>(
+    pub(crate) fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -914,7 +755,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn mul_scalar_float<K: DType>(
+    pub(crate) fn mul_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -929,459 +770,12 @@ impl<D: Device> MetalBackendImpl<D> {
         });
         Ok(out)
     }
-
-    pub fn relu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| if x > 0.0 { x } else { 0.0 })?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| if x > 0.0 { 1.0 } else { 0.0 })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "relu_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn step<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| if x > 0.0 { 1.0 } else { 0.0 })?;
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                Ok(vec![scalar_op_metal(grad_out, 0.0, |_, _| 0.0)?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn elu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| if x > 0.0 { x } else { x.exp() - 1.0 })?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| if x > 0.0 { 1.0 } else { x.exp() })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "elu_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn gelu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| {
-            0.5 * x
-                * (1.0 + ((2.0 / std::f32::consts::PI).sqrt() * (x + 0.044715 * x * x * x)).tanh())
-        })?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| {
-                    let c = (2.0 / std::f32::consts::PI).sqrt();
-                    let inner = c * (x + 0.044715 * x.powi(3));
-                    let tanh_inner = inner.tanh();
-                    let dtanh = 1.0 - tanh_inner * tanh_inner;
-                    0.5 * (1.0 + tanh_inner) + 0.5 * x * dtanh * c * (1.0 + 3.0 * 0.044715 * x * x)
-                })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "gelu_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn mish<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x * (1.0 + x.exp()).ln().tanh())?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| {
-                    let sp = (1.0 + x.exp()).ln();
-                    let tsp = sp.tanh();
-                    let sig = 1.0 / (1.0 + (-x).exp());
-                    tsp + x * sig * (1.0 - tsp * tsp)
-                })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "mish_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn tanh<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x.tanh())?;
-        let out_cap = out.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&out_cap, |y| 1.0 - y * y)?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "tanh_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn sigmoid<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| 1.0 / (1.0 + (-x).exp()))?;
-        let out_cap = out.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&out_cap, |y| y * (1.0 - y))?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "sigmoid_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn abs<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x.abs())?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| {
-                    if x > 0.0 {
-                        1.0
-                    } else if x < 0.0 {
-                        -1.0
-                    } else {
-                        0.0
-                    }
-                })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "abs_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn neg<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| -x)?;
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                Ok(vec![unary_op_metal(grad_out, |x| -x)?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn sqrt<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x.sqrt())?;
-        let out_cap = out.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&out_cap, |y| 1.0 / (2.0 * y))?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "sqrt_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn exp<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x.exp())?;
-        let out_cap = out.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &out_cap,
-                    "exp_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn log<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x.ln())?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| 1.0 / x)?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "log_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn swish<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = unary_op_metal(t, |x| x / (1.0 + (-x).exp()))?;
-        let t_cap = t.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let deriv = unary_op_metal(&t_cap, |x| {
-                    let sig = 1.0 / (1.0 + (-x).exp());
-                    sig + x * sig * (1.0 - sig)
-                })?;
-                Ok(vec![binary_op_metal(
-                    grad_out,
-                    &deriv,
-                    "swish_grad",
-                    |x, y| x * y,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn softmax<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        if dim >= dims.len() {
-            return Err(Error::ShapeMismatch {
-                op: "softmax",
-                expected: vec![dims.len()],
-                got: vec![dim],
-                msg: "softmax dim out of bounds".to_string(),
-            });
-        }
-        let exp_t = unary_op_metal(t, |x| x.exp())?;
-        let sum_exp = sum_dim_impl(&exp_t, dim, true)?;
-        let out = binary_op_metal(&exp_t, &sum_exp, "softmax_div", |x, y| x / y)?;
-
-        let out_cap = out.clone();
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let g_times_s = binary_op_metal(grad_out, &out_cap, "sm_grad_prod", |x, y| x * y)?;
-                let sum_g_times_s = sum_dim_impl(&g_times_s, dim, true)?;
-                let sub = binary_op_metal(grad_out, &sum_g_times_s, "sm_grad_sub", |x, y| x - y)?;
-                Ok(vec![binary_op_metal(&out_cap, &sub, "sm_grad", |x, y| {
-                    x * y
-                })?])
-            }),
-        });
-        Ok(out)
-    }
 }
 
 // ───  ───────────────────────────────────────────────────────────
 
 impl<D: Device> MetalBackendImpl<D> {
-    /// `max_all`. Same host round-trip as `sum_all` above, plus a real
-    /// gradient matching CPU's own: the winning element's flat position is
-    /// recorded and only that position receives `grad_out`'s value on the
-    /// way back, everything else zero.
-    pub fn max_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_all_metal(t, true)
-    }
-    /// `min_all`. Mirror of `max_all` with a strict `<` comparison.
-    pub fn min_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_all_metal(t, false)
-    }
-    /// `prod_all`. Same host round-trip as `sum_all`. Not autograd-wired,
-    /// matching CPU.
-    pub fn prod_all<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let product: f32 = data.iter().product();
-        upload_f32_metal(t, vec![], vec![product])
-    }
-
-    /// `max_dim`. Same host round-trip as `sum_dim`, plus the same
-    /// winning-position gradient routing as `max_all`.
-    pub fn max_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_dim_metal(t, dim, false, true)
-    }
-    /// `min_dim`.
-    pub fn min_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_dim_metal(t, dim, false, false)
-    }
-    /// `max_keepdim`.
-    pub fn max_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_dim_metal(t, dim, true, true)
-    }
-    /// `min_keepdim`.
-    pub fn min_keepdim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        extremum_dim_metal(t, dim, true, false)
-    }
-    /// `prod_dim`. Same host round-trip as `sum_dim`. Not autograd-wired,
-    /// matching CPU.
-    pub fn prod_dim<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let mut out_shape = in_shape.clone();
-        out_shape.remove(dim);
-        let mut keep_shape = in_shape.clone();
-        keep_shape[dim] = 1;
-        let out_total = num_elements(&keep_shape)?;
-        let mut prods = vec![1.0f32; out_total];
-        let out_strides = crate::layout::contiguous_strides(&keep_shape);
-        let src_total = num_elements(&in_shape)?;
-        let mut idx = vec![0usize; in_shape.len()];
-        for &value in data.iter().take(src_total) {
-            let mut out_idx = idx.clone();
-            out_idx[dim] = 0;
-            let flat_out: usize = out_idx
-                .iter()
-                .zip(out_strides.iter())
-                .map(|(&i, &s)| i * s)
-                .sum();
-            prods[flat_out] *= value;
-            crate::layout::increment_index(&mut idx, &in_shape);
-        }
-        upload_f32_metal(t, out_shape, prods)
-    }
-    /// `cumsum`. Same host round-trip as `sum_dim`. Not autograd-wired,
-    /// matching CPU.
-    pub fn cumsum<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let total = num_elements(&in_shape)?;
-        let dim_len = in_shape[dim];
-        let strides = crate::layout::contiguous_strides(&in_shape);
-        let mut out = vec![0.0f32; total];
-        let mut idx = vec![0usize; in_shape.len()];
-        for _ in 0..total {
-            if idx[dim] == 0 {
-                let mut current = 0.0f32;
-                let mut step_idx = idx.clone();
-                for step in 0..dim_len {
-                    step_idx[dim] = step;
-                    let flat: usize = step_idx
-                        .iter()
-                        .zip(strides.iter())
-                        .map(|(&i, &s)| i * s)
-                        .sum();
-                    current += data[flat];
-                    out[flat] = current;
-                }
-            }
-            crate::layout::increment_index(&mut idx, &in_shape);
-        }
-        upload_f32_metal(t, in_shape, out)
-    }
-
-    pub fn sum_dim<K: DType>(
+    pub(crate) fn sum_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1398,7 +792,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn sum_keepdim<K: DType>(
+    pub(crate) fn sum_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1415,7 +809,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn mean_dim<K: DType>(
+    pub(crate) fn mean_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1434,7 +828,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn mean_keepdim<K: DType>(
+    pub(crate) fn mean_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1453,7 +847,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn sum_all<K: DType>(
+    pub(crate) fn sum_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
@@ -1486,7 +880,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn mean_all<K: DType>(
+    pub(crate) fn mean_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
@@ -1495,862 +889,12 @@ impl<D: Device> MetalBackendImpl<D> {
         let sum = Self::sum_all::<K>(t)?;
         scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
     }
-
-    pub fn argmax<K: DType, KInt: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        Err(unsupported("argmax"))
-    }
-
-    pub fn argmin<K: DType, KInt: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        Err(unsupported("argmin"))
-    }
-
-    pub fn topk<K: DType, KInt: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _k: usize,
-        _dim: usize,
-        _largest: bool,
-    ) -> Result<(
-        <Self as StorageBackend>::Storage<K>,
-        <Self as StorageBackend>::Storage<KInt>,
-    )> {
-        Err(unsupported("topk"))
-    }
-
-    pub fn argsort<K: DType, KInt: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _dim: usize,
-        _descending: bool,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        Err(unsupported("argsort"))
-    }
 }
 
 // ───  ──────────────────────────────────────────────────────────────
 
 impl<D: Device> MetalBackendImpl<D> {
-    /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
-    /// shape via the already tape-wired `broadcast_as` above (itself a
-    /// `binary_op_metal` trick — a zeros tensor of the target shape
-    /// combined via broadcasting — not a new host round-trip;
-    /// `crate::layout::broadcast_shape` computes that shape, the same
-    /// resolver CPU's own `where_cond` and every other backend's port use),
-    /// then selects elementwise from `as_bytes()`. Its own backward routes
-    /// each `grad_out` element to `grad_true`/`grad_false` by the mask
-    /// while still in the broadcasted shape; unbroadcasting each back down
-    /// to `on_true`'s/`on_false`'s own shape happens automatically as the
-    /// tape walk continues into `broadcast_as`'s own backward for whichever
-    /// operand was not already at the common shape. `mask` itself gets no
-    /// gradient, matching CPU.
-    pub fn where_cond<K: DType>(
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        on_true: &<Self as StorageBackend>::Storage<K>,
-        on_false: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out_shape = crate::layout::broadcast_shape(
-            on_true.metadata().shape().dims(),
-            on_false.metadata().shape().dims(),
-        )?;
-        let mask_b = Self::broadcast_as::<bool>(mask, &out_shape)?;
-        let true_b = Self::broadcast_as::<K>(on_true, &out_shape)?;
-        let false_b = Self::broadcast_as::<K>(on_false, &out_shape)?;
-
-        let mask_data: &[f32] = bytemuck::cast_slice(mask_b.as_bytes()?);
-        let true_data: &[f32] = bytemuck::cast_slice(true_b.as_bytes()?);
-        let false_data: &[f32] = bytemuck::cast_slice(false_b.as_bytes()?);
-        let out: Vec<f32> = mask_data
-            .iter()
-            .zip(true_data.iter())
-            .zip(false_data.iter())
-            .map(|((&m, &t), &f)| if m != 0.0 { t } else { f })
-            .collect();
-        let out_storage = upload_f32_metal(&true_b, out_shape, out)?;
-
-        let mask_cap = mask_b.clone();
-        let (true_id, false_id, out_id) = (true_b.id(), false_b.id(), out_storage.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![true_id, false_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let mask_data: &[f32] = bytemuck::cast_slice(mask_cap.as_bytes()?);
-                let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
-                let mut grad_true = Vec::with_capacity(grad_data.len());
-                let mut grad_false = Vec::with_capacity(grad_data.len());
-                for (&m, &g) in mask_data.iter().zip(grad_data.iter()) {
-                    if m != 0.0 {
-                        grad_true.push(g);
-                        grad_false.push(0.0);
-                    } else {
-                        grad_true.push(0.0);
-                        grad_false.push(g);
-                    }
-                }
-                let grad_shape = grad_out.metadata().shape().dims().to_vec();
-                let g_true = upload_f32_metal(grad_out, grad_shape.clone(), grad_true)?;
-                let g_false = upload_f32_metal(grad_out, grad_shape, grad_false)?;
-                Ok(vec![g_true, g_false])
-            }),
-        });
-        Ok(out_storage)
-    }
-
-    /// `gather`. Forward is the same host round-trip as `index_select`.
-    /// Unlike `index_select`/`scatter`, CPU wires a real gradient for
-    /// `gather`, so this does too, matching every other backend's port:
-    /// its backward is the matching scatter-add, routing each `grad_out`
-    /// element back to the position it was gathered from, accumulating
-    /// with `+=` rather than overwriting when two output positions share a
-    /// source. `index` itself gets no gradient, matching CPU.
-    pub fn gather<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let index_shape = index.metadata().shape().dims().to_vec();
-        let index_data: Vec<f32> = bytemuck::cast_slice(index.as_bytes()?).to_vec();
-        let strides = crate::layout::contiguous_strides(&in_shape);
-        let out_shape = index_shape.clone();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for &target in index_data.iter().take(total) {
-            let target_i = target as usize;
-            let mut src_flat = 0usize;
-            for (axis, &stride) in strides.iter().enumerate() {
-                let coord = if axis == dim { target_i } else { idx[axis] };
-                src_flat += coord * stride;
-            }
-            out.push(data[src_flat]);
-            if !out_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &out_shape);
-            }
-        }
-        let out_storage = upload_f32_metal(t, out_shape.clone(), out)?;
-
-        let (t_id, out_id) = (t.id(), out_storage.id());
-        let t_shape = in_shape.clone();
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let grad_out_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
-                let t_total = num_elements(&t_shape)?;
-                let mut grad_t_data = vec![0.0f32; t_total];
-                let index_total = num_elements(&out_shape)?;
-                let mut idx = vec![0usize; out_shape.len()];
-                for i in 0..index_total {
-                    let target_i = index_data[i] as usize;
-                    let mut flat_dst = 0usize;
-                    for (axis, &stride) in strides.iter().enumerate() {
-                        let coord = if axis == dim { target_i } else { idx[axis] };
-                        flat_dst += coord * stride;
-                    }
-                    grad_t_data[flat_dst] += grad_out_data[i];
-                    if !out_shape.is_empty() {
-                        crate::layout::increment_index(&mut idx, &out_shape);
-                    }
-                }
-                upload_f32_metal(grad_out, t_shape.clone(), grad_t_data).map(|s| vec![s])
-            }),
-        });
-        Ok(out_storage)
-    }
-
-    /// `scatter`. Same host round-trip as `index_select`, matching CPU's
-    /// semantics exactly, including silently ignoring an out-of-bounds
-    /// destination position rather than erroring. Not autograd-wired,
-    /// matching CPU.
-    pub fn scatter<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-        src: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let mut out_data: Vec<f32> = bytemuck::cast_slice(t.as_bytes()?).to_vec();
-        let index_shape = index.metadata().shape().dims().to_vec();
-        let index_data: &[f32] = bytemuck::cast_slice(index.as_bytes()?);
-        let src_data: &[f32] = bytemuck::cast_slice(src.as_bytes()?);
-        let strides = crate::layout::contiguous_strides(&in_shape);
-        let index_total = num_elements(&index_shape)?;
-        let mut idx = vec![0usize; index_shape.len()];
-        for i in 0..index_total {
-            let target_i = index_data[i] as usize;
-            let mut flat_dest = 0usize;
-            for (axis, &stride) in strides.iter().enumerate() {
-                let coord = if axis == dim { target_i } else { idx[axis] };
-                flat_dest += coord * stride;
-            }
-            if flat_dest < out_data.len() {
-                out_data[flat_dest] = src_data[i];
-            }
-            if !index_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &index_shape);
-            }
-        }
-        upload_f32_metal(t, in_shape, out_data)
-    }
-
-    /// `group_norm`. Metal storage is always contiguous, so a group (the
-    /// per-sample run of `channels/groups * spatial` elements — see the CPU
-    /// implementation's doc comment for why dividing the whole tensor by
-    /// `groups` is wrong above batch size 1) is a plain contiguous slice of
-    /// `as_bytes()`'s output, needing no strided indexing at all — the same
-    /// simplification WGPU's and CUDA's own ports of this method have. Not
-    /// autograd-wired, matching CPU.
-    pub fn group_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        groups: usize,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if groups == 0 {
-            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
-        }
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let channels = if in_shape.len() >= 2 { in_shape[1] } else { 1 };
-        if channels % groups != 0 {
-            return Err(Error::Msg(
-                "group_norm: channels must be divisible by groups".into(),
-            ));
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let total = data.len();
-        let (batch, spatial) = if in_shape.len() >= 2 {
-            (in_shape[0], in_shape[2..].iter().product::<usize>())
-        } else {
-            (1, total)
-        };
-        let group_size = channels / groups * spatial;
-        let mut out = vec![0.0f32; total];
-        for run in 0..batch * groups {
-            let start = run * group_size;
-            let slice = &data[start..start + group_size];
-            let sum: f64 = slice.iter().map(|&v| v as f64).sum();
-            let sq_sum: f64 = slice.iter().map(|&v| (v as f64) * (v as f64)).sum();
-            let mean = sum / group_size as f64;
-            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
-            let inv_std = 1.0 / (var + eps).sqrt();
-            for (i, &value) in slice.iter().enumerate() {
-                out[start + i] = ((value as f64 - mean) * inv_std) as f32;
-            }
-        }
-        upload_f32_metal(t, in_shape, out)
-    }
-
-    /// `instance_norm`. `group_norm` with one group per channel, matching
-    /// every other backend's own composition exactly.
-    pub fn instance_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let channels = if t.metadata().shape().dims().len() >= 2 {
-            t.metadata().shape().dims()[1]
-        } else {
-            1
-        };
-        Self::group_norm::<K>(t, channels, eps)
-    }
-
-    /// `index_select`. Same host round-trip as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn index_select<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let index_data: &[f32] = bytemuck::cast_slice(index.as_bytes()?);
-        let in_strides = crate::layout::contiguous_strides(&in_shape);
-        let mut out_shape = in_shape.clone();
-        out_shape[dim] = index_data.len();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut out_idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let selected = index_data[out_idx[dim]] as usize;
-            let mut src_flat = 0usize;
-            for (axis, &pos) in out_idx.iter().enumerate() {
-                let coord = if axis == dim { selected } else { pos };
-                src_flat += coord * in_strides[axis];
-            }
-            out.push(data[src_flat]);
-            if !out_shape.is_empty() {
-                crate::layout::increment_index(&mut out_idx, &out_shape);
-            }
-        }
-        upload_f32_metal(t, out_shape, out)
-    }
-
-    /// `masked_fill`. Same host round-trip as `repeat`. Not
-    /// autograd-wired, matching CPU. Unlike CPU's own version, checks `t`'s
-    /// and `mask`'s shapes match exactly rather than silently assuming it.
-    pub fn masked_fill<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        value: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let mask_shape = mask.metadata().shape().dims().to_vec();
-        if in_shape != mask_shape {
-            return Err(Error::ShapeMismatch {
-                op: "masked_fill",
-                expected: in_shape,
-                got: mask_shape,
-                msg: "mask must match the operand's shape exactly".to_string(),
-            });
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let mask_data: &[f32] = bytemuck::cast_slice(mask.as_bytes()?);
-        let value = value as f32;
-        let out: Vec<f32> = data
-            .iter()
-            .zip(mask_data.iter())
-            .map(|(&v, &m)| if m != 0.0 { value } else { v })
-            .collect();
-        upload_f32_metal(t, in_shape, out)
-    }
-
-    /// `unfold`. Same host round-trip as `repeat`. Not autograd-wired,
-    /// matching CPU.
-    pub fn unfold<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        size: usize,
-        step: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let dim_len = in_shape[dim];
-        if size > dim_len {
-            return Err(Error::Msg(
-                "unfold size cannot exceed dimension length".into(),
-            ));
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let in_strides = crate::layout::contiguous_strides(&in_shape);
-        let n_windows = (dim_len - size) / step + 1;
-        let mut out_shape = in_shape.clone();
-        out_shape[dim] = n_windows;
-        out_shape.push(size);
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let win_idx = idx[dim];
-            let offset_idx = idx[out_shape.len() - 1];
-            let mut src_flat = 0usize;
-            for (axis, &stride) in in_strides.iter().enumerate() {
-                let coord = if axis == dim {
-                    win_idx * step + offset_idx
-                } else {
-                    idx[axis]
-                };
-                src_flat += coord * stride;
-            }
-            out.push(data[src_flat]);
-            crate::layout::increment_index(&mut idx, &out_shape);
-        }
-        upload_f32_metal(t, out_shape, out)
-    }
-
-    /// `pixel_shuffle`. Same host round-trip as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn pixel_shuffle<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        upscale_factor: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        if in_shape.len() != 4 {
-            return Err(Error::Msg(
-                "pixel_shuffle expects a 4D tensor (N, C, H, W)".into(),
-            ));
-        }
-        let (n, c, h, w) = (in_shape[0], in_shape[1], in_shape[2], in_shape[3]);
-        let r = upscale_factor;
-        let r_sq = r * r;
-        if c % r_sq != 0 {
-            return Err(Error::Msg(
-                "pixel_shuffle channels must be divisible by upscale_factor^2".into(),
-            ));
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let in_strides = crate::layout::contiguous_strides(&in_shape);
-        let out_c = c / r_sq;
-        let out_shape = vec![n, out_c, h * r, w * r];
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; 4];
-        for _ in 0..total {
-            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
-            let h_in = h_out / r;
-            let w_in = w_out / r;
-            let r_h = h_out % r;
-            let r_w = w_out % r;
-            let c_in = c_out * r_sq + r_h * r + r_w;
-            let src_flat = b * in_strides[0]
-                + c_in * in_strides[1]
-                + h_in * in_strides[2]
-                + w_in * in_strides[3];
-            out.push(data[src_flat]);
-            crate::layout::increment_index(&mut idx, &out_shape);
-        }
-        upload_f32_metal(t, out_shape, out)
-    }
-
-    /// `repeat`. Metal storage is plain host bytes (`MetalStorage::as_bytes`),
-    /// so like the elementwise ops above this reads directly with no
-    /// download step, repeats with the same row-major walk CPU's own
-    /// `repeat` uses (reusing `crate::layout::contiguous_strides` and
-    /// `crate::layout::increment_index`, both already `pub(crate)`),
-    /// and builds the result via `upload_f32_metal`. Not autograd-wired,
-    /// matching CPU.
-    pub fn repeat<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        repeats: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        if repeats.len() != in_shape.len() {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Repeat,
-                reason: "repeat factors must match tensor rank",
-            }));
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let in_strides = crate::layout::contiguous_strides(&in_shape);
-        let out_shape: Vec<usize> = in_shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let src_flat: usize = idx
-                .iter()
-                .zip(in_shape.iter())
-                .zip(in_strides.iter())
-                .map(|((&s, &dim), &stride)| (s % dim) * stride)
-                .sum();
-            out.push(data[src_flat]);
-            if !out_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &out_shape);
-            }
-        }
-        upload_f32_metal(t, out_shape, out)
-    }
-
-    /// `pad`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
-    pub fn pad<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        padding: &[(usize, usize)],
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let in_strides = crate::layout::contiguous_strides(&in_shape);
-        let out_shape: Vec<usize> = in_shape
-            .iter()
-            .zip(padding)
-            .map(|(&s, &(before, after))| s + before + after)
-            .collect();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        let val = val as f32;
-        for _ in 0..total {
-            let mut inside = true;
-            let mut src_flat = 0usize;
-            for (axis, &p) in idx.iter().enumerate() {
-                let (before, _) = padding[axis];
-                if p < before || p >= before + in_shape[axis] {
-                    inside = false;
-                    break;
-                }
-                src_flat += (p - before) * in_strides[axis];
-            }
-            out.push(if inside { data[src_flat] } else { val });
-            if !out_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &out_shape);
-            }
-        }
-        upload_f32_metal(t, out_shape, out)
-    }
-
-    /// `triu`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
-    pub fn triu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let rank = in_shape.len();
-        let total = num_elements(&in_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; rank];
-        for &value in data.iter().take(total) {
-            let (r, c) = if rank >= 2 {
-                (idx[rank - 2] as i64, idx[rank - 1] as i64)
-            } else {
-                (0, idx[0] as i64)
-            };
-            out.push(if c >= r + k { value } else { 0.0 });
-            if !in_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &in_shape);
-            }
-        }
-        upload_f32_metal(t, in_shape, out)
-    }
-
-    /// `tril`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
-    pub fn tril<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let rank = in_shape.len();
-        let total = num_elements(&in_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; rank];
-        for &value in data.iter().take(total) {
-            let (r, c) = if rank >= 2 {
-                (idx[rank - 2] as i64, idx[rank - 1] as i64)
-            } else {
-                (0, idx[0] as i64)
-            };
-            out.push(if c <= r + k { value } else { 0.0 });
-            if !in_shape.is_empty() {
-                crate::layout::increment_index(&mut idx, &in_shape);
-            }
-        }
-        upload_f32_metal(t, in_shape, out)
-    }
-
-    /// `diag`. Same pattern as `repeat`, matching CPU's two cases: a 1D
-    /// operand builds a 2D matrix with that operand on its `k`-th diagonal,
-    /// an operand of rank 2+ extracts its `k`-th diagonal into a 1D result.
-    /// Not autograd-wired, matching CPU.
-    pub fn diag<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let in_shape = t.metadata().shape().dims().to_vec();
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let rank = in_shape.len();
-        if rank == 1 {
-            let n = in_shape[0];
-            let k_abs = k.unsigned_abs() as usize;
-            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Storage,
-                expression: "Metal diagonal output dimension",
-            })?;
-            let out_total = num_elements(&[out_dim, out_dim])?;
-            let mut out = vec![0.0f32; out_total];
-            for (i, &value) in data.iter().enumerate().take(n) {
-                let r = if k >= 0 { i } else { i + k_abs };
-                let c = if k >= 0 { i + k_abs } else { i };
-                if r < out_dim && c < out_dim {
-                    out[r * out_dim + c] = value;
-                }
-            }
-            upload_f32_metal(t, vec![out_dim, out_dim], out)
-        } else {
-            let r_len = in_shape[rank - 2];
-            let c_len = in_shape[rank - 1];
-            let mut diag_vals = Vec::new();
-            for r in 0..r_len {
-                let c = (r as i64 + k) as usize;
-                if c < c_len {
-                    diag_vals.push(data[r * c_len + c]);
-                }
-            }
-            let out_len = diag_vals.len();
-            upload_f32_metal(t, vec![out_len], diag_vals)
-        }
-    }
-
-    /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
-    /// so inherits gradient wiring from), matching every other backend's
-    /// own `unsqueeze`.
-    pub fn unsqueeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut target_shape = t.metadata().shape().dims().to_vec();
-        if dim <= target_shape.len() {
-            target_shape.insert(dim, 1);
-        } else {
-            target_shape.push(1);
-        }
-        Self::reshape::<K>(t, &target_shape)
-    }
-
-    /// `cmp_eq`. Metal's `add`/`sub`/`mul` above are already implemented as
-    /// a host round-trip over `as_bytes()`/`from_bytes()` (`binary_op_metal`,
-    /// this file) rather than a dispatched `.metal` shader, so this reuses
-    /// that same helper with a comparison closure instead of adding a new
-    /// one. Matches CPU's own encoding (1.0/0.0 in the same dtype) and lack
-    /// of a gradient for comparisons.
-    pub fn cmp_eq<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_eq",
-        })
-    }
-    pub fn cmp_ne<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_ne",
-        })
-    }
-    pub fn cmp_lt<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_lt",
-        })
-    }
-    pub fn cmp_le<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_le",
-        })
-    }
-    pub fn cmp_gt<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_gt",
-        })
-    }
-    pub fn cmp_ge<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "cmp_ge",
-        })
-    }
-
-    pub fn logical_and(
-        _lhs: &<Self as StorageBackend>::Storage<bool>,
-        _rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "logical_and",
-        })
-    }
-    pub fn logical_or(
-        _lhs: &<Self as StorageBackend>::Storage<bool>,
-        _rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "logical_or",
-        })
-    }
-    pub fn logical_not(
-        _t: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Metal",
-            op: "logical_not",
-        })
-    }
-
-    /// `sub_scalar`. Reuses `scalar_op_metal`, already used by
-    /// `mul_scalar_float` above; not autograd-wired, matching CPU's
-    /// `` scalar methods (as opposed to ``'s
-    /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
-    pub fn sub_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        scalar_op_metal(t, val, |v, s| v - s)
-    }
-    /// `div_scalar`.
-    pub fn div_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        scalar_op_metal(t, val, |v, s| v / s)
-    }
-
-    /// `maximum`. Not autograd-wired, matching CPU.
-    pub fn maximum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op_metal(lhs, rhs, "maximum", f32::max)
-    }
-    /// `minimum`.
-    pub fn minimum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op_metal(lhs, rhs, "minimum", f32::min)
-    }
-    /// `abs_diff`.
-    pub fn abs_diff<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op_metal(lhs, rhs, "abs_diff", |a, b| (a - b).abs())
-    }
-
-    /// `lerp`. `start + weight * (end - start)`; not autograd-wired,
-    /// matching CPU.
-    pub fn lerp<K: DType>(
-        start: &<Self as StorageBackend>::Storage<K>,
-        end: &<Self as StorageBackend>::Storage<K>,
-        weight: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let weight = weight as f32;
-        binary_op_metal(start, end, "lerp", move |s, e| s + weight * (e - s))
-    }
-
-    /// `float_to_scalar`. Metal storage is plain host-accessible bytes
-    /// (`MetalStorage::as_bytes`), so unlike CUDA/WGPU this needs no
-    /// download step at all.
-    pub fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
-        let numel = t.metadata().shape().dims().iter().product::<usize>();
-        if numel != 1 {
-            return Err(Error::Shape(ShapeError::InvalidParameter {
-                operation: OperationKind::Storage,
-                parameter: "float_to_scalar element count",
-                value: numel,
-            }));
-        }
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        Ok(f64::from(data[0]))
-    }
-    /// `float_to_vec1`.
-    pub fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        Ok(data.iter().map(|&x| x as f64).collect())
-    }
-    /// `int_to_scalar`.
-    pub fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        let value = *data.first().ok_or(Error::InvalidByteLength {
-            expected: core::mem::size_of::<f32>(),
-            got: 0,
-        })?;
-        incin_core::error::convert_f64_to_i64(
-            "int_to_scalar",
-            t.metadata().dtype(),
-            f64::from(value),
-            incin_core::error::FloatToIntPolicy::Exact,
-        )
-    }
-    /// `int_to_vec1`.
-    pub fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
-        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
-        data.iter()
-            .map(|&value| {
-                incin_core::error::convert_f64_to_i64(
-                    "int_to_vec1",
-                    t.metadata().dtype(),
-                    f64::from(value),
-                    incin_core::error::FloatToIntPolicy::Exact,
-                )
-            })
-            .collect()
-    }
-    /// `tensor_to_dtype`. Matches CPU's/WGPU's/CUDA's own passthrough for
-    /// this method.
-    pub fn tensor_to_dtype<K: DType, K2: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        _dtype: DTypeDescriptor,
-    ) -> Result<<Self as StorageBackend>::Storage<K2>> {
-        let bytes = t.as_bytes()?.to_vec();
-        MetalStorage::from_bytes(bytes, t.metadata().clone(), t.mode(), t.device_ordinal())
-    }
-
-    /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
-    /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching every
-    /// other backend's own composition — no new host round-trip, just
-    /// reuse of already-implemented methods.
-    pub fn addmm<K: DType>(
-        mat: &<Self as StorageBackend>::Storage<K>,
-        mat1: &<Self as StorageBackend>::Storage<K>,
-        mat2: &<Self as StorageBackend>::Storage<K>,
-        beta: f64,
-        alpha: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mm = Self::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
-        Self::add::<K>(&mat_beta, &mm_alpha)
-    }
-    /// `bmm`. `matmul` already handles the batch dimensions, matching every
-    /// other backend.
-    pub fn bmm<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Self::matmul::<K>(lhs, rhs)
-    }
-
-    /// `scaled_dot_product_attention`. Composed from the already tape-wired
-    /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
-    /// every other backend's own composition, no new host round-trip.
-    pub fn scaled_dot_product_attention<K: DType>(
-        q: &<Self as StorageBackend>::Storage<K>,
-        k: &<Self as StorageBackend>::Storage<K>,
-        v: &<Self as StorageBackend>::Storage<K>,
-        mask: Option<&<Self as StorageBackend>::Storage<K>>,
-        scale: Option<f64>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let k_rank = k.metadata().shape().dims().len();
-        let k_t = if k_rank >= 2 {
-            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
-        } else {
-            k.clone()
-        };
-        let scores = Self::matmul::<K>(q, &k_t)?;
-        let d_k = *q.metadata().shape().dims().last().unwrap_or(&1) as f64;
-        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
-        let masked_scores = if let Some(m) = mask {
-            Self::add::<K>(&scaled_scores, m)?
-        } else {
-            scaled_scores
-        };
-        let attn_dim = scores.metadata().shape().dims().len() - 1;
-        let attn = Self::softmax::<K>(&masked_scores, attn_dim)?;
-        Self::matmul::<K>(&attn, v)
-    }
-
-    pub fn matmul<K: DType>(
+    pub(crate) fn matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2380,24 +924,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn transpose<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim0: usize,
-        dim1: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out = transpose_metal(t, dim0, dim1)?;
-        let (t_id, out_id) = (t.id(), out.id());
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                transpose_metal(grad_out, dim0, dim1).map(|g| vec![g])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn reshape<K: DType>(
+    pub(crate) fn reshape<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2414,7 +941,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Ok(out)
     }
 
-    pub fn broadcast_as<K: DType>(
+    pub(crate) fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2436,464 +963,12 @@ impl<D: Device> MetalBackendImpl<D> {
         });
         Ok(out)
     }
-
-    pub fn broadcast_left<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        shape: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Self::broadcast_as::<K>(t, shape)
-    }
-
-    pub fn narrow<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        if dim >= dims.len() || start + len > dims[dim] {
-            return Err(Error::ShapeMismatch {
-                op: "narrow",
-                expected: vec![dims[dim]],
-                got: vec![start + len],
-                msg: "narrow bounds out of range".to_string(),
-            });
-        }
-        let mut out_dims = dims.to_vec();
-        out_dims[dim] = len;
-        let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_dims))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        let mut out_data = Vec::with_capacity(out_numel);
-
-        let bytes = t.as_bytes()?;
-        let in_slice: &[f32] = bytemuck::cast_slice(bytes);
-
-        let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[..dim]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[dim + 1..]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-
-        for o in 0..outer {
-            for i in start..start + len {
-                let start_idx = o * dims[dim] * inner + i * inner;
-                out_data.extend_from_slice(&in_slice[start_idx..start_idx + inner]);
-            }
-        }
-
-        let shape_buf = ShapeBuf::from_slice(&out_dims);
-        let meta = TensorMeta::contiguous(
-            shape_buf,
-            t.metadata().dtype(),
-            t.device(),
-            MetalStorage::alignment(),
-            out_numel,
-        )?;
-        let out_bytes: Vec<u8> = bytemuck::cast_slice(&out_data).to_vec();
-        let out = MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())?;
-        let (t_id, out_id) = (t.id(), out.id());
-        let t_dims = dims.to_vec();
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let full_grad = MetalStorage::zeros(
-                    &ShapeBuf::from_slice(&t_dims),
-                    grad_out.metadata().dtype(),
-                    grad_out.mode(),
-                    grad_out.device_ordinal(),
-                )?;
-                let g_bytes = grad_out.as_bytes()?;
-                let g_slice: &[f32] = bytemuck::cast_slice(g_bytes);
-                let fg_bytes = full_grad.as_bytes()?;
-                let mut fg_data: Vec<f32> = bytemuck::cast_slice(fg_bytes).to_vec();
-                let g_outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(t_dims[..dim]))
-                    .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
-                let g_inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(t_dims[dim + 1..]))
-                    .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
-                for o in 0..g_outer {
-                    for i in 0..len {
-                        let src_start = o * len * g_inner + i * g_inner;
-                        let dst_start = o * t_dims[dim] * g_inner + (start + i) * g_inner;
-                        fg_data[dst_start..dst_start + g_inner]
-                            .copy_from_slice(&g_slice[src_start..src_start + g_inner]);
-                    }
-                }
-                let meta = TensorMeta::contiguous(
-                    ShapeBuf::from_slice(&t_dims),
-                    grad_out.metadata().dtype(),
-                    grad_out.device(),
-                    MetalStorage::alignment(),
-                    fg_data.len(),
-                )?;
-                MetalStorage::from_bytes(
-                    bytemuck::cast_slice(&fg_data).to_vec(),
-                    meta,
-                    grad_out.mode(),
-                    grad_out.device_ordinal(),
-                )
-                .map(|g| vec![g])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn flatten<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        start_dim: usize,
-        end_dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        if start_dim > end_dim || end_dim >= dims.len() {
-            return Err(Error::ShapeMismatch {
-                op: "flatten",
-                expected: vec![dims.len()],
-                got: vec![start_dim, end_dim],
-                msg: "invalid flatten dimensions".to_string(),
-            });
-        }
-        let mut new_dims = Vec::new();
-        new_dims.extend_from_slice(&dims[..start_dim]);
-        let folded: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[start_dim..=end_dim]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        new_dims.push(folded);
-        new_dims.extend_from_slice(&dims[end_dim + 1..]);
-        Self::reshape::<K>(t, &new_dims)
-    }
-
-    pub fn squeeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        if dim >= dims.len() || dims[dim] != 1 {
-            return Err(Error::ShapeMismatch {
-                op: "squeeze",
-                expected: vec![dims.len()],
-                got: vec![dim],
-                msg: "cannot squeeze non-1 dimension".to_string(),
-            });
-        }
-        let mut new_dims = dims.to_vec();
-        new_dims.remove(dim);
-        Self::reshape::<K>(t, &new_dims)
-    }
-
-    pub fn concat<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "concat",
-                backend: "Metal (empty tensors slice)",
-            });
-        }
-        let first_dims = tensors[0].metadata().shape().dims();
-        if dim >= first_dims.len() {
-            return Err(Error::ShapeMismatch {
-                op: "concat",
-                expected: vec![first_dims.len()],
-                got: vec![dim],
-                msg: "concat dimension out of bounds".to_string(),
-            });
-        }
-        let mut out_dims = first_dims.to_vec();
-        let mut total_concat_len = 0;
-        for t in tensors {
-            let d = t.metadata().shape().dims();
-            if d.len() != first_dims.len() {
-                return Err(Error::ShapeMismatch {
-                    op: "concat",
-                    expected: vec![first_dims.len()],
-                    got: vec![d.len()],
-                    msg: "concat input ranks must match".to_string(),
-                });
-            }
-            for (i, (&d1, &d2)) in first_dims.iter().zip(d.iter()).enumerate() {
-                if i != dim && d1 != d2 {
-                    return Err(Error::ShapeMismatch {
-                        op: "concat",
-                        expected: vec![d1],
-                        got: vec![d2],
-                        msg: "concat non-concat dimensions must match".to_string(),
-                    });
-                }
-            }
-            total_concat_len += d[dim];
-        }
-        out_dims[dim] = total_concat_len;
-
-        let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(first_dims[..dim]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(first_dims[dim + 1..]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        let out_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_dims))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-        let mut out_data = Vec::with_capacity(out_numel);
-
-        for o in 0..outer {
-            for t in tensors {
-                let t_bytes = t.as_bytes()?;
-                let t_slice: &[f32] = bytemuck::cast_slice(t_bytes);
-                let t_len = t.metadata().shape().dims()[dim];
-                let start = o * t_len * inner;
-                out_data.extend_from_slice(&t_slice[start..start + t_len * inner]);
-            }
-        }
-
-        let shape_buf = ShapeBuf::from_slice(&out_dims);
-        let meta = TensorMeta::contiguous(
-            shape_buf,
-            tensors[0].metadata().dtype(),
-            tensors[0].device(),
-            MetalStorage::alignment(),
-            out_numel,
-        )?;
-        let out_bytes: Vec<u8> = bytemuck::cast_slice(&out_data).to_vec();
-        let out = MetalStorage::from_bytes(
-            out_bytes,
-            meta,
-            tensors[0].mode(),
-            tensors[0].device_ordinal(),
-        )?;
-
-        let input_ids: Vec<_> = tensors.iter().map(|t| t.id()).collect();
-        let slice_lens: Vec<_> = tensors
-            .iter()
-            .map(|t| t.metadata().shape().dims()[dim])
-            .collect();
-        let out_id = out.id();
-        let first_mode = tensors[0].mode();
-        let first_ord = tensors[0].device_ordinal();
-
-        crate::metal::tape::push(crate::metal::tape::TapeEntry {
-            output_id: out_id,
-            input_ids,
-            backward: Box::new(move |grad_out: &MetalStorage| {
-                let mut grads = Vec::with_capacity(slice_lens.len());
-                let mut start = 0;
-                for &len in &slice_lens {
-                    let mut sub_dims = out_dims.clone();
-                    sub_dims[dim] = len;
-                    let sub_numel: usize = incin_core::shapes::ShapeBuf::from_slice(&(sub_dims))
-                        .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
-                    let mut sub_data = Vec::with_capacity(sub_numel);
-
-                    let g_bytes = grad_out.as_bytes()?;
-                    let g_slice: &[f32] = bytemuck::cast_slice(g_bytes);
-
-                    for o in 0..outer {
-                        let src_offset = o * out_dims[dim] * inner + start * inner;
-                        sub_data.extend_from_slice(&g_slice[src_offset..src_offset + len * inner]);
-                    }
-
-                    let shape_buf = ShapeBuf::from_slice(&sub_dims);
-                    let meta = TensorMeta::contiguous(
-                        shape_buf,
-                        grad_out.metadata().dtype(),
-                        grad_out.device(),
-                        MetalStorage::alignment(),
-                        sub_numel,
-                    )?;
-                    let sub_bytes: Vec<u8> = bytemuck::cast_slice(&sub_data).to_vec();
-                    grads.push(MetalStorage::from_bytes(
-                        sub_bytes, meta, first_mode, first_ord,
-                    )?);
-                    start += len;
-                }
-                Ok(grads)
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn stack<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "stack",
-                backend: "Metal (empty tensors slice)",
-            });
-        }
-        let mut unsqueezed = Vec::with_capacity(tensors.len());
-        for t in tensors {
-            let mut u_dims = t.metadata().shape().dims().to_vec();
-            u_dims.insert(dim, 1);
-            unsqueezed.push(Self::reshape::<K>(t, &u_dims)?);
-        }
-        let refs: Vec<&<Self as StorageBackend>::Storage<K>> = unsqueezed.iter().collect();
-        Self::concat::<K>(&refs, dim)
-    }
-
-    pub fn slice<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        ranges: &[(usize, usize)],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut curr = t.clone();
-        for (dim, &(start, len)) in ranges.iter().enumerate() {
-            curr = Self::narrow::<K>(&curr, dim, start, len)?;
-        }
-        Ok(curr)
-    }
 }
 
 // ───  ──────────────────────────────────────────────────────────────
 
 impl<D: Device> MetalBackendImpl<D> {
-    pub fn layer_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        weight: &<Self as StorageBackend>::Storage<K>,
-        bias: Option<&<Self as StorageBackend>::Storage<K>>,
-        eps: f32,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        let last_dim = dims[dims.len() - 1];
-        let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[..dims.len() - 1]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-
-        let bytes = t.as_bytes()?;
-        let in_slice: &[f32] = bytemuck::cast_slice(bytes);
-        let w_bytes = weight.as_bytes()?;
-        let w_slice: &[f32] = bytemuck::cast_slice(w_bytes);
-
-        let b_slice: Option<&[f32]> = match bias {
-            Some(b) => Some(bytemuck::cast_slice(b.as_bytes()?)),
-            None => None,
-        };
-
-        let mut out_data = vec![0.0f32; in_slice.len()];
-
-        for o in 0..outer {
-            let offset = o * last_dim;
-            let slice = &in_slice[offset..offset + last_dim];
-            let mean: f32 = slice.iter().sum::<f32>() / (last_dim as f32);
-            let var: f32 =
-                slice.iter().map(|&x| (x - mean) * (x - mean)).sum::<f32>() / (last_dim as f32);
-            let inv_std = 1.0 / (var + eps).sqrt();
-
-            for i in 0..last_dim {
-                let norm = (slice[i] - mean) * inv_std;
-                let b_val = b_slice.map(|b| b[i]).unwrap_or(0.0);
-                out_data[offset + i] = norm * w_slice[i] + b_val;
-            }
-        }
-
-        let shape_buf = ShapeBuf::from_slice(dims);
-        let meta = TensorMeta::contiguous(
-            shape_buf,
-            t.metadata().dtype(),
-            t.device(),
-            MetalStorage::alignment(),
-            in_slice.len(),
-        )?;
-        let out_bytes: Vec<u8> = bytemuck::cast_slice(&out_data).to_vec();
-        MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
-    }
-
-    pub fn batch_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        w: Option<&<Self as StorageBackend>::Storage<K>>,
-        b: Option<&<Self as StorageBackend>::Storage<K>>,
-        _rm: Option<&<Self as StorageBackend>::Storage<K>>,
-        _rv: Option<&<Self as StorageBackend>::Storage<K>>,
-        eps: f32,
-        _momentum: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dims = t.metadata().shape().dims();
-        if dims.len() < 2 {
-            return Err(Error::ShapeMismatch {
-                op: "batch_norm",
-                expected: vec![2],
-                got: vec![dims.len()],
-                msg: "batch_norm requires at least 2D input".to_string(),
-            });
-        }
-        let batch = dims[0];
-        let channels = dims[1];
-        let spatial: usize = incin_core::shapes::ShapeBuf::from_slice(&(dims[2..]))
-            .checked_numel(incin_core::shapes::OperationKind::Storage)?;
-
-        let bytes = t.as_bytes()?;
-        let in_slice: &[f32] = bytemuck::cast_slice(bytes);
-
-        let w_slice: Option<&[f32]> = match w {
-            Some(w_st) => Some(bytemuck::cast_slice(w_st.as_bytes()?)),
-            None => None,
-        };
-        let b_slice: Option<&[f32]> = match b {
-            Some(b_st) => Some(bytemuck::cast_slice(b_st.as_bytes()?)),
-            None => None,
-        };
-
-        let mut out_data = vec![0.0f32; in_slice.len()];
-        let total_per_channel = batch * spatial;
-
-        for c in 0..channels {
-            let mut sum = 0.0f32;
-            for n in 0..batch {
-                for s in 0..spatial {
-                    let idx = n * channels * spatial + c * spatial + s;
-                    sum += in_slice[idx];
-                }
-            }
-            let mean = sum / (total_per_channel as f32);
-
-            let mut var_sum = 0.0f32;
-            for n in 0..batch {
-                for s in 0..spatial {
-                    let idx = n * channels * spatial + c * spatial + s;
-                    let diff = in_slice[idx] - mean;
-                    var_sum += diff * diff;
-                }
-            }
-            let var = var_sum / (total_per_channel as f32);
-            let inv_std = 1.0 / (var + eps).sqrt();
-
-            let scale = w_slice.map(|ws| ws[c]).unwrap_or(1.0);
-            let shift = b_slice.map(|bs| bs[c]).unwrap_or(0.0);
-
-            for n in 0..batch {
-                for s in 0..spatial {
-                    let idx = n * channels * spatial + c * spatial + s;
-                    out_data[idx] = (in_slice[idx] - mean) * inv_std * scale + shift;
-                }
-            }
-        }
-
-        let shape_buf = ShapeBuf::from_slice(dims);
-        let meta = TensorMeta::contiguous(
-            shape_buf,
-            t.metadata().dtype(),
-            t.device(),
-            MetalStorage::alignment(),
-            in_slice.len(),
-        )?;
-        let out_bytes: Vec<u8> = bytemuck::cast_slice(&out_data).to_vec();
-        MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
-    }
-
-    pub fn embedding<K: DType, KInt: DType>(
-        _t: &<Self as StorageBackend>::Storage<KInt>,
-        _w: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("embedding"))
-    }
-
-    pub fn conv1d<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _w: &<Self as StorageBackend>::Storage<K>,
-        _b: Option<&<Self as StorageBackend>::Storage<K>>,
-        _stride: usize,
-        _padding: usize,
-        _dilation: usize,
-        _groups: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("conv1d"))
-    }
-
-    pub fn conv2d<K: DType>(
+    pub(crate) fn conv2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _w: &<Self as StorageBackend>::Storage<K>,
         _b: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -2909,20 +984,8 @@ impl<D: Device> MetalBackendImpl<D> {
         clippy::too_many_arguments,
         reason = "matches the backend operation contract shared by CPU, CUDA, and Metal"
     )]
-    pub fn conv_transpose2d<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _w: &<Self as StorageBackend>::Storage<K>,
-        _b: Option<&<Self as StorageBackend>::Storage<K>>,
-        _stride: usize,
-        _padding: usize,
-        _output_padding: usize,
-        _dilation: usize,
-        _groups: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("conv_transpose2d"))
-    }
 
-    pub fn max_pool2d<K: DType>(
+    pub(crate) fn max_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _kernel_size: (usize, usize),
         _stride: (usize, usize),
@@ -2932,7 +995,7 @@ impl<D: Device> MetalBackendImpl<D> {
         Err(unsupported("max_pool2d"))
     }
 
-    pub fn avg_pool2d<K: DType>(
+    pub(crate) fn avg_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _kernel_size: (usize, usize),
         _stride: (usize, usize),
@@ -2940,49 +1003,11 @@ impl<D: Device> MetalBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Err(unsupported("avg_pool2d"))
     }
-
-    pub fn adaptive_avg_pool2d<K: DType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-        _output_size: (usize, usize),
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("adaptive_avg_pool2d"))
-    }
 }
 
 // ─── Loss helper ────────────────────────────────────────────────────────────
 
-impl<D: Device> MetalBackendImpl<D> {
-    pub fn cross_entropy_loss<K: DType, KInt: DType>(
-        _pred: &<Self as StorageBackend>::Storage<K>,
-        _target: &<Self as StorageBackend>::Storage<KInt>,
-        _reduction: incin_core::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("cross_entropy_loss"))
-    }
-}
-
 // ─── Quantization helpers ───────────────────────────────────────────────────
-
-impl<D: Device> MetalBackendImpl<D> {
-    pub fn quantize<K: FloatDType, Q: QuantDType>(
-        _t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<Q>> {
-        Err(unsupported("quantize"))
-    }
-
-    pub fn dequantize<Q: QuantDType, K: FloatDType>(
-        _t: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Err(unsupported("dequantize"))
-    }
-
-    pub fn quantized_matmul<Q: QuantDType>(
-        _lhs: &<Self as StorageBackend>::Storage<Q>,
-        _rhs: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<f32>> {
-        Err(unsupported("quantized_matmul"))
-    }
-}
 
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for MetalBackendImpl<D> {
     type Grads = MetalGrads;

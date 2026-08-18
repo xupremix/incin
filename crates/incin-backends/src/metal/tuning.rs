@@ -7,9 +7,7 @@
 use crate::kernel::KernelAccess;
 #[cfg(test)]
 use crate::kernel::KernelKey;
-use crate::metal::mps::{
-    MpsMatMulCandidate, MpsNormalizationCandidate, MpsPointwiseCandidate, MpsReductionCandidate,
-};
+use crate::metal::mps::{MpsMatMulCandidate, MpsPointwiseCandidate, MpsReductionCandidate};
 use crate::metal::storage::MetalStorageMode;
 // Only the cache round-trip below names the core representation, and that pair
 // is itself gated on autotune.
@@ -221,32 +219,6 @@ pub fn metal_matmul_candidates(
         .map(|block_size| MetalLaunchCandidate {
             block_size,
             access: KernelAccess::Scalar { unroll_width: 4 },
-            storage_mode,
-            use_mps,
-        })
-        .collect()
-}
-
-/// Generates execution candidates for Metal normalization operations.
-pub fn metal_normalization_candidates(
-    is_layer_norm: bool,
-    norm_size: usize,
-    storage_mode: MetalStorageMode,
-) -> Vec<MetalLaunchCandidate> {
-    let mps_candidate = MpsNormalizationCandidate::preferred(norm_size);
-    let use_mps = mps_candidate == MpsNormalizationCandidate::MpsGraph;
-
-    let access = if is_layer_norm {
-        KernelAccess::Welford
-    } else {
-        KernelAccess::Scalar { unroll_width: 1 }
-    };
-
-    [128, 256, 512]
-        .into_iter()
-        .map(|block_size| MetalLaunchCandidate {
-            block_size,
-            access,
             storage_mode,
             use_mps,
         })

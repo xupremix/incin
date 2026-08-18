@@ -33,13 +33,15 @@ pub mod detect;
 #[cfg(feature = "std")]
 pub use detect::{detect_device, detect_device_in};
 
-// Only the two backends that allocate device buffers by byte length. The
-// external Candle adapter was in this list and never called `byte_len` — Candle
-// owns its own allocations — so `--features external-candle` without a GPU
-// backend compiled a module whose only function was dead, which
-// `-D warnings` rejects. `unsupported` below keeps `external-candle`, because
-// the Candle adapter does use those macros.
-#[cfg(any(feature = "cuda", feature = "wgpu"))]
+// Originally just the two backends that allocate device buffers by byte
+// length. The external Candle adapter was in this list and never called
+// `byte_len` — Candle owns its own allocations — so `--features
+// external-candle` without a GPU backend compiled a module whose only
+// function was dead, which `-D warnings` rejects. `unsupported` below keeps
+// `external-candle`, because the Candle adapter does use those macros.
+// `checked_numel` widened the gate to `cpu`: it is the one implementation
+// `cpu::stride` and `iteration` both call, and a CPU-only build needs it too.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "wgpu"))]
 pub(crate) mod bytes;
 // Every caller of these macros is a GPU or external backend, so a CPU-only
 // build declared four macros it could not use and warned about all of them.

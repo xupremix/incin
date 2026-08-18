@@ -260,56 +260,6 @@ pub(crate) fn dispatch_im2col(
     Ok(())
 }
 
-/// Dispatch transposed 2D convolution
-pub(crate) fn dispatch_conv_transpose2d(
-    inp: &WgpuBuffer,
-    weight: &WgpuBuffer,
-    out: &WgpuBuffer,
-    params_data: &[u32],
-) -> Result<()> {
-    let state = get_device_state();
-    let shader = include_str!("shaders/conv_transpose.wgsl");
-    let pipeline = get_or_create_pipeline("conv_transpose", shader, "main");
-
-    let params_buf = WgpuBuffer::from_slice(params_data);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("ConvTranspose BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inp.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: weight.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-
-    let wg = checked_workgroups(
-        &[
-            params_data[0],
-            params_data[2],
-            params_data[5],
-            params_data[6],
-        ],
-        64,
-        "WGPU transposed-convolution dispatch size",
-    )?;
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ConvTranspose");
-    Ok(())
-}
-
 pub(crate) fn dispatch_shape(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32; 21]) {
     let state = get_device_state();
     let shader = include_str!("shaders/shape.wgsl");
@@ -437,50 +387,6 @@ pub(crate) fn dispatch_reduce_dim(
     });
     let wg = out_n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ReduceDim");
-}
-
-pub(crate) fn dispatch_embedding(
-    indices: &WgpuBuffer,
-    weight: &WgpuBuffer,
-    out: &Arc<WgpuBuffer>,
-    seq_len: u32,
-    embed_dim: u32,
-    vocab_size: u32,
-) -> Result<()> {
-    let state = get_device_state();
-    let shader = include_str!("shaders/embedding.wgsl");
-    let pipeline = get_or_create_pipeline("embedding", shader, "main");
-    let params_buf = WgpuBuffer::from_slice(&[seq_len, embed_dim, vocab_size]);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Embedding BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: indices.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: weight.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg = checked_workgroups(
-        &[seq_len, embed_dim],
-        WG_SIZE,
-        "WGPU embedding dispatch size",
-    )?;
-    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Embedding");
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

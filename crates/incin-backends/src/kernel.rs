@@ -1284,6 +1284,18 @@ extern "C" __global__ void {entry_point}(
     })
 }
 
+/// Renders the CUDA source for `layer_norm` or `batch_norm`.
+///
+/// `layer_norm` reduces over the last axis per row, computed with a
+/// Welford accumulator so the pass is numerically stable without a second
+/// read of the row. `batch_norm` reads precomputed running statistics per
+/// channel rather than reducing at all, which is the inference form; it does
+/// not compute batch statistics on the fly.
+///
+/// `softmax` and `rms_norm` have no case here: both are answered by
+/// composing existing pointwise and reduction kernels in
+/// `cuda::ops::norm` rather than by a dedicated kernel, and their
+/// capability rows say `Composed` rather than `Native` because of it.
 #[cfg(any(feature = "cuda", test))]
 pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;

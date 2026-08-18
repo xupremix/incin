@@ -32,7 +32,42 @@ const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::F32.descriptor(),
     DTypeId::F64.descriptor(),
 ];
+/// `CUDA_STORAGE_DTYPES` plus `bool`, for the specific CUDA rows verified
+/// safe for a 1-byte dtype: `storage` (allocation/`to_bytes`/`from_bytes`)
+/// and `reshape` (metadata-only, no kernel launch either way) never assume a
+/// fixed element width the way `broadcast_as`'s `shape_op` kernel does.
+/// Deliberately a separate constant rather than widening
+/// `CUDA_STORAGE_DTYPES` itself: Metal's own `broadcast` row still reuses
+/// that constant and has the identical `shape_op`-style byte-width
+/// limitation, unverified and out of this session's stated scope — widening
+/// the shared constant in place would have silently widened Metal's
+/// unverified claim too.
+const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::I64.descriptor(),
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
 const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
+/// The union of `where_cond`'s/`masked_fill`'s value dtype and their `bool`
+/// mask operand's, for the same reason `INDEX_AND_F32_DTYPES` exists:
+/// `dispatch::execute` (`crates/incin-core/src/exec/dispatch.rs`'s
+/// `admit_invocation`) checks *every* operand's dtype against the one
+/// resolved capability row in turn, so a row narrower than the union of what
+/// every operand actually carries makes the operation unreachable — the
+/// `mask` operand would fail dtype admission before either kernel ever
+/// launches. Not a claim that either operand may be *either* dtype: the
+/// descriptor's own per-operand contract (`exec/catalog.rs`'s
+/// `WhereCond`/`MaskedFill` arms) and `cuda::ops::select`'s own
+/// `require_bool_mask`/`cuda_require_f32` checks enforce the real, tighter
+/// per-operand split this row cannot state on its own.
+const F32_AND_BOOL: &[DTypeDescriptor] = &[DTypeId::F32.descriptor(), DTypeId::Bool.descriptor()];
+/// `logical_and`/`logical_or`/`logical_not`: every operand and the output
+/// are `bool`, unlike `where_cond`/`masked_fill`'s mixed `F32_AND_BOOL`, so
+/// one dtype suffices — no union needed.
+const BOOL_ONLY: &[DTypeDescriptor] = &[DTypeId::Bool.descriptor()];
 /// The only quantized representation any backend implements today.
 const Q8_ONLY: &[DTypeDescriptor] = &[DTypeId::Q8_0.descriptor()];
 const NON_QUANTIZED: &[DTypeDescriptor] = &[
@@ -308,11 +343,24 @@ macro_rules! cuda_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            elementwise = [Add, Sub, Mul, Div],
+            elementwise = [Add, Sub, Mul, Div, Relu, Exp, Sqrt, Log, Tanh, Sigmoid],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            filling = [],
-            sampling = [],
+            // `impl_creation_executors!`/`impl_data_creation_executors!` in
+            // descriptor_bind.rs give every backend these nine for free;
+            // CUDA simply never listed them here, so the capability query
+            // answered `Unsupported` and the coarse `Fill`/`Random` legacy
+            // rows below were the only channel advertising them at all.
+            // `TensorFromData`/`TensorFromBytes` are not in this list:
+            // they route through `HostInterop::from_bytes`, a plain
+            // byte-length-checked host-to-device upload with no kernel
+            // launch and no dtype-width assumption, genuinely wider than
+            // the `F32_ONLY` this group's other five members are stuck at —
+            // so they get their own standalone rows in `legacy` below
+            // instead of a shared one that would either overclaim for
+            // `zeros`/`ones`/etc or underclaim for these two.
+            filling = [Zeros, Ones, Full, Arange, Linspace],
+            sampling = [UniformRandom, NormalRandom],
             readback = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll,
@@ -326,9 +374,50 @@ macro_rules! cuda_descriptor_operations {
             // claim; a copied one would not be.
             normalization = [],
             embedding = [],
-            native_tensor = [],
-            composed_tensor = [],
-            composed_matmul = [],
+            // `transpose`/`narrow`/`concat` each launch a dedicated CUDA
+            // kernel and push their own tape entry (`concat`'s backward
+            // splits the incoming gradient back into per-operand segments
+            // via `narrow`), so `Native`.
+            // `sub_scalar`/`div_scalar` push their own tape entry directly
+            // (unlike the `composed_tensor` rows below, they call no other
+            // catalog operation to do it), so `Native` alongside the shape
+            // kernels rather than `Composed`.
+            // The six comparisons launch their own dedicated kernel
+            // (`cuda/ops/compare.rs`), so `Native` too, despite writing
+            // `bool` rather than the operand dtype the row's `F32_ONLY`
+            // declares: a capability row constrains what it reads, the same
+            // convention `QuantizedMatMul` established for a row whose
+            // output dtype the declaration cannot separately state.
+            // `where_cond`/`masked_fill` are not here: unlike the six
+            // comparisons, both take a `bool` operand (the mask) *alongside*
+            // an `f32` one, and this group's shared row cannot state a
+            // per-operand dtype pair — `dispatch::execute` checks every
+            // operand against the one resolved row. `F32_ONLY` here would
+            // make the mask operand fail admission before either kernel
+            // launches, so they get their own standalone `F32_AND_BOOL` rows
+            // in `legacy` below instead (see that constant's own doc).
+            native_tensor = [
+                TransposeExact, Narrow, ConcatExact, SubScalar, DivScalar,
+                CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe
+            ],
+            // Every one of these rewrites into `reshape`/`broadcast_as`/
+            // `narrow`/`concat`/`unsqueeze` rather than running a kernel of
+            // its own, pushing zero new tape entries — the composite's
+            // backward is the tape replay over whichever primitives it
+            // called, the same reasoning `softmax`/`rms_norm` above rely on.
+            composed_tensor = [
+                FlattenExact, SqueezeExact, UnsqueezeExact,
+                StackExact, SliceExact, BroadcastLeft,
+                // Both answer with a sequence of narrows along one axis,
+                // same as CPU's own placement of these two in this group.
+                Chunk, Split
+            ],
+            // Every one of these rewrites into `matmul` (batched, in
+            // `bmm`/`addmm`/attention's case, composed from it the same way
+            // CUDA's own `matmul` has no batched-GEMM kernel of its own) or
+            // into `mul`+an all-reduce (`dot`) or `unsqueeze`+broadcast
+            // `mul` (`outer`), pushing zero new tape entries of its own.
+            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention, Dot, Outer],
             composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
@@ -348,7 +437,7 @@ macro_rules! wgpu_descriptor_operations {
             // they were simply never listed here, so the capability query
             // answered `Unsupported` and no caller could reach them. A shader
             // with no capability row is dead code that reads as coverage, which
-            // is what `assert_every_wgpu_executor_is_advertised` now prevents
+            // is what `assert_wgpu_unary_operations_are_advertised` now prevents
             // from recurring.
             elementwise = [
                 Add, Sub, Mul, Div,
@@ -357,8 +446,13 @@ macro_rules! wgpu_descriptor_operations {
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            filling = [Zeros, Ones, Full, Arange, Linspace],
-            sampling = [],
+            // `impl_creation_executors!` gives WGPU real `UniformRandom`/
+            // `NormalRandom` executors too, and `impl_data_creation_executors!`
+            // gives it real `TensorFromData`/`TensorFromBytes` ones; none of
+            // the four were ever listed here, same as the unary activations
+            // above.
+            filling = [TensorFromData, TensorFromBytes, Zeros, Ones, Full, Arange, Linspace],
+            sampling = [UniformRandom, NormalRandom],
             readback = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
@@ -391,8 +485,12 @@ macro_rules! metal_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            filling = [Zeros, Ones, Full, Arange, Linspace],
-            sampling = [],
+            // `impl_creation_executors!` gives Metal real `UniformRandom`/
+            // `NormalRandom` executors too, and `impl_data_creation_executors!`
+            // gives it real `TensorFromData`/`TensorFromBytes` ones; none of
+            // the four were ever listed here.
+            filling = [TensorFromData, TensorFromBytes, Zeros, Ones, Full, Arange, Linspace],
+            sampling = [UniformRandom, NormalRandom],
             readback = [],
             reduction = [
                 SumAll, MeanAll,
@@ -858,16 +956,40 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
 pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
-    broadcast = CUDA_STORAGE_DTYPES,
-    reshape = CUDA_STORAGE_DTYPES,
+    // `broadcast_as` launches `kernels/shape.cu`'s `shape_op`, whose kernel
+    // signature is `const float*`/`float*` unconditionally — there is no
+    // dtype-width parameter anywhere in the launch, so every element is read
+    // and written at a 4-byte stride regardless of the storage's declared
+    // dtype. For a 2-byte dtype (`f16`/`bf16`) that reads and writes past
+    // the buffer `crate::bytes::byte_len` actually allocated; for an 8-byte
+    // one (`f64`/`i64`) it silently touches only every other 4-byte half.
+    // `f32` is the only dtype in `CUDA_STORAGE_DTYPES` this kernel is
+    // byte-compatible with, so it is the only one the row may honestly
+    // claim — narrowed here rather than in `shape.cu` itself, since fixing
+    // the kernel to be dtype-parametric is separate, larger work.
+    // `reshape` does not share this: it never launches `shape_op` at all,
+    // only rewraps the same buffer under a new shape, so it stays byte-exact
+    // for every dtype `CUDA_STORAGE_DTYPES` names.
+    broadcast = F32_ONLY,
+    reshape = CUDA_BOOL_SAFE_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
-    filling_dtypes = NON_QUANTIZED,
-    sampling_dtypes = FLOAT_DTYPES,
+    // `zeros`/`ones`/`full`/`arange`/`linspace`/`rand`/`randn` compute in
+    // `f32` and hand the bit pattern to `cuda_from_f32`, which reinterprets
+    // it as raw bytes rather than converting: every dtype whose element size
+    // differs from 4 bytes fails `checked_storage_byte_len` before it could
+    // return the wrong value, and `f32` is the only one both accepted by
+    // `validate_cuda_storage_dtype` and byte-compatible. `NON_QUANTIZED` and
+    // `FLOAT_DTYPES` were live but unused here until this session populated
+    // the `filling`/`sampling` identity lists above; advertising them now
+    // would repeat the exact mistake the coarse `Normalization` row made.
+    filling_dtypes = F32_ONLY,
+    sampling_dtypes = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
-    broadcast_training = FLOAT_DTYPES,
+    // Same `shape_op` byte-width limit as the `broadcast` row above.
+    broadcast_training = F32_ONLY,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
@@ -882,7 +1004,25 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     legacy = [
         native(
             OperationKind::Storage,
-            CUDA_STORAGE_DTYPES,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
+        // Standalone rather than in the `filling = [...]` list above: both
+        // route through `HostInterop::from_bytes`, verified safe for every
+        // dtype `CUDA_BOOL_SAFE_STORAGE_DTYPES` names (see that constant's
+        // own doc), which is wider than the `F32_ONLY` the group's other
+        // five members are held to. No tape entry either way — a fresh
+        // host-uploaded allocation records nothing to differentiate.
+        native(
+            OperationKind::TensorFromData,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
+        native(
+            OperationKind::TensorFromBytes,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             false,
         ),
@@ -890,24 +1030,70 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),
         native(OperationKind::Reduction, FLOAT_DTYPES, CONTIGUOUS, true),
+        // No coarse `Normalization` row: the four exact identities below do
+        // not share one rule shape, so a single family row could not state
+        // them honestly, and `every_coarse_family_row_is_backed_by_a_native_
+        // exact_row` does not require one — CPU's own Softmax member of the
+        // family is itself `training = true` there only because CPU's kernel
+        // pushes a real backward; the coarse row is not a promise every
+        // backend has to fill.
+        //
+        // `layer_norm` and `batch_norm` are dedicated fused kernels (Welford
+        // reduction; precomputed-statistics affine transform), so `Native`.
+        // Neither pushes a tape entry yet, so `training = false`: a caller
+        // inside a gradient-tracked context that reached either would get a
+        // silently missing gradient rather than an error, which is what
+        // `training` on this row exists to prevent.
         native_ranked(
-            OperationKind::Normalization,
-            FLOAT_DTYPES,
+            OperationKind::LayerNorm,
+            F32_ONLY,
             CONTIGUOUS,
-            1,
-            usize::MAX,
-            true,
-        ),
-        native(
-            OperationKind::Broadcast,
-            CUDA_STORAGE_DTYPES,
-            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::LayerNorm),
+            descriptor_max_rank(OperationKind::LayerNorm),
             false,
         ),
-        native(OperationKind::Broadcast, FLOAT_DTYPES, CONTIGUOUS, true),
+        native_ranked(
+            OperationKind::BatchNorm,
+            F32_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::BatchNorm),
+            descriptor_max_rank(OperationKind::BatchNorm),
+            false,
+        ),
+        // `softmax` and `rms_norm` are answered by rewriting into other
+        // catalog operations (subtract-max, exp, sum, divide; square, mean,
+        // add, sqrt, divide, multiply) rather than a dedicated kernel, so
+        // `Composed`. Every step in both rewrites already pushes its own
+        // correct tape entry, so the composite's backward is the tape replay
+        // over those entries, not new hand-derived math — `training = true`
+        // is a verified claim here, not the conservative default the other
+        // two rows above take.
+        composed_ranked(
+            OperationKind::Softmax,
+            F32_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Softmax),
+            descriptor_max_rank(OperationKind::Softmax),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::RmsNorm,
+            F32_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::RmsNorm),
+            descriptor_max_rank(OperationKind::RmsNorm),
+            true,
+        ),
+        // `F32_ONLY`, not `CUDA_STORAGE_DTYPES`/`FLOAT_DTYPES`: see the
+        // `shape_op` byte-width comment on `CUDA_CAPABILITIES`'s own
+        // `broadcast` field above. The coarse row has to match the exact
+        // `BroadcastAs` row it stands beside, or `doctor`'s coarse probe
+        // and a real `broadcast_as` call would disagree about what runs.
+        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, false),
+        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, true),
         native(
             OperationKind::Reshape,
-            CUDA_STORAGE_DTYPES,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             false,
         ),
@@ -942,6 +1128,58 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             PRECISE,
             ImplementationKind::Native,
         ),
+        // `where_cond`/`masked_fill` (`cuda/ops/select.rs`) are the
+        // consumers a `bool` mask needs to be reachable at all: without them
+        // a `cmp_*` result could be produced and reshaped but never fed back
+        // into a float computation. `F32_AND_BOOL` rather than `F32_ONLY`
+        // because both take a `bool` mask alongside `f32` data and
+        // `dispatch::execute` checks every operand against this one row —
+        // see that constant's own doc for why a shared-group row could not
+        // state this.
+        native_ranked(
+            OperationKind::WhereCond,
+            F32_AND_BOOL,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::WhereCond),
+            descriptor_max_rank(OperationKind::WhereCond),
+            true,
+        ),
+        native_ranked(
+            OperationKind::MaskedFill,
+            F32_AND_BOOL,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::MaskedFill),
+            descriptor_max_rank(OperationKind::MaskedFill),
+            true,
+        ),
+        // `logical_and`/`logical_or`/`logical_not` (`cuda/ops/logical.rs`):
+        // dedicated kernels over `bool` throughout, `BOOL_ONLY` rather than
+        // `F32_AND_BOOL` since there is no mixed-dtype operand here to union
+        // against.
+        native_ranked(
+            OperationKind::LogicalAnd,
+            BOOL_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::LogicalAnd),
+            descriptor_max_rank(OperationKind::LogicalAnd),
+            true,
+        ),
+        native_ranked(
+            OperationKind::LogicalOr,
+            BOOL_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::LogicalOr),
+            descriptor_max_rank(OperationKind::LogicalOr),
+            true,
+        ),
+        native_ranked(
+            OperationKind::LogicalNot,
+            BOOL_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::LogicalNot),
+            descriptor_max_rank(OperationKind::LogicalNot),
+            true,
+        ),
     ]
 );
 
@@ -951,8 +1189,12 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     broadcast = F32_ONLY,
     reshape = F32_ONLY,
     reduction = F32_ONLY,
-    filling_dtypes = NON_QUANTIZED,
-    sampling_dtypes = FLOAT_DTYPES,
+    // `validate_wgpu_dtype` rejects anything but `f32` outright, and the
+    // creation methods never pass `dtype` into the buffer they build, so
+    // `f32` is not just the safe claim here, it is the only one that can
+    // ever succeed. Same reasoning as the CUDA table above.
+    filling_dtypes = F32_ONLY,
+    sampling_dtypes = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
@@ -975,14 +1217,10 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
         native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
-        native_ranked(
-            OperationKind::Normalization,
-            F32_ONLY,
-            CONTIGUOUS,
-            1,
-            usize::MAX,
-            true,
-        ),
+        // No legacy Normalization row: no WGPU kernel backs it. The typed
+        // `normalization = []` list above already advertises none, honestly;
+        // a coarse row here claimed native LayerNorm/BatchNorm support this
+        // backend has never executed.
         CapabilityRule::new(
             OperationKind::Broadcast,
             F32_ONLY,
@@ -1042,7 +1280,11 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = F32_ONLY,
-    filling_dtypes = NON_QUANTIZED,
+    // `zeros`/`full`/`ones`/`arange`/`linspace` compute in `f32` and hand
+    // the bit pattern to `MetalStorage::from_bytes` (or, for `zeros`,
+    // `MetalStorage::zeros`) under whatever `dtype` was requested, without a
+    // numeric conversion. Same reasoning as the CUDA table above.
+    filling_dtypes = F32_ONLY,
     sampling_dtypes = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
@@ -1071,14 +1313,10 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
         native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
-        native_ranked(
-            OperationKind::Normalization,
-            F32_ONLY,
-            CONTIGUOUS,
-            1,
-            usize::MAX,
-            true,
-        ),
+        // No legacy Normalization row: no Metal kernel backs it. The typed
+        // `normalization = []` list above already advertises none, honestly;
+        // a coarse row here claimed native LayerNorm/BatchNorm support this
+        // backend has never executed.
         native(
             OperationKind::Broadcast,
             CUDA_STORAGE_DTYPES,
@@ -1245,6 +1483,171 @@ mod catalog_tests {
             METAL_CAPABILITIES,
         ] {
             assert!(rules.iter().any(|rule| rule.operation.is_exact()));
+        }
+    }
+
+    /// The class of bug this guards against: `CUDA_CAPABILITIES` once carried
+    /// a hand-written `native(OperationKind::Normalization, FLOAT_DTYPES, ...)`
+    /// row from before the typed catalog existed, and nothing checked it
+    /// against reality after the CUDA normalization kernels were deleted. It
+    /// shipped in `docs/capabilities.md` claiming native LayerNorm/BatchNorm
+    /// support no CUDA kernel has ever executed.
+    ///
+    /// `exact_capability_rows_and_executor_admission_share_one_declaration`
+    /// above only walks `OPERATION_CATALOG`, i.e. the exact typed rows; the
+    /// coarse rows a family query like `incin doctor`'s `spec(OperationKind::
+    /// Normalization, ...)` actually resolves against are a second,
+    /// hand-written channel `assert_every_advertised_*_row_executes!` never
+    /// sees, because they carry no `op::X` type to bind an `Execute<O>`
+    /// bound to. This test is that channel's check: coarser than a compile
+    /// time proof, but load-bearing where one is not possible.
+    #[test]
+    fn every_coarse_family_row_is_backed_by_a_native_exact_row() {
+        use incin_core::shapes::error::OperationKind as K;
+
+        // The exact identities `incin doctor` and the `legacy` capability
+        // rows mean by each coarse family name, at the granularity those two
+        // callers actually use (finer than `OperationKind::family()`, which
+        // collapses `MatMul`/`Conv2d`/`Pool2d` into one `Reduction` bucket
+        // and would not have caught this bug either). `Storage` is excluded:
+        // every backend that compiles implements `StorageBackend`, so there
+        // is no exact op whose absence could make that specific claim false.
+        const FAMILIES: &[(K, &[K])] = &[
+            (
+                K::Pointwise,
+                &[
+                    K::Add,
+                    K::Sub,
+                    K::Mul,
+                    K::Div,
+                    K::Relu,
+                    K::Exp,
+                    K::Sqrt,
+                    K::Log,
+                    K::Tanh,
+                    K::Sigmoid,
+                ],
+            ),
+            (K::Broadcast, &[K::BroadcastAs]),
+            (K::Reshape, &[K::ReshapeExact]),
+            (
+                K::Fill,
+                &[K::Zeros, K::Ones, K::Full, K::Arange, K::Linspace],
+            ),
+            (K::Random, &[K::UniformRandom, K::NormalRandom]),
+            (
+                K::Reduction,
+                &[K::SumAll, K::MeanAll, K::MaxAll, K::MinAll, K::SumDim],
+            ),
+            (K::MatMul, &[K::MatMulExact]),
+            (K::Conv2d, &[K::Conv2dExact]),
+            (K::Pool2d, &[K::MaxPool2d, K::AvgPool2d]),
+            (
+                K::Normalization,
+                &[K::Softmax, K::LayerNorm, K::BatchNorm, K::RmsNorm],
+            ),
+        ];
+
+        for (device, rules) in [
+            (DeviceKind::Cpu, CPU_CAPABILITIES),
+            (DeviceKind::Cuda, CUDA_CAPABILITIES),
+            (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+            (DeviceKind::Metal, METAL_CAPABILITIES),
+        ] {
+            for rule in rules {
+                if rule.implementation != ImplementationKind::Native {
+                    continue;
+                }
+                let Some((_, members)) = FAMILIES
+                    .iter()
+                    .find(|(family, _)| *family == rule.operation)
+                else {
+                    continue;
+                };
+                let backed = members.iter().any(|member| {
+                    rules.iter().any(|r| {
+                        r.operation == *member && r.implementation == ImplementationKind::Native
+                    })
+                });
+                assert!(
+                    backed,
+                    "{device:?} advertises native {} but none of {:?} has a \
+                     matching native row in the same table; either the coarse \
+                     row is stale or the family list above is out of date",
+                    rule.operation, members
+                );
+            }
+        }
+    }
+
+    /// `crates/incin-core/src/exec/dispatch.rs`'s `admit_invocation` checks
+    /// *every* operand's dtype against the one capability row an operation
+    /// resolves to, not just a primary operand's. A mixed-operand op like
+    /// `where_cond`/`masked_fill` (a `bool` mask beside `f32` data) whose row
+    /// declares only the data dtype makes the mask operand fail admission
+    /// before either kernel ever launches — the exact bug this regression
+    /// guards: CUDA's `where_cond`/`masked_fill` rows briefly declared
+    /// `F32_ONLY`, which the single-dtype checks above never catch because
+    /// they only ever query `rule.dtypes[0]`.
+    #[test]
+    fn mixed_mask_and_data_operations_admit_both_operand_dtypes_on_every_backend() {
+        use incin_core::shapes::error::OperationKind as K;
+
+        for (device, rules) in [
+            (DeviceKind::Cpu, CPU_CAPABILITIES),
+            (DeviceKind::Cuda, CUDA_CAPABILITIES),
+            (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+            (DeviceKind::Metal, METAL_CAPABILITIES),
+        ] {
+            for operation in [K::WhereCond, K::MaskedFill] {
+                let Some(rule) = rules.iter().find(|rule| rule.operation == operation) else {
+                    // Not every backend has migrated this identity yet; a
+                    // missing row is a separate, already-covered gap.
+                    continue;
+                };
+                for dtype in [DTypeId::F32.descriptor(), DTypeId::Bool.descriptor()] {
+                    let query = CapabilityQuery {
+                        operation: incin_core::exec::OperationIdentity::Builtin(operation),
+                        dtype,
+                        layout: rule.layouts[0],
+                        rank: rule.min_rank,
+                        training: rule.training,
+                        math_mode: rule.math_modes[0],
+                    };
+                    assert!(
+                        !matches!(support(device, &query), SupportLevel::Unsupported(_)),
+                        "{device:?}: {operation} refuses a {dtype:?} operand, so a real \
+                         invocation (mask=bool, data=f32) would fail admission on \
+                         whichever operand this row does not list",
+                    );
+                }
+
+                // `where_cond`'s mask can legitimately arrive at a lower rank
+                // than the data it broadcasts against (a per-column mask
+                // selecting between two 2-D operands, for instance), and
+                // `admit_invocation` checks each operand's *own* rank against
+                // this one row before the executor's own broadcast ever
+                // runs. `descriptor_min_rank(WhereCond)`/`MaskedFill` fall to
+                // that function's `_ => 0` default (neither has a match arm
+                // there), so the row's floor is already 0 — this asserts
+                // that stays true rather than trusting the default silently.
+                let low_rank_query = CapabilityQuery {
+                    operation: incin_core::exec::OperationIdentity::Builtin(operation),
+                    dtype: DTypeId::Bool.descriptor(),
+                    layout: rule.layouts[0],
+                    rank: 1,
+                    training: rule.training,
+                    math_mode: rule.math_modes[0],
+                };
+                assert!(
+                    !matches!(
+                        support(device, &low_rank_query),
+                        SupportLevel::Unsupported(_)
+                    ),
+                    "{device:?}: {operation} refuses a rank-1 bool mask, which a \
+                     lower-rank-than-data mask broadcast would send",
+                );
+            }
         }
     }
 }

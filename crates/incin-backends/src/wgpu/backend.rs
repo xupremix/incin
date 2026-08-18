@@ -5,9 +5,7 @@ use incin_core::backend_authoring::*;
 use incin_core::error::{BackendError, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeError, StrideBuf};
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Wgpu};
-use incin_core::tensor::dtype::{
-    ConstDType, DType, DTypeDescriptor, DTypeId, FloatDType, Q8_0, QuantDType,
-};
+use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 /// WebGPU compute backend implementation for Incin.
 #[derive(Clone)]
@@ -50,7 +48,7 @@ pub struct WgpuVar {
 impl WgpuVar {
     /// Wrap `storage` in a fresh parameter slot.
     #[must_use]
-    pub fn new(storage: WgpuStorage) -> Self {
+    pub(crate) fn new(storage: WgpuStorage) -> Self {
         Self {
             storage: alloc::rc::Rc::new(core::cell::RefCell::new(storage)),
         }
@@ -62,12 +60,12 @@ impl WgpuVar {
     /// `assign_var` on the same slot would panic on a reentrant mutable
     /// borrow.
     #[must_use]
-    pub fn value(&self) -> WgpuStorage {
+    pub(crate) fn value(&self) -> WgpuStorage {
         self.storage.borrow().clone()
     }
 
     /// Replace the wrapped value, visible through every clone of this slot.
-    pub fn assign(&self, storage: WgpuStorage) {
+    pub(crate) fn assign(&self, storage: WgpuStorage) {
         *self.storage.borrow_mut() = storage;
     }
 }
@@ -217,7 +215,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// build a `Vec<f32>` regardless of the requested `dtype`, which
     /// `validate_wgpu` restricts to what the dtype policy allows), so this
     /// fills a host-side `Vec<f32>` and uploads it exactly like they do.
-    pub fn full<K: DType>(
+    pub(crate) fn full<K: DType>(
         val: f64,
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -230,7 +228,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
     /// `arange`.
-    pub fn arange<K: DType>(
+    pub(crate) fn arange<K: DType>(
         start: f64,
         step: f64,
         shape: &[usize],
@@ -245,7 +243,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `linspace`.
-    pub fn linspace<K: DType>(
+    pub(crate) fn linspace<K: DType>(
         start: f64,
         end: f64,
         shape: &[usize],
@@ -267,7 +265,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `zeros`.
-    pub fn zeros<K: DType>(
+    pub(crate) fn zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -280,7 +278,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `ones`.
-    pub fn ones<K: DType>(
+    pub(crate) fn ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -293,7 +291,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `rand`.
-    pub fn rand<K: DType>(
+    pub(crate) fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -320,7 +318,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `randn`.
-    pub fn randn<K: DType>(
+    pub(crate) fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -355,7 +353,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `var_zeros`.
-    pub fn var_zeros<K: DType>(
+    pub(crate) fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -365,7 +363,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `var_ones`.
-    pub fn var_ones<K: DType>(
+    pub(crate) fn var_ones<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -375,7 +373,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `var_rand`.
-    pub fn var_rand<K: DType>(
+    pub(crate) fn var_rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -385,7 +383,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `var_randn`.
-    pub fn var_randn<K: DType>(
+    pub(crate) fn var_randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
         device: &DeviceId,
@@ -498,7 +496,7 @@ fn binary_op<T: DType>(
 
 impl<D: Device> WgpuBackendImpl<D> {
     /// `add`.
-    pub fn add<K: DType>(
+    pub(crate) fn add<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -518,7 +516,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sub`.
-    pub fn sub<K: DType>(
+    pub(crate) fn sub<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -539,7 +537,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mul`.
-    pub fn mul<K: DType>(
+    pub(crate) fn mul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -562,7 +560,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `div`.
-    pub fn div<K: DType>(
+    pub(crate) fn div<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -644,7 +642,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `add_scalar_float`.
-    pub fn add_scalar_float<K: DType>(
+    pub(crate) fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -655,7 +653,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mul_scalar_float`.
-    pub fn mul_scalar_float<K: DType>(
+    pub(crate) fn mul_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -667,7 +665,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `relu`.
-    pub fn relu<K: DType>(
+    pub(crate) fn relu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 0)?;
@@ -680,7 +678,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `step`.
-    pub fn step<K: DType>(
+    pub(crate) fn step<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 10)?;
@@ -689,7 +687,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `elu`.
-    pub fn elu<K: DType>(
+    pub(crate) fn elu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 12)?;
@@ -699,7 +697,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
-    pub fn gelu<K: DType>(
+    pub(crate) fn gelu<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 1)?;
@@ -709,7 +707,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
-    pub fn mish<K: DType>(
+    pub(crate) fn mish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 11)?;
@@ -720,7 +718,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `tanh`.
-    pub fn tanh<K: DType>(
+    pub(crate) fn tanh<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 2)?;
@@ -735,7 +733,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sigmoid`.
-    pub fn sigmoid<K: DType>(
+    pub(crate) fn sigmoid<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 3)?;
@@ -750,7 +748,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `abs`.
-    pub fn abs<K: DType>(
+    pub(crate) fn abs<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 4)?;
@@ -768,7 +766,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `neg`.
-    pub fn neg<K: DType>(
+    pub(crate) fn neg<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 5)?;
@@ -777,7 +775,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sqrt`.
-    pub fn sqrt<K: DType>(
+    pub(crate) fn sqrt<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 6)?;
@@ -790,7 +788,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `exp`.
-    pub fn exp<K: DType>(
+    pub(crate) fn exp<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 7)?;
@@ -802,7 +800,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `log`.
-    pub fn log<K: DType>(
+    pub(crate) fn log<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 8)?;
@@ -814,7 +812,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `swish`.
-    pub fn swish<K: DType>(
+    pub(crate) fn swish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 9)?;
@@ -831,771 +829,14 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
-
-    /// `softmax`.
-    pub fn softmax<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let ls = log_softmax::<K>(t, dim)?;
-        Self::exp::<K>(&ls)
-    }
-}
-
-/// Helper function to compute log_softmax composed from primitives.
-pub(crate) fn log_softmax<K: DType>(t: &WgpuStorage, dim: usize) -> Result<WgpuStorage> {
-    let max = WgpuBackendImpl::<Wgpu>::max_keepdim::<K>(t, dim)?;
-    let max_b = WgpuBackendImpl::<Wgpu>::broadcast_as::<K>(&max, &t.shape)?;
-    let diff = WgpuBackendImpl::<Wgpu>::sub::<K>(t, &max_b)?;
-    let exp_diff = WgpuBackendImpl::<Wgpu>::exp::<K>(&diff)?;
-    let sum_exp = WgpuBackendImpl::<Wgpu>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let sum_exp_b = WgpuBackendImpl::<Wgpu>::broadcast_as::<K>(&sum_exp, &t.shape)?;
-    let log_sum = WgpuBackendImpl::<Wgpu>::log::<K>(&sum_exp_b)?;
-    WgpuBackendImpl::<Wgpu>::sub::<K>(&diff, &log_sum)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //   (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 impl<D: Device> WgpuBackendImpl<D> {
-    /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
-    /// shape via the already tape-wired `broadcast_as` (reusing
-    /// `crate::layout::broadcast_shape` to compute it, the same
-    /// resolver CPU's own `where_cond` uses), then selects elementwise via
-    /// host readback. Its own backward routes each `grad_out` element to
-    /// `grad_true` or `grad_false` by the same mask, in the *broadcasted*
-    /// shape; unbroadcasting each back down to `on_true`'s/`on_false`'s own
-    /// shape is not this closure's job; it happens automatically as the tape
-    /// walk continues into `broadcast_as`'s own backward for whichever of
-    /// `on_true`/`on_false` was not already at the common shape. `mask`
-    /// itself gets no gradient, matching CPU.
-    pub fn where_cond<K: DType>(
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        on_true: &<Self as StorageBackend>::Storage<K>,
-        on_false: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let out_shape = crate::layout::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let mask_b = Self::broadcast_as::<bool>(mask, &out_shape)?;
-        let true_b = Self::broadcast_as::<K>(on_true, &out_shape)?;
-        let false_b = Self::broadcast_as::<K>(on_false, &out_shape)?;
-
-        let mask_data = mask_b.buffer.to_vec::<f32>()?;
-        let true_data = true_b.buffer.to_vec::<f32>()?;
-        let false_data = false_b.buffer.to_vec::<f32>()?;
-        let out: Vec<f32> = mask_data
-            .iter()
-            .zip(true_data.iter())
-            .zip(false_data.iter())
-            .map(|((&m, &t), &f)| if m != 0.0 { t } else { f })
-            .collect();
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        let out_storage = WgpuStorage::new(buf, out_shape);
-
-        let mask_cap = mask_b.clone();
-        let (true_id, false_id, out_id) = (true_b.id, false_b.id, out_storage.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![true_id, false_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let mask_data = mask_cap.buffer.to_vec::<f32>()?;
-                let grad_data = grad_out.buffer.to_vec::<f32>()?;
-                let mut grad_true = Vec::with_capacity(grad_data.len());
-                let mut grad_false = Vec::with_capacity(grad_data.len());
-                for (&m, &g) in mask_data.iter().zip(grad_data.iter()) {
-                    if m != 0.0 {
-                        grad_true.push(g);
-                        grad_false.push(0.0);
-                    } else {
-                        grad_true.push(0.0);
-                        grad_false.push(g);
-                    }
-                }
-                let g_true = WgpuStorage::new(
-                    WgpuBuffer::try_from_slice(&grad_true)?,
-                    grad_out.shape.to_vec(),
-                );
-                let g_false = WgpuStorage::new(
-                    WgpuBuffer::try_from_slice(&grad_false)?,
-                    grad_out.shape.to_vec(),
-                );
-                Ok(vec![g_true, g_false])
-            }),
-        });
-        Ok(out_storage)
-    }
-
-    /// `gather`. Forward is the same host-readback/upload pattern as
-    /// `index_select`. Unlike `index_select`, CPU wires a real gradient for
-    /// `gather`, so this does too: gathering is a linear selection, and its
-    /// backward is the matching "scatter-add" that routes each `grad_out`
-    /// element back to the position it was gathered from, accumulating with
-    /// `+=` rather than `=` when two output positions share a source
-    /// (unlike plain `scatter` above, which only ever writes, never
-    /// accumulates). `index` itself gets no gradient, matching CPU.
-    pub fn gather<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let index_data = index.buffer.to_vec::<f32>()?;
-        let out_shape = index.shape.to_vec();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for &target in index_data.iter().take(total) {
-            let target_i = target as usize;
-            let mut src_idx = idx.clone();
-            src_idx[dim] = target_i;
-            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
-            if !out_shape.is_empty() {
-                increment_multi_index(&mut idx, &out_shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        let out_storage = WgpuStorage::new(buf, out_shape.clone());
-
-        let t_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out_storage.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let grad_out_data = grad_out.buffer.to_vec::<f32>()?;
-                let t_total = num_elements(&t_shape)?;
-                let mut grad_t_data = vec![0.0f32; t_total];
-                let index_total = num_elements(&out_shape)?;
-                let mut idx = vec![0usize; out_shape.len()];
-                for i in 0..index_total {
-                    let target_i = index_data[i] as usize;
-                    let mut src_idx = idx.clone();
-                    src_idx[dim] = target_i;
-                    let flat_dst = checked_flat_index(&src_idx, &t_shape, OperationKind::Reshape)?;
-                    grad_t_data[flat_dst] += grad_out_data[i];
-                    if !out_shape.is_empty() {
-                        increment_multi_index(&mut idx, &out_shape);
-                    }
-                }
-                let buf = WgpuBuffer::try_from_slice(&grad_t_data)?;
-                Ok(vec![WgpuStorage::new(buf, t_shape.clone())])
-            }),
-        });
-        Ok(out_storage)
-    }
-
-    /// `scatter`. Same host-readback/upload pattern as `repeat`, matching
-    /// CPU's own semantics exactly, including silently ignoring an
-    /// out-of-bounds destination position rather than erroring. Not
-    /// autograd-wired, matching CPU.
-    pub fn scatter<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-        src: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut out_data = t.buffer.to_vec::<f32>()?;
-        let index_data = index.buffer.to_vec::<f32>()?;
-        let src_data = src.buffer.to_vec::<f32>()?;
-        let index_total = num_elements(&index.shape)?;
-        let mut idx = vec![0usize; index.shape.len()];
-        for i in 0..index_total {
-            let target_i = index_data[i] as usize;
-            let mut dest_idx = idx.clone();
-            dest_idx[dim] = target_i;
-            let flat_dest = checked_flat_index(&dest_idx, &t.shape, OperationKind::Reshape)?;
-            if flat_dest < out_data.len() {
-                out_data[flat_dest] = src_data[i];
-            }
-            if !index.shape.is_empty() {
-                increment_multi_index(&mut idx, &index.shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out_data)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// `group_norm`. WGPU storage is always contiguous, so a group (CPU's
-    /// per-sample run of `channels/groups * spatial` elements, computed with
-    /// the same formula as `cpu::ops::shape_ops::group_norm` — see its doc
-    /// comment for why dividing the whole tensor by `groups` is wrong above
-    /// batch size 1) is a plain contiguous slice of the host readback,
-    /// needing no strided indexing at all. Not autograd-wired, matching CPU.
-    pub fn group_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        groups: usize,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if groups == 0 {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Normalization,
-                reason: "group_norm: groups must be non-zero",
-            }));
-        }
-        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        if channels % groups != 0 {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Normalization,
-                reason: "group_norm: channels must be divisible by groups",
-            }));
-        }
-        let data = t.buffer.to_vec::<f32>()?;
-        let total = data.len();
-        let (batch, spatial) = if t.shape.len() >= 2 {
-            (t.shape[0], t.shape[2..].iter().product::<usize>())
-        } else {
-            (1, total)
-        };
-        let group_size = channels / groups * spatial;
-        let mut out = vec![0.0f32; total];
-        for run in 0..batch * groups {
-            let start = run * group_size;
-            let slice = &data[start..start + group_size];
-            let sum: f64 = slice.iter().map(|&v| v as f64).sum();
-            let sq_sum: f64 = slice.iter().map(|&v| (v as f64) * (v as f64)).sum();
-            let mean = sum / group_size as f64;
-            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
-            let inv_std = 1.0 / (var + eps).sqrt();
-            for (i, &value) in slice.iter().enumerate() {
-                out[start + i] = ((value as f64 - mean) * inv_std) as f32;
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// `instance_norm`. `group_norm` with one group per channel, matching
-    /// CPU's own composition exactly.
-    pub fn instance_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        eps: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
-        Self::group_norm::<K>(t, channels, eps)
-    }
-
-    /// `unfold`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn unfold<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        size: usize,
-        step: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let dim_len = t.shape[dim];
-        if size > dim_len {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Reshape,
-                reason: "unfold size cannot exceed dimension length",
-            }));
-        }
-        let data = t.buffer.to_vec::<f32>()?;
-        let n_windows = (dim_len - size) / step + 1;
-        let mut out_shape = t.shape.to_vec();
-        out_shape[dim] = n_windows;
-        out_shape.push(size);
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let win_idx = idx[dim];
-            let offset_idx = idx[out_shape.len() - 1];
-            let mut src_idx = idx[..t.shape.len()].to_vec();
-            src_idx[dim] = win_idx * step + offset_idx;
-            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
-            increment_multi_index(&mut idx, &out_shape);
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, out_shape))
-    }
-
-    /// `pixel_shuffle`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn pixel_shuffle<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        upscale_factor: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if t.shape.len() != 4 {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Reshape,
-                reason: "pixel_shuffle expects a 4D tensor (N, C, H, W)",
-            }));
-        }
-        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
-        let r = upscale_factor;
-        let r_sq = r * r;
-        if c % r_sq != 0 {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Reshape,
-                reason: "pixel_shuffle channels must be divisible by upscale_factor^2",
-            }));
-        }
-        let data = t.buffer.to_vec::<f32>()?;
-        let out_c = c / r_sq;
-        let out_shape = vec![n, out_c, h * r, w * r];
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; 4];
-        for _ in 0..total {
-            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
-            let h_in = h_out / r;
-            let w_in = w_out / r;
-            let r_h = h_out % r;
-            let r_w = w_out % r;
-            let c_in = c_out * r_sq + r_h * r + r_w;
-            out.push(
-                data[checked_flat_index(&[b, c_in, h_in, w_in], &t.shape, OperationKind::Reshape)?],
-            );
-            increment_multi_index(&mut idx, &out_shape);
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, out_shape))
-    }
-
-    /// `scaled_dot_product_attention`. Composed from the already tape-wired
-    /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
-    /// CPU's own composition exactly (down to the `1/sqrt(d_k)` default
-    /// scale), so gradients flow through `q`/`k`/`v`/`mask` the same way they
-    /// do on CPU rather than dead-ending on the tape.
-    pub fn scaled_dot_product_attention<K: DType>(
-        q: &<Self as StorageBackend>::Storage<K>,
-        k: &<Self as StorageBackend>::Storage<K>,
-        v: &<Self as StorageBackend>::Storage<K>,
-        mask: Option<&<Self as StorageBackend>::Storage<K>>,
-        scale: Option<f64>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let k_rank = k.shape.len();
-        let k_t = if k_rank >= 2 {
-            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
-        } else {
-            k.clone()
-        };
-        let scores = Self::matmul::<K>(q, &k_t)?;
-        let d_k = *q.shape.last().unwrap_or(&1) as f64;
-        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
-        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
-        let masked_scores = if let Some(m) = mask {
-            Self::add::<K>(&scaled_scores, m)?
-        } else {
-            scaled_scores
-        };
-        let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
-        Self::matmul::<K>(&attn, v)
-    }
-
-    /// `index_select`. Same host-readback/upload pattern as `repeat`; `index`
-    /// is `WgpuStorage` regardless of `KInt` (WGPU has one physical storage
-    /// representation for every dtype), so its values are read back as f32
-    /// and truncated to a position like CPU's `index.get(&idx) as usize`
-    /// does. Not autograd-wired, matching CPU.
-    pub fn index_select<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        index: &<Self as StorageBackend>::Storage<KInt>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let index_data = index.buffer.to_vec::<f32>()?;
-        let mut out_shape = t.shape.to_vec();
-        out_shape[dim] = index_data.len();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut out_idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let selected = index_data[out_idx[dim]] as usize;
-            let mut src_idx = out_idx.clone();
-            src_idx[dim] = selected;
-            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
-            if !out_shape.is_empty() {
-                increment_multi_index(&mut out_idx, &out_shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, out_shape))
-    }
-
-    /// `masked_fill`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn masked_fill<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        mask: &<Self as StorageBackend>::Storage<bool>,
-        value: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if t.shape != mask.shape {
-            return Err(Error::ShapeMismatch {
-                op: "masked_fill",
-                expected: t.shape.to_vec(),
-                got: mask.shape.to_vec(),
-                msg: "mask must match the operand's shape exactly".to_string(),
-            });
-        }
-        let data = t.buffer.to_vec::<f32>()?;
-        let mask_data = mask.buffer.to_vec::<f32>()?;
-        let out: Vec<f32> = data
-            .iter()
-            .zip(mask_data.iter())
-            .map(|(&v, &m)| if m != 0.0 { value as f32 } else { v })
-            .collect();
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// `repeat`. WGPU storage has no shader for this yet, so it reads the
-    /// operand back to the host, repeats it with the same row-major walk
-    /// CPU's own `repeat` uses, and re-uploads — the same host-compute
-    /// pattern `full`/`arange`/`linspace` above already use. Not
-    /// autograd-wired, matching CPU.
-    pub fn repeat<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        repeats: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if repeats.len() != t.shape.len() {
-            return Err(Error::Backend(BackendError::InvalidInput {
-                operation: OperationKind::Repeat,
-                reason: "repeat factors must match tensor rank",
-            }));
-        }
-        let data = t.buffer.to_vec::<f32>()?;
-        let out_shape: Vec<usize> = t.shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let src_idx: Vec<usize> = idx
-                .iter()
-                .zip(t.shape.iter())
-                .map(|(&s, &dim)| s % dim)
-                .collect();
-            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
-            if !out_shape.is_empty() {
-                increment_multi_index(&mut idx, &out_shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, out_shape))
-    }
-
-    /// `pad`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn pad<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        padding: &[(usize, usize)],
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let out_shape: Vec<usize> = t
-            .shape
-            .iter()
-            .zip(padding)
-            .map(|(&s, &(before, after))| s + before + after)
-            .collect();
-        let total = num_elements(&out_shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; out_shape.len()];
-        for _ in 0..total {
-            let mut inside = true;
-            let mut src_idx = Vec::with_capacity(idx.len());
-            for (axis, &p) in idx.iter().enumerate() {
-                let (before, _) = padding[axis];
-                if p < before || p >= before + t.shape[axis] {
-                    inside = false;
-                    break;
-                }
-                src_idx.push(p - before);
-            }
-            out.push(if inside {
-                data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]
-            } else {
-                val as f32
-            });
-            if !out_shape.is_empty() {
-                increment_multi_index(&mut idx, &out_shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, out_shape))
-    }
-
-    /// `triu`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn triu<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let rank = t.shape.len();
-        let total = num_elements(&t.shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; rank];
-        for &value in data.iter().take(total) {
-            let (r, c) = if rank >= 2 {
-                (idx[rank - 2] as i64, idx[rank - 1] as i64)
-            } else {
-                (0, idx[0] as i64)
-            };
-            out.push(if c >= r + k { value } else { 0.0 });
-            if !t.shape.is_empty() {
-                increment_multi_index(&mut idx, &t.shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// `tril`. Same host-readback/upload pattern as `repeat`. Not
-    /// autograd-wired, matching CPU.
-    pub fn tril<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let rank = t.shape.len();
-        let total = num_elements(&t.shape)?;
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; rank];
-        for &value in data.iter().take(total) {
-            let (r, c) = if rank >= 2 {
-                (idx[rank - 2] as i64, idx[rank - 1] as i64)
-            } else {
-                (0, idx[0] as i64)
-            };
-            out.push(if c <= r + k { value } else { 0.0 });
-            if !t.shape.is_empty() {
-                increment_multi_index(&mut idx, &t.shape);
-            }
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// `diag`. Same host-readback/upload pattern as `repeat`, matching CPU's
-    /// two cases: a 1D operand builds a 2D matrix with that operand on its
-    /// `k`-th diagonal, an operand of rank 2+ extracts its `k`-th diagonal
-    /// into a 1D result. Not autograd-wired, matching CPU.
-    pub fn diag<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: i64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let rank = t.shape.len();
-        if rank == 1 {
-            let n = t.shape[0];
-            let k_abs = k.unsigned_abs() as usize;
-            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Storage,
-                expression: "WGPU diagonal output dimension",
-            })?;
-            let out_total = num_elements(&[out_dim, out_dim])?;
-            let mut out = vec![0.0f32; out_total];
-            for (i, &value) in data.iter().enumerate().take(n) {
-                let r = if k >= 0 { i } else { i + k_abs };
-                let c = if k >= 0 { i + k_abs } else { i };
-                if r < out_dim && c < out_dim {
-                    out[r * out_dim + c] = value;
-                }
-            }
-            let buf = WgpuBuffer::try_from_slice(&out)?;
-            Ok(WgpuStorage::new(buf, vec![out_dim, out_dim]))
-        } else {
-            let r_len = t.shape[rank - 2];
-            let c_len = t.shape[rank - 1];
-            let mut diag_vals = Vec::new();
-            for r in 0..r_len {
-                let c = (r as i64 + k) as usize;
-                if c < c_len {
-                    diag_vals.push(data[r * c_len + c]);
-                }
-            }
-            let out_len = diag_vals.len();
-            let buf = WgpuBuffer::try_from_slice(&diag_vals)?;
-            Ok(WgpuStorage::new(buf, vec![out_len]))
-        }
-    }
-
-    /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
-    /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching CPU's
-    /// own composition — and so, like CPU, differentiable through all three
-    /// operands rather than a dead end on the tape.
-    pub fn addmm<K: DType>(
-        mat: &<Self as StorageBackend>::Storage<K>,
-        mat1: &<Self as StorageBackend>::Storage<K>,
-        mat2: &<Self as StorageBackend>::Storage<K>,
-        beta: f64,
-        alpha: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mm = Self::matmul::<K>(mat1, mat2)?;
-        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
-        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
-        Self::add::<K>(&mat_beta, &mm_alpha)
-    }
-    /// `bmm`. `matmul` already handles the batch dimensions, matching CPU.
-    pub fn bmm<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        Self::matmul::<K>(lhs, rhs)
-    }
-
-    /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
-    /// so inherits gradient wiring from): inserts a size-1 axis.
-    pub fn unsqueeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut target_shape = t.shape.to_vec();
-        if dim <= target_shape.len() {
-            target_shape.insert(dim, 1);
-        } else {
-            target_shape.push(1);
-        }
-        Self::reshape::<K>(t, &target_shape)
-    }
-
-    /// `cmp_eq`. Matches the CPU backend: same-dtype output encoding
-    /// true/false as 1.0/0.0, and (like CPU) not autograd-wired since the
-    /// output is not a differentiable function of the operands.
-    pub fn cmp_eq<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_eq",
-        })
-    }
-    pub fn cmp_ne<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_ne",
-        })
-    }
-    pub fn cmp_lt<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_lt",
-        })
-    }
-    pub fn cmp_le<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_le",
-        })
-    }
-    pub fn cmp_gt<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_gt",
-        })
-    }
-    pub fn cmp_ge<K: DType>(
-        _lhs: &<Self as StorageBackend>::Storage<K>,
-        _rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "cmp_ge",
-        })
-    }
-
-    pub fn logical_and(
-        _lhs: &<Self as StorageBackend>::Storage<bool>,
-        _rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "logical_and",
-        })
-    }
-    pub fn logical_or(
-        _lhs: &<Self as StorageBackend>::Storage<bool>,
-        _rhs: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "logical_or",
-        })
-    }
-    pub fn logical_not(
-        _t: &<Self as StorageBackend>::Storage<bool>,
-    ) -> Result<<Self as StorageBackend>::Storage<bool>> {
-        Err(Error::UnsupportedDType {
-            dtype: <bool as ConstDType>::DESCRIPTOR,
-            backend: "Wgpu",
-            op: "logical_not",
-        })
-    }
-
-    /// `sub_scalar`. Not autograd-wired: matches CPU, whose ``
-    /// scalar/comparison methods (as opposed to ``'s
-    /// `add_scalar_float`/`mul_scalar_float`) carry no backward closure.
-    pub fn sub_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        scalar_op::<K>(t, val, 2)
-    }
-    /// `div_scalar`.
-    pub fn div_scalar<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        val: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        scalar_op::<K>(t, val, 3)
-    }
-
-    /// `maximum`. Not autograd-wired, matching CPU.
-    pub fn maximum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op::<K>(lhs, rhs, 15, "maximum")
-    }
-    /// `minimum`.
-    pub fn minimum<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op::<K>(lhs, rhs, 16, "minimum")
-    }
-    /// `abs_diff`.
-    pub fn abs_diff<K: DType>(
-        lhs: &<Self as StorageBackend>::Storage<K>,
-        rhs: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        binary_op::<K>(lhs, rhs, 17, "abs_diff")
-    }
-
-    /// `lerp`. `start + weight * (end - start)`, composed from existing
-    /// primitives; not autograd-wired, matching CPU.
-    pub fn lerp<K: DType>(
-        start: &<Self as StorageBackend>::Storage<K>,
-        end: &<Self as StorageBackend>::Storage<K>,
-        weight: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let diff = binary_op::<K>(end, start, 1, "lerp_diff")?;
-        let scaled = scalar_op::<K>(&diff, weight, 1)?;
-        binary_op::<K>(start, &scaled, 0, "lerp_add")
-    }
-
     /// `matmul`.
-    pub fn matmul<K: DType>(
+    pub(crate) fn matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1772,7 +1013,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `reshape`.
-    pub fn reshape<K: DType>(
+    pub(crate) fn reshape<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -1798,7 +1039,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `transpose`.
-    pub fn transpose<K: DType>(
+    pub(crate) fn transpose<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim1: usize,
         dim2: usize,
@@ -1835,261 +1076,11 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
-    /// `flatten`.
-    pub fn flatten<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        start_dim: usize,
-        end_dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let shape = &t.shape;
-        let flat_size: usize =
-            incin_core::shapes::ShapeBuf::from_slice(&(shape[start_dim..=end_dim]))
-                .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
-        let mut new_shape: Vec<usize> = shape[..start_dim].to_vec();
-        new_shape.push(flat_size);
-        new_shape.extend_from_slice(&shape[end_dim + 1..]);
-        Self::reshape::<K>(t, &new_shape)
-    }
-
-    /// `squeeze`.
-    pub fn squeeze<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut new_shape = t.shape.to_vec();
-        if new_shape[dim] == 1 {
-            new_shape.remove(dim);
-        }
-        Self::reshape::<K>(t, &new_shape)
-    }
-
-    pub fn narrow<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let shape = &t.shape;
-        let mut new_shape = shape.to_vec();
-        new_shape[dim] = len;
-
-        let out_elements = num_elements(&new_shape)?;
-        let out_n = checked_u32(out_elements, "WGPU narrow output element count")?;
-        let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
-
-        let mut aux = vec![0usize; shape.len()];
-        aux[dim] = start;
-
-        let params = dispatch::prepare_shape_params(
-            0, // op_mode = slice
-            out_n, &new_shape, shape, &aux,
-        )?;
-
-        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
-        let out = WgpuStorage::new(out_buf, new_shape);
-
-        let original_shape = t.shape.to_vec();
-        let mut region_start = vec![0usize; original_shape.len()];
-        region_start[dim] = start;
-        let (t_id, out_id) = (t.id, out.id);
-
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                Ok(vec![crate::wgpu::storage::scatter_into_zeros(
-                    &original_shape,
-                    &region_start,
-                    grad_out,
-                )?])
-            }),
-        });
-        Ok(out)
-    }
-
-    pub fn broadcast_as<K: DType>(
+    pub(crate) fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         broadcast_storage(t, shape)
-    }
-
-    /// `broadcast_left`.
-    pub fn broadcast_left<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        shape: &[usize],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut target_shape = shape.to_vec();
-        target_shape.extend_from_slice(&t.shape);
-        Self::broadcast_as::<K>(t, &target_shape)
-    }
-
-    /// `slice`.
-    pub fn slice<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        ranges: &[(usize, usize)],
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let mut out = t.clone();
-        for (dim, &(start, end)) in ranges.iter().enumerate() {
-            out = Self::narrow::<K>(&out, dim, start, end - start)?;
-        }
-        Ok(out)
-    }
-
-    /// `stack`.
-    pub fn stack<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::Msg("stack: empty tensor list".to_string()));
-        }
-        // Unsqueeze each tensor at `dim` then concat
-        let mut unsqueezed = Vec::with_capacity(tensors.len());
-        for t in tensors.iter() {
-            let mut target_shape = t.shape.to_vec();
-            target_shape.insert(dim, 1);
-            unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
-        }
-        let refs: Vec<&<Self as StorageBackend>::Storage<K>> = unsqueezed.iter().collect();
-        Self::concat::<K>(&refs, dim)
-    }
-
-    /// `concat`.
-    pub fn concat<K: DType>(
-        tensors: &[&<Self as StorageBackend>::Storage<K>],
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if tensors.is_empty() {
-            return Err(Error::Msg("concat: empty tensor list".to_string()));
-        }
-        let rank = tensors[0].shape.len();
-        let mut out_shape = tensors[0].shape.to_vec();
-        out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
-            total
-                .checked_add(tensor.shape[dim])
-                .ok_or(ShapeError::ArithmeticOverflow {
-                    operation: OperationKind::Concat,
-                    expression: "WGPU concat output dimension",
-                })
-        })?;
-
-        let out_n = num_elements(&out_shape)?;
-        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
-
-        let mut current_offset = 0usize;
-        for t in tensors {
-            let in_n = checked_u32(num_elements(&t.shape)?, "WGPU concat input element count")?;
-            let mut aux = vec![0usize; rank];
-            aux[dim] = current_offset;
-
-            let params = dispatch::prepare_shape_params(
-                1, // op_mode = paste
-                in_n, &out_shape, &t.shape, &aux,
-            )?;
-            dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
-
-            current_offset =
-                current_offset
-                    .checked_add(t.shape[dim])
-                    .ok_or(ShapeError::ArithmeticOverflow {
-                        operation: OperationKind::Concat,
-                        expression: "WGPU concat cumulative offset",
-                    })?;
-        }
-        let out = WgpuStorage::new(out_buf, out_shape);
-
-        // Calculate cumulative offsets for backward
-        let mut cumulative_offsets = Vec::with_capacity(tensors.len());
-        let mut running = 0usize;
-        for t in tensors.iter() {
-            cumulative_offsets.push(running);
-            running += t.shape[dim];
-        }
-
-        let out_id = out.id;
-        let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
-        let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
-        let offsets = cumulative_offsets;
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids,
-            // Collecting an iterator of `Result` straight into `Result<Vec<_>>`
-            // is the whole conversion here, as on the CPU side.
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                offsets
-                    .iter()
-                    .zip(input_dim_sizes.iter())
-                    .map(|(&offset, &len)| Self::narrow::<K>(grad_out, dim, offset, len))
-                    .collect()
-            }),
-        });
-
-        Ok(out)
-    }
-
-    /// `float_to_scalar`.
-    pub fn float_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<f64> {
-        let numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Storage)?;
-        if numel != 1 {
-            return Err(Error::Shape(ShapeError::InvalidParameter {
-                operation: OperationKind::Storage,
-                parameter: "float_to_scalar element count",
-                value: numel,
-            }));
-        }
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        let value = data.first().copied().ok_or(Error::InternalInvariant {
-            operation: "wgpu_float_to_scalar",
-            reason: "validated one-element storage read back no bytes",
-        })?;
-        Ok(f64::from(value))
-    }
-
-    /// `float_to_vec1`.
-    pub fn float_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<f64>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        Ok(data.iter().map(|&x| x as f64).collect())
-    }
-
-    /// `int_to_scalar`.
-    pub fn int_to_scalar<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<i64> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        let value = data.first().copied().ok_or(Error::InvalidByteLength {
-            expected: core::mem::size_of::<f32>(),
-            got: 0,
-        })?;
-        incin_core::error::convert_f64_to_i64(
-            "int_to_scalar",
-            t.dtype,
-            f64::from(value),
-            incin_core::error::FloatToIntPolicy::Exact,
-        )
-    }
-
-    /// `int_to_vec1`.
-    pub fn int_to_vec1<K: DType>(t: &<Self as StorageBackend>::Storage<K>) -> Result<Vec<i64>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        data.into_iter()
-            .map(|value| {
-                incin_core::error::convert_f64_to_i64(
-                    "int_to_vec1",
-                    t.dtype,
-                    f64::from(value),
-                    incin_core::error::FloatToIntPolicy::Exact,
-                )
-            })
-            .collect()
-    }
-
-    /// `tensor_to_dtype`.
-    pub fn tensor_to_dtype<K: DType, K2: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        _dtype: DTypeDescriptor,
-    ) -> Result<<Self as StorageBackend>::Storage<K2>> {
-        // Simple passthrough (all stored as f32 internally)
-        WgpuStorage::try_new(t.buffer.clone(), t.shape.to_vec())
     }
 }
 
@@ -2097,14 +1088,14 @@ impl<D: Device> WgpuBackendImpl<D> {
 //
 // ─────────────────────────────────────────────────────────────────────────────
 /// `reduce_all_to_storage`.
-pub fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
+pub(crate) fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
     let n = checked_u32(num_elements(&t.shape)?, "WGPU reduction element count")?;
     let out = dispatch::dispatch_reduce_all(&t.buffer, n, mode)?;
     Ok(WgpuStorage::new(out, vec![]))
 }
 
 /// `reduce_dim_to_storage`.
-pub fn reduce_dim_to_storage(
+pub(crate) fn reduce_dim_to_storage(
     t: &WgpuStorage,
     dim: usize,
     mode: u32,
@@ -2168,52 +1159,13 @@ pub fn reduce_dim_to_storage(
 /// any element directly (`outer_idx*(axis*inner) + axis_idx*inner + inner_idx`)
 /// without a general N-dimensional odometer — WGPU storage has no
 /// non-contiguous view support, so this always applies.
-pub fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
+pub(crate) fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
     let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[..dim]))
         .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
     let axis = shape[dim];
     let inner: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[dim + 1..]))
         .checked_numel(incin_core::shapes::OperationKind::Storage)?;
     Ok((outer, axis, inner))
-}
-
-pub fn checked_flat_index(
-    coords: &[usize],
-    shape: &[usize],
-    operation: OperationKind,
-) -> Result<usize> {
-    let mut flat = 0usize;
-    let mut stride = 1usize;
-    for (&coord, &dimension) in coords.iter().zip(shape).rev() {
-        flat = coord
-            .checked_mul(stride)
-            .and_then(|offset| flat.checked_add(offset))
-            .ok_or(ShapeError::ArithmeticOverflow {
-                operation,
-                expression: "WGPU flat index",
-            })?;
-        stride = stride
-            .checked_mul(dimension)
-            .ok_or(ShapeError::ArithmeticOverflow {
-                operation,
-                expression: "WGPU index stride",
-            })?;
-    }
-    Ok(flat)
-}
-
-/// Advances a row-major multi-index by one position (odometer increment),
-/// least-significant axis first. Mirrors the CPU backend's
-/// `cpu::storage::increment_index`; WGPU storage is always contiguous so the
-/// same row-major walk applies directly to a flat host-side readback.
-pub fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
-    for axis in (0..shape.len()).rev() {
-        idx[axis] += 1;
-        if idx[axis] < shape[axis] {
-            return;
-        }
-        idx[axis] = 0;
-    }
 }
 
 /// Backward for `max_dim`/`min_dim`: recomputes each output position's
@@ -2224,7 +1176,12 @@ pub fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
 /// backend's `max_axis_with_indices`/`min_axis_with_indices` +
 /// `scatter_axis_grad` (`cpu/ops/reduce.rs`) exactly. Not used for
 /// `max_keepdim`/`min_keepdim` — see their doc comments.
-pub fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, is_max: bool) {
+pub(crate) fn push_extremum_dim_tape_entry(
+    t: &WgpuStorage,
+    out: &WgpuStorage,
+    dim: usize,
+    is_max: bool,
+) {
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
@@ -2268,7 +1225,7 @@ pub fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usi
 
 /// Backward for `max_all`/`min_all`: the whole-tensor special case of
 /// `push_extremum_dim_tape_entry` (`outer = inner = 1`, `axis = numel`).
-pub fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool) {
+pub(crate) fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool) {
     let input_shape = t.shape.to_vec();
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
@@ -2305,45 +1262,14 @@ pub fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: 
 }
 
 impl<D: Device> WgpuBackendImpl<D> {
-    /// `cumsum`. No shader for this — a prefix scan does not fit the
-    /// per-workgroup reduction shape `reduce.wgsl`/`reduce_dim.wgsl` compute
-    /// — so it uses the same host-readback/upload pattern as the structural
-    /// ops above, matching CPU's own per-row running-sum walk exactly. Not
-    /// autograd-wired, matching CPU.
-    pub fn cumsum<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let data = t.buffer.to_vec::<f32>()?;
-        let total = num_elements(&t.shape)?;
-        let dim_len = t.shape[dim];
-        let mut out = vec![0.0f32; total];
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            if idx[dim] == 0 {
-                let mut current = 0.0f32;
-                let mut step_idx = idx.clone();
-                for step in 0..dim_len {
-                    step_idx[dim] = step;
-                    let flat = checked_flat_index(&step_idx, &t.shape, OperationKind::Reduction)?;
-                    current += data[flat];
-                    out[flat] = current;
-                }
-            }
-            increment_multi_index(&mut idx, &t.shape);
-        }
-        let buf = WgpuBuffer::try_from_slice(&out)?;
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
     /// `prod_all`. Not autograd-wired, matching CPU.
-    pub fn prod_all<K: DType>(
+    pub(crate) fn prod_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         reduce_all_to_storage(t, 3)
     }
     /// `prod_dim`. Not autograd-wired, matching CPU.
-    pub fn prod_dim<K: DType>(
+    pub(crate) fn prod_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2351,7 +1277,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `sum_all`.
-    pub fn sum_all<K: DType>(
+    pub(crate) fn sum_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 0)?;
@@ -2367,7 +1293,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_all`.
-    pub fn mean_all<K: DType>(
+    pub(crate) fn mean_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let sum = reduce_all_to_storage(t, 0)?;
@@ -2386,7 +1312,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `max_all`.
-    pub fn max_all<K: DType>(
+    pub(crate) fn max_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 1)?;
@@ -2394,7 +1320,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `min_all`.
-    pub fn min_all<K: DType>(
+    pub(crate) fn min_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_all_to_storage(t, 2)?;
@@ -2403,7 +1329,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `sum_dim`.
-    pub fn sum_dim<K: DType>(
+    pub(crate) fn sum_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2423,7 +1349,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `sum_keepdim`.
-    pub fn sum_keepdim<K: DType>(
+    pub(crate) fn sum_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2440,7 +1366,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_dim`.
-    pub fn mean_dim<K: DType>(
+    pub(crate) fn mean_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2463,7 +1389,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `mean_keepdim`.
-    pub fn mean_keepdim<K: DType>(
+    pub(crate) fn mean_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2483,7 +1409,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `max_dim`.
-    pub fn max_dim<K: DType>(
+    pub(crate) fn max_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2500,13 +1426,13 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// for any `M` (the `M` terms cancel exactly:
     /// `-M - log(exp(-M)*sum(exp(x))) = -M - (-M + log(sum(exp(x)))) =
     /// -log(sum(exp(x)))`), so the two expressions are literally the same
-    /// function of `x` on their whole domain, not just equal at one point —
+    /// function of `x` on their whole domain, not just equal at one point --
     /// their gradients must therefore be identical too, whether or not `M`
     /// is treated as differentiable. Wiring a real gradient here does NOT
     /// need `log_softmax` to detach `M`. Matches the CPU backend, whose
     /// `max_keepdim` is fully wired and whose composed `log_softmax` (same
     /// formula) passes `softmax_gradcheck`/`log_softmax_gradcheck`.
-    pub fn max_keepdim<K: DType>(
+    pub(crate) fn max_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2515,7 +1441,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
     /// `min_dim`.
-    pub fn min_dim<K: DType>(
+    pub(crate) fn min_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -2525,256 +1451,15 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
     /// `min_keepdim`.
     ///
-    /// Autograd-wired the same way as `min_dim` — see `max_keepdim`'s doc
+    /// Autograd-wired the same way as `min_dim` -- see `max_keepdim`'s doc
     /// comment above.
-    pub fn min_keepdim<K: DType>(
+    pub(crate) fn min_keepdim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = reduce_dim_to_storage(t, dim, 2, true)?;
         push_extremum_dim_tape_entry(t, &out, dim, false);
         Ok(out)
-    }
-
-    /// `argmax`.
-    pub fn argmax<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        match dim {
-            None => {
-                let idx = data
-                    .iter()
-                    .enumerate()
-                    .max_by(|a, b| a.1.total_cmp(b.1))
-                    .map(|(i, _)| i)
-                    .ok_or(ShapeError::InvalidParameter {
-                        operation: OperationKind::Reduction,
-                        parameter: "non-empty input",
-                        value: 0,
-                    })?;
-                let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmax index")?]);
-                Ok(WgpuStorage::new(buf, vec![1]))
-            }
-            Some(d) => {
-                let shape = &t.shape;
-                if d >= shape.len() {
-                    return Err(ShapeError::InvalidParameter {
-                        operation: OperationKind::Reduction,
-                        parameter: "axis",
-                        value: d,
-                    }
-                    .into());
-                }
-                let mut out_shape = shape.to_vec();
-                out_shape[d] = 1;
-                let out_n = num_elements(&out_shape)?;
-
-                let dim_size = checked_u32(shape[d], "WGPU argmax dimension")?;
-                let inner_stride = ShapeBuf::from_slice(&shape[d + 1..])
-                    .checked_numel(OperationKind::Reduction)?;
-
-                let out_buf =
-                    WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
-                dispatch::dispatch_reduce_dim(
-                    &t.buffer,
-                    &out_buf,
-                    4, // argmax
-                    dim_size,
-                    checked_u32(inner_stride, "WGPU argmax inner stride")?,
-                    checked_u32(out_n, "WGPU argmax output element count")?,
-                );
-
-                let mut final_shape = shape.to_vec();
-                final_shape.remove(d);
-                Ok(WgpuStorage::new(out_buf, final_shape))
-            }
-        }
-    }
-
-    /// `argmin`.
-    pub fn argmin<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        match dim {
-            None => {
-                let idx = data
-                    .iter()
-                    .enumerate()
-                    .min_by(|a, b| a.1.total_cmp(b.1))
-                    .map(|(i, _)| i)
-                    .ok_or(ShapeError::InvalidParameter {
-                        operation: OperationKind::Reduction,
-                        parameter: "non-empty input",
-                        value: 0,
-                    })?;
-                let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmin index")?]);
-                Ok(WgpuStorage::new(buf, vec![1]))
-            }
-            Some(d) => {
-                let shape = &t.shape;
-                if d >= shape.len() {
-                    return Err(ShapeError::InvalidParameter {
-                        operation: OperationKind::Reduction,
-                        parameter: "axis",
-                        value: d,
-                    }
-                    .into());
-                }
-                let mut out_shape = shape.to_vec();
-                out_shape[d] = 1;
-                let out_n = num_elements(&out_shape)?;
-
-                let dim_size = checked_u32(shape[d], "WGPU argmin dimension")?;
-                let inner_stride = ShapeBuf::from_slice(&shape[d + 1..])
-                    .checked_numel(OperationKind::Reduction)?;
-
-                let out_buf =
-                    WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
-                dispatch::dispatch_reduce_dim(
-                    &t.buffer,
-                    &out_buf,
-                    5, // argmin
-                    dim_size,
-                    checked_u32(inner_stride, "WGPU argmin inner stride")?,
-                    checked_u32(out_n, "WGPU argmin output element count")?,
-                );
-
-                let mut final_shape = shape.to_vec();
-                final_shape.remove(d);
-                Ok(WgpuStorage::new(out_buf, final_shape))
-            }
-        }
-    }
-
-    /// `topk`.
-    pub fn topk<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        k: usize,
-        dim: usize,
-        largest: bool,
-    ) -> Result<(
-        <Self as StorageBackend>::Storage<K>,
-        <Self as StorageBackend>::Storage<KInt>,
-    )> {
-        let shape = &t.shape;
-        if dim >= shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "topk",
-                expected: shape.to_vec(),
-                got: vec![dim],
-                msg: format!("topk: axis {} out of range", dim),
-            });
-        }
-        let k = k.min(shape[dim]);
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-
-        let mut out_shape = shape.to_vec();
-        out_shape[dim] = k;
-        let mut base_shape = shape.to_vec();
-        base_shape[dim] = 1;
-
-        let n_slices = num_elements(&base_shape)?;
-        let mut out_vals = vec![0.0f32; num_elements(&out_shape)?];
-        let mut out_indices = vec![0u32; num_elements(&out_shape)?];
-
-        for i in 0..n_slices {
-            let mut rem = i;
-            let mut coords = vec![0usize; shape.len()];
-            for dd in (0..shape.len()).rev() {
-                coords[dd] = rem % base_shape[dd];
-                rem /= base_shape[dd];
-            }
-
-            let mut slice_vals = Vec::with_capacity(shape[dim]);
-            for j in 0..shape[dim] {
-                coords[dim] = j;
-                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
-                slice_vals.push((data[flat], checked_u32(j, "WGPU topk index")?));
-            }
-
-            if largest {
-                slice_vals
-                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
-            } else {
-                slice_vals
-                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
-            }
-
-            let mut out_coords = coords.clone();
-            for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
-                out_coords[dim] = j;
-                let flat = checked_flat_index(&out_coords, &out_shape, OperationKind::Reduction)?;
-                out_vals[flat] = val;
-                out_indices[flat] = idx;
-            }
-        }
-        let buf_vals = WgpuBuffer::from_slice(&out_vals);
-        let buf_indices = WgpuBuffer::from_slice(&out_indices);
-        Ok((
-            WgpuStorage::new(buf_vals, out_shape.clone()),
-            WgpuStorage::new(buf_indices, out_shape),
-        ))
-    }
-
-    /// `argsort`.
-    pub fn argsort<K: DType, KInt: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        dim: usize,
-        descending: bool,
-    ) -> Result<<Self as StorageBackend>::Storage<KInt>> {
-        let shape = &t.shape;
-        if dim >= shape.len() {
-            return Err(Error::ShapeMismatch {
-                op: "argsort",
-                expected: shape.to_vec(),
-                got: vec![dim],
-                msg: format!("argsort: axis {} out of range", dim),
-            });
-        }
-        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-
-        let mut base_shape = shape.to_vec();
-        base_shape[dim] = 1;
-
-        let n_slices = num_elements(&base_shape)?;
-        let mut out = vec![0u32; num_elements(shape)?];
-
-        for i in 0..n_slices {
-            let mut rem = i;
-            let mut coords = vec![0usize; shape.len()];
-            for dd in (0..shape.len()).rev() {
-                coords[dd] = rem % base_shape[dd];
-                rem /= base_shape[dd];
-            }
-
-            let mut slice_vals = Vec::with_capacity(shape[dim]);
-            for j in 0..shape[dim] {
-                coords[dim] = j;
-                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
-                slice_vals.push((data[flat], checked_u32(j, "WGPU argsort index")?));
-            }
-
-            if descending {
-                slice_vals
-                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
-            } else {
-                slice_vals
-                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
-            }
-
-            let mut out_coords = coords.clone();
-            for (j, &(_, idx)) in slice_vals.iter().enumerate() {
-                out_coords[dim] = j;
-                let flat = checked_flat_index(&out_coords, shape, OperationKind::Reduction)?;
-                out[flat] = idx;
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 }
 
@@ -2789,7 +1474,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 /// `[B, H_out*W_out, Cin*Kh*Kw]` column matrix. Out-of-bounds positions
 /// (i.e. positions in the padded region) contribute 0.0.
 #[allow(clippy::too_many_arguments)]
-pub fn im2col_2d_cpu(
+pub(crate) fn im2col_2d_cpu(
     input: &[f32],
     b: usize,
     cin: usize,
@@ -2842,7 +1527,7 @@ pub fn im2col_2d_cpu(
 /// Scatter-ADD a `[B, H_out*W_out, Cin*Kh*Kw]` gradient back into a
 /// zero-initialized `[B, Cin, H, W]` buffer.
 #[allow(clippy::too_many_arguments)]
-pub fn col2im_2d_cpu(
+pub(crate) fn col2im_2d_cpu(
     cols_grad: &[f32],
     b: usize,
     cin: usize,
@@ -2892,7 +1577,7 @@ pub fn col2im_2d_cpu(
 
 /// Batched matrix multiply on CPU: lhs `[B, M, K]` × rhs `[B, K, N]` → `[B, M, N]`.
 /// Used inside conv backward closures.
-pub fn cpu_bmm(
+pub(crate) fn cpu_bmm(
     lhs: &[f32],
     rhs: &[f32],
     b: usize,
@@ -2917,7 +1602,7 @@ pub fn cpu_bmm(
 }
 
 /// Transpose the last two dimensions of a `[B, M, N]` tensor → `[B, N, M]`.
-pub fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+pub(crate) fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::Transpose)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -2931,7 +1616,7 @@ pub fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<
 }
 
 /// Sum a `[B, M, N]` buffer over its leading batch axis → `[M, N]`.
-pub fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+pub(crate) fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
     let out_elements = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
     let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
@@ -2951,7 +1636,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// Forward-only conv2d (no tape entry). Used by both `conv1d` and `conv2d`
     /// so they can push exactly ONE clean tape entry each for their respective
     /// grad shapes, rather than having nested entries from the internal matmul.
-    pub fn conv2d_no_tape<K: DType>(
+    pub(crate) fn conv2d_no_tape<K: DType>(
         t: &WgpuStorage,
         weight: &WgpuStorage,
         stride: usize,
@@ -3031,7 +1716,7 @@ impl<D: Device> WgpuBackendImpl<D> {
 /// derives strides from shape), so pooling backward closures — which read
 /// buffers back to a flat host `Vec` — can compute this directly instead of
 /// pulling in `cpu::stride`.
-pub fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
+pub(crate) fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
     let strides = StrideBuf::contiguous_for(&ShapeBuf::from_slice(shape), OperationKind::Storage)?;
     strides
         .strides()
@@ -3039,44 +1724,7 @@ pub fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
         .map_err(|_| Error::Msg("WGPU pooling expected rank-four storage".into()))
 }
 
-/// Per-axis adaptive-pooling window bounds: `start = floor(i*input_size/output_size)`,
-/// `end = ceil((i+1)*input_size/output_size)`. Matches both the CPU backend's
-/// `adaptive_window_bounds` (`cpu/ops/pool.rs`) and the WGSL forward kernel's
-/// own `h_start`/`h_end` computation (`shaders/pool2d.wgsl`, mode 0) exactly —
-/// never derives an equivalent fixed kernel_size/stride, which is wrong
-/// whenever `input_size` doesn't evenly divide `output_size`.
-pub fn adaptive_window_bounds(
-    input_size: usize,
-    output_size: usize,
-    i: usize,
-) -> Result<(usize, usize)> {
-    if output_size == 0 {
-        return Err(ShapeError::InvalidParameter {
-            operation: OperationKind::AdaptiveAvgPool2d,
-            parameter: "output size",
-            value: output_size,
-        }
-        .into());
-    }
-    let start = i
-        .checked_mul(input_size)
-        .ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::AdaptiveAvgPool2d,
-            expression: "adaptive-pooling start index",
-        })?
-        / output_size;
-    let end = i
-        .checked_add(1)
-        .and_then(|next| next.checked_mul(input_size))
-        .ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::AdaptiveAvgPool2d,
-            expression: "adaptive-pooling end index",
-        })?
-        .div_ceil(output_size);
-    Ok((start, end))
-}
-
-pub fn pool_output_dim(
+pub(crate) fn pool_output_dim(
     input: usize,
     kernel: usize,
     stride: usize,
@@ -3125,325 +1773,12 @@ pub fn pool_output_dim(
         })
 }
 
-pub fn conv_transpose_output_dim(
-    input: usize,
-    kernel: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
-    output_padding: usize,
-) -> Result<usize> {
-    if input == 0 || kernel == 0 || stride == 0 || dilation == 0 {
-        return Err(ShapeError::InvalidParameter {
-            operation: OperationKind::Conv2d,
-            parameter: "transposed-convolution dimensions must be nonzero",
-            value: 0,
-        }
-        .into());
-    }
-    let unpadded = (input - 1)
-        .checked_mul(stride)
-        .and_then(|span| {
-            dilation
-                .checked_mul(kernel - 1)
-                .and_then(|effective| span.checked_add(effective))
-        })
-        .and_then(|span| span.checked_add(1))
-        .ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::Conv2d,
-            expression: "transposed-convolution output dimension",
-        })?;
-    let twice_padding = padding
-        .checked_mul(2)
-        .ok_or(ShapeError::ArithmeticOverflow {
-            operation: OperationKind::Conv2d,
-            expression: "transposed-convolution padding",
-        })?;
-    unpadded
-        .checked_sub(twice_padding)
-        .and_then(|natural| natural.checked_add(output_padding))
-        .ok_or_else(|| {
-            ShapeError::InvalidParameter {
-                operation: OperationKind::Conv2d,
-                parameter: "transposed-convolution padding/output padding",
-                value: padding,
-            }
-            .into()
-        })
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // ─────────────────────────────────────────────────────────────────────────────
 impl<D: Device> WgpuBackendImpl<D> {
-    /// `embedding`.
-    pub fn embedding<K: DType, KInt: DType>(
-        indices: &<Self as StorageBackend>::Storage<KInt>,
-        weight: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let embed_dim = weight.shape[1];
-        let vocab_size = weight.shape[0];
-        let seq_len = num_elements(&indices.shape)?;
-        let out_elements =
-            ShapeBuf::from_slice(&[seq_len, embed_dim]).checked_numel(OperationKind::Embedding)?;
-        let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
-
-        let [seq_len_u32, embed_dim_u32, vocab_size_u32] = checked_u32_array(
-            [seq_len, embed_dim, vocab_size],
-            "WGPU embedding kernel parameter",
-        )?;
-
-        dispatch::dispatch_embedding(
-            &indices.buffer,
-            &weight.buffer,
-            &out_buf,
-            seq_len_u32,
-            embed_dim_u32,
-            vocab_size_u32,
-        )?;
-
-        let out = WgpuStorage::new(out_buf, vec![seq_len, embed_dim]);
-
-        let (indices_capture, weight_shape) = (indices.clone(), weight.shape.to_vec());
-        let (weight_id, out_id) = (weight.id, out.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![weight_id],
-            backward: Box::new(move |grad_out: &WgpuStorage| {
-                // Index storage is physically F32 bytes (the WGSL forward
-                // kernel declares `indices: array<f32>` and does a real
-                // `u32(indices[i])` value conversion) — `to_vec::<u32>()`
-                // would bit-reinterpret those bytes instead of converting
-                // the value, corrupting every index except 0.0 (whose bit
-                // pattern happens to equal integer 0).
-                let indices_data = indices_capture.buffer.to_vec::<f32>()?;
-                let grad_data = grad_out.buffer.to_vec::<f32>()?;
-                let weight_grad_elements = ShapeBuf::from_slice(&[vocab_size, embed_dim])
-                    .checked_numel(OperationKind::Embedding)?;
-                let mut weight_grad = vec![0.0f32; weight_grad_elements];
-
-                for (i, &idx) in indices_data.iter().enumerate() {
-                    let idx = idx as usize;
-                    if idx < vocab_size {
-                        for d in 0..embed_dim {
-                            weight_grad[idx * embed_dim + d] += grad_data[i * embed_dim + d];
-                        }
-                    }
-                }
-
-                Ok(vec![WgpuStorage::new(
-                    WgpuBuffer::from_slice(&weight_grad),
-                    weight_shape.clone(),
-                )])
-            }),
-        });
-
-        Ok(out)
-    }
-
-    /// `layer_norm`.
-    pub fn layer_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        weight: &<Self as StorageBackend>::Storage<K>,
-        bias: Option<&<Self as StorageBackend>::Storage<K>>,
-        eps: f32,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let rank = t.shape.len();
-        let last_dim = rank - 1;
-
-        let mean = Self::mean_keepdim::<K>(t, last_dim)?;
-        let mean_b = Self::broadcast_as::<K>(&mean, &t.shape)?;
-        let centered = Self::sub::<K>(t, &mean_b)?;
-        let sq = Self::mul::<K>(&centered, &centered)?;
-        let variance = Self::mean_keepdim::<K>(&sq, last_dim)?;
-        let var_plus_eps = Self::add_scalar_float::<K>(&variance, eps as f64)?;
-        let std = Self::sqrt::<K>(&var_plus_eps)?;
-        let std_b = Self::broadcast_as::<K>(&std, &t.shape)?;
-        let normalized = Self::div::<K>(&centered, &std_b)?;
-
-        let mut w_shape = vec![1; rank];
-        w_shape[last_dim] = weight.shape[0];
-        let w_reshaped = Self::reshape::<K>(weight, &w_shape)?;
-        let weight_b = Self::broadcast_as::<K>(&w_reshaped, &t.shape)?;
-        let scaled = Self::mul::<K>(&normalized, &weight_b)?;
-
-        match bias {
-            Some(b) => {
-                let b_reshaped = Self::reshape::<K>(b, &w_shape)?;
-                let bias_b = Self::broadcast_as::<K>(&b_reshaped, &t.shape)?;
-                Self::add::<K>(&scaled, &bias_b)
-            }
-            None => {
-                let n = num_elements(&t.shape)?;
-                let zeros = WgpuStorage::new(
-                    WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?,
-                    t.shape.to_vec(),
-                );
-                Self::add::<K>(&scaled, &zeros)
-            }
-        }
-    }
-
-    /// `batch_norm`.
-    pub fn batch_norm<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        weight: Option<&<Self as StorageBackend>::Storage<K>>,
-        bias: Option<&<Self as StorageBackend>::Storage<K>>,
-        running_mean: Option<&<Self as StorageBackend>::Storage<K>>,
-        running_var: Option<&<Self as StorageBackend>::Storage<K>>,
-        eps: f32,
-        _momentum: f64,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let rank = t.shape.len();
-        let c = if rank > 1 { t.shape[1] } else { t.shape[0] };
-
-        let mut param_shape = vec![1; rank];
-        if rank > 1 {
-            param_shape[1] = c;
-        } else {
-            param_shape[0] = c;
-        }
-
-        let rm = match running_mean {
-            Some(m) => Self::reshape::<K>(m, &param_shape)?,
-            None => WgpuStorage::new(
-                WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
-                param_shape.clone(),
-            ),
-        };
-        let rv = match running_var {
-            Some(v) => Self::reshape::<K>(v, &param_shape)?,
-            None => {
-                let out = WgpuStorage::new(
-                    WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
-                    param_shape.clone(),
-                );
-                Self::add_scalar_float::<K>(&out, 1.0)?
-            }
-        };
-
-        let w = match weight {
-            Some(w) => Self::reshape::<K>(w, &param_shape)?,
-            None => {
-                let out = WgpuStorage::new(
-                    WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
-                    param_shape.clone(),
-                );
-                Self::add_scalar_float::<K>(&out, 1.0)?
-            }
-        };
-
-        let b = match bias {
-            Some(b) => Self::reshape::<K>(b, &param_shape)?,
-            None => WgpuStorage::new(
-                WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
-                param_shape.clone(),
-            ),
-        };
-
-        let rv_plus_eps = Self::add_scalar_float::<K>(&rv, eps as f64)?;
-        let std = Self::sqrt::<K>(&rv_plus_eps)?;
-
-        let rm_b = Self::broadcast_as::<K>(&rm, &t.shape)?;
-        let std_b = Self::broadcast_as::<K>(&std, &t.shape)?;
-        let w_b = Self::broadcast_as::<K>(&w, &t.shape)?;
-        let b_b = Self::broadcast_as::<K>(&b, &t.shape)?;
-
-        let centered = Self::sub::<K>(t, &rm_b)?;
-        let normalized = Self::div::<K>(&centered, &std_b)?;
-        let scaled = Self::mul::<K>(&normalized, &w_b)?;
-        Self::add::<K>(&scaled, &b_b)
-    }
-
-    /// `adaptive_avg_pool2d`.
-    pub fn adaptive_avg_pool2d<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        output_size: (usize, usize),
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let shape = &t.shape; // [N, C, H, W]
-        let (n, c, h, w) = (shape[0], shape[1], shape[2], shape[3]);
-        let (oh, ow) = output_size;
-        let out_elements = ShapeBuf::from_slice(&[n, c, oh, ow])
-            .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
-        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
-        let [n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32] = checked_u32_array(
-            [n, c, h, w, oh, ow],
-            "WGPU adaptive-pooling kernel parameter",
-        )?;
-
-        dispatch::dispatch_pool2d(
-            &t.buffer, &out_buf, 0, // mode 0 = adaptive_avg
-            n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32, 0, 0, 0, 0, 0, 0, 0, 0,
-        )?;
-
-        let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
-
-        // Backward: distributes grad_out's per-position value uniformly
-        // (divided by that position's actual window element count — windows
-        // vary in size when input_size doesn't evenly divide output_size)
-        // into every input position the window covered, `+=`-accumulating
-        // across overlapping windows. Mirrors the CPU backend's
-        // `adaptive_avg_pool2d_impl` (`cpu/ops/pool.rs`) exactly, including
-        // its `adaptive_window_bounds` formula
-        // (`start = floor(i*input_size/output_size)`,
-        // `end = ceil((i+1)*input_size/output_size)`), which the WGSL
-        // forward kernel (`shaders/pool2d.wgsl`, mode 0) also already uses.
-        let input_shape = t.shape.to_vec();
-        let t_capture = t.clone();
-        let (t_id, out_id) = (t.id, out.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let _ = &t_capture; // input values aren't needed, only its shape
-                let (b, c, h, w) = (
-                    input_shape[0],
-                    input_shape[1],
-                    input_shape[2],
-                    input_shape[3],
-                );
-                let grad_data = grad_out.buffer.to_vec::<f32>()?;
-                let grad_elements = ShapeBuf::from_slice(&input_shape)
-                    .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
-                let mut grad_input = vec![0.0f32; grad_elements];
-                let in_strides = contiguous_strides_4d(&input_shape)?;
-                let h_out = grad_out.shape[2];
-                let w_out = grad_out.shape[3];
-                for bi in 0..b {
-                    for ci in 0..c {
-                        for oh in 0..h_out {
-                            let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh)?;
-                            for ow in 0..w_out {
-                                let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow)?;
-                                let count = ((h_end - h_start) * (w_end - w_start)) as f32;
-                                let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
-                                let g = grad_data[flat_out] / count;
-                                for ih in h_start..h_end {
-                                    for iw in w_start..w_end {
-                                        let flat = bi * in_strides[0]
-                                            + ci * in_strides[1]
-                                            + ih * in_strides[2]
-                                            + iw * in_strides[3];
-                                        grad_input[flat] += g;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(vec![WgpuStorage::new(
-                    WgpuBuffer::from_slice(&grad_input),
-                    input_shape.clone(),
-                )])
-            }),
-        });
-
-        Ok(out)
-    }
-
     /// `avg_pool2d`.
-    pub fn avg_pool2d<K: DType>(
+    pub(crate) fn avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -3553,7 +1888,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     }
 
     /// `max_pool2d`.
-    pub fn max_pool2d<K: DType>(
+    pub(crate) fn max_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
@@ -3675,187 +2010,8 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
-    /// `conv1d`.
-    pub fn conv1d<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        weight: &<Self as StorageBackend>::Storage<K>,
-        bias: Option<&<Self as StorageBackend>::Storage<K>>,
-        stride: usize,
-        padding: usize,
-        dilation: usize,
-        groups: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        // Delegate to conv2d over a fake H=1 spatial dimension, then reshape
-        // back to 3D. We capture IDs before delegating so we can wire our OWN
-        // tape entry that maps grad_out [N, C_out, L_out] → grads for the
-        // original 3D tensors, hiding the internal 4D reshape from callers.
-        let inp_shape = &t.shape; // [N, C_in, L]
-        let w_shape = &weight.shape; // [C_out, C_in/groups, Kl]
-        let (n, c_in, l_in) = (inp_shape[0], inp_shape[1], inp_shape[2]);
-        let (c_out, c_in_g, kl) = (w_shape[0], w_shape[1], w_shape[2]);
-        let c_out_g = c_out / groups.max(1);
-
-        // Forward: CPU im2col + batched matmul via GPU conv2d path.
-        let inp4d = WgpuStorage::new(t.buffer.clone(), vec![n, c_in, 1, l_in]);
-        let w4d = WgpuStorage::new(weight.buffer.clone(), vec![c_out, c_in_g, 1, kl]);
-        // conv2d push its own internal tape entries; we want ONE clean entry
-        // that owns the conv1d backward, so we deliberately skip bias inside
-        // conv2d and add it via the already-tape-tracked add below.
-        let out4d = Self::conv2d_no_tape::<K>(&inp4d, &w4d, stride, padding, dilation, groups)?;
-        let l_out = out4d.shape[3];
-        let out = WgpuStorage::new(out4d.buffer, vec![n, c_out, l_out]);
-
-        // Push tape entry for conv1d.
-        let (inp_capture, w_capture) = (t.clone(), weight.clone());
-        let (inp_id, w_id, out_id) = (t.id, weight.id, out.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![inp_id, w_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                // grad_out: [N, C_out, L_out]
-                let input_data = inp_capture.buffer.to_vec::<f32>()?;
-                let weight_data = w_capture.buffer.to_vec::<f32>()?;
-                let grad_data = grad_out.buffer.to_vec::<f32>()?;
-
-                // Treat as [N, C_in, 1, L] / [N, C_out, 1, L_out] for the 2D helpers.
-                let (h, h_out) = (1usize, 1usize);
-
-                let mut grad_input_groups: Vec<Vec<f32>> = Vec::with_capacity(groups);
-                let mut grad_weight_groups: Vec<Vec<f32>> = Vec::with_capacity(groups);
-
-                for g in 0..groups {
-                    // Slice per-group input/weight/grad_out
-                    let gin_size = ShapeBuf::from_slice(&[n, c_in_g, l_in])
-                        .checked_numel(OperationKind::Conv1d)?;
-                    let mut input_g = vec![0.0f32; gin_size];
-                    for bi in 0..n {
-                        for ci in 0..c_in_g {
-                            for li in 0..l_in {
-                                input_g[bi * c_in_g * l_in + ci * l_in + li] =
-                                    input_data[bi * c_in * l_in + (g * c_in_g + ci) * l_in + li];
-                            }
-                        }
-                    }
-
-                    let gwt_size = ShapeBuf::from_slice(&[c_out_g, c_in_g, kl])
-                        .checked_numel(OperationKind::Conv1d)?;
-                    let mut weight_g = vec![0.0f32; gwt_size];
-                    for co in 0..c_out_g {
-                        for ci in 0..c_in_g {
-                            for ki in 0..kl {
-                                weight_g[co * c_in_g * kl + ci * kl + ki] =
-                                    weight_data[(g * c_out_g + co) * c_in_g * kl + ci * kl + ki];
-                            }
-                        }
-                    }
-
-                    let ggo_size = ShapeBuf::from_slice(&[n, c_out_g, l_out])
-                        .checked_numel(OperationKind::Conv1d)?;
-                    let mut grad_out_g = vec![0.0f32; ggo_size];
-                    for bi in 0..n {
-                        for co in 0..c_out_g {
-                            for li in 0..l_out {
-                                grad_out_g[bi * c_out_g * l_out + co * l_out + li] =
-                                    grad_data[bi * c_out * l_out + (g * c_out_g + co) * l_out + li];
-                            }
-                        }
-                    }
-
-                    // im2col on input_g treated as [N, C_in_g, 1, L]
-                    let (cols, ..) = im2col_2d_cpu(
-                        &input_g, n, c_in_g, h, l_in, h, kl, stride, padding, dilation,
-                    )?;
-                    // cols: [N, L_out, C_in_g*kl]
-                    // weight_mat_t: [C_in_g*kl, C_out_g] (transposed for grad_input)
-                    let weight_mat_t = cpu_transpose_last2(&weight_g, 1, c_out_g, c_in_g * kl)?;
-                    // grad_out_g: [N, C_out_g, L_out] -> [N, L_out, C_out_g]
-                    let go_elements = ShapeBuf::from_slice(&[n, l_out, c_out_g])
-                        .checked_numel(OperationKind::Conv1d)?;
-                    let mut go_t = vec![0.0f32; go_elements];
-                    for bi in 0..n {
-                        for li in 0..l_out {
-                            for co in 0..c_out_g {
-                                go_t[bi * l_out * c_out_g + li * c_out_g + co] =
-                                    grad_out_g[bi * c_out_g * l_out + co * l_out + li];
-                            }
-                        }
-                    }
-                    // grad_cols = go_t @ weight_mat_t: [N, L_out, C_out_g] @ [C_out_g, C_in_g*kl]
-                    let grad_cols = cpu_bmm(&go_t, &weight_mat_t, n, l_out, c_out_g, c_in_g * kl)?;
-                    // col2im: [N, L_out, C_in_g*kl] -> [N, C_in_g, 1, L]
-                    let grad_input_g = col2im_2d_cpu(
-                        &grad_cols, n, c_in_g, h, l_in, h_out, l_out, h, kl, stride, padding,
-                        dilation,
-                    )?;
-                    grad_input_groups.push(grad_input_g);
-
-                    // grad_weight: go_t^T @ cols: [N, C_out_g, L_out] @ [N, L_out, C_in_g*kl]
-                    let go_t2 = cpu_transpose_last2(&go_t, n, l_out, c_out_g)?;
-                    let gw_mat = cpu_bmm(&go_t2, &cols, n, c_out_g, l_out, c_in_g * kl)?;
-                    // sum over batch: [N, C_out_g, C_in_g*kl] -> [C_out_g, C_in_g*kl]
-                    let gw_summed = cpu_sum_batch(&gw_mat, n, c_out_g, c_in_g * kl)?;
-                    // reshape to [C_out_g, C_in_g, Kl]
-                    grad_weight_groups.push(gw_summed);
-                }
-
-                // Reassemble gradient tensors
-                let grad_input_elements =
-                    ShapeBuf::from_slice(&[n, c_in, l_in]).checked_numel(OperationKind::Conv1d)?;
-                let mut grad_input_data = vec![0.0f32; grad_input_elements];
-                for g in 0..groups {
-                    let g_data = &grad_input_groups[g];
-                    for bi in 0..n {
-                        for ci in 0..c_in_g {
-                            for li in 0..l_in {
-                                grad_input_data
-                                    [bi * c_in * l_in + (g * c_in_g + ci) * l_in + li] +=
-                                    g_data[bi * c_in_g * l_in + ci * l_in + li];
-                            }
-                        }
-                    }
-                }
-
-                let grad_weight_elements = ShapeBuf::from_slice(&[c_out, c_in_g, kl])
-                    .checked_numel(OperationKind::Conv1d)?;
-                let mut grad_weight_data = vec![0.0f32; grad_weight_elements];
-                for g in 0..groups {
-                    let g_data = &grad_weight_groups[g];
-                    for co in 0..c_out_g {
-                        for rest in 0..c_in_g * kl {
-                            grad_weight_data[(g * c_out_g + co) * c_in_g * kl + rest] +=
-                                g_data[co * c_in_g * kl + rest];
-                        }
-                    }
-                }
-
-                Ok(vec![
-                    WgpuStorage::new(
-                        WgpuBuffer::from_slice(&grad_input_data),
-                        inp_capture.shape.to_vec(),
-                    ),
-                    WgpuStorage::new(
-                        WgpuBuffer::from_slice(&grad_weight_data),
-                        w_capture.shape.to_vec(),
-                    ),
-                ])
-            }),
-        });
-
-        // Same defect and same repair as `conv2d` below: WGPU's `add` requires
-        // equal shapes, so the bias is stretched to the output shape first.
-        // grad_bias flows back through the broadcast entry.
-        match bias {
-            Some(b) => {
-                let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1])?;
-                let b_stretched = Self::broadcast_as::<K>(&b_shaped, &out.shape)?;
-                Self::add::<K>(&out, &b_stretched)
-            }
-            None => Ok(out),
-        }
-    }
-
     /// `conv2d`.
-    pub fn conv2d<K: DType>(
+    pub(crate) fn conv2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         weight: &<Self as StorageBackend>::Storage<K>,
         bias: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -4030,243 +2186,11 @@ impl<D: Device> WgpuBackendImpl<D> {
             None => Ok(conv_out),
         }
     }
-
-    /// `conv_transpose2d`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn conv_transpose2d<K: DType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-        weight: &<Self as StorageBackend>::Storage<K>,
-        bias: Option<&<Self as StorageBackend>::Storage<K>>,
-        stride: usize,
-        padding: usize,
-        output_padding: usize,
-        groups: usize,
-        dilation: usize,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let shape = &t.shape; // [N, C_in, H_in, W_in]
-        let ws = &weight.shape; // [C_in, C_out/groups, kH, kW]
-
-        if shape.len() != 4 || ws.len() != 4 {
-            return Err(Error::ShapeMismatch {
-                op: "conv_transpose2d",
-                expected: vec![4],
-                got: vec![shape.len()],
-                msg: "expected 4D input and weight".into(),
-            });
-        }
-
-        let batch = shape[0];
-        let c_in = shape[1];
-        let h_in = shape[2];
-        let w_in = shape[3];
-
-        let w_c_in = ws[0];
-        let c_out_per_group = ws[1];
-        let kh = ws[2];
-        let kw = ws[3];
-
-        let c_out = c_out_per_group * groups;
-        assert_eq!(c_in, w_c_in, "Input channels must match weight in_channels");
-
-        let h_nat = conv_transpose_output_dim(h_in, kh, stride, padding, dilation, 0)?;
-        let w_nat = conv_transpose_output_dim(w_in, kw, stride, padding, dilation, 0)?;
-        let h_out = h_nat
-            .checked_add(output_padding)
-            .ok_or(ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Conv2d,
-                expression: "transposed-convolution height plus output padding",
-            })?;
-        let w_out = w_nat
-            .checked_add(output_padding)
-            .ok_or(ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Conv2d,
-                expression: "transposed-convolution width plus output padding",
-            })?;
-
-        let out_elements = ShapeBuf::from_slice(&[batch, c_out, h_out, w_out])
-            .checked_numel(OperationKind::Conv2d)?;
-        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Conv2d)?;
-
-        let params = checked_u32_array(
-            [
-                batch, c_in, c_out, h_in, w_in, h_out, w_out, kh, kw, stride, stride, padding,
-                padding, dilation, dilation, groups,
-            ],
-            "WGPU transposed-convolution kernel parameter",
-        )?;
-
-        dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params)?;
-        let out_storage = WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]);
-
-        // Wire autograd tape (groups==1 only; matches CPU backend's documented scope).
-        let (inp_capture, w_capture) = (t.clone(), weight.clone());
-        let (inp_id, w_id, out_id) = (t.id, weight.id, out_storage.id);
-        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-            output_id: out_id,
-            input_ids: vec![inp_id, w_id],
-            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let input_data = inp_capture.buffer.to_vec::<f32>()?;
-                let weight_data = w_capture.buffer.to_vec::<f32>()?;
-                let grad_data = grad_out.buffer.to_vec::<f32>()?;
-
-                // Narrow away output_padding rows/cols from grad_out.
-                let go_nat: Vec<f32> = if output_padding == 0 {
-                    grad_data.clone()
-                } else {
-                    let natural_elements = ShapeBuf::from_slice(&[batch, c_out, h_nat, w_nat])
-                        .checked_numel(OperationKind::Conv2d)?;
-                    let mut nat = vec![0.0f32; natural_elements];
-                    for bi in 0..batch {
-                        for co in 0..c_out {
-                            for hi in 0..h_nat {
-                                for wi in 0..w_nat {
-                                    nat[bi * (c_out * h_nat * w_nat)
-                                        + co * (h_nat * w_nat)
-                                        + hi * w_nat
-                                        + wi] = grad_data[bi * (c_out * h_out * w_out)
-                                        + co * (h_out * w_out)
-                                        + hi * w_out
-                                        + wi];
-                                }
-                            }
-                        }
-                    }
-                    nat
-                };
-
-                // grad_input: apply conv2d forward formula to go_nat with weight.
-                // im2col on go_nat [N, C_out, H_nat, W_nat] using same kernel geometry.
-                let (go_cols, ..) = im2col_2d_cpu(
-                    &go_nat, batch, c_out, h_nat, w_nat, kh, kw, stride, padding, dilation,
-                )?;
-                // go_cols: [N, H_in*W_in, C_out*Kh*Kw]
-                // weight_mat_t: [C_out*Kh*Kw, C_in] (transposed for grad_input: grad = go_cols @ W^T)
-                let weight_mat_t = cpu_transpose_last2(&weight_data, 1, c_in, c_out * kh * kw)?;
-                // grad_input_flat = go_cols @ weight_mat_t: [N, H_in*W_in, C_out*Kh*Kw] @ [C_out*Kh*Kw, C_in]
-                let spatial_in = h_in * w_in;
-                let grad_input_flat = cpu_bmm(
-                    &go_cols,
-                    &weight_mat_t,
-                    batch,
-                    spatial_in,
-                    c_out * kh * kw,
-                    c_in,
-                )?;
-                // [N, H_in*W_in, C_in] -> [N, C_in, H_in, W_in]
-                let grad_input_elements = ShapeBuf::from_slice(&[batch, c_in, h_in, w_in])
-                    .checked_numel(OperationKind::Conv2d)?;
-                let mut grad_input_data = vec![0.0f32; grad_input_elements];
-                for bi in 0..batch {
-                    for ci in 0..c_in {
-                        for s in 0..spatial_in {
-                            let hi = s / w_in;
-                            let wi = s % w_in;
-                            grad_input_data
-                                [bi * (c_in * h_in * w_in) + ci * (h_in * w_in) + hi * w_in + wi] =
-                                grad_input_flat[bi * (spatial_in * c_in) + s * c_in + ci];
-                        }
-                    }
-                }
-
-                // grad_weight: same swap as CPU conv_transpose2d backward:
-                // input_t^T @ go_cols -> [N, C_in, C_out*Kh*Kw] -> sum_batch -> [C_in, C_out, Kh, Kw]
-                let input_flat_elements = ShapeBuf::from_slice(&[batch, spatial_in, c_in])
-                    .checked_numel(OperationKind::Conv2d)?;
-                let mut input_flat_t = vec![0.0f32; input_flat_elements];
-                for bi in 0..batch {
-                    for ci in 0..c_in {
-                        for s in 0..spatial_in {
-                            let hi = s / w_in;
-                            let wi_idx = s % w_in;
-                            input_flat_t[bi * (spatial_in * c_in) + s * c_in + ci] = input_data[bi
-                                * (c_in * h_in * w_in)
-                                + ci * (h_in * w_in)
-                                + hi * w_in
-                                + wi_idx];
-                        }
-                    }
-                }
-                let input_t2 = cpu_transpose_last2(&input_flat_t, batch, spatial_in, c_in)?;
-                let gw_mat = cpu_bmm(
-                    &input_t2,
-                    &go_cols,
-                    batch,
-                    c_in,
-                    spatial_in,
-                    c_out * kh * kw,
-                )?;
-                let gw_summed = cpu_sum_batch(&gw_mat, batch, c_in, c_out * kh * kw)?;
-
-                Ok(vec![
-                    WgpuStorage::new(
-                        WgpuBuffer::from_slice(&grad_input_data),
-                        inp_capture.shape.to_vec(),
-                    ),
-                    WgpuStorage::new(WgpuBuffer::from_slice(&gw_summed), w_capture.shape.to_vec()),
-                ])
-            }),
-        });
-
-        // Bias via already-tape-tracked add.
-        match bias {
-            Some(b) => {
-                let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1, 1])?;
-                Self::add::<K>(&out_storage, &b_shaped)
-            }
-            None => Ok(out_storage),
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loss helper (cross_entropy is composed from float/reduce operations).
 // ─────────────────────────────────────────────────────────────────────────────
-impl<D: Device> WgpuBackendImpl<D> {
-    /// `cross_entropy_loss`.
-    pub fn cross_entropy_loss<K: DType, KInt: DType>(
-        pred: &<Self as StorageBackend>::Storage<K>,
-        target: &<Self as StorageBackend>::Storage<KInt>,
-        reduction: incin_core::tensor::reduction::Reduction,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let batch = pred.shape[0];
-        let classes = pred.shape[1];
-
-        // 1. log_probs = log_softmax(pred, 1)
-        let log_probs = log_softmax::<K>(pred, 1)?;
-
-        // 2. Build one_hot constant WgpuStorage. Target storage is
-        // physically F32 bytes (this backend has no genuine integer
-        // storage), so read it as F32 and convert the value — a raw
-        // `to_vec::<u32>()` bit-reinterpret would corrupt every class index
-        // except 0.0 (whose bit pattern happens to equal integer 0).
-        let target_data = target.buffer.to_vec::<f32>()?;
-        let one_hot_elements =
-            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
-        let mut one_hot_data = vec![0.0f32; one_hot_elements];
-        for b_idx in 0..batch {
-            let class_idx = target_data[b_idx] as usize;
-            if class_idx < classes {
-                one_hot_data[b_idx * classes + class_idx] = 1.0;
-            }
-        }
-        let one_hot_buf = WgpuBuffer::from_slice(&one_hot_data);
-        let one_hot = WgpuStorage::new(one_hot_buf, vec![batch, classes]);
-
-        // 3. picked = log_probs * one_hot
-        let picked = Self::mul::<K>(&log_probs, &one_hot)?;
-
-        // 4. per_nll = -sum_dim(picked, 1)
-        let sum_picked = Self::sum_dim::<K>(&picked, 1)?;
-        let per_nll = Self::neg::<K>(&sum_picked)?;
-
-        // 5. Dispatch reduction
-        match reduction {
-            incin_core::tensor::reduction::Reduction::Mean => Self::mean_all::<K>(&per_nll),
-            incin_core::tensor::reduction::Reduction::Sum => Self::sum_all::<K>(&per_nll),
-            incin_core::tensor::reduction::Reduction::None => Ok(per_nll),
-        }
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quantization helpers (Q8_0: CPU-side encode/decode, GPU matmul via dequant)
@@ -4280,115 +2204,6 @@ impl<D: Device> WgpuBackendImpl<D> {
 // This mirrors the NativeBackend's `BlockQ8_0` layout, allowing byte-level
 // interoperability.  The encode/decode runs on the CPU (WgpuBuffer::to_vec /
 // from_slice); a GPU-native WGSL kernel is deferred post-0.1.0.
-impl<D: Device> WgpuBackendImpl<D> {
-    /// Quantize a contiguous f32 tensor to Q8_0 format.
-    ///
-    /// Only `K = f32` and `Q = Q8_0` are supported; any other combination
-    /// returns `UnsupportedBackendOperation`.
-    pub fn quantize<K: FloatDType, Q: QuantDType>(
-        t: &<Self as StorageBackend>::Storage<K>,
-    ) -> Result<<Self as StorageBackend>::Storage<Q>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
-            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
-        {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "quantize",
-                backend: "WGPU (only F32 to Q8_0 supported)",
-            });
-        }
-
-        let f32_data: Vec<f32> = t.buffer.to_vec::<f32>()?;
-        let n = f32_data.len();
-        if !n.is_multiple_of(32) {
-            return Err(Error::Msg(alloc::format!(
-                "WGPU quantize Q8_0: length must be a multiple of 32, got {}",
-                n
-            )));
-        }
-
-        // Encode as packed BlockQ8_0 bytes: [f16_le(d), i8×32] per block.
-        let blocks = n / 32;
-        let block_bytes = 2 + 32; // sizeof(f16) + 32 × sizeof(i8)
-        let mut out_bytes: Vec<u8> = Vec::with_capacity(blocks * block_bytes);
-
-        for chunk in f32_data.chunks_exact(32) {
-            let max_abs = chunk.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
-            let d = max_abs / 127.0;
-            let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
-
-            // Write scale as f16 little-endian.
-            let d_f16 = incin_core::tensor::dtype::f16::from_f32(d);
-            let d_bits = d_f16.to_bits();
-            out_bytes.push((d_bits & 0xFF) as u8);
-            out_bytes.push((d_bits >> 8) as u8);
-
-            // Write 32 quantized i8 values.
-            for &v in chunk {
-                let q = (v * inv_d).round().clamp(-128.0, 127.0) as i8;
-                out_bytes.push(q as u8);
-            }
-        }
-
-        let buf = WgpuBuffer::from_slice::<u8>(&out_bytes);
-        WgpuStorage::try_new_packed_q8(buf, t.shape.to_vec())
-    }
-
-    /// Dequantize a Q8_0 tensor back to f32.
-    pub fn dequantize<Q: QuantDType, K: FloatDType>(
-        t: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
-            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
-        {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "dequantize",
-                backend: "WGPU (only Q8_0 to F32 supported)",
-            });
-        }
-
-        let raw: Vec<u8> = t.buffer.to_vec::<u8>()?;
-        let block_bytes = 34usize; // 2-byte f16 + 32 × i8
-        if !raw.len().is_multiple_of(block_bytes) {
-            return Err(Error::Msg(alloc::format!(
-                "WGPU dequantize: raw buffer length {} is not a multiple of 34",
-                raw.len()
-            )));
-        }
-
-        let blocks = raw.len() / block_bytes;
-        let mut f32_data: Vec<f32> = Vec::with_capacity(blocks * 32);
-
-        for block in raw.chunks_exact(block_bytes) {
-            let d_bits = (block[0] as u16) | ((block[1] as u16) << 8);
-            let d = incin_core::tensor::dtype::f16::from_bits(d_bits).to_f32();
-            for i in 0..32 {
-                let q = block[2 + i] as i8;
-                f32_data.push(q as f32 * d);
-            }
-        }
-
-        let buf = WgpuBuffer::from_slice::<f32>(&f32_data);
-        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
-    }
-
-    /// Quantized matmul: dequantize both operands to f32 then dispatch to
-    /// the GPU matmul shader.  A native WGSL Q8_0 matmul kernel is deferred.
-    pub fn quantized_matmul<Q: QuantDType>(
-        lhs: &<Self as StorageBackend>::Storage<Q>,
-        rhs: &<Self as StorageBackend>::Storage<Q>,
-    ) -> Result<<Self as StorageBackend>::Storage<f32>> {
-        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>() {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "quantized_matmul",
-                backend: "WGPU (only Q8_0 supported)",
-            });
-        }
-        // Dequantize both operands, then run the existing GPU matmul.
-        let lhs_f32 = Self::dequantize::<Q, f32>(lhs)?;
-        let rhs_f32 = Self::dequantize::<Q, f32>(rhs)?;
-        Self::matmul::<f32>(&lhs_f32, &rhs_f32)
-    }
-}
 
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for WgpuBackendImpl<D> {
     type Grads = WgpuGrads;

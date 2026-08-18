@@ -11,10 +11,12 @@
 //! [`Error`] type.
 
 use incin_core::error::Result;
+use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::error::OperationKind;
+#[cfg(any(feature = "cuda", feature = "wgpu"))]
 use incin_core::tensor::dtype::DTypeDescriptor;
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "cuda", feature = "wgpu")))]
 use incin_core::tensor::dtype::DTypeId;
 
 /// Bytes needed to hold `elements` values of `dtype`.
@@ -22,6 +24,10 @@ use incin_core::tensor::dtype::DTypeId;
 /// The multiplication is checked, and `dtype` — not the caller — decides the
 /// width, so a block-quantized allocation is sized by its block encoding rather
 /// than by its scalar element width.
+///
+/// Only CUDA and WGPU size a device allocation by explicit byte length; the
+/// module itself compiles for `cpu` too, for [`checked_numel`] below.
+#[cfg(any(feature = "cuda", feature = "wgpu"))]
 pub(crate) fn byte_len(
     dtype: impl Into<DTypeDescriptor>,
     elements: usize,
@@ -30,8 +36,37 @@ pub(crate) fn byte_len(
     Ok(dtype.into().size_bytes(elements, operation)?)
 }
 
+/// Total element count of `shape`, i.e. the product of all dims, via
+/// `checked_mul` rather than a bare `.iter().product()`.
+///
+/// A crafted or accidentally huge user-supplied shape can otherwise overflow
+/// `usize` in release builds (overflow checks are off by default) and
+/// silently wrap to a small number, undersizing the buffer allocated for it
+/// while later stride-based indexing (computed from the same,
+/// differently-wrapped shape) reads or writes past the end of it. Every
+/// backend needs this same check before it trusts a shape's element count,
+/// so this is the one implementation the crate calls, the same way
+/// [`byte_len`] is the one implementation for a byte count.
+pub(crate) fn checked_numel(shape: &[usize]) -> Result<usize> {
+    ShapeBuf::from_slice(shape)
+        .checked_numel(OperationKind::Storage)
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn numel_is_the_checked_product_of_the_dims() {
+        assert_eq!(checked_numel(&[2, 3, 4]).unwrap(), 24);
+        assert_eq!(checked_numel(&[usize::MAX, 0]).unwrap(), 0);
+        assert!(checked_numel(&[usize::MAX, 2]).is_err());
+    }
+}
+
+#[cfg(all(test, any(feature = "cuda", feature = "wgpu")))]
+mod byte_len_tests {
     use super::*;
 
     #[test]

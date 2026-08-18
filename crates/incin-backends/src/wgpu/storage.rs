@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::ops::Deref;
 use incin_core::error::{BackendError, Error, Result};
 use incin_core::exec::{Alignment, TensorMeta};
-use incin_core::shapes::{ShapeBuf, error::OperationKind};
+use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::DTypeId;
 use wgpu::util::DeviceExt;
@@ -187,36 +187,6 @@ impl WgpuStorage {
         })
     }
 
-    pub(crate) fn try_new_packed_q8(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
-        let logical_shape = ShapeBuf::from_slice(&shape);
-        let logical_elements = logical_shape.numel().ok_or_else(|| {
-            Error::Shape(incin_core::shapes::ShapeError::ArithmeticOverflow {
-                operation: OperationKind::Storage,
-                expression: "Q8_0 logical element count",
-            })
-        })?;
-        let expected_bytes = DTypeId::Q8_0.size_bytes(logical_elements, OperationKind::Storage)?;
-        if buffer.size != expected_bytes {
-            return Err(Error::Msg(format!(
-                "WGPU Q8_0 buffer has {} bytes, expected {expected_bytes}",
-                buffer.size
-            )));
-        }
-        let meta = TensorMeta::contiguous(
-            shape.as_slice().into(),
-            DTypeId::Q8_0.descriptor(),
-            DeviceId::wgpu(0),
-            Alignment::BYTE,
-            logical_elements,
-        )
-        .map_err(|error| Error::Msg(format!("invalid WGPU Q8_0 storage metadata: {error}")))?;
-        Ok(Self {
-            buffer,
-            meta,
-            id: TensorId::next(),
-        })
-    }
-
     pub(crate) fn new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Self {
         Self::try_new(buffer, shape)
             .expect("backend-created contiguous WGPU storage must match its allocation")
@@ -225,28 +195,4 @@ impl WgpuStorage {
     pub fn metadata(&self) -> &TensorMeta {
         &self.meta
     }
-}
-
-pub(crate) fn scatter_into_zeros(
-    out_shape: &[usize],
-    start: &[usize],
-    grad_out: &WgpuStorage,
-) -> incin_core::error::Result<WgpuStorage> {
-    use crate::wgpu::dispatch;
-    let out_n = crate::wgpu::backend::num_elements(out_shape)?;
-    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
-    let in_n = crate::wgpu::backend::checked_u32(
-        crate::wgpu::backend::num_elements(&grad_out.shape)?,
-        "WGPU scatter input element count",
-    )?;
-
-    let params = dispatch::prepare_shape_params(
-        1, // paste
-        in_n,
-        out_shape,
-        &grad_out.shape,
-        start,
-    )?;
-    dispatch::dispatch_shape(&grad_out.buffer, &out_buf, &params);
-    Ok(WgpuStorage::new(out_buf, out_shape.to_vec()))
 }

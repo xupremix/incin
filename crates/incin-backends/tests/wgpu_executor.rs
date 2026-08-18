@@ -84,16 +84,14 @@ fn execute(
 }
 
 #[test]
-fn rank2_descriptor_execution_matches_the_backend_helper() {
+fn rank2_descriptor_execution_produces_the_arithmetic_product() {
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
     let rhs = storage(&[3, 2], &[7., 8., 9., 10., 11., 12.]);
     let validated = lower(&[2, 3], &[3, 2]);
 
-    let helper = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
     let descriptor = execute(&validated, &lhs, &rhs).unwrap();
 
-    assert_eq!(descriptor.shape(), helper.shape());
-    assert_eq!(read(&descriptor), read(&helper));
+    assert_eq!(descriptor.shape().dims(), &[2, 2]);
     assert_eq!(read(&descriptor), vec![58., 64., 139., 154.]);
 }
 
@@ -212,19 +210,17 @@ fn execute_reshape(
 }
 
 #[test]
-fn reshape_descriptor_execution_matches_the_backend_helper() {
-    let input = storage(
-        &[2, 6],
-        &[1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.],
-    );
+fn reshape_descriptor_execution_rewrites_the_shape_and_keeps_row_major_order() {
+    let values = [1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
+    let input = storage(&[2, 6], &values);
     let validated = lower_reshape_2x6_to_3x4();
 
-    let helper = TestBackend::reshape::<f32>(&input, &[3, 4]).unwrap();
     let descriptor = execute_reshape(&validated, &input).unwrap();
 
-    assert_eq!(descriptor.shape(), helper.shape());
     assert_eq!(descriptor.shape().dims(), &[3, 4]);
-    assert_eq!(read(&descriptor), read(&helper));
+    // Reshape is a reinterpretation, not a permutation: the row-major reading
+    // order of the elements has to survive it untouched.
+    assert_eq!(read(&descriptor), values.to_vec());
 }
 
 #[test]
@@ -305,16 +301,86 @@ fn lower_conv2d() -> Validated<Descriptor<op::Conv2dExact>> {
     .expect("a 3x3 window with padding 1 fits a 4x4 input")
 }
 
+/// A direct convolution on the host, written from the definition.
+///
+/// The point of this test is to check the GPU kernel against arithmetic, so
+/// the reference deliberately shares nothing with the backend: it indexes the
+/// operands itself and accumulates in the obvious order. Shapes are `NCHW`
+/// input and `OIHW` weight, with a single group and unit stride and dilation.
+#[allow(clippy::needless_range_loop)]
+fn reference_conv2d(
+    input: &[f32],
+    input_shape: [usize; 4],
+    weight: &[f32],
+    weight_shape: [usize; 4],
+    bias: &[f32],
+    padding: usize,
+) -> Vec<f32> {
+    let [batch, in_channels, in_height, in_width] = input_shape;
+    let [
+        out_channels,
+        weight_in_channels,
+        kernel_height,
+        kernel_width,
+    ] = weight_shape;
+    assert_eq!(in_channels, weight_in_channels);
+    let out_height = in_height + 2 * padding - kernel_height + 1;
+    let out_width = in_width + 2 * padding - kernel_width + 1;
+
+    let mut output = Vec::with_capacity(batch * out_channels * out_height * out_width);
+    for n in 0..batch {
+        for co in 0..out_channels {
+            for oh in 0..out_height {
+                for ow in 0..out_width {
+                    let mut sum = bias[co];
+                    for ci in 0..in_channels {
+                        for kh in 0..kernel_height {
+                            for kw in 0..kernel_width {
+                                let ih = (oh + kh) as isize - padding as isize;
+                                let iw = (ow + kw) as isize - padding as isize;
+                                if ih < 0
+                                    || iw < 0
+                                    || ih >= in_height as isize
+                                    || iw >= in_width as isize
+                                {
+                                    continue;
+                                }
+                                let input_index =
+                                    ((n * in_channels + ci) * in_height + ih as usize) * in_width
+                                        + iw as usize;
+                                let weight_index = ((co * in_channels + ci) * kernel_height + kh)
+                                    * kernel_width
+                                    + kw;
+                                sum += input[input_index] * weight[weight_index];
+                            }
+                        }
+                    }
+                    output.push(sum);
+                }
+            }
+        }
+    }
+    output
+}
+
 #[test]
-fn conv2d_descriptor_execution_matches_the_backend_helper() {
-    let input: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
-    let weight: Vec<f32> = (0..54).map(|value| value as f32 * 0.1 - 2.5).collect();
-    let input = storage(&[1, 2, 4, 4], &input);
-    let weight = storage(&[3, 2, 3, 3], &weight);
-    let bias = storage(&[3], &[0.5, -0.25, 1.0]);
+fn conv2d_descriptor_execution_matches_a_direct_convolution() {
+    let input_values: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
+    let weight_values: Vec<f32> = (0..54).map(|value| value as f32 * 0.1 - 2.5).collect();
+    let bias_values = [0.5_f32, -0.25, 1.0];
+    let input = storage(&[1, 2, 4, 4], &input_values);
+    let weight = storage(&[3, 2, 3, 3], &weight_values);
+    let bias = storage(&[3], &bias_values);
     let validated = lower_conv2d();
 
-    let helper = TestBackend::conv2d::<f32>(&input, &weight, Some(&bias), 1, 1, 1, 1).unwrap();
+    let expected = reference_conv2d(
+        &input_values,
+        [1, 2, 4, 4],
+        &weight_values,
+        [3, 2, 3, 3],
+        &bias_values,
+        1,
+    );
 
     let context = ExecutionContext::new(TestBackend::new());
     let inputs = [
@@ -333,9 +399,9 @@ fn conv2d_descriptor_execution_matches_the_backend_helper() {
         .expect("a valid conv2d descriptor must execute");
 
     assert_eq!(descriptor.shape().dims(), &[1, 3, 4, 4]);
-    let (descriptor, helper) = (read(&descriptor), read(&helper));
-    assert_eq!(descriptor.len(), helper.len());
-    for (index, (left, right)) in descriptor.into_iter().zip(helper).enumerate() {
+    let produced = read(&descriptor);
+    assert_eq!(produced.len(), expected.len());
+    for (index, (left, right)) in produced.into_iter().zip(expected).enumerate() {
         assert!(
             (left - right).abs() <= 1e-4,
             "value {index} differs: {left} versus {right}"

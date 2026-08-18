@@ -4,7 +4,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
-#[cfg(any(feature = "wgpu", feature = "cuda", feature = "metal"))]
+#[cfg(any(feature = "wgpu", feature = "cuda"))]
 use incin_core::backend_authoring::HostInterop;
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId};
@@ -116,10 +116,42 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
         &DeviceId::wgpu(0),
     )
     .unwrap();
-    let transposed = WgpuB::transpose::<f32>(&storage, 0, 1).unwrap();
-    let metadata: &TensorMeta = &transposed;
-    assert_eq!(&*metadata.shape, &[3, 2]);
-    assert_eq!(&*metadata.strides, &[2, 1]);
+    // Broadcast is the interesting case for this claim: a backend that keeps
+    // lazy views would answer with a zero stride along the stretched axis.
+    // WGPU materializes instead, so the result has to describe itself as an
+    // ordinary contiguous buffer. Drive it through the descriptor path rather
+    // than a backend method, since that is the only supported way in.
+    let validated =
+        incin_core::exec::Descriptor::<incin_core::exec::op::BroadcastAs>::infer_runtime(
+            incin_core::backend_authoring::operations::ShapeAttributes {
+                shape: vec![2, 2, 3],
+            },
+            vec![incin_core::exec::LogicalTensorMeta {
+                shape: Some(incin_core::prelude::ShapeBuf::from_slice(&[2, 3])),
+                dtype: None,
+                device: None,
+            }],
+        )
+        .expect("2x3 broadcasts to 2x2x3");
+    let context = incin_core::exec::ExecutionContext::new(WgpuB::new());
+    let inputs = [incin_core::exec::TensorHandle::from_storage::<
+        WgpuB,
+        f32,
+        incin_core::prelude::Local,
+    >(&storage)];
+    let broadcast = incin_core::backend_authoring::Execute::execute(
+        context.backend(),
+        incin_core::backend_authoring::ExecutionRequest {
+            operation: &validated,
+            inputs: &inputs,
+            context: &context,
+            payload: None,
+        },
+    )
+    .unwrap();
+    let metadata: &TensorMeta = &broadcast;
+    assert_eq!(&*metadata.shape, &[2, 2, 3]);
+    assert_eq!(&*metadata.strides, &[6, 3, 1]);
     assert_eq!(metadata.offset_elements, 0);
     assert_eq!(metadata.layout, LayoutClass::Contiguous);
     assert_eq!(metadata.dtype, DTypeId::F32.descriptor());

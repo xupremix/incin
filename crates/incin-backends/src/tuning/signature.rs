@@ -367,7 +367,7 @@ fn is_legal_reduction_candidate(candidate: LaunchCandidate, signature: &KernelSi
         return false;
     }
     match candidate.access {
-        KernelAccess::WarpReduction | KernelAccess::Welford => {
+        KernelAccess::WarpReduction => {
             if signature.layout == LayoutClass::Strided {
                 return false;
             }

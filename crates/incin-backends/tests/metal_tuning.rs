@@ -5,8 +5,8 @@
 use incin_backends::metal::MetalStorageMode;
 use incin_backends::metal::tuning::{
     default_metal_pointwise_candidate, default_metal_reduction_candidate,
-    metal_environment_fingerprint, metal_matmul_candidates, metal_normalization_candidates,
-    metal_pointwise_candidates, metal_reduction_candidates, preferred_metal_storage_mode,
+    metal_environment_fingerprint, metal_matmul_candidates, metal_pointwise_candidates,
+    metal_reduction_candidates, preferred_metal_storage_mode,
 };
 use incin_core::prelude::DTypeId;
 
@@ -61,10 +61,7 @@ fn test_metal_reduction_candidates() {
 }
 
 #[test]
-fn test_metal_matmul_and_norm_candidates() {
+fn test_metal_matmul_candidates() {
     let matmul_c = metal_matmul_candidates(512, 512, 512, MetalStorageMode::Shared);
     assert_eq!(matmul_c.len(), 3);
-
-    let norm_c = metal_normalization_candidates(true, 1024, MetalStorageMode::Shared);
-    assert_eq!(norm_c.len(), 3);
 }

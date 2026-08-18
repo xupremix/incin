@@ -5,8 +5,8 @@
 //! whose hardware is relevant — see `incin_core::tensor::auto_device` for why
 //! the compile-time half deliberately does not probe.
 //!
-//! The order is CUDA → WGPU → CPU: native GPU first, then the portable GPU
-//! backend, then the always-available fallback. A family that this build did
+//! The order is CUDA -> Metal -> WGPU -> CPU: native GPU first, then the portable GPU
+//! backend, then the CPU fallback. A family that this build did
 //! not enable is skipped without being probed, so `detect_device` never links
 //! against a driver the build excluded.
 
@@ -15,8 +15,7 @@ use incin_core::tensor::device::{DeviceId, DeviceKind};
 /// The best device available on this machine right now.
 ///
 /// Tries each enabled backend family in order and returns the first that
-/// reports usable hardware. [`DeviceId::cpu`] is the terminal fallback, so this
-/// function is total — it always returns a device.
+/// reports usable hardware, or `None` if no enabled family is available.
 ///
 /// Detection is performed on every call and nothing is cached. A caller that
 /// selects a device once per process should hold on to the result; a caller
@@ -27,11 +26,11 @@ use incin_core::tensor::device::{DeviceId, DeviceKind};
 /// use incin_backends::prelude::*;
 /// use incin_core::tensor::prelude::*;
 ///
-/// let device = incin_backends::detect_device();
+/// let device = incin_backends::detect_device().expect("usable backend required");
 /// let t = Tensor::<Dyn, IncinBackend<Dyn>>::zeros(([2, 3], device));
 /// ```
 #[must_use]
-pub fn detect_device() -> DeviceId {
+pub fn detect_device() -> Option<DeviceId> {
     detect_device_in(PREFERENCE)
 }
 
@@ -45,18 +44,17 @@ pub const PREFERENCE: &[DeviceKind] = &[
 
 /// [`detect_device`] over a caller-chosen preference order.
 ///
-/// Useful for pinning a policy — `detect_device_in(&[DeviceKind::Wgpu,
-/// DeviceKind::Cpu])` refuses CUDA even where it is present. If no listed
-/// family is available the CPU is still returned, because returning "no device"
-/// would leave the caller with nothing runnable.
+/// Useful for pinning a policy -- `detect_device_in(&[DeviceKind::Wgpu,
+/// DeviceKind::Cpu])` refuses CUDA even where it is present. Returns `None`
+/// if no listed family has usable hardware in this build.
 #[must_use]
-pub fn detect_device_in(preference: &[DeviceKind]) -> DeviceId {
+pub fn detect_device_in(preference: &[DeviceKind]) -> Option<DeviceId> {
     for kind in preference {
         if let Some(device) = probe(*kind) {
-            return device;
+            return Some(device);
         }
     }
-    DeviceId::cpu()
+    None
 }
 
 /// Whether a specific family is usable, and at which ordinal.
@@ -174,27 +172,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detection_always_yields_a_runnable_device() {
-        // Total by construction: the CPU terminates the chain.
-        let device = detect_device();
-        assert!(PREFERENCE.contains(&device.kind()), "{device:?}");
+    fn detection_yields_a_preferred_family() {
+        if let Some(device) = detect_device() {
+            assert!(PREFERENCE.contains(&device.kind()), "{device:?}");
+        }
     }
 
     #[test]
-    fn an_empty_preference_still_yields_the_cpu() {
-        assert_eq!(detect_device_in(&[]).kind(), DeviceKind::Cpu);
+    fn an_empty_preference_yields_none() {
+        assert_eq!(detect_device_in(&[]), None);
     }
 
     #[test]
     fn preference_order_is_honored() {
-        // Restricting to CPU must return the CPU even where a GPU exists,
-        // which is what makes this usable as a policy override.
-        assert_eq!(detect_device_in(&[DeviceKind::Cpu]).kind(), DeviceKind::Cpu);
+        if is_compiled_in(DeviceKind::Cpu) {
+            assert_eq!(detect_device_in(&[DeviceKind::Cpu]), Some(DeviceId::cpu()));
+        }
     }
 
     #[test]
     fn a_family_that_is_not_compiled_in_is_never_detected() {
-        for kind in [DeviceKind::Cuda, DeviceKind::Wgpu, DeviceKind::Cpu] {
+        for kind in [
+            DeviceKind::Cuda,
+            DeviceKind::Metal,
+            DeviceKind::Wgpu,
+            DeviceKind::Cpu,
+        ] {
             if !is_compiled_in(kind) {
                 assert!(
                     probe(kind).is_none(),
@@ -223,7 +226,12 @@ mod tests {
             .map(|_| {
                 std::thread::spawn(|| {
                     for _ in 0..2 {
-                        for kind in [DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu] {
+                        for kind in [
+                            DeviceKind::Cpu,
+                            DeviceKind::Cuda,
+                            DeviceKind::Metal,
+                            DeviceKind::Wgpu,
+                        ] {
                             let _ = probe(kind);
                         }
                     }

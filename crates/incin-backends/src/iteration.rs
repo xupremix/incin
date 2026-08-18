@@ -14,6 +14,7 @@
 //! of vectors, because an iteration plan has exactly one or two operands and
 //! the count is known to the type system.
 
+use crate::bytes::checked_numel;
 use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::LayoutClass;
@@ -277,16 +278,6 @@ fn normalize_operand(
     Ok(OperandIteration {
         strides: normalized,
         offset,
-    })
-}
-
-fn checked_numel(shape: &[usize]) -> Result<usize> {
-    shape.iter().try_fold(1usize, |numel, &dimension| {
-        numel.checked_mul(dimension).ok_or_else(|| {
-            Error::Msg(format!(
-                "shape overflow building iteration plan for {shape:?}"
-            ))
-        })
     })
 }
 
