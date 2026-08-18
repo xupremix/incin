@@ -857,47 +857,6 @@ pub(crate) fn elementwise_cmp(
     Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), out_shape))
 }
 
-pub(crate) fn elementwise_float_binary(
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
-    f: impl Fn(f64, f64) -> f64,
-) -> Result<CpuStorage> {
-    if lhs.shape != rhs.shape {
-        return Err(Error::ShapeMismatch {
-            op: "elementwise_binary",
-            expected: lhs.shape.to_vec(),
-            got: rhs.shape.to_vec(),
-            msg: "CPU binary operation requires equal shapes".into(),
-        });
-    }
-    let total = crate::cpu::stride::checked_numel(&lhs.shape)?;
-    let mut out = Vec::with_capacity(total);
-    let mut idx = vec![0usize; lhs.shape.len()];
-    for _ in 0..total {
-        out.push(f(lhs.get(&idx), rhs.get(&idx)));
-        if !lhs.shape.is_empty() {
-            crate::cpu::storage::increment_index(&mut idx, &lhs.shape);
-        }
-    }
-    Ok(CpuStorage::from_contiguous(
-        lhs.buffer.from_f64_values(out)?,
-        &lhs.shape,
-    ))
-}
-
-pub(crate) fn logical_not_storage(t: &CpuStorage) -> Result<CpuStorage> {
-    let total = crate::cpu::stride::checked_numel(&t.shape)?;
-    let mut out = Vec::with_capacity(total);
-    let mut idx = vec![0usize; t.shape.len()];
-    for _ in 0..total {
-        out.push(if t.get(&idx) == 0.0 { 1u8 } else { 0u8 });
-        if !t.shape.is_empty() {
-            crate::cpu::storage::increment_index(&mut idx, &t.shape);
-        }
-    }
-    Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), &t.shape))
-}
-
 pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
     elementwise_unary(t, |value| value - val)
 }

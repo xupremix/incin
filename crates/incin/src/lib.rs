@@ -730,8 +730,10 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use incin_core::serialization::{Format, ModelExt, STATE_FORMAT_VERSION};
 
+    pub use incin_core::exec::{LossScaleState, LossScaling};
     pub use incin_core::optim::{
         Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
+        ScaledOptimizer,
     };
     #[cfg(feature = "std")]
     pub use incin_core::optim::{CosineAnnealingLR, StepLR};

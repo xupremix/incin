@@ -140,10 +140,9 @@ pub(crate) fn canonical_relu(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                let deriv = if x > 0.0 { 1.0 } else { 0.0 };
-                g * deriv
-            })?;
+            let step_mask = elementwise_unary_typed(UnaryOp::Step, &t_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &step_mask, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -172,12 +171,7 @@ pub(crate) fn canonical_step(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
-            let zeros = vec![0.0f64; total];
-            Ok(vec![CpuStorage::from_contiguous(
-                grad_out.buffer.from_f64_values(zeros)?,
-                &grad_out.shape,
-            )])
+            Ok(vec![CpuStorage::zeros_like(grad_out)?])
         }),
     });
     Ok(out)
@@ -201,19 +195,8 @@ pub(crate) fn canonical_mul_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuSto
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
-            let mut scaled = Vec::with_capacity(total);
-            let mut idx = vec![0usize; grad_out.shape.len()];
-            for _ in 0..total {
-                scaled.push(grad_out.get(&idx) * scalar);
-                if !grad_out.shape.is_empty() {
-                    increment_index(&mut idx, &grad_out.shape);
-                }
-            }
-            Ok(vec![CpuStorage::from_contiguous(
-                grad_out.buffer.from_f64_values(scaled)?,
-                &grad_out.shape,
-            )])
+            let grad = elementwise_unary_typed(UnaryOp::MulScalar(scalar), grad_out)?;
+            Ok(vec![grad])
         }),
     });
     Ok(out)
@@ -243,22 +226,20 @@ pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStora
         output_id: out_id,
         input_ids: vec![y_id, x_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let denominator = elementwise_binary(
-                &y_capture,
-                &x_capture,
-                &grad_out.shape,
-                |y_value, x_value| x_value * x_value + y_value * y_value,
-            )?;
+            let x2 =
+                elementwise_binary_numeric(BinaryOp::Mul, &x_capture, &x_capture, &grad_out.shape)?;
+            let y2 =
+                elementwise_binary_numeric(BinaryOp::Mul, &y_capture, &y_capture, &grad_out.shape)?;
+            let denominator = elementwise_binary_numeric(BinaryOp::Add, &x2, &y2, &grad_out.shape)?;
+            let numer_y =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &x_capture, &grad_out.shape)?;
             let grad_y =
-                elementwise_binary(grad_out, &x_capture, &grad_out.shape, |g, x_value| {
-                    g * x_value
-                })?;
-            let grad_y = elementwise_binary(&grad_y, &denominator, &grad_out.shape, |g, d| g / d)?;
+                elementwise_binary_numeric(BinaryOp::Div, &numer_y, &denominator, &grad_out.shape)?;
+            let neg_y = negate(&y_capture);
+            let numer_x =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &neg_y, &grad_out.shape)?;
             let grad_x =
-                elementwise_binary(grad_out, &y_capture, &grad_out.shape, |g, y_value| {
-                    -g * y_value
-                })?;
-            let grad_x = elementwise_binary(&grad_x, &denominator, &grad_out.shape, |g, d| g / d)?;
+                elementwise_binary_numeric(BinaryOp::Div, &numer_x, &denominator, &grad_out.shape)?;
             Ok(vec![
                 tape::unbroadcast(&grad_y, &y_capture.shape)?,
                 tape::unbroadcast(&grad_x, &x_capture.shape)?,
@@ -281,7 +262,8 @@ pub(crate) fn canonical_exp(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| g * o)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &out_capture, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -296,16 +278,9 @@ pub(crate) fn canonical_abs(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                let derivative = if x > 0.0 {
-                    1.0
-                } else if x < 0.0 {
-                    -1.0
-                } else {
-                    0.0
-                };
-                g * derivative
-            })?;
+            let sign_mask = elementwise_unary_typed(UnaryOp::Sign, &t_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &sign_mask, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -320,9 +295,9 @@ pub(crate) fn canonical_sqrt(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                g / (2.0 * o)
-            })?;
+            let div =
+                elementwise_binary_numeric(BinaryOp::Div, grad_out, &out_capture, &grad_out.shape)?;
+            let grad = elementwise_unary_typed(UnaryOp::MulScalar(0.5), &div)?;
             Ok(vec![grad])
         }),
     });
@@ -330,23 +305,7 @@ pub(crate) fn canonical_sqrt(t: &CpuStorage) -> Result<CpuStorage> {
 }
 
 pub(crate) fn canonical_mish(t: &CpuStorage) -> Result<CpuStorage> {
-    let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
-    let t_capture = t.clone();
-    let (t_id, out_id) = (t.id, out.id);
-    tape::push_with(|| TapeEntry {
-        output_id: out_id,
-        input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                let softplus = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
-                let tanh = softplus.tanh();
-                let sigmoid = 1.0 / (1.0 + (-x).exp());
-                g * (tanh + x * sigmoid * (1.0 - tanh * tanh))
-            })?;
-            Ok(vec![grad])
-        }),
-    });
-    Ok(out)
+    canonical_unary_with_deriv_op(UnaryOp::Mish, UnaryOp::MishBackward, t)
 }
 
 pub(crate) fn canonical_elu(t: &CpuStorage) -> Result<CpuStorage> {
@@ -357,9 +316,9 @@ pub(crate) fn canonical_elu(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                g * if o > 0.0 { 1.0 } else { o + 1.0 }
-            })?;
+            let deriv = elementwise_unary_typed(UnaryOp::EluBackward, &out_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &deriv, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -382,7 +341,8 @@ pub(crate) fn canonical_log(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| g / x)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Div, grad_out, &t_capture, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -397,9 +357,9 @@ pub(crate) fn canonical_tanh(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                g * (1.0 - o * o)
-            })?;
+            let deriv = elementwise_unary_typed(UnaryOp::TanhBackward, &out_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &deriv, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -414,23 +374,20 @@ pub(crate) fn canonical_sigmoid(t: &CpuStorage) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
-                g * o * (1.0 - o)
-            })?;
+            let deriv = elementwise_unary_typed(UnaryOp::SigmoidBackward, &out_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &deriv, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
     Ok(out)
 }
 
-fn canonical_unary_with_derivative<F>(
+fn canonical_unary_with_deriv_op(
     op: UnaryOp,
+    deriv_op: UnaryOp,
     t: &CpuStorage,
-    derivative: F,
-) -> Result<CpuStorage>
-where
-    F: Fn(f64) -> f64 + Send + Sync + 'static,
-{
+) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(op, t)?;
     let t_capture = t.clone();
     let (t_id, out_id) = (t.id, out.id);
@@ -438,9 +395,9 @@ where
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
-                g * derivative(x)
-            })?;
+            let deriv = elementwise_unary_typed(deriv_op, &t_capture)?;
+            let grad =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &deriv, &grad_out.shape)?;
             Ok(vec![grad])
         }),
     });
@@ -448,13 +405,13 @@ where
 }
 
 pub(crate) fn canonical_gelu(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Gelu, t, |x| {
-        let cdf = 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2));
-        let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
-        cdf + x * pdf
-    })
+    canonical_unary_with_deriv_op(UnaryOp::Gelu, UnaryOp::GeluBackward, t)
 }
 
+// SiLU/Swish backward combines three operands per element (input t, forward out,
+// and incoming grad_out). Because there is no 3-operand typed kernel layout to
+// reuse, this gradient remains on the f64 index-walk path until a generic 3-way
+// typed kernel is introduced in a future refactor.
 pub(crate) fn canonical_swish(t: &CpuStorage) -> Result<CpuStorage> {
     let out = elementwise_unary_typed(UnaryOp::Swish, t)?;
     let t_capture = t.clone();
@@ -486,49 +443,47 @@ pub(crate) fn canonical_swish(t: &CpuStorage) -> Result<CpuStorage> {
 }
 
 pub(crate) fn canonical_tan(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Tan, t, |x| 1.0 + x.tan().powi(2))
+    canonical_unary_with_deriv_op(UnaryOp::Tan, UnaryOp::TanBackward, t)
 }
 
 pub(crate) fn canonical_asin(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Asin, t, |x| 1.0 / (1.0 - x * x).sqrt())
+    canonical_unary_with_deriv_op(UnaryOp::Asin, UnaryOp::AsinBackward, t)
 }
 
 pub(crate) fn canonical_acos(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Acos, t, |x| -1.0 / (1.0 - x * x).sqrt())
+    canonical_unary_with_deriv_op(UnaryOp::Acos, UnaryOp::AcosBackward, t)
 }
 
 pub(crate) fn canonical_atan(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Atan, t, |x| 1.0 / (1.0 + x * x))
+    canonical_unary_with_deriv_op(UnaryOp::Atan, UnaryOp::AtanBackward, t)
 }
 
 pub(crate) fn canonical_sinh(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Sinh, t, f64::cosh)
+    canonical_unary_with_deriv_op(UnaryOp::Sinh, UnaryOp::Cosh, t)
 }
 
 pub(crate) fn canonical_cosh(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Cosh, t, f64::sinh)
+    canonical_unary_with_deriv_op(UnaryOp::Cosh, UnaryOp::Sinh, t)
 }
 
 pub(crate) fn canonical_asinh(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Asinh, t, |x| 1.0 / (x * x + 1.0).sqrt())
+    canonical_unary_with_deriv_op(UnaryOp::Asinh, UnaryOp::AsinhBackward, t)
 }
 
 pub(crate) fn canonical_acosh(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Acosh, t, |x| 1.0 / (x * x - 1.0).sqrt())
+    canonical_unary_with_deriv_op(UnaryOp::Acosh, UnaryOp::AcoshBackward, t)
 }
 
 pub(crate) fn canonical_atanh(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Atanh, t, |x| 1.0 / (1.0 - x * x))
+    canonical_unary_with_deriv_op(UnaryOp::Atanh, UnaryOp::AtanhBackward, t)
 }
 
 pub(crate) fn canonical_erf(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Erf, t, |x| {
-        2.0 / core::f64::consts::PI.sqrt() * (-x * x).exp()
-    })
+    canonical_unary_with_deriv_op(UnaryOp::Erf, UnaryOp::ErfBackward, t)
 }
 
 pub(crate) fn canonical_rsqrt(t: &CpuStorage) -> Result<CpuStorage> {
-    canonical_unary_with_derivative(UnaryOp::Rsqrt, t, |x| -0.5 / (x * x.sqrt()))
+    canonical_unary_with_deriv_op(UnaryOp::Rsqrt, UnaryOp::RsqrtBackward, t)
 }
 
 fn elementwise_binary_numeric(
@@ -609,23 +564,6 @@ fn elementwise_unary_typed(op: UnaryOp, input: &CpuStorage) -> Result<CpuStorage
 /// `negate`.
 fn negate(t: &CpuStorage) -> CpuStorage {
     elementwise_unary_typed(UnaryOp::Neg, t).unwrap()
-}
-
-/// Abramowitz & Stegun 7.1.26 rational polynomial approximation of the
-/// error function `erf(x)`, max absolute error ~1.5e-7. Rust's standard
-/// library has no `erf`, so `gelu`'s exact erf-based formula (matching
-/// `CandleBackend::gelu`'s `gelu_erf()` call, per RESEARCH.md Pitfall 4) is
-/// built on this hand-rolled approximation instead.
-fn erf_approx(x: f64) -> f64 {
-    let sign = if x < 0.0 { -1.0 } else { 1.0 };
-    let x_abs = x.abs();
-    let t = 1.0 / (1.0 + 0.3275911 * x_abs);
-    let y = 1.0
-        - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t
-            + 0.254829592)
-            * t
-            * (-x_abs * x_abs).exp();
-    sign * y
 }
 
 // The four pointwise binary kernels below are free functions rather than trait
@@ -812,13 +750,18 @@ pub(crate) fn div_storage_with_shape(
                     &rhs_capture,
                     &grad_out.shape,
                 )?;
-                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
+                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = -grad_lhs * (lhs/rhs)
+                let lhs_div_rhs = elementwise_binary_numeric(
+                    BinaryOp::Div,
+                    &lhs_capture,
+                    &rhs_capture,
+                    &grad_out.shape,
+                )?;
+                let neg_grad_lhs = negate(&grad_lhs);
                 let grad_rhs = elementwise_binary_numeric(
                     BinaryOp::Mul,
-                    grad_out,
-                    &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
-                        -l / (r * r)
-                    })?,
+                    &neg_grad_lhs,
+                    &lhs_div_rhs,
                     &grad_out.shape,
                 )?;
                 Ok(vec![
@@ -1532,6 +1475,171 @@ mod tests {
         assert!(
             max_rel_err < 1e-2,
             "log_softmax gradcheck error too high: {max_rel_err}"
+        );
+    }
+
+    #[test]
+    /// `step_forward_and_backward_preserves_dtype_and_zero_grad`.
+    fn step_forward_and_backward_preserves_dtype_and_zero_grad() {
+        // F32 test
+        let t_f32 = vector(vec![-1.0f32, 0.0, 2.0]);
+        let out_f32 = canonical_step(&t_f32).unwrap();
+        assert_eq!(f32_vec(&out_f32), vec![0.0, 0.0, 1.0]);
+        let grads_f32 = tape::backward(&out_f32).unwrap();
+        let grad_f32 = grads_f32.get(t_f32.id).unwrap();
+        assert_eq!(
+            grad_f32.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F32
+        );
+        assert_eq!(f32_vec(grad_f32), vec![0.0, 0.0, 0.0]);
+
+        // F64 test
+        let t_f64 = CpuStorage::from_contiguous(CpuBuffer::F64(vec![-2.0f64, 0.0, 3.0]), [3]);
+        let out_f64 = canonical_step(&t_f64).unwrap();
+        assert_eq!(
+            out_f64.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F64
+        );
+        let grads_f64 = tape::backward(&out_f64).unwrap();
+        let grad_f64 = grads_f64.get(t_f64.id).unwrap();
+        assert_eq!(
+            grad_f64.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F64
+        );
+        if let CpuBuffer::F64(ref v) = *grad_f64.buffer {
+            assert_eq!(v, &vec![0.0f64, 0.0, 0.0]);
+        } else {
+            panic!("expected F64 buffer");
+        }
+
+        // F16 test
+        let t_f16 = CpuStorage::from_contiguous(
+            CpuBuffer::F16(vec![
+                half::f16::from_f32(-1.0),
+                half::f16::from_f32(0.0),
+                half::f16::from_f32(2.0),
+            ]),
+            [3],
+        );
+        let out_f16 = canonical_step(&t_f16).unwrap();
+        assert_eq!(
+            out_f16.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F16
+        );
+        let grads_f16 = tape::backward(&out_f16).unwrap();
+        let grad_f16 = grads_f16.get(t_f16.id).unwrap();
+        assert_eq!(
+            grad_f16.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F16
+        );
+
+        // BF16 test
+        let t_bf16 = CpuStorage::from_contiguous(
+            CpuBuffer::BF16(vec![
+                half::bf16::from_f32(-1.0),
+                half::bf16::from_f32(0.0),
+                half::bf16::from_f32(2.0),
+            ]),
+            [3],
+        );
+        let out_bf16 = canonical_step(&t_bf16).unwrap();
+        assert_eq!(
+            out_bf16.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::BF16
+        );
+        let grads_bf16 = tape::backward(&out_bf16).unwrap();
+        let grad_bf16 = grads_bf16.get(t_bf16.id).unwrap();
+        assert_eq!(
+            grad_bf16.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::BF16
+        );
+    }
+
+    #[test]
+    /// `mul_scalar_typed_preserves_dtype_and_precision`.
+    fn mul_scalar_typed_preserves_dtype_and_precision() {
+        let t_f64 = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.5f64, -2.5, 3.0]), [3]);
+        let out = canonical_mul_scalar(&t_f64, 4.0).unwrap();
+        assert_eq!(
+            out.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F64
+        );
+        let grads = tape::backward(&out).unwrap();
+        let grad = grads.get(t_f64.id).unwrap();
+        assert_eq!(
+            grad.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F64
+        );
+        if let CpuBuffer::F64(ref v) = *grad.buffer {
+            assert_eq!(v, &vec![4.0f64, 4.0, 4.0]);
+        } else {
+            panic!("expected F64 buffer");
+        }
+    }
+
+    #[test]
+    /// `zeros_like_matches_shape_and_dtype`.
+    fn zeros_like_matches_shape_and_dtype() {
+        let t_f32 = vector(vec![1.0, 2.0, 3.0]);
+        let z_f32 = CpuStorage::zeros_like(&t_f32).unwrap();
+        assert_eq!(
+            z_f32.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F32
+        );
+        assert_eq!(f32_vec(&z_f32), vec![0.0, 0.0, 0.0]);
+
+        let t_f64 = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0]), [2]);
+        let z_f64 = CpuStorage::zeros_like(&t_f64).unwrap();
+        assert_eq!(
+            z_f64.buffer.dtype_id(),
+            incin_core::tensor::dtype::DTypeId::F64
+        );
+    }
+
+    #[test]
+    /// `trig_and_hyperbolic_gradchecks`.
+    fn trig_and_hyperbolic_gradchecks() {
+        let check = |name: &str, f: fn(&CpuStorage) -> Result<CpuStorage>, input: &[f32]| {
+            let x = vector(input.to_vec());
+            let op = |inputs: &[CpuStorage]| -> CpuStorage {
+                let out = f(&inputs[0]).unwrap();
+                crate::cpu::ops::reduce::sum_all(&out).unwrap()
+            };
+            let max_rel_err = gradcheck(op, &[x], 1e-4);
+            assert!(
+                max_rel_err < 1e-2,
+                "{name} gradcheck error too high: {max_rel_err}"
+            );
+        };
+
+        check("tan", canonical_tan, &[0.2, -0.4, 0.5]);
+        check("asin", canonical_asin, &[0.1, -0.3, 0.5]);
+        check("acos", canonical_acos, &[0.1, -0.3, 0.5]);
+        check("atan", canonical_atan, &[0.5, -1.2, 2.0]);
+        check("sinh", canonical_sinh, &[0.5, -0.8, 1.2]);
+        check("cosh", canonical_cosh, &[0.5, -0.8, 1.2]);
+        check("asinh", canonical_asinh, &[0.5, -1.0, 2.0]);
+        check("acosh", canonical_acosh, &[1.5, 2.0, 3.5]);
+        check("atanh", canonical_atanh, &[0.2, -0.4, 0.6]);
+        check("erf", canonical_erf, &[0.3, -0.5, 1.0]);
+        check("rsqrt", canonical_rsqrt, &[1.0, 4.0, 9.0]);
+        check("elu", canonical_elu, &[0.5, -0.5, 1.5]);
+        check("mish", canonical_mish, &[0.5, -1.0, 2.0]);
+    }
+
+    #[test]
+    /// `atan2_gradcheck`.
+    fn atan2_gradcheck() {
+        let y = vector(vec![1.0, -2.0, 0.5]);
+        let x = vector(vec![2.0, 1.5, -1.0]);
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let out = canonical_atan2(&inputs[0], &inputs[1]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[y, x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "atan2 gradcheck error too high: {max_rel_err}"
         );
     }
 }

@@ -151,7 +151,34 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
     }
 
     let new_buffer = match &*storage.buffer {
-        CpuBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),
+        CpuBuffer::F32(values) => {
+            if crate::cpu::stride::is_contiguous(&storage.shape, &storage.strides) {
+                let start = storage.offset_elements;
+                let src_total = crate::cpu::stride::validated_numel(&storage.shape);
+                let dense_slice = &values[start..start + src_total];
+                if axis == storage.shape.len().saturating_sub(1) {
+                    let row_len = storage.shape[axis];
+                    let mut out = vec![0.0f32; total];
+                    for (r, chunk) in dense_slice.chunks_exact(row_len).enumerate() {
+                        out[r] = crate::simd::vectorize_reduce_sum_f32(chunk);
+                    }
+                    CpuBuffer::F32(out)
+                } else if axis == 0 {
+                    let dim_len = storage.shape[0];
+                    let inner_len = total;
+                    let mut out = vec![0.0f32; inner_len];
+                    for r in 0..dim_len {
+                        let chunk = &dense_slice[r * inner_len..(r + 1) * inner_len];
+                        crate::simd::vectorize_add_into_f32(&mut out, chunk);
+                    }
+                    CpuBuffer::F32(out)
+                } else {
+                    reduce_variant!(F32, |v: f64| v as f32)
+                }
+            } else {
+                reduce_variant!(F32, |v: f64| v as f32)
+            }
+        }
         CpuBuffer::F64(_) => reduce_variant!(F64, |v: f64| v),
         CpuBuffer::U8(_) => reduce_variant!(U8, |v: f64| v as u8),
         CpuBuffer::Bool(_) => reduce_variant!(Bool, |v: f64| v as u8),
@@ -233,6 +260,27 @@ fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> Result<(CpuStorag
     let mut best_val = vec![f64::NEG_INFINITY; out_total];
     let mut best_flat_src_idx = vec![0usize; out_total];
 
+    if let CpuBuffer::F32(ref values) = *storage.buffer
+        && crate::cpu::stride::is_contiguous(&storage.shape, &storage.strides)
+        && axis == storage.shape.len().saturating_sub(1)
+    {
+        let row_len = storage.shape[axis];
+        let start = storage.offset_elements;
+        let src_total = crate::cpu::stride::validated_numel(&storage.shape);
+        let dense_slice = &values[start..start + src_total];
+        for (r, row) in dense_slice.chunks_exact(row_len).enumerate() {
+            let max_v = crate::simd::vectorize_reduce_max_f32(row, f32::NEG_INFINITY);
+            let local_idx = row
+                .iter()
+                .position(|&v| v == max_v || (v.is_nan() && max_v.is_nan()))
+                .unwrap_or(0);
+            best_val[r] = max_v as f64;
+            best_flat_src_idx[r] = r * row_len + local_idx;
+        }
+        let out = CpuStorage::from_contiguous(storage.buffer.from_f64_values(best_val)?, out_shape);
+        return Ok((out, best_flat_src_idx));
+    }
+
     let mut idx = vec![0usize; storage.shape.len()];
     let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
     for _ in 0..src_total {
@@ -259,6 +307,27 @@ fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> Result<(CpuStorag
     let out_total: usize = crate::cpu::stride::validated_numel(&(out_shape));
     let mut best_val = vec![f64::INFINITY; out_total];
     let mut best_flat_src_idx = vec![0usize; out_total];
+
+    if let CpuBuffer::F32(ref values) = *storage.buffer
+        && crate::cpu::stride::is_contiguous(&storage.shape, &storage.strides)
+        && axis == storage.shape.len().saturating_sub(1)
+    {
+        let row_len = storage.shape[axis];
+        let start = storage.offset_elements;
+        let src_total = crate::cpu::stride::validated_numel(&storage.shape);
+        let dense_slice = &values[start..start + src_total];
+        for (r, row) in dense_slice.chunks_exact(row_len).enumerate() {
+            let min_v = crate::simd::vectorize_reduce_min_f32(row, f32::INFINITY);
+            let local_idx = row
+                .iter()
+                .position(|&v| v == min_v || (v.is_nan() && min_v.is_nan()))
+                .unwrap_or(0);
+            best_val[r] = min_v as f64;
+            best_flat_src_idx[r] = r * row_len + local_idx;
+        }
+        let out = CpuStorage::from_contiguous(storage.buffer.from_f64_values(best_val)?, out_shape);
+        return Ok((out, best_flat_src_idx));
+    }
 
     let mut idx = vec![0usize; storage.shape.len()];
     let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
@@ -403,7 +472,11 @@ fn total_sum_f64(t: &CpuStorage) -> f64 {
 }
 
 pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let sum = total_sum_f64(t);
+    let sum = if let Some(DenseReader::F32(values)) = dense_reader(t) {
+        crate::simd::vectorize_reduce_sum_f32(values) as f64
+    } else {
+        total_sum_f64(t)
+    };
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![sum as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();
@@ -428,7 +501,11 @@ pub(crate) fn sum_all(t: &CpuStorage) -> Result<CpuStorage> {
 /// gradient by `1/n` before broadcasting back to the original shape.
 pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
     let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
-    let sum = total_sum_f64(t);
+    let sum = if let Some(DenseReader::F32(values)) = dense_reader(t) {
+        crate::simd::vectorize_reduce_sum_f32(values) as f64
+    } else {
+        total_sum_f64(t)
+    };
     let mean = if total > 0 { sum / total as f64 } else { 0.0 };
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![mean as f32]), vec![]);
 
@@ -458,17 +535,26 @@ pub(crate) fn mean_all(t: &CpuStorage) -> Result<CpuStorage> {
 pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
     // Strict `>`, so the first of equal maxima wins and the recorded gradient
     // position is the same one the odometer would have chosen.
-    let (best_val, best_flat_idx) = fold_all_f64(
-        t,
-        (f64::NEG_INFINITY, 0usize),
-        |(best, best_index), index, value| {
-            if value > best {
-                (value, index)
-            } else {
-                (best, best_index)
-            }
-        },
-    );
+    let (best_val, best_flat_idx) = if let Some(DenseReader::F32(values)) = dense_reader(t) {
+        let max_v = crate::simd::vectorize_reduce_max_f32(values, f32::NEG_INFINITY);
+        let idx = values
+            .iter()
+            .position(|&v| v == max_v || (v.is_nan() && max_v.is_nan()))
+            .unwrap_or(0);
+        (max_v as f64, idx)
+    } else {
+        fold_all_f64(
+            t,
+            (f64::NEG_INFINITY, 0usize),
+            |(best, best_index), index, value| {
+                if value > best {
+                    (value, index)
+                } else {
+                    (best, best_index)
+                }
+            },
+        )
+    };
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();
@@ -494,17 +580,26 @@ pub(crate) fn max_all(t: &CpuStorage) -> Result<CpuStorage> {
 /// Minimum over every element of `t`, as a scalar (shape `[]`). Mirror of
 /// `max_all` with strict `<` comparison.
 pub(crate) fn min_all(t: &CpuStorage) -> Result<CpuStorage> {
-    let (best_val, best_flat_idx) = fold_all_f64(
-        t,
-        (f64::INFINITY, 0usize),
-        |(best, best_index), index, value| {
-            if value < best {
-                (value, index)
-            } else {
-                (best, best_index)
-            }
-        },
-    );
+    let (best_val, best_flat_idx) = if let Some(DenseReader::F32(values)) = dense_reader(t) {
+        let min_v = crate::simd::vectorize_reduce_min_f32(values, f32::INFINITY);
+        let idx = values
+            .iter()
+            .position(|&v| v == min_v || (v.is_nan() && min_v.is_nan()))
+            .unwrap_or(0);
+        (min_v as f64, idx)
+    } else {
+        fold_all_f64(
+            t,
+            (f64::INFINITY, 0usize),
+            |(best, best_index), index, value| {
+                if value < best {
+                    (value, index)
+                } else {
+                    (best, best_index)
+                }
+            },
+        )
+    };
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
     let original_shape = t.shape.to_vec();

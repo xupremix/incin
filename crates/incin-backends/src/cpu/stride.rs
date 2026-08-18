@@ -9,8 +9,6 @@
 //! only `CpuStorage` asks for.
 
 use incin_core::error::Result;
-use incin_core::shapes::ShapeBuf;
-use incin_core::shapes::error::OperationKind;
 
 pub(crate) use crate::layout::{broadcast_shape, checked_contiguous_strides, contiguous_strides};
 
@@ -41,18 +39,11 @@ pub(crate) fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
     true
 }
 
-/// Total element count of `shape`, i.e. the product of all dims — but via
-/// `checked_mul` instead of a bare `.iter().product()`. A crafted or
-/// accidentally-huge user-supplied shape can otherwise overflow `usize` in
-/// release builds (overflow checks are off by default) and silently wrap to
-/// a small number, undersizing the `Vec` allocated for it while later
-/// stride-based indexing (computed from the same, differently-wrapped shape)
-/// reads/writes past the end of that undersized buffer (C-5).
-pub(crate) fn checked_numel(shape: &[usize]) -> Result<usize> {
-    ShapeBuf::from_slice(shape)
-        .checked_numel(OperationKind::Storage)
-        .map_err(Into::into)
-}
+/// The crate-wide checked element count; see [`crate::bytes::checked_numel`].
+///
+/// Re-exported here because most callers reach it through `stride::`, and
+/// this is the module the C-5 overflow finding was filed against.
+pub(crate) use crate::bytes::checked_numel;
 
 /// Reads an element count from shape metadata already accepted by
 /// `CpuStorage::try_from_parts`.

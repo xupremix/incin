@@ -99,7 +99,7 @@ bench = false
 required-features = ["std"]
 
 [dev-dependencies]
-incin = { path = ".", features = ["backend-authoring", "test-utils", "wgpu", "cpu"] }
+incin = { path = ".", features = ["backend-authoring", "test-utils", "wgpu", "cpu", "train"] }
 hashbrown = "0.14.5"
 bytemuck = "1"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }

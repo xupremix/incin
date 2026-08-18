@@ -36,7 +36,7 @@ fn eager_baselines(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(30);
 
-    for elements in [1_024usize, 65_536] {
+    for elements in [1_024usize, 65_536, 1_048_576] {
         let input = Tensor::<Dyn, B>::ones(vec![elements]).unwrap();
         group.bench_with_input(BenchmarkId::new("add_f32", elements), &elements, |b, _| {
             b.iter(|| black_box(&input) + black_box(&input))
@@ -68,6 +68,15 @@ fn eager_baselines(c: &mut Criterion) {
         let rhs = Tensor::<Dyn, B>::ones(vec![32, 64, 64]).unwrap();
         group.bench_function("batched_matmul_f32/32x64", |b| {
             b.iter(|| black_box(lhs.matmul(black_box(&rhs)).unwrap()))
+        });
+    }
+
+    // Broadcast-strided subtraction benchmark (e.g. layer_norm mean centering).
+    {
+        let lhs = Tensor::<Dyn, B>::ones(vec![64, 4096]).unwrap();
+        let rhs = Tensor::<Dyn, B>::ones(vec![64, 1]).unwrap();
+        group.bench_function("broadcast_sub_f32/64x4096", |b| {
+            b.iter(|| black_box(lhs.broadcast_sub(black_box(&rhs)).unwrap()))
         });
     }
     group.finish();

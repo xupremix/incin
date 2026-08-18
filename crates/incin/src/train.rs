@@ -45,7 +45,8 @@
 
 use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::optim::Optimizer;
+use incin_core::exec::{LossScaleState, LossScaling};
+use incin_core::optim::{Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
 
@@ -140,6 +141,7 @@ impl Decision {
 pub struct Plan {
     devices: DeviceSet,
     epochs: usize,
+    loss_scaling: LossScaling,
     decisions: Vec<Decision>,
 }
 
@@ -154,6 +156,12 @@ impl Plan {
     #[must_use]
     pub fn epochs(&self) -> usize {
         self.epochs
+    }
+
+    /// The loss scaling policy configured for this plan.
+    #[must_use]
+    pub fn loss_scaling(&self) -> LossScaling {
+        self.loss_scaling
     }
 
     /// Every decision the planner made, in the order it made them.
@@ -346,6 +354,7 @@ const fn feature_for(kind: DeviceKind) -> &'static str {
 pub struct TrainerBuilder {
     preference: DevicePreference,
     epochs: usize,
+    loss_scaling: LossScaling,
 }
 
 impl Default for TrainerBuilder {
@@ -353,6 +362,7 @@ impl Default for TrainerBuilder {
         Self {
             preference: DevicePreference::default(),
             epochs: 1,
+            loss_scaling: LossScaling::None,
         }
     }
 }
@@ -377,6 +387,13 @@ impl TrainerBuilder {
     #[must_use]
     pub fn epochs(mut self, epochs: usize) -> Self {
         self.epochs = epochs;
+        self
+    }
+
+    /// Configures the loss scaling policy for mixed-precision training.
+    #[must_use]
+    pub fn loss_scaling(mut self, loss_scaling: LossScaling) -> Self {
+        self.loss_scaling = loss_scaling;
         self
     }
 
@@ -498,10 +515,15 @@ impl TrainerBuilder {
             "epochs",
             format!("{} pass(es) over the data", self.epochs),
         ));
+        decisions.push(Decision::new(
+            "loss-scaling",
+            format!("{:?} policy configured", self.loss_scaling),
+        ));
 
         Ok(Plan {
             devices,
             epochs: self.epochs,
+            loss_scaling: self.loss_scaling,
             decisions,
         })
     }
@@ -608,6 +630,76 @@ impl Trainer {
                 let grads = at(epoch, batch, value.backward())?;
                 at(epoch, batch, optimizer.step(&grads))?;
                 final_loss = Some(at(epoch, batch, value.to_scalar::<f32>())?);
+                batches += 1;
+            }
+        }
+
+        Ok(FitOutcome {
+            epochs: self.plan.epochs,
+            batches,
+            final_loss,
+        })
+    }
+
+    /// Runs the training loop with mixed-precision loss scaling.
+    ///
+    /// Scales the computed loss before the backward pass, checks gradients for
+    /// non-finite overflow (NaN/Inf), unscales gradients in-place, and steps
+    /// the optimizer.
+    ///
+    /// # Errors
+    ///
+    /// As [`fit`](Self::fit).
+    pub fn fit_scaled<B, M, O, D, Batch, F>(
+        &self,
+        model: &mut M,
+        optimizer: &mut O,
+        scaler: &mut LossScaleState,
+        data: D,
+        mut loss: F,
+    ) -> Result<FitOutcome, TrainError>
+    where
+        B: Backend
+            + VariableBackend
+            + AutogradBackend
+            + HostInterop
+            + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>
+            + incin_core::optim::OptimizerBackend<f32>,
+        <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output:
+            Into<<B as incin_core::backend_authoring::StorageBackend>::Storage<f32>>,
+        O: ScaledOptimizer<B>,
+        D: IntoIterator<Item = Batch> + Clone,
+        F: FnMut(
+            &mut M,
+            Batch,
+        ) -> incin_core::error::Result<
+            Tensor<incin_core::shapes::Nil, B, f32, incin_core::tensor::grad::Grad>,
+        >,
+    {
+        if self.plan.is_multi_device() {
+            return Err(TrainError::CollectivesUnavailable {
+                devices: self.plan.devices.len(),
+            });
+        }
+
+        let mut batches = 0;
+        let mut final_loss = None;
+        for epoch in 0..self.plan.epochs {
+            for (batch, item) in data.clone().into_iter().enumerate() {
+                let unscaled_loss_tensor = at(epoch, batch, loss(model, item))?;
+                let current_scale = scaler.scale();
+                let loss_for_backward = if (current_scale - 1.0).abs() > f32::EPSILON {
+                    at(
+                        epoch,
+                        batch,
+                        unscaled_loss_tensor.mul_scalar(current_scale as f64),
+                    )?
+                } else {
+                    unscaled_loss_tensor.clone()
+                };
+                let mut grads = at(epoch, batch, loss_for_backward.backward())?;
+                let _stepped = at(epoch, batch, optimizer.step_scaled(&mut grads, scaler))?;
+                final_loss = Some(at(epoch, batch, unscaled_loss_tensor.to_scalar::<f32>())?);
                 batches += 1;
             }
         }

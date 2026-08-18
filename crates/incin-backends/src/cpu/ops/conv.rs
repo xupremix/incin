@@ -17,7 +17,8 @@
 //! `im2col` + `batched_matmul_impl` + concat — with NO special-casing branch
 //! for any particular `groups` value (Pitfall 7).
 //!
-//! `conv1d_impl`/`conv2d_impl` each push exactly ONE top-level `TapeEntry`:
+//! `conv1d_impl`/`conv2d_windowed_impl` each push exactly ONE top-level
+//! `TapeEntry`:
 //! the im2col unfold/col2im fold steps are plain (non-tape-tracked) helper
 //! functions operating on already-materialized `CpuStorage` values, so
 //! their OWN backward is hand-composed here (reusing `batched_matmul_impl`'s
@@ -26,7 +27,7 @@
 //! is broadcast-added via the canonical storage helper AFTER
 //! the hand-composed conv math, so `grad_bias` falls out of that op's own
 //! existing backward + `unbroadcast` for free — it is never hand-derived
-//! inside `conv1d_impl`/`conv2d_impl`'s own closure.
+//! inside `conv1d_impl`/`conv2d_windowed_impl`'s own closure.
 //!
 //! `conv_transpose2d_impl` (Plan 04-07, RESEARCH.md Pattern 4) reuses
 //! `col2im_2d` VERBATIM as its own forward fold subroutine — transposed
@@ -236,12 +237,11 @@ fn col2im_1d(
 
 /// A convolution window, stated once per spatial axis.
 ///
-/// The historical module-family contract takes one extent for both axes, while the descriptor
-/// that routes to it carries one per axis. An anisotropic window was therefore
-/// refused outright rather than applying the first axis' extent to both, which
-/// was honest but left a real request unanswerable. Carrying the pair this far
-/// down is what makes it answerable, and the isotropic case is the degenerate
-/// one rather than a separate path.
+/// The descriptor that routes here carries a stride, a padding and a dilation
+/// per axis, so the kernel takes the pair rather than one extent applied to
+/// both. The row and column values are used in separate expressions
+/// throughout, which makes an anisotropic window an ordinary case rather than
+/// a separate path.
 #[derive(Clone, Copy)]
 pub(crate) struct Window2d {
     /// Row and column stride.
@@ -253,7 +253,11 @@ pub(crate) struct Window2d {
 }
 
 impl Window2d {
-    /// The same extent on both axes, which is all the legacy signature can say.
+    /// The same extent on both axes.
+    ///
+    /// `conv_transpose2d_impl` still states one extent for both axes, and its
+    /// unfold and fold subroutines take a window, so it spreads the scalar
+    /// here rather than each call site writing the pair out.
     pub(crate) fn isotropic(stride: usize, padding: usize, dilation: usize) -> Self {
         Self {
             stride: [stride; 2],
@@ -533,39 +537,18 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
 }
 
 // ---------------------------------------------------------------------------
-// conv2d_impl
+// conv2d_windowed_impl
 // ---------------------------------------------------------------------------
 
-/// Canonical conv2d implementation, mirroring
-/// `conv1d_impl`'s exact structure generalized to two spatial axes.
+/// Canonical conv2d implementation, mirroring `conv1d_impl`'s exact structure
+/// generalized to two spatial axes.
 ///
-/// The legacy signature states one extent for both axes, so this is the
-/// isotropic case of [`conv2d_windowed_impl`] rather than a kernel of its own.
-pub(crate) fn conv2d_impl<D: incin_core::tensor::device::Device, K: DType>(
-    input: &CpuStorage,
-    weight: &CpuStorage,
-    bias: Option<&CpuStorage>,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
-    groups: usize,
-) -> Result<CpuStorage> {
-    conv2d_windowed_impl::<D, K>(
-        input,
-        weight,
-        bias,
-        Window2d::isotropic(stride, padding, dilation),
-        groups,
-    )
-}
-
-/// `conv2d` with a window stated once per spatial axis.
-///
-/// The descriptor carries a stride, a padding and a dilation for each axis,
-/// and an anisotropic one used to be refused because the routed kernel took a
-/// single extent for both. Nothing about the algorithm needed them equal: the
-/// row and column extents are used in separate expressions throughout, and
-/// making them separate parameters is the whole of the change.
+/// The window is stated once per spatial axis. The descriptor carries a
+/// stride, a padding and a dilation for each axis, and an anisotropic one used
+/// to be refused because the routed kernel took a single extent for both.
+/// Nothing about the algorithm needed them equal: the row and column extents
+/// are used in separate expressions throughout, and making them separate
+/// parameters is the whole of the change.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DType>(
     input: &CpuStorage,
@@ -712,7 +695,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
 /// own backward-data (grad-w.r.t.-input) formula applied directly to
 /// `input` (renamed "output" in transposed-conv terminology) instead of to a
 /// gradient — so this reuses `col2im_2d` (built in Plan 04-05 for
-/// `conv2d_impl`'s backward) VERBATIM as its forward fold subroutine,
+/// `conv2d_windowed_impl`'s backward) VERBATIM as its forward fold subroutine,
 /// rather than a separate im2col-style forward.
 ///
 /// `weight` arrives in Candle's confirmed `conv_transpose2d` layout
@@ -787,7 +770,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DT
         ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
 
     // input: [B, Cin, H, W] -> [B, Cin, H*W] -> [B, H*W, Cin] (mirrors
-    // conv2d_impl's backward: "grad_out_t" role, but played by `input` here).
+    // conv2d_windowed_impl's backward: "grad_out_t" role, but played by `input` here).
     let input_flat = input.reshape(&[b, cin, input_spatial])?;
     let input_t = input_flat.transpose(1, 2)?;
     // weight: [Cin, Cout, Kh, Kw] -> [Cin, Cout*Kh*Kw] ("weight_mat" role).
@@ -867,7 +850,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DT
             let grad_input = grad_input_flat.transpose(1, 2)?.reshape(&[b, cin, h, w])?;
 
             // grad_weight follows the same per-position outer-product-and-sum
-            // structure conv2d_impl's own grad_weight closure uses, with
+            // structure conv2d_windowed_impl's own grad_weight closure uses, with
             // `input` and `grad_out` swapped relative to conv2d's own
             // convention (conv_transpose2d's forward played `input`'s role
             // where conv2d's backward played `grad_out`'s role, and vice
@@ -902,7 +885,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DT
 // ---------------------------------------------------------------------------
 
 /// Sum a `[B, M, N]` storage over its leading batch axis, producing `[M, N]`.
-/// Used by both `conv1d_impl`/`conv2d_impl`'s backward to reduce
+/// Used by both `conv1d_impl`/`conv2d_windowed_impl`'s backward to reduce
 /// `grad_weight`'s per-batch matmul contributions down to weight's own
 /// (batch-independent) shape.
 fn sum_batch_dim(t: &CpuStorage) -> Result<CpuStorage> {
@@ -1010,7 +993,14 @@ mod tests {
         let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
         let weight = tensor(vec![0.5; 25], vec![1, 1, 5, 5]);
 
-        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &input,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 3),
+            1,
+        )
+        .unwrap();
 
         assert_eq!(out.shape.as_ref(), &[1, 1, 1, 1]);
         // `saturating_sub` floors the numerator at 0, so the formula's
@@ -1144,7 +1134,14 @@ mod tests {
         let input_data: Vec<f32> = (1..=16).map(|x| x as f32).collect(); // [1,1,4,4]
         let input = tensor(input_data, vec![1, 1, 4, 4]);
         let weight = tensor(vec![1.0; 9], vec![1, 1, 3, 3]); // sum-of-window kernel
-        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &input,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1,
+        )
+        .unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
         // input matrix:
         //  1  2  3  4
@@ -1168,16 +1165,37 @@ mod tests {
         let weight_data: Vec<f32> = (1..=36).map(|x| x as f32 * 0.01).collect(); // [2,2,3,3]
         let weight = tensor(weight_data.clone(), vec![2, 2, 3, 3]);
 
-        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &input,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            2,
+        )
+        .unwrap();
         assert_eq!(out.shape, vec![1, 2, 3, 3]);
 
         let g0_input = tensor(input_data[0..50].to_vec(), vec![1, 2, 5, 5]);
         let g0_weight = tensor(weight_data[0..18].to_vec(), vec![1, 2, 3, 3]);
-        let g0_out = conv2d_impl::<Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
+        let g0_out = conv2d_windowed_impl::<Cpu, f32>(
+            &g0_input,
+            &g0_weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1,
+        )
+        .unwrap();
 
         let g1_input = tensor(input_data[50..100].to_vec(), vec![1, 2, 5, 5]);
         let g1_weight = tensor(weight_data[18..36].to_vec(), vec![1, 2, 3, 3]);
-        let g1_out = conv2d_impl::<Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
+        let g1_out = conv2d_windowed_impl::<Cpu, f32>(
+            &g1_input,
+            &g1_weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1,
+        )
+        .unwrap();
 
         let combined = f32_vec(&out);
         assert_eq!(&combined[0..9], &f32_vec(&g0_out)[..]);
@@ -1195,7 +1213,14 @@ mod tests {
         let weight_data: Vec<f32> = (1..=27).map(|x| x as f32 * 0.01).collect(); // [3,1,3,3]
         let weight = tensor(weight_data.clone(), vec![3, 1, 3, 3]);
 
-        let out = conv2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 3).unwrap();
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &input,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            3,
+        )
+        .unwrap();
         assert_eq!(out.shape, vec![1, 3, 3, 3]);
 
         // Verify each channel independently against a groups=1 conv on just
@@ -1203,7 +1228,14 @@ mod tests {
         for c in 0..3 {
             let ch_input = tensor(input_data[c * 25..(c + 1) * 25].to_vec(), vec![1, 1, 5, 5]);
             let ch_weight = tensor(weight_data[c * 9..(c + 1) * 9].to_vec(), vec![1, 1, 3, 3]);
-            let ch_out = conv2d_impl::<Cpu, f32>(&ch_input, &ch_weight, None, 1, 0, 1, 1).unwrap();
+            let ch_out = conv2d_windowed_impl::<Cpu, f32>(
+                &ch_input,
+                &ch_weight,
+                None,
+                Window2d::isotropic(1, 0, 1),
+                1,
+            )
+            .unwrap();
             let combined = f32_vec(&out);
             assert_eq!(&combined[c * 9..(c + 1) * 9], &f32_vec(&ch_out)[..]);
         }
@@ -1213,7 +1245,14 @@ mod tests {
 
     /// `conv2d_sum_op`.
     fn conv2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
-        let out = conv2d_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &inputs[0],
+            &inputs[1],
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1,
+        )
+        .unwrap();
         crate::cpu::ops::reduce::sum_all(&out).unwrap()
     }
 

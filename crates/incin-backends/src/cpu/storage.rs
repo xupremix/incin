@@ -310,6 +310,32 @@ impl CpuStorage {
         Ok(CpuStorage::from_contiguous(new_buffer, &other.shape))
     }
 
+    /// Build a fresh, contiguous, all-zeros `CpuStorage` with the same
+    /// shape and dtype variant as `other`.
+    pub fn zeros_like(other: &CpuStorage) -> Result<Self> {
+        let total: usize = crate::cpu::stride::validated_numel(&(other.shape));
+
+        let new_buffer = match &*other.buffer {
+            CpuBuffer::F32(_) => CpuBuffer::F32(vec![0.0f32; total]),
+            CpuBuffer::F64(_) => CpuBuffer::F64(vec![0.0f64; total]),
+            CpuBuffer::U8(_) => CpuBuffer::U8(vec![0u8; total]),
+            CpuBuffer::Bool(_) => CpuBuffer::Bool(vec![0u8; total]),
+            CpuBuffer::U32(_) => CpuBuffer::U32(vec![0u32; total]),
+            CpuBuffer::I64(_) => CpuBuffer::I64(vec![0i64; total]),
+            CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f32(0.0); total]),
+            CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f32(0.0); total]),
+            CpuBuffer::Q8_0(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "zeros_like",
+                });
+            }
+        };
+
+        Ok(CpuStorage::from_contiguous(new_buffer, &other.shape))
+    }
+
     /// Resolve a logical multi-index through `self.strides`/`self.offset_elements`
     /// into the underlying `CpuBuffer`, returning the value as `f64`.
     ///

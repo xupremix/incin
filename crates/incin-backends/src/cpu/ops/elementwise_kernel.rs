@@ -75,6 +75,20 @@ pub(crate) enum UnaryOp {
     Rsqrt,
     Trunc,
     Frac,
+    TanhBackward,
+    SigmoidBackward,
+    EluBackward,
+    TanBackward,
+    AsinBackward,
+    AcosBackward,
+    AtanBackward,
+    AsinhBackward,
+    AcoshBackward,
+    AtanhBackward,
+    ErfBackward,
+    RsqrtBackward,
+    GeluBackward,
+    MishBackward,
 }
 
 impl UnaryOp {
@@ -152,6 +166,41 @@ impl UnaryOp {
             Self::Rsqrt => 1.0 / value.sqrt(),
             Self::Trunc => value.trunc(),
             Self::Frac => value.fract(),
+            Self::TanhBackward => 1.0 - value * value,
+            Self::SigmoidBackward => value * (1.0 - value),
+            Self::EluBackward => {
+                if value > 0.0 {
+                    1.0
+                } else {
+                    value + 1.0
+                }
+            }
+            Self::TanBackward => 1.0 + value.tan().powi(2),
+            Self::AsinBackward => 1.0 / (1.0 - value * value).sqrt(),
+            Self::AcosBackward => -1.0 / (1.0 - value * value).sqrt(),
+            Self::AtanBackward => 1.0 / (1.0 + value * value),
+            Self::AsinhBackward => 1.0 / (value * value + 1.0).sqrt(),
+            Self::AcoshBackward => 1.0 / (value * value - 1.0).sqrt(),
+            Self::AtanhBackward => 1.0 / (1.0 - value * value),
+            Self::ErfBackward => (2.0 / core::f32::consts::PI.sqrt()) * (-value * value).exp(),
+            Self::RsqrtBackward => -0.5 / (value * value.sqrt()),
+            Self::GeluBackward => {
+                let value_f64 = f64::from(value);
+                let cdf = 0.5 * (1.0 + erf_approx_f64(value_f64 / core::f64::consts::SQRT_2));
+                let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt())
+                    * (-value_f64 * value_f64 / 2.0).exp();
+                (cdf + value_f64 * pdf) as f32
+            }
+            Self::MishBackward => {
+                let softplus = if value > 20.0 {
+                    value
+                } else {
+                    (1.0 + value.exp()).ln()
+                };
+                let tanh = softplus.tanh();
+                let sigmoid = 1.0 / (1.0 + (-value).exp());
+                tanh + value * sigmoid * (1.0 - tanh * tanh)
+            }
         }
     }
 
@@ -223,6 +272,40 @@ impl UnaryOp {
             Self::Rsqrt => 1.0 / value.sqrt(),
             Self::Trunc => value.trunc(),
             Self::Frac => value.fract(),
+            Self::TanhBackward => 1.0 - value * value,
+            Self::SigmoidBackward => value * (1.0 - value),
+            Self::EluBackward => {
+                if value > 0.0 {
+                    1.0
+                } else {
+                    value + 1.0
+                }
+            }
+            Self::TanBackward => 1.0 + value.tan().powi(2),
+            Self::AsinBackward => 1.0 / (1.0 - value * value).sqrt(),
+            Self::AcosBackward => -1.0 / (1.0 - value * value).sqrt(),
+            Self::AtanBackward => 1.0 / (1.0 + value * value),
+            Self::AsinhBackward => 1.0 / (value * value + 1.0).sqrt(),
+            Self::AcoshBackward => 1.0 / (value * value - 1.0).sqrt(),
+            Self::AtanhBackward => 1.0 / (1.0 - value * value),
+            Self::ErfBackward => (2.0 / core::f64::consts::PI.sqrt()) * (-value * value).exp(),
+            Self::RsqrtBackward => -0.5 / (value * value.sqrt()),
+            Self::GeluBackward => {
+                let cdf = 0.5 * (1.0 + erf_approx_f64(value / core::f64::consts::SQRT_2));
+                let pdf =
+                    (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-value * value / 2.0).exp();
+                cdf + value * pdf
+            }
+            Self::MishBackward => {
+                let softplus = if value > 20.0 {
+                    value
+                } else {
+                    (1.0 + value.exp()).ln()
+                };
+                let tanh = softplus.tanh();
+                let sigmoid = 1.0 / (1.0 + (-value).exp());
+                tanh + value * sigmoid * (1.0 - tanh * tanh)
+            }
         }
     }
 }
@@ -397,6 +480,11 @@ fn execute_strided_f32(
     output_shape: &[usize],
 ) -> Result<Vec<f32>> {
     let plan = binary_iteration_plan(lhs, lhs_values.len(), rhs, rhs_values.len(), output_shape)?;
+    if plan.numel < PARALLEL_GRAIN {
+        return Ok(map_binary_strided_serial_f32(
+            op, lhs_values, rhs_values, &plan,
+        ));
+    }
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     if let Some(output) = map_iteration_avx2_f32(op, lhs_values, rhs_values, &plan) {
         return Ok(output);
@@ -904,7 +992,7 @@ unsafe fn avx2_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left:
     let mut output: Vec<f32> = Vec::with_capacity(dense.len());
     let output_ptr = output.spare_capacity_mut().as_mut_ptr().cast::<f32>();
     // SAFETY: the caller guarantees AVX2 and output has space for dense.len().
-    unsafe { avx2_scalar_f32_into(op, dense, scalar, scalar_left, output_ptr) };
+    unsafe { avx2_broadcast_scalar_f32(op, dense, scalar, scalar_left, output_ptr) };
     // SAFETY: the writer initialized every slot.
     unsafe { output.set_len(dense.len()) };
     output
@@ -912,7 +1000,7 @@ unsafe fn avx2_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left:
 
 #[cfg(all(feature = "std", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
-unsafe fn avx2_scalar_f32_into(
+pub(crate) unsafe fn avx2_broadcast_scalar_f32(
     op: BinaryOp,
     dense: &[f32],
     scalar: f32,
@@ -953,6 +1041,18 @@ unsafe fn avx2_scalar_f32_into(
         // SAFETY: index is within the allocation and each slot is written once.
         unsafe { output_ptr.add(index).write(value) };
     }
+}
+
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+unsafe fn avx2_scalar_f32_into(
+    op: BinaryOp,
+    dense: &[f32],
+    scalar: f32,
+    scalar_left: bool,
+    output_ptr: *mut f32,
+) {
+    unsafe { avx2_broadcast_scalar_f32(op, dense, scalar, scalar_left, output_ptr) }
 }
 
 #[cfg(all(feature = "std", target_arch = "x86_64"))]
@@ -1622,6 +1722,103 @@ where
     output
 }
 
+fn map_binary_strided_serial_f32(
+    op: BinaryOp,
+    lhs: &[f32],
+    rhs: &[f32],
+    plan: &IterationPlan,
+) -> Vec<f32> {
+    let mut output = Vec::with_capacity(plan.numel);
+    if plan.numel == 0 {
+        return output;
+    }
+    if plan.output_shape.is_empty() {
+        output.push(op.eval_f32(lhs[plan.operands[0].offset], rhs[plan.operands[1].offset]));
+        return output;
+    }
+
+    let outer_rank = plan.output_shape.len() - 1;
+    let inner_len = plan.output_shape[outer_rank];
+    let outer_count = plan.numel / inner_len;
+    let mut coordinates = vec![0usize; outer_rank];
+    let mut lhs_index = plan.operands[0].offset;
+    let mut rhs_index = plan.operands[1].offset;
+    let lhs_inner_stride = plan.operands[0].strides[outer_rank];
+    let rhs_inner_stride = plan.operands[1].strides[outer_rank];
+
+    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    let use_avx2 = (crate::simd::simd_lanes::<f32>() >= 8 || crate::simd::avx2_detected())
+        && matches!((lhs_inner_stride, rhs_inner_stride), (1, 0) | (0, 1));
+
+    #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
+    let use_avx2 = false;
+
+    if use_avx2 {
+        #[cfg(all(feature = "std", target_arch = "x86_64"))]
+        {
+            let output_spare = &mut output.spare_capacity_mut()[..plan.numel];
+            let mut out_offset = 0;
+            for outer_index in 0..outer_count {
+                let out_ptr = output_spare[out_offset..].as_mut_ptr().cast::<f32>();
+                unsafe {
+                    match (lhs_inner_stride, rhs_inner_stride) {
+                        (1, 0) => avx2_broadcast_scalar_f32(
+                            op,
+                            &lhs[lhs_index..lhs_index + inner_len],
+                            rhs[rhs_index],
+                            false,
+                            out_ptr,
+                        ),
+                        (0, 1) => avx2_broadcast_scalar_f32(
+                            op,
+                            &rhs[rhs_index..rhs_index + inner_len],
+                            lhs[lhs_index],
+                            true,
+                            out_ptr,
+                        ),
+                        _ => unreachable!(),
+                    }
+                }
+                out_offset += inner_len;
+                if outer_index + 1 == outer_count {
+                    break;
+                }
+                advance_binary(
+                    &mut coordinates,
+                    &plan.output_shape[..outer_rank],
+                    &mut lhs_index,
+                    &plan.operands[0].strides[..outer_rank],
+                    &mut rhs_index,
+                    &plan.operands[1].strides[..outer_rank],
+                );
+            }
+            unsafe { output.set_len(plan.numel) };
+            return output;
+        }
+    }
+
+    for outer_index in 0..outer_count {
+        for inner_index in 0..inner_len {
+            output.push(op.eval_f32(
+                lhs[lhs_index + inner_index * lhs_inner_stride],
+                rhs[rhs_index + inner_index * rhs_inner_stride],
+            ));
+        }
+        if outer_index + 1 == outer_count {
+            break;
+        }
+        advance_binary(
+            &mut coordinates,
+            &plan.output_shape[..outer_rank],
+            &mut lhs_index,
+            &plan.operands[0].strides[..outer_rank],
+            &mut rhs_index,
+            &plan.operands[1].strides[..outer_rank],
+        );
+    }
+    output
+}
+
 fn map_unary_strided<T, F>(input: &[T], plan: &UnaryIterationPlan, op: &F) -> Vec<T>
 where
     T: Copy + Send + Sync,
@@ -1749,12 +1946,12 @@ pub(crate) fn dense_range(
     }
     let end = storage
         .offset_elements
-        .checked_add(checked_numel(output_shape)?)?;
+        .checked_add(try_numel(output_shape)?)?;
     (end <= buffer_len).then_some(storage.offset_elements..end)
 }
 
 fn scalar_value<T: Copy>(storage: &CpuStorage, values: &[T]) -> Option<T> {
-    if checked_numel(&storage.shape)? != 1 {
+    if try_numel(&storage.shape)? != 1 {
         return None;
     }
     values.get(storage.offset_elements).copied()
@@ -1775,7 +1972,13 @@ fn validate_bounds(
     Ok(())
 }
 
-fn checked_numel(shape: &[usize]) -> Option<usize> {
+/// The element count of `shape`, or `None` on overflow.
+///
+/// This is a fast-path check for two `Option`-returning callers that treat
+/// overflow as "this shortcut does not apply" rather than as an error to
+/// report; [`crate::bytes::checked_numel`] is the crate's answer to the
+/// question "what is this shape's element count, and is it representable".
+fn try_numel(shape: &[usize]) -> Option<usize> {
     shape
         .iter()
         .try_fold(1usize, |numel, &dim| numel.checked_mul(dim))
@@ -2136,6 +2339,106 @@ mod tests {
                 values[row * columns + column],
                 row_values[row] - column_values[column]
             );
+        }
+    }
+
+    #[test]
+    fn broadcast_strided_fast_path_matches_scalar_reference() {
+        for op in [BinaryOp::Add, BinaryOp::Sub, BinaryOp::Mul, BinaryOp::Div] {
+            // Case 1: [B, T, 1] vs [B, T, C] (layer_norm shape, C not multiple of 8)
+            let (b, t, c) = (2, 3, 11);
+            let btc_data: Vec<f32> = (1..=b * t * c).map(|x| x as f32 * 0.5 + 1.0).collect();
+            let bt1_data: Vec<f32> = (1..=b * t).map(|x| x as f32 * 1.5 + 2.0).collect();
+
+            let full = CpuStorage::from_contiguous(CpuBuffer::F32(btc_data.clone()), vec![b, t, c]);
+            let broadcast =
+                CpuStorage::from_contiguous(CpuBuffer::F32(bt1_data.clone()), vec![b, t, 1]);
+
+            // Broadcast on RHS: full (op) broadcast
+            let out_rhs = execute_binary(op, &full, &broadcast, &[b, t, c])
+                .unwrap()
+                .unwrap();
+            let CpuBuffer::F32(ref vals_rhs) = *out_rhs.buffer else {
+                panic!("expected F32 output");
+            };
+            for bi in 0..b {
+                for ti in 0..t {
+                    for ci in 0..c {
+                        let full_idx = bi * t * c + ti * c + ci;
+                        let bcast_idx = bi * t + ti;
+                        let expected = op.eval_f32(btc_data[full_idx], bt1_data[bcast_idx]);
+                        assert!(
+                            (vals_rhs[full_idx] - expected).abs() < 1e-6,
+                            "mismatch at b={bi}, t={ti}, c={ci} for op {op:?}"
+                        );
+                    }
+                }
+            }
+
+            // Broadcast on LHS: broadcast (op) full
+            let out_lhs = execute_binary(op, &broadcast, &full, &[b, t, c])
+                .unwrap()
+                .unwrap();
+            let CpuBuffer::F32(ref vals_lhs) = *out_lhs.buffer else {
+                panic!("expected F32 output");
+            };
+            for bi in 0..b {
+                for ti in 0..t {
+                    for ci in 0..c {
+                        let full_idx = bi * t * c + ti * c + ci;
+                        let bcast_idx = bi * t + ti;
+                        let expected = op.eval_f32(bt1_data[bcast_idx], btc_data[full_idx]);
+                        assert!(
+                            (vals_lhs[full_idx] - expected).abs() < 1e-6,
+                            "mismatch at b={bi}, t={ti}, c={ci} for op {op:?}"
+                        );
+                    }
+                }
+            }
+
+            // Case 2: [C] vs [B, C] (bias-add shape, C not multiple of 8)
+            let (b, c) = (4, 13);
+            let bc_data: Vec<f32> = (1..=b * c).map(|x| x as f32 * 0.75 + 1.0).collect();
+            let c_data: Vec<f32> = (1..=c).map(|x| x as f32 * 2.0 + 3.0).collect();
+
+            let full_bc = CpuStorage::from_contiguous(CpuBuffer::F32(bc_data.clone()), vec![b, c]);
+            let bcast_c = CpuStorage::from_contiguous(CpuBuffer::F32(c_data.clone()), vec![c]);
+
+            // Broadcast on RHS: [B, C] (op) [C]
+            let out_bias_rhs = execute_binary(op, &full_bc, &bcast_c, &[b, c])
+                .unwrap()
+                .unwrap();
+            let CpuBuffer::F32(ref vals_bias_rhs) = *out_bias_rhs.buffer else {
+                panic!("expected F32 output");
+            };
+            for bi in 0..b {
+                for (ci, &c_val) in c_data.iter().enumerate().take(c) {
+                    let full_idx = bi * c + ci;
+                    let expected = op.eval_f32(bc_data[full_idx], c_val);
+                    assert!(
+                        (vals_bias_rhs[full_idx] - expected).abs() < 1e-6,
+                        "mismatch at b={bi}, c={ci} for op {op:?}"
+                    );
+                }
+            }
+
+            // Broadcast on LHS: [C] (op) [B, C]
+            let out_bias_lhs = execute_binary(op, &bcast_c, &full_bc, &[b, c])
+                .unwrap()
+                .unwrap();
+            let CpuBuffer::F32(ref vals_bias_lhs) = *out_bias_lhs.buffer else {
+                panic!("expected F32 output");
+            };
+            for bi in 0..b {
+                for (ci, &c_val) in c_data.iter().enumerate().take(c) {
+                    let full_idx = bi * c + ci;
+                    let expected = op.eval_f32(c_val, bc_data[full_idx]);
+                    assert!(
+                        (vals_bias_lhs[full_idx] - expected).abs() < 1e-6,
+                        "mismatch at b={bi}, c={ci} for op {op:?}"
+                    );
+                }
+            }
         }
     }
 

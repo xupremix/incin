@@ -179,7 +179,7 @@ cuda matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matm
 cuda reduction f32 rank 2 inference: native
 cuda reduction f64 rank 2 inference: native
 cuda conv2d f32 rank 4 training: native
-cuda normalization f32 rank 2 training: native
+cuda normalization f32 rank 2 training: unsupported (operation normalization is not registered)
 
 [findings]
 warning backend-unavailable: wgpu is compiled into this build but no device answered
