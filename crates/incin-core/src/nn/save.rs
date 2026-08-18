@@ -292,6 +292,26 @@ pub fn load_safetensors_snapshot<P: AsRef<Path>>(path: P) -> Result<crate::nn::S
         .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))
 }
 
+/// Parses a safetensors file that was not written by a versioned incin
+/// build into backend-neutral owned state.
+///
+/// [`load_safetensors_snapshot`] refuses a file with no
+/// `incin.format.version` metadata key, because that key is incin's own
+/// promise about its own envelope and an absent key means the promise was
+/// never made. A file produced by another toolchain — most commonly one
+/// downloaded from the Hugging Face Hub — never carries that key and is not
+/// thereby broken; it simply was not written by incin. Use this entry point
+/// for that case. State role metadata (`incin.state.role.<name>`) is still
+/// read if present and still defaults to `Parameter` if absent, exactly as
+/// [`load_safetensors_snapshot`] does; the only difference is that the
+/// version key is not required.
+pub fn load_foreign_safetensors_snapshot<P: AsRef<Path>>(
+    path: P,
+) -> Result<crate::nn::StateSnapshot> {
+    crate::serialize::deserialize_snapshot_safetensors_foreign(path.as_ref())
+        .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {}", e)))
+}
+
 /// Loads weights into a module from a safetensors file.
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where

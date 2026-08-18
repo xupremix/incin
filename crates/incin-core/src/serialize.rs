@@ -126,8 +126,6 @@ pub(crate) fn deserialize_snapshot_safetensors(
 ) -> anyhow::Result<StateSnapshot> {
     let bytes = std::fs::read(path)?;
     let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
-    let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
-    let mut snapshot = StateSnapshot::new();
     let metadata = header.metadata().as_ref();
     let declared = metadata
         .and_then(|items| items.get(STATE_FORMAT_VERSION_KEY))
@@ -138,6 +136,38 @@ pub(crate) fn deserialize_snapshot_safetensors(
         })
         .transpose()?;
     accept_state_format_version(declared, "safetensors")?;
+    read_safetensors_entries(&bytes, metadata)
+}
+
+/// Parses a safetensors file into backend-neutral owned state, without
+/// requiring an `incin.format.version` key.
+///
+/// [`deserialize_snapshot_safetensors`] is the loader behind `ModelExt::load`
+/// and refuses an unversioned file, because that file was never written by a
+/// versioned incin build and the version contract cannot say anything about
+/// it. A file downloaded from an external source — the Hugging Face Hub,
+/// most obviously — is unversioned for exactly that reason and is never
+/// wrong to be so: it was written by whatever produced it, not by incin. This
+/// entry point exists for that case: same tensor/shape/dtype parsing, same
+/// `incin.state.role.<name>` lookup (defaulting to `Parameter` when the key
+/// is absent, which it always is for a genuinely foreign file), no version
+/// gate. `import_model!`'s compile-time safetensors reader already accepts
+/// foreign files on this same basis; this is the runtime equivalent for
+/// callers who only know the file at runtime (e.g. after downloading it).
+pub(crate) fn deserialize_snapshot_safetensors_foreign(
+    path: &std::path::Path,
+) -> anyhow::Result<StateSnapshot> {
+    let bytes = std::fs::read(path)?;
+    let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
+    read_safetensors_entries(&bytes, header.metadata().as_ref())
+}
+
+fn read_safetensors_entries(
+    bytes: &[u8],
+    metadata: Option<&std::collections::HashMap<String, String>>,
+) -> anyhow::Result<StateSnapshot> {
+    let tensors = safetensors::SafeTensors::deserialize(bytes)?;
+    let mut snapshot = StateSnapshot::new();
     for (name, view) in tensors.tensors() {
         let role = match metadata.and_then(|items| items.get(&format!("incin.state.role.{}", name)))
         {
@@ -444,6 +474,62 @@ mod tests {
             error.contains(STATE_FORMAT_VERSION_KEY),
             "the refusal must name the missing key, got: {error}"
         );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn the_foreign_loader_accepts_exactly_the_file_the_strict_loader_refuses() {
+        // Same fixture shape as `a_safetensors_file_without_a_version_is_refused_as_unversioned`:
+        // no version key, but with role metadata present, to prove the
+        // foreign loader still reads role metadata when it happens to exist
+        // rather than blindly defaulting every entry.
+        let path = scratch("foreign-with-role.safetensors");
+        let data = vec![0u8; 4];
+        let view =
+            safetensors::tensor::TensorView::new(safetensors::tensor::Dtype::F32, vec![1], &data)
+                .expect("view is well formed");
+        let mut views = BTreeMap::new();
+        views.insert("entry_0".to_string(), view);
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert("incin.state.role.entry_0".to_string(), "buffer".to_string());
+        safetensors::tensor::serialize_to_file(&views, Some(metadata), &path)
+            .expect("fixture file is written");
+
+        assert!(
+            deserialize_snapshot_safetensors(&path).is_err(),
+            "the strict loader must still refuse this file"
+        );
+        let snapshot = deserialize_snapshot_safetensors_foreign(&path)
+            .expect("the foreign loader must accept a file with no version key");
+        assert_eq!(snapshot.len(), 1);
+        let (state_path, value) = snapshot.iter().next().expect("one entry");
+        assert_eq!(state_path.as_str(), "entry_0");
+        assert_eq!(
+            value.role(),
+            StateRole::Buffer,
+            "role metadata is still honored when present, even without a version key"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn the_foreign_loader_defaults_role_to_parameter_when_absent() {
+        // The realistic case: a genuinely third-party file with neither a
+        // version key nor incin's role convention at all.
+        let path = scratch("foreign-no-metadata.safetensors");
+        let data = vec![0u8; 4];
+        let view =
+            safetensors::tensor::TensorView::new(safetensors::tensor::Dtype::F32, vec![1], &data)
+                .expect("view is well formed");
+        let mut views = BTreeMap::new();
+        views.insert("weight".to_string(), view);
+        safetensors::tensor::serialize_to_file(&views, None, &path)
+            .expect("fixture file is written");
+
+        let snapshot = deserialize_snapshot_safetensors_foreign(&path)
+            .expect("a file with no incin metadata at all must still be readable");
+        let (_, value) = snapshot.iter().next().expect("one entry");
+        assert_eq!(value.role(), StateRole::Parameter);
         std::fs::remove_file(path).ok();
     }
 
