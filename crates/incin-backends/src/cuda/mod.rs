@@ -42,3 +42,15 @@ pub(crate) fn checked_i32(
         .into()
     })
 }
+
+/// [`checked_i32`] over every value, for the launch-parameter lists (strides,
+/// shapes, offsets) that CUDA kernels take as `*const i32` arrays.
+pub(crate) fn checked_i32_vec(
+    values: &[usize],
+    field: &'static str,
+) -> incin_core::error::Result<alloc::vec::Vec<i32>> {
+    values
+        .iter()
+        .map(|&value| checked_i32(value, field))
+        .collect()
+}

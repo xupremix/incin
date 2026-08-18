@@ -1,27 +1,22 @@
+//! CUDA `layer_norm` and `batch_norm`.
+//!
+//! `softmax` and `rms_norm` are not here: both are answered in
+//! `cuda::executor` by composing already-implemented pointwise and reduction
+//! `Execute<O>` calls rather than by a dedicated kernel, and their capability
+//! rows say `Composed` because of it. `layer_norm` and `batch_norm` are real
+//! kernels because a Welford row reduction and a per-channel affine pass are
+//! each one launch; composing either from primitives would mean materializing
+//! an intermediate the size of the input for no reason a fused kernel needs.
+
+use crate::cuda::checked_i32;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::exec::PrecisionRequest;
 use incin_core::shapes::OperationKind;
 
-fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| {
-        Error::Msg(format!(
-            "CUDA normalization {field} {value} exceeds i32 ABI"
-        ))
-    })
-}
-
-fn checked_numel(shape: &[usize]) -> Result<usize> {
-    shape.iter().try_fold(1usize, |product, &dimension| {
-        product
-            .checked_mul(dimension)
-            .ok_or_else(|| Error::Msg("CUDA normalization element count overflow".into()))
-    })
-}
-
 fn validate_contiguous(storage: &CudaStorage, name: &'static str) -> Result<usize> {
-    let numel = checked_numel(&storage.shape)?;
+    let numel = crate::bytes::checked_numel(&storage.shape)?;
     if storage.strides != crate::layout::contiguous_strides(&storage.shape) {
         return Err(Error::Msg(format!(
             "CUDA normalization requires contiguous {name} storage"
@@ -302,7 +297,7 @@ pub(crate) fn launch_batch_norm(
     let channel_axis = usize::from(input.shape.len() > 1);
     let num_channels = input.shape[channel_axis];
     let spatial_size = if input.shape.len() > 2 {
-        checked_numel(&input.shape[2..])?
+        crate::bytes::checked_numel(&input.shape[2..])?
     } else {
         1
     };
@@ -413,15 +408,17 @@ pub(crate) fn launch_batch_norm(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use incin_core::tensor::dtype::DTypeId;
 
     #[test]
     fn normalization_metadata_checks_reject_overflow() {
-        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
-        assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
-        assert!(checked_numel(&[usize::MAX, 2]).is_err());
+        assert!(crate::bytes::checked_numel(&[usize::MAX, 2]).is_err());
         assert!(
-            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Normalization).is_err()
+            crate::bytes::byte_len(
+                incin_core::tensor::dtype::DTypeId::F16,
+                usize::MAX,
+                OperationKind::Normalization
+            )
+            .is_err()
         );
     }
 }

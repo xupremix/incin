@@ -1,22 +1,10 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::cuda::{checked_i32, checked_i32_vec};
 use crate::iteration::OperandIteration;
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::exec::PrecisionRequest;
 use incin_core::shapes::OperationKind;
-use incin_core::tensor::dtype::DTypeId;
-
-fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
-    i32::try_from(value)
-        .map_err(|_| Error::Msg(format!("CUDA reduction {field} {value} exceeds i32 ABI")))
-}
-
-fn checked_i32_vec(values: &[usize], field: &'static str) -> Result<Vec<i32>> {
-    values
-        .iter()
-        .map(|&value| checked_i32(value, field))
-        .collect()
-}
 
 fn validate_reduction<'a>(
     storage: &'a CudaStorage,
@@ -333,185 +321,10 @@ pub(crate) fn launch_reduce_op(
     Ok(CudaStorage::new(Arc::new(out_buffer), final_shape))
 }
 
-#[cfg(feature = "cuda")]
-pub(crate) fn launch_reduce_with_indices_op(
-    op_name: &'static str,
-    storage: &CudaStorage,
-    axis: usize,
-    keepdim: bool,
-) -> Result<(CudaStorage, CudaStorage)> {
-    let (buffer, reduce_dim_size) = validate_reduction(storage, axis, op_name)?;
-    let (keepdim_shape, final_shape) = reduction_shapes(&storage.shape, axis, keepdim);
-    let out_numel = keepdim_shape.iter().try_fold(1usize, |product, &dim| {
-        product
-            .checked_mul(dim)
-            .ok_or_else(|| Error::Msg("CUDA indexed reduction output size overflow".into()))
-    })?;
-    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, op_name)?;
-    let kernel = crate::kernel::render_cuda_reduction(op_name, builtin_id, true, false)?;
-    let launch_selection =
-        reduction_launch_selection(&buffer.device, &kernel, out_numel, reduce_dim_size, false)?;
-    let stream = buffer.device.default_stream();
-    let mut value_buffer = CudaBuffer {
-        len: out_numel,
-        dtype: buffer.dtype,
-        data: Arc::new(
-            stream
-                .alloc_zeros::<u8>(crate::bytes::byte_len(
-                    kernel.dtype,
-                    out_numel,
-                    OperationKind::Reduction,
-                )?)
-                .map_err(|error| {
-                    Error::Msg(format!("CUDA reduction value allocation failed: {error:?}"))
-                })?,
-        ),
-        device: buffer.device.clone(),
-        device_id: buffer.device_id,
-    };
-    let mut index_buffer = CudaBuffer {
-        len: out_numel,
-        dtype: DTypeId::U32.descriptor(),
-        data: Arc::new(
-            stream
-                .alloc_zeros::<u8>(crate::bytes::byte_len(
-                    DTypeId::U32.descriptor(),
-                    out_numel,
-                    OperationKind::Reduction,
-                )?)
-                .map_err(|error| {
-                    Error::Msg(format!("CUDA reduction index allocation failed: {error:?}"))
-                })?,
-        ),
-        device: buffer.device.clone(),
-        device_id: buffer.device_id,
-    };
-    if out_numel == 0 {
-        return Ok((
-            CudaStorage::new(Arc::new(value_buffer), final_shape.clone()),
-            CudaStorage::new(Arc::new(index_buffer), final_shape),
-        ));
-    }
-
-    ensure_reduction_loaded(buffer.device_id, &kernel)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
-    let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
-    let in_strides = checked_i32_vec(&storage.strides, "input stride")?;
-    let out_shape = checked_i32_vec(&keepdim_shape, "output shape")?;
-    let out_strides_host = crate::layout::contiguous_strides(&keepdim_shape);
-    let out_strides = checked_i32_vec(&out_strides_host, "output stride")?;
-    let in_strides_dev = stream.clone_htod(&in_strides).map_err(|error| {
-        Error::Msg(format!(
-            "CUDA indexed reduction stride upload failed: {error:?}"
-        ))
-    })?;
-    let out_shape_dev = stream.clone_htod(&out_shape).map_err(|error| {
-        Error::Msg(format!(
-            "CUDA indexed reduction shape upload failed: {error:?}"
-        ))
-    })?;
-    let out_strides_dev = stream.clone_htod(&out_strides).map_err(|error| {
-        Error::Msg(format!(
-            "CUDA indexed reduction output-stride upload failed: {error:?}"
-        ))
-    })?;
-    let out_numel_i32 = checked_i32(out_numel, "output element count")?;
-    let work_items = u32::try_from(out_numel).map_err(|_| {
-        Error::Msg(format!(
-            "CUDA indexed reduction work-item count {out_numel} exceeds u32 grid ABI"
-        ))
-    })?;
-
-    unsafe {
-        let value_u8 = Arc::get_mut(&mut value_buffer.data).ok_or_else(|| {
-            Error::Msg("fresh CUDA reduction value buffer was unexpectedly shared".into())
-        })?;
-        let index_u8 = Arc::get_mut(&mut index_buffer.data).ok_or_else(|| {
-            Error::Msg("fresh CUDA reduction index buffer was unexpectedly shared".into())
-        })?;
-        use cudarc::driver::PushKernelArg;
-        let in_offset = checked_i32(storage.offset_elements, "input offset")?;
-        let axis_i32 = checked_i32(axis, "axis")?;
-        let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
-        let ndim = checked_i32(storage.shape.len(), "rank")?;
-        let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
-            let block_size = u32::from(candidate.block_size);
-            let config = cudarc::driver::LaunchConfig {
-                grid_dim: (work_items.div_ceil(block_size), 1, 1),
-                block_dim: (block_size, 1, 1),
-                shared_mem_bytes: 0,
-            };
-            stream
-                .launch_builder(&function)
-                .arg(&*buffer.data)
-                .arg(&mut *value_u8)
-                .arg(&mut *index_u8)
-                .arg(&in_strides_dev)
-                .arg(&out_shape_dev)
-                .arg(&out_strides_dev)
-                .arg(&in_offset)
-                .arg(&0i32)
-                .arg(&axis_i32)
-                .arg(&reduce_dim)
-                .arg(&ndim)
-                .arg(&out_numel_i32)
-                .launch(config)
-                .map(|_| ())
-                .map_err(|error| {
-                    Error::Msg(format!(
-                        "CUDA indexed {op_name} reduction launch failed: {error:?}"
-                    ))
-                })
-        };
-        let launch_candidate =
-            empirically_select_reduction_candidate(&stream, launch_selection, false, &mut launch)?;
-        launch(launch_candidate)?;
-    }
-
-    Ok((
-        CudaStorage::new(Arc::new(value_buffer), final_shape.clone()),
-        CudaStorage::new(Arc::new(index_buffer), final_shape),
-    ))
-}
-
-/// Converts a `U32`-dtype index `CudaStorage` (what `launch_reduce_with_indices_op`
-/// produces) into an `I64`-dtype one, matching CPU/WGPU's `argmax`/`argmin`
-/// convention (`CpuBuffer::I64`) so downstream consumers that assume
-/// integer index tensors are `I64` (e.g. `embedding`, `cross_entropy_loss`)
-/// keep working uniformly across backends. Small buffer (one index per
-/// reduced output position, not per input element), so a host round-trip
-/// here is cheap regardless of the input tensor's size.
-#[cfg(feature = "cuda")]
-pub(crate) fn indices_u32_to_i64(idx: &CudaStorage) -> Result<CudaStorage> {
-    let buf = &*idx.buffer;
-    if buf.dtype != DTypeId::U32.descriptor() {
-        return Err(Error::DTypeStorageMismatch {
-            expected: DTypeId::U32.descriptor(),
-            got: buf.dtype,
-        });
-    }
-    let stream = buf.device.default_stream();
-    let host_u32: alloc::vec::Vec<u32> = unsafe {
-        let view = buf
-            .data
-            .transmute::<u32>(buf.len)
-            .ok_or_else(|| Error::Msg("indices_u32_to_i64: invalid byte length".into()))?;
-        stream
-            .clone_dtoh(&view)
-            .map_err(|e| Error::Msg(format!("indices_u32_to_i64: download failed: {e:?}")))?
-    };
-    let host_i64: alloc::vec::Vec<i64> = host_u32.into_iter().map(|v| v as i64).collect();
-    crate::cuda::backend::cuda_from_bytes(
-        &idx.shape,
-        DTypeId::I64.descriptor(),
-        buf.device_id,
-        bytemuck::cast_slice(&host_i64),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use incin_core::tensor::dtype::DTypeId;
 
     #[test]
     fn checked_reduction_metadata_rejects_narrowing_and_overflow() {

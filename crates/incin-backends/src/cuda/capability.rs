@@ -22,8 +22,20 @@ macro_rules! impl_cuda_storage_dtype {
     };
 }
 
-impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64);
+impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool);
 
+/// `bool` is a 1-byte scalar dtype (`tensor/dtype.rs`'s own encoding table
+/// gives it the same `scalar_bytes() == 1` as `u8`/`q8_0`), and every path
+/// this validator gates that does not launch a kernel — allocation,
+/// `to_bytes`/`from_bytes`, `reshape` — is byte-width-agnostic already, so
+/// accepting it here is safe on its own. It does not by itself make `bool`
+/// usable everywhere: `validate_elementwise_dtype` explicitly re-excludes it
+/// so a float kernel never sees it, and `broadcast_as`'s row stays narrower
+/// than this validator for the unrelated `shape_op` byte-width reason
+/// documented on `CUDA_CAPABILITIES` in `capability.rs`. Widening what this
+/// function accepts is a necessary condition for `bool` support, not a
+/// capability claim by itself — the capability table is what actually
+/// claims something, one row at a time.
 pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
     let is_supported = matches!(
         dtype.builtin_id(),
@@ -34,6 +46,7 @@ pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static s
                 | DTypeId::BF16
                 | DTypeId::I64
                 | DTypeId::Q8_0
+                | DTypeId::Bool
         )
     );
     if is_supported {
@@ -103,5 +116,27 @@ impl<D: Device> SupportsDType<Dyn> for super::backend::CudaBackendImpl<D> {
     fn resolve_dtype(field: &DTypeDescriptor, _device: &DeviceId) -> Result<DTypeDescriptor> {
         validate_cuda_storage_dtype(*field, "resolve_dtype")?;
         Ok(*field)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn storage_dtype_validation_now_accepts_bool_alongside_the_original_family() {
+        for dtype in [
+            DTypeId::F32,
+            DTypeId::F64,
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::I64,
+            DTypeId::Q8_0,
+            DTypeId::Bool,
+        ] {
+            validate_cuda_storage_dtype(dtype.descriptor(), "test")
+                .unwrap_or_else(|e| panic!("{dtype:?} should validate: {e:?}"));
+        }
+        assert!(validate_cuda_storage_dtype(DTypeId::U32.descriptor(), "test").is_err());
     }
 }

@@ -12,8 +12,14 @@ use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
 /// values (0=narrow, 2=transpose, 3=broadcast), same `aux` semantics (narrow
 /// start offsets, or transpose's per-output-dim source-dim map, offset by
 /// the output's padding amount so it indexes correctly into `multi_idx`).
+/// `pub(crate)` for `cuda::ops::select::launch_broadcast_bool_mask`, which
+/// reuses this to broadcast a `bool` mask through the exact same index
+/// arithmetic `shape_op`'s `op_mode == 3` uses, without going through
+/// `launch_broadcast`/`shape_op` itself: that kernel's data pointers are a
+/// hardcoded `float*`/`float*`, which a 1-byte `bool` buffer cannot answer
+/// (see `select.rs`'s own doc for the byte-width trap this avoids).
 #[cfg(feature = "cuda")]
-fn prepare_shape_params(
+pub(crate) fn prepare_shape_params(
     op_mode: u32,
     n_elements: u32,
     out_shape: &[usize],

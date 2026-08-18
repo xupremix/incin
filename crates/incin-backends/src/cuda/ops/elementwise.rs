@@ -1,13 +1,12 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::cuda::{checked_i32, checked_i32_vec};
 use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::exec::LayoutClass;
 use incin_core::shapes::OperationKind;
 use incin_core::tensor::device::DeviceId;
-use incin_core::tensor::dtype::DTypeDescriptor;
-#[cfg(test)]
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 fn validate_kernel_abi(
     kernel: &crate::kernel::RenderedKernel,
@@ -31,20 +30,24 @@ fn validate_kernel_abi(
     Ok(())
 }
 
+/// The float-family gate every unary/binary pointwise launcher goes
+/// through before rendering a kernel. `validate_cuda_storage_dtype` alone is
+/// not this function's contract: it now also accepts `bool` (for
+/// `storage`/`reshape`/`to_bytes`/`from_bytes`, none of which run a
+/// float-templated kernel), and `CudaScalarSpec::for_float`'s own catch-all
+/// would still refuse a `bool` that reached it — but refusing here, before
+/// any kernel-rendering work happens, is the more direct failure and keeps
+/// this function's name an honest description of what it checks rather than
+/// a relay to a storage-level check with a wider contract than its own.
 fn validate_elementwise_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
+    if dtype.builtin_id() == Some(DTypeId::Bool) {
+        return Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op,
+        });
+    }
     crate::cuda::backend::validate_cuda_storage_dtype(dtype, op)
-}
-
-fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
-    i32::try_from(value)
-        .map_err(|_| Error::Msg(format!("CUDA {field} value {value} exceeds i32 launch ABI")))
-}
-
-fn checked_i32_vec(values: &[usize], field: &'static str) -> Result<Vec<i32>> {
-    values
-        .iter()
-        .map(|&value| checked_i32(value, field))
-        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -764,6 +767,18 @@ mod tests {
             validate_elementwise_dtype(dtype.descriptor(), "test").unwrap();
         }
         assert!(validate_elementwise_dtype(DTypeId::U32.descriptor(), "test").is_err());
+    }
+
+    /// `bool` is the one dtype this gate refuses that `validate_cuda_storage_dtype`
+    /// itself accepts (for `storage`/`reshape`/`to_bytes`/`from_bytes`, none of
+    /// which render a float-templated kernel) — the explicit carve-out this
+    /// function adds on top of the storage-level check, not something the
+    /// storage validator's own family membership would produce.
+    #[test]
+    fn elementwise_dtype_gate_refuses_bool_even_though_storage_now_accepts_it() {
+        crate::cuda::backend::validate_cuda_storage_dtype(DTypeId::Bool.descriptor(), "test")
+            .expect("storage validation accepts bool");
+        assert!(validate_elementwise_dtype(DTypeId::Bool.descriptor(), "test").is_err());
     }
 
     #[test]
