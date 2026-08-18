@@ -3,7 +3,7 @@
 ## Losses
 
 Every loss module's `forward` takes references, and the target argument is
-`NoGrad`  -  the label data isn't something you differentiate with respect to,
+`NoGrad` - the label data isn't something you differentiate with respect to,
 and that's stated in the type rather than left as a convention to remember:
 
 ```rust,no_run
@@ -19,7 +19,7 @@ let loss2 = L1Loss::<Mean>::new().forward(&pred, &target)?;
 ```
 
 `Mean` is one of three reduction modes (`Mean`, `Sum`, `NoneReduction`) that
-parameterize a loss's own type  -  `MSELoss<Sum>` sums instead of averaging,
+parameterize a loss's own type - `MSELoss<Sum>` sums instead of averaging,
 and `MSELoss<NoneReduction>` returns the per-element loss unreduced, each a
 different type rather than a runtime flag.
 
@@ -51,7 +51,7 @@ assemble a homogeneous group explicitly. Both use `step(&grads)`. The
 learning rate is a public field (`optim.lr`), not hidden behind a setter.
 
 A step that reaches *no* parameter in the group is an error, not a silent
-`Ok(())`. That case is nearly always a bug  -  a `Gradients` from a different
+`Ok(())`. That case is nearly always a bug - a `Gradients` from a different
 model, or a `backward` that ran on a different thread from the forward pass,
 since the tape is thread-local. Skipping *some* parameters stays legal.
 
@@ -62,7 +62,7 @@ fresh gradients for each step rather than reusing one across two.
 ## Gradient clipping
 
 `clip_grad_norm` rescales every gradient in a group so their total L2 norm is
-at most `max_norm`, and returns the norm *before* rescaling  -  which is the
+at most `max_norm`, and returns the norm *before* rescaling - which is the
 number worth logging, since it tells you whether clipping actually engaged.
 
 ```rust,no_run
@@ -123,7 +123,7 @@ one for another is a one-line change.
 
 ## The whole loop
 
-Putting it together  -  model, loss, optimizer, scheduler, several steps:
+Putting it together - model, loss, optimizer, scheduler, several steps:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -154,5 +154,5 @@ fn train() -> Result<()> {
 ```
 
 For a real dataset instead of a fixed tensor, see [Data
-loading](./data_loading.md)  -  the loop shape is identical, just with a
+loading](./data_loading.md) - the loop shape is identical, just with a
 `DataLoader` iteration in place of the fixed `x`.

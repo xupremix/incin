@@ -35,7 +35,7 @@ the prelude.
 ## Loading does not move the model
 
 `load` restores state in place and leaves every parameter on the device it
-already lives on. There is no device argument  -  it used to take one and
+already lives on. There is no device argument - it used to take one and
 ignore it, which read as a relocation the call never performed. Moving a model
 between devices is `ToDevice`, which is explicit and hands back the relocated
 model.
@@ -55,8 +55,8 @@ reported as a version problem rather than as a decode failure several fields
 in. Reading refuses a file whose version is newer than the build, naming both
 numbers so you learn which release would read it.
 
-The version describes the *envelope*  -  how paths, roles, dtypes and payload
-bytes are arranged  -  and is deliberately independent of the crate version
+The version describes the *envelope* - how paths, roles, dtypes and payload
+bytes are arranged - and is deliberately independent of the crate version
 and of any individual dtype's descriptor version.
 
 A file written before versioning existed carries no key and is refused as

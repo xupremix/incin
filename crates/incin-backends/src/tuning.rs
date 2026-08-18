@@ -206,6 +206,10 @@ pub(crate) fn default_reduction_candidate(
         .ok_or_else(|| Error::Msg("reduction candidate set has no 256-thread fallback".into()))
 }
 
+/// `layer_norm`'s Welford reduction favors a wider block than a plain
+/// pointwise or scalar reduction pass, so its own candidate set starts at
+/// 128 rather than 64. `batch_norm` reads precomputed statistics per element
+/// and never reduces, so it uses the same scalar access as pointwise work.
 #[cfg(any(feature = "cuda", test))]
 pub(crate) fn normalization_candidates(is_layer_norm: bool) -> Vec<LaunchCandidate> {
     let access = if is_layer_norm {
@@ -567,7 +571,7 @@ mod tests {
             LaunchCandidate {
                 block_size: 256,
                 access: KernelAccess::WarpReduction,
-            }
+            },
         );
 
         let normalization_ln = normalization_candidates(true);

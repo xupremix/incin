@@ -9,7 +9,7 @@ of repeating a number that won't.
 
 ## Blocks real usage today
 
-- **GPU training.** See [Backends](./backends.md)  -  the previews cover
+- **GPU training.** See [Backends](./backends.md) - the previews cover
   basic arithmetic, reductions, `matmul`, and `conv2d`/pooling, and WGPU adds
   thirteen unary activations. None of them has normalization, a loss
   function, `embedding`, or `dropout`, so training anything in this book's
@@ -50,14 +50,14 @@ of repeating a number that won't.
   canonical dispatch.** `WgpuBackendImpl`, `CudaBackendImpl`,
   `MetalBackendImpl`, and `DispatchBackend` carry public inherent `add`,
   `matmul`, `conv2d` and siblings that take runtime dimensions, mint no
-  descriptor, and consult no capability table. The CPU backend has none  -  it
+  descriptor, and consult no capability table. The CPU backend has none - it
   was contracted already, which is part of why it is the complete one. Do not
   build on these: they are slated to become crate-private. Use the descriptor
   path described in [The target API and canonical
   dispatch](./target_api.md).
 - **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
   complete planning layer behind the `distributed` feature but no execution
-  path yet  -  a design surface, not a training feature to reach for.
+  path yet - a design surface, not a training feature to reach for.
 - **The automatic `Trainer`** (`incin::experimental::training`, `train`
   feature) has a real single-device training loop (`fit`), but explicitly
   refuses a multi-device plan (`TrainError::CollectivesUnavailable`) rather
@@ -65,13 +65,13 @@ of repeating a number that won't.
 
 ## Where the current, generated truth lives
 
-- `docs/capabilities.md`  -  exactly which operations each backend supports,
+- `docs/capabilities.md` - exactly which operations each backend supports,
   for which dtypes, regenerated from the actual registrations.
-- `docs/OPERATION_SEMANTICS.md`  -  the full semantic contract (broadcasting,
+- `docs/OPERATION_SEMANTICS.md` - the full semantic contract (broadcasting,
   dtype, gradient, output rules) for every catalog operation.
-- `audit-evidence/FND-005/cpu-migration-status.md`  -  canonical-path
+- `audit-evidence/FND-005/cpu-migration-status.md` - canonical-path
   migration status, machine-checked against source on every test run.
 
 If any claim in this book ever disagrees with one of those three, the
-generated document is right and this book is stale  -  please file it as
+generated document is right and this book is stale - please file it as
 such.

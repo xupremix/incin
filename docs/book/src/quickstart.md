@@ -1,6 +1,6 @@
 # Quickstart
 
-A tensor, some arithmetic, and a gradient  -  the shortest useful program:
+A tensor, some arithmetic, and a gradient - the shortest useful program:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -75,5 +75,5 @@ fn main() -> Result<()> {
 ```
 
 That's the whole shape of a training step: forward, a loss module, `backward`,
-`optimizer.step`. The rest of this book fills in the pieces  -  more layer
+`optimizer.step`. The rest of this book fills in the pieces - more layer
 types, real datasets, schedulers, metrics, and checkpointing.

@@ -1,14 +1,14 @@
 # Facade and workspace feature flags
 
 The facade feature inventory is checked against `crates/incin/Cargo.toml`.
-The default is `["std", "cpu"]`  -  a
+The default is `["std", "cpu"]` - a
 standard-library CPU build.
 
 ## Core
 
 | Feature | Default | What it enables |
 |---|:--:|---|
-| `std` | ✅ | Standard library, serialization, filesystem APIs. Turning it off gives a `no_std` build  -  see below. |
+| `std` | ✅ | Standard library, serialization, filesystem APIs. Turning it off gives a `no_std` build - see below. |
 | `cpu` | ✅ | The CPU backend, `DefaultBackend`, `DefaultDevice`. The only backend enabled by default. |
 | `nightly` | | Nightly-only APIs in the core and macro crates. |
 
@@ -26,7 +26,7 @@ standard-library CPU build.
 Enabling an accelerator never silently changes behaviour: CPU stays the
 default whenever it is available, and an accelerator-only build gets the one
 enabled device family. See [Backends](./backends.md) for what each backend can
-actually *run* today  -  the answer is much narrower than this table implies.
+actually *run* today - the answer is much narrower than this table implies.
 
 **Every backend feature implies `std`.** A bare `incin-backends` with no
 features is the one configuration that is genuinely `no_std`.
@@ -48,7 +48,7 @@ features is the one configuration that is genuinely `no_std`.
 
 | Feature | What it enables |
 |---|---|
-| `distributed` | Typed meshes, static/runtime placements, distributed lowering proofs. A *planning* surface  -  see [Experimental](./experimental.md). |
+| `distributed` | Typed meshes, static/runtime placements, distributed lowering proofs. A *planning* surface - see [Experimental](./experimental.md). |
 | `distributed-reference` | The deterministic in-process collective transport used by conformance tests and local plan development. |
 | `distributed-nccl` | Two-host process-per-rank CUDA transport and its TCP bootstrap. Implies `cuda`. |
 
@@ -79,7 +79,7 @@ What changes:
   `Enabled`. That is the true state rather than a weakened guarantee: nothing
   in a `no_std` build can express a disabled scope, and every tape in the
   workspace lives in a backend that requires `std`.
-- **No filesystem or serialization surfaces**  -  checkpointing, the doctor
+- **No filesystem or serialization surfaces** - checkpointing, the doctor
   report, and the ONNX/safetensors paths are all `std`.
 
 The workspace CI builds `incin-core --no-default-features` and

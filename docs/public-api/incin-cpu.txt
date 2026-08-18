@@ -317,6 +317,8 @@ pub use incin::prelude::LRScheduler
 pub use incin::prelude::LSTM
 pub use incin::prelude::LSTMCell
 pub use incin::prelude::LinearLR
+pub use incin::prelude::LossScaleState
+pub use incin::prelude::LossScaling
 pub use incin::prelude::MSE
 pub use incin::prelude::MSELoss
 pub use incin::prelude::MatMulShape
@@ -347,6 +349,7 @@ pub use incin::prelude::Result
 pub use incin::prelude::SGD
 pub use incin::prelude::SameCount
 pub use incin::prelude::Scalar
+pub use incin::prelude::ScaledOptimizer
 pub use incin::prelude::SeqTy
 pub use incin::prelude::Sequential
 pub use incin::prelude::Shape
