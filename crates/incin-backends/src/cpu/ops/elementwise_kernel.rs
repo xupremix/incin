@@ -480,11 +480,6 @@ fn execute_strided_f32(
     output_shape: &[usize],
 ) -> Result<Vec<f32>> {
     let plan = binary_iteration_plan(lhs, lhs_values.len(), rhs, rhs_values.len(), output_shape)?;
-    if plan.numel < PARALLEL_GRAIN {
-        return Ok(map_binary_strided_serial_f32(
-            op, lhs_values, rhs_values, &plan,
-        ));
-    }
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     if let Some(output) = map_iteration_avx2_f32(op, lhs_values, rhs_values, &plan) {
         return Ok(output);
@@ -1703,103 +1698,6 @@ where
     for outer_index in 0..outer_count {
         for inner_index in 0..inner_len {
             output.push(op(
-                lhs[lhs_index + inner_index * lhs_inner_stride],
-                rhs[rhs_index + inner_index * rhs_inner_stride],
-            ));
-        }
-        if outer_index + 1 == outer_count {
-            break;
-        }
-        advance_binary(
-            &mut coordinates,
-            &plan.output_shape[..outer_rank],
-            &mut lhs_index,
-            &plan.operands[0].strides[..outer_rank],
-            &mut rhs_index,
-            &plan.operands[1].strides[..outer_rank],
-        );
-    }
-    output
-}
-
-fn map_binary_strided_serial_f32(
-    op: BinaryOp,
-    lhs: &[f32],
-    rhs: &[f32],
-    plan: &IterationPlan,
-) -> Vec<f32> {
-    let mut output = Vec::with_capacity(plan.numel);
-    if plan.numel == 0 {
-        return output;
-    }
-    if plan.output_shape.is_empty() {
-        output.push(op.eval_f32(lhs[plan.operands[0].offset], rhs[plan.operands[1].offset]));
-        return output;
-    }
-
-    let outer_rank = plan.output_shape.len() - 1;
-    let inner_len = plan.output_shape[outer_rank];
-    let outer_count = plan.numel / inner_len;
-    let mut coordinates = vec![0usize; outer_rank];
-    let mut lhs_index = plan.operands[0].offset;
-    let mut rhs_index = plan.operands[1].offset;
-    let lhs_inner_stride = plan.operands[0].strides[outer_rank];
-    let rhs_inner_stride = plan.operands[1].strides[outer_rank];
-
-    #[cfg(all(feature = "std", target_arch = "x86_64"))]
-    let use_avx2 = (crate::simd::simd_lanes::<f32>() >= 8 || crate::simd::avx2_detected())
-        && matches!((lhs_inner_stride, rhs_inner_stride), (1, 0) | (0, 1));
-
-    #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
-    let use_avx2 = false;
-
-    if use_avx2 {
-        #[cfg(all(feature = "std", target_arch = "x86_64"))]
-        {
-            let output_spare = &mut output.spare_capacity_mut()[..plan.numel];
-            let mut out_offset = 0;
-            for outer_index in 0..outer_count {
-                let out_ptr = output_spare[out_offset..].as_mut_ptr().cast::<f32>();
-                unsafe {
-                    match (lhs_inner_stride, rhs_inner_stride) {
-                        (1, 0) => avx2_broadcast_scalar_f32(
-                            op,
-                            &lhs[lhs_index..lhs_index + inner_len],
-                            rhs[rhs_index],
-                            false,
-                            out_ptr,
-                        ),
-                        (0, 1) => avx2_broadcast_scalar_f32(
-                            op,
-                            &rhs[rhs_index..rhs_index + inner_len],
-                            lhs[lhs_index],
-                            true,
-                            out_ptr,
-                        ),
-                        _ => unreachable!(),
-                    }
-                }
-                out_offset += inner_len;
-                if outer_index + 1 == outer_count {
-                    break;
-                }
-                advance_binary(
-                    &mut coordinates,
-                    &plan.output_shape[..outer_rank],
-                    &mut lhs_index,
-                    &plan.operands[0].strides[..outer_rank],
-                    &mut rhs_index,
-                    &plan.operands[1].strides[..outer_rank],
-                );
-            }
-            unsafe { output.set_len(plan.numel) };
-            return output;
-        }
-    }
-
-    for outer_index in 0..outer_count {
-        for inner_index in 0..inner_len {
-            output.push(op.eval_f32(
                 lhs[lhs_index + inner_index * lhs_inner_stride],
                 rhs[rhs_index + inner_index * rhs_inner_stride],
             ));
