@@ -73,6 +73,66 @@ impl LossScaleState {
             }
         }
     }
+
+    /// Checks parameter gradients for non-finite values (NaN/Inf), unscales them in-place if all finite,
+    /// and updates the loss scaling state machine.
+    ///
+    /// Returns `Ok(true)` if all gradients were finite and successfully unscaled (or scale is 1.0).
+    /// Returns `Ok(false)` if non-finite gradients were found (overflow); gradients are NOT unscaled
+    /// and the loss scale is backed off.
+    pub fn unscale_and_update_vars<'a, B, K, I>(
+        &mut self,
+        vars: I,
+        grads: &mut crate::autograd::Gradients<B>,
+    ) -> Result<bool>
+    where
+        B: crate::tensor::backend::VariableBackend
+            + crate::tensor::backend::AutogradBackend
+            + crate::optim::OptimizerBackend<K>
+            + crate::tensor::backend::HostReadback,
+        K: ConstDType,
+        I: IntoIterator<Item = &'a B::Var<K>>,
+    {
+        let mut found_nan_or_inf = false;
+        let mut present = alloc::vec::Vec::new();
+
+        for var in vars {
+            let tensor = B::var_as_tensor::<K>(var)?;
+            if let Some(grad) = B::get_grad::<K>(&tensor, grads.as_backend())? {
+                let float_vals = B::float_to_vec1::<K>(&grad)?;
+                if float_vals.iter().any(|v| !v.is_finite()) {
+                    found_nan_or_inf = true;
+                    break;
+                }
+                present.push((tensor, grad));
+            }
+        }
+
+        // Captured before `update()` runs: the gradients just collected were
+        // produced by a backward pass through a loss scaled by *this* value.
+        // `update()` may grow `self.scale` for the *next* step right here
+        // (once `steps_since_last_overflow` reaches the growth interval), and
+        // unscaling by that new, larger value instead of the one actually
+        // used would silently halve (or worse) this step's update on exactly
+        // the step where growth triggers.
+        let current_scale = self.scale();
+
+        self.update(found_nan_or_inf);
+
+        if found_nan_or_inf {
+            return Ok(false);
+        }
+
+        if (current_scale - 1.0).abs() > f32::EPSILON {
+            let inv_scale = 1.0 / (current_scale as f64);
+            for (tensor, grad) in present {
+                let unscaled = B::optimizer_mul_scalar(&grad, inv_scale)?;
+                B::set_grad::<K>(&tensor, grads.as_backend_mut(), unscaled)?;
+            }
+        }
+
+        Ok(true)
+    }
 }
 
 /// Loss scaling configuration for mixed-precision numerical stability.

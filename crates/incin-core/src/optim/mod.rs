@@ -32,6 +32,20 @@ pub trait Optimizer<B: VariableBackend + AutogradBackend> {
     fn step(&mut self, grads: &Gradients<B>) -> Result<()>;
 }
 
+/// Extension trait for optimizers that support mixed-precision loss scaling.
+pub trait ScaledOptimizer<B: VariableBackend + AutogradBackend>: Optimizer<B> {
+    /// Steps the optimizer with loss scaling support, unscaling gradients in-place and skipping
+    /// updates on overflow.
+    ///
+    /// Returns `Ok(true)` if the step was applied (gradients were finite and unscaled).
+    /// Returns `Ok(false)` if non-finite gradients were found (overflow), skipping the update.
+    fn step_scaled(
+        &mut self,
+        grads: &mut Gradients<B>,
+        scaler: &mut crate::exec::LossScaleState,
+    ) -> Result<bool>;
+}
+
 /// A homogeneous, optimizer-owned collection of trainable variables.
 pub struct ParameterGroup<B: VariableBackend, K: ConstDType> {
     params: alloc::collections::BTreeMap<String, B::Var<K>>,
@@ -699,6 +713,22 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
     }
 }
 
+impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostReadback, K: ConstDType>
+    ScaledOptimizer<B> for SGD<B, K>
+{
+    fn step_scaled(
+        &mut self,
+        grads: &mut Gradients<B>,
+        scaler: &mut crate::exec::LossScaleState,
+    ) -> Result<bool> {
+        if !scaler.unscale_and_update_vars(self.params.values(), grads)? {
+            return Ok(false);
+        }
+        self.step(grads)?;
+        Ok(true)
+    }
+}
+
 /// AdamW optimizer (Adam with decoupled weight decay).
 ///
 /// AdamW modifies the standard Adam algorithm by decoupling the weight decay from the
@@ -909,6 +939,22 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
     }
 }
 
+impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostReadback, K: ConstDType>
+    ScaledOptimizer<B> for AdamW<B, K>
+{
+    fn step_scaled(
+        &mut self,
+        grads: &mut Gradients<B>,
+        scaler: &mut crate::exec::LossScaleState,
+    ) -> Result<bool> {
+        if !scaler.unscale_and_update_vars(self.params.values(), grads)? {
+            return Ok(false);
+        }
+        self.step(grads)?;
+        Ok(true)
+    }
+}
+
 /// Adam optimization algorithm.
 ///
 /// Implements the standard Adam optimizer with momentum and variance tracking.
@@ -1105,5 +1151,21 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B
         }
         self.step = next_step;
         Ok(())
+    }
+}
+
+impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostReadback, K: ConstDType>
+    ScaledOptimizer<B> for Adam<B, K>
+{
+    fn step_scaled(
+        &mut self,
+        grads: &mut Gradients<B>,
+        scaler: &mut crate::exec::LossScaleState,
+    ) -> Result<bool> {
+        if !scaler.unscale_and_update_vars(self.params.values(), grads)? {
+            return Ok(false);
+        }
+        self.step(grads)?;
+        Ok(true)
     }
 }
