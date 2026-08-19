@@ -28,9 +28,10 @@ rustdoc already shows.
 ## Non-goals
 
 - **Crate boundaries.** The 10 crates stay exactly as they are.
-- **Behavior.** No crate is required to preserve its current public API, but
-  none is required to change behavior either. This is about organization
-  and presentation, not semantics.
+- **Behavior.** No crate is required to preserve its current public API —
+  nothing beyond the `0.0.0` placeholder versions is published, so breaking
+  changes are free — but none is required to change behavior either. This is
+  about organization and presentation, not semantics.
 - **Enforcement tooling.** No new CI gate, lint, or `xtask` budget check
   accompanies this document. incin already gates aggressively; add
   enforcement once the convention has been applied somewhere real, not
@@ -41,9 +42,9 @@ rustdoc already shows.
 Not a hard line-count ceiling. A generated-feeling file — a genuine
 declarative table, or the output shape of a macro like
 `impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` — can be
-long and still be one clear thing. The split trigger is **responsibility count**, not line length:
-split a file when it visibly mixes more than one concern, not when it
-crosses a number threshold.
+long and still be one clear thing. The split trigger is **responsibility
+count**, not file length: split a file when it visibly mixes more than one
+concern, not when it crosses a number threshold.
 
 This is not just theoretical: `exec/catalog.rs` (6097 lines) looks at a
 glance like it could be "one big catalog," but it is not one declarative
@@ -55,7 +56,7 @@ metadata types (`LogicalTensorMeta`, `CreationPayload`), an open-operation
 identity (`OperationKey`), and a `Descriptor<O>` typed-wrapper module — at
 least six distinct concerns sharing one file. When this file's turn comes up
 in a future crate-specific restructuring pass, treat it as a primary split
-target, not an exception the length rule was designed to protect.
+target, not an exception this heuristic was designed to protect.
 
 Where a split happens, it favors a directory with `mod.rs` as the public
 surface and concerns broken into named siblings (`kernels.rs`, `tests.rs`,
@@ -69,8 +70,7 @@ Every public item carries:
 1. A one-line summary.
 2. An optional 2-4 sentence "why," only when the decision is genuinely
    non-obvious from the signature and name alone.
-3. A runnable doctest, wherever the item's usage can be shown in a handful
-   of lines.
+3. A `# Examples` block with a real, runnable doctest.
 
 Evidence-log material — bench deltas, Miri-flakiness investigation notes,
 "we tried X, it failed because Y" narratives, deviation justifications —
@@ -117,6 +117,8 @@ exec::catalog::ExecutionSite` before this section was written):
 /// exists yet -- [`ExecutionSite::is_backend_executable`] is the predicate
 /// that tells them apart.
 ///
+/// # Examples
+///
 /// ```
 /// use incin_core::exec::catalog::ExecutionSite;
 ///
@@ -126,9 +128,9 @@ exec::catalog::ExecutionSite` before this section was written):
 ```
 
 The migration-history sentences from the "before" aren't lost — they belong
-in `docs/plan/tasks/EXE-008.md` (or wherever the migration task that
-motivated them lives), as a record of why the type exists, not as the first
-thing a caller reads on the way to calling it.
+in `docs/plan/tasks/<ID>.md` (or wherever the migration task that motivated
+them lives), as a record of why the type exists, not as the first thing a
+caller reads on the way to calling it.
 
 ## Examples and tests
 
@@ -145,7 +147,7 @@ or a `docs/book/` walkthrough instead.
 
 ## Book alignment
 
-The rule: docs/book/src/ chapters link to the real rustdoc examples rather than
+`docs/book/src/` chapters link to the real rustdoc examples rather than
 restating them inline. One example, one source of truth: a book chapter and
 a rustdoc example describing the same behavior in independently-maintained
 prose is exactly the drift this document exists to reduce, not add.
