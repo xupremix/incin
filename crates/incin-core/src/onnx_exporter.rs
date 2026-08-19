@@ -167,8 +167,9 @@ impl<'a> OnnxImporter<'a> {
         Self { path }
     }
 
-    /// Parses the bound file into a [`Graph`]. See [`import_from_onnx`] for
-    /// what this does and does not reconstruct.
+    /// Parses the bound file into a [`Graph`]. See `import_from_onnx`'s own
+    /// documentation (in this crate's source) for what this does and does
+    /// not reconstruct — it is crate-private and cannot be linked from here.
     pub fn import(&self) -> anyhow::Result<Graph> {
         import_from_onnx(self.path)
     }

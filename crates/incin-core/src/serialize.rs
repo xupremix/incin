@@ -154,6 +154,7 @@ pub(crate) fn deserialize_snapshot_safetensors(
 /// gate. `import_model!`'s compile-time safetensors reader already accepts
 /// foreign files on this same basis; this is the runtime equivalent for
 /// callers who only know the file at runtime (e.g. after downloading it).
+#[cfg(feature = "std")]
 pub(crate) fn deserialize_snapshot_safetensors_foreign(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
@@ -162,6 +163,7 @@ pub(crate) fn deserialize_snapshot_safetensors_foreign(
     read_safetensors_entries(&bytes, header.metadata().as_ref())
 }
 
+#[cfg(feature = "std")]
 fn read_safetensors_entries(
     bytes: &[u8],
     metadata: Option<&std::collections::HashMap<String, String>>,
