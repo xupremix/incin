@@ -232,6 +232,7 @@ of problem:
 | `crates/incin-backends/src/{dist/nccl.rs,dist/tuning.rs,tuning/identity.rs,tuning/service.rs}` | feature-gated distributed/tuning services | keep experimental ownership local; split resource protocols when they stabilize |
 | `crates/incin-backends/src/kernel.rs` | kernel template/rendering and specialization test vocabulary | retain as a mechanical kernel source boundary |
 | `crates/incin-diagnostics/src/lib.rs` | diagnostic command and report surface | split command families when the diagnostic API stabilizes |
+| `crates/incin-core/src/optim/mod.rs` | `Optimizer`/`OptimizerBackend`/`ValueClippingBackend` traits, `SGD`/`AdamW`/`Adam`, and the `clip_grad_norm`/`clip_grad_value` free functions share one contract | keep the per-optimizer-backend blanket impls together; extract individual optimizers only once a second consumer needs them independently |
 
 These are explicit staged extraction targets, not permission to add more
 responsibilities. The current checkpoint documents the boundary and adds the

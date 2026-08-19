@@ -32,6 +32,7 @@ declare -A explained=(
     [crates/incin-core/src/tensor/base.rs]=1
     [crates/incin-backends/src/tuning/service.rs]=1
     [crates/incin-backends/src/capability.rs]=1
+    [crates/incin-core/src/optim/mod.rs]=1
 )
 
 mapfile -t actual < <(
