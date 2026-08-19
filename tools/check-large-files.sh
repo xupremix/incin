@@ -8,7 +8,7 @@ cd "$repo_dir"
 # docs/HANDOFF.md. This is an ownership ledger, not a claim that each file is
 # already ideally split; staged extraction targets are allowed when documented.
 declare -A explained=(
-    [crates/incin-core/src/exec/catalog.rs]=1
+    [crates/incin-core/src/exec/catalog/tests.rs]=1
     [crates/incin-backends/src/cuda/backend.rs]=1
     [crates/incin-backends/src/wgpu/backend.rs]=1
     [crates/incin-backends/src/cpu/canonical.rs]=1

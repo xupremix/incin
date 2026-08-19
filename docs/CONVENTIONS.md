@@ -46,17 +46,22 @@ long and still be one clear thing. The split trigger is **responsibility
 count**, not file length: split a file when it visibly mixes more than one
 concern, not when it crosses a number threshold.
 
-This is not just theoretical: `exec/catalog.rs` (6097 lines) looks at a
-glance like it could be "one big catalog," but it is not one declarative
-table. In its first 1100 lines alone it carries classification enums
-(`SemanticProfile`, `BroadcastingRule`, `ExecutionSite`, ...), a
-coverage-reporting pair (`operation_coverage`/`operation_coverage_document`),
-the `OperationCatalogEntry` row type and its classification logic, tensor
-metadata types (`LogicalTensorMeta`, `CreationPayload`), an open-operation
-identity (`OperationKey`), and a `Descriptor<O>` typed-wrapper module — at
-least six distinct concerns sharing one file. When this file's turn comes up
-in a future crate-specific restructuring pass, treat it as a primary split
-target, not an exception this heuristic was designed to protect.
+This was not just theoretical: `exec/catalog.rs` (6097 lines) looked at a
+glance like it could be "one big catalog," but it was not one declarative
+table. It carried classification enums (`SemanticProfile`,
+`BroadcastingRule`, `ExecutionSite`, ...), a coverage-reporting pair
+(`operation_coverage`/`operation_coverage_document`), the row-construction
+macro machinery and the `OPERATION_CATALOG` table itself, tensor metadata
+types (`LogicalTensorMeta`, `CreationPayload`), an open-operation identity
+(`OperationKey`), a `Descriptor<O>` typed-wrapper module, the ~55
+`AttributeContract` impls, shape/output inference helpers, and its own test
+suite — eleven distinct concerns sharing one file. It has since been split
+into `exec/catalog/{classification,coverage,table,meta,descriptor,error,
+shape_transform,attributes,inference,validated,lookup,tests}.rs`, each
+file one of those concerns, with `mod.rs` as the public surface; the
+crate's public API surface (per `cargo public-api`) and its full test suite
+were both unchanged by the split. Treat any file this heuristic flags the
+same way: as a split target, not an exception it was designed to protect.
 
 Where a split happens, it favors a directory with `mod.rs` as the public
 surface and concerns broken into named siblings (`kernels.rs`, `tests.rs`,

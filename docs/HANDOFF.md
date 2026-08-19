@@ -219,7 +219,7 @@ of problem:
 
 | Area | Current reason for size | Maintainer action |
 | --- | --- | --- |
-| `crates/incin-core/src/exec/catalog.rs` | canonical operation schema and generated-like catalog table | keep catalog ownership centralized; extract attribute families only with generated-doc updates |
+| `crates/incin-core/src/exec/catalog/tests.rs` | the catalog module's test suite; `exec/catalog.rs` itself was split into `exec/catalog/{classification,coverage,table,meta,descriptor,error,shape_transform,attributes,inference,validated,lookup}.rs` (each under the threshold) per `docs/CONVENTIONS.md`'s file-organization convention | further split by test theme only if the file grows past this size again |
 | `crates/incin-core/src/tensor/ops/manipulation.rs` | descriptor adapters for many shape operations | split by descriptor family once catalog ownership is stable |
 | `crates/incin-core/src/shapes/shape.rs` | structural shape algebra, validation, and proof-preserving transformations | keep cursor-independent shape operations together; extract arithmetic and validation families only with independent proof tests |
 | `crates/incin-core/src/generated/onnx.rs`, `crates/incin-macros/src/generated/onnx.rs` | checked-in `prost-build` output for `proto/onnx.proto` | never hand-edit; regenerate with `cargo xtask onnx` |

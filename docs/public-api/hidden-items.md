@@ -22,7 +22,7 @@ The source inventory is:
 - `crates/incin-backends/src/lib.rs`
 - `crates/incin-backends/src/target.rs`
 - `crates/incin-core/src/dist/placement.rs`
-- `crates/incin-core/src/exec/catalog.rs`
+- `crates/incin-core/src/exec/catalog/shape_transform.rs`
 - `crates/incin-core/src/exec/proof.rs`
 - `crates/incin-core/src/lib.rs`
 - `crates/incin-core/src/nn/module.rs`
@@ -80,7 +80,7 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-core/src/dist/placement.rs::PIPELINE_DEGREE` | B | Placement implementors provide pipeline degree used by validation. |
 | `crates/incin-core/src/dist/placement.rs::RankedPlacement` | C | Ranked placement carries proof-backed rank metadata without exposing construction. |
 | `crates/incin-core/src/dist/placement.rs::DynamicPlacement` | C | Dynamic placement carries runtime metadata without exposing construction. |
-| `crates/incin-core/src/exec/catalog.rs::ShapeTransform` | C | Descriptor lowering selects transforms internally; callers cannot forge this enum. |
+| `crates/incin-core/src/exec/catalog/shape_transform.rs::ShapeTransform` | C | Descriptor lowering selects transforms internally; callers cannot forge this enum. |
 | `crates/incin-core/src/exec/proof.rs::__audit_or_panic` | C | Paranoid validation is an internal hook for auditing an already sealed proof. |
 | `crates/incin-core/src/lib.rs::__macro_support` | A | Macros expanded inside the crate need the private support re-exports. |
 | `crates/incin-core/src/nn/module.rs::seq_ty` | A | The exported sequence macro is a compatibility name used by generated code. |

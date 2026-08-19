@@ -59,7 +59,7 @@ const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
 /// every operand actually carries makes the operation unreachable — the
 /// `mask` operand would fail dtype admission before either kernel ever
 /// launches. Not a claim that either operand may be *either* dtype: the
-/// descriptor's own per-operand contract (`exec/catalog.rs`'s
+/// descriptor's own per-operand contract (`exec/catalog`'s
 /// `WhereCond`/`MaskedFill` arms) and `cuda::ops::select`'s own
 /// `require_bool_mask`/`cuda_require_f32` checks enforce the real, tighter
 /// per-operand split this row cannot state on its own.
