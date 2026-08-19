@@ -35,3 +35,29 @@ rustdoc already shows.
   accompanies this document. incin already gates aggressively; add
   enforcement once the convention has been applied somewhere real, not
   before.
+
+## File organization
+
+Not a hard line-count ceiling. A generated-feeling file — a genuine
+declarative table, or the output shape of a macro like
+`impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` — can be
+long and still be one clear thing. The split trigger is **responsibility
+count**, not length: split a file when it visibly mixes more than one
+concern, not when it crosses a number.
+
+This is not just theoretical: `exec/catalog.rs` (6097 lines) looks at a
+glance like it could be "one big catalog," but it is not one declarative
+table. In its first 1100 lines alone it carries classification enums
+(`SemanticProfile`, `BroadcastingRule`, `ExecutionSite`, ...), a
+coverage-reporting pair (`operation_coverage`/`operation_coverage_document`),
+the `OperationCatalogEntry` row type and its classification logic, tensor
+metadata types (`LogicalTensorMeta`, `CreationPayload`), an open-operation
+identity (`OperationKey`), and a `Descriptor<O>` typed-wrapper module — at
+least six distinct concerns sharing one file. When this file's turn comes up
+in a future crate-specific restructuring pass, treat it as a primary split
+target, not an exception the length rule was designed to protect.
+
+Where a split happens, it favors a directory with `mod.rs` as the public
+surface and concerns broken into named siblings (`kernels.rs`, `tests.rs`,
+and so on), not one file's contents spread flat into many same-level files
+with no grouping.
