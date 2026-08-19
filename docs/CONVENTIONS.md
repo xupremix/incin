@@ -129,3 +129,23 @@ The migration-history sentences from the "before" aren't lost — they belong
 in `docs/plan/tasks/EXE-008.md` (or wherever the migration task that
 motivated them lives), as a record of why the type exists, not as the first
 thing a caller reads on the way to calling it.
+
+## Examples and tests
+
+"Document and test everything" is a presentation change, not new test
+authorship: every public function and type gets a doctest that exercises
+real, already-proven behavior — the 101 completed ledger tasks already
+built and verified it; this makes that behavior visible where a reader
+looks for it. `cargo test --doc` is already a CI gate, so a doctest that
+goes stale fails the same way any other test failure does.
+
+Where a doctest doesn't fit the crate's shape — `incin-lsp`'s binary,
+`incin-viz`'s TUI — the example is a file under `crates/<crate>/examples/`
+or a `docs/book/` walkthrough instead.
+
+## Book alignment
+
+`docs/book/src/` chapters link to the real rustdoc examples rather than
+restating them inline. One example, one source of truth: a book chapter and
+a rustdoc example describing the same behavior in independently-maintained
+prose is exactly the drift this document exists to reduce, not add.
