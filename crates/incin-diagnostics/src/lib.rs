@@ -28,6 +28,7 @@ pub fn humanize_diagnostic(text: &str) -> Translated {
             hints.push(h);
         }
     }
+    let text = collapse_dimcons_chains(&text);
     Translated { text, hints }
 }
 
@@ -1321,6 +1322,102 @@ pub fn translate_typenum_text(text: &str) -> (String, Vec<(String, String)>) {
     (result, hints)
 }
 
+/// Splits `s` on top-level (bracket-depth-0) commas.
+///
+/// `DimCons`'s head can itself be a bracketed type (`NamedDim<Batch, 4>`),
+/// so a plain `str::split(',')` would cut the wrong argument in two. This
+/// mirrors `matching_bracket`'s depth tracking, generalized to `<`/`>` only
+/// (the sole nesting delimiter a `DimCons` chain's arguments ever carry).
+fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
+    let mut depth = 0i32;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => return Some((&s[..i], &s[i + 1..])),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parses a `DimCons<H, DimCons<H2, ... DimCons<Hn, Nil>...>>` chain into
+/// `[H, H2, ..., Hn]`'s inner elements, or `None` if `s` (the content
+/// between `DimCons`'s own `<` and its matching `>`) isn't exactly that
+/// shape. Fails closed on anything else — a shape list that only sometimes
+/// collapses because a rare case was silently dropped would be worse than
+/// one that never collapses in that case at all.
+fn parse_dimcons_elements(s: &str) -> Option<alloc::vec::Vec<String>> {
+    let (head, tail) = split_top_level_comma(s)?;
+    let head = head.trim();
+    let tail = tail.trim();
+    if tail == "Nil" {
+        return Some(alloc::vec![head.to_string()]);
+    }
+    // `matching_bracket` expects its argument to start AT the open bracket
+    // (see its use elsewhere in this file against `label[tuple_open..]`),
+    // so only `DimCons` is stripped here, leaving the `<` in place.
+    let rest = tail.strip_prefix("DimCons")?;
+    let close = matching_bracket(rest, '<', '>')?;
+    // The tail must be nothing but the nested DimCons: a `DimCons<...>Rest`
+    // with trailing content is not a cons list this parser understands.
+    if rest[close + 1..].trim() != "" {
+        return None;
+    }
+    let mut elements = alloc::vec![head.to_string()];
+    elements.extend(parse_dimcons_elements(&rest[1..close])?);
+    Some(elements)
+}
+
+/// Rewrites every `DimCons<H, DimCons<H2, ... DimCons<Hn, Nil>...>>` chain
+/// in `text` into `[H, H2, ..., Hn]` — the same bracket-list rendering
+/// [`humanize_type_signature`] already gives a `Tensor<(...)>` shape tuple,
+/// extended to the cons-list shape encoding that shows up bare in trait-bound
+/// diagnostics (`MatMulShape<DimCons<...>>` and similar), which never passes
+/// through the `Tensor<(` special case at all.
+///
+/// Intended to run after [`translate_typenum_text`], so a chain's heads are
+/// already plain decimals (`DimCons<4, DimCons<8, Nil>>`) rather than raw
+/// `UInt<...>` walls by the time this collapses the shell around them —
+/// nothing here depends on that order, but the numbers read best that way.
+pub fn collapse_dimcons_chains(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut last_end = 0;
+    let mut search_idx = 0;
+
+    while let Some(rel_start) = text[search_idx..].find("DimCons<") {
+        let start = search_idx + rel_start;
+        let open = start + "DimCons".len(); // index of this DimCons's own '<'
+        let Some(close_rel) = matching_bracket(&text[open..], '<', '>') else {
+            search_idx = start + "DimCons<".len();
+            continue;
+        };
+        let close = open + close_rel;
+        let inner = &text[open + 1..close];
+
+        match parse_dimcons_elements(inner) {
+            Some(elements) => {
+                result.push_str(&text[last_end..start]);
+                result.push('[');
+                for (i, element) in elements.iter().enumerate() {
+                    if i > 0 {
+                        result.push_str(", ");
+                    }
+                    result.push_str(element);
+                }
+                result.push(']');
+                last_end = close + 1;
+                search_idx = close + 1;
+            }
+            None => {
+                search_idx = start + "DimCons<".len();
+            }
+        }
+    }
+    result.push_str(&text[last_end..]);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     // The crate is `no_std` without the `std` feature, so `vec!` is not in the
@@ -1738,5 +1835,69 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_collapse_dimcons_chains_bare_pair() {
+        assert_eq!(
+            collapse_dimcons_chains("DimCons<4, DimCons<8, Nil>>"),
+            "[4, 8]"
+        );
+    }
+
+    #[test]
+    fn test_collapse_dimcons_chains_single_element() {
+        assert_eq!(collapse_dimcons_chains("DimCons<4, Nil>"), "[4]");
+    }
+
+    #[test]
+    fn test_collapse_dimcons_chains_rank_three() {
+        assert_eq!(
+            collapse_dimcons_chains("DimCons<2, DimCons<3, DimCons<4, Nil>>>"),
+            "[2, 3, 4]"
+        );
+    }
+
+    /// The real shape it was written for: a `MatMulShape` trait-bound error,
+    /// where the `DimCons` chain appears bare rather than wrapped in
+    /// `Tensor<(...)>` and so never reaches `humanize_type_signature`'s
+    /// tuple special case at all.
+    #[test]
+    fn test_collapse_dimcons_chains_in_a_real_matmul_mismatch() {
+        let input = "Cannot contract dimension `DimCons<4, DimCons<8, Nil>>` with \
+                      `MatMulShape<DimCons<3, DimCons<8, Nil>>>`";
+        assert_eq!(
+            collapse_dimcons_chains(input),
+            "Cannot contract dimension `[4, 8]` with `MatMulShape<[3, 8]>`"
+        );
+    }
+
+    /// A head that is itself a bracketed type (a named dimension) must not
+    /// be split on its own internal comma.
+    #[test]
+    fn test_collapse_dimcons_chains_head_with_internal_comma() {
+        assert_eq!(
+            collapse_dimcons_chains("DimCons<NamedDim<Batch, 4>, DimCons<8, Nil>>"),
+            "[NamedDim<Batch, 4>, 8]"
+        );
+    }
+
+    /// Anything that isn't a clean cons list all the way to `Nil` is left
+    /// exactly as written rather than partially or incorrectly collapsed.
+    #[test]
+    fn test_collapse_dimcons_chains_leaves_unrecognized_shapes_untouched() {
+        let input = "DimCons<4, SomeOtherTail>";
+        assert_eq!(collapse_dimcons_chains(input), input);
+    }
+
+    #[test]
+    fn test_humanize_diagnostic_collapses_dimcons_after_typenum_translation() {
+        let input = "Cannot contract dimension `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>>` with something";
+        let translated = humanize_diagnostic(input);
+        assert!(
+            translated.text.contains("[4, 5]"),
+            "got: {}",
+            translated.text
+        );
     }
 }
