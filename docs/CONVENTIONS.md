@@ -41,9 +41,9 @@ rustdoc already shows.
 Not a hard line-count ceiling. A generated-feeling file — a genuine
 declarative table, or the output shape of a macro like
 `impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` — can be
-long and still be one clear thing. The split trigger is **responsibility
-count**, not length: split a file when it visibly mixes more than one
-concern, not when it crosses a number.
+long and still be one clear thing. The split trigger is **responsibility count**, not line length:
+split a file when it visibly mixes more than one concern, not when it
+crosses a number threshold.
 
 This is not just theoretical: `exec/catalog.rs` (6097 lines) looks at a
 glance like it could be "one big catalog," but it is not one declarative
@@ -145,7 +145,7 @@ or a `docs/book/` walkthrough instead.
 
 ## Book alignment
 
-`docs/book/src/` chapters link to the real rustdoc examples rather than
+The rule: docs/book/src/ chapters link to the real rustdoc examples rather than
 restating them inline. One example, one source of truth: a book chapter and
 a rustdoc example describing the same behavior in independently-maintained
 prose is exactly the drift this document exists to reduce, not add.
