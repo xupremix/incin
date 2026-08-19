@@ -252,6 +252,7 @@ pub use incin::optim::OptimizerBackend
 pub use incin::optim::ParameterGroup
 pub use incin::optim::SGD
 pub use incin::optim::clip_grad_norm
+pub use incin::optim::clip_grad_value
 pub use incin::prelude::Accuracy
 pub use incin::prelude::Adam
 pub use incin::prelude::AdamW

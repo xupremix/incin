@@ -478,7 +478,7 @@ pub mod transforms {
 /// HuggingFace Hub downloading & pretrained model loading utilities.
 #[cfg(feature = "data-hub")]
 pub mod hub {
-    pub use incin_data::hub::{HubApi, HubRepo, download, from_pretrained};
+    pub use incin_data::hub::{HubApi, HubRepo, download, download_dataset, from_pretrained};
 }
 
 /// Typenum compile-time type-level integers.
