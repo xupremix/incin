@@ -42,18 +42,20 @@ TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 MIRIFLAGS_COMMON="-Zmiri-tree-borrows -Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
 # Miri's software floating-point implementation is not a suitable oracle for
-# the backend's finite-difference tolerances: seven numerical tests fail only
+# the backend's finite-difference tolerances: these numerical tests fail only
 # because interpreted `exp`/transcendental results differ in the last few
 # digits (or amplify that difference through a gradcheck). Keep those tests in
 # the ordinary and ASan suites, while excluding only these exact numerical
 # cases from the aliasing/UB run below.
 MIRI_BACKEND_NUMERIC_SKIPS=(
     --skip cpu::ops::elementwise::tests::softmax_gradcheck
+    --skip cpu::ops::elementwise::tests::log_softmax_gradcheck
     --skip cpu::ops::elementwise::tests::swish_forward_and_gradcheck
     --skip cpu::ops::elementwise::tests::tanh_gradcheck
     --skip cpu::ops::elementwise::tests::log_forward_gradcheck_and_domain_propagation
     --skip cpu::ops::elementwise::tests::sigmoid_forward_and_gradcheck
     --skip cpu::ops::elementwise::tests::acosh_gradcheck
+    --skip cpu::ops::elementwise::tests::trig_and_hyperbolic_gradchecks
     --skip cpu::ops::elementwise_kernel::tests::unary_family_uses_native_float_compute
     --skip cpu::ops::loss::tests::cross_entropy_loss_gradcheck
     --skip cpu::ops::loss::tests::bce_with_logits_gradcheck

@@ -1627,15 +1627,17 @@ mod tests {
     }
 
     #[test]
-    /// `acosh_gradcheck`. Kept separate from `trig_and_hyperbolic_gradchecks`
-    /// rather than folded into that loop: Miri's software float
-    /// implementation diverges from native `acoshf` by enough, right at
-    /// these sample points, to intermittently push the finite-difference
-    /// error over the shared 1% threshold (the same category of divergence
-    /// `tools/soundness.sh` already documents and skips for softmax/tanh/
-    /// sigmoid/log under Miri). Isolating it lets `tools/soundness.sh` skip
-    /// only this one case instead of losing Miri coverage for the other
-    /// twelve functions the bundled check exercises.
+    /// `acosh_gradcheck`. Split out from `trig_and_hyperbolic_gradchecks`
+    /// for the same reason that bundle is itself now on
+    /// `tools/soundness.sh`'s Miri numeric skip list: Miri's software float
+    /// implementation diverges from native transcendental-function results
+    /// by enough, at these sample points, to intermittently push a
+    /// finite-difference error over the shared 1% threshold. It is not one
+    /// fixed function that trips: a second Miri run tripped `atan` inside
+    /// the bundle instead of `acosh`, confirming the whole group sits on
+    /// this margin, not any single member of it. Keeping this one isolated
+    /// still means only this test (rather than a coarser bundle) needs
+    /// re-checking if the bundle's own Miri skip is ever lifted.
     fn acosh_gradcheck() {
         let x = vector(vec![1.5, 2.0, 3.5]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
