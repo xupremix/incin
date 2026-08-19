@@ -61,3 +61,71 @@ Where a split happens, it favors a directory with `mod.rs` as the public
 surface and concerns broken into named siblings (`kernels.rs`, `tests.rs`,
 and so on), not one file's contents spread flat into many same-level files
 with no grouping.
+
+## Doc comments
+
+Every public item carries:
+
+1. A one-line summary.
+2. An optional 2-4 sentence "why," only when the decision is genuinely
+   non-obvious from the signature and name alone.
+3. A runnable doctest, wherever the item's usage can be shown in a handful
+   of lines.
+
+Evidence-log material — bench deltas, Miri-flakiness investigation notes,
+"we tried X, it failed because Y" narratives, deviation justifications —
+moves to where incin already has a proper home for it: `CHANGELOG.md` for
+anything user-facing, `docs/plan/tasks/<ID>.md` for the historical
+task-completion narrative (the ledger's existing pattern for exactly this
+kind of record). It does not disappear; it moves to where a reader looking
+for "what does this do" doesn't have to wade through it, while a reader
+looking for "why was this built this way" still knows where to find it.
+
+`SAFETY:` comments on `unsafe` blocks are unaffected — that is a separate,
+load-bearing convention tied to `docs/security/unsafe-ledger.md`, not the
+audit-trail problem this section addresses.
+
+**Before**, from `crates/incin-core/src/exec/catalog.rs` — six sentences of
+migration history before the enum a reader came to look up:
+
+```rust
+/// Where an operation's result is produced, and therefore what shape of
+/// contract can carry it.
+///
+/// This says nothing about whether an operation is implemented. It says what
+/// kind of implementation is even possible, and it exists because the CPU
+/// migration's remainder used to be one number. One number implies every
+/// unmigrated operation is the same kind of missing work. It is not: most are a
+/// kernel nobody has routed yet, but sixteen of them cannot be an
+/// `Execute<O>` implementation as that trait is currently written,
+/// so counting them beside a missing kernel describes a task that does not
+/// exist and hides one that does.
+///
+/// [`ExecutionSite::is_backend_executable`] is the predicate that separates the
+/// two. Every variant states its own reason rather than deferring to prose.
+```
+
+**After** — the fact a caller needs, plus a doctest proving the predicate
+does what it says (verified to compile with `cargo test -p incin-core --doc
+exec::catalog::ExecutionSite` before this section was written):
+
+```rust
+/// Where an operation's result is produced, and therefore what shape of
+/// execution contract can carry it.
+///
+/// This is about what kind of implementation is possible, not whether one
+/// exists yet -- [`ExecutionSite::is_backend_executable`] is the predicate
+/// that tells them apart.
+///
+/// ```
+/// use incin_core::exec::catalog::ExecutionSite;
+///
+/// assert!(ExecutionSite::Kernel.is_backend_executable());
+/// assert!(!ExecutionSite::Mutation.is_backend_executable());
+/// ```
+```
+
+The migration-history sentences from the "before" aren't lost — they belong
+in `docs/plan/tasks/EXE-008.md` (or wherever the migration task that
+motivated them lives), as a record of why the type exists, not as the first
+thing a caller reads on the way to calling it.
