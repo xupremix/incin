@@ -60,6 +60,15 @@ jobs:
         RUSTDOCFLAGS: -D warnings -D missing_docs
       run: cargo doc -p incin --lib --no-deps
 
+    # `cargo public-api` shells out to `cargo +nightly rustdoc` for the
+    # unstable JSON output rustdoc still gates behind nightly; it does not
+    # need nightly as the active toolchain, only installed and reachable by
+    # name. Without it the invocation fails inside cargo-public-api itself,
+    # which surfaces as a confusing secondary "virtual manifest" error rather
+    # than the actual missing-toolchain cause.
+    - name: Install nightly toolchain for cargo-public-api
+      run: rustup toolchain install nightly --profile minimal
+
     - name: Check reviewed public API
       run: |
         cargo install cargo-public-api --version "${PUBLIC_API_VERSION}" --locked
@@ -446,8 +455,13 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-mdbook-
 
+    # `restore-keys` falls back to the newest cache under the OS-only prefix
+    # when the exact version+book.toml key misses, so a version bump can
+    # restore a stale binary that is present but does not match
+    # `MDBOOK_VERSION`. `--force` makes the reinstall unconditional rather
+    # than failing on "binary already exists" for that stale file.
     - name: Install mdbook
-      run: command -v mdbook && mdbook --version | grep -F "${MDBOOK_VERSION}" || cargo install mdbook --version "${MDBOOK_VERSION}" --locked
+      run: command -v mdbook && mdbook --version | grep -F "${MDBOOK_VERSION}" || cargo install mdbook --version "${MDBOOK_VERSION}" --locked --force
 
     - name: Build the book
       run: mdbook build docs/book

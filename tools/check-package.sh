@@ -54,7 +54,7 @@ for package in "${packages[@]}"; do
     fi
   done
 
-  if ! rg -q '^(license\s*=|license\.workspace\s*=)' "$manifest"; then
+  if ! grep -Eq '^(license[[:space:]]*=|license\.workspace[[:space:]]*=)' "$manifest"; then
     printf 'package has no declared license metadata: %s\n' "$manifest" >&2
     exit 1
   fi

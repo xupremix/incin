@@ -1619,12 +1619,34 @@ mod tests {
         check("sinh", canonical_sinh, &[0.5, -0.8, 1.2]);
         check("cosh", canonical_cosh, &[0.5, -0.8, 1.2]);
         check("asinh", canonical_asinh, &[0.5, -1.0, 2.0]);
-        check("acosh", canonical_acosh, &[1.5, 2.0, 3.5]);
         check("atanh", canonical_atanh, &[0.2, -0.4, 0.6]);
         check("erf", canonical_erf, &[0.3, -0.5, 1.0]);
         check("rsqrt", canonical_rsqrt, &[1.0, 4.0, 9.0]);
         check("elu", canonical_elu, &[0.5, -0.5, 1.5]);
         check("mish", canonical_mish, &[0.5, -1.0, 2.0]);
+    }
+
+    #[test]
+    /// `acosh_gradcheck`. Kept separate from `trig_and_hyperbolic_gradchecks`
+    /// rather than folded into that loop: Miri's software float
+    /// implementation diverges from native `acoshf` by enough, right at
+    /// these sample points, to intermittently push the finite-difference
+    /// error over the shared 1% threshold (the same category of divergence
+    /// `tools/soundness.sh` already documents and skips for softmax/tanh/
+    /// sigmoid/log under Miri). Isolating it lets `tools/soundness.sh` skip
+    /// only this one case instead of losing Miri coverage for the other
+    /// twelve functions the bundled check exercises.
+    fn acosh_gradcheck() {
+        let x = vector(vec![1.5, 2.0, 3.5]);
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let out = canonical_acosh(&inputs[0]).unwrap();
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "acosh gradcheck error too high: {max_rel_err}"
+        );
     }
 
     #[test]
