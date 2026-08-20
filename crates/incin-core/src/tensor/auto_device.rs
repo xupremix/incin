@@ -84,7 +84,7 @@ pub type BestDevice = Cpu;
 /// [`BestDevice`] at a caller-chosen ordinal.
 ///
 /// `N` selects the device ordinal for the GPU families. The CPU has no
-/// ordinal, so when this build resolves to [`Cpu`] the parameter is accepted
+/// ordinal, so when this build resolves to `Cpu` the parameter is accepted
 /// and ignored rather than failing to compile -- code written for a GPU build
 /// still compiles on a CPU-only one, which is the whole point of the alias.
 #[cfg(feature = "cuda")]

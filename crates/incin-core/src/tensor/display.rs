@@ -6,8 +6,8 @@
 //! it takes a plain shape and a flat, row-major value buffer and produces
 //! the bracketed grid PyTorch prints for `print(tensor)`. The `tensor(...)`
 //! wrapper and any dtype/device/`requires_grad` footer are `Tensor`'s own
-//! job (`tensor/base.rs`), since only `Tensor` sees the `K`/`G` markers that
-//! decide whether a footer is needed at all.
+//! job (`tensor/base/types.rs`), since only `Tensor` sees the `K`/`G`
+//! markers that decide whether a footer is needed at all.
 
 use alloc::format;
 use alloc::string::String;

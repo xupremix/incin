@@ -1,11 +1,11 @@
-error[E0599]: no method named `eq_canonical` found for struct `incin_core::tensor::base::Tensor<S, B, K, G, P>` in the current scope
+error[E0599]: no method named `eq_canonical` found for struct `incin_core::tensor::base::types::Tensor<S, B, K, G, P>` in the current scope
  --> tests/target_api_compile_fail/eq_canonical_absent.rs:6:15
   |
 6 |     let _ = a.eq_canonical(&b);
   |               ^^^^^^^^^^^^
   |
 help: there is a method `concat` with a similar name, but with different arguments
- --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation.rs
+ --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation/concat.rs
   |
   | /     pub fn concat<S2, A>(
   | |         &self,

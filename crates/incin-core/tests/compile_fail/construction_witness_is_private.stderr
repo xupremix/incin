@@ -4,7 +4,7 @@ error[E0624]: associated function `from_parts_witnessed` is private
 5 |       let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed();
   |                                              ^^^^^^^^^^^^^^^^^^^^ private associated function
   |
- ::: src/tensor/base.rs
+ ::: src/tensor/base/local.rs
   |
   | /     fn from_parts_witnessed(
   | |         inner: B::Storage<K>,
@@ -22,11 +22,11 @@ error[E0061]: this function takes 6 arguments but 0 arguments were supplied
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- multiple arguments are missing
   |
 note: associated function defined here
- --> src/tensor/base.rs
+ --> src/tensor/base/local.rs
   |
   |     fn from_parts_witnessed(
   |        ^^^^^^^^^^^^^^^^^^^^
 help: provide the arguments
   |
-5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed(/* CpuStorage */, /* ShapeBuf */, /* PhantomData<f32> */, /* PhantomData<incin_backends::cpu::Cpu> */, /* PhantomData<NoGrad> */, /* base::ConstructionWitness */);
-  |                                                                 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed(/* CpuStorage */, /* ShapeBuf */, /* PhantomData<f32> */, /* PhantomData<incin_backends::cpu::Cpu> */, /* PhantomData<NoGrad> */, /* base::local::ConstructionWitness */);
+  |                                                                 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

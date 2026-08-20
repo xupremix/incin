@@ -25,7 +25,7 @@ pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
 /// Recovers the Incin `DeviceId` a candle `Device` stands for.
 ///
 /// This is the inverse of [`to_candle_device`] and is what lets a foreign
-/// tensor report checked [`TensorMeta`](incin_core::exec::TensorMeta): the
+/// tensor report checked [`TensorMeta`]: the
 /// descriptor contract records the device the data actually sits on, and only
 /// candle knows that once it owns the allocation.
 pub fn from_candle_device(device: &candle::Device) -> Result<DeviceId> {

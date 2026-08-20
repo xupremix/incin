@@ -19,11 +19,11 @@ help: `incin::dist::Replicated<Mesh>` implements trait `LegalTransition<To>`
    | |     Mesh: ValidMesh,
    | |     Axis: crate::dist::placement::PlacementAxis,
    | |________________________________________________^ `LegalTransition<incin::dist::Sharded<Mesh, Axis>>`
-note: required by a bound in `incin::prelude::Tensor::<S, B, K, G, P>::try_reshard`
-  --> src/tensor/base.rs
+note: required by a bound in `base::distributed::<impl incin::prelude::Tensor<S, B, K, G, P>>::try_reshard`
+  --> src/tensor/base/distributed.rs
    |
    |     pub fn try_reshard<To, O>(
    |            ----------- required by a bound in this associated function
 ...
    |         P: crate::dist::ConstPlacement + crate::dist::LegalTransition<To>,
-   |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, G, P>::try_reshard`
+   |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `base::distributed::<impl Tensor<S, B, K, G, P>>::try_reshard`

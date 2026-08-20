@@ -7,7 +7,7 @@ pub mod executor;
 ///
 /// Enabled by the `metal-mps` Cargo feature. On non-Apple-Silicon hosts the
 /// module is always compiled (so tests are reachable) but every candidate
-/// resolves to the `Native` path because [`MPS_AVAILABLE`] is `false`.
+/// resolves to the `Native` path because [`MPS_AVAILABLE`](mps::MPS_AVAILABLE) is `false`.
 pub mod mps;
 pub mod shaders;
 pub mod storage;
