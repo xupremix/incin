@@ -1,6 +1,6 @@
 //! Wires `kernels/conv.cu`'s `im2col_2d`/`col2im_2d`/`im2col_1d`/`col2im_1d`
 //! kernels into the CUDA backend. Unlike CPU's `im2col_2d`/`col2im_2d`
-//! (`cpu/ops/conv.rs`), which produce a `[B, H_out*W_out, Cin*Kh*Kw]`
+//! (`cpu/ops/conv/window.rs`), which produce a `[B, H_out*W_out, Cin*Kh*Kw]`
 //! (spatial-major) column matrix, this kernel's own layout is
 //! channel-major: `[B, Cin*Kh*Kw, H_out*W_out]` — so `conv1d`/`conv2d` in
 //! `cuda/backend.rs` compute `weight_mat @ cols` directly (no transpose of
