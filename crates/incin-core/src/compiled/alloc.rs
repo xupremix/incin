@@ -92,7 +92,7 @@ impl LivenessMap {
                     .or_insert(LivenessInterval::new(node_idx, node_idx))
                     .last_use_node = node_idx;
             }
-            // Inputs used at this node — extend their last use
+            // Inputs used at this node - extend their last use
             for &in_id in &node.inputs {
                 if let Some(interval) = intervals.get_mut(&in_id)
                     && node_idx > interval.last_use_node

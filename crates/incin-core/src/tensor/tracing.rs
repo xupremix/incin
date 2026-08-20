@@ -13,7 +13,7 @@ use crate::tensor::dtype::{DType, DTypeDescriptor};
 // and call arbitrary `Graph` methods directly, even though `Graph` itself is
 // `pub(crate)`. The three functions below are the only operations downstream
 // crates actually need (draining/snapshotting the graph, marking an input/
-// output value) — everything else about `Graph`'s shape stays encapsulated.
+// output value) - everything else about `Graph`'s shape stays encapsulated.
 /// Drain the process-wide tracing graph, returning everything recorded since
 /// the last call (or since startup).
 pub fn extract_graph() -> Graph {
@@ -21,7 +21,7 @@ pub fn extract_graph() -> Graph {
     core::mem::take(&mut *b)
 }
 /// Clone the process-wide tracing graph's current contents WITHOUT draining
-/// it (unlike `extract_graph`) — used by telemetry to snapshot mid-flight.
+/// it (unlike `extract_graph`) - used by telemetry to snapshot mid-flight.
 /// Returns `None` if the graph is momentarily locked elsewhere.
 pub fn tracing_graph_snapshot() -> Option<Graph> {
     TRACING_GRAPH.try_lock().map(|g| (*g).clone())

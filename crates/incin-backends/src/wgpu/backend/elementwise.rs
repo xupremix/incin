@@ -46,8 +46,8 @@ pub(crate) fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<Wgpu
 /// One elementwise binary operation, broadcasting its operands when they
 /// disagree.
 ///
-/// The kernel itself is strictly elementwise — it walks two equal-length
-/// buffers — so an operand that needs stretching is materialized at the
+/// The kernel itself is strictly elementwise - it walks two equal-length
+/// buffers - so an operand that needs stretching is materialized at the
 /// broadcast shape first rather than the shader growing a stride argument.
 /// That costs an allocation for the stretched operand, which is why the
 /// equal-shape case still goes straight to the kernel.
@@ -55,7 +55,7 @@ pub(crate) fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<Wgpu
 /// This used to refuse any shape disagreement outright, which made
 /// `broadcast_add` and friends fail on WGPU even though the frontend had
 /// already resolved the output shape at the type level, and made
-/// `Linear::forward` — a matmul plus a rank-one bias add — unusable on this
+/// `Linear::forward` - a matmul plus a rank-one bias add - unusable on this
 /// backend for every model. The backward pass never had that gap: both tape
 /// entries here have always called `unbroadcast`, which only does anything
 /// when a broadcast actually happened.
@@ -71,7 +71,7 @@ fn binary_op<T: DType>(
         (lhs, rhs)
     } else {
         // `broadcast_shape` reports the mismatch itself when the two cannot
-        // align, so an incompatible pair still fails here — with the axis
+        // align, so an incompatible pair still fails here - with the axis
         // named, rather than with this function's old blanket message.
         let target = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape).map_err(|_| {
             Error::ShapeMismatch {
@@ -262,7 +262,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = scalar_op::<K>(t, scalar, 0)?;
         // Gradient passes through unchanged (same shape, no unbroadcast
-        // needed — scalar ops don't change shape).
+        // needed - scalar ops don't change shape).
         push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
         Ok(out)
     }
@@ -283,7 +283,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 0)?;
-        // relu'(x) = step(x) (1 if x>0 else 0) — input-based.
+        // relu'(x) = step(x) (1 if x>0 else 0) - input-based.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let deriv = unary_op::<K>(&t_capture, 10)?;
@@ -367,7 +367,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = unary_op::<K>(t, 4)?;
         // abs'(x) = sign(x) (input-based), computed as step(x) - step(-x):
-        // 1 if x>0, -1 if x<0, 0 if x==0 — matches the CPU backend exactly.
+        // 1 if x>0, -1 if x<0, 0 if x==0 - matches the CPU backend exactly.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let neg_t = unary_op::<K>(&t_capture, 5)?;

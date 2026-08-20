@@ -22,9 +22,9 @@ fn f32_vec(s: &CpuStorage) -> Vec<f32> {
 // --- output-size arithmetic edge cases ---
 
 /// `out_size` subtracts an effective kernel from a padded input length.
-/// When the kernel is larger than the padded input — here a 5x5 kernel
+/// When the kernel is larger than the padded input - here a 5x5 kernel
 /// with dilation 3, an effective span of `3*4+1 = 13` against a padded
-/// input of 2 — a raw `usize` subtraction underflows: a panic in debug
+/// input of 2 - a raw `usize` subtraction underflows: a panic in debug
 /// builds and a wrapped, astronomically large output extent in release.
 /// The saturating form must instead produce an empty spatial extent and
 /// return normally.
@@ -336,7 +336,7 @@ fn conv_transpose2d_forward_stride_upsamples() {
 /// Forward test (output_padding>0, Pitfall 4): explicitly constructs a
 /// case with non-zero `output_padding` and confirms the extra
 /// rows/columns are allocated on the correct (bottom/right) side ONLY,
-/// at exactly value 0.0 — confirming the natural fold-output size is
+/// at exactly value 0.0 - confirming the natural fold-output size is
 /// computed first using `padding` symmetrically, THEN `output_padding`
 /// extra rows/columns are appended afterward (not folded into the same
 /// offset arithmetic as `padding`).

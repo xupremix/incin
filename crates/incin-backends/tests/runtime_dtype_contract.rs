@@ -34,7 +34,7 @@ impl ConstDType for TestOpaque16 {
     );
 }
 
-/// 1G — Custom capability rejection from built-in backend.
+/// 1G - Custom capability rejection from built-in backend.
 #[test]
 fn test_custom_capability_rejection_from_builtin_backend() {
     let descriptor = TestOpaque16::DESCRIPTOR;
@@ -53,7 +53,7 @@ fn test_custom_capability_rejection_from_builtin_backend() {
     }
 }
 
-/// 1I — Public tensor dtype contract.
+/// 1I - Public tensor dtype contract.
 #[test]
 fn test_public_tensor_dtype_contract() {
     let tensor = Cpu.zeros([2, 3]).unwrap();
@@ -61,7 +61,7 @@ fn test_public_tensor_dtype_contract() {
     assert_eq!(tensor.builtin_dtype_id(), Some(DTypeId::F32));
 }
 
-/// 1J — Target dtype extensibility contract.
+/// 1J - Target dtype extensibility contract.
 #[test]
 fn test_target_dtype_extensibility_contract() {
     let target_res = Cpu.dtype_dynamic(TestOpaque16::DESCRIPTOR);
@@ -71,7 +71,7 @@ fn test_target_dtype_extensibility_contract() {
     }
 }
 
-/// 1K — Runtime DType view.
+/// 1K - Runtime DType view.
 #[test]
 #[allow(clippy::result_large_err)]
 fn test_runtime_dtype_view() -> Result<()> {

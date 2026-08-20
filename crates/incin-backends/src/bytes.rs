@@ -21,7 +21,7 @@ use incin_core::tensor::dtype::DTypeId;
 
 /// Bytes needed to hold `elements` values of `dtype`.
 ///
-/// The multiplication is checked, and `dtype` — not the caller — decides the
+/// The multiplication is checked, and `dtype` - not the caller - decides the
 /// width, so a block-quantized allocation is sized by its block encoding rather
 /// than by its scalar element width.
 ///

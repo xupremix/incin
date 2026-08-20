@@ -44,7 +44,7 @@ fn dropping_a_target_does_not_invalidate_its_tensors() {
 }
 
 // ============================================================================
-// Typed data — dtype comes from the data, never from the target
+// Typed data - dtype comes from the data, never from the target
 // ============================================================================
 
 /// A nested Rust array carries both its shape and its element type, which is
@@ -85,7 +85,7 @@ fn f64_data_is_not_narrowed_to_the_targets_float() {
 }
 
 // ============================================================================
-// Gradient rule — follows the object being created, not a target setting
+// Gradient rule - follows the object being created, not a target setting
 // ============================================================================
 
 /// Data tensors are `NoGrad`. This is a type-level fact, so the assertion is
@@ -108,7 +108,7 @@ fn parameters_track_gradients() {
 }
 
 // ============================================================================
-// Shape specification — the argument decides the result type
+// Shape specification - the argument decides the result type
 // ============================================================================
 
 /// Fully static: shape! produces a fully static tensor.

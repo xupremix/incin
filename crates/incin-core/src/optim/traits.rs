@@ -110,7 +110,7 @@ where
 /// Per-element gradient clamping, as a capability separate from
 /// [`OptimizerBackend`] rather than a required method on it.
 ///
-/// `Execute<op::Clamp>` is a CPU-only descriptor today — CUDA, WGPU, and
+/// `Execute<op::Clamp>` is a CPU-only descriptor today - CUDA, WGPU, and
 /// Metal do not implement it. Making [`clip_grad_value`](crate::optim::clip_grad_value) a method on
 /// `OptimizerBackend` itself would have added that bound to every backend's
 /// existing, working conformance, breaking `Adam`/`SGD`/`AdamW` for every
@@ -120,7 +120,7 @@ where
 /// `OptimizerBackend`.
 pub trait ValueClippingBackend<K: DType>: OptimizerBackend<K> {
     /// Clamps every element of `storage` into `[min, max]`, independently of
-    /// every other element — the per-element counterpart to the group-wide
+    /// every other element - the per-element counterpart to the group-wide
     /// rescale [`clip_grad_norm`](crate::optim::clip_grad_norm) performs.
     fn optimizer_clamp(storage: &Self::Storage<K>, min: f64, max: f64) -> Result<Self::Storage<K>>;
 }

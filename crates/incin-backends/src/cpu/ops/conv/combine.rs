@@ -1,4 +1,4 @@
-//! Shared backward-composition helpers (plain, non-tape-tracked — operate on
+//! Shared backward-composition helpers (plain, non-tape-tracked - operate on
 //! already-materialized `CpuStorage` values inside the hand-composed
 //! backward closures in `conv1d`/`conv2d`/`conv_transpose2d`, mirroring the
 //! forward's own per-group narrow/concat convention).

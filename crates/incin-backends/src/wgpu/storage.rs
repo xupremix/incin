@@ -9,7 +9,7 @@ use wgpu::util::DeviceExt;
 
 use crate::wgpu::device::{get_device_state, try_get_device_state};
 
-/// Raw GPU buffer.  All fields are intentionally private — layout and usage
+/// Raw GPU buffer.  All fields are intentionally private - layout and usage
 /// flags are an implementation detail and must not be relied upon by callers.
 pub(crate) struct WgpuBuffer {
     pub(crate) buffer: wgpu::Buffer,

@@ -501,7 +501,7 @@ impl<D: Device> Execute<op::FlattenExact> for CudaBackendImpl<D> {
 }
 
 /// `attributes.shape` is the whole target shape, not just the prefix
-/// `broadcast_left` prepends — the same split CPU's own executor computes
+/// `broadcast_left` prepends - the same split CPU's own executor computes
 /// before calling `broadcast_left_storage`.
 impl<D: Device> Execute<op::BroadcastLeft> for CudaBackendImpl<D> {
     type Output = CudaStorage;
@@ -796,7 +796,7 @@ impl_cuda_scalar_tensor![(SubScalar, sub_scalar_float), (DivScalar, div_scalar_f
 /// precondition `launch_compare` states it relies on: both operands
 /// identically shaped and contiguous. It calls
 /// `crate::cuda::ops::shape::launch_broadcast` directly rather than
-/// `CudaBackendImpl::broadcast_as` — the same materializing kernel launch,
+/// `CudaBackendImpl::broadcast_as` - the same materializing kernel launch,
 /// minus the tape entry `broadcast_as` would push on the way out. That entry
 /// would have nowhere to go: `launch_compare` never links its output id back
 /// to an input on the tape, so nothing can ever walk to it during backward.
@@ -863,7 +863,7 @@ impl_cuda_cmp![
 /// send a gradient). The tape entry this pushes names the *broadcasted*
 /// `on_true`/`on_false` ids as its inputs, not the original operands', so the
 /// generic backward walk continues automatically through whatever
-/// `broadcast_as` entries those broadcasts pushed — the same composition
+/// `broadcast_as` entries those broadcasts pushed - the same composition
 /// this crate's `batched_matmul`/`softmax` already rely on. The backward
 /// itself reuses the forward kernel: routing `grad_out` to `grad_true` where
 /// the mask is set and to `grad_false` where it is not is exactly what
@@ -896,7 +896,7 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
             mask.clone()
         } else {
             // Not `shape::launch_broadcast`: that launches `shape.cu`'s
-            // `shape_op`, whose data pointers are a hardcoded `float*` —
+            // `shape_op`, whose data pointers are a hardcoded `float*` -
             // exactly the byte-width assumption this session already
             // narrowed the `BroadcastAs` capability row over, and a `bool`
             // mask hits it just the same through a direct call. See
@@ -972,7 +972,7 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
 
 /// `LogicalAnd`/`LogicalOr`: both operands and the output are `bool`, unlike
 /// `where_cond`/`masked_fill`'s mixed `bool`+`f32`, so the capability row
-/// this answers to is `Bool`-only rather than a union — no `F32_AND_BOOL`
+/// this answers to is `Bool`-only rather than a union - no `F32_AND_BOOL`
 /// reasoning needed. Broadcasting still goes through
 /// `cuda::ops::select::launch_broadcast_bool_mask`, the same non-`shape_op`
 /// path `impl_cuda_cmp!`/`Execute<op::WhereCond>` use, since `shape_op`'s

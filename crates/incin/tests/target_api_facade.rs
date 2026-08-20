@@ -36,7 +36,7 @@ fn the_whole_surface_is_reachable_from_the_facade_prelude() {
 /// Guarantees that are compile errors rather than runtime failures.
 ///
 /// These live here rather than as `compile_fail` doctests next to the methods
-/// because rustdoc only collects doctests from a crate's *library* target —
+/// because rustdoc only collects doctests from a crate's *library* target -
 /// a `compile_fail` block in an integration test file is never executed and
 /// asserts nothing.
 #[test]

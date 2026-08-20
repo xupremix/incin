@@ -10,7 +10,7 @@
 //!   `checked_numel` there reports it as a formatted string; both become a
 //!   [`ShapeError`] naming the operation and the failing term.
 //! * **No cached derived values.** A `ShapeBuf` stores dimensions and nothing
-//!   else. There is no `numel` field that a later mutation could leave stale —
+//!   else. There is no `numel` field that a later mutation could leave stale -
 //!   the RFC calls this out explicitly, because a cached count that disagrees
 //!   with its dimensions is exactly how an undersized allocation gets indexed
 //!   with an oversized stride.
@@ -282,7 +282,7 @@ impl ShapeBuf {
     /// The zero case is short-circuited rather than folded, and that is load
     /// bearing: a running product would make the answer depend on axis order.
     /// `[MAX, 0, MAX]` reaches the zero and collapses, while `[MAX, MAX, 0]`
-    /// overflows before it gets there — the same dimensions, two different
+    /// overflows before it gets there - the same dimensions, two different
     /// answers. An empty tensor holds no elements no matter how its axes are
     /// written.
     pub fn numel(&self) -> Option<usize> {

@@ -26,15 +26,15 @@ impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool);
 
 /// `bool` is a 1-byte scalar dtype (`tensor/dtype/registry.rs`'s own encoding table
 /// gives it the same `scalar_bytes() == 1` as `u8`/`q8_0`), and every path
-/// this validator gates that does not launch a kernel — allocation,
-/// `to_bytes`/`from_bytes`, `reshape` — is byte-width-agnostic already, so
+/// this validator gates that does not launch a kernel - allocation,
+/// `to_bytes`/`from_bytes`, `reshape` - is byte-width-agnostic already, so
 /// accepting it here is safe on its own. It does not by itself make `bool`
 /// usable everywhere: `validate_elementwise_dtype` explicitly re-excludes it
 /// so a float kernel never sees it, and `broadcast_as`'s row stays narrower
 /// than this validator for the unrelated `shape_op` byte-width reason
 /// documented on `CUDA_CAPABILITIES` in `capability/tables.rs`. Widening what this
 /// function accepts is a necessary condition for `bool` support, not a
-/// capability claim by itself — the capability table is what actually
+/// capability claim by itself - the capability table is what actually
 /// claims something, one row at a time.
 pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
     let is_supported = matches!(

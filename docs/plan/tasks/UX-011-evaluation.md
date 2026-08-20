@@ -1,4 +1,4 @@
-# UX-011 Usability Evaluation — `parallel!` Block Macro
+# UX-011 Usability Evaluation - `parallel!` Block Macro
 
 **Date:** 2026-07-30  
 **Tier:** exploratory  
@@ -20,6 +20,6 @@
 3. **Usability Conclusion:** Implementing `parallel!` as a expression-block macro provides clear scoping for distributed operations and complements the declarative `#[parallel]` attribute macro.
 
 4. **Implementation Plan:**
-   - Add `parallel_block.rs` proc macro parsing `parallel!(mesh_expr => block_expr)` and `parallel!(block_expr)`.
-   - Re-export `parallel` macro in `incin-macros` and `incin` prelude.
-   - Add integration test `crates/incin-macros/tests/parallel_block.rs`.
+  - Add `parallel_block.rs` proc macro parsing `parallel!(mesh_expr => block_expr)` and `parallel!(block_expr)`.
+  - Re-export `parallel` macro in `incin-macros` and `incin` prelude.
+  - Add integration test `crates/incin-macros/tests/parallel_block.rs`.

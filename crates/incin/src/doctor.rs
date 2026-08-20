@@ -1,4 +1,4 @@
-//! `cargo incin doctor` — what this machine can actually run (`UX-014`).
+//! `cargo incin doctor` - what this machine can actually run (`UX-014`).
 //!
 //! PROPOSALS.md sec. 2.3 specifies the report and closes with the two
 //! properties that make it a support tool rather than a print statement: it is
@@ -35,7 +35,7 @@ use serde::Serialize;
 /// Version of the JSON document this module emits.
 ///
 /// A support workflow that parses the report needs to know when the shape it
-/// parses has changed, and the crate version does not tell it — most releases
+/// parses has changed, and the crate version does not tell it - most releases
 /// will not touch this schema. Bumped on any change to a key or to the meaning
 /// of a value; a new *finding code* is not a schema change, since consumers
 /// already have to tolerate codes they do not know.
@@ -45,7 +45,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 const DEVICE_ORDER: &[DeviceKind] = &[DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu];
 
 // ============================================================================
-// The observations — one trait for the whole impure surface
+// The observations - one trait for the whole impure surface
 // ============================================================================
 
 /// Everything the doctor asks the machine.
@@ -75,7 +75,7 @@ pub trait Host {
     /// something about performance that it does not.
     fn cpu_isa(&self) -> Vec<IsaFeature>;
 
-    /// Whether this build contains the family at all — a `cfg!`, not a probe.
+    /// Whether this build contains the family at all - a `cfg!`, not a probe.
     fn compiled_in(&self, kind: DeviceKind) -> bool;
 
     /// Whether hardware for the family answers right now.
@@ -192,8 +192,8 @@ impl Cache {
 
 /// One backend family: whether it is in the build, and whether it answered.
 ///
-/// These are different questions with different remedies — a missing feature
-/// is a rebuild, a missing device is a driver — which is why they are separate
+/// These are different questions with different remedies - a missing feature
+/// is a rebuild, a missing device is a driver - which is why they are separate
 /// fields rather than one tri-state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DeviceReport {
@@ -356,8 +356,8 @@ impl Report {
         let cpu_isa = host.cpu_isa();
 
         // Each family is probed exactly once and the answer is reused. Probing
-        // is not a cheap pure query — `detect::probe` builds a WGPU instance
-        // and enumerates adapters, and retains a CUDA primary context — so
+        // is not a cheap pure query - `detect::probe` builds a WGPU instance
+        // and enumerates adapters, and retains a CUDA primary context - so
         // asking twice is asking the driver to do it all again. The first
         // draft did ask twice, once here and once to decide what to probe
         // capabilities for, and under `cargo test --workspace` (which unifies
@@ -426,7 +426,7 @@ impl Report {
     ///
     /// Every line is `key: value` under a bracketed section header, in a fixed
     /// section order, with no column padding. Padding is what makes a text
-    /// report unstable — a single long path shifts every other line — and the
+    /// report unstable - a single long path shifts every other line - and the
     /// format is the part sec. 2.3 asks to be stable.
     #[must_use]
     pub fn to_text(&self) -> String {
@@ -671,7 +671,7 @@ fn findings(
 
 // `device_name` and `dtype_name` were private copies here until `UX-013`. Both
 // needed a `_ => "unknown"` arm, because these enums are `#[non_exhaustive]`
-// outside `incin-core` — which meant a dtype added later would have rendered as
+// outside `incin-core` - which meant a dtype added later would have rendered as
 // the literal string "unknown" in a support report rather than failing to
 // build. `DeviceKind::name` and `DTypeId::name` live beside the enums now, where
 // the match is exhaustive, and the generated capability tables read the same
@@ -697,7 +697,7 @@ pub struct HostMachine;
 /// them, paired with whether this build has it.
 ///
 /// Written out rather than derived, because there is no way to enumerate one's
-/// own features at runtime — which means this list can fall behind
+/// own features at runtime - which means this list can fall behind
 /// `Cargo.toml`. `tests/doctor.rs` reads the manifest and fails when it does.
 fn compiled_features() -> Vec<Feature> {
     vec![
@@ -765,8 +765,8 @@ fn detected_isa() -> Vec<IsaFeature> {
 ///
 /// The permission bit is read from the directory's metadata rather than probed
 /// by creating a file, because the doctor is read-only by contract. That is a
-/// weaker answer than a write attempt — it does not account for ACLs, for
-/// read-only mounts, or for a full disk — and the report says "not writable"
+/// weaker answer than a write attempt - it does not account for ACLs, for
+/// read-only mounts, or for a full disk - and the report says "not writable"
 /// only when the mode bits are unambiguous about it.
 ///
 /// Public so the read-only contract can be asserted directly: pointing this at

@@ -204,7 +204,7 @@ pub(crate) fn div_storage_with_shape(
 
     // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
     // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
-    // unbroadcast — best-effort correctness, not exercised by this
+    // unbroadcast - best-effort correctness, not exercised by this
     // phase's example/tests.
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);

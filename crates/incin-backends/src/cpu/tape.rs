@@ -3,8 +3,8 @@
 //! `GRD-003` moved the node type, the reverse walk, and the accumulation loop
 //! into `incin_core::exec::tape`, where they are written once instead of three
 //! times. What is left here is what is genuinely CPU-specific: how a
-//! `CpuStorage` is seeded, summed, and tested for a non-finite value — the
-//! three methods [`TapeStorage`] asks for — plus the thread-local that owns
+//! `CpuStorage` is seeded, summed, and tested for a non-finite value - the
+//! three methods [`TapeStorage`] asks for - plus the thread-local that owns
 //! the tape and the `unbroadcast` helper every recipe in this backend calls
 //! (`CPUBACK-06`).
 //!
@@ -12,7 +12,7 @@
 //! the graph and deletes all three of them.
 //!
 //! This tape is deliberately independent from `incin-core`'s
-//! `tensor::tracing` module (`TRACING_GRAPH`, used for ONNX export) — D-04.
+//! `tensor::tracing` module (`TRACING_GRAPH`, used for ONNX export) - D-04.
 //! The two thread-locals never reference each other; this file must not
 //! import or reference `TRACING_GRAPH` anywhere.
 
@@ -75,7 +75,7 @@ impl TapeStorage for CpuStorage {
 /// storage type at every one of them.
 pub struct CpuGrads {
     // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): use
-    // `.get(id)` — downstream crates shouldn't inspect/mutate the map beyond
+    // `.get(id)` - downstream crates shouldn't inspect/mutate the map beyond
     // the intended query API.
     pub(crate) grads: GradientMap<CpuStorage>,
 }
@@ -122,8 +122,8 @@ thread_local! {
 /// [`push`] already discards entries when the effective `GradMode` does not
 /// record, but by then the entry exists: its saved shapes, its input-id vector,
 /// and its boxed backward closure have all been allocated for a value nothing
-/// can read. On a `NoGrad` forward pass — inference, evaluation, anything under
-/// `no_grad` — that was four heap allocations per elementwise operation.
+/// can read. On a `NoGrad` forward pass - inference, evaluation, anything under
+/// `no_grad` - that was four heap allocations per elementwise operation.
 ///
 /// Callers that allocate to build an entry use this and construct inside the
 /// closure. The gate is a thread-local read of the execution policy, which is
@@ -215,7 +215,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
 /// Elementwise sum of two ALREADY-shape-matching gradients.
 ///
 /// This is intentionally NOT the public `::add` (which must
-/// broadcast) — tape-internal accumulation only ever sums two gradients that
+/// broadcast) - tape-internal accumulation only ever sums two gradients that
 /// have already been shape-matched to their target via `unbroadcast`, so no
 /// broadcast logic is needed here.
 fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
@@ -278,7 +278,7 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
     let ndim_diff = grad.shape.len().saturating_sub(target_shape.len());
     let mut result = grad.clone();
 
-    // Sum over any leading dims that don't exist in target_shape at all —
+    // Sum over any leading dims that don't exist in target_shape at all -
     // squeeze the axis away entirely (drop it from the shape).
     for _ in 0..ndim_diff {
         result = sum_dim_squeeze(&result, 0)?;

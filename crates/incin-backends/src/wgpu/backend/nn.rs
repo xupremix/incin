@@ -254,8 +254,8 @@ impl<D: Device> WgpuBackendImpl<D> {
 
 /// Row-major contiguous strides for a rank-4 `[N, C, H, W]` shape. WGPU
 /// storage has no non-contiguous view support (`WgpuStorage::new` always
-/// derives strides from shape), so pooling backward closures — which read
-/// buffers back to a flat host `Vec` — can compute this directly instead of
+/// derives strides from shape), so pooling backward closures - which read
+/// buffers back to a flat host `Vec` - can compute this directly instead of
 /// pulling in `cpu::stride`.
 pub(crate) fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
     let strides = StrideBuf::contiguous_for(&ShapeBuf::from_slice(shape), OperationKind::Storage)?;
@@ -363,7 +363,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
 
         // Backward: distributes grad_out's per-position value uniformly
-        // (divided by the FIXED kh*kw divisor — count_include_pad=True,
+        // (divided by the FIXED kh*kw divisor - count_include_pad=True,
         // PyTorch's default, matching this op's forward, which sums the
         // padded region as 0.0 but still divides by kh*kw) into every input
         // position the window covered (padded positions are skipped, never
@@ -478,9 +478,9 @@ impl<D: Device> WgpuBackendImpl<D> {
 
         // Backward: recomputes each output position's winning (first-argmax,
         // strict `>`) source position from the captured input (padded
-        // positions are never candidates, never substituted with 0.0 —
+        // positions are never candidates, never substituted with 0.0 -
         // matches the WGSL forward's `-FLT_MAX` init and its bounds-checked
-        // skip), then `+=`-accumulates grad_out's value there — never `=`,
+        // skip), then `+=`-accumulates grad_out's value there - never `=`,
         // since overlapping windows (stride < kernel_size) can share a
         // winning input position. Mirrors the CPU backend's
         // `max_window_2d`/`scatter_pool_grad_2d` exactly.

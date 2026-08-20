@@ -111,7 +111,7 @@ fn ordinals(count: usize) -> Vec<DeviceId> {
 /// `PP=3`."
 ///
 /// All three bind against the same three devices, and they are three different
-/// types. That pairing is the point of the module — the machine cannot tell
+/// types. That pairing is the point of the module - the machine cannot tell
 /// them apart and the compiler can.
 #[test]
 fn the_three_valid_three_gpu_topologies_all_bind_to_the_same_machine() {
@@ -191,7 +191,7 @@ fn an_ordinal_the_probe_cannot_see_is_rejected() {
 ///
 /// This is the case that sentence is about, and the one no amount of ordinal
 /// checking catches: two different numbers, one physical card, which is what a
-/// visibility mask produces. `RepeatedDevice` passes here — the ordinals really
+/// visibility mask produces. `RepeatedDevice` passes here - the ordinals really
 /// are distinct.
 #[test]
 fn two_ordinals_resolving_to_one_physical_device_are_rejected() {
@@ -221,7 +221,7 @@ fn a_mesh_spanning_two_backend_families_is_rejected() {
     assert!(matches!(err, BindError::MixedBackendFamily { rank: 1, .. }));
 }
 
-/// Same family, different architecture — the case a family check alone misses.
+/// Same family, different architecture - the case a family check alone misses.
 #[test]
 fn a_mesh_spanning_two_architectures_is_rejected() {
     let machine = FakeMachine::cuda(3).identify(2, DeviceId::cuda(2), "GPU-2", "sm_80");
@@ -360,7 +360,7 @@ fn the_same_machine_bound_the_same_way_has_the_same_id() {
 /// have to be.
 ///
 /// `DP=6` and `TP=6` over six fully-connected devices probe the same pairs in
-/// the same order, so their *fingerprints* are identical — and they are
+/// the same order, so their *fingerprints* are identical - and they are
 /// incompatible programs. Only the degrees tell them apart.
 #[test]
 fn one_machine_bound_two_ways_has_two_ids() {
@@ -380,7 +380,7 @@ fn one_machine_bound_two_ways_has_two_ids() {
 }
 
 /// A different machine is a different mesh even at the same degrees and the
-/// same ordinals — which is the half of the identity the degrees cannot carry.
+/// same ordinals - which is the half of the identity the degrees cannot carry.
 #[test]
 fn the_same_degrees_on_different_hardware_have_different_ids() {
     let devices = ordinals(3);

@@ -1,7 +1,7 @@
-//! `incin-lsp` — a transparent LSP proxy that sits between an editor and
+//! `incin-lsp` - a transparent LSP proxy that sits between an editor and
 //! rust-analyzer: it spawns rust-analyzer as a child process and rewrites
 //! only two message kinds through `incin-diagnostics` before forwarding
-//! them on —
+//! them on -
 //!
 //! - `textDocument/publishDiagnostics` notifications: each diagnostic's
 //!   `message` gets its typenum expressions replaced with decimals.
@@ -9,7 +9,7 @@
 //!   treatment via [`incin_diagnostics::humanize_inlay_label`].
 //!
 //! Every other message (completion, goto-definition, formatting, ...) is
-//! forwarded byte-for-byte unchanged — the proxy never re-serializes a
+//! forwarded byte-for-byte unchanged - the proxy never re-serializes a
 //! message it isn't rewriting, so it cannot introduce whitespace/key-order
 //! drift on anything it doesn't touch.
 //!
@@ -18,7 +18,7 @@
 //! that only ever needs to understand two message shapes. Frames are
 //! read/written as raw `Content-Length`-prefixed bytes ([`frame`]) and, only
 //! when a rewrite might apply, inspected as [`serde_json::Value`]
-//! ([`rewrite`]) — everything else passes through as opaque bytes.
+//! ([`rewrite`]) - everything else passes through as opaque bytes.
 
 pub mod config;
 pub mod frame;

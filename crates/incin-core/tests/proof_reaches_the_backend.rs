@@ -7,7 +7,7 @@
 //! inference across two separately-tested links rather than an observation.
 //!
 //! The backend here records the proof level and allocates nothing. That is the
-//! point — it is the smallest thing that can implement `Execute` and answer a
+//! point - it is the smallest thing that can implement `Execute` and answer a
 //! capability query, so the only behaviour under test is what the dispatch
 //! layer passes down.
 
@@ -129,7 +129,7 @@ fn a_dynamic_shape_reaches_the_backend_as_dynamic() {
     assert_eq!(observed_static_numel_for(&sv), None);
 }
 
-/// `execute` — the evidence-free entry point — must keep claiming nothing.
+/// `execute` - the evidence-free entry point - must keep claiming nothing.
 #[test]
 fn the_evidence_free_entry_point_still_claims_nothing() {
     OBSERVED.with(|slot| slot.set(None));

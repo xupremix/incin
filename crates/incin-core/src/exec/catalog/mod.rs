@@ -10,7 +10,7 @@
 // harder to audit and does not change generated code.
 #![allow(clippy::collapsible_if, clippy::collapsible_match)]
 
-// Shared across every submodule below via `use super::*;` — these mirror
+// Shared across every submodule below via `use super::*;` - these mirror
 // the original single-file catalog.rs's top-level imports so a split
 // submodule needs no import work of its own beyond what it adds locally.
 pub(crate) use crate::exec::OperationIdentity;
@@ -46,11 +46,11 @@ pub use error::*;
 pub use lookup::*;
 // `inference`'s items are `pub(super)` (cross-visible within this module
 // tree only, matching the original single-file catalog.rs's privacy), so
-// this re-export uses `pub(crate)` rather than `pub` — just enough for
+// this re-export uses `pub(crate)` rather than `pub` - just enough for
 // sibling modules (e.g. `validated`) to reach them through `use super::*;`.
 // The lint below misreports this as unused because it under-counts
 // `pub(super)` items imported from a genuinely private context; the
-// re-export is load-bearing — removing it breaks `validated.rs`.
+// re-export is load-bearing - removing it breaks `validated.rs`.
 #[allow(unused_imports)]
 pub(crate) use inference::*;
 pub use meta::*;

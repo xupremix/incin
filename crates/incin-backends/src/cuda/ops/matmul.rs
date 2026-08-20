@@ -1,7 +1,7 @@
 //! Wires `kernels/matmul.cu`'s tiled shared-memory GEMM (`BM=128, BN=128,
 //! BK=8, TM=8, TN=8`, 16x16 thread blocks) into the CUDA backend. Unbatched
 //! 2D operands only, matching `::matmul`'s currently-wired scope on
-//! this backend — batched matmul is not
+//! this backend - batched matmul is not
 //! implemented here.
 
 use super::alloc_zeroed_bytes;
@@ -28,7 +28,7 @@ fn ensure_matmul_loaded(device_id: usize) -> Result<()> {
 
 /// `lhs`: `[M, K]`, `rhs`: `[K, N]` -> `[M, N]`. Caller (the ``
 /// trait method) is responsible for the `lhs.shape[1] == rhs.shape[0]`
-/// shape check — this function assumes it already holds.
+/// shape check - this function assumes it already holds.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
@@ -73,7 +73,7 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
         let lhs_f32 = lhs_buf.data.transmute::<f32>(lhs_buf.len).unwrap();
         let rhs_f32 = rhs_buf.data.transmute::<f32>(rhs_buf.len).unwrap();
         // out_b.data was allocated immediately above and never cloned, so
-        // it stays uniquely owned (refcount 1) here — Arc::get_mut succeeds
+        // it stays uniquely owned (refcount 1) here - Arc::get_mut succeeds
         // without cloning first.
         let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .expect("out_b.data is freshly allocated and uniquely owned here");

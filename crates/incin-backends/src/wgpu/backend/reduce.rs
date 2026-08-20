@@ -76,7 +76,7 @@ pub(crate) fn reduce_dim_to_storage(
 /// around `dim`, i.e. `shape[..dim]`, `shape[dim]`, `shape[dim+1..]`
 /// products. For a contiguous row-major tensor this is enough to address
 /// any element directly (`outer_idx*(axis*inner) + axis_idx*inner + inner_idx`)
-/// without a general N-dimensional odometer — WGPU storage has no
+/// without a general N-dimensional odometer - WGPU storage has no
 /// non-contiguous view support, so this always applies.
 pub(crate) fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
     let outer: usize = incin_core::shapes::ShapeBuf::from_slice(&(shape[..dim]))
@@ -90,11 +90,11 @@ pub(crate) fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, us
 /// Backward for `max_dim`/`min_dim`: recomputes each output position's
 /// winning (first-encountered, strict `>`/`<`) source position from the
 /// captured input, then scatters `grad_out`'s value there with a bare `=`
-/// (never `+=` — unlike pooling, a plain axis reduction never has two output
+/// (never `+=` - unlike pooling, a plain axis reduction never has two output
 /// positions sharing the same winning source element). Mirrors the CPU
 /// backend's `max_axis_with_indices`/`min_axis_with_indices` +
 /// `scatter_axis_grad` (`cpu/ops/reduce/helpers.rs`) exactly. Not used for
-/// `max_keepdim`/`min_keepdim` — see their doc comments.
+/// `max_keepdim`/`min_keepdim` - see their doc comments.
 pub(crate) fn push_extremum_dim_tape_entry(
     t: &WgpuStorage,
     out: &WgpuStorage,

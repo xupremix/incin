@@ -4,7 +4,7 @@
 //! training process emits (via a future `Reporter` implementation, see
 //! `reporter.rs`) and that a separate `incin-viz` process will eventually
 //! deserialize over an out-of-process transport. No transport exists yet in
-//! this phase — only the type schema.
+//! this phase - only the type schema.
 
 /// Current wire schema version. Bump this whenever an event struct's shape
 /// changes in a way that is not backward-compatible for readers.
@@ -85,7 +85,7 @@ pub struct EpochEvent {
 /// `params` is a free-form bag with no automatic redaction: whatever a
 /// caller inserts is persisted verbatim in shareable JSONL telemetry output.
 /// Do not log secrets, credentials, or filesystem paths that shouldn't leave
-/// the machine — this event was designed for hyperparameters (learning
+/// the machine - this event was designed for hyperparameters (learning
 /// rate, batch size, model config), not arbitrary sensitive strings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HyperparamEvent {

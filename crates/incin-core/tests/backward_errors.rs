@@ -7,7 +7,7 @@
 //! Neither held. `BackwardFn` was `Fn(&S) -> Vec<S>`, so a recipe that could
 //! not produce a gradient had exactly one way to say so, and 115 sites across
 //! the three backends took it. And the NaN check was a second entry point,
-//! `Backend::backward_with_nan_check`, which panicked — so choosing it changed
+//! `Backend::backward_with_nan_check`, which panicked - so choosing it changed
 //! both *what was checked* and *what happened on failure*, and wanting the
 //! check without the abort had no spelling at all.
 //!
@@ -101,7 +101,7 @@ fn a_non_finite_gradient_is_a_returned_error() {
     assert_eq!(operation, NonFiniteSite::Contribution);
     // Which tensor is the entire value of checking. A report naming some
     // arbitrary id would satisfy a weaker assertion and still leave the caller
-    // bisecting the graph, so this names the operand whose gradient — 1/0 —
+    // bisecting the graph, so this names the operand whose gradient - 1/0 -
     // is the one that actually went bad.
     assert_eq!(tensor, numerator.get());
 }
@@ -155,7 +155,7 @@ fn nothing_in_the_backward_path_panics_any_more() {
 fn the_default_pass_does_not_look_at_gradient_values() {
     // Not merely "does not fail": the check must not run at all, or every
     // training step pays for a debugging aid. Asserted through the only
-    // observable difference — an unchecked pass over a non-finite gradient
+    // observable difference - an unchecked pass over a non-finite gradient
     // succeeds, where a checked one over the same tape does not.
     let (loss, _) = non_finite_chain();
     assert!(seeded_backward(&loss).is_ok());

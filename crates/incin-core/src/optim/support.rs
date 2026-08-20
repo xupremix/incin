@@ -28,7 +28,7 @@ pub(super) fn invalid_optimizer_config(operation: &'static str, reason: &'static
 /// Every optimizer here skips a parameter it has no gradient for, which is
 /// correct on its own: a parameter the forward pass did not use has nothing to
 /// apply. Skipping *every* parameter is a different event. It means the
-/// backward pass did not reach this group at all — because it was never run,
+/// backward pass did not reach this group at all - because it was never run,
 /// because the graph was detached, or because the tape that recorded the
 /// forward pass belongs to another thread and the reverse walk on this one
 /// found nothing to drain. In each case the previous behaviour was to commit

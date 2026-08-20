@@ -60,7 +60,7 @@ pub(crate) mod cuda {
     }
 
     /// Locates the CUDA toolkit's `include` directory so NVRTC can resolve
-    /// `#include <cuda_fp16.h>` / `<cuda_bf16.h>` — NVRTC has no default
+    /// `#include <cuda_fp16.h>` / `<cuda_bf16.h>` - NVRTC has no default
     /// header search path, unlike a host C++ compiler, so this must be
     /// passed explicitly via `--include-path`.
     pub(crate) fn cuda_include_paths() -> alloc::vec::Vec<String> {
@@ -122,7 +122,7 @@ pub(crate) mod cuda {
         /// cycle at the edges: when the last `Arc` for a device drops, the
         /// primary context is released, and the next retain pays full
         /// re-initialization. Measured on a GTX 1650 SUPER, that is 131 ms with
-        /// no context held against 1 us with one held — five orders of
+        /// no context held against 1 us with one held - five orders of
         /// magnitude, decided entirely by whether anything kept a handle.
         ///
         /// Holding one `Arc` per device here for the lifetime of the process is

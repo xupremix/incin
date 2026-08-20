@@ -99,8 +99,8 @@ macro_rules! cpu_descriptor_operations {
             // reads and writes f32, so a wider float claim here would be the
             // same over-claim FND-005 fixed for `conv1d`/`conv_transpose2d`/
             // `adaptive_avg_pool2d`). One row cannot state "operand 0 is
-            // integer, operand 1 is f32" — `dispatch::execute` applies the same
-            // dtype set to every operand in turn — so `INDEX_AND_F32_DTYPES` is the
+            // integer, operand 1 is f32" - `dispatch::execute` applies the same
+            // dtype set to every operand in turn - so `INDEX_AND_F32_DTYPES` is the
             // union of both, the loosest set the row can honestly claim, the
             // same trick `descriptor_min_rank` already uses for rank. The
             // descriptor's own per-operand contract refuses an integer weight
@@ -174,8 +174,8 @@ macro_rules! cpu_descriptor_operations {
             // The composed reductions whose operands split into a float and an
             // integer index, which is the one thing keeping them out of the
             // group above: `cross_entropy_loss` takes f32 logits and integer
-            // class targets, so its row carries `INDEX_AND_F32_DTYPES` — the
-            // union of the two — for exactly the reason `embedding`'s does.
+            // class targets, so its row carries `INDEX_AND_F32_DTYPES` - the
+            // union of the two - for exactly the reason `embedding`'s does.
             // The descriptor's per-operand contract (`operand_ranks` gives
             // logits rank 2 and targets rank 1, and `index_input` names
             // operand 1 as the integer one) refuses a swapped or mistyped pair
@@ -211,7 +211,7 @@ macro_rules! cuda_descriptor_operations {
             // they route through `HostInterop::from_bytes`, a plain
             // byte-length-checked host-to-device upload with no kernel
             // launch and no dtype-width assumption, genuinely wider than
-            // the `F32_ONLY` this group's other five members are stuck at —
+            // the `F32_ONLY` this group's other five members are stuck at -
             // so they get their own standalone rows in `legacy` below
             // instead of a shared one that would either overclaim for
             // `zeros`/`ones`/etc or underclaim for these two.
@@ -247,7 +247,7 @@ macro_rules! cuda_descriptor_operations {
             // `where_cond`/`masked_fill` are not here: unlike the six
             // comparisons, both take a `bool` operand (the mask) *alongside*
             // an `f32` one, and this group's shared row cannot state a
-            // per-operand dtype pair — `dispatch::execute` checks every
+            // per-operand dtype pair - `dispatch::execute` checks every
             // operand against the one resolved row. `F32_ONLY` here would
             // make the mask operand fail admission before either kernel
             // launches, so they get their own standalone `F32_AND_BOOL` rows
@@ -258,7 +258,7 @@ macro_rules! cuda_descriptor_operations {
             ],
             // Every one of these rewrites into `reshape`/`broadcast_as`/
             // `narrow`/`concat`/`unsqueeze` rather than running a kernel of
-            // its own, pushing zero new tape entries — the composite's
+            // its own, pushing zero new tape entries - the composite's
             // backward is the tape replay over whichever primitives it
             // called, the same reasoning `softmax`/`rms_norm` above rely on.
             composed_tensor = [
@@ -289,7 +289,7 @@ macro_rules! wgpu_descriptor_operations {
             $($args)*;
             // The unary activations here are not new kernels. `wgpu/executor.rs`
             // has implemented `Execute` for every one of them, against the op
-            // modes in `shaders/unary.wgsl`, since the executor was written —
+            // modes in `shaders/unary.wgsl`, since the executor was written -
             // they were simply never listed here, so the capability query
             // answered `Unsupported` and no caller could reach them. A shader
             // with no capability row is dead code that reads as coverage, which

@@ -1,4 +1,4 @@
-//! Runtime model statistics (parameter count, multiply-accumulates) — the v1
+//! Runtime model statistics (parameter count, multiply-accumulates) - the v1
 //! ("ships now, not `const`") half of `docs/growth/04-compile-time-stats.md`.
 //! `ComputeStats` is auto-derived for every `#[module]` struct (summing each
 //! field's contribution, exactly like `NamedLayers` and state traversal; a
@@ -10,7 +10,7 @@
 //! parameter counts are exact for every model (they're just element counts,
 //! independent of batch size or spatial input size). MAC counts are exact
 //! for `Linear` (its formula only needs its own weight shape) but are **not
-//! yet computed for `Conv1d`/`Conv2d`** (0, not "unknown") — their MACs
+//! yet computed for `Conv1d`/`Conv2d`** (0, not "unknown") - their MACs
 //! formula additionally needs the input's spatial size, which isn't part of
 //! a conv layer's own stored state and isn't available without either a real
 //! forward pass or v2's type-level shape propagation. Both are out of scope
@@ -27,13 +27,13 @@ use crate::tensor::dtype::DType;
 /// pass at a given batch size.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LayerStats {
-    /// Number of trainable parameter elements (buffers — e.g. BatchNorm's
-    /// running mean/var — are deliberately excluded, matching
+    /// Number of trainable parameter elements (buffers - e.g. BatchNorm's
+    /// running mean/var - are deliberately excluded, matching
     /// the typed `VisitParameters` traversal's trainable-only convention).
     pub params: u64,
     /// Multiply-accumulate operations for one forward pass at the batch
     /// size `compute_stats` was called with. 0 for layers with no known
-    /// formula yet (see module docs) — not the same as "no compute at all."
+    /// formula yet (see module docs) - not the same as "no compute at all."
     pub macs: u64,
 }
 
@@ -69,7 +69,7 @@ pub struct ModelStats {
     pub params: u64,
     /// Total multiply-accumulate operations for one forward pass.
     pub macs: u64,
-    /// `2 * macs` — the conventional FLOPs figure.
+    /// `2 * macs` - the conventional FLOPs figure.
     pub flops: u64,
 }
 
@@ -85,7 +85,7 @@ pub trait ComputeStats {
     fn compute_stats(&self, batch: u64) -> LayerStats;
 
     /// Convenience entry point: `model.stats(batch)` instead of
-    /// `model.compute_stats(batch).into_model_stats()`. Not overridable —
+    /// `model.compute_stats(batch).into_model_stats()`. Not overridable -
     /// every implementor gets this for free.
     fn stats(&self, batch: u64) -> ModelStats {
         self.compute_stats(batch).into_model_stats()
@@ -156,7 +156,7 @@ macro_rules! impl_zero_compute_stats {
 }
 impl_zero_compute_stats!(ReLU, GELU, Swish, Sigmoid, Tanh, Softmax);
 
-/// Aggregates a slice of already-computed per-field [`LayerStats`] — a tiny
+/// Aggregates a slice of already-computed per-field [`LayerStats`] - a tiny
 /// helper so `#[module]`'s generated code has one place to sum, matching
 /// the style of [`crate::nn::module::format_layer_summary`]'s helpers.
 pub fn sum_stats(items: &[LayerStats]) -> LayerStats {

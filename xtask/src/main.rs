@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo xtask <task>`. These are developer tools, not part of the
 //! published `incin` API, which is why they live in a `publish = false` crate
-//! rather than in `cargo-incin` — a binary target shares its crate's
+//! rather than in `cargo-incin` - a binary target shares its crate's
 //! dependencies, so putting a TOML parser in `crates/incin` would put it in
 //! every downstream user's dependency graph.
 

@@ -1,4 +1,4 @@
-//! `cargo incin tune` — autotune cache management report (`UX-006`).
+//! `cargo incin tune` - autotune cache management report (`UX-006`).
 
 /// Process exit code for a successful tune command.
 pub const EXIT_OK: i32 = 0;

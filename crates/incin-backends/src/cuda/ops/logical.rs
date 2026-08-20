@@ -4,7 +4,7 @@
 //! and write `bool` throughout, one byte per element, which the generic
 //! pointwise pipeline (float-typed) cannot answer. Unlike `compare`
 //! (f32 -> bool) or `select` (bool + f32 -> f32), every operand here is
-//! `bool`, so the capability row is `Bool`-only — no dtype union needed the
+//! `bool`, so the capability row is `Bool`-only - no dtype union needed the
 //! way `where_cond`/`masked_fill`'s `F32_AND_BOOL` was.
 //!
 //! Broadcasting the two binary operands to one shape is the caller's job

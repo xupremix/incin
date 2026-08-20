@@ -6,7 +6,7 @@
 //! backend must either repeat the frontend's work or assume it happened.
 //!
 //! The layer here is the missing middle. An operation is resolved *once* into a
-//! descriptor — a plain, inspectable struct holding the output shape, the
+//! descriptor - a plain, inspectable struct holding the output shape, the
 //! iteration geometry, and the launch parameters that follow from the shape
 //! proof. Backends read the descriptor and trust it.
 //!

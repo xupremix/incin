@@ -37,7 +37,7 @@
 //! # What this row does not do
 //!
 //! `ParallelStrategy` and the plan objective are `DST-011`'s, and `.explain()`
-//! as a rendered planning report is `UX-005`'s — which depends on both this row
+//! as a rendered planning report is `UX-005`'s - which depends on both this row
 //! and `DST-011`. Multi-device *execution* needs `DST-005`'s collectives. This
 //! module therefore plans and validates a multi-device run and refuses to
 //! pretend it can execute one: [`Trainer::fit`] on a multi-device plan is an

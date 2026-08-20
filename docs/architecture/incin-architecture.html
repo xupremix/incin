@@ -41,7 +41,7 @@
   </noscript>
   <style>
     /* ==========================================================
-       THEME VARIABLES — switch by toggling [data-theme] on <html>
+       THEME VARIABLES - switch by toggling [data-theme] on <html>
        ========================================================== */
     :root,
     [data-theme="dark"] {
@@ -128,7 +128,7 @@
     }
 
     /* ==========================================================
-       SIGNAL FLOW — an opt-in, motion-forward visual preset.
+       SIGNAL FLOW - an opt-in, motion-forward visual preset.
        The variables also target a standalone exported SVG, whose
        root carries data-preset and data-theme directly.
        ========================================================== */
@@ -196,7 +196,7 @@
     }
 
     /* ==========================================================
-       BLUEPRINT — a review-first drafting preset for deployment,
+       BLUEPRINT - a review-first drafting preset for deployment,
        infrastructure, and technical design documentation. It keeps
        the same semantic palette and geometry while trading glow for
        precise grid contrast, squared materials, and drafting marks.
@@ -272,7 +272,7 @@
     }
 
     /* ==========================================================
-       EDITORIAL — a warm, publication-minded preset for design
+       EDITORIAL - a warm, publication-minded preset for design
        reviews, launch notes, and documentation. The diagram keeps
        the same semantic palette and exact geometry, but trades
        software chrome for paper, ink, ruled structure, and one
@@ -2730,7 +2730,7 @@
     html[data-preset="blueprint"] .guided-view-chapter,
     html[data-preset="blueprint"] .guided-view-chapter-index { border-radius: 0.12rem !important; }
 
-    /* Story Shelf — keep every authored chapter and the Play action visible,
+    /* Story Shelf - keep every authored chapter and the Play action visible,
        but do not spend a second row on unavailable director controls before
        the reader enters a chapter. Existing data-active-view state expands
        the full guided surface without a new toggle or stored preference. */
@@ -2868,7 +2868,7 @@
     .card li { margin-bottom: 0.375rem; }
 
     /* ==========================================================
-       Print stylesheet — hide interactive controls, force light,
+       Print stylesheet - hide interactive controls, force light,
        drop the grid so the diagram doesn't waste ink, use landscape
        so wide diagrams fit, pack summary cards into 2 columns to
        avoid an orphan card on a trailing page.
@@ -2876,8 +2876,8 @@
     @page { size: landscape; margin: 1.5cm; }
 
     @media print {
-      /* Force the FULL light palette — including component fills/strokes and
-         lane/arrow colors — so printing from dark theme doesn't put neon
+      /* Force the FULL light palette - including component fills/strokes and
+         lane/arrow colors - so printing from dark theme doesn't put neon
          strokes and translucent dark fills on white paper. */
       :root, [data-theme="dark"], [data-theme="light"] {
         --bg: #ffffff;
@@ -3453,7 +3453,7 @@
       font-size: 0.55rem;
     }
 
-    /* Toast — brief feedback for actions like "copied" */
+    /* Toast - brief feedback for actions like "copied" */
     .archify-toast {
       position: fixed;
       top: 1rem;
@@ -3841,7 +3841,7 @@
     }
 
     /* ==========================================================
-       SVG SEMANTIC CLASSES — use these instead of inline fill/stroke
+       SVG SEMANTIC CLASSES - use these instead of inline fill/stroke
        ========================================================== */
     .c-grid       { stroke: var(--grid); fill: none; }
     .c-mask       { fill: var(--mask); stroke: none; }
@@ -5361,7 +5361,7 @@
     }
 
     /* ============================================================
-       Visual style try-on — one topology, four bundled presets.
+       Visual style try-on - one topology, four bundled presets.
        The reader's choice is intentionally session-only: it updates the
        live page and canonical SVG together, but never rewrites the source,
        URL, or a later diagram's authored default.
@@ -5472,7 +5472,7 @@
     })();
 
     /* ============================================================
-       Theme toggle — persists to localStorage, respects system pref
+       Theme toggle - persists to localStorage, respects system pref
        ============================================================ */
 
     Archify.theme = (function () {
@@ -5537,7 +5537,7 @@
     })();
 
     /* ============================================================
-       Export — Share Card / PNG / JPEG / WebP / SVG / WebM and clipboard
+       Export - Share Card / PNG / JPEG / WebP / SVG / WebM and clipboard
 
        Raster exports are always rendered at 4x source resolution for
        maximum sharpness. The trick: we set the serialized SVG's
@@ -5575,12 +5575,12 @@
        * Serialize the main SVG into a standalone document.
        *
        * Two modes:
-       * - Default (opts.autoTheme=false) — locks the serialized SVG to the
+       * - Default (opts.autoTheme=false) - locks the serialized SVG to the
        *   viewer's current theme. Used by the raster pipeline
        *   (PNG/JPEG/WebP/clipboard) because canvas rasterization needs
        *   deterministic colors; a raster cannot react to
        *   prefers-color-scheme after encoding.
-       * - autoTheme=true — emits BOTH dark and light variable sets plus a
+       * - autoTheme=true - emits BOTH dark and light variable sets plus a
        *   `@media (prefers-color-scheme)` rule so the resulting SVG
        *   self-themes when embedded in GitHub READMEs or other hosts that
        *   expose a color scheme. Used for "Download SVG".
@@ -5946,7 +5946,7 @@
           : null;
         // Scale width/height so the browser rasterizes the vectors at target
         // resolution directly. viewBox stays unchanged so coordinates don't
-        // shift. This is the key to sharp rasters — do NOT scale later via
+        // shift. This is the key to sharp rasters - do NOT scale later via
         // canvas upscaling.
         clone.setAttribute('width', vb.width * scale);
         clone.setAttribute('height', vb.height * scale);
@@ -6125,7 +6125,7 @@
         // Serialize at a safe scale (RASTER_SCALE=4 by default, reduced if the
         // resulting canvas would exceed MAX_CANVAS_PIXELS). The SVG itself is
         // rasterized at target resolution natively; drawImage draws at natural
-        // size — no upsampling blur.
+        // size - no upsampling blur.
         var svg = document.querySelector('.diagram-container svg');
         var vb = svg.viewBox.baseVal;
         var scale = pickSafeScale(vb.width, vb.height);
@@ -6145,7 +6145,7 @@
                 ctx.fillStyle = currentBg();
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
               }
-              // Draw at natural size — SVG was already rasterized at target res.
+              // Draw at natural size - SVG was already rasterized at target res.
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(svgUrl);
               var mime = format === 'jpeg' ? 'image/jpeg' :
@@ -6956,7 +6956,7 @@
     })();
 
     /* ============================================================
-       Motion Governor — one reader switch and one motion budget. Ambient
+       Motion Governor - one reader switch and one motion budget. Ambient
        trace yields to the strongest semantic owner; Still also parks bounded
        viewer signals without discarding their static meaning.
        ============================================================ */
@@ -7291,7 +7291,7 @@
     Archify.sourceEvidence.installBeacons();
 
     /* ============================================================
-       Explore — stable-ID neighborhood focus + dependency-free pan/zoom.
+       Explore - stable-ID neighborhood focus + dependency-free pan/zoom.
        Renderer IDs become deep-linkable semantic hooks without turning the
        standalone artifact into a canvas editor.
        ============================================================ */
@@ -8654,7 +8654,7 @@
     })();
 
     /* ============================================================
-       Intent Trace — temporary one-hop topology before durable focus.
+       Intent Trace - temporary one-hop topology before durable focus.
        Fine-pointer hover and keyboard focus share the same stable-ID preview;
        touch continues directly to the existing click-to-focus contract.
        ============================================================ */
@@ -9168,7 +9168,7 @@
           button.setAttribute('aria-pressed', 'false');
           button.setAttribute('tabindex', index === 0 ? '0' : '-1');
           button.setAttribute('aria-label', 'Open chapter ' + (index + 1) + ' of ' + views.length + ': ' + view.label + ', ' + view.focus.length + ' stops');
-          button.title = view.label + ' — ' + (view.note || view.focus.length + ' selected nodes');
+          button.title = view.label + ' - ' + (view.note || view.focus.length + ' selected nodes');
           var position = document.createElement('span');
           position.className = 'guided-view-chapter-index';
           position.setAttribute('aria-hidden', 'true');
@@ -9212,7 +9212,7 @@
             deltaLabel.hidden = true;
             button.removeAttribute('data-chapter-delta');
             button.setAttribute('aria-label', 'Current chapter ' + (index + 1) + ' of ' + views.length + ': ' + views[index].label + ', ' + views[index].focus.length + ' stops');
-            button.title = views[index].label + ' — current chapter, ' + views[index].focus.length + ' stops';
+            button.title = views[index].label + ' - current chapter, ' + views[index].focus.length + ' stops';
           } else {
             var delta = chapterDelta(activeIndex >= 0 ? views[activeIndex] : null, views[index]);
             var compact = '=' + delta.stay.length + ' +' + delta.enter.length + ' \u2212' + delta.leave.length;
@@ -9224,7 +9224,7 @@
             deltaLabel.querySelector('[data-delta-kind="leave"]').textContent = '\u2212' + delta.leave.length;
             button.setAttribute('data-chapter-delta', compact);
             button.setAttribute('aria-label', 'Open chapter ' + (index + 1) + ' of ' + views.length + ': ' + views[index].label + '. Chapter focus delta: ' + expanded);
-            button.title = views[index].label + ' — ' + compact + ' chapter focus';
+            button.title = views[index].label + ' - ' + compact + ' chapter focus';
           }
           if (current) button.setAttribute('aria-current', 'step');
           else button.removeAttribute('aria-current');
@@ -10510,7 +10510,7 @@
     })();
 
     /* ============================================================
-       Adaptive Reader Shell — one diagram across laptop and monitor.
+       Adaptive Reader Shell - one diagram across laptop and monitor.
        The canonical SVG and viewBox never change. On ordinary desktop pages,
        wide diagrams receive only enough outer width to use the available
        height without pushing summary cards below the viewport. Mobile,
@@ -11147,7 +11147,7 @@
     })();
 
     /* ============================================================
-       Semantic Radar — simplified semantic bounds + live viewport.
+       Semantic Radar - simplified semantic bounds + live viewport.
        The radar is built at runtime so the checked artifact still contains
        one canonical SVG block, and export serialization remains untouched.
        ============================================================ */
@@ -11427,7 +11427,7 @@
     })();
 
     /* ============================================================
-       Presentation Stage — a shareable, viewport-filling live view.
+       Presentation Stage - a shareable, viewport-filling live view.
        It changes only HTML layout and URL state; SVG semantics and export
        serialization remain untouched. Escape first clears an active guided
        view/focus, then exits the stage.
@@ -11501,7 +11501,7 @@
     })();
 
     /* ============================================================
-       Node Finder — stable-ID search over the existing semantic SVG.
+       Node Finder - stable-ID search over the existing semantic SVG.
        Search never changes the IR or SVG geometry: selecting a result resets
        the viewport, releases a guided view, and delegates to semantic focus.
        ============================================================ */
@@ -11761,7 +11761,7 @@
     })();
 
     /* ============================================================
-       Route Probe — shortest directed path over compiled semantics.
+       Route Probe - shortest directed path over compiled semantics.
        The graph is read from renderer-owned stable IDs and relationship
        endpoints. BFS order follows authored DOM edge order, so equal-length
        choices are deterministic without adding weights or a graph runtime.
@@ -12774,7 +12774,7 @@
     })();
 
     /* ============================================================
-       Semantic Lens — a counted, viewer-only legend over data-node-kind.
+       Semantic Lens - a counted, viewer-only legend over data-node-kind.
        One selected kind reveals every authored relationship touching it.
        Two selected kinds compare only direct cross-kind relationships while
        preserving the full diagram as a dimmed spatial reference.
@@ -13440,7 +13440,7 @@
     })();
 
     /* ============================================================
-       Diagram Guide — a factual command deck over existing interactions.
+       Diagram Guide - a factual command deck over existing interactions.
        Counts come from compiled semantics; actions delegate to Finder, Route
        Probe, Semantic Radar, Semantic Lens, Story Trail, Presentation, theme, export, and
        camera without adding a second command implementation or SVG state.

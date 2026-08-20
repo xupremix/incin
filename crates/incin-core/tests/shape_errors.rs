@@ -6,7 +6,7 @@
 //!
 //! These run as an *integration* test on purpose. It proves the type is
 //! reachable from outside the crate through `incin_core::prelude`, which is the
-//! only path a downstream caller has — `shapes` itself is `pub(crate)`.
+//! only path a downstream caller has - `shapes` itself is `pub(crate)`.
 
 use incin_core::prelude::{
     Axis, DimensionConstraint, Error, OperationKind, RankExpectation, ShapeError,

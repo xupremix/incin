@@ -135,7 +135,7 @@ and `stride == 0` is invalid. Verified instances, all reachable from safe APIs:
 | Site | Defect |
 |---|---|
 | `shapes/spatial.rs:112-113` | The formula above written in raw unchecked arithmetic. Underflows when the receptive field exceeds the padded input; divides by zero when `stride == 0`. |
-| `shapes/spatial.rs:100-102` | Static `Pool2dShape` returns `(input.0, input.1, Default::default(), Default::default())` — the spatial dimensions are silently **zeroed** for any runtime-carrying dim type (a `usize` axis or a `dim!` name). |
+| `shapes/spatial.rs:100-102` | Static `Pool2dShape` returns `(input.0, input.1, Default::default(), Default::default())` - the spatial dimensions are silently **zeroed** for any runtime-carrying dim type (a `usize` axis or a `dim!` name). |
 | `shapes/spatial.rs:154`, `:221` | `COut::from_size(out_channels).unwrap()` on the convolution channel dimension. |
 | `tensor/ops/manipulation.rs`, `tensor/ops/reduce.rs` | Roughly 30 `from_dyn(...).unwrap()` sites after reshape, flatten, transpose, and reduction shape computation. |
 
@@ -167,7 +167,7 @@ The clearest instance: `Shape` is implemented for tuple ranks **1–8**, but
 `ElementCount` (`shapes/reshape.rs:12-50`) is implemented only for ranks
 **0–4**. Because `ReshapeShape` is blanket-implemented over `ElementCount`,
 a static reshape between two rank-5 shapes has **no element-count proof at
-all** — the shape is representable, the operation is logically valid, and the
+all** - the shape is representable, the operation is logically valid, and the
 trait simply does not exist.
 
 The rank cap itself is acceptable on stable Rust. The flaw is having multiple
@@ -197,7 +197,7 @@ type Output = <Input as Flatten<1, 2>>::Output;
 ```
 
 The issues to fix are range diagnostics, generated-rank coverage, checked
-runtime products for mixed shapes, and contiguity/materialization policy—not
+runtime products for mixed shapes, and contiguity/materialization policy - not
 the use of const axis indices.
 
 #### 1.1.6 The backend interface conflates storage, capabilities, and execution
@@ -260,8 +260,8 @@ and traversal should not be duplicated.
 #### 1.1.9 Layout metadata is repetitive and inconsistent
 
 **Architectural limitation and performance opportunity.** All three storages
-carry the same `Vec<usize>` shape/stride pair — `cpu/storage.rs:198`,
-`cuda/storage.rs:47`, `wgpu/storage.rs:95` — with no shared layout module and,
+carry the same `Vec<usize>` shape/stride pair - `cpu/storage.rs:198`,
+`cuda/storage.rs:47`, `wgpu/storage.rs:95` - with no shared layout module and,
 in WGPU's case, no offset field.
 
 CPU and CUDA storage track shape, strides, and offset. WGPU has a more
@@ -369,7 +369,7 @@ where
     L: BroadcastShape<R>,
     R: Shape,
 {
-    // Not a second opinion about the output shape — the same one.
+    // Not a second opinion about the output shape - the same one.
     type Output = <L as BroadcastShape<R>>::Output;
     type Args = ();
     type Descriptor = BroadcastSpec;
@@ -500,7 +500,7 @@ compile-only CUDA CI path.
 not current behavior.** `SupportsDType<K>`
 (`crates/incin-core/src/tensor/backend.rs:61-66`) exists, but its single method
 has a blanket default body that forwards to `K::to_incin` and never rejects
-anything — so today it proves nothing at compile time, and every unsupported
+anything - so today it proves nothing at compile time, and every unsupported
 dtype is discovered at runtime. The proposed `Execute<O>` split makes static
 dtype/operation rejection a trait-resolution failure instead. `SHP-001`
 inventories every case that still falls back to runtime capability rejection;
@@ -786,9 +786,9 @@ conv2d(F16, NCHW) is unsupported on wgpu for training
 
 reason: F16 shader capability is unavailable on adapter "..."
 available paths:
-  - enable feature `cuda` and select a CUDA device
-  - use F32 on WGPU
-  - enable explicit CPU fallback with FallbackPolicy::AllowTransfer
+ - enable feature `cuda` and select a CUDA device
+ - use F32 on WGPU
+ - enable explicit CPU fallback with FallbackPolicy::AllowTransfer
 ```
 
 Use `#[track_caller]` at public fallible entry points so errors can identify the
@@ -873,7 +873,7 @@ current-features table above when its task lands it.
 | Feature | Task | Status | Notes |
 |---|---|---|---|
 | `external-candle` | GOV-006 | rename of `candle` | `candle` is retained as a deprecated alias for one release |
-| `cuda-vendor` | PRF-004 | new | Gates cuBLASLt/cuDNN call sites. `cudarc` is already built with the `cublas` and `cudnn` features, but **no call site exists today** — this is greenfield, not a toggle |
+| `cuda-vendor` | PRF-004 | new | Gates cuBLASLt/cuDNN call sites. `cudarc` is already built with the `cublas` and `cudnn` features, but **no call site exists today** - this is greenfield, not a toggle |
 | `metal` | MTL-001 | new | Native Metal on Apple targets |
 | `metal-mps` | MTL-003 | new | MPS/MPSGraph structured primitives. Implies `metal` |
 | `distributed-reference` | DST-005 | new | Deterministic CPU reference collectives, for conformance tests |
@@ -883,7 +883,7 @@ current-features table above when its task lands it.
 The rename table is the migration contract: `candle` → `external-candle`, with
 `candle = ["external-candle"]` kept until `REL-002`. Third-party runtimes live
 under an `external-*` namespace. A backend is called "legacy" only if it is
-deprecated and scheduled for removal — being external is not being legacy.
+deprecated and scheduled for removal - being external is not being legacy.
 
 Feature documentation must state:
 
@@ -1126,8 +1126,8 @@ distributed code and remains internal to automatically compiled graphs:
 
 ```rust
 /// The compile-time placement typestates. `Placement` is a trait: it is only
-/// ever a bound on the `P` type parameter. Its runtime counterpart — the value
-/// stored inside descriptors and reported by diagnostics — is the
+/// ever a bound on the `P` type parameter. Its runtime counterpart - the value
+/// stored inside descriptors and reported by diagnostics - is the
 /// `PlacementKind` enum below. The two are deliberately distinct names.
 pub trait Placement {
     /// The runtime projection of this typestate, used in descriptors.
@@ -1150,7 +1150,7 @@ pub enum PlacementKind {
 }
 
 /// `StorageBackend` is defined once, in §1.2.4. This is the placement half of
-/// that same contract, shown here for readability — it is not a second trait.
+/// that same contract, shown here for readability - it is not a second trait.
 /// `<B as StorageBackend<P>>::Storage<K>` varies by placement: `Local` owns one
 /// storage, while a distributed placement owns or references a validated shard set.
 pub struct Tensor<S, B, K, G, P = Local>
@@ -1181,8 +1181,8 @@ fifth defaulted parameter is source-compatible with every existing use.
 
 Normal code continues to write `Tensor<S, B, K, G>`. Expert code may name
 `Tensor<S, B, K, G, Sharded<MyMesh, Hidden>>`, but inference and `placement!`
-should normally avoid spelling it. The method vocabulary—`matmul`, `relu`,
-`reshape`, `backward`, serialization, and inspection—remains one API.
+should normally avoid spelling it. The method vocabulary - `matmul`, `relu`,
+`reshape`, `backward`, serialization, and inspection - remains one API.
 
 Automatic compiled execution accepts ordinary local inputs, scatters or
 reshards at the compiled boundary, keeps intermediate placement in its IR, and
@@ -1324,8 +1324,8 @@ all-to-all with its inverse permutation, and pipeline send with receive.
 All-reduce backward preserves the specified scaling semantics. Saved tensors
 carry mesh and placement identity; cross-mesh gradient accumulation is rejected.
 
-FSDP adds parameter lifecycle states—sharded, gathered, in-use, and
-releasable—to the memory planner. Prefetch respects graph dependencies and a
+FSDP adds parameter lifecycle states - sharded, gathered, in-use, and
+releasable - to the memory planner. Prefetch respects graph dependencies and a
 hard memory-headroom policy.
 
 #### Scheduling, failure behavior, and planning UX
@@ -1640,9 +1640,9 @@ global output dimension `Qkv` resolved to 8192, which is not divisible by 3
 annotation: #[shard(column)] at src/model.rs:18
 
 options:
-  - use tensor parallel degree 2 or 4
-  - select PadAndMask explicitly
-  - leave this layer replicated
+ - use tensor parallel degree 2 or 4
+ - select PadAndMask explicitly
+ - leave this layer replicated
 ```
 
 Every compiled run can export a reproducibility manifest containing crate and
@@ -1804,7 +1804,7 @@ epilogue choices.
 This is greenfield work, not a switch to flip. `cudarc` is already declared
 with its `cublas` and `cudnn` features
 (`crates/incin-backends/Cargo.toml`), but there is **no vendor-library call
-site anywhere in the CUDA backend today** — every CUDA operation runs an
+site anywhere in the CUDA backend today** - every CUDA operation runs an
 Incin-generated kernel. `PRF-004` writes the first ones.
 
 Use Incin-generated kernels for:
@@ -2400,8 +2400,8 @@ This is the implementation handoff contract. Snapshot: **2026-07-29**.
 `EXE-008` is complete, and its CUDA half is no longer compile-verified only. It
 has run on a GeForce GTX 1650, and the run paid for itself immediately. Sixty-one
 of the sixty-three hardware tests passed unchanged, but the CUDA quantize path
-sized its output with a literal `size_of::<BlockQ8_0>()` — the exact hardcoded
-width this row exists to remove — and recorded `CudaBuffer::len` in blocks where
+sized its output with a literal `size_of::<BlockQ8_0>()` - the exact hardcoded
+width this row exists to remove - and recorded `CudaBuffer::len` in blocks where
 every other CUDA buffer records logical elements. A `[2, 32]` `Q8_0` tensor
 therefore declared sixty-four elements over a two-element allocation, which
 `EXE-004`'s bounds check refused. Both sites now go through
@@ -2411,8 +2411,8 @@ whose byte length is not a width, in the one file that had not been migrated to
 the checked helper, is the argument for hardware evidence in one sentence: the
 compiler had signed off on all of it.
 `EXE-004`'s CUDA deviation is discharged by the same run. It recorded
-`Alignment::BYTE` for every CUDA tensor, which was true — `CudaSlice<u8>` proves
-exactly one byte — and useless, because a kernel choosing between a scalar and a
+`Alignment::BYTE` for every CUDA tensor, which was true - `CudaSlice<u8>` proves
+exactly one byte - and useless, because a kernel choosing between a scalar and a
 vector load would have taken the scalar path forever. Eleven awkward allocation
 sizes measured on the device all come back 256-byte aligned, matching what the
 CUDA C Programming Guide promises, so the recorded guarantee is now 256 and a
@@ -2487,7 +2487,7 @@ ran for the first time and found that `ci.yml`'s own Clippy Lints step was
 failing on `develop`. `DTypeId::size_bytes`, added by `EXE-008`, spells a
 divisibility test as a remainder comparison, which clippy 1.92 rejects under
 `-D warnings`; nine further findings sat behind it in `EXE-008`'s and `SHP-007`'s
-code. All are fixed, or allowed with the reason written at the site — the fuzz
+code. All are fixed, or allowed with the reason written at the site - the fuzz
 seeds spell their case in ASCII and clippy's regrouping would destroy that, and
 `DispatchVar`'s size spread follows from `SHP-003` inlining tensor metadata,
 which is the allocation that row exists to remove. `cargo clippy` now exits zero
@@ -2510,19 +2510,19 @@ because that requires descriptor coverage the schema does not yet supply.
 Coverage has since grown from one operation to five. `ReshapeSpec` and
 `Conv2dSpec` came first, alongside the `MatMulSpec` slice `EXE-007` and
 `EXE-008` established, on CPU and WGPU under test, on dispatch through the
-backend holding the operands, and — for reshape — on Candle. CUDA implements
+backend holding the operands, and - for reshape - on Candle. CUDA implements
 both; its descriptor executors are compile-verified only, though the operations
 they route to are now covered by the `EXE-008` hardware run. Two defects
 surfaced there. `DispatchBackend` had no public constructor, so its descriptor
 executors were unreachable from outside the crate; and WGPU's biased `conv2d`
 and `conv1d` added a `[1, C_out, 1, 1]` bias through an elementwise `add` that
-requires equal shapes, which fails for every biased convolution — the bias is
+requires equal shapes, which fails for every biased convolution - the bias is
 now stretched to the output shape first.
 `ReductionSpec` and `Pool2dSpec` followed, once the question they were blocked
 on was answered: both describe a loop and neither said what runs inside it, so
 neither was a complete request. They now name it. `ReduceOp` is closed at the
-five accumulations whose result has the shape the descriptor derives — `argmax`
-returns indices and `cumsum` collapses nothing, so neither is expressible —
+five accumulations whose result has the shape the descriptor derives - `argmax`
+returns indices and `cumsum` collapses nothing, so neither is expressible - 
 and `PoolOp` is separate from it because `Average` over a padded window is not
 `Mean` over the elements present. Both arrive through `ShapeRule::Args`, which
 is where `Conv2dArgs` already puts grouping, on the same grounds: the shape
@@ -2556,14 +2556,14 @@ described an operation that nothing could construct and nothing would execute.
 Refusing it had been justified on the grounds that repeated single-axis calls
 would change the accumulation order for `mean` and the intermediate range for
 `prod`. Every `ReduceOp` accumulation is associative, so the sequence gives the
-same answer as the whole in exact arithmetic — averaging over a run of length `a`
-and then one of length `b` divides by `a * b` either way — and what actually
+same answer as the whole in exact arithmetic - averaging over a run of length `a`
+and then one of length `b` divides by `a * b` either way - and what actually
 differs is floating-point rounding, which is a ULP-level difference rather than a
 semantic one. Each step now keeps the axis it reduced at length 1, so indices
 never shift under the loop, and one reshape at the end drops them.
 `ReduceAllRule` is what makes that reachable. Total reduction had no descriptor
-at all, which meant the operation every training step ends with — turning a loss
-into a scalar — was the one operation that could not be expressed as one. Its
+at all, which meant the operation every training step ends with - turning a loss
+into a scalar - was the one operation that could not be expressed as one. Its
 output is `Scalar`, rank 0, so the `[1]` stand-in `EXE-005` caught WGPU returning
 is rejected by the rule rather than by a backend.
 Removing the adapter itself is what remains. That is not a descriptor gap any
@@ -2575,9 +2575,9 @@ batched driver used to expand both operands to the broadcast shape and reshape
 them before looping, which is metadata-only for a contiguous operand and a full
 copy for any other one, so a `[1, 3, 4]` weight batched against `[64, 4, 5]`
 activations was copied sixty-four times before a single multiply. It now builds
-one `IterationPlan` over the batch axes alone — the same normalization
+one `IterationPlan` over the batch axes alone - the same normalization
 `crate::iteration` already performs for elementwise ops, not a second copy of
-the broadcast rule — and reads each slice in place from a base offset. The
+the broadcast rule - and reads each slice in place from a base offset. The
 rank-2 kernels moved with it, onto a `MatrixView` that is three numbers instead
 of a `CpuStorage::get` call resolving a logical multi-index against heap
 shape and stride vectors once per element. Measured on this host against a
@@ -2602,7 +2602,7 @@ table implied. It binds `matrixmultiply`, a pure-Rust blocked GEMM, rather than
 a system CBLAS. Neither machine this repository has been developed on carries
 the development package a system binding would link against, and `REL-002`
 verifies with `--all-features`, so that binding would have been a feature
-nobody here could build, tested by compilation on a host that never ran it —
+nobody here could build, tested by compilation on a host that never ran it - 
 the exact standard the CUDA rows were just held to. Binding something that
 compiles everywhere is what lets CI run its parity tests on every push instead.
 Its dispatch is asserted rather than assumed: the blocked path is proven to
@@ -2662,7 +2662,7 @@ signatures that `EXE-009` is still removing.
 them. Five jobs each pinned one feature set, which left most of what a dependent
 can actually write in a `Cargo.toml` untested, and the first powerset run found
 the consequence immediately: `incin-backends` with `cpu` and without `std` had
-never compiled. Not broke recently — the CPU kernels reach for `Vec` and `Box`
+never compiled. Not broke recently - the CPU kernels reach for `Vec` and `Box`
 through the std prelude and the autograd tape is a `thread_local!`, so a hundred
 and four errors say that documented pair was never once buildable. `cpu` now
 declares `std` the way `cuda` and `wgpu` already did, and the feature inventory
@@ -2709,14 +2709,14 @@ rather than supplied per impl, so a marker cannot claim it tracks gradients and
 then decline to record.
 
 The design turns on one asymmetry, and the tests are what hold it. An operand's
-mode may only *tighten* the ambient one — `GradMode::restrict` — while a caller
-who names a mode *installs* it — `GradMode::scope`. Collapse the two and a
+mode may only *tighten* the ambient one - `GradMode::restrict` - while a caller
+who names a mode *installs* it - `GradMode::scope`. Collapse the two and a
 `no_grad` block is undone by the first `Grad` tensor inside it; a mutant that
 did exactly that failed two tests, one of them a real recording count. The
 corollary is that `Grad` installs nothing at all, so the overwhelmingly common
 path reads no thread-local and pays nothing for a decision made at compile time.
 The propagation reads the *result's* marker rather than the receiver's, which
-differs only for `argmax`, `argmin`, `topk`, and `argsort` — they return
+differs only for `argmax`, `argmin`, `topk`, and `argsort` - they return
 `NoGrad` whatever they were called on, and the third mutant proved the
 distinction matters by failing when they were switched to the receiver's.
 
@@ -2726,7 +2726,7 @@ sites, because a guarantee that depends on 116 correct edits is not a guarantee.
 about what an outside observer can count, and an evidence test that infers
 "nothing was recorded" from a backward pass finding no gradients would pass
 equally well against a tape that recorded entries nothing happened to reach.
-What the row does not do is prevent the clone — a CPU backward closure captures
+What the row does not do is prevent the clone - a CPU backward closure captures
 its saved operands just before pushing, so a refused push drops them at once
 rather than never making them. `CpuStorage` is `Rc`-backed, so that is a
 refcount bump; building the entry lazily means touching all 116 sites and a
@@ -2749,13 +2749,13 @@ and `PRF-003` needs CUDA hardware.
 `GRD-003` gives the core the graph §1.2.5 says it owns. There were three, and
 the core owned none: `cpu`, `wgpu`, and `cuda` each declared a `TensorId`, an
 entry type, and a copy of the same reverse walk. They were not similar by
-accident — seed, drain, reverse, accumulate is one algorithm, and writing it
+accident - seed, drain, reverse, accumulate is one algorithm, and writing it
 three times is how the CPU copy earned the comment marking the exact line where
 a bare `insert` silently dropped one of two gradient contributions
 (`CPUBACK-05`). It is written once now, and `TapeStorage` names precisely what
 is left to a backend: identity, a ones seed, a fallible accumulate, and a
 non-finite predicate. Accumulation is fallible because one of the three
-backends already was — WGPU allocates to add and CPU does not — and a shared
+backends already was - WGPU allocates to add and CPU does not - and a shared
 walk has to carry the weaker guarantee. `cpu/tape.rs` lost 130 lines and gained
 103.
 
@@ -2765,8 +2765,8 @@ already borrowed`: conv backward is built out of other backend operations, each
 of which records, so a walk still holding the tape re-entered it. `D-06` had
 said "drain before invoking anything" as a comment for as long as the walk was
 written next to the thread-local. Taking `Vec<TapeNode<S>>` by value makes it
-structural — there is no way to call the walk without having already taken the
-nodes out — and a recipe that records during a pass lands on the fresh tape,
+structural - there is no way to call the walk without having already taken the
+nodes out - and a recipe that records during a pass lands on the fresh tape,
 where it belongs.
 
 The row's own evidence command was running zero tests. `gradient_parity.rs` was
@@ -2780,7 +2780,7 @@ three-factor chain is the shortest thing that can tell the two apart.
 
 `TapeNode` does not carry the operation kind §1.2.5 lists. Supplying it means
 editing 116 push sites to name a value nothing reads, and the ruling against
-that is already recorded twice — `GRD-001` on `GradMode` and on
+that is already recorded twice - `GRD-001` on `GradMode` and on
 `AutotunePolicy`. It belongs to the first row that reads it. `GRD-004` migrates
 WGPU and CUDA onto this node on hardware, `GRD-005` owns the `panic!` the NaN
 check still uses, and `GRD-006` owns the three thread-locals that still hold
@@ -2789,7 +2789,7 @@ the tapes.
 `GRD-005` makes both sentences of §3.9 true. "Backward closures must return
 structured errors" was false in a way the count states plainly: an infallible
 `Fn(&S) -> Vec<S>` gave a recipe exactly one way to report that it could not
-produce a gradient, and 115 sites across three backends took it — as
+produce a gradient, and 115 sites across three backends took it - as
 `.expect("unbroadcast lhs (add)")` and as `.unwrap()` on kernels that
 genuinely fail. All 92 recipes propagate now. Five of those unwraps turned out
 to be on an `Option` rather than a `Result`, which is how they were found: a
@@ -2798,28 +2798,28 @@ get.
 
 "NaN checking is an execution policy applied consistently across backends, not
 a panic-only backend helper" was false in a more interesting way. It was a
-*second entry point*, `Backend::backward_with_nan_check`, which panicked — so
+*second entry point*, `Backend::backward_with_nan_check`, which panicked - so
 choosing it changed both what was checked and what happened on failure. A
 caller who wanted the check without the abort had no spelling at all, and one
 who wanted the abort had no reason to want it. `NanPolicy` is an axis beside
 the five `GRD-001` and `GRD-002` established, the method and its four
 implementations are gone, and a failure is a `BackwardError::NonFinite`
 carrying the tensor id and whether it was a recipe's own output or the sum of
-two contributions — two finite values can sum to an infinity, and a report that
+two contributions - two finite values can sum to an infinity, and a report that
 cannot tell those apart sends the reader to the wrong operation.
 
 "Consistently across backends" was worth taking literally. CUDA had no check at
 all: its `backward_with_nan_check` delegated straight to `backward`, so a CUDA
 user asking where a `NaN` came from was told nothing. It reads its gradients
 back and answers now. The same pass found CUDA accumulating through
-`and_modify`, which cannot carry a failure, so its adding kernel unwrapped — a
+`and_modify`, which cannot carry a failure, so its adding kernel unwrapped - a
 launch failure during backward aborted the process.
 
 One assertion in the evidence test started as a tautology and the mutants found
 it. `assert!(tensor > 0 || tensor == 0)` is true of every `u64`, and a mutant
 reporting a fixed id passed it; the test names the exact operand whose `1/0`
-gradient goes bad now. The other two mutants — ignoring the policy in each
-direction — fail four tests and one respectively, and the one is the case
+gradient goes bad now. The other two mutants - ignoring the policy in each
+direction - fail four tests and one respectively, and the one is the case
 proving the default costs nothing rather than merely not failing.
 
 `CI-005` writes the suite the macro policy has required all along, and writing
@@ -2830,7 +2830,7 @@ evidence command ran zero tests and exited zero doing it.
 
 The first defect is one character. `s!`, `idx!`, and `#[module]` expanded to a
 *relative* `incin::prelude::…`, so a caller with any item named `incin` in
-scope had the expansion resolve against theirs — surfacing as "cannot find
+scope had the expansion resolve against theirs - surfacing as "cannot find
 `typenum` in `prelude`" pointed at their own macro invocation. A hygiene test
 is the only kind that finds this, which is presumably why the policy lists it.
 All three are absolute now; `model!` and `import_model!` had the identical bug
@@ -2841,7 +2841,7 @@ The second is the gap `SHP-007` deferred here by name: "the struct-level
 argument is still accepted silently; that gap belongs to `CI-005`".
 `#[module]`'s arguments were read with `attr.to_string().contains(..)`, so
 `#[module(no_such_argument)]` expanded as though it had been written
-`#[module]`, and `#[module(not_internal)]` was accepted *as* `internal` —
+`#[module]`, and `#[module(not_internal)]` was accepted *as* `internal` - 
 which is the failure mode where a typo changes behaviour rather than failing.
 The list is parsed against a closed vocabulary now, which is what "a versioned
 grammar and reject unknown keys" asks for. The compile-fail case for it passed
@@ -2860,11 +2860,11 @@ would notice, because the macros' own sources format fine.
 One consequence was repaired rather than worked around. `incin-core`'s
 `stats.rs` tests relied on `use crate as incin` so the old relative path would
 resolve, and an absolute `::incin` cannot see a use-alias. They use `s![@ ..]`
-now — the in-crate form the parser has always accepted and nothing in the
+now - the in-crate form the parser has always accepted and nothing in the
 repository used. The integration crates under `tests/` were unaffected:
 `extern crate incin_core as incin` does create the crate-root entry.
 
-`UX-014` builds `cargo incin doctor` as §2.3 describes it — a subcommand on the
+`UX-014` builds `cargo incin doctor` as §2.3 describes it - a subcommand on the
 dispatcher that already exists, not a second binary. The report itself lives in
 `crates/incin/src/doctor.rs` rather than in `cargo-incin.rs`, because the row's
 own evidence command is an integration test and an integration test links the
@@ -2872,7 +2872,7 @@ library; a doctor written in the binary could not be reached by the command
 meant to prove it works.
 
 "Mocked hardware tests" is the constraint that shaped everything else. A report
-assembled from ambient hardware asserts one configuration — the one with no
+assembled from ambient hardware asserts one configuration - the one with no
 GPU, which is every runner here. The whole impure surface is six methods on one
 `Host` trait, and assembling, concluding, and rendering are pure functions of
 its answers, so twenty-three of the twenty-five tests describe a machine that
@@ -2886,20 +2886,20 @@ Findings carry stable codes, since a support workflow greps the code and a
 human reads the message. A rejected capability probe deliberately is not one.
 The first draft made it one, and the healthy-machine test showed the cost: an
 ordinary CPU laptop opened its report with two notes saying `f16` matmul and
-`f64` reduction are unsupported — not a fault, not actionable, and already
+`f64` reduction are unsupported - not a fault, not actionable, and already
 printed a few lines above. A section that always has something in it is a
 section people stop reading.
 
 The row found a `SIGSEGV`, and it was not in the doctor. `cargo test
 --workspace` unifies the `wgpu` feature into `incin`, and under it the suite
-died rather than failed. The doctor's own share was real — `gather` probed each
-family twice, once to report it and once to decide what to ask its registry —
+died rather than failed. The doctor's own share was real - `gather` probed each
+family twice, once to report it and once to decide what to ask its registry - 
 but fixing that only made the crash rarer. Underneath, `detect::probe_wgpu`
 built a `wgpu::Instance` per call and dropped it, and two threads each probing
 twice took the process down three times out of three with no doctor code
 involved. `cargo incin doctor` was simply the first caller ever to probe one
 family more than once in a process. The instance is shared through a `OnceLock`
-now — what `wgpu::device::get_device_state` one file over already does — while
+now - what `wgpu::device::get_device_state` one file over already does - while
 detection stays per-call, because `request_adapter` still is.
 
 Read-only is structural rather than promised. Writeability is read from mode
@@ -2917,12 +2917,12 @@ shaped it is the section's last one: "An external backend implements only the
 operation descriptors it supports. Missing support is visible through the
 capability registry rather than hundreds of default trait methods." A
 conformance check for an operation a backend never claimed must therefore
-*skip*, not fail — a suite that fails a half-written backend for not
+*skip*, not fail - a suite that fails a half-written backend for not
 implementing something it never advertised is a suite authors route around. So
 every check asks the registry first.
 
 The surface is one `Subject` trait carrying the three things only an author can
-supply — their backend, storage built from values, values read back — plus
+supply - their backend, storage built from values, values read back - plus
 tolerance profiles and eight checks that are identical for every backend.
 Everything the harness *can* know it does not ask for, because a conformance
 suite whose expectations come from its subject is not testing the subject.
@@ -2932,7 +2932,7 @@ conformance suite usually skips: one that has never failed a backend is
 indistinguishable from one that cannot. Four deliberately broken backends sit
 beside the template. A registry claiming `Native` for everything fails only the
 agreement check. An executor that indexes `request.inputs` instead of matching
-on it panics on a wrong arity and fails only the arity check — reported as a
+on it panics on a wrong arity and fails only the arity check - reported as a
 failure, with the seven checks after it still running, which is the harness's
 own contract and the lesson `UX-014` learned when a `SIGSEGV` took a binary
 down and reported nothing. A backend multiplying its operands the wrong way
@@ -2951,13 +2951,13 @@ beside `cuda` and `wgpu`, but the Candle adapter never allocates by byte
 length, so that feature set compiled a module whose only function was dead and
 `-D warnings` rejected the row's own build. And `pub mod external` was itself
 gated on `external-candle`, which put the backend-authoring surface behind one
-particular integration — an author writing a backend for an ecosystem this
+particular integration - an author writing a backend for an ecosystem this
 repository has never heard of would have had to enable the Candle adapter to
 test it. The module is unconditional now, and the suite passes with no native
 backend compiled at all.
 
-`UX-013` reads §2.10 as the prohibition it is written as — "do not maintain
-independent handwritten support tables that can drift from code" — so the row is
+`UX-013` reads §2.10 as the prohibition it is written as - "do not maintain
+independent handwritten support tables that can drift from code" - so the row is
 done when the tables *cannot* drift, which is a different thing from their
 currently being right. They were not: the facade matrix listed `candle`, which
 `GOV-006` renamed to `external-candle` and left as a deprecated alias, four
@@ -2966,7 +2966,7 @@ lines above an installation example using the new name, and it omitted
 
 The two halves have different authorities, so they have different generators. A
 feature's name, its default-ness and what it enables are facts about a manifest,
-and `cargo xtask docs` reads the manifests — including the `#` comment above
+and `cargo xtask docs` reads the manifests - including the `#` comment above
 each feature, which is the only prose description of a feature that already
 lives beside the thing it describes. What a backend supports is a Rust static,
 so `incin_backends::capability_docs` reads the registrations `EXE-005` tests.
@@ -2977,7 +2977,7 @@ The other half of §2.10 is the sentence that says every public example is
 compiled in the minimum documented feature set, and it is the half the evidence
 command measures. It was measuring nothing: 70 of 79 examples were fenced
 `rust,ignore`, `cargo test --workspace --doc` reported success having compiled
-nine, and CI never ran that command at all — `cargo test --all-targets`
+nine, and CI never ran that command at all - `cargo test --all-targets`
 excludes doctests. Compiling them found the examples documenting an API that
 does not exist. `from_slice` was shown with one argument and takes two, in
 fifteen places. `Param` was shown as `Param<Tensor<S, B>>` and is `Param<S, B>`.
@@ -2992,13 +2992,13 @@ trybuild expectation is the proof, because rustc had been printing the full
 `incin::tensor::ops::index::IndexSpec` path for want of a shorter one. `LSTM`
 and `LSTMCell` were missing from the prelude while `RNN` and `RNNCell` one line
 above were present. And `DummyBackend`'s four binary operations returned the
-left operand's shape unchanged, which disagrees with every real backend —
+left operand's shape unchanged, which disagrees with every real backend - 
 `broadcast_add` reaches `Backend::add` with differently shaped operands and
 hands the result to `from_parts` against the broadcast type. Nothing had ever
 run a `broadcast_*` example, which is exactly why it survived.
 
-`UX-001` builds level 1 of §2's three-level UX ladder — "select three devices
-and let Incin produce and explain a safe plan" — and the sentence that shapes it
+`UX-001` builds level 1 of §2's three-level UX ladder - "select three devices
+and let Incin produce and explain a safe plan" - and the sentence that shapes it
 is the one after the list: "'Easy' must not mean silent CPU transfer […] Every
 automatic decision is inspectable and reproducible." A `Trainer` that quietly
 runs on the CPU when the CUDA devices it was handed are absent is worse than no
@@ -3018,7 +3018,7 @@ Availability sits behind a `Machine` trait for the reason `UX-014`'s `Host`
 does: the row's deliverable is that an unchanged model runs on CPU and on three
 GPUs, and a test that can only describe the runner it is on cannot check the
 second half. A three-GPU machine costs a unit struct, and the model fixture is
-written once and used by both halves — its signature taking no device argument
+written once and used by both halves - its signature taking no device argument
 is itself the assertion.
 
 What the row does not do is pretend. `ParallelStrategy` is `DST-011`'s,
@@ -3028,8 +3028,8 @@ primary device. The plan still validates and reports all three GPUs, which is
 the part that can be true today.
 
 Two things the row's own tests caught. The CPU training test first asserted only
-that the final loss was finite — which a `fit` that never stepped the optimizer
-would also satisfy — so it now probes the same model before and after and
+that the final loss was finite - which a `fit` that never stepped the optimizer
+would also satisfy - so it now probes the same model before and after and
 asserts the parameters moved. And the evidence command as written ran zero tests
 and printed `ok`, because Appendix B puts a preview row behind a non-default
 feature; it carries `--features train` now.
@@ -3043,16 +3043,16 @@ existence validation*, and a mesh type carrying devices would be making the
 second claim while checking the first. `DeviceMesh::bind` and the topology
 fingerprint are `DST-002`.
 
-`ValidMesh` is implemented for exactly one shape of type — three correctly
-ordered axis markers over nonzero degrees — so every way of being an invalid
+`ValidMesh` is implemented for exactly one shape of type - three correctly
+ordered axis markers over nonzero degrees - so every way of being an invalid
 topology is the absence of an implementation rather than a check something has
 to remember to call. §3.8 asks for "nonzero axes and checked `DP × TP × PP`
 multiplication on stable Rust"; both are bounds, `NonZero` being `typenum`'s
 own marker and the product being the same `Mul` the shape rules use, so a mesh
 and a shape agree about multiplication by construction rather than by review.
 `World` is an associated type and not only a constant, which is what turns
-§3.8's sentence about three GPUs — "valid examples are `DP=3`, `TP=3`, or
-`PP=3`. A rectangular `2 × 2` mesh is not valid" — into a `World = U3` bound
+§3.8's sentence about three GPUs - "valid examples are `DP=3`, `TP=3`, or
+`PP=3`. A rectangular `2 × 2` mesh is not valid" - into a `World = U3` bound
 and a compile error for the `2 × 2`.
 
 The axes being positional is the third compile-fail case and the one worth
@@ -3063,13 +3063,13 @@ ordering is what makes the swap an error rather than a different program.
 
 The mesh cases needed their own trybuild directory, because a preview row is
 behind a non-default feature and a case in `tests/compile_fail/` is built
-without it — it would fail with "path does not resolve", which is one of the
+without it - it would fail with "path does not resolve", which is one of the
 five scaffolding failures `SHP-007` added that check to catch. Two directories
 are not two properties, so the "say what this case proves" registry moved into
 `tests/support/` and both suites call it.
 
-`DST-002` builds the other half of §2.11 — the one that section says is not
-checkable at all until a process looks at a machine — in the same file, on
+`DST-002` builds the other half of §2.11 - the one that section says is not
+checkable at all until a process looks at a machine - in the same file, on
 purpose. The failure §2.11 is warning about is a single type making the logical
 claim and the physical one at once, and that boundary is easier to hold with
 both sides of it on the screen than with a module between them. A `MeshSpec`
@@ -3079,7 +3079,7 @@ be built by `bind`.
 Nothing in the row reads hardware, and that is the design rather than a
 limitation of the test machine. Every question binding asks a machine goes
 through one trait, `TopologyProbe`, and every decision made from its answers is
-a pure function — which is why the evidence binds §2.11's own three-GPU example
+a pure function - which is why the evidence binds §2.11's own three-GPU example
 on a runner with no GPU, and why all eight rejections are ordinary test cases
 instead of eight configurations nobody has. No implementor ships here: a probe
 that answers questions about CUDA link topology has to call CUDA, and
@@ -3087,7 +3087,7 @@ that answers questions about CUDA link topology has to call CUDA, and
 real ones and their own evidence is where "the answers are true" gets checked.
 
 Two of the guards exist because §2.11 says the ordinal is not an identity, and
-they are not the same guard. `RepeatedDevice` catches the same number twice —
+they are not the same guard. `RepeatedDevice` catches the same number twice - 
 the launcher misconfiguration that runs, at half speed, double-counting a
 gradient. `AliasedDevice` catches two *different* numbers that a visibility mask
 has pointed at one card, which no amount of ordinal checking finds and which
@@ -3097,7 +3097,7 @@ agree on which kernels exist.
 
 The rank layout had to be decided rather than inherited, since a rank is one
 integer and a mesh is three-dimensional. It is data outermost, then pipeline,
-then tensor innermost, so tensor-parallel peers are a contiguous run — that axis
+then tensor innermost, so tensor-parallel peers are a contiguous run - that axis
 exchanges activations on every layer and launchers put consecutive ranks on one
 host, so the innermost axis is the one that lands on the fastest link.
 `CollectiveGroups` computes this over an axis array rather than three named
@@ -3110,7 +3110,7 @@ it.
 `MeshId` folds the fingerprint digest together with the logical degrees, and the
 evidence contains the case that proves both halves are needed. `DP=6` and `TP=6`
 over six fully-connected devices probe the same pairs in the same order, so
-their fingerprints are byte-identical — and they are incompatible programs.
+their fingerprints are byte-identical - and they are incompatible programs.
 Only the degrees tell them apart. The digest itself is a hand-rolled FNV-1a,
 because it has to be identical in two processes that never speak to each other:
 `ahash` is seeded per process and `DefaultHasher` is documented as unstable
@@ -3119,7 +3119,7 @@ across releases, and either would make a computed mesh id a coin flip.
 Eleven mutants, all caught. Each of the eight guards defeated in turn failed its
 own named test. Dropping the degrees from `MeshId` failed the `DP=6`/`TP=6`
 case. Removing the digest's per-field length prefix failed the case that
-distinguishes `"GPU-1" + "sm_90"` from `"GPU-" + "1sm_90"` — a test written only
+distinguishes `"GPU-1" + "sm_90"` from `"GPU-" + "1sm_90"` - a test written only
 after a first mutation run showed nothing covered it. Reversing the axis order
 failed the adjacency test, and recording links in one direction only failed the
 fingerprint's link-count test. One mutation was rejected as unfaithful rather
@@ -3135,7 +3135,7 @@ a communicator has to exist first, and `DST-006` creates them. `EXE-005` is a
 dependency of this row because binding will consult the registry through its
 `Capabilities` trait, not because this row consults it. Placements remain
 `DST-003`, `mesh![...]` remains `UX-002`, and the `incin` facade still gains no
-`distributed` feature — a `DeviceMesh` that no tensor can be placed on is still
+`distributed` feature - a `DeviceMesh` that no tensor can be placed on is still
 not something the facade takes.
 
 `DST-003` adds the logical placement proof between those meshes and the tensors
@@ -3186,7 +3186,7 @@ The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
 tier column defines what a release is entitled to rely on. Where a theme
-narrative and the graph disagree, the graph wins — themes are prose, edges are
+narrative and the graph disagree, the graph wins - themes are prose, edges are
 the contract.
 
 Statuses are `[ ]` planned, `[~]` active, `[!]` blocked, `[-]` deferred, and
@@ -3206,7 +3206,7 @@ Two invariants hold across every row, and the validator enforces both:
 - **Every `[x]` must carry a `completed_on` date and concrete evidence output**
   in the mirror. A status without evidence is not a completion.
 
-Only five tasks are terminal — `TUN-000` (a completed inventory), the three
+Only five tasks are terminal - `TUN-000` (a completed inventory), the three
 Exploratory tasks, and `REL-004` (the final gate). Every other task feeds a
 release gate, so nothing in this document is work that no release depends on.
 
@@ -3615,7 +3615,7 @@ validated lowering to safe, observable, and optimizable native execution.
 
 ---
 
-## Appendix A — Type inventory
+## Appendix A - Type inventory
 
 Every supporting type named in this document, with the crate and module that
 will own it and the task that introduces it. A type with no row here is not
@@ -3634,7 +3634,7 @@ changing nothing.
 |---|---|---|---|
 | `ShapeError` | `incin-core::shapes::error` | SHP-002 | extends `Error::ShapeMismatch` (`err.rs:56`) |
 | `OperationKind` | `incin-core::shapes::error` | SHP-002 | **promote** `OperationFamily` (`incin-backends/src/dtype_policy.rs:30`) |
-| `Axis`, `RankExpectation`, `DimensionConstraint` | `incin-core::shapes::error` | SHP-002 | — |
+| `Axis`, `RankExpectation`, `DimensionConstraint` | `incin-core::shapes::error` | SHP-002 | - |
 | `ShapeBuf`, `StrideBuf`, `InlineOrHeap` | `incin-core::shapes::buf` | SHP-003 | replaces the `Vec<usize>` pairs in all three storages |
 | `MAX_RANK` | `incin-macros::rank` | SHP-006 | unifies ~10 independent caps (see §1.1.4) |
 
@@ -3642,14 +3642,14 @@ changing nothing.
 
 | Type | Owning module | Task | Existing analogue |
 |---|---|---|---|
-| `ProofLevel`, `Validated<O>` | `incin-core::exec::proof` | EXE-002 | — |
+| `ProofLevel`, `Validated<O>` | `incin-core::exec::proof` | EXE-002 | - |
 | `ShapeRule`, `Conv2dArgs` | `incin-core::exec::rule` | EXE-003 | companion to `BroadcastShape`, `MatMulShape`, … (see §1.2.1) |
 | `MatMulSpec`, `BroadcastSpec`, `ReductionSpec`, `Conv2dSpec` | `incin-core::exec::spec` | EXE-001 | absorbs `IterationPlan`, `OperandIteration` (`iteration.rs:11,77`) |
 | `Pool2dSpec`, `ReshapeSpec` | `incin-core::exec::spec` | EXE-003 | the two remaining descriptors EXE-003 lowers to; see D-018 |
-| `AxisMask` | `incin-core::exec::spec` | EXE-001 | — |
+| `AxisMask` | `incin-core::exec::spec` | EXE-001 | - |
 | `DescriptorSchemaVersion` | `incin-core::exec::spec` | EXE-001 | mirrors `KernelKey::schema_version` (`kernel.rs:159`) |
 | `TensorMeta`, `LayoutClass`, `Alignment` | `incin-core::exec::meta` | EXE-004 | **unify** `UnaryLayoutClass` / `BinaryLayoutClass` (`iteration.rs:92,99`) and `KernelLayout` (`kernel.rs:35`) |
-| `TensorHandle` | `incin-core::exec::request` | EXE-006 | — |
+| `TensorHandle` | `incin-core::exec::request` | EXE-006 | - |
 
 ### A.3 Backend interface
 
@@ -3678,13 +3678,13 @@ changing nothing.
 | `AutotunePolicy`, `TuningScope`, `TuningContext` | `incin-backends::tuning` | TUN-003 | generalizes the CUDA-only tuner (`tuning.rs`) |
 | `DeviceFingerprint` | `incin-backends::tuning::identity` | TUN-001 | replaces ordinal + compute capability |
 | `KernelSignature`, `DTypePolicyId`, `RankClass`, `ShapeBucket`, `AlignmentClass` | `incin-backends::tuning::signature` | TUN-004 | **extend** `KernelKey` (`kernel.rs:158`), which already has family/operation/dtype-policy/layout/access/index-width/math-mode |
-| `PlanTuningKey`, `PlanScore`, `GraphHash`, `ShapeSignature`, `PrecisionPolicyId`, `MemoryBucket`, `PlanSchemaVersion`, `OptimizerKind` | `incin-core::compiled::tuning` | DST-013 | — |
+| `PlanTuningKey`, `PlanScore`, `GraphHash`, `ShapeSignature`, `PrecisionPolicyId`, `MemoryBucket`, `PlanSchemaVersion`, `OptimizerKind` | `incin-core::compiled::tuning` | DST-013 | - |
 
 ### A.6 Compiled execution
 
 | Type | Owning module | Task | Existing analogue |
 |---|---|---|---|
-| `CompileOptions`, `FusionPolicy`, `DynamicShapePolicy` | `incin-core::compiled` | CMP-002 | — |
+| `CompileOptions`, `FusionPolicy`, `DynamicShapePolicy` | `incin-core::compiled` | CMP-002 | - |
 
 ### A.7 Distributed execution
 
@@ -3692,20 +3692,20 @@ changing nothing.
 |---|---|---|---|
 | `MeshSpec`, `Data`, `TensorParallel`, `Pipeline`, `ValidMesh` | `incin-core::dist::mesh` | DST-001 | built: reuses the typenum `Mul` already used by shapes; the `Div`/`Rem` proofs are shard divisibility and arrive with `DST-003` |
 | `DeviceMesh`, `MeshId`, `CollectiveGroups`, `TopologyFingerprint` | `incin-core::dist::mesh` | DST-002 | built: `TopologyProbe` is the observation seam, implemented by `DST-005` and `DST-006` rather than here |
-| `Placement` (trait), `PlacementKind` (enum), `Local`, `Replicated`, `Sharded`, `Partial`, `PipelineStage`, `PlacementBuf`, `ShardRemainderPolicy` | `incin-core::dist::placement` | DST-003 | — |
+| `Placement` (trait), `PlacementKind` (enum), `Local`, `Replicated`, `Sharded`, `Partial`, `PipelineStage`, `PlacementBuf`, `ShardRemainderPolicy` | `incin-core::dist::placement` | DST-003 | - |
 | `DistributedRule`, `ValidatedDistributed`, `DistributedError` | `incin-core::dist::rule` | DST-003 | sealed on the same terms as `Validated<O>` |
 | `CollectiveDType`, `CollectiveKind`, `CollectiveError`, `GroupId`, `StreamId` | `incin-core::dist::collective` | DST-005,DST-007 | re-exported by `incin-backends::dist`; shared vocabulary cannot live below core planning |
 | `CollectiveBackend`, `CollectiveOutput` | `incin-backends::dist::collective` | DST-005 | consumes the core vocabulary without making core depend on a backend |
 | `CollectivePlan`, `CollectiveDescriptor`, `SequenceToken`, plan hash, preflight agreement | `incin-core::dist::plan` | DST-007 | consumes placement proofs and the transport-neutral collective vocabulary |
-| `ParallelOptions`, `ParallelStrategy`, `StrategySet`, `MemoryLimit`, `PipelineSchedule`, `PlanObjective` | `incin-core::dist::plan` | DST-011 | — |
-| `DistributedContext` | `incin-core::dist::context` | DST-015 | — |
+| `ParallelOptions`, `ParallelStrategy`, `StrategySet`, `MemoryLimit`, `PipelineSchedule`, `PlanObjective` | `incin-core::dist::plan` | DST-011 | - |
+| `DistributedContext` | `incin-core::dist::context` | DST-015 | - |
 
 ### A.8 Device selection and UX
 
 | Type | Owning module | Task | Existing analogue |
 |---|---|---|---|
 | `DevicePreference`, `BackendKind`, `DeviceSet` | `incin-core::tensor::device` | UX-001 | `DeviceId` and `BackendFor` already exist (`device.rs:318`, `backend_kind.rs:16`) |
-| `Trainer` | `incin::train` | UX-001 | — |
+| `Trainer` | `incin::train` | UX-001 | - |
 
 Types already in the tree and referenced unchanged: `Shape`, `Dim`, `Dyn`,
 `ConstShape`, `PartialDynShape`, `ProdDim`, `Flatten`, `DType`, `DTypeId`,
@@ -3713,7 +3713,7 @@ Types already in the tree and referenced unchanged: `Shape`, `Dim`, `Dyn`,
 
 ---
 
-## Appendix B — Maturity tiers
+## Appendix B - Maturity tiers
 
 The dependency graph says what order work happens in. It does not say what a
 `0.1.0` user is entitled to rely on. Every ledger task carries one tier.
@@ -3757,7 +3757,7 @@ gates a release.
 
 ---
 
-## Appendix C — Decision log
+## Appendix C - Decision log
 
 Dated architectural decisions. `GOV-002` requires that every contradiction
 resolved in this document appears here exactly once, so a later reader can see
@@ -3768,7 +3768,7 @@ marked, not deleted.
 Rule 2 of Appendix B also lands here: an Exploratory task records its
 justification as an entry before it may start.
 
-### 2026-07-27 — RFC repair
+### 2026-07-27 - RFC repair
 
 | # | Decision | Alternative rejected |
 |---|---|---|
@@ -3789,88 +3789,88 @@ justification as an entry before it may start.
 | D-015 | Repository maintenance commands live in a `publish = false` `xtask` crate (`cargo xtask ledger`), not in `cargo-incin`. | Adding a `ledger` subcommand to `cargo-incin`. A `[[bin]]` target shares its crate's dependencies, so the TOML parser it needs would land in every downstream user's dependency graph. `cargo incin doctor`/`plan`/`tune` stay in `cargo-incin` because those are user-facing; ledger validation is not. |
 | D-016 | `cargo doc --workspace` with `-D warnings` is a required CI gate. | Leaving documentation unchecked. Enabling the gate surfaced 13 genuine broken intra-doc links across four crates, all fixed under `GOV-006`. |
 | D-017 | The CPU CI job keeps excluding `backends`, `tui_graph_demo`, and `native_training_demo`. | Removing the exclusions, as the repair plan originally proposed. All three example packages hard-depend on the `wgpu` feature and cannot build in a CPU-only feature set; the `wgpu` job builds them. The exclusions are correct, and a comment now records why. |
-| D-018 | Pooling and reshape get descriptors of their own (`Pool2dSpec`, `ReshapeSpec`), added under EXE-003 rather than EXE-001. | Reusing `Conv2dSpec` for pooling with `c_out = c_in` and `groups = c_in`, and giving reshape no descriptor at all. The depthwise encoding produces the right geometry and the wrong `OperationKind`, so every capability query and kernel-cache lookup keyed on it would answer for a convolution. Reshape's proof obligation — two shapes with equal element counts — has to be discharged somewhere, and `Validated` is where the discharge is recorded. §4's ledger asks EXE-003 for six rules while Appendix A supplied four descriptors; adding two is the smaller correction. |
+| D-018 | Pooling and reshape get descriptors of their own (`Pool2dSpec`, `ReshapeSpec`), added under EXE-003 rather than EXE-001. | Reusing `Conv2dSpec` for pooling with `c_out = c_in` and `groups = c_in`, and giving reshape no descriptor at all. The depthwise encoding produces the right geometry and the wrong `OperationKind`, so every capability query and kernel-cache lookup keyed on it would answer for a convolution. Reshape's proof obligation - two shapes with equal element counts - has to be discharged somewhere, and `Validated` is where the discharge is recorded. §4's ledger asks EXE-003 for six rules while Appendix A supplied four descriptors; adding two is the smaller correction. |
 | D-019 | `Shape` owns runtime `dims`; `DynShape` retains the derived `rank` and `numel` queries. | Requiring `DynShape` only at construction call sites. `Tensor<S>` accepts every `Shape`, and operation-associated outputs are commonly bounded only by `Shape`; caller-local bounds would leave the constructor unable to enforce its invariant for the exact generic outputs SHP-008 must cover. |
 
-### 2026-07-28 — Stable storage interface encoding
+### 2026-07-28 - Stable storage interface encoding
 
 | # | Decision | Alternative rejected |
 |---|---|---|
 | D-020 | Encode the two-axis storage family as `StorageBackend<P: Placement = Local> { type Storage<K: DType>; }`. The projection is `<B as StorageBackend<P>>::Storage<K>`; omitting `P` selects `Local`. This supersedes only D-001's syntax and preserves its semantics. | `type Storage<K: DType, P: Placement = Local>`: stable Rust rejects defaults on generic parameters of associated types. Dropping placement would compile but contradict the distributed design. Nightly-only associated-type defaults would make a Core interface toolchain-dependent. |
 
-### 2026-07-29 — Gradient-mode propagation
+### 2026-07-29 - Gradient-mode propagation
 
 | # | Decision | Alternative rejected |
 |---|---|---|
 | D-021 | An operand's `GradMode` **tightens** the ambient one and can never raise it (`GradMode::restrict`); only a caller naming a mode installs it (`GradMode::scope`). `no_grad` is therefore a ceiling over everything inside it, and `Grad` is a permission rather than an instruction. | One combinator that installs whatever it is given. A `no_grad` block would then be silently undone by the first `Grad` tensor inside it, which is the single thing callers reach for the block to prevent. It also costs: installing on `Grad` means a thread-local write on the common path for a decision the type already made. |
 | D-022 | Propagation reads the **result's** `G`, not the receiver's. `argmax`, `argmin`, `topk`, and `argsort` return `NoGrad` whatever they were called on, so they run under `GradMode::Disabled` unconditionally. | Reading the receiver's marker, which is the same answer for every operation that preserves `G` and the wrong one for exactly those four. §1.2.5 makes `NoGrad` a statement about what runs, not only about which APIs the result offers; the CPU backend had already reached the same conclusion as a per-kernel exception in `argmax`, which this makes a policy instead. |
-| D-023 | The tape gate lives in each backend's `push`, and `tape::depth` is public. | Gating at the 116 call sites, and leaving the depth `#[cfg(test)]`. A guarantee that depends on 116 correct edits — and on the next kernel author knowing the convention — is not a guarantee; and one that nothing outside the crate can count is not evidence. The alternative evidence, inferring "nothing was recorded" from a backward pass finding no gradients, passes equally well against a tape holding entries nothing happened to reach. |
+| D-023 | The tape gate lives in each backend's `push`, and `tape::depth` is public. | Gating at the 116 call sites, and leaving the depth `#[cfg(test)]`. A guarantee that depends on 116 correct edits - and on the next kernel author knowing the convention - is not a guarantee; and one that nothing outside the crate can count is not evidence. The alternative evidence, inferring "nothing was recorded" from a backward pass finding no gradients, passes equally well against a tape holding entries nothing happened to reach. |
 
-### 2026-07-29 — Backend-neutral tape
+### 2026-07-29 - Backend-neutral tape
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D-024 | The backward walk takes its nodes **by value** (`tape::backward(nodes, loss, check)`); a `Tape` is drained into it. | `Tape::backward(&mut self, ..)`. A backward recipe may itself record — every convolution backward on the CPU backend does — so a walk still holding the tape re-enters it, which with the tape behind a `RefCell` is a panic on the second borrow. Four tests found this within minutes of the migration. `D-06` had stated the ordering as a comment for as long as the walk lived beside the thread-local; by value, it is not statable any other way. |
+| D-024 | The backward walk takes its nodes **by value** (`tape::backward(nodes, loss, check)`); a `Tape` is drained into it. | `Tape::backward(&mut self, ..)`. A backward recipe may itself record - every convolution backward on the CPU backend does - so a walk still holding the tape re-enters it, which with the tape behind a `RefCell` is a panic on the second borrow. Four tests found this within minutes of the migration. `D-06` had stated the ordering as a comment for as long as the walk lived beside the thread-local; by value, it is not statable any other way. |
 | D-025 | `TapeStorage::accumulate` is **fallible**, even though the CPU implementation cannot fail. | An infallible signature with WGPU's allocating add unwrapping inside it. One of the three backends already returns a `Result` here, and a shared walk has to carry the weaker guarantee: an accumulation that cannot report a failure turns a dropped contribution into a wrong gradient rather than an error. |
-| D-026 | One `TensorId` for the workspace, re-exported by each backend's storage module. | Three per-backend newtypes over three counters. They hand out the same integers to different allocations, which is harmless exactly as long as no two backends share a tape — the thing `GRD-006` ends. Re-exporting rather than renaming keeps every existing `use` site spelled as it was. |
+| D-026 | One `TensorId` for the workspace, re-exported by each backend's storage module. | Three per-backend newtypes over three counters. They hand out the same integers to different allocations, which is harmless exactly as long as no two backends share a tape - the thing `GRD-006` ends. Re-exporting rather than renaming keeps every existing `use` site spelled as it was. |
 
-### 2026-07-29 — Backward failure reporting
+### 2026-07-29 - Backward failure reporting
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D-027 | NaN checking is a `NanPolicy` axis on `ExecutionPolicy`, read once per backward pass by every backend's walk. `Backend::backward_with_nan_check` is deleted. | Keeping the second entry point. It conflated two independent choices — whether to inspect gradients, and whether to abort — so wanting the check without the abort had no spelling, and `D-008` rules against shipping both vocabularies for one question. The default is `Permit` because the check reads every element of every gradient, which on a device backend is a full readback per contribution. |
+| D-027 | NaN checking is a `NanPolicy` axis on `ExecutionPolicy`, read once per backward pass by every backend's walk. `Backend::backward_with_nan_check` is deleted. | Keeping the second entry point. It conflated two independent choices - whether to inspect gradients, and whether to abort - so wanting the check without the abort had no spelling, and `D-008` rules against shipping both vocabularies for one question. The default is `Permit` because the check reads every element of every gradient, which on a device backend is a full readback per contribution. |
 | D-028 | `BackwardError::NonFinite` carries the tensor id **and** a `NonFiniteSite` distinguishing a recipe's output from an accumulation. | Reporting only that some gradient went non-finite. Two finite contributions can sum to an infinity, and the entire value of checking is knowing which operation to look at; a report that cannot separate the two cases sends the reader to the wrong one. |
 | D-029 | `BackwardFn` is fallible for all three backends in this row, even though WGPU and CUDA still own their walks until `GRD-004`. | Converting the CPU recipes only. §3.9 says backward closures return structured errors, and a signature two of three backends do not satisfy is not a contract. `EXE-008` had already deferred this once, to `GRD-001`, which landed without it. |
 
-### 2026-07-29 — Macro path resolution
+### 2026-07-29 - Macro path resolution
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D-030 | Every macro expands to an **absolute** `::incin::…` path, and in-crate callers use the `@` form that expands to `crate::…`. | The relative `incin::…` the macros emitted, which resolves against whatever the caller has in scope: a module of their own named `incin` silently wins, and the diagnostic points at their macro invocation rather than at the macro. `incin-core`'s own tests had been leaning on that relative form through a `use crate as incin` alias, which is the one spelling an absolute path cannot see — so the `@` form the parser already accepted, and nothing used, is what they take. |
+| D-030 | Every macro expands to an **absolute** `::incin::…` path, and in-crate callers use the `@` form that expands to `crate::…`. | The relative `incin::…` the macros emitted, which resolves against whatever the caller has in scope: a module of their own named `incin` silently wins, and the diagnostic points at their macro invocation rather than at the macro. `incin-core`'s own tests had been leaning on that relative form through a `use crate as incin` alias, which is the one spelling an absolute path cannot see - so the `@` form the parser already accepted, and nothing used, is what they take. |
 | D-031 | A **package rename** in a caller's `Cargo.toml` is documented as unsupported rather than resolved. | Depending on `proc-macro-crate`, which reads the caller's manifest during expansion. The macro policy in §4 forbids filesystem access outside the explicit import macros, and a path resolution that depends on where the manifest is makes expansion depend on the build layout. The limit is stated on all three macros. |
 | D-032 | `#[module]`'s struct-level arguments are parsed as a closed vocabulary. | The `attr.to_string().contains(..)` it used, which accepted `#[module(no_such_argument)]` as bare `#[module]` and `#[module(not_internal)]` as `internal`. The policy requires a versioned grammar that rejects unknown keys, and substring matching cannot reject anything. |
 
-### 2026-07-29 — `cargo incin doctor`
+### 2026-07-29 - `cargo incin doctor`
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D-033 | The report is a library module (`incin::doctor`); `cargo-incin.rs` is the dispatcher §2.3 calls it. | Writing the report in the binary, as the row's target column reads. An integration test links the library and not the `[[bin]]`, so the row's own evidence command — `cargo test -p incin --test doctor` — could not reach a single line of it. |
+| D-033 | The report is a library module (`incin::doctor`); `cargo-incin.rs` is the dispatcher §2.3 calls it. | Writing the report in the binary, as the row's target column reads. An integration test links the library and not the `[[bin]]`, so the row's own evidence command - `cargo test -p incin --test doctor` - could not reach a single line of it. |
 | D-034 | Every impure observation goes behind one `Host` trait, and assembling, concluding, and rendering are pure functions of its answers. | Reading hardware where it is needed. A report assembled from ambient hardware asserts exactly one configuration, the one with no GPU that every runner here has, and "mocked hardware tests" is in the deliverable. |
-| D-035 | A rejected capability probe is **reported but is not a finding**. | Emitting a note per rejection, which the first draft did. `f16` matmul and `f64` reduction are unsupported on the CPU registry, so every healthy laptop opened its report with two notes about how the CPU backend simply is — not a fault, not actionable, and duplicating the probe section verbatim. |
+| D-035 | A rejected capability probe is **reported but is not a finding**. | Emitting a note per rejection, which the first draft did. `f16` matmul and `f64` reduction are unsupported on the CPU registry, so every healthy laptop opened its report with two notes about how the CPU backend simply is - not a fault, not actionable, and duplicating the probe section verbatim. |
 | D-036 | `detect::probe_wgpu` shares one `wgpu::Instance` through a `OnceLock`; detection itself stays per call. | Building an instance per probe, which is what it did. Two threads each probing twice is a reproducible `SIGSEGV` inside adapter enumeration, and `probe` is public and documented as callable repeatedly. `request_adapter` still runs per call, so hardware appearing or disappearing is still observed. |
 | D-037 | Cache writeability is read from mode bits, and the telemetry run directory resolves through a non-creating `default_run_dir_path`. | Attempting a write, which is the accurate test, and calling `default_run_dir`, which creates the directory. §2.3 makes the command read-only absent an explicit flag, and a diagnostic that changes what it is diagnosing is not one. The weaker answer is documented at the function. |
 
-### 2026-07-29 — External-backend SDK
+### 2026-07-29 - External-backend SDK
 
 | # | Decision | Alternative rejected |
 |---|---|---|
 | D-038 | `incin_backends::external` is unconditional; only the Candle adapter inside it stays behind `external-candle`. | Leaving the module gated, which put the backend-authoring surface behind one particular third-party integration. An author writing a backend for an ecosystem this repository has never heard of would have had to enable the Candle adapter to test it. |
 | D-039 | A conformance check for an operation the backend's registry does not claim **skips**. | Failing it, or requiring every backend to implement everything. §2.9 says an external backend implements only the descriptors it supports, so a half-written backend passing with checks skipped is the correct verdict rather than a lenient one. |
-| D-040 | The conformance harness catches panics and reports them as failures of the check that panicked. | Letting them propagate. A backend that panics where the contract says to return a `BackendError` is the finding, and a harness that dies on it reports one check instead of eight — the failure mode `UX-014` hit when a `SIGSEGV` took a test binary down and reported nothing at all. |
+| D-040 | The conformance harness catches panics and reports them as failures of the check that panicked. | Letting them propagate. A backend that panics where the contract says to return a `BackendError` is the finding, and a harness that dies on it reports one check instead of eight - the failure mode `UX-014` hit when a `SIGSEGV` took a test binary down and reported nothing at all. |
 | D-041 | The template backend lives in `tests/conformance.rs`, not in `src/`. | Shipping a reference backend to every downstream user, which `D-015` already refused for a TOML parser on the same reasoning. It is still in the repository, still compiled, and still asserted to pass the suite on every run, which is what keeps it from going stale. |
 | D-042 | The suite carries four deliberately broken backends, each asserted to fail exactly one check. | A suite of positive cases only. A check that has never failed is indistinguishable from a check that cannot fail, and a conformance suite is the one place that distinction is the entire product. |
-| D-043 | The two generated documents have two generators: `cargo xtask docs` for the feature tables, `incin_backends::capability_docs` for the capability tables. | One generator in `xtask`, which would have to either parse Rust to reach the capability statics or link against `incin-backends` — making `cargo xtask ledger` compile the whole backend stack for a task that reads a TOML file. A generator belongs with its authority: features are a manifest fact, capabilities are a Rust static. |
+| D-043 | The two generated documents have two generators: `cargo xtask docs` for the feature tables, `incin_backends::capability_docs` for the capability tables. | One generator in `xtask`, which would have to either parse Rust to reach the capability statics or link against `incin-backends` - making `cargo xtask ledger` compile the whole backend stack for a task that reads a TOML file. A generator belongs with its authority: features are a manifest fact, capabilities are a Rust static. |
 | D-044 | The README's `Purpose` column is generated from the `#` comment above each feature in `Cargo.toml`. | A second prose description in the README. The manifest comment already exists and already sits beside the declaration it describes; a table written separately is the drift §2.10 prohibits, in the same file that prohibits it. |
-| D-045 | The capability summary table's cell is the element-type list, not a support tick. | A yes/no matrix. All three backends register the same eleven operations, so it renders as eleven rows of "yes" and reads as parity — while CPU registers `reduction` for `f32` alone and CUDA registers it for every float. |
-| D-046 | An example that cannot compile where it lives is fenced ```` ```text ````, and a test fails on any ```` ```ignore ```` fence in `crates/*/src`. | Leaving `ignore` for the handful of genuine cases. `ignore` is indistinguishable from "we did not get round to it" — which is how seventy of them accumulated — and a rule with an exception nobody can mechanically tell apart from a violation is not enforceable. |
+| D-045 | The capability summary table's cell is the element-type list, not a support tick. | A yes/no matrix. All three backends register the same eleven operations, so it renders as eleven rows of "yes" and reads as parity - while CPU registers `reduction` for `f32` alone and CUDA registers it for every float. |
+| D-046 | An example that cannot compile where it lives is fenced ```` ```text ````, and a test fails on any ```` ```ignore ```` fence in `crates/*/src`. | Leaving `ignore` for the handful of genuine cases. `ignore` is indistinguishable from "we did not get round to it" - which is how seventy of them accumulated - and a rule with an exception nobody can mechanically tell apart from a violation is not enforceable. |
 | D-047 | `incin-core`'s examples satisfy their backend parameter with a hidden `DummyBackend` alias rather than the facade's `DefaultBackend`. | A dev-dependency cycle from `incin-core` on `incin`. It compiles, and `incin-macros` already has one, but it would put the facade in `incin-core`'s dev graph under `cargo hack check --feature-powerset --all-targets`, where unification would enable `incin-core/std` and silently stop the no_std powerset check from checking no_std. The visible text of an example documents the API; which concrete type satisfies `B` does not. |
-| D-048 | `DTypeId::name`, `DeviceKind::name` and `ImplementationKind::name` live on the enums in `incin-core`. | The private copies `cargo incin doctor` carried. Those needed a `_ => "unknown"` arm because the enums are `#[non_exhaustive]` outside the defining crate — so a dtype added later would have rendered as the literal string "unknown" in a support report. Inside `incin-core` the match is exhaustive and the same addition is a compile error. |
+| D-048 | `DTypeId::name`, `DeviceKind::name` and `ImplementationKind::name` live on the enums in `incin-core`. | The private copies `cargo incin doctor` carried. Those needed a `_ => "unknown"` arm because the enums are `#[non_exhaustive]` outside the defining crate - so a dtype added later would have rendered as the literal string "unknown" in a support report. Inside `incin-core` the match is exhaustive and the same addition is a compile error. |
 | D-049 | Appendix A.8's `BackendKind` is not built; `DeviceSet` is built from the existing `DeviceKind`. | A second type meaning "the runtime-identifiable backend family a `DeviceId` belongs to", which is `DeviceKind`'s documented definition. `D-008` records what two vocabularies for one concept cost. |
 | D-050 | `DevicePreference` and `DeviceSet` are separate types rather than one enum with a "resolve" method. | Collapsing them. A preference is resolved against a machine and may land somewhere the caller did not name; a set is already resolved and may not. Keeping them apart is what makes "I asked for CUDA and got CPU" a thing the type system can refuse, and §2 rules it out in as many words. |
-| D-051 | `DevicePreference::default()` is `Cpu`, not `Fastest`. | A default that picks the best available device. It moves an unchanged program onto a GPU the day one appears, which is the same class of surprise as silently moving it off one — and §2's objection is to the surprise, not to its direction. |
+| D-051 | `DevicePreference::default()` is `Cpu`, not `Fastest`. | A default that picks the best available device. It moves an unchanged program onto a GPU the day one appears, which is the same class of surprise as silently moving it off one - and §2's objection is to the surprise, not to its direction. |
 | D-052 | `Trainer::fit` on a multi-device plan returns `CollectivesUnavailable` naming `DST-005`. | Running the plan on its primary device. A three-GPU request that trains on one GPU and reports success is the silent-fallback failure with extra steps; naming the row that will fix it also makes the code to delete findable. |
 | D-053 | `UX-001`'s evidence command gained `--features train`. | `cargo test -p incin --test trainer`, which ran zero tests and printed `ok`: Appendix B requires a preview row behind a non-default feature, and the suite is `#![cfg(feature = "train")]`. An evidence command that passes without compiling its subject is the defect `UX-013` removed. |
-| D-054 (2026-07-29) | `ValidMesh` exposes `World` as an associated type with `WORLD` as its defaulted projection. | A `WORLD` constant alone. §3.8 distinguishes valid three-GPU meshes from a `2 × 2`, and a `usize` cannot be bounded on; `M: ValidMesh<World = U3>` is what makes that sentence a compile error. The constant stays defaulted so no implementation can set the two independently — a mesh that reports a world size other than its own binds the wrong number of devices. |
+| D-054 (2026-07-29) | `ValidMesh` exposes `World` as an associated type with `WORLD` as its defaulted projection. | A `WORLD` constant alone. §3.8 distinguishes valid three-GPU meshes from a `2 × 2`, and a `usize` cannot be bounded on; `M: ValidMesh<World = U3>` is what makes that sentence a compile error. The constant stays defaulted so no implementation can set the two independently - a mesh that reports a world size other than its own binds the wrong number of devices. |
 | D-055 (2026-07-29) | `MeshSpec`'s axes are positional and each position accepts only its own marker, so `ValidMesh` has exactly one impl. | A single `MeshAxis` bound on all three parameters. That accepts `MeshSpec<Data<U1>, Pipeline<U3>, TensorParallel<U1>>`, which has the same world size as the mesh it was meant to be and describes three pipeline stages instead of three-way tensor parallelism. The swap is silent everywhere downstream. |
-| D-056 (2026-07-29) | The mesh types are not re-exported from `incin_core::prelude`, and `incin` gains no `distributed` feature in this row. | Both. `Data` and `Pipeline` are ordinary enough words that a glob prelude re-exporting them changes what `use incin::prelude::*` means for existing code the day a preview feature is enabled. And nothing in the facade accepts a mesh yet: `DeviceMesh` is `DST-002` and placements are `DST-003`, so forwarding the feature now would expose a type with no verbs — at the price of doubling `incin`'s feature-powerset job. |
-| D-057 (2026-07-29) | The mesh compile-fail cases live in `crates/incin-core/tests/mesh_compile_fail/`, a second trybuild directory. | Adding them to `tests/compile_fail/`. That directory is built without `distributed`, so a mesh case there fails with `E0433`, "a path that does not resolve" — one of the five scaffolding failures `SHP-007` added its registry check to catch. The registry itself moved to `tests/support/` so two directories do not become two implementations of one property. |
+| D-056 (2026-07-29) | The mesh types are not re-exported from `incin_core::prelude`, and `incin` gains no `distributed` feature in this row. | Both. `Data` and `Pipeline` are ordinary enough words that a glob prelude re-exporting them changes what `use incin::prelude::*` means for existing code the day a preview feature is enabled. And nothing in the facade accepts a mesh yet: `DeviceMesh` is `DST-002` and placements are `DST-003`, so forwarding the feature now would expose a type with no verbs - at the price of doubling `incin`'s feature-powerset job. |
+| D-057 (2026-07-29) | The mesh compile-fail cases live in `crates/incin-core/tests/mesh_compile_fail/`, a second trybuild directory. | Adding them to `tests/compile_fail/`. That directory is built without `distributed`, so a mesh case there fails with `E0433`, "a path that does not resolve" - one of the five scaffolding failures `SHP-007` added its registry check to catch. The registry itself moved to `tests/support/` so two directories do not become two implementations of one property. |
 | D-058 (2026-07-29) | CI gained a step running the preview-tier evidence commands for `UX-001` and `DST-001`. | Leaving them to the powerset job, which runs `cargo hack check` and so compiles those suites without executing them, and to the default test job, which does not enable their features at all. `DST-001`'s trybuild cases in particular assert nothing under `check`. |
-| D-059 (2026-07-29) | `DeviceMesh::bind` reads a `TopologyProbe` trait rather than any ambient hardware. | Querying the machine directly. §2.11's physical proof is about installed devices, link topology, and process layout, and a suite that could only run where those happen to be right would exercise no rejection at all. This is `UX-014`'s `Host` seam for the same reason: `tests/mesh_bind.rs` binds a three-GPU mesh on a runner with no GPU. No implementor ships in this row — a probe that answers questions about CUDA link topology has to call CUDA, and `incin-core` is `no_std`; `DST-005` and `DST-006` own the real ones. |
+| D-059 (2026-07-29) | `DeviceMesh::bind` reads a `TopologyProbe` trait rather than any ambient hardware. | Querying the machine directly. §2.11's physical proof is about installed devices, link topology, and process layout, and a suite that could only run where those happen to be right would exercise no rejection at all. This is `UX-014`'s `Host` seam for the same reason: `tests/mesh_bind.rs` binds a three-GPU mesh on a runner with no GPU. No implementor ships in this row - a probe that answers questions about CUDA link topology has to call CUDA, and `incin-core` is `no_std`; `DST-005` and `DST-006` own the real ones. |
 | D-060 (2026-07-29) | `BindError` is a standalone enum in `dist::mesh`, not a variant set on a core error type. | Adding variants to `crate::err`. It exists only under the `distributed` feature, and a core error enum whose variant set depends on a feature is one that callers cannot match on portably. `BackendError` and `BackwardError` are the precedent for one enum per failure domain. |
-| D-061 (2026-07-29) | The rank layout is fixed at data-outermost, pipeline, tensor-innermost, and `CollectiveGroups` computes it over an axis array rather than three named degrees. | Leaving the convention implicit, or hardcoding three axes. Tensor parallelism exchanges activations on every layer and launchers assign consecutive ranks to one host, so the innermost axis is the one that lands on the fastest link; data parallelism communicates once per step and is outermost. Writing it over `[(MeshAxis, usize); AXIS_COUNT]` means §2.11's expert-parallel axis is an array entry later rather than a re-cut convention — and the round-trip test alone would not catch a reordering, which is why the adjacency test exists beside it. |
-| D-062 (2026-07-29) | Reachability is required within every collective group, and only within them. | Requiring every pair to reach every pair, or only the tensor group. Two ranks that share no group never run a collective together, so a missing path between them is not this module's business; two that do share one cannot run the collective that axis is made of. Only `Unreachable` is refused — a slow link is a performance judgement no library should silently make for a caller. |
+| D-061 (2026-07-29) | The rank layout is fixed at data-outermost, pipeline, tensor-innermost, and `CollectiveGroups` computes it over an axis array rather than three named degrees. | Leaving the convention implicit, or hardcoding three axes. Tensor parallelism exchanges activations on every layer and launchers assign consecutive ranks to one host, so the innermost axis is the one that lands on the fastest link; data parallelism communicates once per step and is outermost. Writing it over `[(MeshAxis, usize); AXIS_COUNT]` means §2.11's expert-parallel axis is an array entry later rather than a re-cut convention - and the round-trip test alone would not catch a reordering, which is why the adjacency test exists beside it. |
+| D-062 (2026-07-29) | Reachability is required within every collective group, and only within them. | Requiring every pair to reach every pair, or only the tensor group. Two ranks that share no group never run a collective together, so a missing path between them is not this module's business; two that do share one cannot run the collective that axis is made of. Only `Unreachable` is refused - a slow link is a performance judgement no library should silently make for a caller. |
 | D-063 (2026-07-29) | The fingerprint digest is a hand-rolled FNV-1a with a length prefix before every field. | `ahash` (seeded per process) or `DefaultHasher` (explicitly unstable across releases). The digest has to be identical in two processes that never speak to each other, which is the whole point of computing a `MeshId` instead of agreeing on one. It is not used as a cryptographic hash. The length prefix is what keeps `persistent = "GPU-1", architecture = "sm_90"` distinct from `persistent = "GPU-", architecture = "1sm_90"`. |
-| D-064 (2026-07-29) | `MeshAxis`'s variants are `Data`, `Pipeline`, and `Tensor`, shadowing the marker type names, and `DST-001`'s trybuild baselines were re-blessed to match. | Renaming the variants to avoid the collision. The typestate/projection pairing is the same one `Placement` and `PlacementKind` already use, and an axis enum whose variants are not named after the axes is worse to read at every call site. The cost is real and is recorded rather than absorbed: rustc now fully qualifies `incin_core::dist::mesh::Data` in `mesh_axes_out_of_order.stderr` and `mesh_zero_axis.stderr`, because the short name became ambiguous inside the module, so `DST-001`'s headline diagnostic is longer than it was. Nothing about what those cases assert changed — both still fail with `E0277` and still pass `every_mesh_case_names_the_rule_it_pins`. |
+| D-064 (2026-07-29) | `MeshAxis`'s variants are `Data`, `Pipeline`, and `Tensor`, shadowing the marker type names, and `DST-001`'s trybuild baselines were re-blessed to match. | Renaming the variants to avoid the collision. The typestate/projection pairing is the same one `Placement` and `PlacementKind` already use, and an axis enum whose variants are not named after the axes is worse to read at every call site. The cost is real and is recorded rather than absorbed: rustc now fully qualifies `incin_core::dist::mesh::Data` in `mesh_axes_out_of_order.stderr` and `mesh_zero_axis.stderr`, because the short name became ambiguous inside the module, so `DST-001`'s headline diagnostic is longer than it was. Nothing about what those cases assert changed - both still fail with `E0277` and still pass `every_mesh_case_names_the_rule_it_pins`. |
 | D-065 (2026-07-30) | `PlacementKind` projects only logical placement facts; a bound `DeviceMesh` supplies `MeshId` separately at execution. | Putting `MeshId` in each non-local variant as the original sketch did. `Placement::kind()` is a static method over a typestate, while `MeshId` is a runtime value derived from a physical topology fingerprint. The method would have to fabricate an identity or consult ambient state, violating the logical/physical proof split. |
 | D-066 (2026-07-30) | `ValidatedDistributed` records a proved `PlacementTransition`, not a `CollectivePlan`. | Defining a placeholder collective plan in `DST-003`. `DST-007` owns group ids, sequence tokens, streams, and divergent-plan preflight; an empty plan would be a value executors could mistake for executable ordering, while moving that planner into this row would collapse two ledger tasks. |
 | D-067 (2026-07-30) | `PipelineStage<Mesh, INDEX>` proves same-stage identity statically and checks `INDEX < stages` at runtime. | A generic const bound comparing `INDEX` with `M::PIPELINE`. The crate promises stable Rust, and comparing a const parameter with a trait-associated const requires unstable generic const expressions. Replacing `INDEX` with typenum would contradict the public shape fixed in §2.11. |
@@ -3882,7 +3882,7 @@ justification as an entry before it may start.
 | D-073 (2026-07-30) | The first CUDA distributed runtime target is two ranks in separate processes on network-accessible hosts; future DP/TP/PP, NCCL, tuning, and CI acceptance rows use that topology. | The earlier planned three-CUDA-device, primarily single-process target. Two real network ranks exercise process identity, transport reachability, timeout, and fail-stop behavior that three devices in one host do not. Completed three-rank logical-mesh evidence remains historical and valid because the mesh algebra is cardinality-generic; it is not a future hardware requirement. |
 | D-074 (2026-07-30) | Transport-neutral dtype, kind, error, group, and stream vocabulary lives in `incin-core::dist::collective`; backends re-export and implement it, while plans, sequence tokens, hashes, and preflight also remain in core. | Keeping the original Appendix A row that grouped every collective type with the backend transport. Core planning cannot depend on `incin-backends` without a crate cycle, and duplicating the vocabulary would let a plan and executor disagree. |
 | D-075 (2026-07-30) | Static plan endpoints require `PlacementOn<M>` in addition to `LegalTransition`, where `M` is the builder's bound `DeviceMesh`. | Treating any legal transition as legal in any plan. `Sharded<MeshA, Axis> -> Replicated<MeshA>` is internally legal but must not enter a plan physically bound for `MeshB`; placement kinds deliberately omit runtime mesh identity, so the type bound is the proof. |
-| D-076 (2026-07-30) | Core preflight is a pure comparison over one `PlanSummary` per rank and returns sealed `AgreedPlan`; exchanging summaries belongs to the transport/launcher. | Opening sockets or invoking a collective from `incin-core`. That would break `no_std`, introduce a backend dependency cycle, and make the agreement rule untestable without a live communicator—the exact deadlock preflight exists to precede. |
+| D-076 (2026-07-30) | Core preflight is a pure comparison over one `PlanSummary` per rank and returns sealed `AgreedPlan`; exchanging summaries belongs to the transport/launcher. | Opening sockets or invoking a collective from `incin-core`. That would break `no_std`, introduce a backend dependency cycle, and make the agreement rule untestable without a live communicator - the exact deadlock preflight exists to precede. |
 | D-077 (2026-07-30) | Native NCCL execution is rank-local and plan-bound: one process submits one `NcclBuffer<K>`, while the deterministic reference backend retains its all-rank `CollectiveBackend` interface. | Forcing NCCL through the reference backend's slice of every rank's buffers. A process-per-rank host cannot possess its peer's CUDA allocation, so that signature would either lie about ownership or stage peer data through host memory and cease to be NCCL execution. |
 | D-078 (2026-07-30) | Two-host startup uses two versioned, bounded TCP sessions: first exchange physical CUDA/NCCL identity to bind one mesh, then exchange the resulting plan summary and NCCL unique id before communicator creation. | Asking operators to copy both GPU UUIDs/architectures into environment variables, or initializing NCCL before comparing plans. The first makes persistent identity an unchecked deployment convention; the second reintroduces the divergent-order deadlock preflight exists to prevent. |
 | D-079 (2026-07-30) | The first NCCL communicator submits the agreed plan strictly in sequence on one physical CUDA stream; logical `StreamId` remains observable but does not imply concurrency yet. | Creating one CUDA/NCCL communicator per logical stream before dependency scheduling exists. Serial submission satisfies every ordering edge and is the correctness baseline; premature concurrency would turn `depends_on` from checked metadata into an unenforced suggestion. |
@@ -3898,7 +3898,7 @@ justification as an entry before it may start.
 | D-089 (2026-07-30) | The two-rank hybrid planner compares DP=2, TP=2, and PP=2 over a `TwoRankPlanningTopology` that retains only shared physical identity and link assumptions. | Carrying the `MeshId` of one candidate into the search. A `MeshId` includes logical degrees, so beginning from a DP=2 identity would make TP=2 and PP=2 appear to target a different machine even when all three interpretations use the same two devices. |
 | D-090 (2026-07-30) | Static manual entry points prove only the selected strategy's constraints, while static auto proves every candidate's dtype, divisibility, nonzero count, and bound; `Dyn` filters the same candidates with structured runtime reasons. | Making a runtime `StrategySet` weaken generic bounds. Stable Rust cannot conditionally require `ShardDivisible<U2>` from a bitmask value, and accepting invalid static alternatives would contradict the static/`Dyn` contract. Manual entry points avoid forcing irrelevant DP, TP, or PP proofs. |
 | D-091 (2026-07-30) | Planning reports label step cost as a deterministic analytical score and expose its memory, communication, and topology inputs; measured calibration belongs to DST-012/DST-013. | Presenting link-weighted byte arithmetic as elapsed time. Until coordinated dry runs and measurements exist, a duration-like value would be false precision and could make an inspectable heuristic look like hardware evidence. |
-| D-092 (2026-07-30) | `dist::tuning` owns a policy-neutral coordination contract—problem/candidate identity, legal reports, scoring, and commit—while TUN-003 still owns `AutotunePolicy`, distributed permits, and cache lifecycle. | Defining a second general tuning service because TUN-003 is not implemented yet. That would split policy and cache semantics before the dependency lands; the coordination layer can be tested independently without inventing those types twice. |
+| D-092 (2026-07-30) | `dist::tuning` owns a policy-neutral coordination contract - problem/candidate identity, legal reports, scoring, and commit - while TUN-003 still owns `AutotunePolicy`, distributed permits, and cache lifecycle. | Defining a second general tuning service because TUN-003 is not implemented yet. That would split policy and cache semantics before the dependency lands; the coordination layer can be tested independently without inventing those types twice. |
 | D-093 (2026-07-30) | A candidate's score is the median of synchronized per-sample maximum-rank durations, with rank-local medians retained only for imbalance diagnostics. | Averaging ranks, taking the maximum of independently computed medians, or optimizing rank zero. A collective completes when its slowest participant completes each sample, and independently reordering rank samples before taking a maximum loses the barrier-aligned experiment. |
 | D-094 (2026-07-30) | Measurement produces `ProvisionalCollectiveTuning`; only one matching positive vote from each of the two ranks mints `CommittedCollectiveTuning`. | Returning a cacheable winner directly from rank-zero selection. A peer timeout, failed validation, or candidate-hash disagreement would then leave a partial result visible to later steps even though no distributed experiment committed it. |
 | D-095 (2026-07-30) | `DistributedContext<M, R>` admits a static `M: ValidMesh<World = U2>` and only `R = U0/U1`; its `Dyn, Dyn` form checks the same world, rank, role, timeout, and launch-device cardinality at runtime. | Treating launcher identity as environment-only data. That would make the expert static surface weaker than tensors, dtypes, and plans, and would allow an impossible static rank to reach a socket before failing. |

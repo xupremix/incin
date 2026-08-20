@@ -4,7 +4,7 @@
 //! `PreparedUpdate`, `Optimizer`, `OptimizerBackend`, `commit_parameter_updates`,
 //! `require_gradients_reached_the_group`, `validate_learning_rate`, plus
 //! `Gradients`/`ScaledOptimizer`), and `AdamW`/`Adam` additionally share
-//! `validate_adam_config`/`load_adam_state`/`prepare_adam_update` — splitting
+//! `validate_adam_config`/`load_adam_state`/`prepare_adam_update` - splitting
 //! them apart would mean writing that same import list three times over a
 //! contiguous 551-line span rather than reading it once.
 

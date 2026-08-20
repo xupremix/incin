@@ -177,7 +177,7 @@ fn mul_forward_computes_elementwise_product_with_broadcast() {
 #[test]
 /// `mul_backward_uses_other_operands_real_values`.
 fn mul_backward_uses_other_operands_real_values() {
-    // d(a*b)/da = b, d(a*b)/db = a — verify the retrieved gradient
+    // d(a*b)/da = b, d(a*b)/db = a - verify the retrieved gradient
     // equals a manually-computed expected value (not merely "some
     // gradient exists").
     let a = vector(vec![2.0, 3.0, 4.0]);
@@ -632,7 +632,7 @@ fn softmax_after_refactor_still_passes_all_prior_behavior() {
     // Regression guard: the refactored softmax (exp(log_softmax(x, dim)))
     // must produce the same output as the old max_keepdim/sub/exp/sum_keepdim/div
     // composition. Verified by running all pre-existing scenarios in one test.
-    // (Pre-existing tests above already cover this — this is an explicit marker
+    // (Pre-existing tests above already cover this - this is an explicit marker
     //  that the refactor did not break them.)
     //
     // Spot-check: vector [0.5, -1.0, 2.0] forward correctness.

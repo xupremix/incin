@@ -22,12 +22,12 @@ pub trait ConcatShape<S2, Axis> {
 /// axis-sum relationship: always resolves to `Dyn`, deferring the actual
 /// dimension check to runtime.
 pub trait TryConcatShape<S2> {
-    /// Always `Dyn` — the concrete size is only known at runtime.
+    /// Always `Dyn` - the concrete size is only known at runtime.
     type Output: Shape;
 }
 
 impl<S1: Shape, S2: Shape> TryConcatShape<S2> for S1 {
-    /// Always `Dyn` — the concrete size is only known at runtime.
+    /// Always `Dyn` - the concrete size is only known at runtime.
     type Output = Dyn;
 }
 

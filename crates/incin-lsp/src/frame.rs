@@ -1,5 +1,5 @@
 //! Raw LSP `Content-Length`-framed message I/O, independent of any JSON-RPC
-//! type modeling — the proxy only needs to locate each message's byte span,
+//! type modeling - the proxy only needs to locate each message's byte span,
 //! not parse its structure, to forward it.
 
 use std::io::{self, BufRead, Write};
@@ -29,7 +29,7 @@ pub fn read_frame<R: BufRead>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
             content_length = Some(parsed);
         }
         // Other headers (e.g. Content-Type) are valid per the LSP spec but
-        // unused here — ignored, not an error.
+        // unused here - ignored, not an error.
     }
     let content_length = content_length.ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "missing Content-Length header")
@@ -40,7 +40,7 @@ pub fn read_frame<R: BufRead>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
 }
 
 /// Writes `body` as one `Content-Length`-framed LSP message to `w`. The
-/// header is computed from `body.len()` — the actual byte length — not a
+/// header is computed from `body.len()` - the actual byte length - not a
 /// char count, so rewritten multi-byte UTF-8 content never desyncs the
 /// reader on the other end.
 pub fn write_frame<W: Write>(w: &mut W, body: &[u8]) -> io::Result<()> {
@@ -78,7 +78,7 @@ mod tests {
         assert!(read_frame(&mut reader).unwrap().is_none());
     }
 
-    /// `Content-Length` is a byte count, not a char count — a rewritten
+    /// `Content-Length` is a byte count, not a char count - a rewritten
     /// diagnostic containing multi-byte UTF-8 (e.g. the 💡/└── glyphs this
     /// tooling already emits elsewhere) must produce a header matching the
     /// serialized body's actual byte length, or the reader on the other end

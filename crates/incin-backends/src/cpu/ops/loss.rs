@@ -1,7 +1,7 @@
 //! Canonical CPU loss helpers for `CpuBackendImpl<D>`.
 //!
 //! `mse_loss` is composed strictly from already-tape-tracked primitives
-//! (elementwise subtraction/multiplication and reduction helpers) — it does
+//! (elementwise subtraction/multiplication and reduction helpers) - it does
 //! NOT implement a hand-derived fused
 //! backward kernel. Because each primitive already pushes its own
 //! `TapeEntry`, the backward gradient through MSE is automatically correct

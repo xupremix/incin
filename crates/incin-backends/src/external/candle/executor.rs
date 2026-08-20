@@ -2,7 +2,7 @@
 //!
 //! Candle's own tensor type is foreign: it carries dimensions, strides, dtype,
 //! and device, but no [`TensorMeta`], and no trait implementation can add a
-//! field to a type this crate does not own. [`CandleStorage`] is the seam —
+//! field to a type this crate does not own. [`CandleStorage`] is the seam -
 //! it pairs a borrowed-or-owned `candle_core::Tensor` with the checked metadata
 //! the descriptor contract requires, validated once at the boundary.
 //!

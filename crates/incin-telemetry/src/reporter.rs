@@ -23,7 +23,7 @@ use alloc::string::{String, ToString};
 /// default-provided wrappers that fill in `schema_version` and build the
 /// event struct for you, so a training loop can write
 /// `reporter.scalar("loss", step, value)` instead of hand-constructing a
-/// `ScalarEvent` — this is `docs/growth/05-observability-and-scaffolding.md`
+/// `ScalarEvent` - this is `docs/growth/05-observability-and-scaffolding.md`
 /// Task 05.1's ergonomic entry point.
 pub trait Reporter {
     /// Emit a scalar metric event.

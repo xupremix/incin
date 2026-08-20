@@ -50,7 +50,7 @@ impl<B: StorageBackend> ExecutionContext<B> {
     ///
     /// Without `std` there is no thread-local to read and no
     /// [`ExecutionPolicy::scope`] to have installed anything, so the answer is
-    /// the default policy — the same reasoning, and the same resolution, as
+    /// the default policy - the same reasoning, and the same resolution, as
     /// [`GradMode::current`](crate::exec::GradMode::current). Offering it in
     /// both configurations rather than gating it on `std` keeps a caller like
     /// `Tensor::add` from having to exist only in one of them.

@@ -2,8 +2,8 @@
 //!
 //! `EXE-007` proved the contract for CPU. These cases prove the same sealed
 //! `Validated<MatMulExact>` binds and executes against a second, genuinely
-//! different backend — so the descriptor path is a shared contract rather than
-//! a CPU-shaped one — and that the binder's rejections are enforced per backend
+//! different backend - so the descriptor path is a shared contract rather than
+//! a CPU-shaped one - and that the binder's rejections are enforced per backend
 //! rather than inherited from the CPU implementation.
 #![cfg(feature = "wgpu")]
 
@@ -585,8 +585,8 @@ fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
 ///
 /// This is the case that was missing when `wgpu/executor.rs` implemented
 /// thirteen unary activations that `WGPU_CAPABILITIES` never advertised. A
-/// direct `backend().execute(..)` — which is what every other case in this file
-/// does — would have passed the whole time, because it never asks the
+/// direct `backend().execute(..)` - which is what every other case in this file
+/// does - would have passed the whole time, because it never asks the
 /// capability registry anything. `dispatch::execute` does ask, so it is the
 /// only call that can tell an implemented operation from a reachable one.
 #[test]

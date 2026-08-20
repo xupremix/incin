@@ -2,7 +2,7 @@
 //!
 //! This is the half of automatic device selection that inspects real hardware.
 //! It runs on the machine that executes the binary, which is the only machine
-//! whose hardware is relevant — see `incin_core::tensor::auto_device` for why
+//! whose hardware is relevant - see `incin_core::tensor::auto_device` for why
 //! the compile-time half deliberately does not probe.
 //!
 //! The order is CUDA -> Metal -> WGPU -> CPU: native GPU first, then the portable GPU
@@ -133,7 +133,7 @@ fn probe_cuda() -> Option<DeviceId> {
 /// Shared rather than created per call because creating and dropping instances
 /// concurrently takes the process down: two threads each probing twice is a
 /// reproducible `SIGSEGV` inside adapter enumeration on a Mesa/llvmpipe stack,
-/// found by `UX-014`'s `cargo incin doctor` — which was the first caller to
+/// found by `UX-014`'s `cargo incin doctor` - which was the first caller to
 /// probe the same family more than once in a process.
 ///
 /// This does not cache *detection*, which the module contract says is

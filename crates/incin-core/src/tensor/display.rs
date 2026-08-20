@@ -2,7 +2,7 @@
 //! `HostInterop::host_format_display`/`host_format_debug` default bodies
 //! (`tensor/backend.rs`).
 //!
-//! This module knows nothing about `Backend`, `Storage`, or dtype markers —
+//! This module knows nothing about `Backend`, `Storage`, or dtype markers -
 //! it takes a plain shape and a flat, row-major value buffer and produces
 //! the bracketed grid PyTorch prints for `print(tensor)`. The `tensor(...)`
 //! wrapper and any dtype/device/`requires_grad` footer are `Tensor`'s own
@@ -37,7 +37,7 @@ pub(crate) enum Values {
 /// Renders `values` reshaped over `shape` the way PyTorch's default printer
 /// does: a shared decimal width across the whole tensor, right-aligned
 /// columns, and `...` in place of any dimension longer than
-/// [`SUMMARIZE_THRESHOLD`]. Returns just the bracketed value grid — no
+/// [`SUMMARIZE_THRESHOLD`]. Returns just the bracketed value grid - no
 /// `tensor(...)` wrapper, no metadata.
 pub(crate) fn render(shape: &[usize], values: &Values) -> String {
     let cells = format_cells(values);
@@ -112,7 +112,7 @@ fn format_one_float(v: f64, scientific: bool, all_integral: bool) -> String {
 enum Tree {
     Leaf(String),
     Node(Vec<Tree>),
-    /// Stands in for a run of dropped siblings — either scalar leaves (in
+    /// Stands in for a run of dropped siblings - either scalar leaves (in
     /// the innermost dimension) or whole sub-arrays (in an outer one).
     Ellipsis,
 }

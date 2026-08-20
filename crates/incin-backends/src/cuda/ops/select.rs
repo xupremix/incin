@@ -4,7 +4,7 @@
 //! trip through the generic pointwise pipeline: `where_cond` reads three
 //! operands of two different dtypes (a `bool` mask, two `float` values), and
 //! `masked_fill` reads a `bool` mask beside a `float` operand and a scalar
-//! attribute — neither shape fits `launch_binary_op`, which reads and writes
+//! attribute - neither shape fits `launch_binary_op`, which reads and writes
 //! exactly two operands of one shared dtype. Both kernels are compiled once
 //! from `kernels/select.cu` and cached under the module name `select`, same
 //! pattern as `concat`/`shape_op`/`compare`.
@@ -60,7 +60,7 @@ fn require_same_device(a: &CudaStorage, b: &CudaStorage) -> Result<()> {
 ///
 /// Not `crate::cuda::ops::shape::launch_broadcast`: that launches
 /// `shape.cu`'s `shape_op`, whose data pointers are a hardcoded
-/// `float*`/`float*` — the same byte-width assumption this session already
+/// `float*`/`float*` - the same byte-width assumption this session already
 /// narrowed CUDA's `broadcast`/`broadcast_training` capability rows to
 /// `F32_ONLY` over. Narrowing the row stops `BroadcastAs` from reaching it
 /// on a non-`f32` dtype; it does nothing about a direct internal call like
@@ -69,7 +69,7 @@ fn require_same_device(a: &CudaStorage, b: &CudaStorage) -> Result<()> {
 /// `crate::cuda::ops::shape::prepare_shape_params` for the index arithmetic
 /// (identical to `shape_op`'s `op_mode == 3`) and launches `select.cu`'s
 /// `broadcast_bool_op`, the `unsigned char` port of that case, against the
-/// mask's own raw byte buffer directly — a `bool` element is already one
+/// mask's own raw byte buffer directly - a `bool` element is already one
 /// byte, so unlike `shape_op`'s `f32` path there is no `transmute` involved
 /// on either data pointer, only on the uploaded `params` buffer.
 #[cfg(feature = "cuda")]
@@ -223,7 +223,7 @@ pub(crate) fn launch_where_cond(
 /// exactly: neither backend's `masked_fill` currently routes a gradient back
 /// to `input`, so a masked-fill result is a leaf on the tape on both. That is
 /// an existing, pre-`compare`/`select` gap shared by both backends rather
-/// than something this module introduces — fixing it would mean adding the
+/// than something this module introduces - fixing it would mean adding the
 /// same backward (`grad_input = masked_fill(grad_out, mask, 0.0)`) to CPU
 /// too, which is separate work, not a CUDA-only patch that would leave the
 /// two backends disagreeing on what `masked_fill` differentiates through.

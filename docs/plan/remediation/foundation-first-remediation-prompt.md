@@ -252,7 +252,7 @@ For this run, API tooling should protect the external `incin` facade. Internal c
 
 ---
 
-# 6. FND-000 — Reset truth and contain false product claims
+# 6. FND-000 - Reset truth and contain false product claims
 
 ## 6.1 Reopen false task states
 
@@ -313,7 +313,7 @@ FND-000 passes only when:
 
 ---
 
-# 7. FND-001 — Lock the public boundary and stability tiers
+# 7. FND-001 - Lock the public boundary and stability tiers
 
 ## 7.1 Stable root
 
@@ -396,7 +396,7 @@ Do not block this task on semver reports for every private internal crate. Run `
 
 ---
 
-# 8. FND-002 — Make invariants explicit and unforgeable
+# 8. FND-002 - Make invariants explicit and unforgeable
 
 ## 8.1 Classify public data types
 
@@ -456,7 +456,7 @@ Use property tests where arithmetic combinations are large.
 
 ---
 
-# 9. FND-003 — Establish one typed error and failure contract
+# 9. FND-003 - Establish one typed error and failure contract
 
 ## 9.1 Preserve compatibility where sensible
 
@@ -518,7 +518,7 @@ Replace silent float-to-integer truncation of NaN, infinity, and out-of-range va
 
 ---
 
-# 10. FND-004 — Freeze canonical operation semantics and descriptors
+# 10. FND-004 - Freeze canonical operation semantics and descriptors
 
 This is the most important design task in the run. Do not rush it or patch only the visible operations.
 
@@ -544,7 +544,7 @@ For each operation record:
 - aliasing/layout behavior;
 - backend support status.
 
-Write the human-readable form to `docs/OPERATION_SEMANTICS.md`, but make code—not prose—the source consumed by validation and capability reporting.
+Write the human-readable form to `docs/OPERATION_SEMANTICS.md`, but make code - not prose - the source consumed by validation and capability reporting.
 
 ## 10.2 Descriptor contract
 
@@ -600,7 +600,7 @@ Archive a reviewed mapping from old trait method to descriptor type.
 
 ---
 
-# 11. FND-005 — Migrate CPU eager execution to the durable contract
+# 11. FND-005 - Migrate CPU eager execution to the durable contract
 
 Do not implement compiler execution or GPU breadth. The goal is to make ordinary CPU eager execution consume the new stable contracts.
 
@@ -811,9 +811,9 @@ At the end, report:
 7. test counts reproduced from the current commit only;
 8. blockers and missing hardware/tooling;
 9. the next recommended task, which must be one of:
-   - autograd/module conformance on the CPU contract;
-   - real ONNX initializer/state loading;
-   - data-pipeline reliability;
-   - compiled CPU vertical slice.
+  - autograd/module conformance on the CPU contract;
+  - real ONNX initializer/state loading;
+  - data-pipeline reliability;
+  - compiled CPU vertical slice.
 
 Do not recommend GPU breadth, compiler optimization, or distributed expansion unless FND-005 is complete.

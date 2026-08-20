@@ -1,5 +1,5 @@
 //! Verifies `ComputeStats` (docs/growth/04-compile-time-stats.md, v1) against
-//! hand-computed numbers — including the exact params/MACs example numbers
+//! hand-computed numbers - including the exact params/MACs example numbers
 //! (101,770 / 101,632) from the growth doc's own pretty-print mockup, so
 //! this test doubles as a check that the doc's illustrative numbers and the
 //! real implementation actually agree.
@@ -39,7 +39,7 @@ fn mlp_stats_match_the_growth_docs_own_worked_example() {
 
     let stats = model.compute_stats(1);
     // docs/growth/04-compile-time-stats.md's pretty-print mockup gives these
-    // exact totals for this exact Mlp shape — this test is also a check
+    // exact totals for this exact Mlp shape - this test is also a check
     // that the doc's own illustrative numbers are correct, not just that
     // this implementation is internally consistent.
     assert_eq!(stats.params, 101_770);
@@ -77,7 +77,7 @@ fn sequential_with_an_activation_sums_correctly_and_the_activation_contributes_n
 fn conv2d_params_are_exact_but_macs_are_the_documented_v1_gap() {
     // Conv2d's params come from the same generic "sum of Param fields"
     // path every #[module] struct gets automatically (no hand-written
-    // formula needed) — so this is exact. Its MACs need the input's
+    // formula needed) - so this is exact. Its MACs need the input's
     // spatial size, which Conv2d doesn't store, so v1 honestly reports 0
     // rather than guessing; see nn/stats.rs's module docs.
     let conv = Conv2d::<s![16, 3, 3, 1, 1, 1], TestBackend>::build(()).unwrap();

@@ -91,8 +91,8 @@ where
         return Ok(total_norm);
     }
 
-    // The epsilon keeps the divisor away from zero. It cannot matter here —
-    // this branch already established `total_norm > max_norm > 0` — but it
+    // The epsilon keeps the divisor away from zero. It cannot matter here -
+    // this branch already established `total_norm > max_norm > 0` - but it
     // keeps the expression the same one every reference implementation writes,
     // which is worth more than the branch it would save.
     let scale = max_norm / (total_norm + 1e-6);
@@ -110,7 +110,7 @@ where
 /// rescale: a gradient with one exploding element and otherwise-reasonable
 /// ones is left with that one element flattened to the bound rather than
 /// having its whole direction rescaled by the outlier. The two are not
-/// interchangeable and neither dominates the other — `clip_grad_norm`
+/// interchangeable and neither dominates the other - `clip_grad_norm`
 /// preserves the gradient's direction, this does not.
 ///
 /// Call it between the backward pass and [`Optimizer::step`](crate::optim::Optimizer::step), exactly where

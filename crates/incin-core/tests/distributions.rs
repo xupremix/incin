@@ -112,7 +112,7 @@ fn a_downstream_distribution_composes_catalog_operations() {
     // downstream author must write one. The orphan rule forbids a blanket
     // `impl<Bk> DistributionExecutor<ConstantAdd, f32> for Bk` from outside
     // the crate that owns the trait, so the executor is implemented for one
-    // concrete backend — which is exactly the shape of the extension a
+    // concrete backend - which is exactly the shape of the extension a
     // downstream crate can actually write. The offset is what proves the
     // composition ran: a uniform draw on [0, 1) shifted by 42 must land in
     // [42, 43), which no unshifted sampler could produce.

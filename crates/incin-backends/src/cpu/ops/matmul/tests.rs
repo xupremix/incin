@@ -327,7 +327,7 @@ fn batched_matmul_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 /// inputs push the f32 finite-difference numerator into
 /// catastrophic-cancellation noise at `eps=1e-4` (observed empirically:
 /// values up to 18 produced ~5% relative error purely from f32
-/// subtraction rounding, not a gradient bug — confirmed by the
+/// subtraction rounding, not a gradient bug - confirmed by the
 /// analytic gradient exactly matching the hand-computed reference in
 /// `batched_matmul_gradcheck_*`'s sibling forward/backward tests above).
 #[test]

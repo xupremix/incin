@@ -18,8 +18,8 @@ use incin_core::tensor::dtype::DTypeDescriptor;
 /// Allocate a zeroed device buffer sized for `elements` values of `dtype`.
 ///
 /// Before `EXE-008` these allocations multiplied the element count by a literal
-/// `4` and unwrapped the driver result, so an `F64` or `I64` output — both of
-/// which the CUDA capability registry accepts for storage and shape work — was
+/// `4` and unwrapped the driver result, so an `F64` or `I64` output - both of
+/// which the CUDA capability registry accepts for storage and shape work - was
 /// given half the bytes its own recorded dtype requires, and an allocation
 /// failure aborted the process. The dtype now decides the width, the
 /// multiplication is checked, and the driver's failure is reported.

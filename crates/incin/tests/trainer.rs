@@ -4,7 +4,7 @@
 //! Both halves are here, and they are different kinds of test on purpose. The
 //! CPU half really trains: a model, an optimizer, batches, a loss that goes
 //! down. The three-GPU half plans against a machine that does not exist,
-//! because the point of the deliverable is that *the model* did not change —
+//! because the point of the deliverable is that *the model* did not change -
 //! and a test that could only describe this runner could never check that.
 //!
 //! What every test below is really guarding is one sentence of §2: "'Easy' must
@@ -39,7 +39,7 @@ impl Machine for ThreeGpus {
     }
 }
 
-/// A machine with the CUDA feature compiled in and no CUDA hardware — the
+/// A machine with the CUDA feature compiled in and no CUDA hardware - the
 /// configuration a silent fallback would hide.
 struct CudaCompiledButAbsent;
 
@@ -245,7 +245,7 @@ fn a_build_with_no_backend_has_nowhere_to_run() {
 }
 
 /// The default has to be the boring one, and it has to be the CPU rather than
-/// whatever is fastest — otherwise an unchanged program moves onto a GPU the
+/// whatever is fastest - otherwise an unchanged program moves onto a GPU the
 /// day one appears.
 #[test]
 fn the_default_plan_is_one_cpu_and_one_epoch() {
@@ -357,7 +357,7 @@ fn the_model_trains_on_the_cpu() -> Result<()> {
     Ok(())
 }
 
-/// The three-GPU half. Same `model()`, same `batches()`, different plan — and
+/// The three-GPU half. Same `model()`, same `batches()`, different plan - and
 /// `fit` refuses rather than running a third of the work on one GPU.
 #[test]
 fn the_same_model_plans_for_three_gpus_and_refuses_to_fake_the_run() -> Result<()> {
@@ -450,8 +450,8 @@ fn a_failing_step_reports_the_epoch_and_batch_it_failed_in() -> Result<()> {
     Ok(())
 }
 
-/// `epochs(0)` is a plan that trains nothing. It is allowed — planning without
-/// training is a use of this API — but it must not silently become one epoch.
+/// `epochs(0)` is a plan that trains nothing. It is allowed - planning without
+/// training is a use of this API - but it must not silently become one epoch.
 #[test]
 fn zero_epochs_runs_nothing_rather_than_being_rounded_up() -> Result<()> {
     let mut model = model().expect("the model builds");

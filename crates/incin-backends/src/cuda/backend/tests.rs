@@ -49,7 +49,7 @@ fn storage_validation_accepts_renderable_float_family_and_i64_indices() {
 // The tests below exercise real GPU dispatch (`::{reshape,
 // transpose, narrow, broadcast_as, squeeze, stack, slice, flatten,
 // broadcast_left, matmul}`) and therefore need a real CUDA device to
-// run — none is available in this environment, so this path is compile-verified
+// run - none is available in this environment, so this path is compile-verified
 // only locally. `#[ignore]`d so `cargo test` stays green everywhere; run with
 // `cargo test --features cuda,std -- --ignored` on real hardware.
 
@@ -174,7 +174,7 @@ fn broadcast_bool_mask_expands_a_lower_rank_mask() {
 }
 
 /// The composition `Execute<op::WhereCond>` performs when the mask
-/// arrives at a lower rank than the data it selects between — the exact
+/// arrives at a lower rank than the data it selects between - the exact
 /// case `where_cond`'s own descriptor permits (its output shape is the
 /// broadcast of all three operands, not just the two data ones).
 #[test]
@@ -392,7 +392,7 @@ fn conv2d_groups_matches_two_independent_convs() {
 
 // The tests below cover the methods added in this pass: `unsqueeze`,
 // the host-readback conversions, `addmm`/`bmm`/
-// `scaled_dot_product_attention`. Same convention as everything above —
+// `scaled_dot_product_attention`. Same convention as everything above -
 // `#[ignore]`d because there is no CUDA device in this environment, so
 // only compilation is verified here; run with `--ignored` on real
 // hardware. Fixtures and expected values are the same ones the CPU and

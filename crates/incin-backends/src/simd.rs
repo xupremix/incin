@@ -54,7 +54,7 @@ pub const fn simd_lanes<T: Sized>() -> usize {
 /// [`simd_vector_bytes`] answers a different question: what the compiler was
 /// told to assume. A stock `cargo build` for `x86_64-unknown-linux-gnu` targets
 /// the baseline ISA, where `target_feature = "avx2"` is false and every
-/// `simd_lanes::<f32>() >= 8` branch is dead code — so the AVX2 kernels in this
+/// `simd_lanes::<f32>() >= 8` branch is dead code - so the AVX2 kernels in this
 /// crate were unreachable in exactly the builds users install, and the CPU
 /// backend fell back to a scalar loop. On this machine that was a 9x difference
 /// on a 65536-element `f32` add.

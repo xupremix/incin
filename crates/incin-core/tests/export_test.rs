@@ -28,7 +28,7 @@ fn test_gguf_export_and_inspect_roundtrip() {
 /// so a "Q8_0" file was actually full-precision data mislabeled as
 /// quantized. Weight is [8, 4] = 32 elements (one Q8_0 block: 34 bytes),
 /// bias is [8] elements (not a multiple of 32, so it must stay F32: 32
-/// bytes) — this pins both the per-tensor quantization eligibility rule
+/// bytes) - this pins both the per-tensor quantization eligibility rule
 /// and that the declared dtype in the tensor table matches the bytes
 /// actually written.
 #[test]

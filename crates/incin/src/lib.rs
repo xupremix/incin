@@ -5,7 +5,7 @@
 //! ## Key Features
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
-//! * **Backends**: CPU is enabled by default and is the complete backend — every backend-executable operation in the canonical catalog has a CPU executor. The native CUDA, WGPU, and Metal backends are explicit opt-ins and are previews: each covers a documented subset of the catalog, so a model built from the layers in this crate trains on CPU. `docs/capabilities.md` is generated from the backend registrations and answers this per operation. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
+//! * **Backends**: CPU is enabled by default and is the complete backend - every backend-executable operation in the canonical catalog has a CPU executor. The native CUDA, WGPU, and Metal backends are explicit opt-ins and are previews: each covers a documented subset of the catalog, so a model built from the layers in this crate trains on CPU. `docs/capabilities.md` is generated from the backend registrations and answers this per operation. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
 //! * **Macro-driven Ergonomics**: Stable macros such as `s![]`, `shape![]`, `axis![]`, and `i![]` define shapes, selectors, and indexing. Partial ONNX expansion is available separately as `experimental::model!`.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
@@ -28,7 +28,7 @@
 //! ## Neural Network Modules
 //!
 //! Building and running a model is straightforward using the `#[module]` attribute and the
-//! `seq!`/`SeqTy!` macros — `SeqTy!` names the same nested `Sequential<...>`
+//! `seq!`/`SeqTy!` macros - `SeqTy!` names the same nested `Sequential<...>`
 //! type that `seq!` builds a value of, so a layer list only needs to be written once per meaning
 //! instead of the field type being hand-nested separately:
 //!
@@ -528,7 +528,7 @@ pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::devic
 // trait-bound resolution the moment anyone actually used it, far from the
 // real problem ("you disabled `cpu` and didn't pick another backend").
 // Instead, every alias below drops the `B = DefaultBackend` default entirely
-// in this configuration, same as `Tensor` already did — forcing an explicit,
+// in this configuration, same as `Tensor` already did - forcing an explicit,
 // immediate "expected 2 generic arguments" error at the actual call site.
 
 #[cfg(feature = "cpu")]
@@ -555,7 +555,7 @@ pub type Tensor<
 //
 // Each of these that takes a `B` (backend) param is declared twice, gated on
 // the `cpu` feature: with a `= DefaultBackend` default when `cpu` is on
-// (the common case), and with NO default when it's off — same reasoning as
+// (the common case), and with NO default when it's off - same reasoning as
 // `Tensor` above and `DefaultBackend` itself.
 #[cfg(feature = "cpu")]
 /// Linear.
@@ -631,7 +631,7 @@ pub type Embedding<S, B> = incin_core::nn::Embedding<S, B>;
 pub mod macros {
     // `impl_arg_into` deliberately excluded: it's an internal codegen helper
     // invoked once, internally, by `incin-core` itself
-    // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
+    // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) - no
     // end-user code calls it, and it has no documented public contract.
     pub use incin_macros::{i, s, shape, tensor};
 
@@ -689,7 +689,7 @@ pub mod prelude {
     pub use incin_backends::IncinBackend;
 
     // Device values are the preferred allocation targets.
-    // These are extension traits, so they only resolve when in scope — which
+    // These are extension traits, so they only resolve when in scope - which
     // is the whole reason they are in the prelude rather than left to a
     // module path. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.
     pub use incin_backends::nn_target::InitOnTarget;

@@ -1,5 +1,5 @@
 //! CPU reduction kernels: every method now has a real
-//! implementation — `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
+//! implementation - `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
 //! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
 //! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
 //! `argmax`/`argmin` (Phase 2, forward-only by structural design). Zero
@@ -15,7 +15,7 @@
 //! ## Design Notes
 //!
 //! * `sum_all` / `mean_all` backward: the incoming scalar gradient must be
-//!   *broadcast* back to every element of the original shape — the exact
+//!   *broadcast* back to every element of the original shape - the exact
 //!   inverse of sum. This is NOT a call to `tape::unbroadcast` (which handles
 //!   the opposite direction); instead, the backward closure fills a new
 //!   contiguous storage with `grad_scalar / n` (for `mean_all`) or
@@ -26,7 +26,7 @@
 //!   because `tape::unbroadcast` (Plan 02) depends on the same axis-reduce
 //!   logic internally. Rather than making tape.rs's private helpers
 //!   `pub(crate)` and introducing a dependency, this file carries its own
-//!   `sum_axis_keepdim` / `sum_axis_squeeze` helpers — identical in logic to
+//!   `sum_axis_keepdim` / `sum_axis_squeeze` helpers - identical in logic to
 //!   tape.rs's private versions, independent in scope, so that neither side
 //!   regresses the other's tests.
 //!
@@ -36,18 +36,18 @@
 //! * `max_dim` / `min_dim` / `max_keepdim` / `min_keepdim` / `max_all` /
 //!   `min_all` route gradient to exactly one winning element per output
 //!   position via `max_axis_with_indices` / `min_axis_with_indices` (strict
-//!   `>`/`<` comparison — first-encountered winner on ties, never splitting
+//!   `>`/`<` comparison - first-encountered winner on ties, never splitting
 //!   or duplicating gradient mass) and the shared `scatter_axis_grad`
 //!   backward helper.
 //!
-//! * `argmax` / `argmin` are forward-only — `incin-core`'s
+//! * `argmax` / `argmin` are forward-only - `incin-core`'s
 //!   `Tensor::argmax`/`argmin` structurally force `G = NoGrad` on their
 //!   output regardless of the input's own `G`, so neither method calls
 //!   `tape::push` (the one deliberate exception to this file's
 //!   every-other-method unconditional-push convention).
 //!
 //! * Any leftover unimplemented method (there are none as of Phase 2) would
-//!   keep returning the typed unsupported-backend-operation error — never a
+//!   keep returning the typed unsupported-backend-operation error - never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use incin_core::error::Error;

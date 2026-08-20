@@ -89,7 +89,7 @@ impl<
     Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
 > KernelConv2dShape<Dyn, Stride, Padding> for Dyn
 {
-    /// Always `Dyn` — the concrete size is only known at runtime.
+    /// Always `Dyn` - the concrete size is only known at runtime.
     type Output = Dyn;
     /// Computes the convolved output shape from the runtime input/kernel
     /// dims using the standard conv output-size formula.

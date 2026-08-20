@@ -123,7 +123,7 @@ The prior master plan itself acknowledges that the checked `CMP-001` through `CM
 
 ---
 
-# PART I — PUBLIC API RECONSTRUCTION
+# PART I - PUBLIC API RECONSTRUCTION
 
 ## 5. Current public API defects
 
@@ -248,7 +248,7 @@ Add:
 
 ## 7. API implementation tasks
 
-### API-001 — Replace wildcard facade exports
+### API-001 - Replace wildcard facade exports
 
 **Priority:** P0  
 **Files:** `crates/incin/src/lib.rs`, `crates/incin-backends/src/lib.rs`, `crates/incin-core/src/lib.rs`, `crates/incin-core/src/tensor/mod.rs`  
@@ -260,10 +260,10 @@ Add:
 2. Delete root wildcard exports.
 3. Add explicit exports following section 6.
 4. Split `incin_core::prelude` into:
-   - `prelude`: stable common names;
-   - `compile`: curated compiled preview;
-   - `backend_authoring`: descriptor and executor extension API;
-   - `test_utils`: feature-gated fake backends and test helpers.
+  - `prelude`: stable common names;
+  - `compile`: curated compiled preview;
+  - `backend_authoring`: descriptor and executor extension API;
+  - `test_utils`: feature-gated fake backends and test helpers.
 5. Remove autoref fallback traits and compiler representation types from the prelude.
 6. Update examples/docs to import from the correct namespaces.
 7. Add a migration table for every removed path.
@@ -276,7 +276,7 @@ Add:
 - compile-pass and compile-fail API fixtures pass;
 - `cargo semver-checks` report is archived.
 
-### API-002 — Make marker and proof constructors opaque
+### API-002 - Make marker and proof constructors opaque
 
 **Priority:** P0  
 **Files:** `tensor/base.rs`, `tensor/device.rs`, `shapes/shape.rs`, `compiled/alloc.rs`, backend tuning/storage/var files  
@@ -304,7 +304,7 @@ impl CheckedNumel {
 
 **Acceptance:** external tuple construction fails; all valid constructors remain ergonomic; serialization cannot bypass validation; no unsafe transmute is introduced to regain construction.
 
-### API-003 — Remove production exposure of test/prototype internals
+### API-003 - Remove production exposure of test/prototype internals
 
 **Priority:** P0  
 **Files:** `tensor/backend.rs`, compiled module exports, viz panel exports  
@@ -312,7 +312,7 @@ impl CheckedNumel {
 
 Move `DummyBackend` and `PanicTestPanel` behind test/test-utils gates. Keep compiled pass representations private until executable semantics exist. Rustdoc must not advertise fake numerical behavior as a backend.
 
-### API-004 — Establish API tier and semver policy
+### API-004 - Establish API tier and semver policy
 
 **Priority:** P1  
 **Files:** `README.md`, `CHANGELOG.md`, new `docs/API_STABILITY.md`, CI  
@@ -322,7 +322,7 @@ Document stable/preview/experimental tiers, feature promises, minimum supported 
 
 ---
 
-# PART II — EXECUTION AND BACKEND ARCHITECTURE
+# PART II - EXECUTION AND BACKEND ARCHITECTURE
 
 ## 8. Monolithic backend trait: current state and replacement
 
@@ -401,32 +401,32 @@ The following operations are explicitly routed to unsupported macro implementati
 
 ### CUDA
 
-- **TensorOps — 38:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `float_to_scalar`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype`
-- **FloatOps — 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
-- **CreationOps — 3:** `full`, `arange`, `linspace`
-- **ReductionOps — 3:** `prod_all`, `prod_dim`, `cumsum`
+- **TensorOps - 38:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `float_to_scalar`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype`
+- **FloatOps - 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
+- **CreationOps - 3:** `full`, `arange`, `linspace`
+- **ReductionOps - 3:** `prod_all`, `prod_dim`, `cumsum`
 
 ### WGPU
 
-- **TensorOps — 33:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`
-- **FloatOps — 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
-- **CreationOps — 3:** `full`, `arange`, `linspace`
-- **ReductionOps — 3:** `prod_all`, `prod_dim`, `cumsum`
+- **TensorOps - 33:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`
+- **FloatOps - 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
+- **CreationOps - 3:** `full`, `arange`, `linspace`
+- **ReductionOps - 3:** `prod_all`, `prod_dim`, `cumsum`
 
 ### Metal
 
-- **TensorOps — 38:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `float_to_scalar`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype`
-- **FloatOps — 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
-- **CreationOps — 3:** `full`, `arange`, `linspace`
-- **ReductionOps — 9:** `max_all`, `min_all`, `max_dim`, `max_keepdim`, `min_dim`, `min_keepdim`, `prod_all`, `prod_dim`, `cumsum`
+- **TensorOps - 38:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`, `float_to_scalar`, `float_to_vec1`, `int_to_scalar`, `int_to_vec1`, `tensor_to_dtype`
+- **FloatOps - 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
+- **CreationOps - 3:** `full`, `arange`, `linspace`
+- **ReductionOps - 9:** `max_all`, `min_all`, `max_dim`, `max_keepdim`, `min_dim`, `min_keepdim`, `prod_all`, `prod_dim`, `cumsum`
 
 ### Candle adapter
 
-- **TensorOps — 33:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`
-- **FloatOps — 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
-- **CreationOps — 3:** `full`, `arange`, `linspace`
-- **ReductionOps — 3:** `prod_all`, `prod_dim`, `cumsum`
-- **QuantizedOps — 1:** `all quantized operations return UnsupportedBackendOperation`
+- **TensorOps - 33:** `where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`, `unsqueeze`, `repeat`, `pad`, `triu`, `tril`, `diag`, `cmp_eq`, `cmp_ne`, `cmp_lt`, `cmp_le`, `cmp_gt`, `cmp_ge`, `logical_and`, `logical_or`, `logical_not`, `sub_scalar`, `div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp`, `addmm`, `bmm`, `scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm`, `instance_norm`
+- **FloatOps - 26:** `sign`, `floor`, `ceil`, `round`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`, `rsqrt`, `trunc`, `frac`, `powf`, `clamp`, `atan2`, `fmod`, `remainder`
+- **CreationOps - 3:** `full`, `arange`, `linspace`
+- **ReductionOps - 3:** `prod_all`, `prod_dim`, `cumsum`
+- **QuantizedOps - 1:** `all quantized operations return UnsupportedBackendOperation`
 
 
 ### CPU caveats
@@ -454,7 +454,7 @@ Do not mechanically implement every operation merely to make an unsupported coun
 
 ## 10. Backend/execution tasks
 
-### EXE-001 — Finish the descriptor executor migration
+### EXE-001 - Finish the descriptor executor migration
 
 **Priority:** P0  
 **Files:** `incin-core/src/tensor/backend.rs`, `incin-core/src/exec/*`, `incin-backends/src/descriptor_bind.rs`, `dispatch.rs`, `dispatch_executor.rs`, every backend  
@@ -474,7 +474,7 @@ Do not mechanically implement every operation merely to make an unsupported coun
 
 **Acceptance:** no public backend type can satisfy an operation bound without implementing or deliberately adapting that operation; unsupported operations are rejected by capability/trait selection before allocation; old broad operation traits are private compatibility code or deleted.
 
-### CAP-001 — Replace broad capability classes with operation-granular truth
+### CAP-001 - Replace broad capability classes with operation-granular truth
 
 **Priority:** P0  
 **Files:** `incin-backends/src/capability.rs`, `capability_docs.rs`, backend registries, `docs/capabilities.md`  
@@ -484,7 +484,7 @@ Create one typed registry consumed by dispatch, docs, doctor, and tests. Generat
 
 **Acceptance:** the docs cannot claim pointwise support while a member operation returns unsupported; registry and actual `Execute<Op>` implementations are cross-checked at compile/test time.
 
-### BE-CPU-001 — Make CPU the semantic reference backend
+### BE-CPU-001 - Make CPU the semantic reference backend
 
 **Priority:** P0  
 **Files:** `incin-backends/src/cpu/**`  
@@ -498,7 +498,7 @@ Create one typed registry consumed by dispatch, docs, doctor, and tests. Generat
 - add property tests against a simple scalar reference implementation;
 - add finite-difference gradient tests for differentiable operations.
 
-### BE-GPU-001 — Shared pointwise expression layer
+### BE-GPU-001 - Shared pointwise expression layer
 
 **Priority:** P1  
 **Files:** CUDA/WGPU/Metal codegen and operation modules  
@@ -508,7 +508,7 @@ Implement the 26 missing float operations through a shared validated expression 
 
 Required tests per operation: scalar and broadcast shapes, empty dimensions where legal, F32/F64/F16/BF16 domain as supported, NaN/inf, signed zero where relevant, CPU parity tolerance, and backward parity.
 
-### BE-GPU-002 — Indexing, masking, and shape operations
+### BE-GPU-002 - Indexing, masking, and shape operations
 
 **Priority:** P1  
 **Operations:** `where_cond`, gather/scatter/index_select/masked_fill, unsqueeze/repeat/pad, triangle/diag, comparisons, logical ops  
@@ -516,7 +516,7 @@ Required tests per operation: scalar and broadcast shapes, empty dimensions wher
 
 Use a common index linearization library with checked rank/stride arithmetic. Scatter must specify duplicate-index semantics and determinism. Pad must validate negative/positive padding and mode. Comparisons return a canonical boolean representation. Add randomized parity tests over non-contiguous inputs.
 
-### BE-GPU-003 — Matrix/attention and normalization families
+### BE-GPU-003 - Matrix/attention and normalization families
 
 **Priority:** P1/P2  
 **Operations:** `addmm`, `bmm`, scaled dot-product attention, unfold, pixel shuffle, group norm, instance norm  
@@ -524,7 +524,7 @@ Use a common index linearization library with checked rank/stride arithmetic. Sc
 
 Prefer vendor primitives only behind a capability check and deterministic policy. Provide mathematically simple reference decompositions first, then optimized paths. Attention must specify mask layout, causal behavior, scaling, dropout/training, accumulation dtype, and memory bounds. Every optimized path is compared with the decomposition.
 
-### BE-IO-001 — Host transfer and dtype conversion
+### BE-IO-001 - Host transfer and dtype conversion
 
 **Priority:** P0 for CUDA/Metal  
 **Operations:** scalar/vector readback and `tensor_to_dtype`  
@@ -532,7 +532,7 @@ Prefer vendor primitives only behind a capability check and deterministic policy
 
 Create asynchronous transfer primitives with synchronization semantics. Validate element count before host allocation. Conversion must use a checked conversion table; disallow silent float-to-int truncation and overflow unless an explicitly named casting mode requests it.
 
-### BE-REDUCE-001 — Complete reduction semantics
+### BE-REDUCE-001 - Complete reduction semantics
 
 **Priority:** P1  
 **Operations:** product/cumsum everywhere; Metal min/max gaps  
@@ -540,7 +540,7 @@ Create asynchronous transfer primitives with synchronization semantics. Validate
 
 Define identity for empty reductions, accumulation dtype, overflow behavior, NaN propagation, keepdim behavior, deterministic tree order, and gradient behavior. Use segmented scan for cumsum. Add large/non-power-of-two and non-contiguous tests.
 
-### BE-CREATE-001 — Full/sequence creation
+### BE-CREATE-001 - Full/sequence creation
 
 **Priority:** P1  
 **Operations:** `full`, `arange`, `linspace`  
@@ -548,17 +548,17 @@ Define identity for empty reductions, accumulation dtype, overflow behavior, NaN
 
 Validate shape/numel through proof wrappers, reject zero step, define inclusivity and rounding, prevent sequence length overflow, and generate directly on device. Match CPU semantics exactly.
 
-### BE-QNT-001 — Quantized scope decision
+### BE-QNT-001 - Quantized scope decision
 
 **Priority:** P1  
 **Files:** CPU quant/storage/tape, Candle quant adapter, GGUF  
 **Depends on:** CAP-001
 
-Choose a supported quantization matrix and make public enums reflect it. Either implement each advertised scheme end-to-end—load, validate, execute, serialize, autograd policy—or remove it from stable API and return a parse-time capability error. Q8 must never enter a branch that panics.
+Choose a supported quantization matrix and make public enums reflect it. Either implement each advertised scheme end-to-end - load, validate, execute, serialize, autograd policy - or remove it from stable API and return a parse-time capability error. Q8 must never enter a branch that panics.
 
 ---
 
-# PART III — COMPILED EXECUTION
+# PART III - COMPILED EXECUTION
 
 ## 11. Why the current compiled subsystem is not executable
 
@@ -681,7 +681,7 @@ Portable artifacts contain validated IR, constants, options, capability requirem
 
 ## 13. Compiled implementation tasks
 
-### CMP-001 — Replace lossy capture with descriptor-parity IR
+### CMP-001 - Replace lossy capture with descriptor-parity IR
 
 **Priority:** P0  
 **Files:** `graph.rs`, `compiled/capture.rs`, operation descriptor definitions  
@@ -689,7 +689,7 @@ Portable artifacts contain validated IR, constants, options, capability requirem
 
 Implement the IR in section 12. Capture every operation attribute and every value’s shape/dtype/device/layout. Preserve constant payloads with strict limits. Add one round-trip test per descriptor family comparing eager descriptor to captured owned descriptor. Delete any default metadata fabrication.
 
-### CMP-002 — Implement validated input/output schema and guards
+### CMP-002 - Implement validated input/output schema and guards
 
 **Priority:** P0  
 **Files:** `compiled/plan.rs`, shape-expression support  
@@ -697,7 +697,7 @@ Implement the IR in section 12. Capture every operation attribute and every valu
 
 Derive guards from IR inputs. Verify exact input count. Implement symbolic equality/range/divisibility constraints. Add negative tests for wrong dtype, rank, axis, device, layout, missing/extra input, and index out of range.
 
-### CMP-003 — Implement executable lowering and `run`
+### CMP-003 - Implement executable lowering and `run`
 
 **Priority:** P0  
 **Files:** new `compiled/lower.rs`, `compiled/program.rs`, backend lowerers  
@@ -705,7 +705,7 @@ Derive guards from IR inputs. Verify exact input count. Implement symbolic equal
 
 Start with a CPU vertical slice: creation, elementwise, matmul, reshape/view, reduction, one neural layer. `CompiledProgram::run` must numerically match eager execution and execute a stored schedule rather than replaying a graph through ad hoc dynamic dispatch.
 
-### CMP-004 — Implement semantics-preserving constant evaluation
+### CMP-004 - Implement semantics-preserving constant evaluation
 
 **Priority:** P1  
 **Files:** `compiled/fold.rs`, constant pool  
@@ -713,7 +713,7 @@ Start with a CPU vertical slice: creation, elementwise, matmul, reshape/view, re
 
 Maintain an evaluator registry keyed by operation ID. Fold only pure operations whose complete inputs are constants and whose resource cost is within limits. Record replacement value metadata and remove dead nodes after use analysis. Test actual constant values, not only node counts.
 
-### CMP-005 — Replace fake fusion with fusion groups
+### CMP-005 - Replace fake fusion with fusion groups
 
 **Priority:** P1  
 **Files:** `compiled/fusion.rs`, backend codegen  
@@ -721,7 +721,7 @@ Maintain an evaluator registry keyed by operation ID. Fold only pure operations 
 
 A fused unit must retain the ordered operation sequence/expressions. Require single-use producer outputs unless duplicated computation is explicitly costed. Respect side effects, aliases, saved tensors, training/backward needs, dtype/layout/device boundaries, and numerical policy. Compare fused output and gradients with unfused execution.
 
-### CMP-006 — Implement real memory planning
+### CMP-006 - Implement real memory planning
 
 **Priority:** P1  
 **Files:** `compiled/alloc.rs`, storage descriptors  
@@ -729,7 +729,7 @@ A fused unit must retain the ordered operation sequence/expressions. Require sin
 
 Compute byte ranges with checked arithmetic; track alignment, device/space, dtype, storage class, alias views, persistence, stream/events, output escape, and saved-for-backward values. Reuse only compatible slots whose lifetimes do not overlap. Validate node IDs through maps, not vector-index assumptions. Add a debug plan report with peak bytes and reuse decisions.
 
-### CMP-007 — Implement weight prepacking
+### CMP-007 - Implement weight prepacking
 
 **Priority:** P1  
 **Files:** prepack module, backend lowerers  
@@ -737,7 +737,7 @@ Compute byte ranges with checked arithmetic; track alignment, device/space, dtyp
 
 Define backend-specific `PackedConstant` with source hash, target capability, layout, dtype, and bytes/handle. Prepack only immutable constants. Invalidate on backend/driver/schema mismatch. Verify numerical parity and measure load/execution benefit.
 
-### CMP-008 — Replace synthetic tuning with measured candidates
+### CMP-008 - Replace synthetic tuning with measured candidates
 
 **Priority:** P1  
 **Files:** `compiled/tuning.rs`, runtime benchmark hooks  
@@ -745,7 +745,7 @@ Define backend-specific `PackedConstant` with source hash, target capability, la
 
 Separate `AnalyticalScore` from `MeasuredDuration`. Warm up, synchronize device, measure repeated samples, reject outliers using a documented method, enforce a time/iteration budget, compare against the actual baseline executable, and only select a candidate when confidence and regression thresholds pass. Persist hardware/software fingerprint and shape signature. No arithmetic “5% improvement” is allowed.
 
-### CMP-009 — Harden and version artifacts
+### CMP-009 - Harden and version artifacts
 
 **Priority:** P1  
 **Files:** compiled artifact modules, `ResourceLimits`  
@@ -753,7 +753,7 @@ Separate `AnalyticalScore` from `MeasuredDuration`. Warm up, synchronize device,
 
 Use private fields and validated constructors. Implement bounded section decoding, operation schema hash, capability requirements, target fingerprint, constant hashes, and migration policy. Separate corruption detection from authenticity. Fuzz parser and semantic validator. Invalid artifacts must never allocate based on unvalidated lengths or execute anything.
 
-### CMP-010 — Rename or hide prototype until CMP-001..003 land
+### CMP-010 - Rename or hide prototype until CMP-001..003 land
 
 **Priority:** Immediate safety action  
 **Files:** exports/docs/features  
@@ -763,7 +763,7 @@ Until a real executable vertical slice exists, remove current compiled types fro
 
 ---
 
-# PART IV — TENSOR, AUTOGRAD, MODULE, AND OPTIMIZER CORRECTNESS
+# PART IV - TENSOR, AUTOGRAD, MODULE, AND OPTIMIZER CORRECTNESS
 
 ## 14. High-risk failure paths
 
@@ -804,7 +804,7 @@ Float-to-integer conversion must not silently truncate NaN, infinity, or out-of-
 
 ## 15. Core correctness tasks
 
-### CORE-001 — Panic-free internal fallible paths
+### CORE-001 - Panic-free internal fallible paths
 
 **Priority:** P0  
 **Files:** live panic/unwrap inventory, especially tensor manipulation/indexing, module forward, optimizer, exec proof  
@@ -819,7 +819,7 @@ Classify every live panic/unwrap/expect as:
 
 Convert all public-path recoverable cases. `paranoid-validation` must return an error or fail only under an explicitly documented debug/testing mode.
 
-### CORE-002 — Operation semantic specification
+### CORE-002 - Operation semantic specification
 
 **Priority:** P0  
 **Files:** new `docs/OPERATION_SEMANTICS.md`, descriptor validation  
@@ -827,7 +827,7 @@ Convert all public-path recoverable cases. `paranoid-validation` must return an 
 
 For every public operation specify input ranks, broadcasting, dtype promotion, output shape/dtype, empty tensor behavior, NaN/inf, overflow, layout, gradient, determinism, and unsupported cases. Tests and backends consume this specification.
 
-### CORE-003 — Autograd parity and mutation safety
+### CORE-003 - Autograd parity and mutation safety
 
 **Priority:** P1  
 **Files:** tape/autograd across core/backends  
@@ -835,7 +835,7 @@ For every public operation specify input ranks, broadcasting, dtype promotion, o
 
 Add finite-difference and cross-backend gradient tests, repeated-backward policy, detach/no-grad tests, saved-tensor lifetime tests, and failure rollback. Backend tape closures must return `Result`; CUDA backward must not `unwrap()` launch failures.
 
-### CORE-004 — Module/state invariants
+### CORE-004 - Module/state invariants
 
 **Priority:** P1  
 **Files:** `nn/*`, state dict, serialization  
@@ -843,7 +843,7 @@ Add finite-difference and cross-backend gradient tests, repeated-backward policy
 
 Validate parameter shapes/dtypes/devices during construction/load. Keep optional fields internally consistent. Make generated/manual module state load atomic and report every missing/unexpected/mismatched key.
 
-### CORE-005 — Remove broad lint allowances
+### CORE-005 - Remove broad lint allowances
 
 **Priority:** P1  
 **Files:** core crate root and CI  
@@ -853,7 +853,7 @@ Delete crate-wide `dead_code` and `unused_imports` allowances, eliminate dead pa
 
 ---
 
-# PART V — ONNX, MACROS, SERIALIZATION, AND MODEL I/O
+# PART V - ONNX, MACROS, SERIALIZATION, AND MODEL I/O
 
 ## 16. ONNX importer defects
 
@@ -876,7 +876,7 @@ This is a P0 truthfulness problem because the public docs claim a strongly typed
 
 ## 17. Macro/model I/O tasks
 
-### ONNX-001 — Fail closed during macro expansion
+### ONNX-001 - Fail closed during macro expansion
 
 **Priority:** P0  
 **Files:** `incin-macros/src/onnx.rs`  
@@ -884,7 +884,7 @@ This is a P0 truthfulness problem because the public docs claim a strongly typed
 
 Change parser/lowering functions to `syn::Result<TokenStream>` or a domain error converted to `compile_error!`. Never generate runtime panic for malformed static model metadata. Never use `parse().unwrap_or(empty)` or `parse().unwrap()` for generated fragments; retain token streams structurally.
 
-### ONNX-002 — Correct shape and identifier handling
+### ONNX-002 - Correct shape and identifier handling
 
 **Priority:** P0  
 **Depends on:** ONNX-001
@@ -895,7 +895,7 @@ Change parser/lowering functions to `syn::Result<TokenStream>` or a domain error
 - verify all node input/output references and graph outputs;
 - reject unsupported ops at macro expansion with node name/opset/domain context.
 
-### ONNX-003 — Implement real initializer loading
+### ONNX-003 - Implement real initializer loading
 
 **Priority:** P0  
 **Depends on:** ONNX-001, CORE-004
@@ -911,21 +911,21 @@ impl<B> Model<B> {
 
 Embed initializer bytes only within documented size/resource limits, or generate a sidecar loader keyed by original ONNX names. Remove zero-filled `new()` unless it is named `new_zeroed_for_testing` and test-gated. `load_default_weights` must either load verified bytes or not exist.
 
-### ONNX-004 — Implement or reject control flow correctly
+### ONNX-004 - Implement or reject control flow correctly
 
 **Priority:** P1/P2  
 **Depends on:** ONNX-001, CMP-001 if compiled execution is used
 
 Implement ONNX `If` and `Loop` according to opset semantics, including captures, condition, loop-carried dependencies, trip count, scan outputs, and shape joins. Until then, emit a compile error naming the unsupported node. Partial lowering is forbidden.
 
-### ONNX-005 — Opset/domain conformance suite
+### ONNX-005 - Opset/domain conformance suite
 
 **Priority:** P1  
 **Depends on:** ONNX-002..004
 
 Use small generated ONNX fixtures and official backend-test style vectors. Test attributes, optional inputs, dynamic ranks, external data, malformed protobufs, resource limits, identifier collisions, and parity with a reference runtime.
 
-### MACRO-001 — Audit all procedural macro panic/error boundaries
+### MACRO-001 - Audit all procedural macro panic/error boundaries
 
 **Priority:** P1  
 **Files:** `incin-macros/src/*`  
@@ -933,7 +933,7 @@ Use small generated ONNX fixtures and official backend-test style vectors. Test 
 
 Convert path-extension unwraps and unsafe token assumptions into compile diagnostics. Add `trybuild` pass/fail fixtures with stable error codes/messages. Validate safetensors names and dimensions with the same identifier allocator and resource limits.
 
-### IO-001 — Quantized export/API truth
+### IO-001 - Quantized export/API truth
 
 **Priority:** P1  
 **Files:** GGUF/MLX/export/import modules  
@@ -943,7 +943,7 @@ Do not publicly advertise quantization schemes that exporter/runtime cannot supp
 
 ---
 
-# PART VI — DATA PIPELINE AND HUB
+# PART VI - DATA PIPELINE AND HUB
 
 ## 18. Data loader and dataset defects
 
@@ -963,7 +963,7 @@ Do not publicly advertise quantization schemes that exporter/runtime cannot supp
 
 ## 19. Data implementation tasks
 
-### DATA-001 — Validating loader builder
+### DATA-001 - Validating loader builder
 
 **Priority:** P0  
 **Files:** data loader  
@@ -986,21 +986,21 @@ pub type BatchResult<T> = Result<T, DataError>;
 
 Return `Result<DataLoader<_>>`. A zero-worker loader executes synchronously without a thread. Retain worker handles and a cancellation token. Iterator yields `Result<Batch, DataError>`. Ordered mode uses sequence numbers and a reorder buffer. Drop joins/cancels without deadlock.
 
-### DATA-002 — Dataset error contract and MNIST validation
+### DATA-002 - Dataset error contract and MNIST validation
 
 **Priority:** P0  
 **Depends on:** DATA-001
 
 Change dataset access to distinguish index absence from sample decode/corruption. MNIST constructor validates magic, dimensions, checked count/byte length, exact or explicitly allowed trailing bytes, image-label equality, and limits. Keep buffers/count private. `get` uses checked offsets.
 
-### DATA-003 — Transform invariants
+### DATA-003 - Transform invariants
 
 **Priority:** P0  
 **Depends on:** DATA-002
 
 Every transform validates rank, dimensions, buffer length, channels, parameters, and output allocation before indexing. Probability constructors require `0.0..=1.0` and reject NaN. Normalize requires exact channel divisibility. Add property tests over malformed shapes and arbitrary byte/vector lengths.
 
-### DATA-004 — Downloader integrity and concurrency
+### DATA-004 - Downloader integrity and concurrency
 
 **Priority:** P1  
 **Files:** hub/downloader  
@@ -1008,7 +1008,7 @@ Every transform validates rank, dimensions, buffer length, channels, parameters,
 
 Add maximum compressed/uncompressed bytes, streaming length checks, checksum/hash verification, ETag/Last-Modified metadata, atomic unique temp files, per-target lock, fsync/rename policy, cache revalidation, redirect/domain policy, decompression bomb defense, cancellation, and explicit offline mode. Never trust an existing cache file only because its path exists.
 
-### DATA-005 — Determinism and reproducibility tests
+### DATA-005 - Determinism and reproducibility tests
 
 **Priority:** P1  
 **Depends on:** DATA-001
@@ -1017,7 +1017,7 @@ For the same dataset/seed/epoch/config, batch order and augmentations must match
 
 ---
 
-# PART VII — DISTRIBUTED, CHECKPOINTS, AND REPRODUCIBILITY
+# PART VII - DISTRIBUTED, CHECKPOINTS, AND REPRODUCIBILITY
 
 ## 20. Distributed scope truth
 
@@ -1025,53 +1025,53 @@ The distributed codebase contains significant planning and checkpoint work, but 
 
 The public API must reject unsupported placements during planning, before execution. It must not advertise general sharding when only divisible/even partitions are valid.
 
-### DIST-001 — Encode shard divisibility constraints
+### DIST-001 - Encode shard divisibility constraints
 
 **Priority:** P0 for public distributed preview  
 **Files:** distributed plan/placement/mesh  
 **Implementation:** represent even, padded, and ragged shard policies distinctly. Only construct a validated plan when backend/collective supports the selected policy. Report axis, dimension, mesh size, and alternatives on failure.
 
-### DIST-002 — Reproducibility manifest completeness
+### DIST-002 - Reproducibility manifest completeness
 
 **Priority:** P1  
 **Files:** reproducibility/checkpoint modules  
 **Implementation:** use fixed-size typed digests rather than unvalidated strings. Include and compare environment/runtime/backend/driver/capability/schema versions. `replay_diff` must report environment differences rather than omit them.
 
-### DIST-003 — Checkpoint transaction and reshard validation
+### DIST-003 - Checkpoint transaction and reshard validation
 
 **Priority:** P1  
 **Implementation:** validate all shard hashes, tensor metadata, global shape, placement, dtype, world/mesh mapping, and resource limits before committing load. Reshard through a planned data movement graph with failure cleanup. Test interrupted writes and partial/mismatched shard sets.
 
-### DIST-004 — Hardware evidence gate
+### DIST-004 - Hardware evidence gate
 
 **Priority:** P0 release gate  
 **Implementation:** run real two-rank, multi-GPU, and multi-node suites. Archive commands, commit, hardware inventory, driver/runtime versions, logs, numerical parity, timeout/failure injection, and performance distributions. A workflow dispatch command without resulting logs is not evidence.
 
 ---
 
-# PART VIII — LSP, VIZ, TELEMETRY, AND DIAGNOSTICS
+# PART VIII - LSP, VIZ, TELEMETRY, AND DIAGNOSTICS
 
 ## 21. Tooling hardening tasks
 
-### TOOL-001 — LSP child lifecycle and pipe errors
+### TOOL-001 - LSP child lifecycle and pipe errors
 
 **Priority:** P1  
 **Files:** `incin-lsp`, `cargo-incin` proxy code  
 **Implementation:** replace `expect`/mutex unwrap with typed errors; retain child lifecycle ownership; support shutdown/cancellation; avoid joining a thread blocked forever on editor stdin after server stdout closes; kill/wait child on pipe failure; propagate both pump errors. Add fake-child integration tests for EOF, crash, malformed JSON, broken pipe, and shutdown.
 
-### TOOL-002 — Remove public panic test UI
+### TOOL-002 - Remove public panic test UI
 
 **Priority:** P0 API cleanup  
 **Files:** viz panels/exports  
 **Implementation:** put `PanicTestPanel` behind `cfg(test)` or a non-release dev feature. Keep panic containment tests internal.
 
-### TOOL-003 — Telemetry drop/backpressure safety
+### TOOL-003 - Telemetry drop/backpressure safety
 
 **Priority:** P1  
 **Files:** telemetry emitter  
 **Implementation:** avoid `expect` in `Drop`; make shutdown idempotent; define bounded queues and priority behavior; report dropped events; join workers with timeout/failure reporting outside `Drop`; ensure telemetry failure cannot panic model execution.
 
-### TOOL-004 — Diagnostics parser stability
+### TOOL-004 - Diagnostics parser stability
 
 **Priority:** P1  
 **Files:** diagnostics  
@@ -1079,7 +1079,7 @@ The public API must reject unsupported placements during planning, before execut
 
 ---
 
-# PART IX — SECURITY, RESOURCE LIMITS, AND ERROR CONTRACT
+# PART IX - SECURITY, RESOURCE LIMITS, AND ERROR CONTRACT
 
 ## 22. Required error model
 
@@ -1097,32 +1097,32 @@ Create structured error domains with source chaining and stable machine-readable
 
 Error messages must include operation and relevant dimensions but must not include unbounded attacker-controlled strings or secrets. Internal invariant failures should be distinguishable from user input errors.
 
-### SEC-001 — Enforce validated arithmetic at allocation boundaries
+### SEC-001 - Enforce validated arithmetic at allocation boundaries
 
 **Priority:** P0  
 **Implementation:** all numel, byte length, stride, offset, sequence length, tensor slice, constant pool, artifact section, download, decompression, and sharding calculations use checked arithmetic and configured limits. Proof wrappers have private fields. Add boundary/property/fuzz tests.
 
-### SEC-002 — Remove backend `transmute(...).unwrap()` paths
+### SEC-002 - Remove backend `transmute(...).unwrap()` paths
 
 **Priority:** P0  
 **Files:** CUDA and other backend storage/cast sites  
 **Implementation:** provide typed allocation/copy APIs returning `Result`, validate exact element/byte counts, alignment, and dtype before conversion. Use `bytemuck` only with proven `Pod` types and checked lengths. No unsafe conversion may be justified only by “backend created it.”
 
-### SEC-003 — Artifact parser fuzzing and authentication boundary
+### SEC-003 - Artifact parser fuzzing and authentication boundary
 
 **Priority:** P1  
 **Depends on:** CMP-009
 
 Fuzz framing, section lengths, nested descriptors, constants, schema versions, and semantic validator. Document that checksums detect accidental corruption, while authenticity requires a signature/trusted transport policy.
 
-### SEC-004 — Poison and panic policy
+### SEC-004 - Poison and panic policy
 
 **Priority:** P1  
 **Implementation:** decide per mutex whether poison propagates, recovers by extracting inner state, or aborts subsystem; never blindly unwrap. Catching a panic is only valid at explicit plugin/task isolation boundaries and must not continue with potentially corrupted mutable state.
 
 ---
 
-# PART X — TEST AND RELEASE SYSTEM
+# PART X - TEST AND RELEASE SYSTEM
 
 ## 23. Mandatory validation commands
 
@@ -1213,7 +1213,7 @@ audit-evidence/<TASK-ID>/
 
 ## 25. Dependency-ordered execution plan
 
-### Phase 0 — Truth and containment
+### Phase 0 - Truth and containment
 
 - correct false ledger states;
 - hide compiled prototype/test internals;
@@ -1222,7 +1222,7 @@ audit-evidence/<TASK-ID>/
 - DATA-001 zero-batch/lifecycle minimum fix;
 - ONNX-001 remove generated runtime panics/no-op weight claim.
 
-### Phase 1 — Semantic foundation
+### Phase 1 - Semantic foundation
 
 - EXE-001 descriptor executor;
 - CAP-001 exact registry;
@@ -1231,20 +1231,20 @@ audit-evidence/<TASK-ID>/
 - SEC-001 checked arithmetic;
 - API-004 and API test gates.
 
-### Phase 2 — Compiled CPU vertical slice
+### Phase 2 - Compiled CPU vertical slice
 
 - CMP-001/002/003;
 - real eager-vs-compiled numerical tests;
 - CMP-010 can be reversed only when this passes.
 
-### Phase 3 — Model/data reliability
+### Phase 3 - Model/data reliability
 
 - ONNX-002/003;
 - CORE-003/004;
 - DATA-002/003/004/005;
 - IO-001 and quantized scope.
 
-### Phase 4 — Accelerator breadth
+### Phase 4 - Accelerator breadth
 
 - BE-IO-001;
 - BE-GPU-001/002;
@@ -1252,13 +1252,13 @@ audit-evidence/<TASK-ID>/
 - BE-GPU-003;
 - exact capability docs and hardware evidence.
 
-### Phase 5 — Compiler optimization and artifacts
+### Phase 5 - Compiler optimization and artifacts
 
 - CMP-004 through CMP-009;
 - measured, not synthetic, tuning;
 - fuzz/security gates.
 
-### Phase 6 — Distributed/tooling/release
+### Phase 6 - Distributed/tooling/release
 
 - DIST-001..004;
 - TOOL-001..004;
@@ -1291,7 +1291,7 @@ The project is not “done” until all of the following are true:
 
 ---
 
-# APPENDIX A — High-priority source locations
+# APPENDIX A - High-priority source locations
 
 | Area | Location | Finding |
 |---|---|---|
@@ -1324,74 +1324,74 @@ The project is not “done” until all of the following are true:
 
 ---
 
-# APPENDIX B — Public tuple-field review
+# APPENDIX B - Public tuple-field review
 
-- `crates/incin-core/src/shapes/shape.rs:105` — `pub struct CheckedNumel(pub usize);`
-- `crates/incin-core/src/shapes/shape.rs:116` — `pub struct CheckedByteLen(pub usize);`
-- `crates/incin-core/src/shapes/dim.rs:174` — `pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);`
-- `crates/incin-core/src/nn/module.rs:506` — `pub struct Sequential<L1, L2>(pub L1, pub L2);`
-- `crates/incin-core/src/compiled/alloc.rs:157` — `pub struct BufferSlot(pub usize);`
-- `crates/incin-core/src/tensor/base.rs:13` — `pub struct Dyn(pub ());`
-- `crates/incin-core/src/tensor/device.rs:115` — `pub struct Cuda(pub usize);`
-- `crates/incin-core/src/tensor/device.rs:149` — `pub struct Wgpu(pub usize);`
-- `crates/incin-core/src/tensor/device.rs:276` — `pub struct Metal(pub usize);`
-- `crates/incin-core/src/optim/mod.rs:10` — `pub struct Gradients<G>(pub G);`
-- `crates/incin-backends/src/cpu/var.rs:25` — `pub struct CpuVar(pub(crate) Rc<RefCell<CpuStorage>>);`
-- `crates/incin-viz-plugin-api/src/render_ctx.rs:11` — `pub struct HitId(pub u32);`
+- `crates/incin-core/src/shapes/shape.rs:105` - `pub struct CheckedNumel(pub usize);`
+- `crates/incin-core/src/shapes/shape.rs:116` - `pub struct CheckedByteLen(pub usize);`
+- `crates/incin-core/src/shapes/dim.rs:174` - `pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);`
+- `crates/incin-core/src/nn/module.rs:506` - `pub struct Sequential<L1, L2>(pub L1, pub L2);`
+- `crates/incin-core/src/compiled/alloc.rs:157` - `pub struct BufferSlot(pub usize);`
+- `crates/incin-core/src/tensor/base.rs:13` - `pub struct Dyn(pub ());`
+- `crates/incin-core/src/tensor/device.rs:115` - `pub struct Cuda(pub usize);`
+- `crates/incin-core/src/tensor/device.rs:149` - `pub struct Wgpu(pub usize);`
+- `crates/incin-core/src/tensor/device.rs:276` - `pub struct Metal(pub usize);`
+- `crates/incin-core/src/optim/mod.rs:10` - `pub struct Gradients<G>(pub G);`
+- `crates/incin-backends/src/cpu/var.rs:25` - `pub struct CpuVar(pub(crate) Rc<RefCell<CpuStorage>>);`
+- `crates/incin-viz-plugin-api/src/render_ctx.rs:11` - `pub struct HitId(pub u32);`
 
 
 Not every public tuple field is wrong. The implementation agent must apply the invariant criterion in section 5.4 and document each keep/change decision.
 
 ---
 
-# APPENDIX C — Live panic-class inventory
+# APPENDIX C - Live panic-class inventory
 
 The following scan excludes much obvious test-only code but is still lexical. Each item must be classified, not blindly deleted.
 
-- `crates/incin-macros/src/onnx.rs:187` — `quote::quote! { panic!("If node missing then_branch graph") }`
-- `crates/incin-macros/src/onnx.rs:190` — `quote::quote! { panic!("If node missing then_branch") }`
-- `crates/incin-macros/src/onnx.rs:214` — `quote::quote! { panic!("If node missing else_branch graph") }`
-- `crates/incin-macros/src/onnx.rs:217` — `quote::quote! { panic!("If node missing else_branch") }`
-- `crates/incin-macros/src/onnx.rs:255` — `quote::quote! { panic!("Loop node missing body graph") }`
-- `crates/incin-macros/src/onnx.rs:258` — `quote::quote! { panic!("Loop node missing body attribute") }`
-- `crates/incin-macros/src/module.rs:483` — `_ => unreachable!(),`
-- `crates/incin-core/src/exec/proof.rs:263` — `panic!("paranoid-validation: descriptor failed its own invariants: {error:?}");`
-- `crates/incin-core/src/tensor/ops/binary.rs:377` — `panic!(`
-- `crates/incin-core/src/tensor/ops/binary.rs:410` — `panic!(`
-- `crates/incin-core/src/tensor/ops/binary.rs:442` — `panic!(`
-- `crates/incin-core/src/tensor/ops/binary.rs:474` — `panic!(`
-- `crates/incin-core/src/tensor/ops/unary.rs:423` — `.unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))`
-- `crates/incin-core/src/tensor/ops/unary.rs:436` — `.unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))`
-- `crates/incin-core/src/tensor/ops/unary.rs:449` — `.unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))`
-- `crates/incin-core/src/tensor/ops/unary.rs:462` — `.unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))`
-- `crates/incin-viz/src/panels/panic_test.rs:44` — `panic!("Manual panic triggered from PanicTestPanel");`
-- `crates/incin-backends/src/kernel.rs:472` — `_ => unreachable!("CudaScalarSpec already rejected non-float dtype"),`
-- `crates/incin-backends/src/kernel.rs:1052` — `_ => unreachable!(),`
-- `crates/incin-backends/src/kernel.rs:1106` — `_ => unreachable!(),`
-- `crates/incin-backends/src/tuning/service.rs:799` — `_ => unreachable!("non-coordinated policies returned above"),`
-- `crates/incin-backends/src/wgpu/backend.rs:1189` — `_ => panic!("Unknown reduce dim mode"),`
-- `crates/incin-backends/src/dist/nccl.rs:1168` — `TensorParallelCollective::RowOutputSum => unreachable!(),`
-- `crates/incin-backends/src/cpu/tape.rs:314` — `CpuBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/stride.rs:24` — `panic!(`
-- `crates/incin-backends/src/cpu/storage.rs:170` — `panic!("from_f64_values not supported on Q8_0 quantized buffer")`
-- `crates/incin-backends/src/cpu/storage.rs:188` — `panic!("get_f64 not supported directly on Q8_0 quantized buffer")`
-- `crates/incin-backends/src/cpu/storage.rs:268` — `CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/storage.rs:448` — `CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/storage.rs:534` — `CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/creation.rs:103` — `_ => unreachable!(),`
-- `crates/incin-backends/src/cpu/creation.rs:140` — `_ => unreachable!(),`
-- `crates/incin-backends/src/cpu/gradcheck.rs:49` — `_ => panic!("gradcheck: perturbation only supported for F32/F64 buffers"),`
-- `crates/incin-backends/src/external/conformance.rs:382` — `_ => unreachable!("is_supported() is false only for Unsupported"),`
-- `crates/incin-backends/src/external/conformance.rs:467` — `_ => unreachable!("is_supported() is false only for Unsupported"),`
-- `crates/incin-backends/src/cpu/ops/shape_ops.rs:335` — `CpuBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1513` — `_ => unreachable!("inner stride pattern was validated"),`
-- `crates/incin-backends/src/cpu/ops/reduce.rs:117` — `CpuBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),`
-- `crates/incin-backends/src/cpu/ops/reduce.rs:151` — `CpuBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),`
+- `crates/incin-macros/src/onnx.rs:187` - `quote::quote! { panic!("If node missing then_branch graph") }`
+- `crates/incin-macros/src/onnx.rs:190` - `quote::quote! { panic!("If node missing then_branch") }`
+- `crates/incin-macros/src/onnx.rs:214` - `quote::quote! { panic!("If node missing else_branch graph") }`
+- `crates/incin-macros/src/onnx.rs:217` - `quote::quote! { panic!("If node missing else_branch") }`
+- `crates/incin-macros/src/onnx.rs:255` - `quote::quote! { panic!("Loop node missing body graph") }`
+- `crates/incin-macros/src/onnx.rs:258` - `quote::quote! { panic!("Loop node missing body attribute") }`
+- `crates/incin-macros/src/module.rs:483` - `_ => unreachable!(),`
+- `crates/incin-core/src/exec/proof.rs:263` - `panic!("paranoid-validation: descriptor failed its own invariants: {error:?}");`
+- `crates/incin-core/src/tensor/ops/binary.rs:377` - `panic!(`
+- `crates/incin-core/src/tensor/ops/binary.rs:410` - `panic!(`
+- `crates/incin-core/src/tensor/ops/binary.rs:442` - `panic!(`
+- `crates/incin-core/src/tensor/ops/binary.rs:474` - `panic!(`
+- `crates/incin-core/src/tensor/ops/unary.rs:423` - `.unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))`
+- `crates/incin-core/src/tensor/ops/unary.rs:436` - `.unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))`
+- `crates/incin-core/src/tensor/ops/unary.rs:449` - `.unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))`
+- `crates/incin-core/src/tensor/ops/unary.rs:462` - `.unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))`
+- `crates/incin-viz/src/panels/panic_test.rs:44` - `panic!("Manual panic triggered from PanicTestPanel");`
+- `crates/incin-backends/src/kernel.rs:472` - `_ => unreachable!("CudaScalarSpec already rejected non-float dtype"),`
+- `crates/incin-backends/src/kernel.rs:1052` - `_ => unreachable!(),`
+- `crates/incin-backends/src/kernel.rs:1106` - `_ => unreachable!(),`
+- `crates/incin-backends/src/tuning/service.rs:799` - `_ => unreachable!("non-coordinated policies returned above"),`
+- `crates/incin-backends/src/wgpu/backend.rs:1189` - `_ => panic!("Unknown reduce dim mode"),`
+- `crates/incin-backends/src/dist/nccl.rs:1168` - `TensorParallelCollective::RowOutputSum => unreachable!(),`
+- `crates/incin-backends/src/cpu/tape.rs:314` - `CpuBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/stride.rs:24` - `panic!(`
+- `crates/incin-backends/src/cpu/storage.rs:170` - `panic!("from_f64_values not supported on Q8_0 quantized buffer")`
+- `crates/incin-backends/src/cpu/storage.rs:188` - `panic!("get_f64 not supported directly on Q8_0 quantized buffer")`
+- `crates/incin-backends/src/cpu/storage.rs:268` - `CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/storage.rs:448` - `CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/storage.rs:534` - `CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/creation.rs:103` - `_ => unreachable!(),`
+- `crates/incin-backends/src/cpu/creation.rs:140` - `_ => unreachable!(),`
+- `crates/incin-backends/src/cpu/gradcheck.rs:49` - `_ => panic!("gradcheck: perturbation only supported for F32/F64 buffers"),`
+- `crates/incin-backends/src/external/conformance.rs:382` - `_ => unreachable!("is_supported() is false only for Unsupported"),`
+- `crates/incin-backends/src/external/conformance.rs:467` - `_ => unreachable!("is_supported() is false only for Unsupported"),`
+- `crates/incin-backends/src/cpu/ops/shape_ops.rs:335` - `CpuBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1513` - `_ => unreachable!("inner stride pattern was validated"),`
+- `crates/incin-backends/src/cpu/ops/reduce.rs:117` - `CpuBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),`
+- `crates/incin-backends/src/cpu/ops/reduce.rs:151` - `CpuBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),`
 
 
 ---
 
-# APPENDIX D — Production source inventory
+# APPENDIX D - Production source inventory
 
 Every file below was included in the static scan. Flags are lexical triage counts (`panic`, `unwrap`, `expect`, explicit unsupported markers, public declarations, unsafe tokens), not final defect judgments.
 
@@ -1420,7 +1420,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/cpu/ops/loss.rs` | 521 | panic:1, unwrap:26, expect:3 |
 | `crates/incin-backends/src/cpu/ops/matmul.rs` | 1357 | panic:1, unwrap:40, expect:6, public:3, unsafe:11 |
 | `crates/incin-backends/src/cpu/ops/mod.rs` | 63 | unsupported:1, public:13 |
-| `crates/incin-backends/src/cpu/ops/module.rs` | 133 | — |
+| `crates/incin-backends/src/cpu/ops/module.rs` | 133 | - |
 | `crates/incin-backends/src/cpu/ops/norm.rs` | 632 | panic:1, unwrap:15, public:2 |
 | `crates/incin-backends/src/cpu/ops/optimizer.rs` | 77 | unsupported:1 |
 | `crates/incin-backends/src/cpu/ops/pool.rs` | 648 | panic:1, unwrap:21, expect:3, public:3 |
@@ -1433,7 +1433,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/cpu/typed_kernel.rs` | 133 | public:4 |
 | `crates/incin-backends/src/cpu/var.rs` | 127 | panic:1, unwrap:13, public:4 |
 | `crates/incin-backends/src/cuda/backend.rs` | 2902 | unwrap:84, expect:70, unsupported:6, public:5 |
-| `crates/incin-backends/src/cuda/executor.rs` | 552 | — |
+| `crates/incin-backends/src/cuda/executor.rs` | 552 | - |
 | `crates/incin-backends/src/cuda/gpu.rs` | 170 | unwrap:2, expect:1, public:13 |
 | `crates/incin-backends/src/cuda/mod.rs` | 18 | public:8 |
 | `crates/incin-backends/src/cuda/ops/conv.rs` | 347 | unwrap:8, expect:4, public:6, unsafe:4 |
@@ -1453,7 +1453,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/descriptor_bind.rs` | 552 | unwrap:4, expect:14, unsupported:2, public:11 |
 | `crates/incin-backends/src/detect.rs` | 246 | expect:1, public:5 |
 | `crates/incin-backends/src/dispatch.rs` | 1678 | unsupported:1, public:6 |
-| `crates/incin-backends/src/dispatch_executor.rs` | 381 | — |
+| `crates/incin-backends/src/dispatch_executor.rs` | 381 | - |
 | `crates/incin-backends/src/dist/collective.rs` | 95 | public:7 |
 | `crates/incin-backends/src/dist/mod.rs` | 36 | public:8 |
 | `crates/incin-backends/src/dist/nccl.rs` | 2948 | panic:1, unwrap:64, public:40, unsafe:2 |
@@ -1466,11 +1466,11 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/external/candle/mod.rs` | 57 | unwrap:3, public:5 |
 | `crates/incin-backends/src/external/candle/ops/creation.rs` | 122 | unsupported:1 |
 | `crates/incin-backends/src/external/candle/ops/float.rs` | 161 | unsupported:1 |
-| `crates/incin-backends/src/external/candle/ops/loss.rs` | 107 | — |
-| `crates/incin-backends/src/external/candle/ops/mod.rs` | 15 | — |
+| `crates/incin-backends/src/external/candle/ops/loss.rs` | 107 | - |
+| `crates/incin-backends/src/external/candle/ops/mod.rs` | 15 | - |
 | `crates/incin-backends/src/external/candle/ops/module.rs` | 236 | unsupported:1 |
-| `crates/incin-backends/src/external/candle/ops/numeric.rs` | 46 | — |
-| `crates/incin-backends/src/external/candle/ops/optimizer.rs` | 9 | — |
+| `crates/incin-backends/src/external/candle/ops/numeric.rs` | 46 | - |
+| `crates/incin-backends/src/external/candle/ops/optimizer.rs` | 9 | - |
 | `crates/incin-backends/src/external/candle/ops/quant.rs` | 38 | unsupported:6 |
 | `crates/incin-backends/src/external/candle/ops/reduce.rs` | 197 | unsupported:2 |
 | `crates/incin-backends/src/external/candle/ops/tensor.rs` | 261 | unsupported:1 |
@@ -1480,7 +1480,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/kernel.rs` | 1712 | panic:5, unwrap:23, public:18 |
 | `crates/incin-backends/src/lib.rs` | 116 | public:31 |
 | `crates/incin-backends/src/metal/backend.rs` | 1892 | unsupported:7, public:3 |
-| `crates/incin-backends/src/metal/executor.rs` | 374 | — |
+| `crates/incin-backends/src/metal/executor.rs` | 374 | - |
 | `crates/incin-backends/src/metal/mod.rs` | 24 | public:11 |
 | `crates/incin-backends/src/metal/mps.rs` | 233 | public:14 |
 | `crates/incin-backends/src/metal/shaders/mod.rs` | 87 | public:7 |
@@ -1499,7 +1499,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-backends/src/wgpu/backend.rs` | 3209 | panic:1, unwrap:2, expect:32, unsupported:8, public:6 |
 | `crates/incin-backends/src/wgpu/device.rs` | 51 | expect:2, public:2 |
 | `crates/incin-backends/src/wgpu/dispatch.rs` | 774 | public:18 |
-| `crates/incin-backends/src/wgpu/executor.rs` | 554 | — |
+| `crates/incin-backends/src/wgpu/executor.rs` | 554 | - |
 | `crates/incin-backends/src/wgpu/mod.rs` | 28 | public:9 |
 | `crates/incin-backends/src/wgpu/pipeline.rs` | 47 | public:1 |
 | `crates/incin-backends/src/wgpu/storage.rs` | 216 | unwrap:3, expect:2, public:12 |
@@ -1563,7 +1563,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-core/src/nn/max_pool2d.rs` | 75 | public:2 |
 | `crates/incin-core/src/nn/mod.rs` | 117 | public:44 |
 | `crates/incin-core/src/nn/module.rs` | 1078 | public:23 |
-| `crates/incin-core/src/nn/module_optional.rs` | 44 | — |
+| `crates/incin-core/src/nn/module_optional.rs` | 44 | - |
 | `crates/incin-core/src/nn/optional.rs` | 47 | public:3 |
 | `crates/incin-core/src/nn/param.rs` | 670 | public:22 |
 | `crates/incin-core/src/nn/rms_norm.rs` | 128 | public:3 |
@@ -1653,7 +1653,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 | `crates/incin-viz/src/dispatch.rs` | 150 | panic:1, expect:2, public:5 |
 | `crates/incin-viz/src/err.rs` | 53 | public:2 |
 | `crates/incin-viz/src/lib.rs` | 18 | public:5 |
-| `crates/incin-viz/src/main.rs` | 158 | — |
+| `crates/incin-viz/src/main.rs` | 158 | - |
 | `crates/incin-viz/src/panels/graph.rs` | 454 | public:3 |
 | `crates/incin-viz/src/panels/loss.rs` | 104 | public:2 |
 | `crates/incin-viz/src/panels/mod.rs` | 19 | public:6 |
@@ -1673,7 +1673,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 
 ---
 
-# APPENDIX E — Crate scale and scan summary
+# APPENDIX E - Crate scale and scan summary
 
 | Crate | Production files | Approx. lines | Lexical flags |
 |---|---:|---:|---|
@@ -1691,7 +1691,7 @@ Every file below was included in the static scan. Flags are lexical triage count
 
 ---
 
-# APPENDIX F — Instructions for maintaining this report
+# APPENDIX F - Instructions for maintaining this report
 
 When implementation changes land:
 

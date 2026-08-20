@@ -129,7 +129,7 @@ mod tests {
     }
 
     /// `model()`/`dataset()` must resolve to the correct Hub namespace and
-    /// must not themselves make a network call — only `HubRepo::get`
+    /// must not themselves make a network call - only `HubRepo::get`
     /// (exercised by the `#[ignore]`d network tests below) touches the
     /// network. Constructing a `HubRepo` for a repo that doesn't exist must
     /// still succeed; only a subsequent `get` can fail.

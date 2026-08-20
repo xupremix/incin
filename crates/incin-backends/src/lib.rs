@@ -35,7 +35,7 @@ pub use detect::{detect_device, detect_device_in};
 
 // Originally just the two backends that allocate device buffers by byte
 // length. The external Candle adapter was in this list and never called
-// `byte_len` — Candle owns its own allocations — so `--features
+// `byte_len` - Candle owns its own allocations - so `--features
 // external-candle` without a GPU backend compiled a module whose only
 // function was dead, which `-D warnings` rejects. `unsupported` below keeps
 // `external-candle`, because the Candle adapter does use those macros.
@@ -65,7 +65,7 @@ pub(crate) mod quant;
 /// Compile-time SIMD lane-width resolution for type-specialized kernels.
 ///
 /// [`simd_lanes`] returns the number of elements of type `T` that fit into one
-/// SIMD register on the compile target.  It is a pure `const fn` — no runtime
+/// SIMD register on the compile target.  It is a pure `const fn` - no runtime
 /// feature detection, no overhead.
 pub mod simd;
 pub use simd::simd_lanes;

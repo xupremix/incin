@@ -29,7 +29,7 @@ impl<D> Default for WgpuBackendImpl<D> {
 /// [`VariableBackend::assign_var`]; the model holds the *same* parameters. With a
 /// plain owned `WgpuStorage` here, `assign_var` replaced the optimizer's copy
 /// and the model never saw it, so `optimizer.step()` was a no-op and training
-/// loss sat at exactly its initial value forever — the failure looks like a
+/// loss sat at exactly its initial value forever - the failure looks like a
 /// bad learning rate rather than a broken write, which is why it survived.
 #[derive(Clone)]
 pub struct WgpuVar {

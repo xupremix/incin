@@ -7,7 +7,7 @@ use super::*;
 ///
 /// Pushes a `TapeEntry` whose backward closure computes
 /// `grad_lhs = grad_out @ rhs^T` and `grad_rhs = lhs^T @ grad_out`, composed
-/// from the forward kernel itself plus `transpose_2d` — not a bespoke
+/// from the forward kernel itself plus `transpose_2d` - not a bespoke
 /// hand-derived kernel.
 pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let out = matmul_forward(lhs, rhs)?;

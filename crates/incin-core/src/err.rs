@@ -190,9 +190,9 @@ pub enum BackwardError {
 
 /// Where a non-finite gradient was found.
 ///
-/// A contribution and an accumulation fail for different reasons — one recipe
+/// A contribution and an accumulation fail for different reasons - one recipe
 /// produced a bad value, or two individually finite contributions summed to an
-/// infinity — and a report that cannot tell them apart sends the reader to the
+/// infinity - and a report that cannot tell them apart sends the reader to the
 /// wrong place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NonFiniteSite {

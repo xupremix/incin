@@ -79,7 +79,7 @@ impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dila
 /// expression, because every way it can fail is a different diagnostic:
 ///
 /// * a `stride`, `kernel`, or `dilation` of 0 is an invalid parameter, not an
-///   arithmetic accident — an unchecked `/ stride` divides by zero and an
+///   arithmetic accident - an unchecked `/ stride` divides by zero and an
 ///   unchecked `kernel - 1` underflows;
 /// * a kernel that does not fit its padded input makes the subtraction
 ///   underflow. In a release build that wraps to an enormous value, which then

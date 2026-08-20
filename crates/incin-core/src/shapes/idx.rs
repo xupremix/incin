@@ -19,9 +19,9 @@ pub struct Ellipsis;
 /// All three parameters are `typenum::Unsigned` types so the width is a compile-time constant.
 ///
 /// ## Type Parameters
-/// * `Start` — The inclusive lower bound (a `typenum::Unsigned`).
-/// * `End` — The exclusive upper bound (a `typenum::Unsigned`).
-/// * `Diff` — The width of the slice, equal to `End - Start` (a `typenum::Unsigned`).
+/// * `Start` - The inclusive lower bound (a `typenum::Unsigned`).
+/// * `End` - The exclusive upper bound (a `typenum::Unsigned`).
+/// * `Diff` - The width of the slice, equal to `End - Start` (a `typenum::Unsigned`).
 pub struct Slice<Start, End, Diff> {
     _marker: core::marker::PhantomData<(Start, End, Diff)>,
 }
@@ -29,8 +29,8 @@ pub struct Slice<Start, End, Diff> {
 /// A trait for types that can be used as dimension specifiers in the `idx![]` macro for reshaping.
 ///
 /// Implemented by:
-/// * `typenum` types (e.g., `U128`) — The dimension is statically known.
-/// * `InferDim` — The dimension is computed from the total element count divided by all other known dimensions.
+/// * `typenum` types (e.g., `U128`) - The dimension is statically known.
+/// * `InferDim` - The dimension is computed from the total element count divided by all other known dimensions.
 pub trait DimIdx {
     /// The resolved [`Dim`] type in the output shape. `InferDim` resolves to `usize`.
     type Resolved: Dim;
@@ -78,7 +78,7 @@ where
 impl DimIdx for InferDim {
     /// Resolves to a runtime-computed `usize`.
     type Resolved = usize;
-    /// Always `None` — the size is inferred from the other dimensions.
+    /// Always `None` - the size is inferred from the other dimensions.
     fn size() -> Option<usize> {
         None
     }

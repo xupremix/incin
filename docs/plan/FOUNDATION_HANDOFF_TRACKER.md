@@ -1,6 +1,6 @@
 # Foundation Handoff Tracker
 
-Foundation status: FOUNDATION REMEDIATION AUDIT — EXECUTION/SHAPE CONTRACTS OPEN
+Foundation status: FOUNDATION REMEDIATION AUDIT - EXECUTION/SHAPE CONTRACTS OPEN
 
 Current phase: FOUNDATION REMEDIATION CHECKPOINTS 0–6 COMPLETE; NEXT BLOCKERS RECORDED
 Last verified command: cargo test -p incin -- --test-threads=1
@@ -10,16 +10,16 @@ backend decomposition scoped to independently verifiable ownership slices.
 
 Status vocabulary:
 
-- PASS — implementation and requested evidence both exist
-- FAIL — known contradiction
-- IN_PROGRESS — currently being edited
-- UNKNOWN — not yet verified
-- BLOCKED — external blocker with exact reason/evidence
-- DEFERRED — explicitly post-foundation by the master prompt
-- CONFIRMED FIXED — current source and executable evidence agree
-- CONFIRMED OPEN — current source contains the forbidden or incomplete contract
-- PARTIAL — a bounded part is fixed but the required migration is incomplete
-- UNVERIFIED — source or executable evidence has not yet been checked
+- PASS - implementation and requested evidence both exist
+- FAIL - known contradiction
+- IN_PROGRESS - currently being edited
+- UNKNOWN - not yet verified
+- BLOCKED - external blocker with exact reason/evidence
+- DEFERRED - explicitly post-foundation by the master prompt
+- CONFIRMED FIXED - current source and executable evidence agree
+- CONFIRMED OPEN - current source contains the forbidden or incomplete contract
+- PARTIAL - a bounded part is fixed but the required migration is incomplete
+- UNVERIFIED - source or executable evidence has not yet been checked
 
 ## Tracker Table
 

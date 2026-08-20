@@ -3,7 +3,7 @@
 //!
 //! `CpuStorage` flows as an immutable, cheaply-cloned value: the `Rc`
 //! clone is cheap, and view operations (`reshape`/`transpose`/`broadcast_as`)
-//! never allocate a new buffer when the source is already contiguous — they
+//! never allocate a new buffer when the source is already contiguous - they
 //! construct new shape/stride/offset metadata sharing the same `Arc<CpuBuffer>`.
 //! This is NOT the `CpuVar` mutation boundary (a separate later plan);
 //! nothing in this file mutates a `CpuBuffer` in place.
@@ -24,7 +24,7 @@ use crate::cpu::stride;
 /// `GRD-003` moved this to `incin_core::exec::tape`, where one counter serves
 /// the whole workspace. Three backends each running their own counter handed
 /// out the same integers to different allocations, which is harmless only for
-/// as long as no two backends share a tape — the thing `GRD-006` ends. The
+/// as long as no two backends share a tape - the thing `GRD-006` ends. The
 /// re-export keeps every `use crate::cpu::storage::TensorId` in this backend
 /// spelled as it was.
 pub use incin_core::exec::TensorId;
@@ -236,7 +236,7 @@ impl CpuStorage {
     /// Takes the geometry by reference rather than by owned `Vec`.
     ///
     /// `TensorMeta` stores rank 8 and below inline, so the vectors were built
-    /// only to be copied into it and dropped — one allocation each, on every
+    /// only to be copied into it and dropped - one allocation each, on every
     /// storage this backend constructs, which is at least one per operation.
     /// `impl AsRef<[usize]>` keeps the existing owned call sites compiling
     /// while letting the hot ones pass the slice they already hold.
@@ -513,7 +513,7 @@ impl CpuStorage {
     /// Narrow dimension `dim` to the half-open range `[start, start + len)`.
     /// Metadata-only: shares the same `Arc<CpuBuffer>`, keeps `strides`
     /// completely unchanged (this is the load-bearing O(1) correctness
-    /// property — never recompute strides from `contiguous_strides`, since
+    /// property - never recompute strides from `contiguous_strides`, since
     /// that would silently produce wrong results on an already-transposed
     /// or otherwise non-contiguous source view), and only adjusts `offset`
     /// (by `start * strides[dim]`) and `shape[dim]` (to `len`).

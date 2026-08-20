@@ -3,7 +3,7 @@
 /// `avx2_f32_available` was inline at four call sites and read
 /// `simd_lanes::<f32>() >= 8` alone. That constant is false in a stock
 /// `cargo build`, so all four branches were dead code and the CPU backend
-/// fell through to a scalar loop — a 9x difference on `add_f32/65536`,
+/// fell through to a scalar loop - a 9x difference on `add_f32/65536`,
 /// invisible to every test because the kernels themselves stayed correct.
 ///
 /// This is the assertion that would have caught it. It fails if the gate is

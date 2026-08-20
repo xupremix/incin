@@ -65,11 +65,11 @@ impl Rng {
 
 // The generator emits `usize::MAX` freely, so a product of eight dimensions can
 // exceed `u128` as well. Every reference is therefore itself checked and yields
-// `None` for "too large to represent" — which, for our purposes, is just a
+// `None` for "too large to represent" - which, for our purposes, is just a
 // stronger form of "does not fit `usize`".
 
 fn reference_numel(dims: &[usize]) -> Option<u128> {
-    // The mathematical product, which is 0 whenever any factor is — not a
+    // The mathematical product, which is 0 whenever any factor is - not a
     // left-to-right fold, whose intermediate overflow would depend on the
     // order the axes happen to be written in.
     if dims.contains(&0) {

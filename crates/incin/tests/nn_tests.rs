@@ -99,7 +99,7 @@ fn test_sequential() -> Result<()> {
 /// `Sequential(Linear, Sequential(ReLU, Linear))`. Before flat numbering,
 /// this produced keys `0.weight/0.bias, 1.1.weight/1.1.bias` (encoding the
 /// tree's nesting depth). PyTorch's `nn.Sequential` numbers by flat
-/// position instead — index `1` (`ReLU`, no parameters) is simply absent
+/// position instead - index `1` (`ReLU`, no parameters) is simply absent
 /// from the state dict rather than renumbering what follows, so the second
 /// `Linear` keeps index `2`, not `1`.
 fn test_sequential_state_dict_keys_are_flat_like_pytorch() -> Result<()> {
@@ -122,7 +122,7 @@ fn test_sequential_state_dict_keys_are_flat_like_pytorch() -> Result<()> {
 }
 
 #[test]
-/// `SeqTy!` must name the exact type `seq!` builds a value of —
+/// `SeqTy!` must name the exact type `seq!` builds a value of -
 /// this only compiles at all if the two macros' nesting rules stay in sync,
 /// so it's a compile-time proof, not just a runtime assertion.
 fn test_seq_ty_matches_seq_value_type() -> Result<()> {
@@ -153,7 +153,7 @@ fn test_seq_ty_matches_seq_value_type() -> Result<()> {
 /// without the caller reaching into the tree by hand. `Linear` opts into
 /// `TrainMode` via its default no-op body (like every other stateless
 /// leaf layer), which is what makes `Sequential<Linear<..>, Dropout>: TrainMode`
-/// satisfiable at all — see `TrainMode`'s own doc for why this needs
+/// satisfiable at all - see `TrainMode`'s own doc for why this needs
 /// explicit bounds rather than relying on an unconstrained generic fallback.
 fn test_train_mode_propagates_through_sequential_dropout() -> Result<()> {
     let mut seq = seq!(

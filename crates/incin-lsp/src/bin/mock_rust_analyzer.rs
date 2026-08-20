@@ -1,12 +1,12 @@
 //! Test-only stand-in for rust-analyzer, used by `tests/proxy_integration.rs`
 //! to exercise the real `incin-lsp` binary end-to-end without depending on
-//! an actual rust-analyzer install being present. Not part of the product —
+//! an actual rust-analyzer install being present. Not part of the product -
 //! see the `test = false, doc = false` bin entry in `Cargo.toml`.
 //!
 //! Protocol: reads exactly one frame from stdin (the harness's
 //! `textDocument/inlayHint` request), then emits three canned frames on
-//! stdout — an unrelated notification, a `publishDiagnostics` notification,
-//! and the inlayHint response (echoing back the request's own `id`) — each
+//! stdout - an unrelated notification, a `publishDiagnostics` notification,
+//! and the inlayHint response (echoing back the request's own `id`) - each
 //! containing raw typenum text for `incin-lsp` to rewrite, before exiting.
 
 use incin_lsp::frame::{read_frame, write_frame};
@@ -24,7 +24,7 @@ fn main() -> io::Result<()> {
 
     let mut stdout = io::stdout();
 
-    // An unrelated notification — must reach the editor byte-for-byte
+    // An unrelated notification - must reach the editor byte-for-byte
     // unchanged, since this is a fixed literal, not JSON re-serialized by
     // incin-lsp.
     write_frame(&mut stdout, br#"{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"mock server started"}}"#)?;

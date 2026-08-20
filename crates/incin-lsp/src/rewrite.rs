@@ -8,15 +8,15 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
 /// Tracks JSON-RPC request ids sent to `textDocument/inlayHint` and
-/// `textDocument/diagnostic`, so the corresponding response — which carries
-/// no `method` of its own, only the matching `id` — can later be recognized
+/// `textDocument/diagnostic`, so the corresponding response - which carries
+/// no `method` of its own, only the matching `id` - can later be recognized
 /// as one when it comes back from rust-analyzer.
 #[derive(Default)]
 pub struct PendingRequests {
     inlay_hint_ids: HashSet<String>,
     hover_ids: HashSet<String>,
     /// Pull-diagnostic request ids, mapped to the document URI from the
-    /// request's `params.textDocument.uri` — the response itself carries no
+    /// request's `params.textDocument.uri` - the response itself carries no
     /// URI (unlike `publishDiagnostics`, which has one in `params`), but
     /// `relatedInformation` locations still need one.
     diagnostic_pull_ids: HashMap<String, Value>,
@@ -98,7 +98,7 @@ fn id_key(id: &Value) -> String {
 }
 
 /// Rewrites one message flowing from rust-analyzer to the editor. Returns
-/// `None` if the message needs no rewriting — the caller should then forward
+/// `None` if the message needs no rewriting - the caller should then forward
 /// the original bytes verbatim rather than re-serializing.
 pub fn rewrite_incoming_from_server(
     msg: &Value,
@@ -132,7 +132,7 @@ pub fn rewrite_incoming_from_server(
 /// Humanizes every diagnostic's `message` in place and, for any that contain
 /// typenum content, appends `relatedInformation` decimal-mapping hints.
 /// Shared by both the `textDocument/publishDiagnostics` push notification and
-/// the `textDocument/diagnostic` pull response — the `Diagnostic` shape
+/// the `textDocument/diagnostic` pull response - the `Diagnostic` shape
 /// inside each is identical, only where the list and its URI live differs.
 fn humanize_diagnostic_list(diagnostics: &mut [Value], uri: &Value) {
     for diagnostic in diagnostics.iter_mut() {
@@ -166,7 +166,7 @@ fn humanize_diagnostic_list(diagnostics: &mut [Value], uri: &Value) {
 
 /// Rewrites a `textDocument/diagnostic` pull response. Per LSP 3.17, `result`
 /// is a `DocumentDiagnosticReport`: either `{"kind": "full", "items": [...]}`
-/// (rewrite each item) or `{"kind": "unchanged", ...}` (no items — the client
+/// (rewrite each item) or `{"kind": "unchanged", ...}` (no items - the client
 /// is told to reuse what it already has, which was already humanized on
 /// first delivery, so there's nothing to rewrite here).
 fn rewrite_diagnostic_pull_response(msg: &Value, uri: &Value) -> Option<Value> {
@@ -189,7 +189,7 @@ fn rewrite_inlay_hint_response(msg: &Value, shorten_backend: bool) -> Value {
         for hint in hints.iter_mut() {
             // rust-analyzer truncates deeply-nested generics (typenum shapes
             // routinely qualify) in `label` with a `…` ellipsis, discarding
-            // the bits we need to humanize — but it always includes the
+            // the bits we need to humanize - but it always includes the
             // complete, fully-path-qualified type in `textEdits[0].newText`
             // (used for "insert the full type" instead of the ellipsis).
             // Prefer that as the source of truth whenever it's present.
@@ -251,7 +251,7 @@ fn collapse_multi_part_label(label: &Value, shorten_backend: bool) -> Option<Str
 /// Per the LSP spec both can take any of several shapes: a plain string; an
 /// object carrying the text under a `value` key (`InlayHintLabelPart`, or
 /// hover's `MarkupContent`/deprecated `MarkedString`); or an array of either
-/// (hover's deprecated `MarkedString[]`) — recursing into arrays covers that
+/// (hover's deprecated `MarkedString[]`) - recursing into arrays covers that
 /// last case for free.
 fn rewrite_label_value(label: &mut Value, shorten_backend: bool) {
     match label {
@@ -275,7 +275,7 @@ fn rewrite_label_value(label: &mut Value, shorten_backend: bool) {
 /// Rewrites a `textDocument/hover` response's `result.contents`, which takes
 /// the same shapes `rewrite_label_value` handles for inlay hints. Unlike
 /// inlay hints, rust-analyzer doesn't truncate hover text with an ellipsis,
-/// so there's no `textEdits`-style fallback needed here — but hover *does*
+/// so there's no `textEdits`-style fallback needed here - but hover *does*
 /// have room (unlike an inlay hint's cramped ghost text) for a legend
 /// mapping each humanized number back to its raw typenum expression, so it
 /// gets one appended, mirroring what diagnostics already show via
@@ -385,8 +385,8 @@ mod tests {
 
     /// Regression test for the real root cause of "diagnostics never show
     /// humanized text": Neovim (and other clients) automatically switch to
-    /// the LSP 3.17 pull-diagnostics model — `textDocument/diagnostic`
-    /// request/response — instead of the push-based `publishDiagnostics`
+    /// the LSP 3.17 pull-diagnostics model - `textDocument/diagnostic`
+    /// request/response - instead of the push-based `publishDiagnostics`
     /// notification whenever the server advertises `diagnosticProvider`,
     /// which rust-analyzer does. The proxy only watched for the push
     /// notification, so every diagnostic silently bypassed humanization.
@@ -472,7 +472,7 @@ mod tests {
             "Tensor<[2, 3], CpuBackendImpl<Cpu>>"
         );
 
-        // The id is consumed on first use — a second identical response
+        // The id is consumed on first use - a second identical response
         // (e.g. from a stray duplicate) is no longer recognized.
         assert!(rewrite_incoming_from_server(&response, &mut pending, true, false).is_none());
     }
@@ -503,7 +503,7 @@ mod tests {
     /// deeply-nested typenum shape's `label` with a `…` ellipsis (verified
     /// against a live rust-analyzer response for a `Tensor<[3, 5], ...>`
     /// hint), so the per-part label rewrite in `rewrite_label_value` can't
-    /// recover it — the full type only survives in `textEdits[0].newText`,
+    /// recover it - the full type only survives in `textEdits[0].newText`,
     /// which must be preferred when present.
     #[test]
     fn inlay_hint_response_recovers_truncated_label_from_text_edit() {
@@ -626,7 +626,7 @@ mod tests {
     /// hovering a Incin tensor showed the raw typenum type. Verified against
     /// a live rust-analyzer hover response for `let t2: Tensor<...>`, which
     /// wraps the type in a markdown code fence followed by a `size = ...`
-    /// trailer — the rewrite must touch only the type, not the surrounding
+    /// trailer - the rewrite must touch only the type, not the surrounding
     /// markdown (which itself contains unrelated parens, e.g. `(0x48)`), and
     /// (unlike inlay hints, which have no room for it) append the same
     /// typenum-translation legend diagnostics already show.

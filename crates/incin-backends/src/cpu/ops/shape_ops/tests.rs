@@ -462,7 +462,7 @@ fn concat_backward_narrows_grad_to_each_inputs_own_shape_and_values() {
 }
 
 /// Task 1 Test 7: each input to `concat` is read through its OWN
-/// strides without being materialized first — one input is a
+/// strides without being materialized first - one input is a
 /// TRANSPOSED (non-contiguous) view, output values are still correct.
 #[test]
 fn concat_on_transposed_input_produces_correct_values_without_materializing() {
@@ -513,7 +513,7 @@ fn stack_dim_equal_to_rank_appends_new_trailing_axis() {
 }
 
 /// Task 2 Test 3: `stack` with mismatched-shape inputs returns
-/// `Err(Error::ShapeMismatch)` — stack requires IDENTICAL shapes,
+/// `Err(Error::ShapeMismatch)` - stack requires IDENTICAL shapes,
 /// stricter than concat's "all-but-one-axis" rule.
 #[test]
 fn stack_rejects_mismatched_shapes() {

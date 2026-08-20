@@ -19,7 +19,7 @@ enum LiteralKind {
     Float,
     /// A literal with an explicit dtype suffix, e.g. `2u8`, `2.0f64`.
     Suffixed(String),
-    /// Anything else — a variable, a call, an index, ... `tensor!` never
+    /// Anything else - a variable, a call, an index, ... `tensor!` never
     /// guesses a dtype from these and never casts them.
     Other,
 }
@@ -42,7 +42,7 @@ struct TensorInput {
 ///
 /// There is deliberately no `backend:` or `device:` clause. Placing a tensor
 /// somewhere other than the default CPU backend is the allocation target's
-/// job — see `incin_backends::target` — and an earlier revision of this macro
+/// job - see `incin_backends::target` - and an earlier revision of this macro
 /// tried to infer a backend from the *token spelling* of a device expression
 /// (`Wgpu::new(0)` → `Wgpu`), which could not see through a binding or an
 /// alias and broke the moment a caller wrote `let d = Wgpu::new(0);`.
@@ -137,8 +137,8 @@ impl Parse for TensorInput {
 /// Walks one level of nesting, recording `shape[depth]` the first time it is
 /// reached and requiring every later sibling at that depth to agree with it
 /// (a ragged literal is a compile error, not a best-effort reshape). An
-/// empty `items` is a valid, terminal 0-length dimension — `tensor![]` and
-/// `tensor![[], []]` (shape `[0]`/`[2, 0]`) — matching `vec![]` and
+/// empty `items` is a valid, terminal 0-length dimension - `tensor![]` and
+/// `tensor![[], []]` (shape `[0]`/`[2, 0]`) - matching `vec![]` and
 /// `torch.tensor([])`; it just has no further nesting to validate or recurse
 /// into, so it returns immediately after the length check below.
 fn classify(
@@ -262,10 +262,10 @@ fn resolve_dtype(leaves: &[Leaf], explicit: Option<Type>) -> syn::Result<Type> {
     Ok(syn::parse_str::<Type>(name).expect("`i64`/`f32` always parse as a type"))
 }
 
-/// `; grad:` only accepts `Grad`/`NoGrad` — the two `RequiresGrad` markers
+/// `; grad:` only accepts `Grad`/`NoGrad` - the two `RequiresGrad` markers
 /// with no runtime argument (`Arg = ()`), matching how `dtype:` is also a
 /// compile-time-only clause. `Dyn` (runtime-toggled tracking)
-/// takes a `bool` `Arg`, which would need a value-carrying clause — not
+/// takes a `bool` `Arg`, which would need a value-carrying clause - not
 /// worth it for a marker most code sets once and never flips, so it is left
 /// to a direct
 /// `Tensor::<S, B, K, Dyn>::from_slice(&data, (.., runtime_bool))` call
@@ -311,11 +311,11 @@ pub(crate) fn tensor(input: TokenStream) -> TokenStream {
     // dtype and grad arguments are all `()`; the shape is fully static
     // because it came from the literal's own nesting. So there is exactly one
     // argument form and no `ArgInto` slot bookkeeping for a caller to get
-    // wrong. Anything else — another backend, another device, a runtime
-    // ordinal — is the allocation target's job.
+    // wrong. Anything else - another backend, another device, a runtime
+    // ordinal - is the allocation target's job.
     let args = quote! { () };
 
-    // `G` is the 4th of `Tensor`'s 5 type params, after `K` — trailing
+    // `G` is the 4th of `Tensor`'s 5 type params, after `K` - trailing
     // params with a `Default` (`G`, and `P` after it) can be omitted from
     // the turbofish entirely, so an absent `; grad:` clause just leaves `G`
     // out here and lets it fall back to `Tensor`'s own default (`Grad`)

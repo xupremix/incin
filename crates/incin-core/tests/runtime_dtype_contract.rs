@@ -12,7 +12,7 @@ use incin_core::prelude::*;
 use incin_core::shapes::ShapeBuf;
 use incin_core::tensor::dtype::StorageEncoding;
 
-/// 1B — Custom DType definition (NO DTypeId variant).
+/// 1B - Custom DType definition (NO DTypeId variant).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct TestOpaque16;
 
@@ -37,7 +37,7 @@ impl ConstDType for TestOpaque16 {
     );
 }
 
-/// 1C — Dyn DType contract.
+/// 1C - Dyn DType contract.
 #[test]
 fn test_dyn_dtype_contract() {
     let descriptor = TestOpaque16::DESCRIPTOR;
@@ -45,7 +45,7 @@ fn test_dyn_dtype_contract() {
     assert_eq!(<Dyn as DType>::descriptor(&field), descriptor);
 }
 
-/// 1D — TensorMeta contract.
+/// 1D - TensorMeta contract.
 #[test]
 fn test_tensor_meta_contract() -> Result<()> {
     let meta = TensorMeta::contiguous(
@@ -60,7 +60,7 @@ fn test_tensor_meta_contract() -> Result<()> {
     Ok(())
 }
 
-/// 1E — Capability contract.
+/// 1E - Capability contract.
 #[test]
 fn test_capability_contract() {
     const CUSTOM: DTypeDescriptor = TestOpaque16::DESCRIPTOR;
@@ -95,7 +95,7 @@ fn test_capability_contract() {
     );
 }
 
-/// 1F — Precision contract.
+/// 1F - Precision contract.
 #[test]
 fn test_precision_contract() {
     let request = PrecisionRequest::new(
@@ -111,7 +111,7 @@ fn test_precision_contract() {
     assert_eq!(request.output, TestOpaque16::DESCRIPTOR);
 }
 
-/// 1H — Built-in compatibility.
+/// 1H - Built-in compatibility.
 #[test]
 fn test_builtin_compatibility() {
     assert_eq!(

@@ -42,7 +42,7 @@ mod onnx;
 ///
 /// A checked-in `prost-build` output rather than the `onnx-pb` crate. `onnx-pb`
 /// has not been released since 2020, pinned this crate to `prost 0.6` beside
-/// `incin-core`'s `prost 0.14`, and ran `protoc` from a build script — which
+/// `incin-core`'s `prost 0.14`, and ran `protoc` from a build script - which
 /// made a protobuf compiler a build requirement for everyone who depended on
 /// the facade. The file is byte-identical to `incin-core`'s copy and both are
 /// written by `cargo xtask onnx`, whose `--check` mode is the CI gate.
@@ -102,7 +102,7 @@ mod tensor;
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
 /// against the crate rather than against whatever the caller happens to have
-/// in scope — including a module of their own called `incin` (`CI-005`).
+/// in scope - including a module of their own called `incin` (`CI-005`).
 ///
 /// The one form it cannot survive is a *package* rename in the caller's
 /// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
@@ -115,10 +115,10 @@ pub fn s(input: TokenStream) -> TokenStream {
 }
 
 /// Builds a `Tensor` directly from a literal, inferring shape and (unless
-/// told otherwise) dtype from how it's written — the macro analogue of
+/// told otherwise) dtype from how it's written - the macro analogue of
 /// `vec![...]`.
 ///
-/// `tensor![data...; dtype: T, grad: G]` — the `; clause, ...` tail is
+/// `tensor![data...; dtype: T, grad: G]` - the `; clause, ...` tail is
 /// optional and either clause may appear in either order.
 ///
 /// **Scope.** This macro is the convenience form for literal data on the
@@ -147,7 +147,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// let t = tensor![[[1, 2], [3, 4]], [[5, 6], [7, 8]]]    // shape [2, 2, 2], i64
 ///     .unwrap();
 ///
-/// let empty = tensor![].unwrap();                        // shape [0], f32 — like vec![]
+/// let empty = tensor![].unwrap();                        // shape [0], f32 - like vec![]
 /// ```
 ///
 /// A ragged literal (a row whose length disagrees with its siblings, or a
@@ -167,7 +167,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// (a variable, a call, ...) has no dtype the macro can see at expansion
 /// time, so it is passed through unchanged rather than cast. If it turns out
 /// not to already be the resolved dtype, that surfaces as `rustc`'s own type
-/// mismatch at the `from_slice` call this macro expands to — not a silently
+/// mismatch at the `from_slice` call this macro expands to - not a silently
 /// narrowed value.
 ///
 /// ## Clauses
@@ -182,15 +182,15 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// Clauses are matched by name, not position, so they can be written in any
-/// order — `; grad: NoGrad, dtype: f64` and `; dtype: f64, grad: NoGrad` are
+/// order - `; grad: NoGrad, dtype: f64` and `; dtype: f64, grad: NoGrad` are
 /// the same.
 ///
-/// - `dtype: T` — the element type, overriding inference above.
-/// - `grad: G` — `Grad` or `NoGrad`, overriding the default `Grad` (matching
+/// - `dtype: T` - the element type, overriding inference above.
+/// - `grad: G` - `Grad` or `NoGrad`, overriding the default `Grad` (matching
 ///   `Tensor`'s own default). Only those two markers are accepted, since
 ///   both take no runtime argument; `Dyn` (gradient tracking toggled at
 ///   runtime) needs a value alongside the type, and `tensor!` has no
-///   value-carrying clause — construct
+///   value-carrying clause - construct
 ///   directly with `Tensor::<S, B, K, Dyn>::from_slice(&data, (.., flag))`
 ///   instead:
 ///
@@ -205,14 +205,14 @@ pub fn s(input: TokenStream) -> TokenStream {
 ///
 /// Like every other fallible constructor on `Tensor` (`zeros`, `ones`,
 /// `from_slice`, ...), `tensor!` expands to a `Result<Tensor<...>>`
-/// expression rather than panicking — use `?` or `.unwrap()` at the call
+/// expression rather than panicking - use `?` or `.unwrap()` at the call
 /// site.
 ///
 /// ## Path resolution
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
 /// against the crate rather than against whatever the caller happens to have
-/// in scope — including a module of their own called `incin` (`CI-005`).
+/// in scope - including a module of their own called `incin` (`CI-005`).
 ///
 /// The one form it cannot survive is a *package* rename in the caller's
 /// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
@@ -235,7 +235,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// # Which axes are static
 ///
 /// An integer literal is a static axis; anything else is a runtime axis. This
-/// is the same split `s!` already makes — `s![usize, 784]` — with the `usize`
+/// is the same split `s!` already makes - `s![usize, 784]` - with the `usize`
 /// inferred rather than spelled.
 ///
 /// The inference is *syntactic*, so a named constant reads as an expression
@@ -248,7 +248,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 ///
 /// That is a weaker shape than was available, never a wrong one: the extent is
 /// still 32, it is simply carried at runtime instead of in the type. Where the
-/// stronger form matters, name it — `s![32, 784]` — which is
+/// stronger form matters, name it - `s![32, 784]` - which is
 /// what the explicit constructors remain for.
 ///
 /// # What it does not carry
@@ -257,7 +257,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 /// target's bound float (`gpu.zeros(..)` is `f32` unless the target was rebound
 /// with `dtype`), and data tensors take the element type of the data
 /// (`gpu.tensor([0_i64, 1])` is `i64`). Nothing in this macro can change
-/// either, which is deliberate — a shape argument that silently decided dtype
+/// either, which is deliberate - a shape argument that silently decided dtype
 /// would be the same mistake as a device argument that silently decided a
 /// backend.
 ///
@@ -289,7 +289,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
 /// against the crate rather than against whatever the caller happens to have
-/// in scope — including a module of their own called `incin` (`CI-005`).
+/// in scope - including a module of their own called `incin` (`CI-005`).
 #[proc_macro]
 pub fn shape(input: TokenStream) -> TokenStream {
     shape_value::shape_value(input)
@@ -336,7 +336,7 @@ pub fn impl_layer_args(input: TokenStream) -> TokenStream {
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
 /// against the crate rather than against whatever the caller happens to have
-/// in scope — including a module of their own called `incin` (`CI-005`).
+/// in scope - including a module of their own called `incin` (`CI-005`).
 ///
 /// The one form it cannot survive is a *package* rename in the caller's
 /// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
@@ -407,7 +407,7 @@ pub fn mesh(input: TokenStream) -> TokenStream {
 ///
 /// The expansion names `::incin::prelude::…` absolutely, so it resolves
 /// against the crate rather than against whatever the caller happens to have
-/// in scope — including a module of their own called `incin` (`CI-005`).
+/// in scope - including a module of their own called `incin` (`CI-005`).
 ///
 /// The one form it cannot survive is a *package* rename in the caller's
 /// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
@@ -427,7 +427,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ## Examples
 ///
-/// The path is read at compile time, so this is shown rather than compiled —
+/// The path is read at compile time, so this is shown rather than compiled -
 /// there is no feature set in which a doctest has `resnet18.onnx` to open.
 ///
 /// ```text

@@ -22,7 +22,7 @@ has to act on.
 
 `incin-core` had a build script that ran `prost-build` on every build, which
 made a system protobuf compiler mandatory for every crate that depended on the
-facade — including the overwhelming majority that never call the ONNX
+facade, including the overwhelming majority that never call the ONNX
 exporter. The generated module is checked in at
 `crates/incin-core/src/generated/onnx.rs` instead. Nothing changes for callers;
 the ONNX API is identical. Maintainers regenerate with `cargo xtask onnx` and
@@ -44,8 +44,7 @@ fn set_grad<K: DType>(
 ) -> Result<()>;
 ```
 
-It exists so that post-backward transforms which rescale a whole gradient set —
-`clip_grad_norm` is the one in tree — can be written once against the trait
+It exists so that post-backward transforms which rescale a whole gradient set (`clip_grad_norm` is the one in tree) can be written once against the trait
 rather than once per backend. It is a replacement, not an accumulation; the
 reverse walk's own accumulation has finished before anything calls it.
 
@@ -58,7 +57,7 @@ return `Error::UnsupportedBackendOperation` rather than `Ok(())`.
 
 `SGD`, `Adam`, and `AdamW` previously skipped a parameter they had no gradient
 for and returned `Ok(())` regardless. Skipping *some* parameters is still
-legal — a parameter the forward pass did not use has nothing to apply — but
+legal (a parameter the forward pass did not use has nothing to apply), but
 skipping *every* parameter in a non-empty group now returns
 `Error::InvalidModuleState`.
 
@@ -84,7 +83,7 @@ opt-in:
 incin = { version = "0.1.0", features = ["data-hub"] }
 ```
 
-Dataset downloading does not need it — that is `incin-data`'s `download`
+Dataset downloading does not need it: that is `incin-data`'s `download`
 feature, which is on by default.
 
 ### `ModelExt::load` no longer takes a device
@@ -110,8 +109,8 @@ the build, naming both numbers.
 
 This is breaking for files written by a `0.0.0` snapshot, which carry no
 version: loading one now fails with a message saying so. Re-save it with a
-build of this version. Foreign safetensors files — a Hugging Face checkpoint,
-say — were never loadable through `ModelExt::load` and are unaffected;
+build of this version. Foreign safetensors files (a Hugging Face checkpoint,
+for instance) were never loadable through `ModelExt::load` and are unaffected;
 `import_model!` reads those and does not look for the key.
 
 The sharded-checkpoint manifest has always carried a `version` field but never

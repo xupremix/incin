@@ -316,7 +316,7 @@ impl ArgInto<Dim5Arg> for Dim5Arg {
 }
 
 // ============================================================================
-// NotUnit markers — types that represent actual user-provided values
+// NotUnit markers - types that represent actual user-provided values
 // ============================================================================
 
 macro_rules! impl_not_unit {

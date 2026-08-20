@@ -1,10 +1,10 @@
 //! Typed device meshes: the logical topology and its physical binding.
 //!
 //! PROPOSALS.md §3.8 splits distributed correctness into two proof domains. The
-//! *logical* one — shard counts, placements, collective semantics, and
-//! global/local shapes — is provable from the types alone. The *physical* one —
+//! *logical* one - shard counts, placements, collective semantics, and
+//! global/local shapes - is provable from the types alone. The *physical* one -
 //! installed devices, rank mapping, memory, peer access, link topology,
-//! transport versions — is not provable at all until a process looks at a
+//! transport versions - is not provable at all until a process looks at a
 //! machine.
 //!
 //! Both halves are in this file and the boundary between them is the point. A
@@ -87,8 +87,8 @@ pub struct MeshSpec<DP, TP = TensorParallel<U1>, PP = Pipeline<U1>>(PhantomData<
 /// A topology whose degrees are all nonzero and whose product is countable.
 ///
 /// This is the whole compile-time contract of a mesh. It is implemented for
-/// exactly one shape of type — three correctly ordered axis markers over
-/// nonzero `typenum` degrees — so every way of being an invalid topology is the
+/// exactly one shape of type - three correctly ordered axis markers over
+/// nonzero `typenum` degrees - so every way of being an invalid topology is the
 /// absence of this implementation rather than a runtime check that something
 /// has to remember to call.
 ///
@@ -177,8 +177,8 @@ where
 /// Every question binding asks a machine, and the only impure surface in this
 /// module.
 ///
-/// §2.11's physical-proof list — installed devices, rank mapping, peer access,
-/// link topology, transport versions, process layout — is exactly the set of
+/// §2.11's physical-proof list - installed devices, rank mapping, peer access,
+/// link topology, transport versions, process layout - is exactly the set of
 /// things a type cannot know. This trait is that set, and `DeviceMesh::bind`
 /// consults nothing else, so every rule in this file can be exercised against
 /// a machine that does not exist. That is `UX-014`'s
@@ -201,8 +201,8 @@ pub trait TopologyProbe {
 
     /// How two devices reach each other.
     ///
-    /// Asked in both directions is not the same as asked once — a link can be
-    /// asymmetric — so `bind` asks for the pair it is about to require and
+    /// Asked in both directions is not the same as asked once - a link can be
+    /// asymmetric - so `bind` asks for the pair it is about to require and
     /// does not assume the reverse.
     fn link(&self, from: DeviceId, to: DeviceId) -> LinkClass;
 
@@ -219,7 +219,7 @@ pub trait TopologyProbe {
 /// stable across reboots, it is renumbered by `CUDA_VISIBLE_DEVICES`, and two
 /// processes with different visibility masks will disagree about which
 /// physical card `1` is while both believing they agree. So the ordinal is
-/// kept — it is what the caller asked for and what a diagnostic has to print —
+/// kept - it is what the caller asked for and what a diagnostic has to print -
 /// and the vendor-stable id is what identity actually *means* here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceIdentity {
@@ -293,7 +293,7 @@ impl LinkClass {
     /// Whether any transfer is possible over this link.
     ///
     /// Only [`Unreachable`](LinkClass::Unreachable) is false. A slow link is a
-    /// performance problem and this is a correctness predicate — `bind`
+    /// performance problem and this is a correctness predicate - `bind`
     /// refuses meshes that cannot communicate, not meshes that communicate
     /// badly, because the second is a judgement no library should silently
     /// make on a caller's behalf.
@@ -440,7 +440,7 @@ impl MeshAxis {
 /// arbitrary: tensor parallelism exchanges activations on every layer and is
 /// the most bandwidth-hungry axis, launchers assign consecutive ranks to the
 /// same host, and so the innermost axis is the one that lands on the fastest
-/// link. Data parallelism is outermost because it communicates least — once
+/// link. Data parallelism is outermost because it communicates least - once
 /// per step, on gradients.
 ///
 /// Groups are computed from the degrees on demand rather than stored, so there
@@ -596,7 +596,7 @@ impl Digest {
 /// §2.11: "A topology fingerprint includes stable device identity,
 /// architecture, relevant link classes, transport/library versions, and
 /// process layout." Those are exactly the fields, and *relevant* is doing real
-/// work in that sentence — the recorded links are the ones the mesh's own
+/// work in that sentence - the recorded links are the ones the mesh's own
 /// collective groups need, not every pair, because a mesh does not care
 /// whether two ranks that never communicate can reach each other.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -735,7 +735,7 @@ pub struct DeviceMesh<M> {
 }
 
 // These four are written out rather than derived because `derive` would bound
-// them on `M: Debug + Clone + PartialEq + Eq`, and `M` is a `MeshSpec` — a
+// them on `M: Debug + Clone + PartialEq + Eq`, and `M` is a `MeshSpec` - a
 // marker that is never constructed and implements none of them. The bound
 // would make a `DeviceMesh` undebuggable for exactly the type parameters it is
 // meant to be used with.

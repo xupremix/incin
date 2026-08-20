@@ -183,16 +183,16 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 
 /// Rewrites a rust-analyzer inlay-hint (or hover) label for a Incin tensor
 /// type into a compact shape form: `Tensor<(U2, U3), CpuBackendImpl<Cpu>>`
-/// becomes `Tensor<[2, 3], CpuBackendImpl<Cpu>>` — or, with
+/// becomes `Tensor<[2, 3], CpuBackendImpl<Cpu>>` - or, with
 /// `shorten_backend: true`, `Tensor<[2, 3]>`.
 ///
 /// Falls back to a generic, whole-label typenum-to-decimal rewrite (the same
 /// one `humanize_diagnostic` uses) for any label that isn't specifically a
-/// `Tensor<(...` shell — e.g. `let conv: Conv2d<(usize, usize, UInt<...>,
+/// `Tensor<(...` shell - e.g. `let conv: Conv2d<(usize, usize, UInt<...>,
 /// ...), CpuBackendImpl>`, which is just as common a hint to hit as a bare
 /// `Tensor` (any `let` binding of a layer/module shows one) but has no single
 /// tuple that's unambiguously "the shape" the way `Tensor`'s first generic
-/// param always is, so it doesn't get the `[...]` bracket treatment — every
+/// param always is, so it doesn't get the `[...]` bracket treatment - every
 /// `UInt<...>`/`UTerm` chain in it still becomes a plain decimal in place,
 /// which is the whole readability win either way. Truly non-Incin labels
 /// (`i32`, `Dyn`-shaped tensors with no typenum content) pass through
@@ -202,7 +202,7 @@ pub fn humanize_inlay_label(label: &str, shorten_backend: bool) -> String {
 }
 
 /// Same rewrite as [`humanize_inlay_label`], but also returns the
-/// `(decimal, original)` hint pairs discovered along the way — for callers
+/// `(decimal, original)` hint pairs discovered along the way - for callers
 /// like hover, which (unlike an inlay hint's cramped ghost text) have room
 /// to show a legend mapping each humanized number back to its raw typenum
 /// expression.
@@ -230,7 +230,7 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     let (shape_digits, hints) = translate_typenum_text(&label[tuple_open + 1..tuple_close]);
     // Rust's 1-tuple syntax (`(U8,)`) leaves a trailing comma inside the
     // parens that `translate_typenum_text` faithfully preserves (it only
-    // rewrites typenum spans, not surrounding punctuation) — strip it so a
+    // rewrites typenum spans, not surrounding punctuation) - strip it so a
     // rank-1 shape renders as `[8]`, not `[8,]`.
     let shape_digits = shape_digits.trim_end_matches(|c: char| c == ',' || c.is_whitespace());
     let shape = format!("[{}]", shape_digits);
@@ -265,7 +265,7 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
 /// segment: `incin::cpu::Tensor` becomes `Tensor`, `typenum::B1` becomes
 /// `B1`. Intended for rust-analyzer's inlay-hint `textEdits[0].newText`,
 /// which spells every type fully-qualified (so it inserts correctly at any
-/// scope) — that fully-qualified form is otherwise identical in shape to the
+/// scope) - that fully-qualified form is otherwise identical in shape to the
 /// short-path form `humanize_inlay_label` already knows how to parse, so
 /// normalizing it first lets the same parser handle both.
 pub fn strip_path_qualifiers(s: &str) -> String {

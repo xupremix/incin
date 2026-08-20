@@ -2,7 +2,7 @@
 //! generate, and every public example is compiled.
 //!
 //! §2.10 says not to maintain handwritten support tables that can drift from
-//! code. Generating them is only half of that — a generated file that nobody
+//! code. Generating them is only half of that - a generated file that nobody
 //! regenerates has drifted just as far as a handwritten one, and reads as
 //! authoritative while doing it. This suite is the other half: it fails when the
 //! checked-in text and the renderer disagree, so the drift cannot be committed.
@@ -122,8 +122,8 @@ fn the_document_does_not_advertise_an_unregistered_operation() {
 /// them before `UX-013` and `cargo test --workspace --doc` reported success
 /// while compiling nine examples out of seventy-nine.
 ///
-/// A snippet that genuinely cannot compile where it lives — the invocation form
-/// of a `pub(crate)` macro, a `model!` that opens a file at build time — is
+/// A snippet that genuinely cannot compile where it lives - the invocation form
+/// of a `pub(crate)` macro, a `model!` that opens a file at build time - is
 /// fenced ` ```text `, which says it is shown rather than run and, unlike
 /// `ignore`, does not claim to be a checked example.
 #[test]

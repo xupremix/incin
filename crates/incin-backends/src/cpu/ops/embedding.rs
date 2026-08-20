@@ -5,11 +5,11 @@
 //! module.rs pattern.
 //!
 //! Forward is a genuine materializing per-row gather (like im2col's forward)
-//! — not a `CpuStorage` view op, since gathered rows are not contiguous/
+//! - not a `CpuStorage` view op, since gathered rows are not contiguous/
 //! stridable from arbitrary integer indices. Backward is a hand-composed
 //! scatter-add: repeated indices in the input tensor must ACCUMULATE (sum)
 //! their gradient contributions into the corresponding weight row, never
-//! overwrite — the embedding-specific analogue of CPUBACK-05's tape-level
+//! overwrite - the embedding-specific analogue of CPUBACK-05's tape-level
 //! accumulate-not-overwrite requirement, done inside ONE backward closure
 //! rather than via multiple `TapeEntry` pushes.
 
@@ -27,7 +27,7 @@ use crate::cpu::tape::{self, TapeEntry};
 /// `t.shape ++ [hidden_size]`.
 ///
 /// Backward pushes exactly ONE `TapeEntry` whose `input_ids` is `vec![w.id]`
-/// only — the integer indices tensor `t` is not a differentiable input (it
+/// only - the integer indices tensor `t` is not a differentiable input (it
 /// has no gradient, mirroring `cross_entropy_loss`'s treatment of its
 /// integer `target` argument). The backward closure scatter-adds each
 /// gathered position's incoming gradient slice into the corresponding row
@@ -101,7 +101,7 @@ pub(crate) fn embedding_impl<D: incin_core::tensor::device::Device, K: DType, KI
             let mut grad_w = vec![0.0f32; w_total];
             // Walk the LEADING axes (matching `t_shape`) with the shared
             // odometer helper, appending the trailing hidden-size axis
-            // explicitly for each leading position — this mirrors how `out`
+            // explicitly for each leading position - this mirrors how `out`
             // was populated during forward (row-major over `t`'s positions,
             // contiguous `hidden_size` run per position).
             let mut leading_idx = vec![0usize; t_shape.len()];

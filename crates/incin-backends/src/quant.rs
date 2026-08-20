@@ -26,8 +26,8 @@ mod tests {
     #[test]
     /// The struct and the dtype table must agree on a block's size.
     ///
-    /// Both are used to size allocations — the CPU by `size_of`, CUDA and WGPU
-    /// by `block_bytes` — so a disagreement would under-allocate on one side of
+    /// Both are used to size allocations - the CPU by `size_of`, CUDA and WGPU
+    /// by `block_bytes` - so a disagreement would under-allocate on one side of
     /// a transfer rather than fail to compile.
     fn block_matches_the_dtype_tables_block_size() {
         use incin_core::tensor::dtype::ConstDType;

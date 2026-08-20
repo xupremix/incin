@@ -197,7 +197,7 @@ pub(crate) fn cuda_from_bytes(
 /// Guards `download_f32_host`/`upload_f32_from_host` callers against the
 /// class of bug those two helpers cannot detect on their own: they assume
 /// F32 storage unconditionally, so calling them on any of CUDA's other
-/// storage dtypes (I64/BF16/F16/F64 — see `CUDA_STORAGE_DTYPES` in
+/// storage dtypes (I64/BF16/F16/F64 - see `CUDA_STORAGE_DTYPES` in
 /// `capability/constants.rs`) would silently reinterpret the wrong bytes rather than
 /// error. `topk`/`argsort` (this file, `cuda_topk_host`/`cuda_argsort_host`)
 /// have this exact gap already and are tracked separately; every new

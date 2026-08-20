@@ -247,7 +247,7 @@ fn malformed_adam_state_load_is_typed_and_transactional() -> Result<()> {
 /// silent no-op.
 ///
 /// Before this contract, every optimizer here skipped a parameter it had no
-/// gradient for and returned `Ok(())` regardless — so a training loop that
+/// gradient for and returned `Ok(())` regardless - so a training loop that
 /// never reached the backward pass, or reached it on a different thread from
 /// the one that recorded the forward pass, ran to completion with parameters
 /// that never moved. Skipping *some* parameters stays legal, because a

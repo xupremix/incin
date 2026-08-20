@@ -37,7 +37,7 @@ pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<StrideBuf> {
     // Returned as a `StrideBuf`, which stores rank 8 and below inline. Copying
     // it into a `Vec` cost an allocation per storage construction, which is one
     // per operation, to reach a value the caller then hands straight to
-    // `TensorMeta` — where it becomes a `StrideBuf` again.
+    // `TensorMeta` - where it becomes a `StrideBuf` again.
     incin_core::shapes::StrideBuf::contiguous_for(
         &ShapeBuf::from_slice(shape),
         OperationKind::Storage,

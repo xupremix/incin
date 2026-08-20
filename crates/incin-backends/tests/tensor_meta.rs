@@ -164,8 +164,8 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
 /// is the only thing the Rust type system knows about a CUDA allocation and one
 /// byte is all it proves. It is a true claim and a useless one: every CUDA
 /// tensor would answer "unaligned" to a kernel choosing between a scalar and a
-/// vector load. The first run on real hardware settled it — the driver returns
-/// 256-byte-aligned addresses, as its own documentation promises — so the claim
+/// vector load. The first run on real hardware settled it - the driver returns
+/// 256-byte-aligned addresses, as its own documentation promises - so the claim
 /// now matches the allocator, and a view offset still weakens it.
 #[cfg(feature = "cuda")]
 #[test]

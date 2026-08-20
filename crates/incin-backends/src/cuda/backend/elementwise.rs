@@ -306,7 +306,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
     /// The literal is emitted unsuffixed (full `f64` precision, not narrowed
     /// to `f32` first) so the `f64` compute-type family actually computes at
-    /// `f64` precision instead of silently narrowing — see `sub_scalar_float`
+    /// `f64` precision instead of silently narrowing - see `sub_scalar_float`
     /// below, which this now matches instead of contradicting.
     pub(crate) fn add_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
         let expr = format!("x + ({scalar:.17})");
@@ -327,7 +327,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
     /// `x - val`. The literal is emitted unsuffixed (full `f64` precision,
     /// not narrowed to `f32` first) so the `f64` compute-type family
-    /// actually computes at `f64` precision instead of silently narrowing —
+    /// actually computes at `f64` precision instead of silently narrowing -
     /// the same distinction `exp`/`sqrt`/`log`/`tanh` above draw against
     /// their float-suffixed intrinsics.
     pub(crate) fn sub_scalar_float<K: DType>(t: &CudaStorage, val: f64) -> Result<CudaStorage> {

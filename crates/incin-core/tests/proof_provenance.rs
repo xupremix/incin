@@ -2,7 +2,7 @@
 //!
 //! The `compile_fail` cases next door prove what an external caller cannot do:
 //! reach `Validated::new`, name its fields, or add a descriptor to the sealed
-//! taxonomy. This file proves the other half — that everything a caller is
+//! taxonomy. This file proves the other half - that everything a caller is
 //! *supposed* to do still works across the crate boundary, so the seal did not
 //! also lock out legitimate use.
 //!

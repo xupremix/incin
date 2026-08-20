@@ -2,7 +2,7 @@
 //! `var_*` counterparts.
 //!
 //! `rand` uses `rand::distributions::Uniform` (uniform `[0.0, 1.0)`);
-//! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
+//! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) - per
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
 use incin_core::error::{ConversionFailure, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
@@ -514,7 +514,7 @@ mod tests {
         let n = data.len() as f64;
         let mean: f64 = data.iter().map(|&v| v as f64).sum::<f64>() / n;
         let variance: f64 = data.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
-        // Wide tolerance — statistical smoke test, not exact.
+        // Wide tolerance - statistical smoke test, not exact.
         assert!(mean.abs() < 0.2, "sample mean {mean} not near 0.0");
         assert!(
             (variance - 1.0).abs() < 0.3,

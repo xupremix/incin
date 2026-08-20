@@ -3,8 +3,8 @@
 ## Status
 
 Design approved. First spec in a multi-spec restructuring effort tracked on
-the `design` branch. This spec produces one deliverable — a conventions
-document — and touches no crate's actual source. Per-crate application is
+the `design` branch. This spec produces one deliverable - a conventions
+document - and touches no crate's actual source. Per-crate application is
 separate, follow-up work.
 
 ## Problem
@@ -14,8 +14,8 @@ execution ledger marked complete. The code works and is heavily tested, but
 it is dense to read and edit: individual files run long (`exec/catalog.rs` at
 6097 lines, `cpu/canonical.rs` at 4235, `tensor/ops/manipulation.rs` at 3464,
 `dist/nccl.rs` at 2955), and doc comments frequently read as audit-trail
-paragraphs — bench deltas, "a second Miri run tripped X instead of Y,"
-deviation justifications — rather than short API summaries. Nothing here is
+paragraphs - bench deltas, "a second Miri run tripped X instead of Y,"
+deviation justifications - rather than short API summaries. Nothing here is
 a correctness problem; it is a navigation and editing-speed problem.
 
 ## Goal
@@ -30,9 +30,9 @@ rustdoc already shows.
 
 - **Crate boundaries.** The 10 crates stay exactly as they are. Nothing here
   splits, merges, or moves a crate.
-- **Behavior.** No crate is required to preserve its current public API —
+- **Behavior.** No crate is required to preserve its current public API - 
   nothing beyond the `0.0.0` placeholder versions is published, so breaking
-  changes are free — but no crate is required to change behavior either.
+  changes are free - but no crate is required to change behavior either.
   This spec is about organization and presentation, not semantics.
 - **Enforcement tooling.** No new CI gate, lint, or `xtask` budget check.
   incin already gates aggressively (audit-shapes, soundness.sh,
@@ -47,9 +47,9 @@ rustdoc already shows.
 
 ### File organization
 
-Not a hard line-count ceiling. A generated-feeling file — a genuine
+Not a hard line-count ceiling. A generated-feeling file - a genuine
 declarative table, or the output shape of a macro like
-`impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` — can be
+`impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` - can be
 long and still be one clear thing. The split trigger is **responsibility
 count**, not length: a file is split when it visibly mixes more than one
 concern.
@@ -61,7 +61,7 @@ alone it carries classification enums (`SemanticProfile`,
 (`operation_coverage`/`operation_coverage_document`), the
 `OperationCatalogEntry` row type and its classification logic, tensor
 metadata types (`LogicalTensorMeta`, `CreationPayload`), an open-operation
-identity (`OperationKey`), and a `Descriptor<O>` typed-wrapper module — at
+identity (`OperationKey`), and a `Descriptor<O>` typed-wrapper module - at
 least six distinct concerns sharing one file. This is exactly the case the
 heuristic is meant to catch, and the split follow-up for `incin-core` should
 treat it as a primary target rather than an exception.
@@ -80,8 +80,8 @@ Every public item carries:
    non-obvious from the signature and name alone.
 3. A `# Examples` block with a real, runnable doctest.
 
-Evidence-log material — bench deltas, Miri-flakiness investigation notes,
-"we tried X, it failed because Y" narratives, deviation justifications —
+Evidence-log material - bench deltas, Miri-flakiness investigation notes,
+"we tried X, it failed because Y" narratives, deviation justifications - 
 moves to where incin already has a proper home for it: `CHANGELOG.md` for
 anything user-facing, `docs/plan/tasks/<ID>.md` for the historical
 task-completion narrative (the ledger's existing pattern for exactly this
@@ -98,14 +98,14 @@ addresses.
 
 "Document and test everything" is a presentation change, not new test
 authorship: every public function and type gets a doctest under
-`# Examples` that exercises real, already-proven behavior — the 101
+`# Examples` that exercises real, already-proven behavior - the 101
 completed ledger tasks already built and verified it; this makes that
 behavior visible where a reader looks for it. `cargo test --doc` is already
 a CI gate (the Documentation Build job), so a doctest that goes stale fails
 the same way any other test failure does.
 
-Where a doctest doesn't fit the crate's shape — `incin-lsp`'s binary,
-`incin-viz`'s TUI — the example is a file under `crates/<crate>/examples/`
+Where a doctest doesn't fit the crate's shape - `incin-lsp`'s binary,
+`incin-viz`'s TUI - the example is a file under `crates/<crate>/examples/`
 or a `docs/book/` walkthrough instead.
 
 ### Book alignment
@@ -129,7 +129,7 @@ This spec's deliverable is the convention only. Follow-up specs apply it,
 one per crate or small related group (for example: `incin-core` +
 `incin-macros` together, given how tightly coupled they are; the four
 backend targets in `incin-backends` as their own spec; the smaller support
-crates — `incin-data`, `incin-diagnostics`, `incin-telemetry`, `incin-lsp`,
-`incin-viz`, `incin-viz-plugin-api` — grouped by size). Each follow-up spec
+crates - `incin-data`, `incin-diagnostics`, `incin-telemetry`, `incin-lsp`,
+`incin-viz`, `incin-viz-plugin-api` - grouped by size). Each follow-up spec
 gets its own design-doc → plan → implementation cycle rather than being
 folded into this one.

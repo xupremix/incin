@@ -169,7 +169,7 @@ impl<'a> OnnxImporter<'a> {
 
     /// Parses the bound file into a [`Graph`]. See `import_from_onnx`'s own
     /// documentation (in this crate's source) for what this does and does
-    /// not reconstruct — it is crate-private and cannot be linked from here.
+    /// not reconstruct - it is crate-private and cannot be linked from here.
     pub fn import(&self) -> anyhow::Result<Graph> {
         import_from_onnx(self.path)
     }
@@ -186,7 +186,7 @@ impl<'a> OnnxImporter<'a> {
 /// [`OperationKind`] (see `onnx_name`'s own forward table), or whose output
 /// has no shape and dtype from either an explicit `value_info` entry or an
 /// initializer, is refused rather than given an invented shape or a guessed
-/// dtype — an invented `Value::shape` would be a lie every downstream reader
+/// dtype - an invented `Value::shape` would be a lie every downstream reader
 /// of the graph inherits.
 pub fn import_from_onnx(path: &Path) -> anyhow::Result<Graph> {
     let bytes = std::fs::read(path)?;
@@ -328,7 +328,7 @@ fn dtype_from_onnx(code: i32) -> anyhow::Result<DTypeId> {
 
 /// The inverse of `value_to_value_info`, for the parts of a `TypeProto` this
 /// module ever writes: a tensor type with a concrete (non-symbolic) shape.
-/// Returns `None` rather than an error for anything else — a `value_info`
+/// Returns `None` rather than an error for anything else - a `value_info`
 /// entry with no tensor type, or a dynamic dimension, is not itself a
 /// defect, it just means this name contributes nothing to the shape lookup.
 fn value_info_shape_dtype(
@@ -364,8 +364,8 @@ fn value_info_shape_dtype(
 
 /// The inverse of `onnx_name`. `MatMul` and `Conv` are each written by two
 /// different [`OperationKind`]s (`MatMulExact`/`BatchedMatMul`,
-/// `Conv1dExact`/`Conv2dExact`); the rank of the first operand — read from
-/// `value_info`/an initializer when one supplied it — is what tells them
+/// `Conv1dExact`/`Conv2dExact`); the rank of the first operand - read from
+/// `value_info`/an initializer when one supplied it - is what tells them
 /// apart on the way back in, the same distinction ONNX's own operator
 /// semantics draw from tensor rank rather than the op name. `Trilu` folds
 /// `Triu`/`Tril` into one ONNX op with an `upper` attribute, defaulting to

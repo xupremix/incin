@@ -36,10 +36,10 @@ upgrade from a `0.0.0` snapshot has to act on.
   Hub client that pulled them is now behind the `data-hub` feature.
 
 ### Added
-- **`clip_grad_norm`** — total-norm gradient clipping over a `ParameterGroup`,
+- **`clip_grad_norm`** - total-norm gradient clipping over a `ParameterGroup`,
   returning the norm before rescaling. The one training primitive the framework
   was missing.
-- **`AutogradBackend::set_grad`** — the backend primitive clipping needs.
+- **`AutogradBackend::set_grad`** - the backend primitive clipping needs.
   Required rather than defaulted; see `docs/MIGRATION.md`.
 - **WGPU unary activations are reachable.** `relu`, `step`, `mish`, `elu`,
   `gelu`, `abs`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, and `swish`
@@ -56,11 +56,11 @@ upgrade from a `0.0.0` snapshot has to act on.
   documentation links, and `[package.metadata.docs.rs]` feature sets, checked
   by `tools/check-publish-metadata.py`.
 - **`rust-version = "1.88"`**, verified by a CI job pinned to that toolchain.
-- **Supply-chain gate** — `deny.toml` and a `cargo deny check` CI job covering
+- **Supply-chain gate** - `deny.toml` and a `cargo deny check` CI job covering
   advisories, licences, duplicates, and registry provenance.
 - **`data-hub` facade feature** for the Hugging Face Hub client, and
   `download`/`hub` features on `incin-data`.
-- **`STATE_FORMAT_VERSION`** — an explicit schema version on both state
+- **`STATE_FORMAT_VERSION`** - an explicit schema version on both state
   formats. Safetensors carries it as `incin.format.version` metadata; postcard
   carries it as the first field of its envelope, ahead of the payload, so a
   version mismatch is reported as one rather than as a decode failure partway
@@ -70,7 +70,7 @@ upgrade from a `0.0.0` snapshot has to act on.
 
 ### Changed
 - **The CPU AVX2 kernels are reachable.** They were gated on
-  `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` — false
+  `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` - false
   in any stock `cargo build`, since the default `x86_64` target is the baseline
   ISA. Every default build therefore dead-code-eliminated the SIMD path and ran
   a scalar loop. The kernels already carried
@@ -81,15 +81,15 @@ upgrade from a `0.0.0` snapshot has to act on.
   A test now fails if the gate is narrowed back to a compile-time condition.
 - **Whole-tensor reductions read contiguous storage directly.** `sum_all`,
   `mean_all`, `prod_all`, `max_all`, and `min_all` walked a logical odometer and
-  fetched every element through a stride dot product plus a dtype match — about
+  fetched every element through a stride dot product plus a dtype match - about
   twenty cycles to read one number. `sum_f32/1024` goes from 6.97 µs to 5.41 µs
   under the full benchmark suite and from 6.97 µs to 1.32 µs in isolation;
   `sum_f32/65536` from 399 µs to 306 µs. The `f64` accumulator and the traversal
   order are unchanged, so reduced values are bit-identical.
 - **Fewer allocations per operation.** The descriptor path inferred each output
-  shape twice — once to derive it, once to verify the derivation against itself
-  — `broadcast_shape` round-tripped its accumulator through a `ShapeBuf` on
-  every operand, and the CPU backend built autograd tape entries even when the
+  shape twice, once to derive it and once to verify the derivation against
+  itself; `broadcast_shape` round-tripped its accumulator through a `ShapeBuf`
+  on every operand, and the CPU backend built autograd tape entries even when the
   effective `GradMode` was going to discard them. A rank-2 elementwise add went
   from 27 allocations to 5 and a unary from 20 to 5, and the ceilings in
   `hot_path_allocations.rs` were rebased onto the new counts. Shape inference
@@ -103,7 +103,7 @@ upgrade from a `0.0.0` snapshot has to act on.
 - **An optimizer step that reaches no parameter is an error.** `SGD`, `Adam`,
   and `AdamW` returned `Ok(())` when no parameter in the group received a
   gradient, so a training loop could run to completion with parameters that
-  never moved — including when `backward` ran on a different thread from the
+  never moved - including when `backward` ran on a different thread from the
   forward pass, since a tape is thread-local. Skipping some parameters remains
   legal.
 - **`docs/plan/roadmap.md` derives its completion table from
@@ -285,8 +285,8 @@ upgrade from a `0.0.0` snapshot has to act on.
 - **Typed logical device meshes (`DST-001`, `incin-core`'s `distributed`
   feature):** `incin_core::dist::mesh` adds `MeshSpec<Data<DP>,
   TensorParallel<TP>, Pipeline<PP>>` and `ValidMesh`, the compile-time half of
-  `PROPOSALS.md` §3.8. A mesh holds no `DeviceId` — the claim is logical device
-  selection, never hardware existence — so `ValidMesh` proves only that the
+  `PROPOSALS.md` §3.8. A mesh holds no `DeviceId` - the claim is logical device
+  selection, never hardware existence - so `ValidMesh` proves only that the
   degrees are nonzero and that `DP × TP × PP` is countable, over the same
   `typenum` `Mul` the shape rules use. `World` is an associated type so a
   caller can write `M: ValidMesh<World = U3>`, which is how §3.8's "`DP=3`,
@@ -296,15 +296,15 @@ upgrade from a `0.0.0` snapshot has to act on.
   size and changes the meaning. Omitted axes default to one. `DeviceMesh::bind`,
   the topology fingerprint, and the runtime guards are `DST-002`.
 - **Automatic `Trainer` (`UX-001`, `train` feature):** `incin::train` builds
-  `PROPOSALS.md` §2's level-1 workflow — pick devices, get a validated plan,
+  `PROPOSALS.md` §2's level-1 workflow - pick devices, get a validated plan,
   train. The load-bearing property is a refusal: an unsatisfiable device request
   is an error, never a CPU fallback, and `NotCompiledIn` (fix your
   `Cargo.toml`) is a separate variant from `DeviceUnavailable` (fix your
   machine). `DeviceSet` and `DevicePreference` join
   `incin_core::tensor::device`; they are separate types so that "I asked for
   CUDA and got CPU" is something the API can refuse rather than express.
-  `DevicePreference::Fastest` may resolve to the CPU — that is what asking for
-  it means — and records every family it skipped. Availability is answered
+  `DevicePreference::Fastest` may resolve to the CPU - that is what asking for
+  it means - and records every family it skipped. Availability is answered
   through a `Machine` trait, so a three-GPU plan is testable on a runner with
   none. Multi-device `fit` is an explicit `CollectivesUnavailable` naming
   `DST-005` rather than a quiet single-GPU run.
@@ -312,7 +312,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   `docs/capabilities.md` is rendered from `CPU_CAPABILITIES`,
   `CUDA_CAPABILITIES` and `WGPU_CAPABILITIES` by
   `incin_backends::capability_docs`, and `README.md`'s two feature tables are
-  rendered from the Cargo manifests by `cargo xtask docs` — including the
+  rendered from the Cargo manifests by `cargo xtask docs` - including the
   `Purpose` column, which comes from the `#` comment above each feature in the
   manifest. Both have a check that runs in CI (`cargo xtask docs --check` and
   the `generated_docs` suite), because a generator nobody runs is a handwritten
@@ -322,7 +322,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   call `f32`.
 - **External-backend SDK and conformance suite (`EXE-010`):**
   `incin_backends::external::conformance` is the backend-authoring surface from
-  `PROPOSALS.md` §2.9 — a `Subject` trait carrying the three things only an
+  `PROPOSALS.md` §2.9 - a `Subject` trait carrying the three things only an
   author can supply, `Tolerance` profiles, and eight checks identical for every
   backend. Every check consults the capability registry first, so an operation
   a backend does not claim is *skipped*, not failed. `external` is no longer
@@ -336,33 +336,33 @@ upgrade from a `0.0.0` snapshot has to act on.
   and writeability, and capability probes for eight representative operations
   on every device that answered. Stable `key: value` text by default, `--json`
   for CI and support reports with a `schema_version`. Findings carry stable
-  codes — `no-backend-compiled`, `backend-unavailable`, `cache-not-writable`,
-  `deprecated-feature`, `toolchain-unknown`, `isa-unavailable` — and only the
+  codes - `no-backend-compiled`, `backend-unavailable`, `cache-not-writable`,
+  `deprecated-feature`, `toolchain-unknown`, `isa-unavailable` - and only the
   first exits non-zero. The report is `incin::doctor`, a library module, so it
   is testable; every observation goes behind a `Host` trait, so a three-GPU
   machine can be put in front of it on a runner with none. The command is
   read-only: writeability is read from mode bits rather than probed by writing.
 - **Macro test suite (`CI-005`):** `crates/incin-macros/tests/` now carries the
   compile-pass, compile-fail, hygiene, rename, and rustfmt cases the macro
-  policy in `PROPOSALS.md` requires — twelve trybuild cases plus guards that
+  policy in `PROPOSALS.md` requires - twelve trybuild cases plus guards that
   fail when a case stops asserting what it claims or when one of the five
   categories disappears. `cargo test -p incin-macros` previously ran nothing.
 - **Structured backward failures and `NanPolicy` (`GRD-005`):** backward
-  recipes return `Result` — the 115 `.expect("unbroadcast lhs (add)")` and
-  `.unwrap()` sites inside them propagate now — and a failure arrives as
+  recipes return `Result` - the 115 `.expect("unbroadcast lhs (add)")` and
+  `.unwrap()` sites inside them propagate now - and a failure arrives as
   `BackwardError`, naming the tensor and whether the non-finite value came from
   a recipe or from summing two contributions. NaN checking is an
   `ExecutionPolicy` axis (`incin_core::exec::check_gradients(|| ..)`), read by
   every backend's walk, and defaults to off because the check reads every
   element of every gradient. The CUDA backend had no check at all before this.
 - **Backend-neutral autograd tape (`GRD-003`):** `incin_core::exec::tape` now
-  owns the graph `PROPOSALS.md` §1.2.5 puts in the core — one `TensorId`, a
+  owns the graph `PROPOSALS.md` §1.2.5 puts in the core - one `TensorId`, a
   `TapeNode` holding a node's inputs and backward recipe, a `Tape` owning the
   nodes, and the reverse walk that consumes them. `TapeStorage` is the whole of
   what a backend still supplies: identity, a ones seed, a fallible accumulate,
   and a non-finite predicate. The CPU backend runs on it; `GRD-004` moves WGPU
   and CUDA. The walk takes its nodes by value, so a backward recipe that itself
-  records — every convolution backward does — cannot re-enter the tape it is
+  records - every convolution backward does - cannot re-enter the tape it is
   draining.
 
 - **`GradMode` and `no_grad` (`GRD-002`):** the type-level `Grad`/`NoGrad`
@@ -371,7 +371,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   declared beside it, and travels to the backends through the ambient policy
   `GRD-001` already installs. Every frontend operation runs its kernel under
   the mode its *result*'s marker derives, and the CPU, WGPU, and CUDA tapes
-  refuse a push when that mode does not record — so a `NoGrad` chain creates no
+  refuse a push when that mode does not record - so a `NoGrad` chain creates no
   autograd node and retains no saved tensor, as `PROPOSALS.md` §1.2.5 requires.
   `incin_core::exec::no_grad(|| ..)` is the inference form and applies to
   `Grad` tensors too; an operand can only tighten the ambient mode, never raise
@@ -388,13 +388,13 @@ upgrade from a `0.0.0` snapshot has to act on.
   suppression claim so concurrent callers tuning the same problem/device/
   workload key block on the in-progress measurement instead of redundantly
   benchmarking it, and Tier-2 occupancy pruning for pointwise candidates
-  (`cuOccupancyMaxActiveBlocksPerMultiprocessor`, conservative — only drops a
+  (`cuOccupancyMaxActiveBlocksPerMultiprocessor`, conservative - only drops a
   candidate the driver confirms has zero active blocks). CUDA reductions and
   layer/batch norm are now generated from the dtype policy (replacing the
   checked-in F32-only `norm.cu`/`reduce.cu`) with warp/block cooperation and
   Welford accumulation; CUDA pointwise dispatch adds scalar-ILP and aligned
   packed (`half2`/`bfloat162`/`float4`/`double2`) access candidates. All CUDA
-  work is compile/clippy-verified only — no CUDA hardware available in CI or
+  work is compile/clippy-verified only - no CUDA hardware available in CI or
   local development at time of writing.
 - **WGPU autograd, essentially complete:** `layer_norm`, `batch_norm`,
   `adaptive_avg_pool2d`/`avg_pool2d`/`max_pool2d`, `max_dim`/`min_dim`/
@@ -408,7 +408,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   out to already be gradient-correct by composition from already-wired
   primitives and only needed verification. WGPU autograd coverage now
   matches CPU's, except `quantize`/`dequantize`/`quantized_matmul` (not wired
-  on CPU either — not a WGPU-specific gap).
+  on CPU either - not a WGPU-specific gap).
 - **Cross-backend gradient parity:** extended `tests/gradient_parity.rs` with
   `max_pool2d` and `cross_entropy_loss` (non-zero target class) CPU-vs-WGPU
   checks, the permanent regression class this file exists to catch.
@@ -420,7 +420,7 @@ upgrade from a `0.0.0` snapshot has to act on.
 ### Fixed
 - **Every public example is compiled (`UX-013`).** 70 of the workspace's 79 doc
   examples were fenced ```` ```rust,ignore ````, so `cargo test --workspace
-  --doc` reported success having compiled nine — and CI never ran it at all,
+  --doc` reported success having compiled nine - and CI never ran it at all,
   because `cargo test --all-targets` excludes doctests. Compiling them found
   the examples documenting an API that does not exist: `from_slice` shown with
   one argument where it takes two (fifteen examples), `Param<Tensor<S, B>>`
@@ -479,7 +479,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   (`buffer.to_vec::<u32>()`) instead of converting the value, silently
   corrupting every gradient/loss contribution for any non-zero class or
   vocab index (only index `0.0` happened to survive, since its IEEE bit
-  pattern is `0x00000000`). Existing tests never caught this — both only
+  pattern is `0x00000000`). Existing tests never caught this - both only
   exercised index/class `0`. Fixed to read `to_vec::<f32>()` and convert,
   matching the WGSL forward kernel's own `u32(indices[i])` value conversion.
 - Pre-existing (not introduced this cycle) `cargo clippy --features cuda,std`
@@ -489,7 +489,7 @@ upgrade from a `0.0.0` snapshot has to act on.
   `tests/gradient_parity.rs` assuming `cpu` was always enabled alongside
   `cuda`/`wgpu`.
 
-## Development snapshot — 2026-07-22
+## Development snapshot - 2026-07-22
 
 ### Changed
 
@@ -557,7 +557,7 @@ upgrade from a `0.0.0` snapshot has to act on.
 
 ---
 
-## Development snapshot — Backend Refactoring Sprint
+## Development snapshot - Backend Refactoring Sprint
 
 ### Changed
 - **Backend Crates:** Moved `native`, `wgpu`, and `cuda` backends into their own

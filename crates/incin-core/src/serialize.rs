@@ -50,8 +50,8 @@ fn dtype_from_safetensors(dtype: safetensors::tensor::Dtype) -> anyhow::Result<D
 
 /// The schema version stamped into every state file this crate writes.
 ///
-/// It describes the *envelope* — how paths, roles, dtypes, and payload bytes
-/// are arranged — and is deliberately independent of the crate version and of
+/// It describes the *envelope* - how paths, roles, dtypes, and payload bytes
+/// are arranged - and is deliberately independent of the crate version and of
 /// any individual dtype's own descriptor version. Bump it when a reader of the
 /// previous version would misread a file rather than fail to parse it.
 #[cfg(feature = "std")]
@@ -145,8 +145,8 @@ pub(crate) fn deserialize_snapshot_safetensors(
 /// [`deserialize_snapshot_safetensors`] is the loader behind `ModelExt::load`
 /// and refuses an unversioned file, because that file was never written by a
 /// versioned incin build and the version contract cannot say anything about
-/// it. A file downloaded from an external source — the Hugging Face Hub,
-/// most obviously — is unversioned for exactly that reason and is never
+/// it. A file downloaded from an external source - the Hugging Face Hub,
+/// most obviously - is unversioned for exactly that reason and is never
 /// wrong to be so: it was written by whatever produced it, not by incin. This
 /// entry point exists for that case: same tensor/shape/dtype parsing, same
 /// `incin.state.role.<name>` lookup (defaulting to `Parameter` when the key

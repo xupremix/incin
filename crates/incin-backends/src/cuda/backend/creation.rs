@@ -6,7 +6,7 @@ use super::*;
 impl<D: Device> CudaBackendImpl<D> {
     // No kernel fills an arbitrary value or generates a sequence yet.
     /// `full`. Same host-fill-then-upload pattern `zeros`/`ones` above
-    /// already use — `cuda_from_f32` reinterprets a `Vec<f32>`'s bytes as
+    /// already use - `cuda_from_f32` reinterprets a `Vec<f32>`'s bytes as
     /// `dtype`'s native representation, so like those two this only
     /// actually succeeds for `dtype == F32`; any other dtype fails the byte
     /// length check inside `cuda_from_bytes` rather than misreading, the

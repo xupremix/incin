@@ -331,7 +331,7 @@ fn inspect_gguf(
     }
 
     // Tensor data begins right after the info table, at the file's next
-    // absolute position — offsets in the table above are relative to it.
+    // absolute position - offsets in the table above are relative to it.
     let data_section_start = file.stream_position()?;
 
     let mut tensors = Vec::with_capacity(headers.len());

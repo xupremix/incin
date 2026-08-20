@@ -61,7 +61,7 @@
 //! dtype.
 //!
 //! The float is the dtype of *generated* tensors and layer parameters only.
-//! Data tensors take their dtype from the data and are never cast — see
+//! Data tensors take their dtype from the data and are never cast - see
 //! [`TargetExt::tensor`].
 //!
 //! This module is split by concern per `docs/CONVENTIONS.md`: `place` is

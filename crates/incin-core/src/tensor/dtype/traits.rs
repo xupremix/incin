@@ -1,13 +1,13 @@
 use super::*;
 
 // ============================================================================
-// DType — the fundamental trait for any logical dtype
+// DType - the fundamental trait for any logical dtype
 // ============================================================================
 
 /// A type-level tensor dtype: a logical description of what kind of values a
 /// tensor holds.
 ///
-/// Implement this to define a new logical dtype — no `DTypeId` variant required.
+/// Implement this to define a new logical dtype - no `DTypeId` variant required.
 /// The `descriptor` method returns the dtype's full description (key, kind,
 /// physical encoding) at any given runtime moment.
 ///
@@ -28,14 +28,14 @@ pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
 }
 
 // ============================================================================
-// ConstDType — dtype known at compile time
+// ConstDType - dtype known at compile time
 // ============================================================================
 
 /// A `DType` whose identity is fully known at compile time (as opposed to
 /// `Dyn`, which is resolved at runtime).
 ///
 /// A compile-time-known dtype does **not** imply that it has an ordinary Rust
-/// scalar element — `Q8_0` implements `ConstDType` but does NOT implement
+/// scalar element - `Q8_0` implements `ConstDType` but does NOT implement
 /// [`PlainDType`] because Q8_0 is a block-quantized format with no per-element
 /// Rust scalar. See [`PlainDType`] for dtypes that genuinely have one Rust
 /// scalar value per logical element.
@@ -48,7 +48,7 @@ pub trait ConstDType: DType<Arg = ()> {
 }
 
 // ============================================================================
-// BuiltinDType — compile-time dtype with a current built-in DTypeId
+// BuiltinDType - compile-time dtype with a current built-in DTypeId
 // ============================================================================
 
 /// A [`ConstDType`] that additionally has a current built-in [`DTypeId`].
@@ -72,7 +72,7 @@ pub trait BuiltinDType: ConstDType {
 }
 
 // ============================================================================
-// TensorElement — ordinary Rust POD scalar element
+// TensorElement - ordinary Rust POD scalar element
 // ============================================================================
 
 pub(super) mod sealed {
@@ -85,7 +85,7 @@ pub(super) mod sealed {
 /// remain supported, but cannot provide a custom [`TensorElement`].
 ///
 /// Only scalar (non-block) dtypes have a `TensorElement`. Block-quantized
-/// dtypes such as `Q8_0` do NOT implement this — their physical representation
+/// dtypes such as `Q8_0` do NOT implement this - their physical representation
 /// is backend-specific and carries no per-element Rust type.
 pub trait TensorElement:
     sealed::TensorElementSealed
@@ -112,13 +112,13 @@ impl<T> TensorElement for T where
 }
 
 // ============================================================================
-// PlainDType — dtype with a real ordinary Rust POD scalar element
+// PlainDType - dtype with a real ordinary Rust POD scalar element
 // ============================================================================
 
 /// A [`ConstDType`] that additionally has a plain Rust POD scalar element.
 ///
 /// The `Elem` associated type is the Rust type whose bytes are the storage
-/// representation — `f32` for `f32`, `half::f16` for `f16`, etc.
+/// representation - `f32` for `f32`, `half::f16` for `f16`, etc.
 ///
 /// **Q8_0 does NOT implement `PlainDType`** because Q8_0 is a block-quantized
 /// format. Physical data is a sequence of `BlockQ8_0` structs, not `Q8_0`
@@ -139,6 +139,6 @@ pub trait FloatDType: PlainDType {}
 pub trait IntDType: PlainDType {}
 /// Marker for the boolean dtype.
 pub trait BoolDType: ConstDType {}
-/// Marker for block-quantized dtypes (e.g. `Q8_0`) — storage formats with
+/// Marker for block-quantized dtypes (e.g. `Q8_0`) - storage formats with
 /// their own internal scale/block structure, not plain scalar elements.
 pub trait QuantDType: ConstDType {}

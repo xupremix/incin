@@ -21,10 +21,10 @@ pub struct MatMulMismatch {
     /// The rhs shape's elements, humanized for display (e.g. `["5", "6"]`).
     pub rhs: Vec<String>,
     /// Index into `lhs` of the conflicting "inner" dimension (always the
-    /// last element — matmul's `K` from the lhs side).
+    /// last element - matmul's `K` from the lhs side).
     pub lhs_inner_index: usize,
     /// Index into `rhs` of the conflicting "inner" dimension (the
-    /// second-to-last element — matmul's `K` from the rhs side; usually
+    /// second-to-last element - matmul's `K` from the rhs side; usually
     /// index `0` for a plain `(K, N)`, but shifts right with batch dims).
     pub rhs_inner_index: usize,
 }
@@ -41,7 +41,7 @@ impl MatMulMismatch {
         let lhs_label = format!("{INDENT}lhs shape = (");
         let rhs_label = format!("{INDENT}rhs shape = (");
         // `{:>N$}` right-aligns within a field of width `N`, so the marker
-        // ends up at index `N - 1` — add 1 to land it exactly at the target
+        // ends up at index `N - 1` - add 1 to land it exactly at the target
         // column (the offset of the element's first character).
         let lhs_caret_width =
             lhs_label.len() + joined_prefix_len(&self.lhs, self.lhs_inner_index) + 1;
@@ -63,24 +63,24 @@ impl MatMulMismatch {
 }
 
 /// Length, in characters, of everything that would precede `elements[index]`
-/// once `elements` is joined with `", "` — i.e. where that element's own
+/// once `elements` is joined with `", "` - i.e. where that element's own
 /// text starts within the joined string.
 fn joined_prefix_len(elements: &[String], index: usize) -> usize {
     elements[..index].iter().map(|e| e.len() + 2).sum()
 }
 
-/// Parses the `MatMulShape` trait's fixed on_unimplemented message —
-/// `` Cannot matrix-multiply shape `{Self}` with `{Rhs}` `` — and, if the
+/// Parses the `MatMulShape` trait's fixed on_unimplemented message -
+/// `` Cannot matrix-multiply shape `{Self}` with `{Rhs}` `` - and, if the
 /// inner dimensions (last element of `Self`, second-to-last of `Rhs`, per
 /// the trait's own rule) actually differ, returns a [`MatMulMismatch`]
 /// ready to render. Returns `None` if `text` isn't this message, either
 /// shape isn't a plain tuple, or the inner dimensions match (nothing to
-/// explain — the real failure is something else, e.g. a rank mismatch).
+/// explain - the real failure is something else, e.g. a rank mismatch).
 pub fn parse_matmul_mismatch(text: &str) -> Option<MatMulMismatch> {
     // Search rather than `strip_prefix` on the whole input: callers (e.g.
-    // `cargo incin --explain`) pass the *entire* rendered diagnostic —
+    // `cargo incin --explain`) pass the *entire* rendered diagnostic -
     // "error[E0277]: Cannot matrix-multiply shape `...` with `...`\n   -->
-    // file:line:col\n..." — not just this one message in isolation.
+    // file:line:col\n..." - not just this one message in isolation.
     let start = text.find("Cannot matrix-multiply shape `")?;
     let after_prefix = &text[start + "Cannot matrix-multiply shape `".len()..];
     let (lhs_raw, after_lhs) = after_prefix.split_once('`')?;
@@ -104,7 +104,7 @@ pub fn parse_matmul_mismatch(text: &str) -> Option<MatMulMismatch> {
     let rhs: Vec<String> = rhs_elems.iter().map(|e| humanize(e)).collect();
 
     if lhs[lhs_inner_index] == rhs[rhs_inner_index] {
-        return None; // inner dims already agree — a different rule failed
+        return None; // inner dims already agree - a different rule failed
     }
 
     Some(MatMulMismatch {
@@ -115,7 +115,7 @@ pub fn parse_matmul_mismatch(text: &str) -> Option<MatMulMismatch> {
     })
 }
 
-/// Splits `s` on top-level commas (i.e. not nested inside `<...>`) — a
+/// Splits `s` on top-level commas (i.e. not nested inside `<...>`) - a
 /// typenum shape tuple's elements never contain their own parens, only
 /// angle-bracket generics, so tracking `<`/`>` depth alone is sufficient.
 fn split_top_level_commas(s: &str) -> Vec<&str> {

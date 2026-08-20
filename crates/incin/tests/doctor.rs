@@ -5,7 +5,7 @@
 //! Almost every test here runs against a machine that does not exist. That is
 //! the point rather than a shortcut: the report's whole job is to describe
 //! hardware, and a test that describes *this* runner's hardware asserts one
-//! configuration — the one with no GPU, which is every runner in this
+//! configuration - the one with no GPU, which is every runner in this
 //! repository's CI. Behind `Host`, a three-GPU machine with an unwritable
 //! cache and a missing toolchain costs a struct literal.
 //!
@@ -106,14 +106,14 @@ fn codes(report: &Report) -> Vec<&str> {
 /// It also pins the probe list, so adding or dropping a representative
 /// operation is a decision rather than a diff nobody sees.
 ///
-/// The machine is deliberately unlike this one — three backends compiled, two
+/// The machine is deliberately unlike this one - three backends compiled, two
 /// present, an unwritable cache, no AVX2, and the deprecated feature alias on.
 ///
 /// The capability answers are not mocked. `Host` fakes which hardware is
 /// *there*; the registries in `incin-backends` are static data compiled into
 /// every build, so a mocked CUDA device gets CUDA's real registrations. Every
 /// probe line below was checked against `crates/incin-backends/src/capability/tables.rs`
-/// rather than recorded from output — the first draft had `matmul f16` and
+/// rather than recorded from output - the first draft had `matmul f16` and
 /// `reduction f64` the wrong way round on CUDA, which is exactly the mistake a
 /// recorded golden would have preserved.
 #[test]
@@ -587,7 +587,7 @@ fn the_subcommand_renders_text_by_default_and_json_on_request() {
 /// non-zero, and the feature powerset builds it.
 ///
 /// Everything else about `no-backend-compiled` is asserted against a mocked
-/// host. This asserts it against a real one, in the build where it is true —
+/// host. This asserts it against a real one, in the build where it is true -
 /// so the error path is exercised by CI rather than only described.
 #[test]
 fn a_real_build_agrees_with_the_mock_about_whether_it_can_run() {
@@ -612,8 +612,8 @@ fn a_real_build_agrees_with_the_mock_about_whether_it_can_run() {
 
 /// The whole path works against actual hardware.
 ///
-/// Deliberately weak on content — this runner's configuration is not something
-/// to assert — and strong on the two things that must hold everywhere: the CPU
+/// Deliberately weak on content - this runner's configuration is not something
+/// to assert - and strong on the two things that must hold everywhere: the CPU
 /// backend is compiled in and answers, and nothing in the report is empty
 /// where it cannot be.
 #[test]
@@ -692,7 +692,7 @@ fn the_reported_features_are_exactly_the_manifests() {
 
 /// Sec. 2.3: "The command is read-only unless invoked with an explicit
 /// cache-cleaning or benchmark flag." There is no such flag, so it is
-/// read-only, and the place that would break that is the cache section — the
+/// read-only, and the place that would break that is the cache section - the
 /// obvious way to answer "is this writable" is to write to it.
 #[test]
 fn inspecting_a_cache_path_does_not_create_it() {

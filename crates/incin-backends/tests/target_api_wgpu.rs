@@ -2,7 +2,7 @@
 //!
 //! `Wgpu` is a Tier 2 device: the backend family is fixed at compile time and
 //! the ordinal is a runtime value. That is the case the current constructor
-//! surface handles worst — it needs `((), Wgpu::new(0))`, a 2-tuple whose
+//! surface handles worst - it needs `((), Wgpu::new(0))`, a 2-tuple whose
 //! leading unit exists only to satisfy `ArgInto`'s slot bookkeeping. Here the
 //! device value *is* the target.
 //!

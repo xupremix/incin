@@ -209,8 +209,8 @@ mod tests {
         );
     }
 
-    // `SocketTransport` intentionally does not implement `Debug` (its fields —
-    // `interprocess`'s `Listener`/`Stream` — don't either), so these tests use an
+    // `SocketTransport` intentionally does not implement `Debug` (its fields -
+    // `interprocess`'s `Listener`/`Stream` - don't either), so these tests use an
     // explicit `match` instead of `expect_err`/`unwrap_err`, both of which require
     // `T: Debug` on the `Ok` side even when only the `Err` value is used.
     #[test]

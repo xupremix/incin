@@ -12,7 +12,7 @@
 //! calls them directly too, both inside its own `legacy = [...]` blocks
 //! (ordinary expressions, resolved where they are written) and, for `native`/
 //! `native_ranked`/`composed_ranked`/`CONTIGUOUS`/`PRECISE`, from *inside*
-//! `descriptor_capability_rules!`'s own body — a `$callback:ident` forwarded
+//! `descriptor_capability_rules!`'s own body - a `$callback:ident` forwarded
 //! through `cpu_descriptor_operations!` and friends carries the invocation's
 //! syntax context, not this file's, so a bare identifier written in the
 //! macro's definition here still resolves against whatever the ultimate
@@ -186,7 +186,7 @@ macro_rules! descriptor_capability_rules {
                 true,
             ),)*
             // The union of the index operand's integer dtypes and the weight
-            // operand's f32-only one — see `INDEX_AND_F32_DTYPES`'s own doc for why
+            // operand's f32-only one - see `INDEX_AND_F32_DTYPES`'s own doc for why
             // one row cannot state the tighter, per-operand pair directly.
             $(native_ranked(
                 OperationKind::$embedding_op,
@@ -274,7 +274,7 @@ macro_rules! descriptor_capability_rules {
                 true,
             ),)*
             // The same rule, widened to the union of a float operand's dtypes
-            // and an integer index operand's — see `INDEX_AND_F32_DTYPES`.
+            // and an integer index operand's - see `INDEX_AND_F32_DTYPES`.
             $(composed_ranked(
                 OperationKind::$composed_reduction_indexed_op,
                 $embedding_dtypes,
@@ -379,7 +379,7 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         OperationKind::InstanceNorm | OperationKind::PixelShuffle => 4,
         // The weight table is always rank two; the index operand carries
         // whatever batch geometry addresses it, down to a single-axis vector
-        // of indices — a scalar index is not accepted. One is therefore the
+        // of indices - a scalar index is not accepted. One is therefore the
         // loosest bound the row can honestly state, matching the per-operand
         // rank contract the descriptor validates separately.
         OperationKind::EmbeddingExact => 1,

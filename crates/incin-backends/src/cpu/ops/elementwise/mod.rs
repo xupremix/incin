@@ -5,7 +5,7 @@
 //! `stride::broadcast_shape`, then iterates the OUTPUT shape's logical index
 //! space, resolving each operand's own index through its own strides with
 //! wraparound (stride-0-equivalent) logic on right-aligned/expanded
-//! dimensions — it never pre-materializes a broadcast copy of either operand
+//! dimensions - it never pre-materializes a broadcast copy of either operand
 //! (the anti-pattern flagged in RESEARCH.md). Every op pushes a `TapeEntry`
 //! whose backward closure calls `tape::unbroadcast` on the ORIGINAL
 //! (pre-broadcast) operand shapes.

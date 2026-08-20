@@ -1,5 +1,5 @@
-//! End-to-end proof that the real `incin-lsp` binary — not just its pure
-//! `rewrite` functions — correctly pumps and rewrites frames, using
+//! End-to-end proof that the real `incin-lsp` binary - not just its pure
+//! `rewrite` functions - correctly pumps and rewrites frames, using
 //! `mock-rust-analyzer` as a stand-in server so this test needs no real
 //! rust-analyzer install.
 
@@ -27,7 +27,7 @@ fn proxy_rewrites_diagnostics_and_hints_but_passes_everything_else_through_byte_
 
     let mut proxy_stdout = BufReader::new(child.stdout.take().unwrap());
 
-    // Frame 1: the unrelated notification must be forwarded byte-for-byte —
+    // Frame 1: the unrelated notification must be forwarded byte-for-byte -
     // the proxy never re-serializes a message it isn't rewriting.
     let unrelated = read_frame(&mut proxy_stdout).unwrap().unwrap();
     assert_eq!(

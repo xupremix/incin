@@ -10,6 +10,6 @@ fn main() {
     let t2: Tensor<s![Batch, 20], CpuBackendImpl> = Tensor::zeros((32usize, ())).unwrap();
 
     // Same dim name (Batch) but a different literal size on the other axis
-    // (10 vs 20) — must NOT compile.
+    // (10 vs 20) - must NOT compile.
     let _ = t1.add_exact(&t2);
 }

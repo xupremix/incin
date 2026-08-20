@@ -41,7 +41,7 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {
     }
 }
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> TrainMode for AvgPool2d<K, S, P, D> {}

@@ -3,7 +3,7 @@
 //! There are three tiers of device specification, ordered from most
 //! dynamic to most static:
 //!
-//! ## Tier 1 — Fully Runtime (`Dyn`)
+//! ## Tier 1 - Fully Runtime (`Dyn`)
 //!
 //! Neither the backend family nor the device ordinal is known at compile
 //! time. The user passes a [`crate::tensor::device::DeviceId`] at construction time and everything
@@ -13,7 +13,7 @@
 //! Tensor::<Dyn, IncinBackend<Dyn>>::zeros(([2, 3], DTypeId::F32, DeviceId::cuda(1)))
 //! ```
 //!
-//! ## Tier 2 — Partial Compile-Time (`Cuda` / `Wgpu`)
+//! ## Tier 2 - Partial Compile-Time (`Cuda` / `Wgpu`)
 //!
 //! The backend family (CUDA or WGPU) is known at compile time, but the
 //! specific device ordinal (which GPU to use) is provided through an explicit
@@ -33,7 +33,7 @@
 //! unsatisfied `ArgInto<TensorArgsData<..>>` bound rather than as anything
 //! that names the device.
 //!
-//! ## Tier 3 — Fully Static Selection (`CudaN<N>` / `WgpuN<N>`)
+//! ## Tier 3 - Fully Static Selection (`CudaN<N>` / `WgpuN<N>`)
 //!
 //! Both the backend family and the device ordinal are encoded at the type
 //! level via [`typenum`] unsigned integers. The tensor type fully describes
@@ -61,7 +61,7 @@ use crate::shapes::Dyn;
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
     /// The user-facing constructor argument:
     /// - `DeviceId` for `Dyn` (fully runtime)
-    /// - an explicit selector for `Cuda`/`Wgpu` (partial — ordinal at runtime)
+    /// - an explicit selector for `Cuda`/`Wgpu` (partial - ordinal at runtime)
     /// - `()` for `CudaN<N>`/`WgpuN<N>` (fully static)
     type Arg: Clone;
     /// The runtime-stored representation:
@@ -75,7 +75,7 @@ pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized
     fn to_incin(dev: &Self::Field) -> Result<DeviceId>;
 }
 
-/// A [`Device`] whose logical selector is **fully known at compile time** —
+/// A [`Device`] whose logical selector is **fully known at compile time** -
 /// both the backend family and ordinal are encoded in the type. This does not
 /// prove that matching hardware exists on the runtime host. Takes no
 /// constructor argument (`Arg = ()`).
@@ -84,17 +84,17 @@ pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized
 pub trait ConstDevice: Default + Device<Arg = ()> {}
 
 // ============================================================================
-// Tier 1: Fully Runtime — Dyn
+// Tier 1: Fully Runtime - Dyn
 // ============================================================================
 
 impl Device for Dyn {
-    /// The runtime-chosen device — user passes a full [`DeviceId`].
+    /// The runtime-chosen device - user passes a full [`DeviceId`].
     type Arg = DeviceId;
-    /// Stored directly — `Dyn`'s whole point is deferring device choice
+    /// Stored directly - `Dyn`'s whole point is deferring device choice
     /// to runtime, so `Field` is just the `DeviceId` itself.
     type Field = DeviceId;
 
-    /// Already a `DeviceId` — returned as-is.
+    /// Already a `DeviceId` - returned as-is.
     fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
         Ok(*dev)
     }
@@ -106,7 +106,7 @@ impl Device for Dyn {
 }
 
 // ============================================================================
-// Tier 2: Partial Compile-Time — Cuda / Wgpu (runtime ordinal)
+// Tier 2: Partial Compile-Time - Cuda / Wgpu (runtime ordinal)
 // ============================================================================
 
 #[cfg(feature = "cuda")]
@@ -212,7 +212,7 @@ mod wgpu_partial {
 pub use wgpu_partial::Wgpu;
 
 // ============================================================================
-// Tier 3: Fully Static Selection — CudaN<N> / WgpuN<N> (typenum ordinal)
+// Tier 3: Fully Static Selection - CudaN<N> / WgpuN<N> (typenum ordinal)
 // ============================================================================
 
 #[cfg(feature = "cuda")]
@@ -224,11 +224,11 @@ mod cuda_static {
     /// **Tier 3** CUDA device: both the backend kind *and* the device
     /// ordinal `N` are fully known at compile time via [`typenum`].
     ///
-    /// This is a zero-sized type — no runtime data is stored. The default
+    /// This is a zero-sized type - no runtime data is stored. The default
     /// ordinal is `U0` (GPU 0).
     ///
     /// ```text
-    /// // Always on GPU 0 — no runtime arg required
+    /// // Always on GPU 0 - no runtime arg required
     /// Tensor::<s![2, 3], IncinBackend<CudaN<U0>>>::zeros(())
     ///
     /// // Always on GPU 2
@@ -244,7 +244,7 @@ mod cuda_static {
     use core::fmt::Debug;
 
     impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> Device for CudaN<N> {
-        /// No constructor argument — the device ordinal `N` is compile-time-fixed.
+        /// No constructor argument - the device ordinal `N` is compile-time-fixed.
         type Arg = ();
         /// Zero-sized: `N` alone identifies the device.
         type Field = PhantomData<Self>;
@@ -273,11 +273,11 @@ mod wgpu_static {
     /// **Tier 3** WGPU device: both the backend kind *and* the adapter
     /// ordinal `N` are fully known at compile time via [`typenum`].
     ///
-    /// This is a zero-sized type — no runtime data is stored. The default
+    /// This is a zero-sized type - no runtime data is stored. The default
     /// ordinal is `U0` (adapter 0).
     ///
     /// ```text
-    /// // Always on adapter 0 — no runtime arg required
+    /// // Always on adapter 0 - no runtime arg required
     /// Tensor::<s![2, 3], IncinBackend<WgpuN<U0>>>::zeros(())
     /// ```
     pub struct WgpuN<N: Unsigned = U0>(PhantomData<N>);
@@ -290,7 +290,7 @@ mod wgpu_static {
     use core::fmt::Debug;
 
     impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> Device for WgpuN<N> {
-        /// No constructor argument — the adapter ordinal `N` is compile-time-fixed.
+        /// No constructor argument - the adapter ordinal `N` is compile-time-fixed.
         type Arg = ();
         /// Zero-sized: `N` alone identifies the device.
         type Field = PhantomData<Self>;
@@ -386,18 +386,18 @@ mod metal_static {
 pub use metal_static::MetalN;
 
 // ============================================================================
-// CPU — always fully static (there is only one CPU)
+// CPU - always fully static (there is only one CPU)
 // ============================================================================
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-/// The CPU device. A zero-sized type — there is only one CPU, so no ordinal
+/// The CPU device. A zero-sized type - there is only one CPU, so no ordinal
 /// is needed. This is a **Tier 3** (fully static) device selector.
 pub struct Cpu;
 
 impl ConstDevice for Cpu {}
 
 impl Device for Cpu {
-    /// No constructor argument needed — there is only one CPU device.
+    /// No constructor argument needed - there is only one CPU device.
     type Arg = ();
     /// Zero-sized: there is nothing to store.
     type Field = PhantomData<Self>;
@@ -414,7 +414,7 @@ impl Device for Cpu {
 }
 
 // ============================================================================
-// DeviceId and DeviceKind — runtime device identity
+// DeviceId and DeviceKind - runtime device identity
 // ============================================================================
 
 #[non_exhaustive]
@@ -462,7 +462,7 @@ impl DeviceKind {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 /// A runtime device identifier: a backend family ([`DeviceKind`]) plus an
 /// ordinal distinguishing multiple devices of the same family (e.g. GPU 0
-/// vs. GPU 1). This is the [`Device`] trait's runtime counterpart — every
+/// vs. GPU 1). This is the [`Device`] trait's runtime counterpart - every
 /// `Device::to_incin` resolves to one of these.
 pub struct DeviceId {
     kind: DeviceKind,
@@ -618,8 +618,8 @@ impl WgpuDevice {
 /// means "the runtime-identifiable backend family a `DeviceId` belongs to", so
 /// this builds on it rather than adding a second spelling (`D-008`).
 ///
-/// Order is kept because it is meaningful — the first device is where a
-/// single-device run happens and where rank 0 sits — and duplicates are
+/// Order is kept because it is meaningful - the first device is where a
+/// single-device run happens and where rank 0 sits - and duplicates are
 /// rejected, because a set naming the same GPU twice describes a run that
 /// cannot exist.
 ///
@@ -651,7 +651,7 @@ pub enum DeviceSetError {
     /// The set would have been empty.
     ///
     /// A run has to happen somewhere, and the alternative to rejecting this is
-    /// picking a device on the caller's behalf — which is the silent fallback
+    /// picking a device on the caller's behalf - which is the silent fallback
     /// sec. 2 rules out.
     Empty,
     /// The same device was named more than once.
@@ -729,7 +729,7 @@ impl DeviceSet {
         }
     }
 
-    /// CUDA devices at the given ordinals — `DeviceSet::cuda(0..3)` in sec. 2's
+    /// CUDA devices at the given ordinals - `DeviceSet::cuda(0..3)` in sec. 2's
     /// example.
     ///
     /// # Errors
@@ -799,7 +799,7 @@ impl DeviceSet {
 /// Distinct from [`DeviceSet`] on purpose: a preference is resolved against a
 /// machine and can fail, a set is already resolved. Keeping them one type is
 /// what makes "I asked for CUDA and got CPU" possible to express, and sec. 2
-/// rules that out — "'easy' must not mean silent CPU transfer".
+/// rules that out - "'easy' must not mean silent CPU transfer".
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DevicePreference {

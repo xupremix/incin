@@ -4,7 +4,7 @@
 //! Everywhere else, `CpuStorage` flows as an immutable, cheaply-cloned
 //! value. Only `CpuVar` allows mutation, exclusively through
 //! `assign_var`. `var_as_tensor` is a scoped `borrow().clone()` that never
-//! returns a live `Ref` guard — per Pitfall 5's explicit warning, holding a
+//! returns a live `Ref` guard - per Pitfall 5's explicit warning, holding a
 //! borrow across an `assign_var` call would panic on reentrant mutable
 //! borrow. `SGD::step()` (existing, unmodified, generic over `Backend`)
 //! drives this exact `var_as_tensor` (read) -> ... -> `assign_var` (write)
@@ -36,7 +36,7 @@ impl incin_core::backend_authoring::ExecuteOutput for CpuVar {}
 
 /// Read the current value of `var` as a plain `CpuStorage`.
 ///
-/// Implemented as `var.0.borrow().clone()` — a scoped borrow that clones
+/// Implemented as `var.0.borrow().clone()` - a scoped borrow that clones
 /// the value out and releases the borrow immediately upon returning. This
 /// function must NEVER return a live `Ref<'_, CpuStorage>` guard: doing
 /// so would keep the `RefCell` borrowed past the call, and a subsequent
@@ -50,7 +50,7 @@ pub(crate) fn var_as_tensor(var: &CpuVar) -> Result<CpuStorage> {
 ///
 /// This is the ONLY function in the whole `incin-cpu` crate permitted
 /// to call `borrow_mut()` on a `CpuVar`'s inner `RefCell` (CPUBACK-09,
-/// structurally enforced — grep the crate for `borrow_mut()` to confirm
+/// structurally enforced - grep the crate for `borrow_mut()` to confirm
 /// this is the sole call site).
 pub(crate) fn assign_var(var: &mut CpuVar, tensor: &CpuStorage) -> Result<()> {
     #[cfg(feature = "test-utils")]
@@ -165,7 +165,7 @@ mod tests {
     /// `var_as_tensor_does_not_hold_live_borrow_across_assign_var`.
     fn var_as_tensor_does_not_hold_live_borrow_across_assign_var() {
         // Calling var_as_tensor immediately followed by assign_var on the
-        // same CpuVar within the same scope must not panic — proves
+        // same CpuVar within the same scope must not panic - proves
         // var_as_tensor's borrow() ends immediately after the clone,
         // rather than returning a live Ref guard (Pitfall 5).
         let t = storage(vec![1.0]);

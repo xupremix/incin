@@ -20,8 +20,8 @@ use alloc::string::String;
 /// A shape marker trait specifying the input and output features of a [`Linear`] layer.
 ///
 /// The typical usage is to supply a 2-tuple `(InF, OutF)` where:
-/// * `InF` — Number of input features (the last dimension of the input tensor).
-/// * `OutF` — Number of output features.
+/// * `InF` - Number of input features (the last dimension of the input tensor).
+/// * `OutF` - Number of output features.
 ///
 /// ## Examples
 /// ```rust
@@ -167,7 +167,7 @@ where
 /// // A fully static linear layer: 512 inputs → 256 outputs
 /// let layer = Linear::<s![512, 256], DefaultBackend>::build(())?;
 ///
-/// // A dynamic linear layer — shape known only at runtime
+/// // A dynamic linear layer - shape known only at runtime
 /// let layer = Linear::<Dyn, DefaultBackend>::build((512, 256))?;
 /// # Ok(()) }
 /// ```

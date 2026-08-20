@@ -8,7 +8,7 @@ use crate::cpu::tape;
 
 /// Build a fresh, owned copy of `storage` with the scalar at flat buffer
 /// position `flat_idx` perturbed by `delta`. Never mutates the input's
-/// shared `Rc<CpuBuffer>` in place (T-02-01 mitigation) — always
+/// shared `Rc<CpuBuffer>` in place (T-02-01 mitigation) - always
 /// constructs a new `Vec` copy first.
 fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
     // Resolve `flat_idx` (an index into the LOGICAL row-major element order,
@@ -45,7 +45,7 @@ fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
     };
 
     // The perturbed value lives in a freshly materialized CONTIGUOUS buffer
-    // matching `storage`'s logical shape — build via `from_contiguous` (new
+    // matching `storage`'s logical shape - build via `from_contiguous` (new
     // `Rc`, new `TensorId`) rather than reusing `storage`'s own strides,
     // which may be non-contiguous.
     let contiguous_shape = shape.clone();
@@ -69,7 +69,7 @@ fn flat_get(storage: &CpuStorage, flat_idx: usize) -> f64 {
 
 /// Central-difference approximation of `d(output_scalar)/d(inputs[input_idx][flat_idx])`,
 /// using the standard formula `(f(x+eps) - f(x-eps)) / (2*eps)`. Central
-/// difference has O(eps^2) truncation error vs. forward difference's O(eps) —
+/// difference has O(eps^2) truncation error vs. forward difference's O(eps) -
 /// the standard choice for gradient checking (matches `torch.autograd.
 /// gradcheck`'s own default technique).
 fn numerical_grad(
@@ -97,7 +97,7 @@ fn numerical_grad(
 /// # Panics
 ///
 /// Panics with a clear message if `op(inputs)`'s output shape is not scalar
-/// (`[]`) — `gradcheck` requires a scalar-output op so a single central
+/// (`[]`) - `gradcheck` requires a scalar-output op so a single central
 /// difference directly approximates the whole gradient contribution.
 pub(crate) fn gradcheck(
     op: impl Fn(&[CpuStorage]) -> CpuStorage,
@@ -134,7 +134,7 @@ pub(crate) fn gradcheck(
             // combination, not a bare relative-error ratio). If the absolute
             // difference itself is below this noise ceiling, treat it as a
             // pass (contributes 0 to `max_rel_err`) regardless of the ratio
-            // — a genuinely wrong non-zero gradient still produces an
+            // - a genuinely wrong non-zero gradient still produces an
             // `abs_diff` far above this ceiling and fails loudly via the
             // relative check below.
             let abs_tol = 1e-3;
@@ -212,7 +212,7 @@ mod tests {
     #[should_panic(expected = "gradcheck requires a scalar-output op")]
     fn gradcheck_panics_on_non_scalar_output() {
         let x = vector(vec![1.0, 2.0, 3.0]);
-        // op returns x*x elementwise — shape [3], not scalar.
+        // op returns x*x elementwise - shape [3], not scalar.
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0]).unwrap()
         };

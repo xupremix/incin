@@ -158,7 +158,7 @@ fn _assert_not_plain_compile_check() {
     _assert_plain::<f32>();
     _assert_plain::<f64>();
     _assert_plain::<i64>();
-    // Q8_0 deliberately NOT listed — it must NOT implement PlainDType.
+    // Q8_0 deliberately NOT listed - it must NOT implement PlainDType.
     // Uncomment the next line to verify it fails to compile:
     // _assert_plain::<Q8_0>();
 }

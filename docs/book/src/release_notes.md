@@ -68,7 +68,7 @@ See [Losses, optimizers, and schedulers](./training.md).
 ### The CPU SIMD kernels became reachable
 
 The AVX2 elementwise kernels were gated on a compile-time check for the AVX2
-target feature, which a stock `cargo build` never sets — so every default build
+target feature, which a stock `cargo build` never sets - so every default build
 dead-code-eliminated them and ran a scalar loop instead. They are selected by
 runtime detection now.
 

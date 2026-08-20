@@ -19,7 +19,7 @@ pub(crate) fn canonical_softmax<D: Device>(t: &CpuStorage, dim: usize) -> Result
 /// let log_sm = diff.broadcast_sub(&sum_exp.log()?)?
 /// ```
 ///
-/// Composed entirely from already-tape-tracked primitives — zero new backward
+/// Composed entirely from already-tape-tracked primitives - zero new backward
 /// code is written here; the composed tape entries from `max_keepdim` / `sub`
 /// / `exp` / `sum_keepdim` / `log` / `sub` already implement the correct
 /// backward chain automatically (Plan 04-01 D-02 rationale).

@@ -131,7 +131,7 @@ impl IndexArgs for alloc::vec::Vec<IndexSpec> {
 
 /// Compile-time shape-equality check between two `Shape` types, used to
 /// reject shape-mismatched tensor operations before runtime rather than
-/// after (where possible — dynamic shapes still need a runtime check too).
+/// after (where possible - dynamic shapes still need a runtime check too).
 pub trait ShapeEq<Other> {
     /// `true` iff `Self` and `Other` are the same shape type.
     const SHAPES_EQUAL: bool;

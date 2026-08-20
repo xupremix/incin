@@ -1,4 +1,4 @@
-# Incin 0.1 Stability and 1.0 Framework Completion — Master Implementation Plan
+# Incin 0.1 Stability and 1.0 Framework Completion - Master Implementation Plan
 
 **Document role:** single implementation and audit handoff to be read together with `PROPOSALS.md`  
 **Repository source:** supplied `incin(1).zip`  
@@ -15,7 +15,7 @@
 
 ---
 
-# Part 0 — Decisions, unresolved inputs, and release interpretation
+# Part 0 - Decisions, unresolved inputs, and release interpretation
 
 ## 0.1 Decisions supplied by the maintainer
 
@@ -229,11 +229,11 @@ This count includes some `#[cfg(test)]` code inside source files and is therefor
 
 Required classification for every occurrence:
 
-- **Class A — user/runtime controlled:** must return a structured error; panic/unwrap prohibited.
-- **Class B — proof-established internal invariant:** encode in types where reasonable; otherwise use a documented invariant and a debug assertion, not an unqualified panic.
-- **Class C — process initialization/build script:** may terminate only with an actionable diagnostic and exact cause.
-- **Class D — tests:** unwrap/expect allowed for test readability.
-- **Class E — FFI/unsafe kernel boundary:** every block gets a `// SAFETY:` argument and dedicated boundary tests.
+- **Class A - user/runtime controlled:** must return a structured error; panic/unwrap prohibited.
+- **Class B - proof-established internal invariant:** encode in types where reasonable; otherwise use a documented invariant and a debug assertion, not an unqualified panic.
+- **Class C - process initialization/build script:** may terminate only with an actionable diagnostic and exact cause.
+- **Class D - tests:** unwrap/expect allowed for test readability.
+- **Class E - FFI/unsafe kernel boundary:** every block gets a `// SAFETY:` argument and dedicated boundary tests.
 
 The goal is not “zero unsafe at any cost.” The goal is a small, reviewed unsafe surface whose invariants are mechanically and dynamically tested.
 
@@ -297,7 +297,7 @@ Because the maintainer wants a non-breaking boundary earlier than Rust’s usual
 
 ---
 
-# Part I — Current-state audit of `develop`
+# Part I - Current-state audit of `develop`
 
 ## 1. What Incin already has that must be preserved
 
@@ -309,7 +309,7 @@ The `develop` branch is materially more advanced than the earlier repository sna
 - Static, named, mixed, and dynamic shape paths already exist.
 - `#[module]`, `Module<Input>`, parameter traversal, state dictionaries, device transfer, train/eval mode, named layers, and compute statistics provide a genuine model-building framework.
 - The module and state-dictionary naming conventions are already close to PyTorch conventions, especially for sequential models.
-- The repository exposes a broad operation vocabulary in `graph::OpType`—91 variants at this snapshot—including pointwise ops, reductions, matmul, convolution, pooling, indexing, normalization, attention, and shape transforms.
+- The repository exposes a broad operation vocabulary in `graph::OpType` - 91 variants at this snapshot - including pointwise ops, reductions, matmul, convolution, pooling, indexing, normalization, attention, and shape transforms.
 
 ### 1.2 Proof-carrying operation execution
 
@@ -479,7 +479,7 @@ Every new task must include a **semantic mutant**: a deliberately broken impleme
 
 ---
 
-# Part II — Definition of “framework-completion” success
+# Part II - Definition of “framework-completion” success
 
 ## 4. Minimum complete AOT workflow
 
@@ -586,7 +586,7 @@ These are starting budgets, not permanent promises. Record the exact environment
 
 ---
 
-# Part III — Target architecture
+# Part III - Target architecture
 
 ## 7. Architectural invariant
 
@@ -961,7 +961,7 @@ Use BLAKE3 or SHA-256. Store a hash algorithm ID.
 
 ---
 
-# Part IV — Capture and public model compilation
+# Part IV - Capture and public model compilation
 
 ## 10. Replace global tracing with session-scoped symbolic capture
 
@@ -1096,14 +1096,14 @@ Required tests:
 
 Mutation examples:
 
-- force every dtype to F32—tests must fail;
-- drop reduction axis—tests must fail;
-- reuse the same global capture—concurrency test must fail;
-- erase parameter names—state-dict/artifact test must fail.
+- force every dtype to F32 - tests must fail;
+- drop reduction axis - tests must fail;
+- reuse the same global capture - concurrency test must fail;
+- erase parameter names - state-dict/artifact test must fail.
 
 ---
 
-# Part V — Real compiled execution
+# Part V - Real compiled execution
 
 ## 11. Native reference executable before IREE
 
@@ -1229,70 +1229,70 @@ Do not spend the first month building a complete native optimizer. IREE will ini
 
 Track these as new hardening IDs so history remains honest.
 
-### CMP2-001 — Canonical executable IR
+### CMP2-001 - Canonical executable IR
 
 **Depends on:** EXE-003, EXE-006  
 **Target:** `incin-core/src/compiled/ir/*`  
 **Deliverable:** full value metadata, descriptor enum, constants/parameters, constraints, verifier, stable hash.  
 **Evidence:** semantic round-trip tests for all Tier-0 operations; malformed IR mutants rejected.
 
-### CMP2-002 — Session capture
+### CMP2-002 - Session capture
 
 **Depends on:** CMP2-001  
 **Target:** `compiled/capture.rs`, `tensor/tracing.rs`, capture backend  
 **Deliverable:** symbolic capture through `Validated<Spec>`, no global graph, dtype/attribute fidelity.  
 **Evidence:** concurrency, no-allocation, descriptor parity, source-path tests.
 
-### CMP2-003 — Reference executable
+### CMP2-003 - Reference executable
 
 **Depends on:** CMP2-002  
 **Target:** `compiled/interpreter.rs`, runtime value bindings  
 **Deliverable:** canonical IR executes through existing backend descriptors.  
 **Evidence:** eager/interpreter parity for MLP, CNN, attention block.
 
-### CMP2-004 — Real guard program
+### CMP2-004 - Real guard program
 
 **Depends on:** CMP2-001  
 **Target:** `compiled/guard.rs`  
 **Deliverable:** static, named, bounded, affine, divisibility and product guards.  
 **Evidence:** accepted/rejected shape matrix and remediation messages.
 
-### CMP2-005 — Byte-aware buffer planner
+### CMP2-005 - Byte-aware buffer planner
 
 **Depends on:** CMP2-003  
 **Target:** `compiled/alloc.rs`  
 **Deliverable:** bytes/alignment/device/alias/lifetime planning and report.  
 **Evidence:** exact peak memory tests; alias/saved tensor mutants.
 
-### CMP2-006 — Real constant folding/prepacking contract
+### CMP2-006 - Real constant folding/prepacking contract
 
 **Depends on:** CMP2-003  
 **Target:** `compiled/fold.rs`  
 **Deliverable:** evaluator-backed constant folding and target-owned prepack records.  
 **Evidence:** outputs equal eager; folded node removal; checksum and invalidation tests.
 
-### CMP2-007 — Semantic fusion regions
+### CMP2-007 - Semantic fusion regions
 
 **Depends on:** CMP2-001  
 **Target:** `compiled/fusion.rs`, existing pointwise AST  
 **Deliverable:** fusion creates a real pointwise expression/subgraph, preserves semantics, handles broadcasts and multi-use.  
 **Evidence:** launch/node reduction plus numerical parity; `relu(neg(x))` mutant.
 
-### CMP2-008 — Artifact v2
+### CMP2-008 - Artifact v2
 
 **Depends on:** CMP2-004  
 **Target:** `compiled/artifact.rs`  
 **Deliverable:** sectioned binary container, robust hash, executable variants, parameter refs, ABI/fingerprint.  
 **Evidence:** corruption, truncation, unknown-section, version, and target mismatch tests.
 
-### CMP2-009 — Public `model.compile/run`
+### CMP2-009 - Public `model.compile/run`
 
 **Depends on:** CMP2-003, CMP2-004  
 **Target:** facade and module API  
 **Deliverable:** same model eager and compiled.  
 **Evidence:** public examples and trybuild diagnostics.
 
-### CMP2-010 — Real tuning host
+### CMP2-010 - Real tuning host
 
 **Depends on:** CMP2-003  
 **Target:** `compiled/tuning.rs`  
@@ -1301,7 +1301,7 @@ Track these as new hardening IDs so history remains honest.
 
 ---
 
-# Part VI — IREE compiler target
+# Part VI - IREE compiler target
 
 ## 13. Strategy
 
@@ -1413,15 +1413,15 @@ reason:
   Incin StableHLO lowering for Scatter does not support this reduction mode
 
 options:
-  - use `CompilePartitionPolicy::ExplicitFallback`
-  - replace with `index_select` + `where`
-  - run this model with the native CUDA executor
-  - enable experimental `iree-linalg-fallback`
+ - use `CompilePartitionPolicy::ExplicitFallback`
+ - replace with `index_select` + `where`
+ - run this model with the native CUDA executor
+ - enable experimental `iree-linalg-fallback`
 ```
 
 No silent eager fallback. No silent host round-trip.
 
-### 14.6 Graph partitioning—later
+### 14.6 Graph partitioning - later
 
 After whole-graph IREE is reliable, add explicit partitioning:
 
@@ -1451,7 +1451,7 @@ The plan report must list every region and boundary copy.
 
 ## 15. IREE compiler host
 
-### IREE-001 — Toolchain discovery
+### IREE-001 - Toolchain discovery
 
 Implement:
 
@@ -1466,11 +1466,11 @@ Implement:
 
 Never download a compiler implicitly during a normal build. `cargo incin setup iree` may install with explicit user action.
 
-### IREE-002 — Deterministic MLIR emission
+### IREE-002 - Deterministic MLIR emission
 
 Golden tests for every Tier-0 op. Parse/compile emitted files in CI where toolchain is available.
 
-### IREE-003 — Subprocess compiler
+### IREE-003 - Subprocess compiler
 
 Requirements:
 
@@ -1481,9 +1481,9 @@ Requirements:
 - command reproduction in diagnostics;
 - source-map translation from MLIR diagnostics to Incin node/module/source;
 - exact compiler flags in artifact;
-- no shell string interpolation—pass arguments directly.
+- no shell string interpolation - pass arguments directly.
 
-### IREE-004 — Runtime engine
+### IREE-004 - Runtime engine
 
 ```rust
 pub struct IreeEngine {
@@ -1507,7 +1507,7 @@ Requirements:
 - structured runtime errors;
 - no global singleton requirement.
 
-### IREE-005 — Multi-variant artifact
+### IREE-005 - Multi-variant artifact
 
 At least:
 
@@ -1518,17 +1518,17 @@ At least:
 
 Variant selection uses actual capability/driver compatibility, not “first variant”. Return a rejection report for every candidate.
 
-### IREE-006 — Build-time generation
+### IREE-006 - Build-time generation
 
 Provide an ergonomic helper that writes generated typed wrappers to `OUT_DIR`, supporting conventional build-time deployment for users who prefer it, while retaining the normal runtime/CLI path.
 
-### IREE-007 — Embedded compiler API
+### IREE-007 - Embedded compiler API
 
 Post-beta. Bind official versioned compiler C API. Compare bytecode and diagnostics against subprocess mode.
 
 ---
 
-# Part VII — Artifact format and cache
+# Part VII - Artifact format and cache
 
 ## 16. `.incin` artifact v2
 
@@ -1640,7 +1640,7 @@ Cache requirements:
 
 ---
 
-# Part VIII — Dynamic shapes without losing safety
+# Part VIII - Dynamic shapes without losing safety
 
 ## 17. Dynamic shape policy
 
@@ -1719,7 +1719,7 @@ Map PyTorch export constraints into Incin symbols:
 
 ---
 
-# Part IX — PyTorch interoperability program
+# Part IX - PyTorch interoperability program
 
 ## 18. Principles
 
@@ -1740,7 +1740,7 @@ All Python graph paths must lower through the canonical Incin IR. A separate byp
 
 ## 19. State-dict and safetensors hardening
 
-### TORCH-001 — Typed state archive
+### TORCH-001 - Typed state archive
 
 Fix the current loader so storage dtype is not silently represented as `B::FloatElem` regardless of source dtype.
 
@@ -1769,7 +1769,7 @@ pub enum StateLoadPolicy {
 }
 ```
 
-### TORCH-002 — Strict load report
+### TORCH-002 - Strict load report
 
 ```rust
 pub struct StateLoadReport {
@@ -1784,7 +1784,7 @@ pub struct StateLoadReport {
 
 Default is strict. Provide PyTorch-like `strict=false` explicitly.
 
-### TORCH-003 — Key mapping
+### TORCH-003 - Key mapping
 
 Support:
 
@@ -1796,7 +1796,7 @@ Support:
 - generated mapping report;
 - collision rejection.
 
-### TORCH-004 — Device-aware loading
+### TORCH-004 - Device-aware loading
 
 - CPU staging is explicit;
 - direct GPU load where backend supports it;
@@ -1846,7 +1846,7 @@ torch.compile(model, backend="incin")
 
 ## 21. `torch.export` importer
 
-### TORCH-005 — ExportedProgram schema bridge
+### TORCH-005 - ExportedProgram schema bridge
 
 Python extracts:
 
@@ -1861,7 +1861,7 @@ Python extracts:
 
 Serialize to a stable, versioned bridge schema consumed by Rust. Prefer Cap’n Proto/FlatBuffers/Postcard-style bounded binary over ad hoc Python pickle. JSON is acceptable only for the first internal prototype and must not become the artifact ABI.
 
-### TORCH-006 — ATen-to-Incin operation registry
+### TORCH-006 - ATen-to-Incin operation registry
 
 Create a generated registry:
 
@@ -1889,15 +1889,15 @@ Each registration includes:
 
 Generate support docs and tests from this registry.
 
-### TORCH-007 — Decomposition policy
+### TORCH-007 - Decomposition policy
 
 Use PyTorch decompositions/AOTAutograd core ATen set where helpful, but record the exact decomposition table/version in the artifact. Avoid a huge frontend opset.
 
-### TORCH-008 — Constraint importer
+### TORCH-008 - Constraint importer
 
 Translate export shape constraints to Incin `ShapeConstraint`. Reject unsupported relations with a precise source stack and suggested shape policy.
 
-### TORCH-009 — Parameter import
+### TORCH-009 - Parameter import
 
 Export parameters to safetensors/IREE parameter archive and map them to stable Incin `ParameterId`s. Never duplicate multi-gigabyte weights in bridge metadata.
 
@@ -1941,7 +1941,7 @@ This is initially slower to implement than a bypass but substantially reduces lo
 
 ## 23. AOTAutograd and training
 
-### TORCH-010 — AOTAutograd wrapper
+### TORCH-010 - AOTAutograd wrapper
 
 Use the official AOTAutograd custom-backend path to receive smaller core ATen forward/backward graphs.
 
@@ -1953,7 +1953,7 @@ First milestone:
 - preserve saved tensor contract;
 - compare gradients against eager PyTorch.
 
-### INCIN-GRAD2-001 — Compile native Incin forward/backward
+### INCIN-GRAD2-001 - Compile native Incin forward/backward
 
 Do not write a second symbolic autodiff engine first. Use existing backend-neutral autograd recipes to capture a combined forward/backward IR:
 
@@ -1964,7 +1964,7 @@ Do not write a second symbolic autodiff engine first. Use existing backend-neutr
 5. compile both functions;
 6. optimizer remains eager initially.
 
-### INCIN-GRAD2-002 — Saved tensor planner
+### INCIN-GRAD2-002 - Saved tensor planner
 
 Integrate with buffer liveness:
 
@@ -1988,7 +1988,7 @@ Integrate with buffer liveness:
 
 ---
 
-# Part X — DLPack and zero-copy interoperability
+# Part X - DLPack and zero-copy interoperability
 
 ## 24. DLPack implementation
 
@@ -2047,7 +2047,7 @@ Implement `__dlpack__` and `__dlpack_device__` on Incin Python tensor wrappers. 
 
 ---
 
-# Part XI — Model-building and testing UX
+# Part XI - Model-building and testing UX
 
 ## 25. Model API goals
 
@@ -2189,7 +2189,7 @@ For each critical feature, record one known mutant and the test that kills it. E
 
 ---
 
-# Part XII — CLI and diagnostics
+# Part XII - CLI and diagnostics
 
 ## 27. Commands
 
@@ -2280,7 +2280,7 @@ Every failure should answer:
 
 ---
 
-# Part XIII — Performance and comparison program
+# Part XIII - Performance and comparison program
 
 ## 28. Benchmark matrix
 
@@ -2380,11 +2380,11 @@ Every result records:
 
 ---
 
-# Part XIV — Operation coverage roadmap
+# Part XIV - Operation coverage roadmap
 
 ## 29. Coverage tiers
 
-### Tier 0 — public beta
+### Tier 0 - public beta
 
 - Input/Constant/Parameter
 - Add/Sub/Mul/Div and scalar forms
@@ -2405,7 +2405,7 @@ Every result records:
 - Pad/Slice/Narrow
 - SDPA through decomposition
 
-### Tier 1 — release candidate
+### Tier 1 - release candidate
 
 - Conv1d
 - ConvTranspose2d
@@ -2419,7 +2419,7 @@ Every result records:
 - richer attention/masking
 - random/dropout policy
 
-### Tier 2 — post-1.0 compiler maturity
+### Tier 2 - post-1.0 compiler maturity
 
 - quantized op families;
 - sparse ops;
@@ -2457,13 +2457,13 @@ Generate:
 
 ---
 
-# Part XV — Agent execution protocol
+# Part XV - Agent execution protocol
 
 ## 31. Sequential roles and handoff order
 
 Only one implementation agent is active at a time. “Owner” means the model that receives the issue after prerequisites merge; it does not authorize concurrent edits. Reviews may be performed after the implementation agent stops, but the next implementation issue does not start until the previous PR is merged or formally abandoned.
 
-### Human maintainer — product and release authority
+### Human maintainer - product and release authority
 
 Primary responsibilities:
 
@@ -2473,7 +2473,7 @@ Primary responsibilities:
 - decide unresolved trade-offs rather than allowing agents to invent product policy;
 - own the 0.1 compatibility promise and final release tags.
 
-### Opus 5 — architecture and adversarial review owner
+### Opus 5 - architecture and adversarial review owner
 
 Primary responsibilities:
 
@@ -2488,7 +2488,7 @@ Primary responsibilities:
 
 Assign Opus first when a task changes contracts across crates, public APIs, serialization formats, memory ownership, compiler semantics, or safety boundaries. Opus should not spend its turn on repetitive fixtures once the contract is frozen.
 
-### GPT-5.6 — primary implementation and integration owner
+### GPT-5.6 - primary implementation and integration owner
 
 Primary responsibilities:
 
@@ -2501,7 +2501,7 @@ Primary responsibilities:
 
 Use GPT-5.6 after Opus freezes a difficult contract and before delegating repetitive coverage to Gemini.
 
-### Gemini Pro agent 1 — bounded subsystem implementation owner
+### Gemini Pro agent 1 - bounded subsystem implementation owner
 
 Primary responsibilities:
 
@@ -2513,7 +2513,7 @@ Primary responsibilities:
 
 This agent must receive a task packet containing pseudocode, invariants, explicit files, expected errors, and exact test commands.
 
-### Gemini Pro/Flash agent 2 — mechanical coverage, docs, and verification owner
+### Gemini Pro/Flash agent 2 - mechanical coverage, docs, and verification owner
 
 Primary responsibilities:
 
@@ -2663,13 +2663,13 @@ Architecture owner rejects a PR unless all applicable answers are yes:
 
 ---
 
-# Part XVI — Aggressive implementation schedule
+# Part XVI - Aggressive implementation schedule
 
 ## 36. Twelve-effort-week aggressive preview schedule
 
 These are **effort weeks**, not parallel calendar lanes. Execute every role block sequentially in the order written: architecture/review first, implementation second, coverage/documentation third. A single human maintainer should expect roughly 18–30 calendar weeks depending on review latency, hardware availability, and how many baseline defects appear.
 
-### Week 0 — baseline and truth reset
+### Week 0 - baseline and truth reset
 
 **Opus**
 
@@ -2688,77 +2688,77 @@ These are **effort weeks**, not parallel calendar lanes. Execute every role bloc
 
 **Exit:** repository truthfully reports current compiled path as preview scaffolding; failing end-to-end tests are tracked, not hidden.
 
-### Weeks 1–2 — canonical IR and capture
+### Weeks 1–2 - canonical IR and capture
 
 **Opus:** CMP2-001 design/review, graph verifier, stable hash.  
 **GPT-5.6:** descriptor conversions, value metadata, capture session, pytree support, tests.
 
 **Exit:** MLP captures without allocation; all shapes/dtypes/attributes/parameters are preserved; IR verifies and snapshots deterministically.
 
-### Week 3 — reference executable and public API skeleton
+### Week 3 - reference executable and public API skeleton
 
 **Opus:** runtime value and witness contract.  
 **GPT-5.6:** interpreter, guard generation, public `model.compile` with `Reference` target.
 
 **Exit:** same MLP and CNN run eager and compiled-reference with parity.
 
-### Week 4 — IREE MLIR emitter
+### Week 4 - IREE MLIR emitter
 
 **Opus:** StableHLO mapping rules and diagnostics.  
 **GPT-5.6:** emitter for pointwise/shape/reduction/matmul; golden tests.
 
 **Exit:** emitted modules compile with pinned IREE for LLVM CPU.
 
-### Week 5 — IREE runtime and static inference
+### Week 5 - IREE runtime and static inference
 
 **Opus:** runtime ABI and artifact variant contract.  
 **GPT-5.6:** subprocess compiler, VMFB loader, engine, typed invocation.
 
 **Exit:** MLP runs through IREE LLVM CPU from ordinary Incin model.
 
-### Week 6 — artifact v2 and cache
+### Week 6 - artifact v2 and cache
 
 **Opus:** format/compatibility/security review.  
 **GPT-5.6:** binary container, cache, CLI inspect/compile, corruption tests.
 
 **Exit:** build-time and runtime compilation produce loadable `.incin` artifacts; cache hits skip compilation.
 
-### Week 7 — CNN/transformer operation coverage and GPU
+### Week 7 - CNN/transformer operation coverage and GPU
 
 **Opus:** coverage registry and partition policy.  
 **GPT-5.6:** conv/pool/layernorm/embedding/attention decomposition; CUDA target integration.
 
 **Exit:** CNN and transformer block pass CPU/CUDA parity.
 
-### Week 8 — dynamic shapes
+### Week 8 - dynamic shapes
 
 **Opus:** symbols/constraints/bucket policy.  
 **GPT-5.6:** guard bytecode, bucket cache, variable batch/sequence tests.
 
 **Exit:** one public dynamic sequence example works without unsafe stale specialization.
 
-### Week 9 — state dict and DLPack
+### Week 9 - state dict and DLPack
 
 **Opus:** ownership/stream safety review.  
 **GPT-5.6:** typed state archive, strict report, CPU DLPack, CUDA DLPack if hardware available.
 
 **Exit:** PyTorch tensors can feed Incin artifact without mandatory host copy; weights load with a complete report.
 
-### Week 10 — PyTorch export and backend beta
+### Week 10 - PyTorch export and backend beta
 
 **Opus:** ATen registry and bridge schema.  
 **GPT-5.6:** Python package, canonical ATen-to-Incin lowering, `torch.compile` registration, and pytree ABI.
 
 **Exit:** `torch.compile(model, backend="incin")` runs MLP/CNN/transformer inference.
 
-### Week 11 — hardening, diagnostics, comparison
+### Week 11 - hardening, diagnostics, comparison
 
 **Opus:** security/compatibility/mutation review.  
 **GPT-5.6:** minifier integration, `cargo incin diff`, benchmark matrix, docs/examples.
 
 **Exit:** reproducible compiler/framework performance report; unsupported-op errors identify source and remediation.
 
-### Week 12 — beta release
+### Week 12 - beta release
 
 - freeze schemas;
 - run feature powerset;
@@ -2807,7 +2807,7 @@ These are **effort weeks**, not parallel calendar lanes. Execute every role bloc
 
 ---
 
-# Part XVII — First 30 pull requests in dependency order
+# Part XVII - First 30 pull requests in dependency order
 
 ## 38. PR sequence
 
@@ -2846,7 +2846,7 @@ Do not parallelize PRs that modify the same core contract before the previous co
 
 ---
 
-# Part XVIII — Detailed acceptance models
+# Part XVIII - Detailed acceptance models
 
 ## 39. Rust model suite
 
@@ -2920,7 +2920,7 @@ For every model:
 
 ---
 
-# Part XIX — Risks and mitigations
+# Part XIX - Risks and mitigations
 
 ## 41. Risk register
 
@@ -2982,16 +2982,16 @@ For every model:
 
 ---
 
-# Part XX — Documentation and positioning
+# Part XX - Documentation and positioning
 
 ## 42. Documentation set
 
 Required before beta:
 
-1. **Why Incin compiled execution**—same model eager and compiled.
-2. **Five-minute compile tutorial**—no build script.
-3. **Build-time AOT tutorial**—for conventional embedded/offline deployment.
-4. **Dynamic shapes tutorial**—named batch/sequence.
+1. **Why Incin compiled execution** - same model eager and compiled.
+2. **Five-minute compile tutorial** - no build script.
+3. **Build-time AOT tutorial** - for conventional embedded/offline deployment.
+4. **Dynamic shapes tutorial** - named batch/sequence.
 5. **PyTorch import tutorial**.
 6. **`torch.compile` tutorial**.
 7. **Custom module and custom op tutorial**.
@@ -2999,7 +2999,7 @@ Required before beta:
 9. **Compiler diagnostics guide**.
 10. **Fair compiler and framework comparison methodology and results**.
 11. **Support matrix generated from registry**.
-12. **Known limitations**—explicit and current.
+12. **Known limitations** - explicit and current.
 
 ## 43. README comparison language
 
@@ -3029,7 +3029,7 @@ A reviewer should be able to see the advantage without reading architecture pros
 
 ---
 
-# Part XXI — Exact definition of done
+# Part XXI - Exact definition of done
 
 ## 45. Program-level done
 
@@ -3058,7 +3058,7 @@ At that point Incin provides a coherent end-to-end workflow rather than requirin
 
 
 
-# Part XXII — Repository hardening, ecosystem, and release issue packets
+# Part XXII - Repository hardening, ecosystem, and release issue packets
 
 This part supplements the compiler packets with correctness, API, format, documentation, and release work. Each packet is intentionally repetitive. Weaker agents should follow the order literally and must not infer missing steps.
 
@@ -3077,7 +3077,7 @@ For every task below:
 9. No `[x]` ledger update until every acceptance item and command has evidence.
 10. Merge only after the coordinator independently reads the diff and runs or validates the reported commands.
 
-## 47. GOV2-001 — Establish a reproducible truth baseline
+## 47. GOV2-001 - Establish a reproducible truth baseline
 
 **Suggested owner:** Gemini Pro 1  
 **Reviewer:** Opus 5  
@@ -3130,7 +3130,7 @@ Feature subsets must be run separately because `--all-features` can mask invalid
 - editing baseline numbers manually;
 - using `|| true` in evidence scripts.
 
-## 48. GOV2-002 — Reconcile ledger claims with implemented semantics
+## 48. GOV2-002 - Reconcile ledger claims with implemented semantics
 
 **Suggested owner:** Opus 5  
 **Reviewer:** human maintainer  
@@ -3159,7 +3159,7 @@ Separate “foundation landed,” “preview behavior exists,” and “producti
 - Historical work is not erased; maturity is clarified.
 - README feature claims link to stable/preview capability data generated from evidence.
 
-## 49. API2-001 — Inventory and minimize the 0.1 public API
+## 49. API2-001 - Inventory and minimize the 0.1 public API
 
 **Suggested owner:** Opus 5  
 **Reviewer:** GPT-5.6  
@@ -3191,7 +3191,7 @@ Decide what users can rely on after 0.1 and hide everything else before the free
 - Every preview module is clearly labeled and excluded from the non-breaking promise.
 - The downstream fixture builds on MSRV and current stable.
 
-## 50. SAFE2-001 — Panic, unwrap, and unsafe triage
+## 50. SAFE2-001 - Panic, unwrap, and unsafe triage
 
 **Suggested owner:** Gemini Pro 2  
 **Reviewer:** GPT-5.6  
@@ -3232,7 +3232,7 @@ Turn a raw lexical inventory into enforced safety policy without replacing clear
 - every unsafe block has a safety comment and targeted test reference;
 - CI prevents unclassified growth.
 
-## 51. STATE2-001 — Introduce an exact typed state value
+## 51. STATE2-001 - Introduce an exact typed state value
 
 **Suggested owner:** GPT-5.6  
 **Reviewer:** Opus 5  
@@ -3287,7 +3287,7 @@ The exact storage erasure design must use existing backend handles and witnessed
 - dropping aliases;
 - making export infallible by omitting values.
 
-## 52. STATE2-002 — Strict, atomic, PyTorch-familiar state loading
+## 52. STATE2-002 - Strict, atomic, PyTorch-familiar state loading
 
 **Suggested owner:** Gemini Pro 1  
 **Reviewer:** GPT-5.6  
@@ -3330,7 +3330,7 @@ pub struct LoadStateReport {
 11. Test tied weights: one source alias group maps to one destination sharing relationship.
 12. Add PyTorch terminology comparison to docs while documenting intentional stricter behavior.
 
-## 53. IO2-001 — Correct safetensors read/write and sharded checkpoints
+## 53. IO2-001 - Correct safetensors read/write and sharded checkpoints
 
 **Suggested owner:** GPT-5.6  
 **Reviewer:** Gemini Pro 2  
@@ -3351,7 +3351,7 @@ pub struct LoadStateReport {
 11. Fuzz the header and range parser.
 12. Compare round trips with the reference Python safetensors package across dtypes.
 
-## 54. HF2-001 — Build a secure Hugging Face repository resolver
+## 54. HF2-001 - Build a secure Hugging Face repository resolver
 
 **Suggested owner:** Gemini Pro 1  
 **Reviewer:** Opus 5  
@@ -3376,7 +3376,7 @@ Resolve a repository into a deterministic local package manifest containing conf
 11. Add cache corruption, interrupted download, stale ETag, missing shard, and token-redaction tests.
 12. Expose one high-level resolver through the facade; keep HTTP implementation internal.
 
-## 55. HF2-002 — Compile-time typed and runtime flexible model loading
+## 55. HF2-002 - Compile-time typed and runtime flexible model loading
 
 **Suggested owner:** Opus 5  
 **Reviewer:** GPT-5.6  
@@ -3419,7 +3419,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 9. Add compile-fail tests for contradictory metadata and runtime tests for missing/incorrect weights.
 10. Add one Hugging Face parity example with deterministic logits against PyTorch.
 
-## 56. NPY2-001 — NumPy `.npy`/`.npz` and zero-copy array exchange
+## 56. NPY2-001 - NumPy `.npy`/`.npz` and zero-copy array exchange
 
 **Suggested owner:** Gemini Pro 2  
 **Reviewer:** GPT-5.6  
@@ -3438,7 +3438,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 9. Differential-test files against NumPy.
 10. Document static Rust conversion (`try_into_tensor<s![...], K>()`) and runtime `Dyn` conversion.
 
-## 57. ONNX2-001 — Harden ONNX import into canonical model/graph contracts
+## 57. ONNX2-001 - Harden ONNX import into canonical model/graph contracts
 
 **Suggested owner:** GPT-5.6  
 **Reviewer:** Opus 5  
@@ -3459,7 +3459,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 11. Add malformed protobuf, cyclic graph, forward reference, duplicate SSA name, external-path traversal, and oversized initializer tests.
 12. Publish a generated opset/operator support matrix.
 
-## 58. MOD2-001 — Finalize the stable Module/state/container UX
+## 58. MOD2-001 - Finalize the stable Module/state/container UX
 
 **Suggested owner:** Opus 5  
 **Reviewer:** human maintainer  
@@ -3504,7 +3504,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 11. Migrate all examples and predefined models.
 12. Freeze only after the PyTorch comparison guide and three real model fixtures are reviewed.
 
-## 59. DATA2-001 — Make DataLoader cancellation, errors, and determinism reliable
+## 59. DATA2-001 - Make DataLoader cancellation, errors, and determinism reliable
 
 **Suggested owner:** Gemini Pro 1  
 **Reviewer:** GPT-5.6  
@@ -3525,7 +3525,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 11. Validate dataset file headers/magic/counts with checked arithmetic.
 12. Document reproducibility guarantees and unsupported nondeterministic transforms.
 
-## 60. DOC2-001 — Build the tested documentation system
+## 60. DOC2-001 - Build the tested documentation system
 
 **Suggested owner:** Gemini Pro 2  
 **Reviewer:** human maintainer  
@@ -3535,17 +3535,17 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 
 1. API rustdoc coverage gate for stabilized public items.
 2. `mdBook` with:
-   - installation and device setup;
-   - tensors, static/dynamic/named shapes;
-   - model definition;
-   - training and evaluation;
-   - saving/loading/state dictionaries;
-   - Hugging Face, ONNX, safetensors, NumPy, and PyTorch bridges;
-   - compiled execution and troubleshooting;
-   - custom modules and custom operations;
-   - performance methodology;
-   - deployment;
-   - safety model and error handling.
+  - installation and device setup;
+  - tensors, static/dynamic/named shapes;
+  - model definition;
+  - training and evaluation;
+  - saving/loading/state dictionaries;
+  - Hugging Face, ONNX, safetensors, NumPy, and PyTorch bridges;
+  - compiled execution and troubleshooting;
+  - custom modules and custom operations;
+  - performance methodology;
+  - deployment;
+  - safety model and error handling.
 3. “PyTorch concept → Incin concept” pages with side-by-side executable examples.
 4. Student path explaining tensors, gradients, layers, optimizers, and shape errors.
 5. Rust ML researcher path emphasizing custom models, experiments, instrumentation, and reproducibility.
@@ -3561,7 +3561,7 @@ Runtime models use dynamic/erased module interfaces with explicit input contract
 - documentation never claims unexecuted hardware support;
 - comparison pages explain intentional differences, not just matching names.
 
-## 61. REL2-001 — Prepare and freeze the 0.1 release candidate
+## 61. REL2-001 - Prepare and freeze the 0.1 release candidate
 
 **Suggested owner:** human maintainer with Opus 5 checklist review  
 **Issue title:** `REL2-001: cut the stability-targeted Incin 0.1 release candidate`
@@ -3628,7 +3628,7 @@ Any later PR that changes the selected public API must include:
 - release/support/security processes are routine;
 - distributed features may remain explicitly preview.
 
-# Appendix A — Immediate instructions for the first agent session
+# Appendix A - Immediate instructions for the first agent session
 
 ## A.1 Opus 5 first prompt
 
@@ -3677,7 +3677,7 @@ Return command evidence and exact follow-up seams for descriptor conversion.
 
 ---
 
-# Appendix B — Evidence commands to establish on the real development machine
+# Appendix B - Evidence commands to establish on the real development machine
 
 The environment used to prepare this plan did not contain `rustc` or `cargo`, so no claim is made that the supplied branch currently passes these commands. The first implementation session must run and record them.
 
@@ -3712,7 +3712,7 @@ Hardware commands must assert that tests actually executed and record device/dri
 
 ---
 
-# Appendix C — Decision summary
+# Appendix C - Decision summary
 
 1. IREE is a target, not Incin’s identity.
 2. `Validated<Spec>` is the semantic source of truth.
@@ -3731,7 +3731,7 @@ Hardware commands must assert that tests actually executed and record device/dri
 
 ---
 
-# Appendix D — External technical basis checked for this plan
+# Appendix D - External technical basis checked for this plan
 
 The implementation strategy was cross-checked against current official documentation available on 2026-08-01:
 
@@ -3746,7 +3746,7 @@ The implementation strategy was cross-checked against current official documenta
 Pin exact versions during implementation; do not assume current nightly APIs remain stable.
 
 
-# Appendix E — Sequential Agent Execution Pack
+# Appendix E - Sequential Agent Execution Pack
 
 **Use with:** this master plan  
 **Baseline:** `origin/develop` at `eb3633525ea74e56f7a6b2d5c5b57dc74a5d9b8d`, or a newer `develop` SHA explicitly recorded in `STATUS.md` before work starts.
@@ -3936,7 +3936,7 @@ Do not:
 
 # 3. Ready-to-run task prompts
 
-## Task 0 — Truth reset and semantic regression tests
+## Task 0 - Truth reset and semantic regression tests
 
 **Owner:** Opus 5, with GPT-5.6 implementing tests after ADR approval.
 
@@ -3982,7 +3982,7 @@ Deliver:
 
 ---
 
-## Task 1 — Canonical IR foundation
+## Task 1 - Canonical IR foundation
 
 ```text
 Task ID: CMP2-001A
@@ -4031,7 +4031,7 @@ Change verifier to treat node ID as vector index. A test with sparse/non-monoton
 
 ---
 
-## Task 2 — Canonical descriptors
+## Task 2 - Canonical descriptors
 
 ```text
 Task ID: CMP2-001B
@@ -4079,7 +4079,7 @@ Drop reduction axes from canonicalization/hash. Equality/hash test must fail.
 
 ---
 
-## Task 3 — Session-scoped symbolic capture
+## Task 3 - Session-scoped symbolic capture
 
 ```text
 Task ID: CMP2-002A
@@ -4127,7 +4127,7 @@ Force F32 in symbolic output. F16 capture test must fail.
 
 ---
 
-## Task 4 — Pytree and public capture contract
+## Task 4 - Pytree and public capture contract
 
 ```text
 Task ID: CMP2-002B
@@ -4159,7 +4159,7 @@ Reverse tuple leaf order in runtime binder. Round-trip test must fail.
 
 ---
 
-## Task 5 — Reference interpreter
+## Task 5 - Reference interpreter
 
 ```text
 Task ID: CMP2-003
@@ -4196,7 +4196,7 @@ Swap matmul operands while retaining output shape. Numerical parity test must fa
 
 ---
 
-## Task 6 — Real guard program
+## Task 6 - Real guard program
 
 ```text
 Task ID: CMP2-004
@@ -4232,7 +4232,7 @@ Skip a bound check on cache hit. Cache-hit invalid-shape test must fail.
 
 ---
 
-## Task 7 — Public reference compile API
+## Task 7 - Public reference compile API
 
 ```text
 Task ID: CMP2-009A
@@ -4273,7 +4273,7 @@ Return eager model directly instead of executing plan. Test must inspect plan st
 
 ---
 
-## Task 8 — IREE toolchain and emitter
+## Task 8 - IREE toolchain and emitter
 
 ```text
 Task IDs: IREE-001 and IREE-002A
@@ -4305,7 +4305,7 @@ Omit a dynamic dimension marker or dtype in emitted type. Golden/parse test must
 
 ---
 
-## Task 9 — Tier-0 StableHLO lowering
+## Task 9 - Tier-0 StableHLO lowering
 
 ```text
 Task ID: IREE-002B/C
@@ -4333,7 +4333,7 @@ Emit sum for mean without division. IR/reference semantic test must fail.
 
 ---
 
-## Task 10 — IREE subprocess compiler and runtime
+## Task 10 - IREE subprocess compiler and runtime
 
 ```text
 Task IDs: IREE-003, IREE-004A
@@ -4375,7 +4375,7 @@ Reload module every run. Spy/counter test must fail performance contract.
 
 ---
 
-## Task 11 — Artifact v2
+## Task 11 - Artifact v2
 
 ```text
 Task ID: CMP2-008
@@ -4417,7 +4417,7 @@ Skip VMFB digest validation. Corruption test must fail.
 
 ---
 
-## Task 12 — Dynamic buckets and cache
+## Task 12 - Dynamic buckets and cache
 
 ```text
 Task IDs: DYN-001, DYN-002, CACHE-001
@@ -4451,7 +4451,7 @@ Remove compiler version from key. Version-invalidation test must fail.
 
 ---
 
-## Task 13 — Typed state archive and PyTorch naming
+## Task 13 - Typed state archive and PyTorch naming
 
 ```text
 Task IDs: TORCH-001..004
@@ -4483,7 +4483,7 @@ Load all tensors through FloatElem irrespective of source dtype. Dtype test must
 
 ---
 
-## Task 14 — DLPack CPU/CUDA
+## Task 14 - DLPack CPU/CUDA
 
 ```text
 Task IDs: DLPACK-001, DLPACK-002
@@ -4517,7 +4517,7 @@ Drop producer owner immediately after import. Lifetime test under stress/sanitiz
 
 ---
 
-## Task 15 — PyTorch backend beta
+## Task 15 - PyTorch backend beta
 
 ```text
 Task ID: TORCH-BACKEND-001
@@ -4552,7 +4552,7 @@ Convert inputs through CPU NumPy. Device/copy telemetry test must fail.
 
 ---
 
-## Task 16 — Canonical `torch.export` importer
+## Task 16 - Canonical `torch.export` importer
 
 ```text
 Task ID: TORCH-EXPORT-001
@@ -4594,7 +4594,7 @@ Ignore one export range constraint. Invalid-input test must fail.
 
 ---
 
-## Task 17 — AOTAutograd
+## Task 17 - AOTAutograd
 
 ```text
 Task ID: TORCH-AOT-001
@@ -4686,7 +4686,7 @@ Pause and request architecture review if any task discovers:
 
 
 
-# Appendix F — Current official technical references used for external integration choices
+# Appendix F - Current official technical references used for external integration choices
 
 Repository findings in this document come from the supplied source archive. The following external design choices were checked against official documentation current at the time of writing. Pin actual versions in implementation and treat experimental APIs as unstable.
 
@@ -4701,7 +4701,7 @@ Repository findings in this document come from the supplied source archive. The 
 - Hugging Face safetensors repository metadata/shard index: https://huggingface.co/docs/huggingface_hub/en/package_reference/hf_api
 - NumPy DLPack exchange: https://numpy.org/doc/stable/reference/generated/numpy.from_dlpack.html
 
-# Appendix G — Final coordinator checklist
+# Appendix G - Final coordinator checklist
 
 Before assigning any implementation task, verify:
 

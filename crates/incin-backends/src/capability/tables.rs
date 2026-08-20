@@ -132,7 +132,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
     // `broadcast_as` launches `kernels/shape.cu`'s `shape_op`, whose kernel
-    // signature is `const float*`/`float*` unconditionally — there is no
+    // signature is `const float*`/`float*` unconditionally - there is no
     // dtype-width parameter anywhere in the launch, so every element is read
     // and written at a 4-byte stride regardless of the storage's declared
     // dtype. For a 2-byte dtype (`f16`/`bf16`) that reads and writes past
@@ -140,7 +140,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     // one (`f64`/`i64`) it silently touches only every other 4-byte half.
     // `f32` is the only dtype in `CUDA_STORAGE_DTYPES` this kernel is
     // byte-compatible with, so it is the only one the row may honestly
-    // claim — narrowed here rather than in `shape.cu` itself, since fixing
+    // claim - narrowed here rather than in `shape.cu` itself, since fixing
     // the kernel to be dtype-parametric is separate, larger work.
     // `reshape` does not share this: it never launches `shape_op` at all,
     // only rewraps the same buffer under a new shape, so it stays byte-exact
@@ -187,7 +187,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // route through `HostInterop::from_bytes`, verified safe for every
         // dtype `CUDA_BOOL_SAFE_STORAGE_DTYPES` names (see that constant's
         // own doc), which is wider than the `F32_ONLY` the group's other
-        // five members are held to. No tape entry either way — a fresh
+        // five members are held to. No tape entry either way - a fresh
         // host-uploaded allocation records nothing to differentiate.
         native(
             OperationKind::TensorFromData,
@@ -208,7 +208,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // No coarse `Normalization` row: the four exact identities below do
         // not share one rule shape, so a single family row could not state
         // them honestly, and `every_coarse_family_row_is_backed_by_a_native_
-        // exact_row` does not require one — CPU's own Softmax member of the
+        // exact_row` does not require one - CPU's own Softmax member of the
         // family is itself `training = true` there only because CPU's kernel
         // pushes a real backward; the coarse row is not a promise every
         // backend has to fill.
@@ -240,7 +240,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // add, sqrt, divide, multiply) rather than a dedicated kernel, so
         // `Composed`. Every step in both rewrites already pushes its own
         // correct tape entry, so the composite's backward is the tape replay
-        // over those entries, not new hand-derived math — `training = true`
+        // over those entries, not new hand-derived math - `training = true`
         // is a verified claim here, not the conservative default the other
         // two rows above take.
         composed_ranked(
@@ -308,7 +308,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // a `cmp_*` result could be produced and reshaped but never fed back
         // into a float computation. `F32_AND_BOOL` rather than `F32_ONLY`
         // because both take a `bool` mask alongside `f32` data and
-        // `dispatch::execute` checks every operand against this one row —
+        // `dispatch::execute` checks every operand against this one row -
         // see that constant's own doc for why a shared-group row could not
         // state this.
         native_ranked(

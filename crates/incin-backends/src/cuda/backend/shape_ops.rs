@@ -6,7 +6,7 @@ use super::*;
 impl<D: Device> CudaBackendImpl<D> {
     /// Join operands along an existing axis. Backward splits the incoming
     /// gradient back into one segment per operand, at the same offsets the
-    /// forward join used, via `narrow` — the same decomposition CPU's
+    /// forward join used, via `narrow` - the same decomposition CPU's
     /// `concat_storage` backward relies on.
     pub(crate) fn concat<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
@@ -38,7 +38,7 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 
-    /// Composed from `reshape` (zero new tape entries — matches `squeeze`).
+    /// Composed from `reshape` (zero new tape entries - matches `squeeze`).
     pub(crate) fn unsqueeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
@@ -94,7 +94,7 @@ impl<D: Device> CudaBackendImpl<D> {
     /// Take a half-open `[start, end)` window per axis, one `narrow` at a
     /// time. Every `narrow` already pushes its own correct tape entry, so
     /// the composite's backward is the tape replay over them, not new
-    /// hand-derived math — mirrors the `RmsNorm`/`Softmax` composition.
+    /// hand-derived math - mirrors the `RmsNorm`/`Softmax` composition.
     pub(crate) fn slice<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -103,7 +103,7 @@ impl<D: Device> CudaBackendImpl<D> {
             let t: &CudaStorage = t;
             t.clone()
         };
-        // One `narrow` per range, unconditionally — same shape as CPU's own
+        // One `narrow` per range, unconditionally - same shape as CPU's own
         // `slice_storage`. A range list longer than the operand's rank is
         // not special-cased here either: it reaches `narrow`'s own
         // `dim >= t.shape.len()` check and fails loudly there, on the axis
@@ -121,7 +121,7 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 
     /// Join operands along a new axis: `unsqueeze` each at `dim`, then
-    /// `concat`. Zero new tape entries of its own — both steps already push
+    /// `concat`. Zero new tape entries of its own - both steps already push
     /// their own.
     pub(crate) fn stack<K: DType>(
         tensors: &[&<Self as StorageBackend>::Storage<K>],
@@ -137,7 +137,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
     /// Cut `axis` into consecutive pieces of `piece` elements each, the last
     /// one shorter if `extent` does not divide evenly. One `narrow` per
-    /// piece, each already tape-tracked — mirrors CPU's own
+    /// piece, each already tape-tracked - mirrors CPU's own
     /// `consecutive_pieces`, which both `chunk` and `split` share.
     fn consecutive_pieces<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -202,7 +202,7 @@ impl<D: Device> CudaBackendImpl<D> {
     /// Metadata-only: every `CudaStorage` this backend produces is always
     /// fully contiguous (`narrow`/`transpose`/`broadcast_as` below
     /// materialize a fresh contiguous buffer rather than building a
-    /// strided view — CUDA's elementwise/matmul/reduce kernels assume flat
+    /// strided view - CUDA's elementwise/matmul/reduce kernels assume flat
     /// contiguous memory), so reshaping never needs to touch the data or
     /// check contiguity first, unlike CPU's `reshape`.
     pub(crate) fn reshape<K: DType>(
@@ -270,7 +270,7 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 
-    /// Matmul is only wired for unbatched 2D operands so far — falls through to the `Backend`
+    /// Matmul is only wired for unbatched 2D operands so far - falls through to the `Backend`
     /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
     pub(crate) fn matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
@@ -379,7 +379,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
         if batch_total == 0 {
             // No batch slice to run `matmul` over; a zero-element reshape of
-            // either flattened operand is exact, not a placeholder — see
+            // either flattened operand is exact, not a placeholder - see
             // `IterationPlan::binary`'s own zero-vs-unbatched distinction,
             // which `crate::layout::broadcast_shape` already carries here.
             return Self::reshape::<K>(&lhs_flat, &out_shape);
@@ -405,7 +405,7 @@ impl<D: Device> CudaBackendImpl<D> {
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let t: &CudaStorage = t;
-        // Validates compatibility before dispatch — an invalid broadcast
+        // Validates compatibility before dispatch - an invalid broadcast
         // must error, not silently read garbage/OOB indices in the kernel.
         crate::layout::broadcast_shape(&t.shape, shape)?;
 
@@ -463,7 +463,7 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 
-    /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
+    /// Composed from `reshape` (zero new tape entries - matches CPU/WGPU).
     pub(crate) fn squeeze<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,

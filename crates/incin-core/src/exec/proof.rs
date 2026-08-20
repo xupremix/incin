@@ -1,8 +1,8 @@
 //! The seal that makes a descriptor worth trusting.
 //!
 //! [`spec`](crate::exec::spec) resolves an operation into a descriptor. That
-//! descriptor is internally consistent — its constructors derive every field
-//! rather than accepting it — but internal consistency is not the property a
+//! descriptor is internally consistent - its constructors derive every field
+//! rather than accepting it - but internal consistency is not the property a
 //! backend needs. A backend needs to know that the operation was checked
 //! against the frontend's shape proof, and a bare exact descriptor cannot say
 //! so, because anyone can build one.
@@ -93,7 +93,7 @@ impl ShapeEvidence {
 /// `ShapeEvidence::dynamic`, which claims nothing.
 ///
 /// A `Shape` implemented outside this crate can still overstate its own
-/// `PROOF`, exactly as it can today — the trait's default is
+/// `PROOF`, exactly as it can today - the trait's default is
 /// [`Dynamic`](ProofLevel::Dynamic) so silence is never credited, and a wrong
 /// override is a wrong specialization rather than unsoundness. What this type
 /// removes is the ability to assert a level with *no* type behind it at all.
@@ -191,7 +191,7 @@ impl<O: fmt::Debug> fmt::Display for Validated<O> {
 /// a debug build runs, never something a kernel's correctness depends on.
 ///
 /// The fact worth rechecking is the one `EXE-001` made a constructor
-/// obligation — that the output can actually be indexed. If this ever returns
+/// obligation - that the output can actually be indexed. If this ever returns
 /// `Err`, a descriptor reached a backend without going through a checked
 /// constructor, which is a bug in the lowering layer rather than in the
 /// caller's shapes.

@@ -45,8 +45,8 @@
 //!
 //! ## Parameters & Buffers
 //!
-//! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
-//! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
+//! * [`Param`] - A trainable parameter (gradients are computed and updated by an optimizer).
+//! * [`Buffer`] - A non-trainable state buffer (e.g., running statistics in BatchNorm).
 /// `activation`.
 pub mod activation;
 /// `adaptive_avg_pool2d`.

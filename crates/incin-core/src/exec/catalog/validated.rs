@@ -83,7 +83,7 @@ impl<O: Operation> ValidatedInvocation<O> {
     /// The input metadata this invocation was validated against.
     ///
     /// Borrowed from the descriptor rather than held a second time. The two
-    /// copies were always equal — the second was built by cloning the first —
+    /// copies were always equal - the second was built by cloning the first -
     /// and keeping it cost a `Vec<LogicalTensorMeta>` allocation on every
     /// operation the framework executes.
     #[must_use]
@@ -103,8 +103,8 @@ where
     /// Only the descriptor test suite reaches this: both production lowering
     /// paths derive their outputs from [`infer_outputs`] and cannot state them.
     /// It is kept because it is the entry point that exercises the
-    /// fabrication check in `verify_outputs` — the one that proves a stated
-    /// output disagreeing with the catalog's own inference is refused — and
+    /// fabrication check in `verify_outputs` - the one that proves a stated
+    /// output disagreeing with the catalog's own inference is refused - and
     /// there is no other way to construct that case.
     #[cfg(test)]
     pub(crate) fn validate(

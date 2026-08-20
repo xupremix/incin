@@ -10,8 +10,8 @@
 //! mixed and dynamic cases, which return `Result` rather than panicking or
 //! fabricating a scalar or empty shape.
 //!
-//! Every variant is `Copy` and allocation-free — `&'static str` and `usize`
-//! only — so a shape rule can report a precise diagnostic from `no_std` code
+//! Every variant is `Copy` and allocation-free - `&'static str` and `usize`
+//! only - so a shape rule can report a precise diagnostic from `no_std` code
 //! and from a context that must not allocate.
 
 use core::fmt;
@@ -132,12 +132,12 @@ impl OperationKind {
     ///
     /// The groupings follow what the dtype rule actually is:
     ///
-    /// * operations that only move or re-address bytes — every shape
+    /// * operations that only move or re-address bytes - every shape
     ///   manipulation, plus [`Embedding`](Self::Embedding), which gathers rows
-    ///   by integer index — are [`Storage`](Self::Storage), and so accept
+    ///   by integer index - are [`Storage`](Self::Storage), and so accept
     ///   whatever dtype the backend can hold;
-    /// * operations that accumulate — [`MatMul`](Self::MatMul), the
-    ///   convolutions, and the poolings — are [`Reduction`](Self::Reduction),
+    /// * operations that accumulate - [`MatMul`](Self::MatMul), the
+    ///   convolutions, and the poolings - are [`Reduction`](Self::Reduction),
     ///   because what makes them float-only and what earns them a widened
     ///   accumulator is that they sum many values into one.
     ///
@@ -233,7 +233,7 @@ pub enum Axis {
     /// An axis identified by the role its operation gives it, such as
     /// `"channels"` or `"height"`.
     Named(&'static str),
-    /// The rule constrains the shape as a whole rather than one axis — for
+    /// The rule constrains the shape as a whole rather than one axis - for
     /// example reshape's element-count equality.
     Whole,
 }
@@ -256,7 +256,7 @@ pub enum RankExpectation {
     Exactly(usize),
     /// This rank or higher.
     AtLeast(usize),
-    /// This rank or lower — usually the rank ceiling of a shape rule.
+    /// This rank or lower - usually the rank ceiling of a shape rule.
     AtMost(usize),
     /// Within an inclusive range.
     Between {
@@ -323,7 +323,7 @@ impl fmt::Display for DimensionConstraint {
 /// A shape rule that could not be discharged.
 ///
 /// Returned by every fallible shape computation. Statically invalid programs do
-/// not reach this type — they fail to compile.
+/// not reach this type - they fail to compile.
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShapeError {
@@ -366,7 +366,7 @@ pub enum ShapeError {
         rank: usize,
     },
 
-    /// A scalar operation parameter was outside its legal domain — most often a
+    /// A scalar operation parameter was outside its legal domain - most often a
     /// stride or kernel extent of 0.
     #[error("{operation}: parameter '{parameter}' has invalid value {value}")]
     InvalidParameter {
@@ -397,7 +397,7 @@ pub enum ShapeError {
     /// differs, or an axis the target type fixes at compile time disagrees.
     ///
     /// The axis is deliberately absent. Recovering it needs per-axis knowledge
-    /// that the erased `&[usize]` form has thrown away — which is the reason
+    /// that the erased `&[usize]` form has thrown away - which is the reason
     /// `SHP-004` reconstructs the field axis by axis wherever the arity is
     /// known, and reports [`DimensionMismatch`](Self::DimensionMismatch) with a
     /// real axis there. This variant covers what is left.

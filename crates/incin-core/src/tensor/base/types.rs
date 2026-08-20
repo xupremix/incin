@@ -91,7 +91,7 @@ impl<
     ///
     /// `dtype=`/`device=`/`requires_grad=` are appended only when they
     /// differ from what a reader would otherwise assume: `f32`
-    /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and — not
+    /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and - not
     /// requiring gradients. That last one is the mirror image of PyTorch's
     /// own rule for the literal reason that `G` defaults to
     /// [`NoGrad`] here rather than `Grad`: printing

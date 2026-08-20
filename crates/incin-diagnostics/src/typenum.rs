@@ -149,7 +149,7 @@ fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
 /// Parses a `DimCons<H, DimCons<H2, ... DimCons<Hn, Nil>...>>` chain into
 /// `[H, H2, ..., Hn]`'s inner elements, or `None` if `s` (the content
 /// between `DimCons`'s own `<` and its matching `>`) isn't exactly that
-/// shape. Fails closed on anything else — a shape list that only sometimes
+/// shape. Fails closed on anything else - a shape list that only sometimes
 /// collapses because a rare case was silently dropped would be worse than
 /// one that never collapses in that case at all.
 fn parse_dimcons_elements(s: &str) -> Option<alloc::vec::Vec<String>> {
@@ -175,7 +175,7 @@ fn parse_dimcons_elements(s: &str) -> Option<alloc::vec::Vec<String>> {
 }
 
 /// Rewrites every `DimCons<H, DimCons<H2, ... DimCons<Hn, Nil>...>>` chain
-/// in `text` into `[H, H2, ..., Hn]` — the same bracket-list rendering
+/// in `text` into `[H, H2, ..., Hn]` - the same bracket-list rendering
 /// [`crate::humanize_type_signature`] already gives a `Tensor<(...)>` shape tuple,
 /// extended to the cons-list shape encoding that shows up bare in trait-bound
 /// diagnostics (`MatMulShape<DimCons<...>>` and similar), which never passes
@@ -183,7 +183,7 @@ fn parse_dimcons_elements(s: &str) -> Option<alloc::vec::Vec<String>> {
 ///
 /// Intended to run after [`translate_typenum_text`], so a chain's heads are
 /// already plain decimals (`DimCons<4, DimCons<8, Nil>>`) rather than raw
-/// `UInt<...>` walls by the time this collapses the shell around them —
+/// `UInt<...>` walls by the time this collapses the shell around them -
 /// nothing here depends on that order, but the numbers read best that way.
 pub fn collapse_dimcons_chains(text: &str) -> String {
     let mut result = String::with_capacity(text.len());

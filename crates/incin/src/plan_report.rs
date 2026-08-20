@@ -1,4 +1,4 @@
-//! `cargo incin plan` — plan report generator (`UX-005`).
+//! `cargo incin plan` - plan report generator (`UX-005`).
 
 use crate::train::{HostMachine, Machine, Trainer};
 use incin_core::tensor::device::{DevicePreference, DeviceSet};

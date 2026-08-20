@@ -27,7 +27,7 @@ where
 }
 
 /// Witness that two type-level element counts are identical. Implemented
-/// reflexively — only `SameCount<N>` for the *same* `N` exists — so
+/// reflexively - only `SameCount<N>` for the *same* `N` exists - so
 /// requiring `A: SameCount<B>` is a compile-time assertion that `A == B`,
 /// but one that fails as an unsatisfied trait bound (E0277) rather than an
 /// associated-type projection mismatch (E0271). `#[diagnostic::

@@ -1,6 +1,6 @@
 ---
 name: Refactor / chore
-about: Internal cleanup — a file split, a doc-comment pass, book alignment, or
+about: Internal cleanup - a file split, a doc-comment pass, book alignment, or
   other work tracked against docs/CONVENTIONS.md rather than a bug or a new API
 title: ""
 labels: chore

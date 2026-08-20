@@ -103,7 +103,7 @@ impl FallbackPolicy {
 /// Whether execution records an autograd node for the operations run under it.
 ///
 /// This is the runtime form of the type-level `Grad`/`NoGrad` markers, and it
-/// is derived from them rather than set beside them — see
+/// is derived from them rather than set beside them - see
 /// [`RequiresGrad::grad_mode`](crate::tensor::grad::RequiresGrad::grad_mode).
 /// The markers decide which tensor APIs exist; this decides what the layer
 /// below the frontend does, because a backend kernel receives storage and
@@ -188,7 +188,7 @@ impl GradMode {
     /// scope
     /// is what a *caller* calls. The difference is the direction: this can
     /// only tighten, so it needs to install nothing when it is `Enabled`, and
-    /// the common path — an operation on a `Grad` tensor — reads no
+    /// the common path - an operation on a `Grad` tensor - reads no
     /// thread-local at all.
     ///
     /// Without `std` there is nothing to install into; see
@@ -258,7 +258,7 @@ impl NanPolicy {
     /// scope.
     ///
     /// The shared backward walk reads this. Without `std` there is no scope to
-    /// have installed anything, so the answer is the default — see
+    /// have installed anything, so the answer is the default - see
     /// [`GradMode::current`] for why that is the true answer rather than a
     /// weakened one.
     #[must_use]
@@ -424,7 +424,7 @@ mod scope {
         ///
         /// This installs the mode rather than combining with the enclosing
         /// one, so `GradMode::Enabled.scope(..)` inside a disabled scope
-        /// records again — the caller who writes that is asking for it by
+        /// records again - the caller who writes that is asking for it by
         /// name. Combining is what an *operand's* mode does, and that happens
         /// where the operand is known, not here.
         ///

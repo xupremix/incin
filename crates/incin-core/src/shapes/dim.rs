@@ -622,7 +622,7 @@ impl Dim for UTerm {
     /// Zero, which is a real extent and not a missing one.
     const STATIC: StaticExtent = StaticExtent::Value(0);
 
-    /// No argument needed — `UTerm` (typenum's zero) is always size 0.
+    /// No argument needed - `UTerm` (typenum's zero) is always size 0.
     type Arg = ();
 }
 
@@ -645,6 +645,6 @@ where
     /// The `typenum` value, which is where every static extent comes from.
     const STATIC: StaticExtent = StaticExtent::Value(<Self as Unsigned>::USIZE);
 
-    /// No argument needed — the size is fixed by the `typenum` type itself.
+    /// No argument needed - the size is fixed by the `typenum` type itself.
     type Arg = ();
 }

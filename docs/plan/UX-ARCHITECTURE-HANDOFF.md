@@ -20,7 +20,7 @@ unit tests + 4 integration tests in `incin-core`. `cargo fmt --check` clean, `cl
 
 **Audience:** whoever picks this up next. This document is meant to be
 followed without re-deriving anything. Every claim below was verified by
-running the compiler or the test suite, not by reading a doc comment — several
+running the compiler or the test suite, not by reading a doc comment - several
 doc comments in this repo are wrong, and they are named where relevant.
 
 ---
@@ -33,9 +33,9 @@ construction, lowering, and dispatch actually work. That audit found problems
 considerably more serious than the ergonomics question, and they are the
 reason the work is sequenced the way it is.
 
-**The single most important finding:** `exec::dispatch::execute` — documented
+**The single most important finding:** `exec::dispatch::execute` - documented
 in `docs/FROZEN_FOUNDATIONS.md` as "the single production route from an
-operation to a kernel" — **had zero production callers.** All 216 of its call
+operation to a kernel" - **had zero production callers.** All 216 of its call
 sites were test code (56 + 128 + 32, tabulated in §1.1); the handful of other
 textual matches are comments. The real production path is the nine
 operation-family supertraits on `Backend` (`B::add(..)`, `B::zeros(..)`).
@@ -54,7 +54,7 @@ operation; four of the catalog's rows are reached and the rest are not.
 | Question | Answer | Where |
 |---|---|---|
 | What is the allocation target? | a device value bound to a float dtype | §2.2 |
-| Should `Runtime` exist? | no — nothing to own, all state is process-global | §1.4, §6 |
+| Should `Runtime` exist? | no - nothing to own, all state is process-global | §1.4, §6 |
 | Does canonical dispatch work? | yes, on the CPU only, and the fill family uses it | §1.1, §2.5 |
 | Is the proof defect fixed? | for the fill family via the target API only | §2.5, §3 Step 1 |
 | What happened to `tensor!`? | demoted; `backend:`/`device:` deleted | §2.3 |
@@ -81,7 +81,7 @@ crates/incin-backends/src/capability.rs             2   comments, not calls
 crates/incin-core/src/exec/catalog.rs               1   doc comment
 ```
 
-Production callers: **0** (before this work; see §2.5). Reproduce with — note
+Production callers: **0** (before this work; see §2.5). Reproduce with - note
 the counts now also include the call sites this work added, so subtract
 `incin-backends/src/target.rs` and `incin-core/tests/proof_reaches_the_backend.rs`
 to recover the numbers above:
@@ -92,7 +92,7 @@ for f in $(grep -rl "dispatch::execute" crates/ --include=*.rs); do
 done
 ```
 
-The repo's own generated evidence agrees —
+The repo's own generated evidence agrees - 
 `audit-evidence/FND-005/cpu-migration-status.md` says the family traits
 "remain the path the stable tensor surface uses". `FROZEN_FOUNDATIONS.md`
 does not, and is the document that is wrong.
@@ -102,14 +102,14 @@ does not, and is the document that is wrong.
 | # | Vocabulary | Size | Where | Used by |
 |---|---|---|---|---|
 | 1 | `OperationKind` / `op::X` / `Descriptor<O>` | 174 rows | generated from `operation_catalog.rs` | tests only |
-| 2 | Nine `Backend` family supertraits | — | `tensor/backend.rs` | **all production tensor ops** |
+| 2 | Nine `Backend` family supertraits | - | `tensor/backend.rs` | **all production tensor ops** |
 | 3 | canonical `OperationIdentity` | catalog-derived | `graph.rs` and `compiled/capture.rs` | canonical catalog |
 
 Vocabulary 3 has no reference to the catalog. So "capture records the same
 operation identity used for execution" is **false**: capture speaks 3,
 execution speaks 2, the frozen contract is 1.
 
-### 1.3 Proof provenance was being discarded (fixed for `op::Zeros` — §2.1, §2.5)
+### 1.3 Proof provenance was being discarded (fixed for `op::Zeros` - §2.1, §2.5)
 
 `Shape::PROOF` is correctly implemented (Static / Mixed / Dynamic, folded per
 axis). `dispatch::execute` hardcoded `ProofLevel::Dynamic` because it has no
@@ -118,12 +118,12 @@ axis). `dispatch::execute` hardcoded `ProofLevel::Dynamic` because it has no
 was `Dynamic`.
 
 `ProofLevel` is also a single aggregate: it cannot distinguish
-`s![usize, 784]` from `s![32, usize]` — both are `Mixed`. Survivable for eager
+`s![usize, 784]` from `s![32, usize]` - both are `Mixed`. Survivable for eager
 execution, **not** survivable for capture, plan caching, or shape guards.
 
 ### 1.4 Backends own nothing; devices own nothing; resources are global
 
-- `WgpuBackendImpl<T, D>(PhantomData)` — "the stateless WGPU executor",
+- `WgpuBackendImpl<T, D>(PhantomData)` - "the stateless WGPU executor",
   `const fn new()`. A ZST.
 - `IncinBackend<T, D>` is a **type alias** for `<D as BackendFor<T>>::Backend`,
   not a struct.
@@ -145,7 +145,7 @@ state. See §6 for the decision rule.
 ### 1.5 Multi-device works only on CUDA
 
 - **CUDA:** real. Contexts keyed by ordinal; ordinal threaded into allocation.
-- **WGPU:** one process-global adapter obtained with `request_adapter(...)` —
+- **WGPU:** one process-global adapter obtained with `request_adapter(...)` - 
   **the ordinal is never passed**. `wgpu/backend.rs:95` explicitly rejects any
   ordinal ≠ 0 with `InvalidDeviceOrdinal`.
 - **CPU:** ordinal must be 0.
@@ -160,13 +160,13 @@ caller supplied something". So the shape slot is occupied even when nothing
 was written, and the device selector shifts to second position.
 
 `crates/incin-core/src/tensor/device.rs`'s own module doc claimed
-`zeros(Cuda::new(2))` compiles. It does not. **Fixed in this session** — the
+`zeros(Cuda::new(2))` compiles. It does not. **Fixed in this session** - the
 doc now shows `((), Cuda::new(2))` and explains why.
 
 ### 1.7 Layer init is worse than tensor construction
 
 `Linear::build<A>(args)` takes `A: LayerArgInto<(InArg, OutArg, DTypeArg, DeviceArg, BiasArg)>`
-— a **5-position** compressed tuple. Real usage:
+ -  a **5-position** compressed tuple. Real usage:
 `Linear::<Dyn, Backend>::build((784, 128))`. There is no
 `Linear::new(784, 128, &target)`.
 
@@ -176,7 +176,7 @@ doc now shows `((), Cuda::new(2))` and explains why.
 `<Backend as Backend>::from_bytes` directly, builds `DeviceId::cpu()` by hand,
 and does `labels.push(label as f32)` with the comment "F32 target tensor for
 CrossEntropyLoss". When the framework's own showcase routes around the
-constructors, the constructors have failed. **Not yet fixed** — see §4.3.
+constructors, the constructors have failed. **Not yet fixed** - see §4.3.
 
 ### 1.9 Boolean tensors
 
@@ -235,7 +235,7 @@ All changes are additive. Nothing existing changed behaviour.
 `ShapeEvidence` is a `ProofLevel` that can only be obtained from a shape
 *type* (`ShapeEvidence::of::<S>()`) or as the no-claim value
 (`ShapeEvidence::dynamic()`). A bare `ProofLevel` parameter would have let any
-caller assert `Static` beside arbitrary metadata — the forgery `Validated`
+caller assert `Static` beside arbitrary metadata - the forgery `Validated`
 prevents one layer down.
 
 `execute_with_evidence` is a new `pub fn` beside `execute`; `execute`
@@ -248,7 +248,7 @@ Tests: `exec::proof::tests::{shape_evidence_reports_exactly_what_the_shape_type_
 dynamic_evidence_claims_nothing, evidence_meets_at_the_weaker_operand}` and
 `exec::catalog::tests::frontend_shape_evidence_reaches_the_validated_descriptor`.
 
-This is now *used*, not just plumbing — see §2.5, which added the first
+This is now *used*, not just plumbing - see §2.5, which added the first
 non-test caller of canonical dispatch in the repository. The defect is closed
 for `zeros` via the target API and open everywhere else.
 
@@ -263,11 +263,11 @@ Feature `target-api`, **off by default**. Enable with
 ```rust
 use incin::prelude::*;   // or incin_backends::prelude::*; the traits must be in scope
 
-let cpu = Cpu;                    // unit struct — no new(), no ?
+let cpu = Cpu;                    // unit struct - no new(), no ?
 let gpu = Wgpu::new(0);           // const fn, infallible
 
 let x      = cpu.tensor([[1.0_f32, 2.0], [3.0, 4.0]])?;  // s![2,2], f32, NoGrad
-let labels = cpu.tensor([0_i64, 1])?;                     // s![2],   i64, NoGrad — not cast
+let labels = cpu.tensor([0_i64, 1])?;                     // s![2],   i64, NoGrad - not cast
 
 let a = gpu.zeros(Static::<s![32, 784]>::new())?;         // Tensor<s![32,784], ..>
 let b = gpu.zeros([batch, 128])?;                         // Tensor<Dyn, ..>
@@ -277,7 +277,7 @@ let w = cpu.parameter(Static::<s![128, 784]>::new(), GeneratedFill::Normal)?;  /
 
 let fp64 = cpu.with_dtype::<f64>()?;   // fallible: the device must be able to store f64
 
-// Canonical lowering (see 2.5) — same result, real proof carried:
+// Canonical lowering (see 2.5) - same result, real proof carried:
 let z = cpu.zeros_canonical(shape![2, 3])?;
 
 // Layers begin at the layer type (see 2.6):
@@ -291,8 +291,8 @@ Key design decisions and *why*, so they are not relitigated:
   backend and every call site would leave `F` ambiguous (this reproduces as
   `E0283`). The float is an **associated type**, not a generic parameter, which
   keeps inference total.
-- **Not a `Runtime`** — see §1.4; there is nothing to own.
-- **Not a backend value** — backends are ZSTs and type aliases (§1.4).
+- **Not a `Runtime`** - see §1.4; there is nothing to own.
+- **Not a backend value** - backends are ZSTs and type aliases (§1.4).
 - **The shape spec decides the result type**, so there is no
   `zeros_static`/`zeros_partial`/`zeros_dynamic` family. `ShapeSpec::resolve`
   returns the field *and* the dims together, because both are needed and
@@ -310,7 +310,7 @@ Key design decisions and *why*, so they are not relitigated:
   Cost: methods only autocomplete when the trait is in scope.
 
 Tests: `crates/incin-backends/tests/target_api.rs` (17, CPU) and
-`target_api_wgpu.rs` (3, **real WGPU execution** — asserts `device=wgpu:0`
+`target_api_wgpu.rs` (3, **real WGPU execution** - asserts `device=wgpu:0`
 actually appears in `Display` output, so the ordinal genuinely lands).
 
 ### 2.3 `tensor!` demoted to a CPU-literal convenience
@@ -318,8 +318,8 @@ actually appears in `Display` output, so the ordinal genuinely lands).
 **Removed:** the `backend:` and `device:` clauses.
 
 The `device:` clause inferred a backend type by *sniffing token spelling*
-(`Wgpu::new(0)` → `Wgpu`). It could not see through a binding — `let d =
-Wgpu::new(0); tensor![1.0; device: d]` failed — and inferring types from how an
+(`Wgpu::new(0)` → `Wgpu`). It could not see through a binding - `let d =
+Wgpu::new(0); tensor![1.0; device: d]` failed - and inferring types from how an
 expression is written is not something a macro should do. The target API
 removes the need. `backend:` went with it because without `device:` it could
 not reach a Tier 2 device anyway, and the target API covers the rest.
@@ -357,7 +357,7 @@ need their own bodies, not a wider bound here.
 
 How this sidesteps the blocker described in §3 Step 1: `Tensor::zeros` is
 generic over `B: Backend`, and `Backend` does not require
-`Execute<Descriptor<op::Zeros>>` — adding that is FND-005's completion
+`Execute<Descriptor<op::Zeros>>` - adding that is FND-005's completion
 condition and breaks every backend. A *target*, unlike `Tensor`, knows its
 concrete backend, so each method asks for the bound at its own signature and
 leaves `Backend` untouched. Backends that have not migrated an operation
@@ -380,7 +380,7 @@ their output shape from `Descriptor::outputs()` instead of calling
 already run `infer_outputs` and sealed the result in a `Validated`, so the
 re-derivation was a second fallible right-aligned loop and a second heap
 allocation for an answer the request was carrying. Measured at ~12.6 ns per
-call on an 8x8 broadcast add, about 1.7% of that call — small, and the reason
+call on an 8x8 broadcast add, about 1.7% of that call - small, and the reason
 to do it is structural rather than the nanoseconds: an executor that trusts the
 validated descriptor is the precondition for one that trusts anything else in
 it. Each site cross-checks the descriptor against a re-derivation under
@@ -389,12 +389,12 @@ it. Each site cross-checks the descriptor against a re-derivation under
 
 **The proof level itself is still unconsumed.** `Static` says the extents were
 compile-time constants; acting on that means a kernel that can be specialized
-on constant extents — const-generic tile sizes, unrolled inner loops — and no
+on constant extents - const-generic tile sizes, unrolled inner loops - and no
 such kernel exists on any backend. Adding a use of `proof_level` that does not
 change what runs would be decoration. The value arrives, is proven correct, and
 is readable via `Validated::proof_level()`; the kernels that could exploit it
 are the next piece of work, and they are also the reason Step 1b's accelerator
-gap matters — matmul and elementwise are the operations worth specializing and
+gap matters - matmul and elementwise are the operations worth specializing and
 they have no canonical executor outside the CPU.
 
 **Which today means: the CPU and nothing else.** Every
@@ -416,7 +416,7 @@ the descriptor stamped `ProofLevel::Static` rather than `Dynamic`.
 
 1. **Grad mode is part of the capability query.** `dispatch::execute` turns
    the context's `GradMode` into the query's `training` flag, and the CPU
-   registry advertises `zeros` for **inference only** — correctly, a fill has
+   registry advertises `zeros` for **inference only** - correctly, a fill has
    no backward. Building the context with the default (grad enabled) asks
    "can `zeros` participate in training", gets a truthful *no*, and surfaces
    it as `training is unsupported for zeros`. `zeros_canonical` therefore
@@ -430,7 +430,7 @@ the descriptor stamped `ProofLevel::Static` rather than `Dynamic`.
 **The proof is observed, not inferred.**
 `crates/incin-core/tests/proof_reaches_the_backend.rs` implements a minimal
 recording backend (`StorageBackend` is 3 items, `Capabilities` is 1, `Execute`
-is 1 — the whole thing is ~40 lines) that stores
+is 1 - the whole thing is ~40 lines) that stores
 `request.operation.proof_level()` and asserts what actually arrives:
 
 | Shape type | Observed at the backend |
@@ -442,7 +442,7 @@ is 1 — the whole thing is ~40 lines) that stores
 plus a regression that plain `execute` still reports `Dynamic`, so adding the
 evidence-carrying overload did not quietly upgrade callers that know nothing.
 
-### 2.6b `shape!` — the shape argument's surface
+### 2.6b `shape!` - the shape argument's surface
 
 `Static::<s![32,784]>::new()` and `Bound::<s![usize,784]>::new((batch,))?` were
 too much ceremony for the thing you write most often. `shape!`
@@ -468,7 +468,7 @@ Two supporting changes:
   an allocator. This is what lets `shape!` expand to a plain expression rather
   than generating a `?` or an `unwrap` in the caller's code.
 - **Staticness is inferred syntactically.** An integer literal is a static
-  axis, anything else is runtime — the same split `s!` already makes, with the
+  axis, anything else is runtime - the same split `s!` already makes, with the
   `usize` inferred rather than spelled. A `const N: usize` therefore reads as
   an expression and yields a runtime axis. That is a *weaker* shape than was
   available, never a wrong one, and `Static`/`Bound` stay public for when it
@@ -480,10 +480,10 @@ inferred a *backend type* from an expression's spelling and broke outright on
 mirrors what `s!` already does.
 
 `shape!` expands to `::incin::prelude::…`, so like `s!` and `tensor!` it is
-only usable from the `incin` façade — `incin-backends`' own tests use
+only usable from the `incin` façade - `incin-backends`' own tests use
 `Static`/`Bound` directly.
 
-Tests: `crates/incin/tests/shape_macro.rs` — 11, each pinning the resulting
+Tests: `crates/incin/tests/shape_macro.rs` - 11, each pinning the resulting
 `Tensor` *type* rather than just its dims, plus 3 trybuild cases (negative,
 fractional, wrong literal suffix).
 
@@ -557,13 +557,13 @@ no second allocator.
 
 `S` cannot be inferred (no argument mentions it), so the call needs a
 turbofish: `Linear::<Dyn, _>::new(784, 128, &cpu)?`. That is a genuine wart,
-not an oversight — it follows from `Linear` being generic over its shape
+not an oversight - it follows from `Linear` being generic over its shape
 family.
 
 **Required a small core change:** `Linear::build_full` was `pub(crate)` and is
 now `pub`. `build` takes a *compressed* tuple with the unit positions omitted,
 and its arity therefore depends on which positions are `()` for the concrete
-device — `(in, out)` for `Cpu`, `(in, out, Wgpu)` for `Wgpu`. Generic code
+device - `(in, out)` for `Cpu`, `(in, out, Wgpu)` for `Wgpu`. Generic code
 cannot name that arity, and `LayerArgInto` only accepts `NotUnit` positions,
 so the uncompressed form is the only one callable from a device-generic
 context. This is the same defect as §1.6, one layer up.
@@ -574,7 +574,7 @@ context. This is the same defect as §1.6, one layer up.
 
 Each step is blocked by the one above it.
 
-### Step 1 — Proof provenance  ✅ done
+### Step 1 - Proof provenance  ✅ done
 
 `TargetExt::zeros_canonical` (§2.5) is the first production caller of
 `dispatch::execute`, it carries real evidence, and
@@ -582,7 +582,7 @@ Each step is blocked by the one above it.
 arriving at a backend for all three shape kinds.
 
 **Scope of the claim, precisely:** the defect is closed *for the zero-operand
-fill family reached through the target API* — `op::Zeros`, `op::Ones`,
+fill family reached through the target API* - `op::Zeros`, `op::Ones`,
 `op::UniformRandom`, `op::NormalRandom`. Every other operation still goes
 through the family traits and carries no proof at all, because it never reaches
 `dispatch::execute`. Do not describe the defect as closed generally.
@@ -599,7 +599,7 @@ directly instead, which is the link that needed observing.
 > fails when it drifts from the manifest. Adding `target-api` tripped exactly
 > this.
 
-### Step 1b — Migrate the remaining creation operations  ✅ done
+### Step 1b - Migrate the remaining creation operations  ✅ done
 
 All seven zero-operand creation operations are now reachable from a target and
 routed through canonical dispatch:
@@ -612,21 +612,21 @@ routed through canonical dispatch:
 | `linspace` | `linspace_canonical` | `LinspaceAttributes` |
 
 `full`, `arange` and `linspace` had **no target-API form at all** before this,
-canonical or otherwise — a target could produce zeros, ones and two
+canonical or otherwise - a target could produce zeros, ones and two
 distributions, and a constant needed dropping back to
 `Tensor::<S, B>::full((..))`.
 
 The four fills share `generated_canonical`; the other three cannot, because a
 different attribute type is a different type rather than a wider one. What they
 all share is `canonical_creation`, which takes a closure building the
-attributes from the resolved shape, dtype and device — so the evidence, the
+attributes from the resolved shape, dtype and device - so the evidence, the
 grad-mode handling and the `Validated` plumbing exist once, and only the
 attribute construction varies.
 
 This step widened the CPU-only surface rather than closing it: all seven
 canonical methods compile for `Cpu` targets and for no other backend, because
 the `Execute<Descriptor<op::X>>` impls exist only under `cpu/`. That was a
-knowing call, not momentum — the direct forms work on every backend, so nothing
+knowing call, not momentum - the direct forms work on every backend, so nothing
 is unreachable off the CPU, it is only unproven.
 
 `tensor_from_data` and `tensor_from_bytes` now use `DataAttributes`, which carry
@@ -634,23 +634,23 @@ the runtime shape, dtype, device, and payload required by their exact
 descriptors. The remaining creation gap is `sample`; migrating it requires a
 distribution registry or an equivalent stable descriptor payload.
 
-### Step 2 — `Linear::new(in, out, &target)`  ✅ done
+### Step 2 - `Linear::new(in, out, &target)`  ✅ done
 
 Landed as `LinearInit` (§2.6). Extend the same pattern to `Conv2d`,
-`LayerNorm`, `Embedding` — each needs its own `build_full` made `pub` for the
+`LayerNorm`, `Embedding` - each needs its own `build_full` made `pub` for the
 same reason `Linear`'s did.
 
 A builder (`Linear::builder(784, 128).without_bias().build(&target)`) remains
 possible and was not attempted; the default constructor was the priority.
 
-### Step 3 — Unify capture's vocabulary with the catalog
+### Step 3 - Unify capture's vocabulary with the catalog
 
 Graph capture records `OperationIdentity` directly. Built-in identities come
 from the canonical operation catalog, while custom operations retain their
 namespaced `OperationKey`. Descriptor payloads and execution-site metadata are
 captured with each node.
 
-### Step 4 — Axis-level shape contract
+### Step 4 - Axis-level shape contract
 
 `ProofLevel` cannot distinguish `s![usize, 784]` from `s![32, usize]`. For
 plan caching and shape guards you need something like:
@@ -659,10 +659,10 @@ plan caching and shape guards you need something like:
 enum AxisContract { Const(usize), Runtime { slot: usize }, Symbol { id: ShapeSymbol } }
 ```
 
-`ShapeSpec` is the natural place to produce it — it already knows which axes
+`ShapeSpec` is the natural place to produce it - it already knows which axes
 the caller bound. Add `fn contract(&self) -> ShapeContract` there.
 
-### Step 5 — Decide the prototype's fate
+### Step 5 - Decide the prototype's fate
 
 See §5 for criteria.
 
@@ -690,7 +690,7 @@ bypasses canonical lowering**.
 ### 4.3 The MNIST example
 
 Still uses `unsafe`, direct backend calls, and `label as f32`. It should be
-rewritten against whatever survives Step 1/Step 2 — that rewrite is the real
+rewritten against whatever survives Step 1/Step 2 - that rewrite is the real
 acceptance test for the whole design. Do not do it before Step 1, or it will
 be rewritten twice.
 
@@ -706,13 +706,13 @@ ordinals unrepresentable for WGPU, or implementing real adapter selection.
 Delete `crates/incin-backends/src/target.rs`, its feature, and its two test
 files if any of these hold:
 
-1. Step 1 cannot be completed — i.e. `TargetExt::zeros` cannot be made to
+1. Step 1 cannot be completed - i.e. `TargetExt::zeros` cannot be made to
    route through `dispatch::execute` with real evidence. Then the prototype is
    a fourth construction path, which is worse than the three that exist.
 2. The extension-trait import requirement proves unacceptable in practice
    (methods not discoverable without `use incin_backends::prelude::*`).
 3. A decision is taken to put allocation on `ExecutionContext` or a `Runtime`
-   after all — in which case the shape-spec types (`ShapeSpec`, `Static`,
+   after all - in which case the shape-spec types (`ShapeSpec`, `Static`,
    `Bound`) should be salvaged, since they are independent of what the target
    is.
 
@@ -725,7 +725,7 @@ Nothing outside the feature gate depends on it, so deletion is a clean revert.
 > Use device values as public allocation targets, bound to a float dtype, for
 > as long as backends remain stateless ZSTs and device resources remain
 > process-global. Introduce a `Runtime` only when something must own an
-> allocator, queue, RNG, capture, or compilation cache **per instance** — and
+> allocator, queue, RNG, capture, or compilation cache **per instance** - and
 > then introduce it by wrapping the target, not replacing it. Keep shape
 > contracts and semantic lowering independent of both. Do not add a
 > user-facing construction surface that does not terminate in canonical

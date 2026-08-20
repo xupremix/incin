@@ -446,14 +446,14 @@ fn main() -> io::Result<()> {
 
     // Only cargo's own compilation-triggering subcommands understand
     // `--message-format=json` (and thus benefit from diagnostic
-    // translation) — everything else, whether a built-in like `fmt`/
+    // translation) - everything else, whether a built-in like `fmt`/
     // `tree`/`add`/`update`/`publish` or a third-party plugin the user
     // installed (`cargo-watch`, `cargo-audit`, `cargo-expand`, ...), gets
     // delegated straight through with fully inherited stdio and no
     // interception at all. This is deliberately a small, closed allowlist
     // of cargo's own commands rather than a blocklist of known-bad ones:
     // it means supporting a new third-party subcommand needs zero code
-    // here, ever — that's the whole point.
+    // here, ever - that's the whole point.
     const JSON_CAPABLE_SUBCOMMANDS: &[&str] = &[
         "build", "b", "check", "c", "test", "t", "bench", "run", "r", "clippy", "doc", "fix",
     ];
@@ -487,7 +487,7 @@ fn main() -> io::Result<()> {
         // is ever added, so by construction `raw_mode` is always `false` here.
         // `--message-format=json` makes cargo emit *only* JSON on stdout,
         // but its own pretty "Compiling foo v0.1.0 (...)" progress lines
-        // always go to *stderr* regardless of `--message-format` — and
+        // always go to *stderr* regardless of `--message-format` - and
         // that stream is inherited untouched (`Stdio::inherit()` above), so
         // that progress already reaches the terminal correctly on its own.
         // Every JSON `reason` on stdout still needs to be handled here or
@@ -511,7 +511,7 @@ fn main() -> io::Result<()> {
             // `compiler-artifact` (build progress, already shown via
             // stderr above), `build-script-executed`, and `build-finished`
             // are cargo-internal bookkeeping a plain `cargo build` never
-            // prints either — suppressed, not dumped raw. Deliberately an
+            // prints either - suppressed, not dumped raw. Deliberately an
             // explicit list, not a wildcard: `cargo incin run`'s program
             // output could itself be JSON containing an unrelated "reason"
             // key, and a wildcard would silently eat that instead of

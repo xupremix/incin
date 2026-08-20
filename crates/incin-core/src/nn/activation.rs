@@ -27,7 +27,7 @@ macro_rules! impl_stateless_shape_info {
 
 impl_stateless_shape_info!(ReLU);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ReLU {}
@@ -67,7 +67,7 @@ pub struct GELU;
 
 impl_stateless_shape_info!(GELU);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for GELU {}
@@ -98,7 +98,7 @@ pub struct Swish;
 
 impl_stateless_shape_info!(Swish);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Swish {}
@@ -129,7 +129,7 @@ pub struct Mish;
 
 impl_stateless_shape_info!(Mish);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Mish {}
@@ -162,7 +162,7 @@ pub struct ELU;
 
 impl_stateless_shape_info!(ELU);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ELU {}
@@ -189,7 +189,7 @@ where
 /// Converts a vector of raw logits into a probability distribution that sums to 1.
 ///
 /// ## Parameters
-/// * `dim` — The axis along which the softmax normalization is applied.
+/// * `dim` - The axis along which the softmax normalization is applied.
 #[derive(Debug, Clone)]
 pub struct Softmax {
     /// The axis along which softmax is applied.
@@ -209,7 +209,7 @@ impl Softmax {
     }
 }
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Softmax {}
@@ -243,7 +243,7 @@ pub struct Sigmoid;
 
 impl_stateless_shape_info!(Sigmoid);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Sigmoid {}
@@ -273,7 +273,7 @@ pub struct Tanh;
 
 impl_stateless_shape_info!(Tanh);
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Tanh {}

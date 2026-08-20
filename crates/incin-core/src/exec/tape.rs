@@ -8,8 +8,8 @@
 //! `TensorId`, their own entry type, and their own copy of the same reverse
 //! walk.
 //!
-//! They were not similar by accident. The walk is one algorithm — seed, drain,
-//! reverse, accumulate — and writing it three times is how the CPU one earned
+//! They were not similar by accident. The walk is one algorithm - seed, drain,
+//! reverse, accumulate - and writing it three times is how the CPU one earned
 //! the comment marking the exact line where a bare `insert` silently dropped
 //! one of two gradient contributions (`CPUBACK-05`). It is written once here,
 //! and the accumulation goes through an API that has no overwrite spelling.
@@ -76,7 +76,7 @@ pub trait TapeStorage: Clone + 'static {
     /// This allocation's identity.
     fn id(&self) -> TensorId;
 
-    /// A value shaped like `self` and filled with ones — the seed a backward
+    /// A value shaped like `self` and filled with ones - the seed a backward
     /// pass starts from.
     fn ones_like(&self) -> Result<Self>;
 
@@ -103,8 +103,8 @@ pub trait TapeStorage: Clone + 'static {
 /// A backward recipe: given the accumulated gradient of a node's output,
 /// produce one gradient per input, in the same order as [`TapeNode::input_ids`].
 ///
-/// Fallible since `GRD-005`. PROPOSALS.md sec. 3.9 requires it — "backward
-/// closures must return structured errors" — and the count is the argument:
+/// Fallible since `GRD-005`. PROPOSALS.md sec. 3.9 requires it - "backward
+/// closures must return structured errors" - and the count is the argument:
 /// an infallible signature gave a recipe exactly one way to report that it
 /// could not produce a gradient, and 115 sites across three backends took it,
 /// as `.expect("unbroadcast lhs (add)")` and `.unwrap()` on kernels that
@@ -115,8 +115,8 @@ pub type BackwardFn<S> = Box<dyn Fn(&S) -> Result<Vec<S>> + Send + Sync>;
 /// it backwards.
 ///
 /// Saved values are captured by the recipe closure rather than listed in a
-/// field. That is what makes the node backend-neutral — the core never names a
-/// storage type it would have to hold — and it is why refusing a push releases
+/// field. That is what makes the node backend-neutral - the core never names a
+/// storage type it would have to hold - and it is why refusing a push releases
 /// the saved tensors: they live in the `Box` that is dropped.
 pub struct TapeNode<S> {
     /// The id of the value this operation produced.
@@ -207,8 +207,8 @@ impl<S> Tape<S> {
     ///
     /// The gate is here, on the one function every kernel in every backend
     /// funnels through, rather than at the call sites. There are 116 of those,
-    /// and a guarantee that depends on 116 correct edits — and on the next
-    /// kernel author knowing the convention — is not a guarantee. A refused
+    /// and a guarantee that depends on 116 correct edits - and on the next
+    /// kernel author knowing the convention - is not a guarantee. A refused
     /// node is dropped on the spot, which releases the saved values its recipe
     /// captured.
     pub fn push(&mut self, node: TapeNode<S>) {
@@ -275,8 +275,8 @@ impl<S> Tape<S> {
 /// Walk `nodes` backward from `loss`, returning the accumulated gradients.
 ///
 /// Taking the nodes by value rather than borrowing a [`Tape`] is the whole
-/// point of the signature. A recipe may itself record — every convolution
-/// backward on the CPU backend does — so a walk that still held the tape would
+/// point of the signature. A recipe may itself record - every convolution
+/// backward on the CPU backend does - so a walk that still held the tape would
 /// either re-enter it or, with the tape behind a `RefCell`, panic on the
 /// second borrow. `D-06` says drain before invoking anything; this makes that
 /// structural, because there is no way to call the walk without having already

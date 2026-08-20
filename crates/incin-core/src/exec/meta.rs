@@ -204,12 +204,12 @@ impl TensorMeta {
     /// Metadata for a handle that owns no allocation.
     ///
     /// A backend whose storage is an enum over several devices has one variant
-    /// that holds nothing — it exists so the enum has a shape when no backend
+    /// that holds nothing - it exists so the enum has a shape when no backend
     /// feature is enabled. [`StorageBackend::metadata`] returns `&TensorMeta`
     /// infallibly and so cannot report "there is no allocation here"; this
     /// constant is what that variant describes instead. It is a well-formed
     /// rank-0 contiguous descriptor rather than a sentinel, so every accessor
-    /// on it answers consistently — but it describes no real buffer, and a
+    /// on it answers consistently - but it describes no real buffer, and a
     /// backend that reaches it has been handed a handle it cannot execute.
     ///
     /// [`StorageBackend::metadata`]: crate::tensor::backend::StorageBackend::metadata

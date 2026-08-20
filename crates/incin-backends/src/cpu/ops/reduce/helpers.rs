@@ -253,7 +253,7 @@ pub(super) fn max_axis_with_indices(
 }
 
 /// Mirror of `max_axis_with_indices`, seeded with `f64::INFINITY` and a
-/// strict `<` comparison — same first-encountered-winner convention, and the
+/// strict `<` comparison - same first-encountered-winner convention, and the
 /// same dtype preservation.
 pub(super) fn min_axis_with_indices(
     storage: &CpuStorage,
@@ -306,7 +306,7 @@ pub(super) fn min_axis_with_indices(
 /// Backward helper shared by `max_dim`/`min_dim`/`max_keepdim`/`min_keepdim`:
 /// build a zero-filled buffer sized to `original_shape`, then scatter
 /// `grad_out`'s per-output-position value into ONLY the recorded winning
-/// flat index for that position (T-02-08 mitigation — reuses `flatten_index`
+/// flat index for that position (T-02-08 mitigation - reuses `flatten_index`
 /// rather than hand-deriving a new index-resolution formula).
 pub(super) fn scatter_axis_grad(
     grad_out: &CpuStorage,

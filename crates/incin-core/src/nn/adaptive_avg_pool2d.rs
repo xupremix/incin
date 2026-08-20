@@ -44,7 +44,7 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
     }
 }
 
-/// Stateless — no training-dependent behavior, opts in with the trait's
+/// Stateless - no training-dependent behavior, opts in with the trait's
 /// default no-op so it can appear inside a `Sequential` alongside layers
 /// that do have one (e.g. `Dropout`).
 impl<HOut: Unsigned, WOut: Unsigned> TrainMode for AdaptiveAvgPool2d<HOut, WOut> {}

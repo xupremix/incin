@@ -13,7 +13,7 @@ of 101, and a reader had no way to tell which number to believe.
 `deliverable` field names exists and its `evidence` command passes. That is not
 the same as "the feature works everywhere". `MTL-001` is complete because the
 Metal feature gate, storage modes, device capabilities, and unified-memory
-guards exist — and its own `deviations` field records that every operation
+guards exist - and its own `deviations` field records that every operation
 returns `UnsupportedBackendOperation` until `MTL-002` and `MTL-003` write the
 shaders. 31 rows carry a `deviations` entry like that. Reading the
 status column without the deviations column is how "101 complete" turns into a
@@ -24,46 +24,46 @@ For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
 
 | Theme | Rows | Notes |
 |-------|:----:|-------|
-| `dist` — distributed | 16 | Planning and placement layer only; there is no distributed execution path. |
-| `ux` — user experience | 15 | |
-| `exec` — execution contract | 10 | |
-| `tune` — autotune | 9 | Infrastructure complete; the call-site API is not exposed. |
-| `ci` — CI & gates | 8 | |
-| `shp` — shape & dim system | 8 | |
-| `gov` — governance & baselines | 7 | |
-| `grd` — autograd | 7 | Higher-order gradients are not in this set. |
-| `compile` — compile-time | 6 | |
-| `metal` — Metal backend | 6 | `MTL-001` only; the shader and MPS rows are what make it execute. |
-| `perf` — kernel performance | 5 | |
-| `rel` — release | 4 | |
+| `dist` - distributed | 16 | Planning and placement layer only; there is no distributed execution path. |
+| `ux` - user experience | 15 | |
+| `exec` - execution contract | 10 | |
+| `tune` - autotune | 9 | Infrastructure complete; the call-site API is not exposed. |
+| `ci` - CI & gates | 8 | |
+| `shp` - shape & dim system | 8 | |
+| `gov` - governance & baselines | 7 | |
+| `grd` - autograd | 7 | Higher-order gradients are not in this set. |
+| `compile` - compile-time | 6 | |
+| `metal` - Metal backend | 6 | `MTL-001` only; the shader and MPS rows are what make it execute. |
+| `perf` - kernel performance | 5 | |
+| `rel` - release | 4 | |
 | **Total** | **101** | 31 rows carry recorded deviations. |
 
 ### What's already solid
 
-- **Compile-time shape verification** — `s![]`, `dim!`, `idx![]`, typenum
+- **Compile-time shape verification** - `s![]`, `dim!`, `idx![]`, typenum
   arithmetic, compile-fail test suite. Ahead of every other Rust ML framework.
-- **Canonical execution** — one catalog identity, one validated descriptor, one
+- **Canonical execution** - one catalog identity, one validated descriptor, one
   capability query, and one `Execute<O>` path per operation, with a
   compile-time assertion in both directions that advertised rows and written
   executors are the same set.
-- **CPU completeness** — all 158 backend-executable catalog operations have CPU
+- **CPU completeness** - all 158 backend-executable catalog operations have CPU
   executors, and training runs on them.
-- **Autograd** — reverse-mode tape, `GRD-001..005`, finite-difference gradient
+- **Autograd** - reverse-mode tape, `GRD-001..005`, finite-difference gradient
   checks across the CPU operation families.
-- **Governance** — Criterion baselines, budget gates, generated capability and
+- **Governance** - Criterion baselines, budget gates, generated capability and
   feature documentation, public-API baseline, unsafe ledger, supply-chain gate.
 
 ### What's missing or weak
 
-- **GPU breadth** — CUDA, WGPU, and Metal cover arithmetic, reductions,
+- **GPU breadth** - CUDA, WGPU, and Metal cover arithmetic, reductions,
   `matmul`, and convolution/pooling (plus unary activations on WGPU). None
   covers normalization, loss, or embedding, so training is CPU-only.
-- **CPU kernel performance** — no SIMD in reduce, norm, pool, conv, or the
+- **CPU kernel performance** - no SIMD in reduce, norm, pool, conv, or the
   non-f32 elementwise paths.
-- **Compiled/fused execution** — eager only; no op fusion, no graph-level
+- **Compiled/fused execution** - eager only; no op fusion, no graph-level
   optimization.
-- **Distributed execution** — the planner is real, the execution path is not.
-- **Higher-order gradients** — `GRD-006/007`.
+- **Distributed execution** - the planner is real, the execution path is not.
+- **Higher-order gradients** - `GRD-006/007`.
 
 ---
 
@@ -71,14 +71,14 @@ For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
 
 > Each task has a **benchmark before / benchmark after** workflow built in.
 > The rule: measure first, implement, measure again. If the Criterion comparison
-> doesn't show the expected gain the task was wrong about something — either the
+> doesn't show the expected gain the task was wrong about something - either the
 > bottleneck was somewhere else or the fix didn't land cleanly.
 
 ### Dependency chain
 
 ```
 PRF-003 (simd_lanes const fn)
-    └── PRF-004 (TypedKernel — eliminate f64 widening)
+    └── PRF-004 (TypedKernel - eliminate f64 widening)
     └── PRF-005 (tile_2d + autotune integration)  ←── TUN-003
             └── PRF-006 (vectorize! combinator)
                         └── TUN-004 (#[autotune] macro)  ←── TUN-003
@@ -89,7 +89,7 @@ PRF-003 (simd_lanes const fn)
 | Task | What | Expected gain | Effort |
 |------|------|---------------|--------|
 | [PRF-003](tasks/PRF-003.md) | `simd_lanes<T>()` compile-time lane constant | Indirect enabler; 10–30% from eliminated branch | Low |
-| [PRF-004](tasks/PRF-004.md) | `TypedKernel<T>` — kill f64 widening in unary ops | **4–8× on bf16/f16; 2–3× on f32** | Medium |
+| [PRF-004](tasks/PRF-004.md) | `TypedKernel<T>` - kill f64 widening in unary ops | **4–8× on bf16/f16; 2–3× on f32** | Medium |
 | [PRF-005](tasks/PRF-005.md) | `tile_2d` cache-blocking + autotune tile selection | **3–8× matmul/conv off BLAS path** | Low–Medium |
 | [PRF-006](tasks/PRF-006.md) | `vectorize!` combinator for reduce/norm/pool/conv | **3–8× on all currently-scalar ops** | Medium |
 | [TUN-004](tasks/TUN-004.md) | `#[autotune(...)]` proc-macro to expose tuning infra | **15–40% mean improvement** | Medium |
@@ -125,32 +125,32 @@ PRF-003 (simd_lanes const fn)
 
 | JAX feature | What it gives | Incin status | Task |
 |-------------|---------------|--------------|------|
-| `@jax.jit` — compile a pure function to XLA | Global op fusion, constant folding, layout optimization across the whole forward pass | **Already scoped** — this is the `model.compile()` story in incin; the full chain is EXE-009 → CMP-001..006 | See chain below |
-| `jax.vmap` — auto-vectorise over a batch axis | Write a single-sample function; `vmap` generates the batched version with no explicit batch loop | **Not yet scoped** — Incin requires the user to pass a batched tensor; no axis-lifting transform | New `CMP-007` |
-| `jax.lax.scan` — JIT-compilable loop | Replaces Python `for` loops over time steps so the compiler sees the whole sequence | **Not yet scoped** — RNN/LSTM loop currently re-enters Rust per step | New `EXE-011` |
-| `jax.grad` of `jax.grad` | Higher-order derivatives (Jacobian, Hessian) composable with `jit` and `vmap` | **Planned** — `GRD-006/007` exist in the ledger but are not yet scoped | `GRD-006` |
+| `@jax.jit` - compile a pure function to XLA | Global op fusion, constant folding, layout optimization across the whole forward pass | **Already scoped** - this is the `model.compile()` story in incin; the full chain is EXE-009 → CMP-001..006 | See chain below |
+| `jax.vmap` - auto-vectorise over a batch axis | Write a single-sample function; `vmap` generates the batched version with no explicit batch loop | **Not yet scoped** - Incin requires the user to pass a batched tensor; no axis-lifting transform | New `CMP-007` |
+| `jax.lax.scan` - JIT-compilable loop | Replaces Python `for` loops over time steps so the compiler sees the whole sequence | **Not yet scoped** - RNN/LSTM loop currently re-enters Rust per step | New `EXE-011` |
+| `jax.grad` of `jax.grad` | Higher-order derivatives (Jacobian, Hessian) composable with `jit` and `vmap` | **Planned** - `GRD-006/007` exist in the ledger but are not yet scoped | `GRD-006` |
 
 #### The `model.compile()` chain (already in the roadmap)
 
 ```
-EXE-009  (active)  — remove monolithic adapter; clean descriptor surface
-    └── CMP-001    — capture the eager graph into validated IR
-        └── CMP-002 — immutable compiled plans + dynamic shape guards
-            ├── CMP-003 — liveness & allocation planner (peak-memory reduction)
-            └── CMP-004 — constant folding, weight prepacking, shape buckets
-                └── CMP-005 — op fusion + backward hooks (← the key one)
-                    └── CMP-006 — versioned compiled artifacts
+EXE-009  (active) - remove monolithic adapter; clean descriptor surface
+    └── CMP-001   - capture the eager graph into validated IR
+        └── CMP-002 - immutable compiled plans + dynamic shape guards
+            ├── CMP-003 - liveness & allocation planner (peak-memory reduction)
+            └── CMP-004 - constant folding, weight prepacking, shape buckets
+                └── CMP-005 - op fusion + backward hooks (← the key one)
+                    └── CMP-006 - versioned compiled artifacts
 ```
 
 `CMP-005` is the direct analogue of PyTorch's TorchInductor / Triton fusion
 pass: *"Safe fusion and backward hooks; gradient parity and launch-count
 reduction."* When it lands, `incin_model.compile()` (or the Rust equivalent)
 will merge adjacent pointwise ops into a single kernel, eliminating intermediate
-allocations across the entire forward pass — the **2–4× memory-traffic win**
+allocations across the entire forward pass - the **2–4× memory-traffic win**
 described in the PyTorch section below.
 
 **Biggest JAX idea not yet in incin:** `vmap`. The static shape system is
-uniquely positioned to implement it correctly — if a function maps
+uniquely positioned to implement it correctly - if a function maps
 `Tensor<s![N], B>` to `Tensor<s![M], B>`, a `vmap` transform over a new batch
 axis produces `Tensor<s![Batch, N], B>` → `Tensor<s![Batch, M], B>` with the
 shape proven at compile time. No other Rust framework can do this safely.
@@ -167,7 +167,7 @@ shape proven at compile time. No other Rust framework can do this safely.
 **Biggest PyTorch idea for incin:** **op fusion**. The `OperationSpec` enum
 already gives a description of every op. A simple fusion pass that merges
 adjacent pointwise ops into a single CPU loop (or single GPU kernel) would
-eliminate the intermediate allocation per op — likely a **2–4×** memory-traffic
+eliminate the intermediate allocation per op - likely a **2–4×** memory-traffic
 reduction for a transformer forward pass with no change to kernel performance.
 
 ### Mojo (already documented in detail)
@@ -187,22 +187,22 @@ The short list: `simd_lanes` (PRF-003), typed kernels (PRF-004), tiling
 
 | Language | Relevant idea | Incin applicability |
 |----------|--------------|-------------------|
-| **Chapel** | `forall` loop with `reduce` intent — the compiler parallelises the loop and the reduction in one statement, no rayon | incin's `rayon::par_chunks_mut` is explicit; a higher-level `parallel_reduce!` macro would be cleaner |
-| **Zig** | `comptime` — arbitrary computation at compile time including array size calculation | Rust `const fn` is catching up; the `simd_lanes` const fn (PRF-003) is the exact analogue |
+| **Chapel** | `forall` loop with `reduce` intent - the compiler parallelises the loop and the reduction in one statement, no rayon | incin's `rayon::par_chunks_mut` is explicit; a higher-level `parallel_reduce!` macro would be cleaner |
+| **Zig** | `comptime` - arbitrary computation at compile time including array size calculation | Rust `const fn` is catching up; the `simd_lanes` const fn (PRF-003) is the exact analogue |
 
 ---
 
 ## Recommended execution order
 
 ```
-1. PRF-003  — simd_lanes (1–2 days, unlocks everything)
-2. PRF-004  — TypedKernel / no f64 widening (3–4 days, highest perf per effort)
-3. PRF-005  — tile_2d + autotune tile (2–3 days, highest raw throughput)
-4. PRF-006  — vectorize! combinator (4–5 days, broad coverage)
-5. TUN-004  — #[autotune] macro (2–3 days, exposes existing infra)
+1. PRF-003 - simd_lanes (1–2 days, unlocks everything)
+2. PRF-004 - TypedKernel / no f64 widening (3–4 days, highest perf per effort)
+3. PRF-005 - tile_2d + autotune tile (2–3 days, highest raw throughput)
+4. PRF-006 - vectorize! combinator (4–5 days, broad coverage)
+5. TUN-004 - #[autotune] macro (2–3 days, exposes existing infra)
 ──── benchmark gate: compare all before/after baselines ────
-6. EXE-009  — compiled execution foundation (then JAX/PyTorch fusion ideas)
-7. CMP-007  — vmap axis-lifting transform (uniquely enabled by static shapes)
+6. EXE-009 - compiled execution foundation (then JAX/PyTorch fusion ideas)
+7. CMP-007 - vmap axis-lifting transform (uniquely enabled by static shapes)
 ```
 
 ---
@@ -212,7 +212,7 @@ The short list: `simd_lanes` (PRF-003), typed kernels (PRF-004), tiling
 Beyond kernel performance, these are the things that would turn incin from "an
 impressive Rust ML library" into "the reason I use Rust for ML."
 
-### 1. 🧠 FlexAttention — user-defined attention masks as compiled kernels
+### 1. 🧠 FlexAttention - user-defined attention masks as compiled kernels
 
 **What:** PyTorch 2.x's killer feature: you write a Python closure that describes
 your attention mask variant (sliding window, ALiBi, causal, RoPE, document mask)
@@ -283,7 +283,7 @@ modern GPUs. Without AMP, users must manually manage casts everywhere.
 
 ---
 
-### 4. 🐍 PyO3 Python bindings — `pip install incin`
+### 4. 🐍 PyO3 Python bindings - `pip install incin`
 
 **What:** MLX (Apple), candle (Hugging Face), and burn all ship Python wheels.
 The Python ML ecosystem is non-negotiable for adoption.
@@ -303,13 +303,13 @@ Python.
 
 ---
 
-### 5. 📖 The Book — `docs/growth/07-the-book.md`
+### 5. 📖 The Book - `docs/growth/07-the-book.md`
 
 **What:** Rust has *The Book*. JAX has its excellent tutorial sequence. Incin has
 an API reference and a README.
 
 **Why it matters:** The diagnostics crate (`incin-diagnostics`) already
-humanises compile errors beautifully — but a new user doesn't know the shape
+humanises compile errors beautifully - but a new user doesn't know the shape
 system, the `s![]` macro, or the Backend trait well enough to hit those errors
 productively. A progressive tutorial ("your first tensor → your first model →
 your first training run → your first GPU run") is the highest-leverage docs
@@ -320,7 +320,7 @@ has been written.
 
 ---
 
-### 6. 🚀 Inference serving — `incin serve`
+### 6. 🚀 Inference serving - `incin serve`
 
 **What:** vLLM, TensorRT-LLM, and ONNX Runtime Server dominate the inference
 serving space. They all have continuous batching, KV-cache management, and
@@ -340,12 +340,12 @@ to leave the ecosystem at exactly the moment they need reliability most.
 
 ---
 
-### 7. 🔄 `#[differentiable]` — tape instrumentation by annotation
+### 7. 🔄 `#[differentiable]` - tape instrumentation by annotation
 
 **What:** Swift for TensorFlow's `@differentiable` attribute made any function
 automatically differentiable. The compiler inserted the vjp/jvp.
 
-**Where incin is:** The tape is manual — users call `.backward()` and the tape
+**Where incin is:** The tape is manual - users call `.backward()` and the tape
 records ops. This works but is boilerplate-heavy when building custom autograd
 functions.
 
@@ -356,7 +356,7 @@ functions.
 
 ---
 
-### 8. 📊 Memory profiler — `cargo incin profile`
+### 8. 📊 Memory profiler - `cargo incin profile`
 
 **What:** PyTorch's `torch.cuda.memory_summary()` and JAX's `jax.profiler` show
 exactly where memory goes: which tensors are alive, which are leaked, where peak
@@ -367,9 +367,9 @@ events, but there's no one-command memory profiler.
 
 **What to build:**
 - A `cargo incin profile <script>` command that runs a training step and dumps:
-  - Peak memory by backend (CPU / CUDA / WGPU)
-  - Tensor allocation timeline (live tensors vs. time)
-  - Top-N tensors by size at peak
+ - Peak memory by backend (CPU / CUDA / WGPU)
+ - Tensor allocation timeline (live tensors vs. time)
+ - Top-N tensors by size at peak
 - Integrate with the `incin-viz` panels for graphical display
 
 ---
@@ -383,9 +383,9 @@ a model, fine-tune it on a dataset, export it, serve it.
 end-to-end example that a user can copy and run.
 
 **What to build:**
-- `examples/train_gpt2.rs` — fine-tune GPT-2 on a small dataset
-- `examples/inference_llama.rs` — load Llama weights, generate text
-- `examples/train_cifar.rs` — image classification from scratch
+- `examples/train_gpt2.rs` - fine-tune GPT-2 on a small dataset
+- `examples/inference_llama.rs` - load Llama weights, generate text
+- `examples/train_cifar.rs` - image classification from scratch
 - Each example runs in under 5 minutes on a consumer GPU and produces a
   checkpoint that can be loaded back
 
@@ -395,15 +395,15 @@ end-to-end example that a user can copy and run.
 
 | # | Idea | Impact on adoption | Technical difficulty | Depends on |
 |---|------|--------------------|---------------------|------------|
-| 1 | Sharded model loading | 🔴 Critical — blocks all frontier models | Medium | Growth doc 09 |
-| 2 | End-to-end examples | 🔴 Critical — first thing a new user looks for | Low | Sharded loading |
-| 3 | The Book | 🟠 High — retains users after first contact | Low | Nothing |
-| 4 | Mixed precision / AMP | 🟠 High — halves memory, doubles GPU throughput | Medium | PRF-004 |
-| 5 | FlexAttention | 🟠 High — unlocks custom architectures | High | CMP-005 |
-| 6 | PyO3 Python bindings | 🟡 Medium — opens to 95% of ML practitioners | Medium | Stable API (REL-001) |
-| 7 | Memory profiler | 🟡 Medium — saves debugging hours | Low | Telemetry |
-| 8 | `#[differentiable]` macro | 🟡 Medium — reduces boilerplate | Medium | GRD-005 |
-| 9 | Inference serving | 🟢 Future — needs the above first | High | Sharded loading, AMP |
+| 1 | Sharded model loading | 🔴 Critical - blocks all frontier models | Medium | Growth doc 09 |
+| 2 | End-to-end examples | 🔴 Critical - first thing a new user looks for | Low | Sharded loading |
+| 3 | The Book | 🟠 High - retains users after first contact | Low | Nothing |
+| 4 | Mixed precision / AMP | 🟠 High - halves memory, doubles GPU throughput | Medium | PRF-004 |
+| 5 | FlexAttention | 🟠 High - unlocks custom architectures | High | CMP-005 |
+| 6 | PyO3 Python bindings | 🟡 Medium - opens to 95% of ML practitioners | Medium | Stable API (REL-001) |
+| 7 | Memory profiler | 🟡 Medium - saves debugging hours | Low | Telemetry |
+| 8 | `#[differentiable]` macro | 🟡 Medium - reduces boilerplate | Medium | GRD-005 |
+| 9 | Inference serving | 🟢 Future - needs the above first | High | Sharded loading, AMP |
 
 ---
 
@@ -413,7 +413,7 @@ A PyTorch user switching to incin will reach for these things instinctively.
 Every one that doesn't work is a reason to close the tab. The items below are
 ordered from "most jarring absence" to "nice-to-have polish."
 
-### 1. `torch.tensor([1, 2, 3])` — one-line tensor creation from data
+### 1. `torch.tensor([1, 2, 3])` - one-line tensor creation from data
 
 **PyTorch:**
 ```python
@@ -442,12 +442,12 @@ let eye = Tensor::eye(4);                          // identity matrix
 ```
 
 This is the single highest-impact ergonomic change. Look at the MNIST example's
-`MnistCollate` — 40 lines of unsafe byte manipulation for what PyTorch does in
+`MnistCollate` - 40 lines of unsafe byte manipulation for what PyTorch does in
 `torch.tensor(images).reshape(B, 1, 28, 28)`.
 
 ---
 
-### 2. `+`, `-`, `*`, `/` — operator overloading
+### 2. `+`, `-`, `*`, `/` - operator overloading
 
 **PyTorch:** `z = x + y * 2.0`
 
@@ -464,7 +464,7 @@ let z = x + y * 2.0;
 
 ---
 
-### 3. `.to(device)` — move tensors and models between devices
+### 3. `.to(device)` - move tensors and models between devices
 
 **PyTorch:**
 ```python
@@ -486,7 +486,7 @@ let model = model.to(Device::cuda(0))?;
 
 ---
 
-### 4. `print(tensor)` — human-readable tensor display
+### 4. `print(tensor)` - human-readable tensor display
 
 **PyTorch:**
 ```python
@@ -542,7 +542,7 @@ output shapes, param counts, and MACs.
 
 ---
 
-### 7. `state_dict` round-trip — unified checkpoint save/load
+### 7. `state_dict` round-trip - unified checkpoint save/load
 
 **Incin today:** `model.save(Format::Safetensors, path)` exists. `AdamW` has
 `state_dict()` / `load_state_dict()`. But there's no unified `Checkpoint` that
@@ -551,7 +551,7 @@ with one call.
 
 ---
 
-### 8. `torch.no_grad()` — disable gradient tracking
+### 8. `torch.no_grad()` - disable gradient tracking
 
 **Incin today:** Gradient tracking is part of the type `G` parameter.
 
@@ -563,7 +563,7 @@ let x_detached = x.detach();
 
 ---
 
-### 9. DataLoader from tensors — zero boilerplate
+### 9. DataLoader from tensors - zero boilerplate
 
 **Incin today:** Requires implementing `Collate` trait with unsafe byte casting.
 
@@ -576,7 +576,7 @@ let loader = DataLoader::from_tensors(&x_train, &y_train)
 
 ---
 
-### 10. `.numpy()` / `from_numpy()` — ndarray interop
+### 10. `.numpy()` / `from_numpy()` - ndarray interop
 
 Behind an `ndarray` feature gate:
 ```rust
@@ -586,7 +586,7 @@ let tensor = Tensor::from_ndarray(arr)?;  // zero-copy if contiguous
 
 ---
 
-### 11. Migration guide — "PyTorch to incin" cheat sheet
+### 11. Migration guide - "PyTorch to incin" cheat sheet
 
 A single markdown page with side-by-side translations:
 ```
@@ -613,7 +613,7 @@ error: matmul dimension mismatch: [3, 4] × [5, 6]
 
 ---
 
-### 13. Gradient checkpointing — trade compute for memory
+### 13. Gradient checkpointing - trade compute for memory
 
 ```rust
 let output = incin::checkpoint(|| {

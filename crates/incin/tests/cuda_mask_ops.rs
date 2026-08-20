@@ -17,7 +17,7 @@
 //!
 //! `Cuda` is a Tier-2 device (runtime ordinal), so tensors are built through
 //! the target-first `gpu.tensor(...)`/`TargetExt` surface
-//! (`incin_backends::target`) rather than `Tensor::<S, B>::from_slice` — see
+//! (`incin_backends::target`) rather than `Tensor::<S, B>::from_slice` - see
 //! `crates/incin-backends/tests/target_api_wgpu.rs`'s own doc for why that
 //! constructor handles Tier-2 devices worst.
 
@@ -80,7 +80,7 @@ fn cuda_comparisons_feed_logical_connectives() -> Result<()> {
 // in `incin-backends`, not here: the static-shape `Tensor::where_cond` above
 // requires `S: ShapeEq<S2>` (`tensor/ops/index.rs`), which only holds when
 // the mask's shape type and the data's are the *same* type (`impl<S>
-// ShapeEq<S> for S` is the only impl) — so a statically lower-rank mask
+// ShapeEq<S> for S` is the only impl) - so a statically lower-rank mask
 // cannot even be named at this call site. Reaching that broadcast through
 // the public API would need a `Dyn`-shaped mask, where `ShapeEq` is
 // trivially satisfied by `Dyn: ShapeEq<Dyn>` regardless of the two tensors'

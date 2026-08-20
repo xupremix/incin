@@ -12,9 +12,9 @@
 //! discipline, applied to conv's own backward).
 //!
 //! `groups` support (including the depthwise `groups == Cin` degenerate case)
-//! is implemented as a single generic `0..groups` loop — narrow the input's
+//! is implemented as a single generic `0..groups` loop - narrow the input's
 //! channel axis and the weight's output-channel axis into per-group slices,
-//! `im2col` + `batched_matmul_impl` + concat — with NO special-casing branch
+//! `im2col` + `batched_matmul_impl` + concat - with NO special-casing branch
 //! for any particular `groups` value (Pitfall 7).
 //!
 //! `conv1d_impl`/`conv2d_windowed_impl` each push exactly ONE top-level
@@ -26,11 +26,11 @@
 //! multiply-accumulate step, per RESEARCH.md Pattern 3). Bias, when present,
 //! is broadcast-added via the canonical storage helper AFTER
 //! the hand-composed conv math, so `grad_bias` falls out of that op's own
-//! existing backward + `unbroadcast` for free — it is never hand-derived
+//! existing backward + `unbroadcast` for free - it is never hand-derived
 //! inside `conv1d_impl`/`conv2d_windowed_impl`'s own closure.
 //!
 //! `conv_transpose2d_impl` (Plan 04-07, RESEARCH.md Pattern 4) reuses
-//! `col2im_2d` VERBATIM as its own forward fold subroutine — transposed
+//! `col2im_2d` VERBATIM as its own forward fold subroutine - transposed
 //! convolution's forward pass is exactly `conv2d`'s own backward-data
 //! (grad-w.r.t.-input) formula applied to `input` directly instead of to a
 //! gradient. Its own backward, symmetrically, reuses `im2col_2d` +

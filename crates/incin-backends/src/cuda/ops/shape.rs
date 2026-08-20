@@ -8,7 +8,7 @@ use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
 /// expects: `[op_mode, rank, n_elements, out_shape(6), inp_shape(6), aux(6)]`,
 /// shapes right-aligned/padded with leading `1`s to a fixed rank-6 layout.
-/// Direct port of `wgpu/dispatch.rs::prepare_shape_params` — same op_mode
+/// Direct port of `wgpu/dispatch.rs::prepare_shape_params` - same op_mode
 /// values (0=narrow, 2=transpose, 3=broadcast), same `aux` semantics (narrow
 /// start offsets, or transpose's per-output-dim source-dim map, offset by
 /// the output's padding amount so it indexes correctly into `multi_idx`).
@@ -91,12 +91,12 @@ fn ensure_shape_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
-/// Shared launcher for `narrow`/`paste`/`transpose`/`broadcast_as` — all are
+/// Shared launcher for `narrow`/`paste`/`transpose`/`broadcast_as` - all are
 /// the same per-thread strided gather-or-scatter, differing only in how a
 /// thread's index maps to an input/output flat offset (see `shape.cu`).
 /// `launch_n` is the thread count: the output's element count for
 /// narrow/transpose/broadcast, but the (smaller) *input*'s element count
-/// for paste, which scatters into a larger, pre-zeroed output — see
+/// for paste, which scatters into a larger, pre-zeroed output - see
 /// `scatter_into_zeros`.
 #[cfg(feature = "cuda")]
 fn launch_shape_op(
@@ -148,7 +148,7 @@ fn launch_shape_op(
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let params_f32 = params_dev.transmute::<u32>(21).unwrap();
         // out_b.data was allocated once immediately above and never cloned,
-        // so it stays uniquely owned (refcount 1) here — Arc::get_mut
+        // so it stays uniquely owned (refcount 1) here - Arc::get_mut
         // succeeds without cloning first.
         let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .expect("out_b.data is freshly allocated and uniquely owned here");
@@ -172,7 +172,7 @@ fn launch_shape_op(
 
 /// Narrows dimension `dim` of `t` to the half-open range `[start, start+len)`.
 /// Materializes a fresh contiguous buffer (unlike CPU's metadata-only
-/// `narrow`) — CUDA's elementwise/matmul/reduce kernels read flat contiguous
+/// `narrow`) - CUDA's elementwise/matmul/reduce kernels read flat contiguous
 /// memory, so a non-contiguous, stride-sharing view would silently corrupt
 /// any op run on it afterward. Mirrors `wgpu/backend.rs::narrow`'s same
 /// materializing choice, made for the same reason.
@@ -205,7 +205,7 @@ pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Res
 }
 
 /// Broadcasts `t` to `target_shape`. Materializes (see `launch_narrow`'s doc
-/// for why). Caller must validate shape compatibility first — this function
+/// for why). Caller must validate shape compatibility first - this function
 /// assumes `target_shape` is already a legal broadcast target of `t.shape`.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_broadcast(t: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
@@ -214,7 +214,7 @@ pub(crate) fn launch_broadcast(t: &CudaStorage, target_shape: &[usize]) -> Resul
 }
 
 /// Scatters `values` into a fresh, zero-initialized buffer of shape
-/// `original_shape` at `region_start` — `narrow`'s backward (the gradient
+/// `original_shape` at `region_start` - `narrow`'s backward (the gradient
 /// w.r.t. the un-narrowed input is zero everywhere except the narrowed
 /// region, which gets `values` verbatim). Iterates over `values` (always
 /// the smaller side) rather than the zeroed output, so `launch_n` is

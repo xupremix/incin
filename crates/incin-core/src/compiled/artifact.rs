@@ -23,7 +23,7 @@ pub struct ArtifactVersion {
     pub minor: u32,
     /// Framework patch version.
     pub patch: u32,
-    /// Artifact format version — must match `ARTIFACT_FORMAT_VERSION`.
+    /// Artifact format version - must match `ARTIFACT_FORMAT_VERSION`.
     pub format: u32,
 }
 

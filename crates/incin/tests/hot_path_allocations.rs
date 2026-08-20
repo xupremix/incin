@@ -11,7 +11,7 @@
 //! That reasoning held up: when the eager path later measured 4.4x above its
 //! recorded latency baseline, the cause was found by counting allocations
 //! rather than by profiling, and the counts below fell by roughly 60%. The
-//! ceilings are worth keeping tight for exactly that reason — a loose ceiling
+//! ceilings are worth keeping tight for exactly that reason - a loose ceiling
 //! stops being a regression gate.
 //!
 //! Two kinds of assertion appear below and they carry different weight. The
@@ -106,7 +106,7 @@ fn allocations_of<R>(mut body: impl FnMut() -> R) -> usize {
 /// frontend, the backend's shape accessor, descriptor validation, and the
 /// storage constructor.
 ///
-/// Two of these five hold the result — the output data buffer and the `Arc`
+/// Two of these five hold the result - the output data buffer and the `Arc`
 /// around it. Everything else on the path is metadata, and by this row only
 /// three allocations of it survive.
 ///

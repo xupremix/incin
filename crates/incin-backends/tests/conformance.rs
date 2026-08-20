@@ -33,7 +33,7 @@ type MatMulOperation = op::MatMulExact;
 type ReshapeOperation = op::ReshapeExact;
 
 // ============================================================================
-// The template — copy this module
+// The template - copy this module
 // ============================================================================
 
 /// A complete minimal external backend.
@@ -336,7 +336,7 @@ fn the_template_backend_conforms() {
 /// decides whether the suite means anything: a check that has never failed is
 /// indistinguishable from a check that cannot fail. Each subject below is the
 /// template with one behaviour replaced, and each is asserted to fail exactly
-/// the check that behaviour breaks — no more, so the checks are independent,
+/// the check that behaviour breaks - no more, so the checks are independent,
 /// and no fewer, so none of them is vacuous.
 mod broken {
     use super::*;
@@ -590,7 +590,7 @@ mod broken {
 
     /// A backend that registers nothing.
     ///
-    /// Not broken — this is the *correct* state of a backend part-way through
+    /// Not broken - this is the *correct* state of a backend part-way through
     /// being written, and sec. 2.9 says it should be a legitimate one: "an
     /// external backend implements only the operation descriptors it supports".
     /// It lives in this module because it is the other thing the suite must not
@@ -671,8 +671,8 @@ mod broken {
 
 /// A backend that registers nothing passes, with everything skipped.
 ///
-/// This is sec. 2.9's central promise as a test — "an external backend
-/// implements only the operation descriptors it supports" — and getting it
+/// This is sec. 2.9's central promise as a test - "an external backend
+/// implements only the operation descriptors it supports" - and getting it
 /// wrong is what makes a conformance suite something authors route around. The
 /// checks that need no registration still run, so passing is not vacuous.
 #[test]

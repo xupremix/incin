@@ -1,7 +1,7 @@
 # incin conventions
 
 A house style for how this codebase should read and how new work should be
-organized. Nothing here is a correctness rule — incin's 101-task execution
+organized. Nothing here is a correctness rule: incin's 101-task execution
 ledger (see `PROPOSALS.md`) already covers that. This is about how fast a
 human can find, read, and change something.
 
@@ -13,8 +13,8 @@ tested, but it is dense to navigate: individual files run long
 `crates/incin-backends/src/cpu/canonical.rs` at 4235,
 `crates/incin-core/src/tensor/ops/manipulation.rs` at 3464,
 `crates/incin-backends/src/dist/nccl.rs` at 2955), and doc comments
-frequently read as audit-trail paragraphs — bench deltas, "a second Miri run
-tripped X instead of Y," deviation justifications — rather than short API
+frequently read as audit-trail paragraphs (bench deltas, "a second Miri run
+tripped X instead of Y," deviation justifications) rather than short API
 summaries.
 
 ## Goal
@@ -28,9 +28,9 @@ rustdoc already shows.
 ## Non-goals
 
 - **Crate boundaries.** The 10 crates stay exactly as they are.
-- **Behavior.** No crate is required to preserve its current public API —
+- **Behavior.** No crate is required to preserve its current public API:
   nothing beyond the `0.0.0` placeholder versions is published, so breaking
-  changes are free — but none is required to change behavior either. This is
+  changes are free, but none is required to change behavior either. This is
   about organization and presentation, not semantics.
 - **Enforcement tooling.** No new CI gate, lint, or `xtask` budget check
   accompanies this document. incin already gates aggressively; add
@@ -39,9 +39,9 @@ rustdoc already shows.
 
 ## File organization
 
-Not a hard line-count ceiling. A generated-feeling file — a genuine
+Not a hard line-count ceiling. A generated-feeling file (such as a genuine
 declarative table, or the output shape of a macro like
-`impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)` — can be
+`impl_typed_kernel!(f32, f64, f16, bf16, u8, i8, u32, i32, i64)`) can be
 long and still be one clear thing. The split trigger is **responsibility
 count**, not file length: split a file when it visibly mixes more than one
 concern, not when it crosses a number threshold.
@@ -55,7 +55,7 @@ macro machinery and the `OPERATION_CATALOG` table itself, tensor metadata
 types (`LogicalTensorMeta`, `CreationPayload`), an open-operation identity
 (`OperationKey`), a `Descriptor<O>` typed-wrapper module, the ~55
 `AttributeContract` impls, shape/output inference helpers, and its own test
-suite — eleven distinct concerns sharing one file. It has since been split
+suite (eleven distinct concerns sharing one file). It has since been split
 into `exec/catalog/{classification,coverage,table,meta,descriptor,error,
 shape_transform,attributes,inference,validated,lookup,tests}.rs`, each
 file one of those concerns, with `mod.rs` as the public surface; the
@@ -77,8 +77,8 @@ Every public item carries:
    non-obvious from the signature and name alone.
 3. A `# Examples` block with a real, runnable doctest.
 
-Evidence-log material — bench deltas, Miri-flakiness investigation notes,
-"we tried X, it failed because Y" narratives, deviation justifications —
+Evidence-log material (bench deltas, Miri-flakiness investigation notes,
+"we tried X, it failed because Y" narratives, deviation justifications)
 moves to where incin already has a proper home for it: `CHANGELOG.md` for
 anything user-facing, `docs/plan/tasks/<ID>.md` for the historical
 task-completion narrative (the ledger's existing pattern for exactly this
@@ -86,11 +86,11 @@ kind of record). It does not disappear; it moves to where a reader looking
 for "what does this do" doesn't have to wade through it, while a reader
 looking for "why was this built this way" still knows where to find it.
 
-`SAFETY:` comments on `unsafe` blocks are unaffected — that is a separate,
+`SAFETY:` comments on `unsafe` blocks are unaffected: that is a separate,
 load-bearing convention tied to `docs/security/unsafe-ledger.md`, not the
 audit-trail problem this section addresses.
 
-**Before**, from `crates/incin-core/src/exec/catalog.rs` — six sentences of
+**Before**, from `crates/incin-core/src/exec/catalog.rs` (six sentences of
 migration history before the enum a reader came to look up:
 
 ```rust
@@ -110,7 +110,7 @@ migration history before the enum a reader came to look up:
 /// two. Every variant states its own reason rather than deferring to prose.
 ```
 
-**After** — the fact a caller needs, plus a doctest proving the predicate
+**After**: the fact a caller needs, plus a doctest proving the predicate
 does what it says (verified to compile with `cargo test -p incin-core --doc
 exec::catalog::ExecutionSite` before this section was written):
 
@@ -132,7 +132,7 @@ exec::catalog::ExecutionSite` before this section was written):
 /// ```
 ```
 
-The migration-history sentences from the "before" aren't lost — they belong
+The migration-history sentences from the "before" aren't lost; they belong
 in `docs/plan/tasks/<ID>.md` (or wherever the migration task that motivated
 them lives), as a record of why the type exists, not as the first thing a
 caller reads on the way to calling it.
@@ -141,13 +141,13 @@ caller reads on the way to calling it.
 
 "Document and test everything" is a presentation change, not new test
 authorship: every public function and type gets a doctest that exercises
-real, already-proven behavior — the 101 completed ledger tasks already
+real, already-proven behavior (the 101 completed ledger tasks already
 built and verified it; this makes that behavior visible where a reader
 looks for it. `cargo test --doc` is already a CI gate, so a doctest that
 goes stale fails the same way any other test failure does.
 
-Where a doctest doesn't fit the crate's shape — `incin-lsp`'s binary,
-`incin-viz`'s TUI — the example is a file under `crates/<crate>/examples/`
+Where a doctest doesn't fit the crate's shape (such as `incin-lsp`'s binary
+or `incin-viz`'s TUI), the example is a file under `crates/<crate>/examples/`
 or a `docs/book/` walkthrough instead.
 
 ## Book alignment

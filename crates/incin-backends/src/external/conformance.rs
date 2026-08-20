@@ -8,7 +8,7 @@
 //! trait methods."
 //!
 //! That sentence has a direct consequence for how the suite is built. A check
-//! for an operation a backend never claimed must **skip**, not fail — a suite
+//! for an operation a backend never claimed must **skip**, not fail - a suite
 //! that fails a backend for not implementing something it was never asked to
 //! implement is a suite nobody runs. So every check asks
 //! [`incin_core::exec::Capabilities::support`] first and reports what it found.
@@ -16,7 +16,7 @@
 //! The three things only the author can supply are on
 //! [`Subject`](crate::external::conformance::Subject): their
 //! backend, storage built from values, and values read back out. Everything
-//! else — descriptors, expected results, tolerances, the verdict — belongs to
+//! else - descriptors, expected results, tolerances, the verdict - belongs to
 //! the harness, because those are the parts that must be the same for every
 //! backend or the word "conformance" means nothing.
 //!
@@ -61,8 +61,8 @@ pub struct Tolerance {
 }
 
 impl Tolerance {
-    /// Bit-exact. The right profile for anything that only moves bytes —
-    /// reshape, transpose, a copy — where a difference of one ulp means the
+    /// Bit-exact. The right profile for anything that only moves bytes -
+    /// reshape, transpose, a copy - where a difference of one ulp means the
     /// backend did arithmetic it was not asked to do.
     pub const EXACT: Self = Self {
         absolute: 0.0,
@@ -106,7 +106,7 @@ impl Tolerance {
 /// The backend under test, and the three things only its author can supply.
 ///
 /// Deliberately small. Every method here is something the harness cannot
-/// possibly know — how to build this backend's storage, how to read it back,
+/// possibly know - how to build this backend's storage, how to read it back,
 /// and what accuracy its author is claiming. Anything the harness *can* know it
 /// does not ask for, because a conformance suite whose expectations come from
 /// the subject is not testing the subject.
@@ -258,7 +258,7 @@ fn matmul_spec(
 /// Statically shaped, unlike the matmul fixture, and not by preference:
 /// `ReshapeShape` carries an `ElementCount` proof that `Dyn` cannot supply, so
 /// a dynamically shaped reshape has nothing to lower. That is the rule working
-/// — element count is what reshape has to preserve — and it means the harness
+/// - element count is what reshape has to preserve - and it means the harness
 /// fixes this shape pair rather than taking it as arguments.
 fn reshape_spec() -> Result<Validated<Descriptor<op::ReshapeExact>>, String> {
     Descriptor::<op::ReshapeExact>::infer_runtime(

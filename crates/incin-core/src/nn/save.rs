@@ -298,8 +298,8 @@ pub fn load_safetensors_snapshot<P: AsRef<Path>>(path: P) -> Result<crate::nn::S
 /// [`load_safetensors_snapshot`] refuses a file with no
 /// `incin.format.version` metadata key, because that key is incin's own
 /// promise about its own envelope and an absent key means the promise was
-/// never made. A file produced by another toolchain — most commonly one
-/// downloaded from the Hugging Face Hub — never carries that key and is not
+/// never made. A file produced by another toolchain - most commonly one
+/// downloaded from the Hugging Face Hub - never carries that key and is not
 /// thereby broken; it simply was not written by incin. Use this entry point
 /// for that case. State role metadata (`incin.state.role.<name>`) is still
 /// read if present and still defaults to `Parameter` if absent, exactly as

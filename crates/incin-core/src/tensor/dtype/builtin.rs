@@ -38,7 +38,7 @@ macro_rules! impl_plain_builtin_dtype {
         impl sealed::TensorElementSealed for $t {}
 
         impl DType for $t {
-            /// No argument needed — the dtype is fixed by the Rust type itself.
+            /// No argument needed - the dtype is fixed by the Rust type itself.
             type Arg = ();
             /// Zero-sized: the value is fixed by the type.
             type Field = PhantomData<$t>;
@@ -173,7 +173,7 @@ impl BoolDType for bool {}
 // ============================================================================
 
 impl DType for Q8_0 {
-    /// No argument needed — the dtype is fixed by the Rust type itself.
+    /// No argument needed - the dtype is fixed by the Rust type itself.
     type Arg = ();
     /// Zero-sized: the value is fixed by the type.
     type Field = PhantomData<Q8_0>;
@@ -224,7 +224,7 @@ impl From<DTypeId> for DTypeDescriptor {
 impl DType for Dyn {
     /// The runtime-chosen dtype descriptor.
     type Arg = DTypeDescriptor;
-    /// Stored directly — `Dyn`'s whole point is deferring dtype choice
+    /// Stored directly - `Dyn`'s whole point is deferring dtype choice
     /// to runtime, so `Field` is the `DTypeDescriptor` itself.
     type Field = DTypeDescriptor;
 

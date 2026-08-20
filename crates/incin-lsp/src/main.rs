@@ -1,4 +1,4 @@
-//! `incin-lsp` — spawns rust-analyzer as a child process and pumps LSP
+//! `incin-lsp` - spawns rust-analyzer as a child process and pumps LSP
 //! frames between it and the editor on two threads, rewriting only the
 //! frames `incin_lsp::rewrite` recognizes. See `incin_lsp` (the library
 //! crate) for the architectural rationale.

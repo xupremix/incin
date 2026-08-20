@@ -534,6 +534,6 @@ macro_rules! define_catalog {
 
 // The `incin_operation_catalog!` invocation that expands this template lives
 // in descriptor.rs (matching the original file's layout, right after
-// `CanonicalOperation`), not here where it's defined — this re-export is
+// `CanonicalOperation`), not here where it's defined - this re-export is
 // what makes `define_catalog!` reachable there via `use super::*;`.
 pub(crate) use define_catalog;

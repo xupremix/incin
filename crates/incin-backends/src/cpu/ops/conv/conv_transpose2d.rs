@@ -25,19 +25,19 @@ use super::window::{Window2d, col2im_2d, im2col_2d};
 /// Pattern 4): transposed convolution's forward pass is exactly `conv2d`'s
 /// own backward-data (grad-w.r.t.-input) formula applied directly to
 /// `input` (renamed "output" in transposed-conv terminology) instead of to a
-/// gradient — so this reuses `col2im_2d` (built in Plan 04-05 for
+/// gradient - so this reuses `col2im_2d` (built in Plan 04-05 for
 /// `conv2d_windowed_impl`'s backward) VERBATIM as its forward fold subroutine,
 /// rather than a separate im2col-style forward.
 ///
 /// `weight` arrives in Candle's confirmed `conv_transpose2d` layout
-/// `[Cin, Cout, Kh, Kw]` — already the "transposed channel order" relative
+/// `[Cin, Cout, Kh, Kw]` - already the "transposed channel order" relative
 /// to `conv2d`'s own `[Cout, Cin, Kh, Kw]` convention that the backward-data
 /// formula needs, so no additional channel-axis transpose is required.
 ///
 /// `output_padding` (Pitfall 4) is handled as its OWN final step, separate
 /// from `padding`'s symmetric fold-size arithmetic: the natural
 /// (no-`output_padding`) fold output is computed first via
-/// `natural_transpose_out_size`, then — only if `output_padding > 0` — the
+/// `natural_transpose_out_size`, then - only if `output_padding > 0` - the
 /// final output buffer is allocated `output_padding` larger (added once, not
 /// doubled) in H and W via `scatter_into_zeros`, copying the natural result
 /// into the leading `[0..H_nat, 0..W_nat]` sub-region and leaving the
@@ -185,7 +185,7 @@ pub(crate) fn conv_transpose2d_impl<D: incin_core::tensor::device::Device, K: DT
             // `input` and `grad_out` swapped relative to conv2d's own
             // convention (conv_transpose2d's forward played `input`'s role
             // where conv2d's backward played `grad_out`'s role, and vice
-            // versa) — this swap is the least-obvious part of this reuse:
+            // versa) - this swap is the least-obvious part of this reuse:
             // grad_weight_mat = input_t^T @ grad_out_cols :
             // [Cin, B*H*W] view via batched matmul against [B, H*W, Cout*Kh*Kw].
             let input_flat = input_capture.reshape(&[b, cin, input_spatial])?;

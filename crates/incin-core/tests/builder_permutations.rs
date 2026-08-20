@@ -100,27 +100,27 @@ fn test_conv2d_permutations() {
 #[test]
 /// Test norm permutations.
 fn test_norm_permutations() {
-    // LayerNorm — static
+    // LayerNorm - static
     let _ln1 = LayerNorm::<s![10], B>::build(1e-5).unwrap();
-    // LayerNorm — dynamic
+    // LayerNorm - dynamic
     let _ln2 = LayerNorm::<s![dyn], B>::build((10, 1e-5)).unwrap();
 
-    // BatchNorm2d — static
+    // BatchNorm2d - static
     let _bn1 = BatchNorm2d::<s![16], B>::build((1e-5, 0.1)).unwrap();
-    // BatchNorm2d — dynamic
+    // BatchNorm2d - dynamic
     let _bn2 = BatchNorm2d::<s![dyn], B>::build((16, 1e-5, 0.1)).unwrap();
 }
 
 #[test]
 /// Test rnn permutations.
 fn test_rnn_permutations() {
-    // RNNCell — static
+    // RNNCell - static
     let _wi = Linear::<s![10, 20], B>::build(()).unwrap();
     let _wh = Linear::<s![20, 20], B>::build(()).unwrap();
     let _cell = RNNCell::<s![10, 20], B>::new(_wi, _wh);
     let _rnn1 = RNN::<s![10, 20], B>::new(_cell.clone());
 
-    // RNNCell — dynamic
+    // RNNCell - dynamic
     let _wi2 = Linear::<s![dyn, dyn], B>::build((10, 20)).unwrap();
     let _wh2 = Linear::<s![dyn, dyn], B>::build((20, 20)).unwrap();
     let _cell2 = RNNCell::<s![dyn, dyn], B>::new(_wi2, _wh2);

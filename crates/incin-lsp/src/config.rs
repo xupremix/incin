@@ -1,4 +1,4 @@
-//! Runtime configuration, read once from the environment at startup — this
+//! Runtime configuration, read once from the environment at startup - this
 //! is a developer-machine proxy launched by an editor, not a deployed
 //! service, so a config file would be more machinery than the surface needs.
 

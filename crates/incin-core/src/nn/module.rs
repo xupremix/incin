@@ -51,7 +51,7 @@ pub trait VisitParameters<B: VariableBackend> {
 }
 
 /// Recursively switches a module (and every submodule reachable through
-/// `#[module]`-derived fields) between training and evaluation behavior —
+/// `#[module]`-derived fields) between training and evaluation behavior -
 /// `#[module]` auto-implements this for derived modules.
 /// typed state visitors, walking every field and delegating to its `TrainMode`
 /// implementation, so calling `.eval()` on a top-level model
@@ -60,7 +60,7 @@ pub trait VisitParameters<B: VariableBackend> {
 ///
 /// `set_training` defaults to a no-op, so any leaf layer with no
 /// training-dependent behavior (`Linear`, `ReLU`, `Conv2d`, ...) can opt in
-/// with a bare `impl TrainMode for X {}` — this is what makes it possible
+/// with a bare `impl TrainMode for X {}` - this is what makes it possible
 /// for [`Sequential`] to require `L1: TrainMode, L2: TrainMode` (see its own
 /// impl below) without forcing every existing layer type to implement real
 /// logic. Containers use explicit trait bounds and direct field calls.
@@ -69,11 +69,11 @@ pub trait VisitParameters<B: VariableBackend> {
 ///
 /// Only [`crate::nn::dropout::Dropout`] has training-dependent behavior
 /// today (`is_training` gates whether it randomly zeroes elements or acts as
-/// an identity function — see its own doc). **`BatchNorm2d` does not
-/// currently respond to this call** — its own `forward` always normalizes
+/// an identity function - see its own doc). **`BatchNorm2d` does not
+/// currently respond to this call** - its own `forward` always normalizes
 /// using the supplied running statistics regardless of mode (a deliberate,
 /// already-documented "inference-mode-only" scope carried forward from an
-/// earlier design decision — see the `_momentum` parameter's doc comment in
+/// earlier design decision - see the `_momentum` parameter's doc comment in
 /// `cpu/ops/norm.rs::batch_norm_impl`), so it opts into `TrainMode` as a
 /// harmless no-op via the macro's default rather than silently claiming a
 /// behavior change that isn't actually implemented. Reversing that
@@ -100,7 +100,7 @@ pub trait VisitParameters<B: VariableBackend> {
 /// ```
 pub trait TrainMode {
     /// Sets training mode on this module and recursively on every
-    /// submodule. `train()`/`eval()` are the ergonomic entry points — most
+    /// submodule. `train()`/`eval()` are the ergonomic entry points - most
     /// callers should use those instead of calling this directly. Defaults
     /// to a no-op so leaf layers with no training-dependent behavior can
     /// opt in with a bare `impl TrainMode for X {}`.
@@ -423,7 +423,7 @@ pub trait NamedLayers {
     }
 
     /// [`Self::summary`] plus a params/MACs/FLOPs totals footer at the given
-    /// batch size — see [`format_layer_summary_with_stats`]. Only callable
+    /// batch size - see [`format_layer_summary_with_stats`]. Only callable
     /// when `Self` also implements
     /// [`crate::nn::stats::ComputeStats`] (every `#[module]`
     /// struct does, automatically).
@@ -478,7 +478,7 @@ pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
 }
 
 /// [`format_layer_summary`] plus a totals footer (params / MACs / FLOPs at
-/// the given `stats`' batch size) — the "optional stats column" from
+/// the given `stats`' batch size) - the "optional stats column" from
 /// `docs/growth/04-compile-time-stats.md`'s v1 acceptance criteria. This is
 /// a **totals row**, not a per-layer breakdown: threading per-node stats
 /// through `LayerNode` itself would mean adding a batch parameter to
@@ -633,7 +633,7 @@ impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> 
 /// `seq!(L1, L2, L3)` expands to `Sequential(L1, Sequential(L2, L3))`.
 ///
 /// Naming the *type* of that value (e.g. for a `#[module]` struct field)
-/// still requires hand-nesting `Sequential<L1, Sequential<L2, L3>>` — see
+/// still requires hand-nesting `Sequential<L1, Sequential<L2, L3>>` - see
 /// `SeqTy!`, which generates that same nesting from the same
 /// flat layer list so it never has to be written out by hand.
 #[macro_export]

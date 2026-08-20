@@ -124,13 +124,13 @@ impl<N> IgnoreOrdinal for (Cpu, core::marker::PhantomData<N>) {
 
 /// Names the best device this build can target.
 ///
-/// * `best_device!()` — ordinal 0, i.e. [`BestDevice`].
-/// * `best_device!(U2)` — ordinal 2 via a `typenum` type, i.e.
+/// * `best_device!()` - ordinal 0, i.e. [`BestDevice`].
+/// * `best_device!(U2)` - ordinal 2 via a `typenum` type, i.e.
 ///   [`BestDeviceAt<U2>`](BestDeviceAt). Ignored on a CPU-only build.
 ///
 /// This is a naming convenience over the two aliases and nothing more. It
 /// expands to a public type path, performs no discovery, and touches neither
-/// the filesystem nor the network — the conditions `PROPOSALS.md` puts on every
+/// the filesystem nor the network - the conditions `PROPOSALS.md` puts on every
 /// public macro. Resolving the `cfg` inside this crate rather than inside the
 /// macro body is load bearing: a `#[cfg(feature = "cuda")]` written in a
 /// `macro_rules!` body is evaluated against the *calling* crate's features, so

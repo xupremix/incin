@@ -37,7 +37,7 @@ fn test_translate_typenum_text_with_hints() {
 
 /// A smaller nested expression's translation (e.g. `2`) must not
 /// clobber the same literal substring where it recurs inside a
-/// larger, separately-translated expression later in the text —
+/// larger, separately-translated expression later in the text -
 /// regression test for a real corrupted-diagnostic bug found while
 /// reviewing this file.
 #[test]
@@ -74,7 +74,7 @@ fn test_humanize_inlay_label_shortens_backend_when_requested() {
 
 /// Realistic case: all four `Tensor<S, B, K, G>` type params resolved
 /// and shown (rust-analyzer often renders defaulted params explicitly),
-/// with nested `<...>` inside the backend param — the balanced-bracket
+/// with nested `<...>` inside the backend param - the balanced-bracket
 /// scan must not stop at the first `>` it sees.
 #[test]
 fn test_humanize_inlay_label_handles_nested_angle_brackets_in_backend_param() {
@@ -100,7 +100,7 @@ fn test_humanize_inlay_label_strips_trailing_comma_on_rank_one_shape() {
 
 /// Regression test for a real, reported case: a `let` binding of a
 /// layer/module (not a bare `Tensor`) shows its full inferred type,
-/// which is just as typenum-heavy but has no `Tensor<(...` shell —
+/// which is just as typenum-heavy but has no `Tensor<(...` shell -
 /// previously passed through completely raw.
 #[test]
 fn test_humanize_inlay_label_rewrites_non_tensor_struct_types_generically() {
@@ -127,7 +127,7 @@ fn test_strip_path_qualifiers_collapses_qualified_paths() {
 /// Regression test for the real bug this was written to fix: rust-analyzer
 /// truncates deeply-nested inlay-hint `label`s with a `…` ellipsis once
 /// they exceed its default nesting depth, which loses the B0/B1 bits
-/// entirely — no rewrite of `label` can recover data that was never sent.
+/// entirely - no rewrite of `label` can recover data that was never sent.
 /// The full type only survives in `textEdits[0].newText`, fully
 /// path-qualified; `strip_path_qualifiers` normalizes that back into the
 /// same shape `humanize_inlay_label` already parses.
@@ -154,7 +154,7 @@ fn test_humanize_inlay_label_passes_through_non_tensor_labels_unchanged() {
 /// Regression test for a real, reported request: `cargo incin --explain`
 /// only printed a generic static rule for matmul errors. This verifies
 /// the parser pulls out the actual conflicting values from the trait's
-/// fixed `on_unimplemented` message — the exact scenario requested:
+/// fixed `on_unimplemented` message - the exact scenario requested:
 /// multiplying a `(2, 4)` shape by a `(5, 6)` shape.
 #[test]
 fn test_parse_matmul_mismatch_extracts_conflicting_inner_dims() {
@@ -198,7 +198,7 @@ fn test_matmul_mismatch_render_points_at_conflicting_dims_and_suggests_fix() {
 #[test]
 fn test_parse_matmul_mismatch_returns_none_when_inner_dims_already_match() {
     // lhs=(2,3), rhs=(3,4): inner dims are both 3, so this text isn't
-    // actually describing an inner-dim mismatch — some other rule must
+    // actually describing an inner-dim mismatch - some other rule must
     // have failed, and inventing a bogus "3 != 3" explanation would be
     // actively misleading.
     let text = "Cannot matrix-multiply shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` with `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`";
@@ -214,7 +214,7 @@ fn test_parse_matmul_mismatch_returns_none_for_unrelated_text() {
 /// *entire* rendered rustc diagnostic ("error[E0277]: Cannot
 /// matrix-multiply shape `...` with `...`\n   --> file:line:col\n...",
 /// with `help`/`note` lines following), not just the message in
-/// isolation — an earlier version used `strip_prefix`, which silently
+/// isolation - an earlier version used `strip_prefix`, which silently
 /// returned `None` for anything but the bare message on its own.
 #[test]
 fn test_parse_matmul_mismatch_finds_message_embedded_in_full_rendered_diagnostic() {

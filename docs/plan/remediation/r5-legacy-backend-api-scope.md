@@ -26,7 +26,7 @@ the current tree:
 
 These are `add`, `matmul`, `conv2d`, `mean_dim`, `softmax` and their siblings:
 storage-in, storage-out helpers that take runtime dimensions and never mint a
-descriptor. `crates/incin-backends/src/cpu/mod.rs` has none — the CPU backend
+descriptor. `crates/incin-backends/src/cpu/mod.rs` has none - the CPU backend
 is already contracted, which is why it is the one described as complete.
 
 Only `new` (wgpu, cuda, metal) and `metadata` (dispatch) are genuine public
@@ -46,9 +46,9 @@ Outside their defining files, these names are referenced in five places:
 
 The first four are inside the crate and unaffected by `pub(crate)`. The four
 in `architecture_regression.rs` are `::new()` constructors, which stay public.
-Only four test call sites use a genuine operation helper —
+Only four test call sites use a genuine operation helper - 
 `TestBackend::{matmul, reshape, conv2d}` in `tests/wgpu_executor.rs` and
-`WgpuB::transpose` in `tests/tensor_meta.rs` — each as the reference half of a
+`WgpuB::transpose` in `tests/tensor_meta.rs` - each as the reference half of a
 "descriptor execution matches the backend helper" comparison.
 
 ## What the experiment found
@@ -59,8 +59,8 @@ of dead code under `--features cpu,wgpu`, and 60 under `--all-features`.**
 That is the finding: most of this layer has no caller inside the crate at all.
 It was reachable only from outside, so `pub` was the only thing keeping the
 compiler quiet about it. The whole `impl<D: Device> DispatchBackend<D>` helper
-block — `add`, `sub`, `mul`, `div`, `reshape`, `softmax`, the quantization
-trio, `cross_entropy_loss` — is orphaned; `dispatch_executor.rs` superseded it
+block - `add`, `sub`, `mul`, `div`, `reshape`, `softmax`, the quantization
+trio, `cross_entropy_loss` - is orphaned; `dispatch_executor.rs` superseded it
 and the old layer was never removed.
 
 The dead set cascades. Once `dispatch.rs`'s helpers go, the CUDA helpers they

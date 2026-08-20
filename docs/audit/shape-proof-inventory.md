@@ -8,7 +8,7 @@ This document is the baseline for the shape workstream (`SHP-002`…`SHP-008`). 
 classifies every shape, dtype, backend, and device rule by the stage at which it
 is actually proven today, and inventories the sites where a rule that the design
 in [PROPOSALS.md](../../PROPOSALS.md) §1.2 wants proven statically or once at
-lowering is instead re-checked — or not checked at all — at runtime.
+lowering is instead re-checked - or not checked at all - at runtime.
 
 It is deliberately a *measurement*, not a fix. No behavior changes with this
 task. Every defect below is assigned to the ledger task that closes it, and the
@@ -43,30 +43,30 @@ which the rule is actually enforced in this tree; "Target" is the stage
 
 | Rule | Today | Target | Gap | Owner |
 |---|---|---|---|---|
-| Rank compatibility, static dims | T | T | none | — |
-| Static dimension equality | T | T | none | — |
+| Rank compatibility, static dims | T | T | none | - |
+| Static dimension equality | T | T | none | - |
 | Named/runtime dimension equality | U | L | Re-derived per call site; no descriptor to seal. | `EXE-001` |
-| Broadcast output arithmetic | **L** | L | closed by `SHP-004`; see §3.2. | — |
+| Broadcast output arithmetic | **L** | L | closed by `SHP-004`; see §3.2. | - |
 | Reshape element-count equality | T | T | Proven only to rank 4; see §4. | `SHP-006` |
-| Flatten output arithmetic | **L** | L | closed by `SHP-004`; same chain as broadcast. | — |
-| Conv/pool spatial geometry | **L** | L | closed by `SHP-005`; see §3.3. | — |
+| Flatten output arithmetic | **L** | L | closed by `SHP-004`; same chain as broadcast. | - |
+| Conv/pool spatial geometry | **L** | L | closed by `SHP-005`; see §3.3. | - |
 | Overflow in `numel`/byte length | **L** | L | closed by `SHP-003` for `ShapeBuf`; the storages migrate under `EXE-004`. | `EXE-004` |
 
 ### 2.2 Dtype, backend, and device rules
 
 | Rule | Today | Target | Gap | Owner |
 |---|---|---|---|---|
-| Backend family selected | T | T | none | — |
-| Logical device ordinal selected | T | T | Static only for `ConstDevice`; `Cuda`/`Wgpu` are **B**. | — |
+| Backend family selected | T | T | none | - |
+| Logical device ordinal selected | T | T | Static only for `ConstDevice`; `Cuda`/`Wgpu` are **B**. | - |
 | Static dtype/backend legality | **U** | T | `SupportsDType` proves nothing; see §3.1. | `EXE-005` |
 | Operation interface available | U | T | No `Execute<O>` bound exists yet. | `EXE-006` |
 | Inputs share required device | U | L | Checked per op when the ordinal is stored. | `EXE-001` |
-| Physical device/adapter exists | B | B | none — cannot be earlier. | — |
-| Actual device supports dtype/op | B | B | none — cannot be earlier. | — |
-| Storage matches its metadata | B | B | none | — |
-| Byte bounds and offset | B | B | none | — |
-| Pointer alignment | B | B | none | — |
-| Driver/library compatibility | B | B | none | — |
+| Physical device/adapter exists | B | B | none - cannot be earlier. | - |
+| Actual device supports dtype/op | B | B | none - cannot be earlier. | - |
+| Storage matches its metadata | B | B | none | - |
+| Byte bounds and offset | B | B | none | - |
+| Pointer alignment | B | B | none | - |
+| Driver/library compatibility | B | B | none | - |
 
 ## 3. Findings
 
@@ -92,7 +92,7 @@ table describes a target contract, not current behavior.
 Closed by `EXE-005`/`EXE-006`, which make dtype/operation rejection a
 trait-resolution failure. `SHP-001` only records it.
 
-### 3.2 The `from_dyn().unwrap()` chain — closed by `SHP-004`
+### 3.2 The `from_dyn().unwrap()` chain - closed by `SHP-004`
 
 **Status: fixed.** The account below is the finding as `SHP-001` recorded it.
 `SHP-004` made `BroadcastShape::output_shape` and `MatMulShape::output_shape`
@@ -107,13 +107,13 @@ panic it sat next to because it propagated silently:
 * broadcast resolved a compatible pair with `lhs.max(rhs)`, so a size-1 axis
   against a size-**0** one produced 1. An axis with no elements cannot gain one
   by being broadcast against; the rule is "take the side that is not 1".
-* `Dyn` matmul returned `vec![]` — the *scalar* shape — as a fallthrough for
+* `Dyn` matmul returned `vec![]` - the *scalar* shape - as a fallthrough for
   every rank combination it did not recognize, including `[m, k] × [k]`, whose
   answer is `[m]`.
 * no `MatMulShape` impl checked the contracted dimension at all. `output_shape`
   returned `(lhs.0, rhs.1)` without ever reading `K`, so a disagreement yielded
   a confidently wrong output shape. It is now a `DimensionMismatch` on axis
-  `'k'` — the same `D-013` argument as broadcast, since a `dim!` name can carry
+  `'k'` - the same `D-013` argument as broadcast, since a `dim!` name can carry
   different runtime sizes on each operand.
 
 The `unreachable!` noted below is also gone: a missing axis on the shorter
@@ -141,7 +141,7 @@ carries `unreachable!("out_rank is the max of both operands' ranks")`. The
 invariant is genuine, but it is asserted in a comment rather than established by
 construction.
 
-### 3.3 Conv and pool geometry zeroed runtime dimensions — closed by `SHP-005`
+### 3.3 Conv and pool geometry zeroed runtime dimensions - closed by `SHP-005`
 
 **Status: fixed.** The account below is the finding as `SHP-001` recorded it.
 `SHP-005` replaced both defects with the named checked sequence
@@ -170,7 +170,7 @@ Two distinct defects share this line:
    channel count that does not fit the target dim type.
 2. The spatial extents use `Default::default()`. For a `typenum` dim that is the
    correct static value, but for a `usize` or `symbolic_dim!` extent
-   `Default::default()` is **0** — the output shape silently claims a zero-sized
+   `Default::default()` is **0** - the output shape silently claims a zero-sized
    spatial dimension instead of the computed one.
 
 **Confirmed by execution**, not just by reading. A pooling call on shape
@@ -191,7 +191,7 @@ was already found and fixed once; the spatial half is still open.
 `SHP-005` replaces both with a named, checked sequence and rejects stride 0, and
 should carry this case as a regression test. Note that the traits involved
 (`Pool2dShape`, `SpatialConv2d`) are `pub` inside a `pub(crate) mod shapes`, so
-the reproduction must live in-crate — an integration test under
+the reproduction must live in-crate - an integration test under
 `crates/incin-core/tests/` cannot reach them.
 
 ### 3.4 Operator panics are structural, not accidental
@@ -262,7 +262,7 @@ themselves.
 
 ## 6. Exit criteria
 
-`SHP-001` is complete when the inventory exists and is mechanically verifiable —
+`SHP-001` is complete when the inventory exists and is mechanically verifiable - 
 both true as of this snapshot. The counts above are the baseline that later tasks
 reduce:
 
@@ -279,15 +279,15 @@ The `unwrap` count for the `shapes` surface fell from 13 to **1** over this
 period: two `from_size().unwrap()` sites under `SHP-005`, then the ten
 `from_dyn().unwrap()` sites under `SHP-004`. The single survivor is
 [`idx.rs:143`](../../crates/incin-core/src/shapes/idx.rs#L143), a
-`size.unwrap()` guarded by an `is_none()` test on the line above — safe, but
-expressible as a `match` — and it sits in a reshape path that also returns
+`size.unwrap()` guarded by an `is_none()` test on the line above - safe, but
+expressible as a `match` - and it sits in a reshape path that also returns
 `vec![]` as a sentinel for "more than one inferred dimension". Both belong to
 `SHP-007`'s sweep of the remaining mixed and dynamic gaps; neither is part of a
 named chain.
 
 **The `from_dyn` baseline was wrong.** `SHP-001` counted these with
 `from_dyn\([^)]*\)\s*\.unwrap\(\)`, which stops at the first inner `)` and so
-never matched the most common form in this tree —
+never matched the most common form in this tree - 
 `from_dyn(&broadcast_dims::<Self, (A, B)>(lhs, rhs)).unwrap()`. Fourteen sites
 were invisible. The chain is now counted by balancing parentheses, and the true
 figure is 39 live sites across 11 files (42 including `#[cfg(test)]` modules,

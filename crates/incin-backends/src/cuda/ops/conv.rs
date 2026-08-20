@@ -2,11 +2,11 @@
 //! kernels into the CUDA backend. Unlike CPU's `im2col_2d`/`col2im_2d`
 //! (`cpu/ops/conv/window.rs`), which produce a `[B, H_out*W_out, Cin*Kh*Kw]`
 //! (spatial-major) column matrix, this kernel's own layout is
-//! channel-major: `[B, Cin*Kh*Kw, H_out*W_out]` — so `conv1d`/`conv2d` in
+//! channel-major: `[B, Cin*Kh*Kw, H_out*W_out]` - so `conv1d`/`conv2d` in
 //! `cuda/backend.rs` compute `weight_mat @ cols` directly (no transpose of
 //! either operand needed), rather than CPU/WGPU's `cols @ weight_mat^T`.
 //!
-//! These are raw launchers only (no tape wiring — matches `ops::shape`'s
+//! These are raw launchers only (no tape wiring - matches `ops::shape`'s
 //! convention: `cuda/backend.rs` wires the actual `TapeEntry`s, pairing
 //! `launch_im2col_2d`/`launch_col2im_2d` as each other's forward/backward,
 //! same for the 1D pair).
@@ -123,7 +123,7 @@ fn launch_cfg(n: usize) -> Result<cudarc::driver::LaunchConfig> {
 }
 
 /// Unfolds `t: [B, C, H, W]` into `[B, C*Kh*Kw, H_out*W_out]` (channel-major
-/// — see module doc). Out-of-bounds (padded-region) source positions are
+/// - see module doc). Out-of-bounds (padded-region) source positions are
 /// written as `0.0` by the kernel itself.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_im2col_2d(

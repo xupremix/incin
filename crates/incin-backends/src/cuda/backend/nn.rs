@@ -8,7 +8,7 @@ use super::*;
 /// this is a proper tape op, `conv1d`/`conv2d`'s own forward can be composed
 /// entirely from already-tape-tracked primitives (`narrow`/`reshape`/
 /// `matmul`/`concat` plus this) with NO hand-written backward closure of
-/// their own — mirroring the free loss helpers' "free via composition"
+/// their own - mirroring the free loss helpers' "free via composition"
 /// discovery documented by the backend conformance audit.
 pub(crate) fn im2col_2d_tape(
     t: &CudaStorage,
@@ -67,7 +67,7 @@ pub(crate) fn validate_conv_groups(
 
 impl<D: Device> CudaBackendImpl<D> {
     /// Backward replays `max_indices` (captured from the forward pass)
-    /// through `scatter_pool_grad_2d` — no forward recomputation needed,
+    /// through `scatter_pool_grad_2d` - no forward recomputation needed,
     /// mirrors CPU's `max_window_2d`/`scatter_pool_grad_2d` pairing exactly.
     pub(crate) fn max_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -100,7 +100,7 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 
     /// Backward is a real CUDA kernel (`avg_pool2d_backward`), unlike
-    /// WGPU's host-readback-and-Rust-loop approach — see this file's
+    /// WGPU's host-readback-and-Rust-loop approach - see this file's
     /// module doc.
     pub(crate) fn avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -130,7 +130,7 @@ impl<D: Device> CudaBackendImpl<D> {
 
     /// Mirrors `conv1d`'s exact structure generalized to two spatial axes.
     /// CUDA's `im2col_2d` kernel lays cols out channel-major
-    /// (`[B, Cin_g*Kh*Kw, H_out*W_out]` — see `cuda/ops/conv.rs`'s module
+    /// (`[B, Cin_g*Kh*Kw, H_out*W_out]` - see `cuda/ops/conv.rs`'s module
     /// doc), so this computes `weight_mat @ cols_b` directly per batch, no
     /// transpose of either operand needed (unlike CPU/WGPU's
     /// spatial-major `cols @ weight_mat^T`).

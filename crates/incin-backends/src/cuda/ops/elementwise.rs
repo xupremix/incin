@@ -35,7 +35,7 @@ fn validate_kernel_abi(
 /// not this function's contract: it now also accepts `bool` (for
 /// `storage`/`reshape`/`to_bytes`/`from_bytes`, none of which run a
 /// float-templated kernel), and `CudaScalarSpec::for_float`'s own catch-all
-/// would still refuse a `bool` that reached it — but refusing here, before
+/// would still refuse a `bool` that reached it - but refusing here, before
 /// any kernel-rendering work happens, is the more direct failure and keeps
 /// this function's name an honest description of what it checks rather than
 /// a relay to a storage-level check with a wider contract than its own.
@@ -241,7 +241,7 @@ fn occupancy_active_blocks(
 /// a multiprocessor, before the expensive JIT-then-measure loop times them.
 /// Only prunes when at least one other candidate is confirmed viable, and
 /// never removes a candidate whose occupancy query itself failed (unknown,
-/// not proven infeasible) — an optimization that must never narrow the
+/// not proven infeasible) - an optimization that must never narrow the
 /// legal candidate set to zero or reject a candidate on a driver hiccup.
 #[cfg(all(feature = "cuda", feature = "autotune"))]
 fn prune_zero_occupancy_candidates(prepared: &mut Vec<PreparedPointwiseKernel>) {
@@ -771,7 +771,7 @@ mod tests {
 
     /// `bool` is the one dtype this gate refuses that `validate_cuda_storage_dtype`
     /// itself accepts (for `storage`/`reshape`/`to_bytes`/`from_bytes`, none of
-    /// which render a float-templated kernel) — the explicit carve-out this
+    /// which render a float-templated kernel) - the explicit carve-out this
     /// function adds on top of the storage-level check, not something the
     /// storage validator's own family membership would produce.
     #[test]

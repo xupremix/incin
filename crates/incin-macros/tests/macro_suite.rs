@@ -23,8 +23,8 @@ fn compile_pass_and_compile_fail() {
 
 /// Text that must appear in a case's recorded output, keyed by file stem.
 ///
-/// A macro rejection carries no error code — it is a `syn::Error` the macro
-/// wrote — so each row is the message itself. That is the stronger pin anyway:
+/// A macro rejection carries no error code - it is a `syn::Error` the macro
+/// wrote - so each row is the message itself. That is the stronger pin anyway:
 /// it fails when the wording changes, and the wording is the diagnostic the
 /// user reads.
 ///

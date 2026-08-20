@@ -1,7 +1,7 @@
 use super::*;
 
 // ============================================================================
-// DTypeKey — stable logical dtype identity
+// DTypeKey - stable logical dtype identity
 // ============================================================================
 
 /// A stable, extensible logical dtype key.
@@ -95,7 +95,7 @@ impl DTypeKey {
 }
 
 // ============================================================================
-// DTypeKind — broad semantic classification
+// DTypeKind - broad semantic classification
 // ============================================================================
 
 /// Broad semantic category of a dtype.
@@ -126,7 +126,7 @@ pub enum DTypeKind {
 }
 
 // ============================================================================
-// StorageEncoding — physical byte/block encoding contract
+// StorageEncoding - physical byte/block encoding contract
 // ============================================================================
 
 /// Physical byte/block encoding of a dtype's storage.
@@ -299,12 +299,12 @@ impl StorageEncoding {
 }
 
 // ============================================================================
-// DTypeDescriptor — logical + physical description
+// DTypeDescriptor - logical + physical description
 // ============================================================================
 
 /// Combined logical and physical description of a dtype.
 ///
-/// Every dtype — whether built-in or third-party — is described by a
+/// Every dtype - whether built-in or third-party - is described by a
 /// `DTypeDescriptor`. Backends that only support built-in dtypes can extract the
 /// [`DTypeId`] via [`builtin_id`](Self::builtin_id) and error gracefully when
 /// it is `None`.
@@ -449,7 +449,7 @@ impl DTypeDescriptor {
 }
 
 // ============================================================================
-// DTypeId — built-in runtime compatibility identifier
+// DTypeId - built-in runtime compatibility identifier
 // ============================================================================
 
 #[non_exhaustive]
@@ -583,7 +583,7 @@ impl DTypeId {
         self.descriptor().key().name()
     }
 
-    /// True for `U8`, `U32`, `I64` — dtypes with no fractional part, which
+    /// True for `U8`, `U32`, `I64` - dtypes with no fractional part, which
     /// [`Tensor`](crate::tensor::base::Tensor)'s `Display`/`Debug` render as plain
     /// integers rather than with decimal formatting.
     #[must_use]
@@ -600,7 +600,7 @@ impl DTypeId {
         matches!(self.descriptor().kind(), DTypeKind::Float)
     }
 
-    /// True for `Q8_0` — a packed block format with no per-element scalar
+    /// True for `Q8_0` - a packed block format with no per-element scalar
     /// representation, so printing it requires dequantizing first rather
     /// than reading one value per logical element.
     #[must_use]

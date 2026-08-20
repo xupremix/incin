@@ -5,7 +5,7 @@
 //! they stay internal to this crate and are not part of the public API surface.
 //!
 //! Both are composed entirely from canonical storage primitives
-//! (sub / mul / div / add / sqrt / scalar arithmetic / mean_keepdim) — zero
+//! (sub / mul / div / add / sqrt / scalar arithmetic / mean_keepdim) - zero
 //! new `tape::push`/backward closures are written here. The existing backward
 //! closures already handle the unbroadcast math correctly for any shape.
 
@@ -28,7 +28,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 /// 4. `std = sqrt(variance + eps)`
 /// 5. `normalized = centered / std`
 /// 6. `result = normalized * weight + bias` (weight/bias broadcast over
-///    all leading dims — they have shape `[hidden_size]`)
+///    all leading dims - they have shape `[hidden_size]`)
 ///
 /// Matches `candle-nn-0.9.1`'s `LayerNorm::forward` semantics exactly
 /// (trailing-dim only, not batch-level normalization).
@@ -81,7 +81,7 @@ pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
 // ---------------------------------------------------------------------------
 
 /// Per-channel normalization using the GIVEN `running_mean`/`running_var`
-/// (inference-mode only — `momentum` is intentionally ignored, matching
+/// (inference-mode only - `momentum` is intentionally ignored, matching
 /// `CandleBackend`'s confirmed inference-mode-only semantic per CONTEXT.md).
 ///
 /// `channel_dim = if rank > 1 { 1 } else { 0 }` (matching Candle's exact rule).
@@ -100,7 +100,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     rm: Option<&CpuStorage>,
     rv: Option<&CpuStorage>,
     eps: f32,
-    _momentum: f64, // deliberately unused — inference-mode-only (CONTEXT.md carried-forward decision)
+    _momentum: f64, // deliberately unused - inference-mode-only (CONTEXT.md carried-forward decision)
 ) -> Result<CpuStorage> {
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
@@ -119,7 +119,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     };
 
     // Reshape a provided storage to bcast_shape (it arrives as a flat [C] vector).
-    // CpuStorage::reshape is the inherent method (not tape-tracked here —
+    // CpuStorage::reshape is the inherent method (not tape-tracked here -
     // these are treated as fixed parameters, not differentiated inputs).
     let reshape_to_bcast = |s: &CpuStorage| -> Result<CpuStorage> { s.reshape(&bcast_shape) };
 
@@ -159,7 +159,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
         None => make_buf(0.0),
     };
 
-    // (t - rm) / sqrt(rv + eps) * w + b — all broadcast via existing tape-tracked ops.
+    // (t - rm) / sqrt(rv + eps) * w + b - all broadcast via existing tape-tracked ops.
     let centered = crate::cpu::ops::elementwise::sub_storage(t, &rm_ref)?;
     let rv_eps = crate::cpu::ops::elementwise::canonical_add_scalar(&rv_ref, eps as f64)?;
     let std = crate::cpu::ops::elementwise::canonical_sqrt(&rv_eps)?;
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     /// `batch_norm_all_args_provided_matches_hand_computed_formula`.
     fn batch_norm_all_args_provided_matches_hand_computed_formula() {
-        // Input [2, 3, 2, 2] — batch=2, channels=3, 2×2 spatial.
+        // Input [2, 3, 2, 2] - batch=2, channels=3, 2×2 spatial.
         // running_mean = [1, 2, 3], running_var = [1, 1, 1], weight = [1, 1, 1], bias = [0, 0, 0].
         // Channel 0: all x-values are 1.0 → (1-1)/sqrt(1+eps)*1+0 ≈ 0
         let t = tensor4(vec![1.0f32; 2 * 3 * 2 * 2], 2, 3, 2, 2);
@@ -504,7 +504,7 @@ mod tests {
         // Channel 1: input=1.0, rm=2.0, rv=1.0, w=1, b=0 → -1
         // Channel 2: input=1.0, rm=3.0, rv=1.0, w=1, b=0 → -2
 
-        // The output layout is [batch, channel, h, w] — element at [0,0,0,0] is channel 0.
+        // The output layout is [batch, channel, h, w] - element at [0,0,0,0] is channel 0.
         let expected_ch = [
             bn_expected(1.0, 1.0, 1.0, 1.0, 0.0, eps),
             bn_expected(1.0, 2.0, 1.0, 1.0, 0.0, eps),
@@ -569,7 +569,7 @@ mod tests {
     /// `batch_norm_none_args_match_explicit_default_fallback`.
     fn batch_norm_none_args_match_explicit_default_fallback() {
         // Passing None for all four optional args should equal explicit
-        // rm=0, rv=1, w=1, b=0 (Candle's convention — T-04-08 mitigation).
+        // rm=0, rv=1, w=1, b=0 (Candle's convention - T-04-08 mitigation).
         let t = tensor4(
             vec![
                 1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 2.0, 3.0, 4.0,

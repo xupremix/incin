@@ -369,7 +369,7 @@ macro_rules! impl_wgpu_unary_float {
 /// Two consumers read this list: the macro that writes the `Execute` impls, and
 /// the assertion that every one of them is advertised by the capability
 /// registry. Naming them twice is exactly how thirteen working shaders ended up
-/// unreachable — the impls existed, the capability rows did not, and the only
+/// unreachable - the impls existed, the capability rows did not, and the only
 /// compile-time check ran in the direction that could not notice.
 macro_rules! wgpu_unary_float_operations {
     ($callback:ident) => {

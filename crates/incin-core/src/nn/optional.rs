@@ -3,11 +3,11 @@ use crate::shapes::Dyn;
 /// Marker trait for optional module parameters (e.g., bias tensors).
 ///
 /// Three types implement this trait:
-/// * [`True`]  — The parameter always exists. `build` takes no extra arg.
-/// * [`False`] — The parameter never exists. `build` takes no extra arg.
-/// * [`Dyn`]   — Whether the parameter exists is decided at runtime via a `bool` passed to `build`.
+/// * [`True`]  - The parameter always exists. `build` takes no extra arg.
+/// * [`False`] - The parameter never exists. `build` takes no extra arg.
+/// * [`Dyn`]   - Whether the parameter exists is decided at runtime via a `bool` passed to `build`.
 ///
-/// There is no `build()` method or associated `BuildArgs` — each layer provides
+/// There is no `build()` method or associated `BuildArgs` - each layer provides
 /// dedicated `impl` blocks with the exact signature matching each variant.
 pub trait OptionalField {
     /// Runtime argument contributed by this optional position.

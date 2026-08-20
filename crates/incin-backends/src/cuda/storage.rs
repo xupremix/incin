@@ -15,7 +15,7 @@ use incin_core::tensor::dtype::DTypeId;
 /// runtime allocation routine is aligned to at least 256 bytes, which is what
 /// makes the coalescing and vector-load rules in the same section usable. The
 /// Rust type `CudaSlice<u8>` cannot express that, so it was previously recorded
-/// as [`Alignment::BYTE`] — a true claim, but far weaker than the allocator
+/// as [`Alignment::BYTE`] - a true claim, but far weaker than the allocator
 /// actually provides, and one that would force a kernel selecting on alignment
 /// to take the scalar path on every tensor. `device_pointers_are_aligned_to_the_
 /// documented_boundary` measures real pointers rather than trusting the
@@ -91,7 +91,7 @@ impl CudaStorage {
     /// Check that the allocation is large enough for the element count it claims.
     ///
     /// `CudaBuffer::len` counts logical elements while `data` counts bytes, and
-    /// the two are related by the dtype rather than by a fixed width — a `Q8_0`
+    /// the two are related by the dtype rather than by a fixed width - a `Q8_0`
     /// block is 34 bytes for 32 values. Comparing them here is what stops a
     /// buffer whose `len` was recorded in the wrong unit from reaching a kernel
     /// that would read past the end of it.
@@ -168,8 +168,8 @@ mod tests {
 
     /// The alignment claim recorded by every CUDA `TensorMeta`, measured.
     ///
-    /// Sizes are deliberately awkward — one byte, a prime, a value just past a
-    /// block boundary — because a well-behaved allocator that happened to round
+    /// Sizes are deliberately awkward - one byte, a prime, a value just past a
+    /// block boundary - because a well-behaved allocator that happened to round
     /// every request up to a large power of two would pass a test that only
     /// asked for round sizes. Allocations are held for the duration of the loop
     /// so the driver cannot hand the same suspiciously well-aligned address back

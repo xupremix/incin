@@ -1039,7 +1039,7 @@ fn inputs_are_known(inputs: &[LogicalTensorMeta]) -> bool {
 /// supplied outputs against `expected_output`, which is the check that stops a
 /// caller fabricating output metadata. When the outputs came from
 /// `infer_outputs` moments earlier, that comparison re-runs the same function
-/// over the same inputs and can only ever agree — it was costing a full second
+/// over the same inputs and can only ever agree - it was costing a full second
 /// shape inference, and its allocations, on every operation the framework
 /// executes. Every other check in `verify_outputs` runs either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

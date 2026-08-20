@@ -102,7 +102,7 @@ fn launch_cfg(n: usize) -> Result<cudarc::driver::LaunchConfig> {
     })
 }
 
-/// Forward max_pool2d. Returns `(output, max_indices)` — `max_indices` is a
+/// Forward max_pool2d. Returns `(output, max_indices)` - `max_indices` is a
 /// same-length `U32`-dtype `CudaStorage` (one winning flat source index per
 /// output position) captured by the backward closure and replayed through
 /// `launch_scatter_pool_grad_2d`, exactly like CPU's `max_window_2d`/
@@ -240,7 +240,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
-/// Forward avg_pool2d (no dilation — matches `::avg_pool2d`'s
+/// Forward avg_pool2d (no dilation - matches `::avg_pool2d`'s
 /// signature, which has no dilation parameter either).
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_avg_pool2d_forward(

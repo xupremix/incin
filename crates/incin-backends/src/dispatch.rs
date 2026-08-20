@@ -139,8 +139,8 @@ pub enum DispatchGrads {
 /// The wildcard falls back to [`DeviceKind::name`] rather than to `"Unknown"`.
 /// `DeviceKind` is `#[non_exhaustive]`, so the arm cannot be removed, but every
 /// kind can already say what it is called: spelling three of them out here and
-/// answering `"Unknown"` for the rest meant a Metal device — a first-class
-/// feature this dispatcher happens not to carry a variant for — reported a
+/// answering `"Unknown"` for the rest meant a Metal device - a first-class
+/// feature this dispatcher happens not to carry a variant for - reported a
 /// failure that named no backend at all.
 fn unavailable(kind: DeviceKind) -> Error {
     Error::BackendUnavailable {

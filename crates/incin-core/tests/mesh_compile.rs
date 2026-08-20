@@ -2,7 +2,7 @@
 //!
 //! Every assertion in this file is really two. The `assert_eq!` checks the
 //! arithmetic, but the file compiling at all is what proves the topology was
-//! accepted — a mesh the rule rejects has no `WORLD` to compare against. The
+//! accepted - a mesh the rule rejects has no `WORLD` to compare against. The
 //! rejections are in `tests/mesh_compile_fail/`, because a rule that accepts
 //! everything also passes every test written this way.
 //!
@@ -81,7 +81,7 @@ fn the_world_constant_is_the_projection_of_the_world_type() {
 /// §3.8's `mesh![dp = 3]`: "Omitted axes default to one."
 ///
 /// Written as three separate meshes rather than one, because the interesting
-/// case is that leaving an axis off and writing it as one are the same type —
+/// case is that leaving an axis off and writing it as one are the same type -
 /// not merely types that agree about `WORLD`.
 #[test]
 fn an_omitted_axis_is_the_same_type_as_a_degree_of_one() {
@@ -108,8 +108,8 @@ fn an_omitted_axis_is_the_same_type_as_a_degree_of_one() {
 /// A one-rank mesh is a valid topology and the one every non-distributed
 /// program is already running.
 ///
-/// It is here because `U1` is the degenerate case of every rule in the module —
-/// nonzero, multiplies to itself, and is the default for two axes — so a rule
+/// It is here because `U1` is the degenerate case of every rule in the module -
+/// nonzero, multiplies to itself, and is the default for two axes - so a rule
 /// that special-cased it would be wrong in a way nothing else here would catch.
 #[test]
 fn a_single_rank_mesh_is_a_mesh() {

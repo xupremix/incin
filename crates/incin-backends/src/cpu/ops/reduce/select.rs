@@ -3,7 +3,7 @@ use super::*;
 /// Index of the maximum element. `Some(d)`: per-axis, axis removed from
 /// the output shape (mirrors `max_dim`'s squeeze shape). `None`: fully
 /// flattened, returns a scalar (shape `[]`) holding the single winning
-/// flat index. Forward-only — `incin-core`'s `Tensor::argmax`
+/// flat index. Forward-only - `incin-core`'s `Tensor::argmax`
 /// structurally forces `G = NoGrad` on the output regardless of the
 /// input's own `G`, so this deliberately never calls `tape::push`
 /// (T-02-09 mitigation; the one exception to this file's

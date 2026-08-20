@@ -47,5 +47,5 @@ beforehand.
 Building `incin-core` no longer requires `protoc`. The ONNX protobuf module is
 checked in at `crates/incin-core/src/generated/onnx.rs`, regenerated with
 `cargo xtask onnx`, and verified against `proto/onnx.proto` by `cargo xtask
-onnx --check` in CI — which is the only job in the repository that installs a
+onnx --check` in CI (the only job in the repository that installs a
 protobuf compiler.

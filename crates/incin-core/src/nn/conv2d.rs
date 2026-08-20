@@ -21,7 +21,7 @@ pub trait Conv2dShape: Shape + DynShape {
     type OutC: Dim;
     /// Number of input channels.
     type InC: Dim;
-    /// Kernel (window) size — square, applied to both spatial dimensions.
+    /// Kernel (window) size - square, applied to both spatial dimensions.
     type K: Dim<Arg = ()>;
     /// Stride.
     type S: Dim<Arg = ()>;

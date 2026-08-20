@@ -1,4 +1,4 @@
-//! Minimal smoke test for `dim!` — for a fuller tour (transpose and
+//! Minimal smoke test for `dim!` - for a fuller tour (transpose and
 //! reshape safety, dimension unwrapping), run `cargo run -p named_dims_safety`.
 extern crate alloc;
 use incin::prelude::*;
@@ -19,7 +19,7 @@ fn main() {
     let _t4 = t1.add_exact(&t3).unwrap();
 
     // Should fail with shape mismatch: same dim name (Batch) but a
-    // different literal size on the other axis (10 vs 20) — proven as a
+    // different literal size on the other axis (10 vs 20) - proven as a
     // real compile_fail snapshot at
     // crates/incin-core/tests/compile_fail/named_dim_size_mismatch.rs.
     // let _t5 = t1.add(&_t2).unwrap(); // This correctly fails to compile!

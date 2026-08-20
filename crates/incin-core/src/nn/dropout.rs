@@ -52,7 +52,7 @@ impl Dropout {
 }
 
 impl TrainMode for Dropout {
-    /// Directly sets `is_training` — `Dropout`'s own forward already reads
+    /// Directly sets `is_training` - `Dropout`'s own forward already reads
     /// this flag to decide identity-vs-random-zeroing behavior.
     fn set_training(&mut self, training: bool) {
         self.is_training = training;

@@ -309,7 +309,7 @@ impl BinaryOp {
 ///
 /// The decision lives here rather than inline at each call so that there is one
 /// place to change and one thing to test. It was inline, and it read
-/// `simd_lanes::<f32>() >= 8` alone — true only when the compiler was told to
+/// `simd_lanes::<f32>() >= 8` alone - true only when the compiler was told to
 /// assume AVX2, which a stock `cargo build` never is. See
 /// `simd::avx2_detected`.
 #[cfg(all(feature = "std", target_arch = "x86_64"))]

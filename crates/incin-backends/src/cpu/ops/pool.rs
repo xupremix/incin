@@ -1,10 +1,10 @@
-//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackendImpl<D>` —
+//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackendImpl<D>` -
 //! generalizes `ops/reduce.rs`'s `max_axis_with_indices`/`scatter_axis_grad`
 //! 1D-axis-reduction pattern to a 2D sliding window (D-01/D-02).
 //!
 //! `max_window_2d`/`scatter_pool_grad_2d` are the 2D generalization of
 //! `max_axis_with_indices`/`scatter_axis_grad`. Unlike `scatter_axis_grad`'s
-//! bare `=` overwrite (correct there — each axis-reduce output position has
+//! bare `=` overwrite (correct there - each axis-reduce output position has
 //! exactly one winning source position, contributed to by only that one
 //! output), `scatter_pool_grad_2d` uses `+=` accumulation: pooling windows
 //! can overlap (stride < kernel_size), so the SAME input position can be the
@@ -14,14 +14,14 @@
 //! Padding: any window position landing in the padded region is treated as
 //! NOT a max-pooling candidate (skipped entirely, never substituted with
 //! `0.0`), mirroring PyTorch/Candle's "padding contributes -inf to max-pool"
-//! convention — a real negative-valued input must not lose to an artificial
+//! convention - a real negative-valued input must not lose to an artificial
 //! zero. `avg_pool2d`/`adaptive_avg_pool2d`, by contrast, treat the padded
 //! region as `0.0` contributing to BOTH the sum and the divisor
 //! (`count_include_pad=True`, PyTorch's default).
 //!
 //! `adaptive_avg_pool2d` computes per-output-position variable window
 //! boundaries (`start = floor(i*input_size/output_size)`,
-//! `end = ceil((i+1)*input_size/output_size)`), independently per H/W axis —
+//! `end = ceil((i+1)*input_size/output_size)`), independently per H/W axis -
 //! NOT a fixed kernel_size/stride derivation, which produces wrong results
 //! whenever `input_size` doesn't evenly divide `output_size` (Pitfall 6 /
 //! T-04-15's sibling correctness concern for adaptive's own window sizing).
@@ -40,7 +40,7 @@ use crate::cpu::tape::{self, TapeEntry};
 /// 2D generalization of `ops::reduce::max_axis_with_indices`: for each output
 /// position `(b, c, h_out, w_out)`, scan the `kernel_size` window (accounting
 /// for stride/padding/dilation), skipping any position landing in the padded
-/// region entirely (not a candidate — never treated as `0.0`), and track the
+/// region entirely (not a candidate - never treated as `0.0`), and track the
 /// winning flat-index-into-`input` (strict `>`, first-encountered wins,
 /// matching `max_axis_with_indices`'s tie convention).
 fn max_window_2d(
@@ -79,7 +79,7 @@ fn max_window_2d(
                         for kwi in 0..kw {
                             let src_h = oh * sh + khi * dh;
                             let src_w = ow * sw + kwi * dw;
-                            // Padded-region positions are NOT candidates —
+                            // Padded-region positions are NOT candidates -
                             // skip entirely rather than substitute 0.0
                             // (max-pool's "-inf padding" convention).
                             if src_h < ph || src_h - ph >= h || src_w < pw || src_w - pw >= w {
@@ -112,7 +112,7 @@ fn max_window_2d(
 /// Backward helper for `max_pool2d`: build a zero-filled buffer sized to
 /// `input_shape`, then for each output position `+=` (NEVER `=`)
 /// `grad_out`'s value at that position into
-/// `vals[winning_flat_src_idx[flat_out]]`. This is the Pitfall 5 fix —
+/// `vals[winning_flat_src_idx[flat_out]]`. This is the Pitfall 5 fix -
 /// explicitly diverges from `ops::reduce::scatter_axis_grad`'s bare
 /// assignment, since overlapping pooling windows can share a winning input
 /// position and each contribution must be summed, not overwritten.
@@ -168,7 +168,7 @@ pub(crate) fn max_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
 /// Canonical avg-pool implementation: for each output
 /// position, sums the window's values (padded-region positions contribute
 /// `0.0` to both the sum and the fixed `kernel_size.0 * kernel_size.1`
-/// divisor — PyTorch's `count_include_pad=True` default) divided by the
+/// divisor - PyTorch's `count_include_pad=True` default) divided by the
 /// window element count. Backward distributes `grad_out`'s per-position
 /// value UNIFORMLY (divided by the window's element count) into every input
 /// position the window covered, `+=`-accumulating across overlapping
@@ -281,7 +281,7 @@ pub(crate) fn avg_pool2d_impl<D: incin_core::tensor::device::Device, K: DType>(
 /// Per RESEARCH.md Pitfall 6: computes PER-OUTPUT-POSITION window boundaries
 /// via `start = floor(i * input_size / output_size)`,
 /// `end = ceil((i+1) * input_size / output_size)`, independently per axis.
-/// Never derives an equivalent fixed `kernel_size`/`stride` — that produces
+/// Never derives an equivalent fixed `kernel_size`/`stride` - that produces
 /// wrong results whenever `input_size` does not evenly divide `output_size`
 /// (e.g. 5 -> 3 produces window sizes `[2, 3, 2]`, not a uniform kernel).
 fn adaptive_window_bounds(
@@ -502,7 +502,7 @@ mod tests {
         // [1,1,2,2] input, kernel=2x2, stride=1x1, padding=1x1.
         let input = tensor(vec![1.0, -2.0, -3.0, 4.0], vec![1, 1, 2, 2]);
         let out = max_pool2d_impl::<Cpu, f32>(&input, (2, 2), (1, 1), (1, 1), (1, 1)).unwrap();
-        // padded region: -inf-candidate skip, not 0.0 — confirms real values
+        // padded region: -inf-candidate skip, not 0.0 - confirms real values
         // (including negatives) win over padding rather than losing to an
         // artificial 0.0.
         // H_out = W_out = (2+2-2)/1+1 = 3
@@ -541,7 +541,7 @@ mod tests {
         assert_eq!(vals, expected);
     }
 
-    /// Overlap test (Pitfall 5 / T-04-14 — the load-bearing test for this
+    /// Overlap test (Pitfall 5 / T-04-14 - the load-bearing test for this
     /// plan): construct a small input where ONE specific input position is
     /// the argmax winner for TWO adjacent overlapping output windows. The
     /// backward gradient at that position must equal the SUM of both
@@ -669,8 +669,8 @@ mod tests {
     /// produce per-output-position window sizes [2,3,2] (not a uniform
     /// fixed kernel), matching PyTorch's documented
     /// `start=floor(i*in/out), end=ceil((i+1)*in/out)` formula. (Using
-    /// input=5/output=3 here rather than 7/3, since 7/3's own boundaries —
-    /// `start=floor(i*7/3), end=ceil((i+1)*7/3)` — evaluate to windows
+    /// input=5/output=3 here rather than 7/3, since 7/3's own boundaries -
+    /// `start=floor(i*7/3), end=ceil((i+1)*7/3)` - evaluate to windows
     /// [0,3),[2,5),[4,7), i.e. sizes [3,3,3] with genuine inter-window
     /// overlap, not the [3,2,2] figure RESEARCH.md's prose used as its
     /// illustrative example; 5/3 is the textbook non-uniform case and

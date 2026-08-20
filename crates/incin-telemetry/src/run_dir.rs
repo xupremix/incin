@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// exist.
 ///
 /// A `INCIN_TELEMETRY_RUN_DIR` env-var override is checked first in test
-/// builds only (`#[cfg(test)]`, WR-03), purely for hermetic testability —
+/// builds only (`#[cfg(test)]`, WR-03), purely for hermetic testability -
 /// this is not a user-facing/stable API surface, and gating it behind
 /// `cfg(test)` ensures it can never affect production path resolution
 /// (e.g. an attacker- or misconfiguration-controlled env var redirecting
@@ -24,7 +24,7 @@ pub fn default_run_dir() -> crate::err::Result<PathBuf> {
 ///
 /// Same resolution, and deliberately the same code path, so the two cannot
 /// disagree about the answer. This exists for callers that need to *name* the
-/// directory rather than write to it — `cargo incin doctor` reports it, and a
+/// directory rather than write to it - `cargo incin doctor` reports it, and a
 /// read-only diagnostic must not create the thing it is reporting on.
 pub fn default_run_dir_path() -> crate::err::Result<PathBuf> {
     #[cfg(test)]
@@ -48,7 +48,7 @@ pub fn generate_run_id() -> String {
 /// Enumerates `.jsonl` files in `run_dir`, returning `(run_id, path,
 /// mtime)` tuples (D-04). Non-`.jsonl` files are ignored. The picker UI
 /// that consumes this (liveness/freshness rendering) is a `incin-viz`
-/// (Phase 8+) concern — this function only makes the directory
+/// (Phase 8+) concern - this function only makes the directory
 /// enumerable.
 pub fn list_runs(
     run_dir: &Path,

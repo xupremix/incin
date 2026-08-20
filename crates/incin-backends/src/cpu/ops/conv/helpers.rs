@@ -50,7 +50,7 @@ pub(super) fn out_size(
 /// `conv2d`'s own forward-shape formula (`out_size` above) inverted. Uses
 /// `saturating_sub` throughout (T-04-11) so a pathological small-input
 /// combination underflows to `0` rather than panicking. `output_padding` is
-/// deliberately NOT part of this formula (Pitfall 4) — it is applied as a
+/// deliberately NOT part of this formula (Pitfall 4) - it is applied as a
 /// separate final allocate-larger step by the caller.
 pub(super) fn natural_transpose_out_size(
     len: usize,

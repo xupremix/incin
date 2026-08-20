@@ -2,8 +2,8 @@
 //!
 //! `crates/incin-core/src/generated/onnx.rs` used to be produced by a build
 //! script. That made `protoc` a mandatory system dependency of every crate that
-//! depends on `incin-core` — including the overwhelming majority that never
-//! call the ONNX exporter — and a first `cargo build` on a machine without it
+//! depends on `incin-core` - including the overwhelming majority that never
+//! call the ONNX exporter - and a first `cargo build` on a machine without it
 //! failed with a protobuf error rather than compiling.
 //!
 //! The generated file is checked in instead, which is only safe if something

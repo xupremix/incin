@@ -29,13 +29,13 @@ use incin_core::tensor::dtype::DTypeId;
 )]
 #[serde(rename_all = "lowercase")]
 pub enum MetalStorageMode {
-    /// Shared memory — CPU and GPU access the same physical memory space.
+    /// Shared memory - CPU and GPU access the same physical memory space.
     /// Default for Apple Silicon unified memory architectures.
     #[default]
     Shared,
-    /// Managed memory — explicitly synchronized between CPU and GPU systems.
+    /// Managed memory - explicitly synchronized between CPU and GPU systems.
     Managed,
-    /// Private memory — GPU access only, inaccessible directly from CPU host.
+    /// Private memory - GPU access only, inaccessible directly from CPU host.
     Private,
 }
 

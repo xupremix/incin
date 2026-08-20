@@ -1,4 +1,4 @@
-# Incin Next-Steps Execution Prompt — Finish the Public API Remediation
+# Incin Next-Steps Execution Prompt - Finish the Public API Remediation
 
 You are continuing remediation of the Incin Rust workspace from the current repository state.
 
@@ -6,8 +6,8 @@ You are continuing remediation of the Incin Rust workspace from the current repo
 
 - Work from the current checked-out `develop` branch.
 - The inspected archive was at commit:
-  - `8f90364a0226655d36a43bb391446fdf0f490964`
-  - commit subject: `refactor(core): finalize backend_authoring facade migration and trait visibility`
+ - `8f90364a0226655d36a43bb391446fdf0f490964`
+ - commit subject: `refactor(core): finalize backend_authoring facade migration and trait visibility`
 - Read these files before editing:
   1. `AGENTS.md`
   2. `docs/plan/remediation/codebase-truth-audit.md`
@@ -24,18 +24,18 @@ Treat the following as known defects that must be resolved, not rediscovered and
 1. `audit-evidence/API-001/summary.md` still has every acceptance criterion unchecked.
 2. `audit-evidence/API-001/` contains no `api-after.txt`, `commands.log`, or archived semver report.
 3. `crates/incin/src/lib.rs` still contains public wildcard re-exports, including:
-   - `incin_core::compile::*`
-   - `incin_core::backend_authoring::*`
-   - `incin_core::test_utils::*`
-   - `incin_core::nn::*`
-   - `incin_core::optim::*`
-   - `incin_core::metrics::*`
-   - `incin_core::dist::*`
-   - `incin_data::*`
-   - `incin_data::transforms::*`
-   - `incin_data::hub::*`
-   - `incin_backends::prelude::*`
-   - `incin_core::prelude::*`
+  - `incin_core::compile::*`
+  - `incin_core::backend_authoring::*`
+  - `incin_core::test_utils::*`
+  - `incin_core::nn::*`
+  - `incin_core::optim::*`
+  - `incin_core::metrics::*`
+  - `incin_core::dist::*`
+  - `incin_data::*`
+  - `incin_data::transforms::*`
+  - `incin_data::hub::*`
+  - `incin_backends::prelude::*`
+  - `incin_core::prelude::*`
 4. Backend-authoring traits are still re-exported at the stable `incin` root, including `CreationOps`, `FloatOps`, `ModuleOps`, `NumericOps`, `ReductionOps`, `SupportsDType`, and `TensorOps`. These belong only in the backend-authoring tier unless a concrete user-facing API proves otherwise.
 5. `incin::compile` is exposed unconditionally even though it is intended to be a preview/experimental feature tier.
 6. `incin_core::test_utils` is public unconditionally, `incin_core::prelude` exposes it as `dummy`, and `incin-backends` re-exports that alias at its root. `DummyBackend` therefore remains visible in production configurations.
@@ -48,9 +48,9 @@ Treat the following as known defects that must be resolved, not rediscovered and
 
 Complete the following tasks in strict order:
 
-1. `API-001` — finish the public facade and prelude reconstruction.
-2. `API-002` — make marker, proof, planner, tuning, and backend-storage constructors safe and opaque while preserving legitimate user construction.
-3. `API-003` — remove production exposure of test and prototype internals.
+1. `API-001` - finish the public facade and prelude reconstruction.
+2. `API-002` - make marker, proof, planner, tuning, and backend-storage constructors safe and opaque while preserving legitimate user construction.
+3. `API-003` - remove production exposure of test and prototype internals.
 
 Do not begin `API-002` until every `API-001` acceptance criterion is proven. Do not begin `API-003` until every `API-002` acceptance criterion is proven. Stop after `API-003`; do not begin backend breadth, compiled execution, ONNX, data, or distributed remediation in this run.
 
@@ -58,7 +58,7 @@ If a required tool or platform is unavailable, mark the current task `BLOCKED`, 
 
 ---
 
-# Task 1: API-001 — Finish the public facade and prelude
+# Task 1: API-001 - Finish the public facade and prelude
 
 ## 1. Re-open the task honestly
 
@@ -295,7 +295,7 @@ Commit only this task with a subject beginning `API-001:`. Do not squash it into
 
 ---
 
-# Task 2: API-002 — Safe public construction and opaque invariants
+# Task 2: API-002 - Safe public construction and opaque invariants
 
 Begin only after `API-001` is proven done.
 
@@ -380,7 +380,7 @@ Run and archive the API-002-specific tests plus the global API-001 gates. Commit
 
 ---
 
-# Task 3: API-003 — Remove test and prototype internals from production
+# Task 3: API-003 - Remove test and prototype internals from production
 
 Begin only after `API-002` is proven done.
 
@@ -421,7 +421,7 @@ Stop after reporting API-003. Do not proceed to `API-004` or any later phase in 
 Return exactly this structure:
 
 ```text
-TASK: <API-001 | API-002 | API-003> — <name>
+TASK: <API-001 | API-002 | API-003> - <name>
 STATUS: DONE | PARTIAL | BLOCKED
 BASE COMMIT: <hash>
 RESULT COMMIT: <hash or NONE>

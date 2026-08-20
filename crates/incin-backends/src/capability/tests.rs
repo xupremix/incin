@@ -170,7 +170,7 @@ fn every_coarse_family_row_is_backed_by_a_native_exact_row() {
 /// resolves to, not just a primary operand's. A mixed-operand op like
 /// `where_cond`/`masked_fill` (a `bool` mask beside `f32` data) whose row
 /// declares only the data dtype makes the mask operand fail admission
-/// before either kernel ever launches — the exact bug this regression
+/// before either kernel ever launches - the exact bug this regression
 /// guards: CUDA's `where_cond`/`masked_fill` rows briefly declared
 /// `F32_ONLY`, which the single-dtype checks above never catch because
 /// they only ever query `rule.dtypes[0]`.
@@ -214,7 +214,7 @@ fn mixed_mask_and_data_operations_admit_both_operand_dtypes_on_every_backend() {
             // this one row before the executor's own broadcast ever
             // runs. `descriptor_min_rank(WhereCond)`/`MaskedFill` fall to
             // that function's `_ => 0` default (neither has a match arm
-            // there), so the row's floor is already 0 — this asserts
+            // there), so the row's floor is already 0 - this asserts
             // that stays true rather than trusting the default silently.
             let low_rank_query = CapabilityQuery {
                 operation: incin_core::exec::OperationIdentity::Builtin(operation),
