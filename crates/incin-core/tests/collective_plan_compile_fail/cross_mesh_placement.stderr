@@ -18,7 +18,7 @@ help: the trait `PlacementOn<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B
    | |________________________^
    = help: for that trait implementation, expected `UInt<UTerm, B1>`, found `UTerm`
 note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    |     pub fn push_static<K, From, To>(
    |            ----------- required by a bound in this associated function
@@ -43,7 +43,7 @@ help: the trait `PlacementOn<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = help: for that trait implementation, expected `UInt<UTerm, B1>`, found `UTerm`
 note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    |     pub fn push_static<K, From, To>(
    |            ----------- required by a bound in this associated function

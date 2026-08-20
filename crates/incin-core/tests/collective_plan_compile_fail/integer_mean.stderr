@@ -15,7 +15,7 @@ help: the following other types implement trait `CollectiveReductionDType<R>`
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
    = note: required for `incin_core::dist::Partial<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, incin_core::dist::Mean>` to implement `PlannedCollectiveTransition<u32, incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>>>`
 note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    |     pub fn push_static<K, From, To>(
    |            ----------- required by a bound in this associated function

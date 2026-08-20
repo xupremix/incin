@@ -22,7 +22,7 @@ help: the following other types implement trait `incin_core::typenum::NonZero`
   | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
 note: required by a bound in `HybridPlanner::plan_pipeline_static`
- --> src/dist/plan.rs
+ --> src/dist/plan/planner.rs
   |
   |     pub fn plan_pipeline_static<K, Parameters, Activations, Microbatches, Schedule>(
   |            -------------------- required by a bound in this associated function

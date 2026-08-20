@@ -10,7 +10,7 @@ error[E0277]: `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<U
    = note: integer mean reductions require a floating dtype; local-only placement changes do not belong in a collective plan
 help: the trait `PlannedCollectiveTransition<f32, incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UInt<UTerm, B1>>>` is not implemented for `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UTerm>`
       but trait `PlannedCollectiveTransition<f32, incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>>>` is implemented for it
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    | / impl<K, M, Axis> PlannedCollectiveTransition<K, Replicated<M>> for Sharded<M, Axis>
    | | where
@@ -20,7 +20,7 @@ help: the trait `PlannedCollectiveTransition<f32, incin_core::dist::Sharded<Mesh
    | |________________________^
    = help: for that trait implementation, expected `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>>`, found `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UInt<UTerm, B1>>`
 note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    |     pub fn push_static<K, From, To>(
    |            ----------- required by a bound in this associated function

@@ -16,7 +16,7 @@ error[E0277]: the trait bound `incin_core::prelude::Q8_0: CollectiveDType` is no
              u32
              u8
 note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
-  --> src/dist/plan.rs
+  --> src/dist/plan/collective.rs
    |
    |     pub fn push_static<K, From, To>(
    |            ----------- required by a bound in this associated function

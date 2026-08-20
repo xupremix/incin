@@ -6,7 +6,7 @@ error[E0277]: the trait bound `UInt<UTerm, B1>: Same<UTerm>` is not satisfied
   |
   = note: required for `UInt<UInt<UInt<UTerm, B1>, B1>, B1>` to implement `ShardDivisible<UInt<UInt<UTerm, B1>, B0>>`
 note: required by a bound in `HybridPlanner::plan_tensor_static`
- --> src/dist/plan.rs
+ --> src/dist/plan/planner.rs
   |
   |     pub fn plan_tensor_static<K, TensorExtent, Parameters, Activations, Microbatches>(
   |            ------------------ required by a bound in this associated function

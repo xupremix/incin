@@ -5,14 +5,14 @@ error[E0277]: the trait bound `u32: HybridPlanDType` is not satisfied
   |                                               ^^^ the trait `HybridPlanDType` is not implemented for `u32`
   |
 help: the following other types implement trait `HybridPlanDType`
- --> src/dist/plan.rs
+ --> src/dist/plan/workload.rs
   |
   | impl HybridPlanDType for f32 {}
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f32`
   | impl HybridPlanDType for f64 {}
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
 note: required by a bound in `HybridPlanner::plan_data_static`
- --> src/dist/plan.rs
+ --> src/dist/plan/planner.rs
   |
   |     pub fn plan_data_static<K, Batch, Parameters, Activations, Microbatches>(
   |            ---------------- required by a bound in this associated function
