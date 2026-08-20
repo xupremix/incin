@@ -201,13 +201,50 @@ fn rewrite_inlay_hint_response(msg: &Value, shorten_backend: bool) -> Value {
                 Some(rewritten) => hint["label"] = json!(rewritten),
                 None => {
                     if let Some(label) = hint.get_mut("label") {
-                        rewrite_label_value(label, shorten_backend);
+                        match collapse_multi_part_label(label, shorten_backend) {
+                            Some(rewritten) => *label = json!(rewritten),
+                            None => rewrite_label_value(label, shorten_backend),
+                        }
                     }
                 }
             }
         }
     }
     msg
+}
+
+/// When a hint's `label` is an array of two or more `InlayHintLabelPart`s
+/// and no `textEdits[0].newText` fallback exists, rust-analyzer has split
+/// one logical type across several hyperlinked fragments (e.g. `Tensor`,
+/// `<`, `DimCons`, `<`, `NamedDim`, `<`, `Batch`, `, …>, …>, …>`, each part
+/// linked to its own definition site), rather than putting the whole string
+/// in one part. Per-part rewriting can't help there, since no single
+/// fragment is a complete, parseable shape on its own, only their
+/// concatenation is. This joins every part's text, humanizes the result as
+/// a whole, and returns it so the caller can replace the entire array with
+/// one plain string, the same shape the `textEdits` fallback already
+/// produces. That trades away the per-fragment navigation links in exchange
+/// for a label that is actually readable; a single-part array is left to
+/// `rewrite_label_value`, which rewrites it in place without losing its one
+/// link, so this only returns `Some` for two or more parts.
+fn collapse_multi_part_label(label: &Value, shorten_backend: bool) -> Option<String> {
+    let parts = label.as_array()?;
+    if parts.len() < 2 {
+        return None;
+    }
+    let mut full = String::new();
+    for part in parts {
+        let text = match part {
+            Value::String(s) => s.as_str(),
+            Value::Object(obj) => obj.get("value")?.as_str()?,
+            _ => return None,
+        };
+        full.push_str(text);
+    }
+    Some(humanize_inlay_label(
+        &strip_path_qualifiers(&full),
+        shorten_backend,
+    ))
 }
 
 /// Rewrites an inlay-hint `label` or a hover `contents` value in place.
@@ -515,6 +552,72 @@ mod tests {
         assert_eq!(
             rewritten["result"][0]["label"][0]["value"],
             "Tensor<[1], CpuBackendImpl<Cpu>>"
+        );
+    }
+
+    /// Regression test for a real, reported gap: a genuine live response
+    /// (captured from `rust-analyzer` hinting a `named_dims_safety` example)
+    /// splits one type across several `InlayHintLabelPart`s, each linked to
+    /// its own definition site, with no `textEdits` fallback present at all.
+    /// The single-part case above stays a rewritten array; this multi-part
+    /// case has to collapse to one plain string, since no individual
+    /// fragment is a complete shape on its own.
+    #[test]
+    fn inlay_hint_label_multi_part_array_is_collapsed_and_rewritten() {
+        let request = json!({"id": 42, "method": "textDocument/inlayHint"});
+        let response = json!({
+            "id": 42,
+            "result": [{
+                "position": {"line": 12, "character": 5},
+                "label": [
+                    {"value": ": "},
+                    {
+                        "location": {
+                            "uri": "file:///incin-core/src/tensor/base/types.rs",
+                            "range": {"start": {"line": 47, "character": 11}, "end": {"line": 47, "character": 17}}
+                        },
+                        "value": "Tensor"
+                    },
+                    {"value": "<"},
+                    {
+                        "location": {
+                            "uri": "file:///incin-core/src/shapes/shape.rs",
+                            "range": {"start": {"line": 125, "character": 11}, "end": {"line": 125, "character": 18}}
+                        },
+                        "value": "DimCons"
+                    },
+                    {"value": "<"},
+                    {
+                        "location": {
+                            "uri": "file:///incin-core/src/shapes/dim.rs",
+                            "range": {"start": {"line": 534, "character": 11}, "end": {"line": 534, "character": 19}}
+                        },
+                        "value": "NamedDim"
+                    },
+                    {"value": "<"},
+                    {
+                        "location": {
+                            "uri": "file:///named_dims_safety/src/main.rs",
+                            "range": {"start": {"line": 12, "character": 5}, "end": {"line": 12, "character": 10}}
+                        },
+                        "value": "Batch"
+                    },
+                    {"value": ", …>, …>, …>"}
+                ],
+                "kind": 1
+            }]
+        });
+        let mut pending = PendingRequests::new();
+        pending.observe_outgoing_to_server(&request);
+        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+        // No `textEdits` accompanies this real capture, so the truncated
+        // `…` markers can't be resolved to a clean `[Batch, ...]` shape the
+        // way `inlay_hint_response_recovers_truncated_label_from_text_edit`
+        // manages to; the win here is a single readable string in place of
+        // five disconnected fragments (`DimCons`, `NamedDim`, ...).
+        assert_eq!(
+            rewritten["result"][0]["label"],
+            ": Tensor<DimCons<NamedDim<Batch, …>, …>, …>"
         );
     }
 
