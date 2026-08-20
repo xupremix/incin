@@ -9,7 +9,6 @@ cd "$repo_dir"
 # already ideally split; staged extraction targets are allowed when documented.
 declare -A explained=(
     [crates/incin-core/src/exec/catalog/tests.rs]=1
-    [crates/incin-backends/src/cpu/canonical.rs]=1
     [crates/incin-backends/src/dist/nccl.rs]=1
     [crates/incin-core/src/tensor/ops/manipulation.rs]=1
     [crates/incin-backends/src/cpu/ops/elementwise_kernel.rs]=1

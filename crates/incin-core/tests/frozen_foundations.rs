@@ -80,7 +80,7 @@ fn the_proof_mechanisms_the_document_cites_are_still_present() {
             "macro_rules! incin_operation_catalog",
         ),
         (
-            "crates/incin-backends/src/cpu/canonical.rs",
+            "crates/incin-backends/src/cpu/canonical/mod.rs",
             "macro_rules! assert_every_advertised_row_executes",
         ),
         (
