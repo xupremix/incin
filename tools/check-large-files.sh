@@ -13,7 +13,6 @@ declare -A explained=(
     [crates/incin-core/src/tensor/ops/manipulation.rs]=1
     [crates/incin-backends/src/kernel.rs]=1
     [crates/incin-diagnostics/src/lib.rs]=1
-    [crates/incin-backends/src/cpu/ops/matmul.rs]=1
     [crates/incin-core/src/generated/onnx.rs]=1
     [crates/incin-macros/src/generated/onnx.rs]=1
     [crates/incin-backends/src/dist/tuning.rs]=1
