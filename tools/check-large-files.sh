@@ -12,7 +12,6 @@ declare -A explained=(
     [crates/incin-core/src/tensor/ops/manipulation.rs]=1
     [crates/incin-core/src/generated/onnx.rs]=1
     [crates/incin-macros/src/generated/onnx.rs]=1
-    [crates/incin-core/src/optim/mod.rs]=1
 )
 
 mapfile -t actual < <(
