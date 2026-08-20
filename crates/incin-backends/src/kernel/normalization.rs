@@ -1,0 +1,256 @@
+// Every item below is `#[cfg(any(feature = "cuda", test))]`; on a
+// non-cuda, non-test build this file compiles empty, so this import is
+// unused there.
+#[allow(unused_imports)]
+use super::*;
+
+/// Renders the CUDA source for `layer_norm` or `batch_norm`.
+///
+/// `layer_norm` reduces over the last axis per row, computed with a
+/// Welford accumulator so the pass is numerically stable without a second
+/// read of the row. `batch_norm` reads precomputed running statistics per
+/// channel rather than reducing at all, which is the inference form; it does
+/// not compute batch statistics on the fly.
+///
+/// `softmax` and `rms_norm` have no case here: both are answered by
+/// composing existing pointwise and reduction kernels in
+/// `cuda::ops::norm` rather than by a dedicated kernel, and their
+/// capability rows say `Composed` rather than `Native` because of it.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
+    let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
+    #[cfg(feature = "cuda")]
+    let policy = {
+        let req = PrecisionRequest::new(
+            incin_core::shapes::error::OperationKind::Normalization,
+            dtype.descriptor(),
+            dtype.descriptor(),
+            LayoutClass::Contiguous,
+            1,
+            false,
+            MathMode::Fast,
+        );
+        crate::cuda::backend::native_precision(&req)?
+    };
+    #[cfg(not(feature = "cuda"))]
+    let policy = {
+        let compute = if matches!(dtype, DTypeId::F16 | DTypeId::BF16) {
+            DTypeId::F32.descriptor()
+        } else {
+            dtype.descriptor()
+        };
+        incin_core::exec::ResolvedPrecision::new(
+            dtype.descriptor(),
+            compute,
+            compute,
+            dtype.descriptor(),
+            incin_core::exec::LossScaling::None,
+        )
+    };
+    debug_assert_eq!(policy.accumulator, policy.compute);
+    let entry_point = format!("incin_normalization_{}_{}", scalar.suffix, op_name);
+    let key = KernelKey::cuda(
+        OperationKind::Normalization,
+        KernelFamily::Normalization,
+        op_name,
+        dtype,
+        if op_name == "layer_norm" {
+            LayoutClass::RowWise
+        } else {
+            LayoutClass::ChannelWise
+        },
+        if op_name == "layer_norm" {
+            KernelAccess::Welford
+        } else {
+            KernelAccess::Scalar { unroll_width: 1 }
+        },
+    )?;
+    let cache_key = key.cache_id();
+    let inverse_std = if dtype == DTypeId::F64 {
+        "1.0 / sqrt(variance + (double)eps)"
+    } else {
+        "rsqrtf(variance + eps)"
+    };
+    let source = match op_name {
+        "layer_norm" => format!(
+            r#"
+{preamble}
+struct IncinWelford {{
+    {compute_type} mean;
+    {compute_type} m2;
+    int count;
+}};
+
+__device__ __forceinline__ IncinWelford incin_welford_combine(
+    IncinWelford left, IncinWelford right)
+{{
+    if (right.count == 0) return left;
+    if (left.count == 0) return right;
+    int count = left.count + right.count;
+    {compute_type} delta = right.mean - left.mean;
+    {compute_type} right_ratio = ({compute_type})right.count / ({compute_type})count;
+    IncinWelford combined;
+    combined.mean = left.mean + delta * right_ratio;
+    combined.m2 = left.m2 + right.m2 + delta * delta
+        * (({compute_type})left.count * ({compute_type})right.count / ({compute_type})count);
+    combined.count = count;
+    return combined;
+}}
+
+extern "C" __global__ void {entry_point}(
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ gamma,
+    const {storage_type}* __restrict__ beta,
+    {storage_type}* __restrict__ output,
+    float eps,
+    int norm_size,
+    int has_bias,
+    int batch_size,
+    int input_offset,
+    int gamma_offset,
+    int beta_offset)
+{{
+    int row = blockIdx.x;
+    if (row >= batch_size) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    IncinWelford local = {{({compute_type})0.0, ({compute_type})0.0, 0}};
+    int row_start = input_offset + row * norm_size;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        local.count += 1;
+        {compute_type} delta = value - local.mean;
+        local.mean += delta / ({compute_type})local.count;
+        {compute_type} delta2 = value - local.mean;
+        local.m2 += delta * delta2;
+    }}
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        IncinWelford other;
+        other.mean = __shfl_down_sync(active, local.mean, delta);
+        other.m2 = __shfl_down_sync(active, local.m2, delta);
+        other.count = __shfl_down_sync(active, local.count, delta);
+        if (lane + delta < 32) local = incin_welford_combine(local, other);
+    }}
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_mean = reinterpret_cast<{compute_type}*>(shared_raw);
+    {compute_type}* shared_m2 = shared_mean + warp_count;
+    int* shared_count = reinterpret_cast<int*>(shared_m2 + warp_count);
+    if (lane == 0) {{
+        shared_mean[warp] = local.mean;
+        shared_m2[warp] = local.m2;
+        shared_count[warp] = local.count;
+    }}
+    __syncthreads();
+    if (warp == 0) {{
+        local.mean = lane < warp_count ? shared_mean[lane] : ({compute_type})0.0;
+        local.m2 = lane < warp_count ? shared_m2[lane] : ({compute_type})0.0;
+        local.count = lane < warp_count ? shared_count[lane] : 0;
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            IncinWelford other;
+            other.mean = __shfl_down_sync(active, local.mean, delta);
+            other.m2 = __shfl_down_sync(active, local.m2, delta);
+            other.count = __shfl_down_sync(active, local.count, delta);
+            if (lane + delta < 32) local = incin_welford_combine(local, other);
+        }}
+        if (lane == 0) {{
+            shared_mean[0] = local.mean;
+            shared_m2[0] = local.m2 / ({compute_type})local.count;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} mean = shared_mean[0];
+    {compute_type} variance = shared_m2[0];
+    {compute_type} inverse_std = {inverse_std};
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        {compute_type} scale = {load_prefix}gamma[gamma_offset + i]{load_suffix};
+        {compute_type} shift = has_bias
+            ? {load_prefix}beta[beta_offset + i]{load_suffix}
+            : ({compute_type})0.0;
+        {compute_type} normalized = (value - mean) * inverse_std;
+        output[row * norm_size + i] = {store_prefix}(normalized * scale + shift){store_suffix};
+    }}
+}}
+"#,
+            preamble = scalar.preamble,
+            compute_type = scalar.compute_type,
+            storage_type = scalar.storage_type,
+            load_prefix = scalar.load_prefix,
+            load_suffix = scalar.load_suffix,
+            store_prefix = scalar.store_prefix,
+            store_suffix = scalar.store_suffix,
+        ),
+        "batch_norm" => format!(
+            r#"
+{preamble}
+extern "C" __global__ void {entry_point}(
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ weight,
+    const {storage_type}* __restrict__ bias,
+    const {storage_type}* __restrict__ running_mean,
+    const {storage_type}* __restrict__ running_variance,
+    {storage_type}* __restrict__ output,
+    float eps,
+    int num_channels,
+    int spatial_size,
+    int total_elements,
+    int has_weight,
+    int has_bias,
+    int has_running_mean,
+    int has_running_variance,
+    int input_offset,
+    int weight_offset,
+    int bias_offset,
+    int mean_offset,
+    int variance_offset)
+{{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= total_elements) return;
+    int channel = (idx / spatial_size) % num_channels;
+    {compute_type} mean = has_running_mean
+        ? {load_prefix}running_mean[mean_offset + channel]{load_suffix}
+        : ({compute_type})0.0;
+    {compute_type} variance = has_running_variance
+        ? {load_prefix}running_variance[variance_offset + channel]{load_suffix}
+        : ({compute_type})1.0;
+    {compute_type} scale = has_weight
+        ? {load_prefix}weight[weight_offset + channel]{load_suffix}
+        : ({compute_type})1.0;
+    {compute_type} shift = has_bias
+        ? {load_prefix}bias[bias_offset + channel]{load_suffix}
+        : ({compute_type})0.0;
+    {compute_type} value = {load_prefix}input[input_offset + idx]{load_suffix};
+    {compute_type} inverse_std = {inverse_std};
+    {compute_type} normalized = (value - mean) * inverse_std;
+    output[idx] = {store_prefix}(normalized * scale + shift){store_suffix};
+}}
+"#,
+            preamble = scalar.preamble,
+            compute_type = scalar.compute_type,
+            storage_type = scalar.storage_type,
+            load_prefix = scalar.load_prefix,
+            load_suffix = scalar.load_suffix,
+            store_prefix = scalar.store_prefix,
+            store_suffix = scalar.store_suffix,
+        ),
+        _ => {
+            return Err(Error::Msg(format!(
+                "unsupported CUDA normalization operation {op_name:?}"
+            )));
+        }
+    };
+    Ok(RenderedKernel {
+        entry_point,
+        cache_key,
+        source,
+        dtype,
+        element_size: scalar.element_size,
+        unroll_width: 1,
+        vector_width: 1,
+        key,
+    })
+}
