@@ -115,8 +115,15 @@ def main() -> None:
     actual_files = set()
     actual_items = set()
     for path in (ROOT / "crates").rglob("*.rs"):
-        if "/target/" in path.as_posix():
-            continue
+        # Skip a stray per-crate cargo build output directory
+        # (`<crate>/target/...`), not a `src/target/` source module: the
+        # build directory's `target` sits directly under the crate root,
+        # never under `src`.
+        parts = path.relative_to(ROOT).parts
+        if "target" in parts:
+            idx = parts.index("target")
+            if idx == 0 or parts[idx - 1] != "src":
+                continue
         relative = path.relative_to(ROOT).as_posix()
         for item in extract_hidden_items(path):
             actual_files.add(relative)
