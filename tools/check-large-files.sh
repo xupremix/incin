@@ -13,7 +13,6 @@ declare -A explained=(
     [crates/incin-backends/src/wgpu/backend.rs]=1
     [crates/incin-backends/src/cpu/canonical.rs]=1
     [crates/incin-backends/src/dist/nccl.rs]=1
-    [crates/incin-core/src/tensor/ops/manipulation.rs]=1
     [crates/incin-core/src/dist/plan.rs]=1
     [crates/incin-backends/src/cpu/ops/elementwise_kernel.rs]=1
     [crates/incin-backends/src/cpu/ops/shape_ops.rs]=1

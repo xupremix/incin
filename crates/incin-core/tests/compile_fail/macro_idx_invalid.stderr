@@ -13,7 +13,7 @@ error[E0107]: method takes 0 generic arguments but 1 generic argument was suppli
   |               expected 0 generic arguments
   |
 note: method defined here, with 0 generic parameters
- --> src/tensor/ops/manipulation.rs
+ --> src/tensor/ops/manipulation/indexing.rs
   |
   |     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
   |            ^^^^^
@@ -25,7 +25,7 @@ error[E0061]: this method takes 1 argument but 0 arguments were supplied
   |               ^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `&[IndexSpec]` is missing
   |
 note: method defined here
- --> src/tensor/ops/manipulation.rs
+ --> src/tensor/ops/manipulation/indexing.rs
   |
   |     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
   |            ^^^^^
