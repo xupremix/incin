@@ -49,6 +49,13 @@ GROUPS = {
                 "crates/incin-backends/src/dtype_policy.rs"],
 }
 EXCLUDE_NAMES = {"onnx_pb.rs"}
+# `tests.rs` is always a bare test-module body reached only via a sibling
+# `#[cfg(test)] mod tests;` declaration (docs/CONVENTIONS.md's file-split
+# convention) -- the `#[cfg(test)]` attribute lives in the parent `mod.rs`,
+# not in this file, so `live_lines`'s same-file brace-matching mask below
+# can never see it and would otherwise count every test's `.unwrap()`/
+# `assert!` as a production rule-surface obligation.
+EXCLUDE_NAMES.add("tests.rs")
 
 # Panic-class categories. Each is a way a shape rule can fail at runtime that
 # the proof-carrying design in PROPOSALS.md sec. 1.2 intends to make either
