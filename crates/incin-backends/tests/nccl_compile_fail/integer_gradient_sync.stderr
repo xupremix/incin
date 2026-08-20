@@ -15,7 +15,7 @@ help: the following other types implement trait `DataParallelDType`
    | impl DataParallelDType for f64 {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
 note: required by a bound in `NcclTransport::synchronize_gradient`
-  --> src/dist/nccl.rs
+  --> src/dist/nccl/transport.rs
    |
    |     pub fn synchronize_gradient<S, D, K, G, P>(
    |            -------------------- required by a bound in this associated function

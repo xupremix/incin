@@ -17,7 +17,7 @@ The architecture has three intentional unsafe families:
 | --- | --- |
 | CPU storage and kernels | `crates/incin-backends/src/cpu/storage.rs`, `crates/incin-backends/src/cpu/ops/elementwise_kernel/avx2.rs`, `crates/incin-backends/src/cpu/ops/elementwise_kernel/neon.rs`, `crates/incin-backends/src/cpu/ops/elementwise_kernel/scalar.rs`, `crates/incin-backends/src/cpu/ops/elementwise_kernel/wasm.rs`, `crates/incin-backends/src/cpu/ops/matmul/gemm.rs`, `crates/incin-backends/src/cpu/ops/quant.rs`, `crates/incin-backends/src/simd.rs` |
 | CUDA kernels | `crates/incin-backends/src/cuda/ops/compare.rs`, `crates/incin-backends/src/cuda/ops/conv.rs`, `crates/incin-backends/src/cuda/ops/elementwise.rs`, `crates/incin-backends/src/cuda/ops/logical.rs`, `crates/incin-backends/src/cuda/ops/matmul.rs`, `crates/incin-backends/src/cuda/ops/norm.rs`, `crates/incin-backends/src/cuda/ops/pool.rs`, `crates/incin-backends/src/cuda/ops/reduce.rs`, `crates/incin-backends/src/cuda/ops/select.rs`, `crates/incin-backends/src/cuda/ops/shape.rs` |
-| Distributed and tuning FFI | `crates/incin-backends/src/dist/nccl.rs`, `crates/incin-backends/src/tuning/identity.rs` |
+| Distributed and tuning FFI | `crates/incin-backends/src/dist/nccl/transport.rs`, `crates/incin-backends/src/tuning/identity.rs` |
 | Core tensor representation | `crates/incin-core/src/tensor/ops/manipulation.rs` |
 | Process integrations | `crates/incin-data/src/hub.rs`, `crates/incin-lsp/src/config.rs`, `crates/incin-telemetry/src/emitter.rs`, `crates/incin-telemetry/src/run_dir.rs` |
 
