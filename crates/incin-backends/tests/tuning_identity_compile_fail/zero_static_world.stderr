@@ -22,7 +22,7 @@ help: the following other types implement trait `incin_core::typenum::NonZero`
   | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
 note: required by a bound in `StaticWorld`
- --> src/tuning/identity.rs
+ --> src/tuning/identity/topology.rs
   |
   | pub struct StaticWorld<N: Unsigned + NonZero>(PhantomData<N>);
   |                                      ^^^^^^^ required by this bound in `StaticWorld`
