@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/xupremix/incin/blob/develop/CONTRIBUTING.md
+    about: Setup, PR checklist, and where to start.
+  - name: House style / CONVENTIONS.md
+    url: https://github.com/xupremix/incin/blob/develop/docs/CONVENTIONS.md
+    about: File organization, doc-comment shape, and book-alignment rules new code should follow.
