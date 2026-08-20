@@ -32,7 +32,9 @@ The source inventory is:
 - `crates/incin-core/src/shapes/rank.rs`
 - `crates/incin-core/src/shapes/shape.rs`
 - `crates/incin-core/src/tensor/backend/execute.rs`
-- `crates/incin-core/src/tensor/ops/manipulation.rs`
+- `crates/incin-core/src/tensor/ops/manipulation/concat.rs`
+- `crates/incin-core/src/tensor/ops/manipulation/reshape.rs`
+- `crates/incin-core/src/tensor/ops/manipulation/transpose.rs`
 - `crates/incin-core/src/tensor/ops/reduce.rs`
 - `crates/incin-core/src/tensor/ops/unary.rs`
 - `crates/incin-macros/src/lib.rs`
@@ -102,14 +104,14 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-core/src/shapes/shape.rs::FlattenPrefix` | C | Prefix flattening is solver machinery for typed shape operations. |
 | `crates/incin-core/src/shapes/shape.rs::FlattenSuffix` | C | Suffix flattening is solver machinery for typed shape operations. |
 | `crates/incin-core/src/tensor/backend/execute.rs::execution_storage` | B | Backend authors provide the storage-erasure hook used by execution validation. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::reshape_typed` | B | The explicit typed reshape spelling remains for source compatibility. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::transpose_runtime` | C | Runtime transpose lowers the canonical selector API. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::flatten_runtime` | C | Runtime flatten lowers the canonical selector API. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::flatten_range` | B | The signed flatten spelling remains for source compatibility. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::try_concat` | B | The legacy concatenation spelling remains for source compatibility. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::concat_axis` | B | The legacy signed-axis concatenation spelling remains for source compatibility. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::stack_structural` | C | Structural stacking lowers the canonical stack API. |
-| `crates/incin-core/src/tensor/ops/manipulation.rs::try_stack` | B | The legacy dynamic stacking spelling remains for source compatibility. |
+| `crates/incin-core/src/tensor/ops/manipulation/reshape.rs::reshape_typed` | B | The explicit typed reshape spelling remains for source compatibility. |
+| `crates/incin-core/src/tensor/ops/manipulation/transpose.rs::transpose_runtime` | C | Runtime transpose lowers the canonical selector API. |
+| `crates/incin-core/src/tensor/ops/manipulation/reshape.rs::flatten_runtime` | C | Runtime flatten lowers the canonical selector API. |
+| `crates/incin-core/src/tensor/ops/manipulation/reshape.rs::flatten_range` | B | The signed flatten spelling remains for source compatibility. |
+| `crates/incin-core/src/tensor/ops/manipulation/concat.rs::try_concat` | B | The legacy concatenation spelling remains for source compatibility. |
+| `crates/incin-core/src/tensor/ops/manipulation/concat.rs::concat_axis` | B | The legacy signed-axis concatenation spelling remains for source compatibility. |
+| `crates/incin-core/src/tensor/ops/manipulation/concat.rs::stack_structural` | C | Structural stacking lowers the canonical stack API. |
+| `crates/incin-core/src/tensor/ops/manipulation/concat.rs::try_stack` | B | The legacy dynamic stacking spelling remains for source compatibility. |
 | `crates/incin-core/src/tensor/ops/reduce.rs::sum_at` | C | Structural reduction lowers typed reduction proofs. |
 | `crates/incin-core/src/tensor/ops/reduce.rs::sum_keepdim_at` | C | Structural keep-dimension reduction lowers typed proofs. |
 | `crates/incin-core/src/tensor/ops/reduce.rs::sum_runtime_ranked` | C | Runtime ranked reduction lowers the canonical reduction API. |
