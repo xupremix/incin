@@ -13,6 +13,25 @@ two almost always and let the rest default:
 
 ## Creating tensors
 
+### 1. Target-first creation (Recommended)
+
+Concrete application code selects a target device directly:
+
+```rust,no_run
+use incin::prelude::*;
+
+let x = Cpu.randn(shape![2, 3])?; // ~ N(0, 1) standard normal
+# Ok::<(), incin::Error>(())
+```
+
+See [Target-first construction](./target_api.md) for the rest of the
+creation methods (`rand`, `zeros`, `ones`, `full`, `arange`, `linspace`,
+`tensor`) and their runtime-shape forms.
+
+### 2. Type-level and macro construction
+
+Generic code fixing a backend type or using literal macros:
+
 ```rust,no_run
 use incin::prelude::*;
 type B = DefaultBackend;
@@ -25,7 +44,7 @@ let spaced = Tensor::<s![3], B>::linspace(0.0, 1.0, ())?; // start, end, args
 let uniform = Tensor::<s![2, 3], B>::rand(())?;
 let normal = Tensor::<s![2, 3], B>::randn(())?;
 
-// From literal data - shape and dtype inferred from the literal itself.
+// From literal data macro - shape and dtype inferred from the literal itself.
 let literal = tensor![[1.0, 2.0], [3.0, 4.0]]?;         // [2, 2], f32
 let integers = tensor![1, 2, 3]?;                        // [3], i64 (matches torch.tensor's default)
 let explicit = tensor![1.0, 2.0; dtype: f64]?;

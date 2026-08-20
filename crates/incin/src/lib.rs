@@ -11,20 +11,18 @@
 //!
 //! ## Quick Start
 //!
-//! Basic tensor creation and operations:
+//! Tensors are allocated by starting from a target device such as `Cpu`:
 //!
 //! ```rust
 //! use incin::prelude::*;
 //!
-//! // Create a backend alias for convenience
-//! type Backend = DefaultBackend;
-//!
-//! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
-//! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
-//!
-//! // Dynamic shapes are also supported using the `Dyn` type:
-//! let y = Tensor::<Dyn, Backend>::ones(vec![2, 3, 224, 224]).unwrap();
+//! // Statically shaped, zero-filled: (Batch=2, Channels=3, Height=224, Width=224)
+//! let x = Cpu.zeros(shape![2, 3, 224, 224]).unwrap();
 //! ```
+//!
+//! [`TargetExt`](prelude::TargetExt) documents the rest of the creation API
+//! (`randn`, `rand`, `ones`, `full`, `arange`, `linspace`, `tensor`, dynamic
+//! runtime shapes) with a runnable example on every method.
 
 //!
 //! ## Neural Network Modules

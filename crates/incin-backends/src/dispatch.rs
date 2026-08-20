@@ -650,6 +650,7 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for DispatchBackend<D
     }
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 impl<D: Device> DispatchBackend<D> {
     pub(crate) fn zeros<K: DType>(
         shape: &[usize],
@@ -808,6 +809,7 @@ impl<D: Device> DispatchBackend<D> {
         }
     }
 }
+#[allow(clippy::extra_unused_type_parameters)]
 impl<D: Device> DispatchBackend<D> {
     pub(crate) fn add_scalar_float<K: DType>(
         t: &DispatchStorage,

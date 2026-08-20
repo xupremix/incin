@@ -1,19 +1,14 @@
 # Target-first construction
 
 Incin's application-facing allocation API starts with a target. A target such
-as `Cpu` selects the backend and device, while `shape!` supplies static proof
-or runtime dimensions. This is part of the normal API and needs no feature
-flag.
-
-```rust,no_run
-use incin::prelude::*;
-
-let x = Cpu.zeros(shape![2, 3])?;
-let batch = 4;
-let y = Cpu.zeros(shape![batch, 3])?;
-let z = Cpu.zeros([batch, 3])?;
-# Ok::<(), incin::Error>(())
-```
+as `Cpu` (or GPU targets such as `Cuda::new(0)`) selects the backend and device,
+while `shape!` supplies static proofs or runtime dimensions. This provides a
+direct equivalent to PyTorch and NumPy creation APIs: `randn`, `rand`, `zeros`,
+`ones`, `full`, `arange`, `linspace`, and `tensor`. Each method's own rustdoc
+on `TargetExt` (`cargo doc -p incin-backends --open`, then `target::TargetExt`)
+carries a runnable example; this chapter covers the parts of the target-first
+story that aren't one method's job, static vs. dynamic shapes and the typed
+constructor escape hatch.
 
 Static literals and explicit const paths preserve compile-time dimensions:
 
@@ -21,7 +16,7 @@ Static literals and explicit const paths preserve compile-time dimensions:
 use incin::prelude::*;
 
 const FEATURES: usize = 128;
-let weights = Cpu.zeros(shape![const FEATURES, const FEATURES])?;
+let weights = Cpu.randn(shape![const FEATURES, const FEATURES])?;
 # Ok::<(), incin::Error>(())
 ```
 

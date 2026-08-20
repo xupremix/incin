@@ -984,7 +984,6 @@ impl<D: Device> MetalBackendImpl<D> {
         clippy::too_many_arguments,
         reason = "matches the backend operation contract shared by CPU, CUDA, and Metal"
     )]
-
     pub(crate) fn max_pool2d<K: DType>(
         _t: &<Self as StorageBackend>::Storage<K>,
         _kernel_size: (usize, usize),

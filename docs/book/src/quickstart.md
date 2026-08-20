@@ -4,11 +4,10 @@ A tensor, some arithmetic, and a gradient - the shortest useful program:
 
 ```rust,no_run
 use incin::prelude::*;
-use incin::backend_authoring::AutogradBackend;
 
 fn main() -> Result<()> {
-    let a = Tensor::<s![2, 2], DefaultBackend>::ones(())?.require_grad();
-    let b = Tensor::<s![2, 2], DefaultBackend>::full(3.0, ())?;
+    let a = Cpu.ones(shape![2, 2])?.require_grad();
+    let b = Cpu.full(shape![2, 2], 3.0)?;
 
     let c = (&a * &b)?;
     let loss = c.sum_all()?;
@@ -23,7 +22,7 @@ fn main() -> Result<()> {
 }
 ```
 
-`s![2, 2]` is a **type**, not a value. `a`'s shape is checked at compile
+`shape![2, 2]` produces a statically-checked type-level shape proof. `a`'s shape is checked at compile
 time. Checked arithmetic uses the same broadcasting rules as ordinary
 operators, while `add_exact`, `mul_exact`, and their siblings request strict
 equal-shape behavior explicitly.
@@ -37,7 +36,7 @@ type Backend = DefaultBackend;
 
 fn main() -> Result<()> {
     let layer = Linear::<s![8, 4], Backend>::build(())?;
-    let x = Tensor::<s![2, 8], Backend>::ones(())?;
+    let x = Cpu.randn(shape![2, 8])?;
 
     let h = layer.forward(x)?;
     let h = ReLU.forward(h)?;
@@ -60,8 +59,8 @@ type Backend = DefaultBackend;
 
 fn main() -> Result<()> {
     let model = Linear::<s![4, 2], Backend>::build(())?;
-    let x = Tensor::<s![3, 4], Backend>::ones(())?;
-    let target = Tensor::<s![3, 2], Backend, f32, NoGrad>::zeros(())?;
+    let x = Cpu.randn(shape![3, 4])?;
+    let target = Cpu.zeros(shape![3, 2])?;
 
     let mut optim = AdamW::<Backend>::from_module(&model, 1e-2)?;
 

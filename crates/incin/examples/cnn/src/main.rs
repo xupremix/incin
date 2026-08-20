@@ -47,8 +47,8 @@ fn main() -> Result<()> {
     println!("Initializing CNN model...");
     let model = SimpleCNN::new()?;
 
-    println!("Creating input tensor of shape (4, 1, 28, 28)...");
-    let input: Tensor<Dyn> = Tensor::<Dyn>::zeros([4, 1, 28, 28])?;
+    println!("Creating input tensor of shape (4, 1, 28, 28) using Cpu.randn...");
+    let input = Cpu.randn([4, 1, 28, 28])?;
 
     let logits = model.forward(input)?;
     println!(
