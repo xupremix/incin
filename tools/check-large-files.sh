@@ -11,7 +11,6 @@ declare -A explained=(
     [crates/incin-core/src/exec/catalog/tests.rs]=1
     [crates/incin-backends/src/dist/nccl.rs]=1
     [crates/incin-core/src/tensor/ops/manipulation.rs]=1
-    [crates/incin-backends/src/cpu/ops/elementwise_kernel.rs]=1
     [crates/incin-backends/src/cpu/ops/shape_ops.rs]=1
     [crates/incin-backends/src/cpu/ops/elementwise.rs]=1
     [crates/incin-backends/src/kernel.rs]=1

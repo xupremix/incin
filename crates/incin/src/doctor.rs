@@ -730,7 +730,7 @@ fn compiled_features() -> Vec<Feature> {
 /// The instruction-set extensions the CPU kernels actually branch on.
 ///
 /// `x86_64` is the only target where the branch is a runtime one:
-/// `cpu/ops/elementwise_kernel.rs` calls `is_x86_feature_detected!("avx2")` and
+/// `cpu/ops/elementwise_kernel/` calls `is_x86_feature_detected!("avx2")` and
 /// falls back to a scalar loop. On `aarch64` the NEON path is selected by
 /// `cfg`, so it is present whenever the build targets it; on `wasm32` the
 /// `simd128` path is a `target_feature` decided at compile time. Elsewhere no
