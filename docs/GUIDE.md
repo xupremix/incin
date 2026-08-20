@@ -335,7 +335,7 @@ while separate `Execute<MatMulSpec>`/`Execute<ReshapeSpec>` implementations
 operate on the validated wrapper. Joining the descriptor contract does not
 expose or recreate the removed operation-family API.
 
-**Capability declarations** (`crates/incin-backends/src/capability.rs`) are
+**Capability declarations** (`crates/incin-backends/src/capability/declarations.rs`) are
 grouped by *rule shape*, not by operation family - migrating an operation onto
 the canonical path is one more name in an existing list, not a new match arm
 in every consumer (`docs/FROZEN_FOUNDATIONS.md`'s "the completeness proof"

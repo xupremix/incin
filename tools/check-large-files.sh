@@ -24,7 +24,6 @@ declare -A explained=(
     [crates/incin-backends/src/tuning/identity.rs]=1
     [crates/incin-backends/src/cpu/ops/conv.rs]=1
     [crates/incin-backends/src/tuning/service.rs]=1
-    [crates/incin-backends/src/capability.rs]=1
     [crates/incin-core/src/optim/mod.rs]=1
 )
 

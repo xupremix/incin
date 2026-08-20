@@ -84,7 +84,7 @@ fn the_proof_mechanisms_the_document_cites_are_still_present() {
             "macro_rules! assert_every_advertised_row_executes",
         ),
         (
-            "crates/incin-backends/src/capability.rs",
+            "crates/incin-backends/src/capability/declarations.rs",
             "macro_rules! cpu_descriptor_operations",
         ),
     ] {

@@ -112,7 +112,7 @@ fn codes(report: &Report) -> Vec<&str> {
 /// The capability answers are not mocked. `Host` fakes which hardware is
 /// *there*; the registries in `incin-backends` are static data compiled into
 /// every build, so a mocked CUDA device gets CUDA's real registrations. Every
-/// probe line below was checked against `crates/incin-backends/src/capability.rs`
+/// probe line below was checked against `crates/incin-backends/src/capability/tables.rs`
 /// rather than recorded from output — the first draft had `matmul f16` and
 /// `reduction f64` the wrong way round on CUDA, which is exactly the mistake a
 /// recorded golden would have preserved.
