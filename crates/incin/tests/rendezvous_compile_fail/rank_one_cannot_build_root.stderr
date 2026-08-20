@@ -5,7 +5,7 @@ error[E0599]: no associated function or constant named `root` found for struct `
   |                                           ^^^^ associated function or constant not found in `StaticRendezvousConfig<UInt<UTerm, B1>>`
   |
 note: if you're trying to build a new `StaticRendezvousConfig<UInt<UTerm, B1>>`, consider using `StaticRendezvousConfig::<UInt<UTerm, B1>>::peer` which returns `StaticRendezvousConfig<UInt<UTerm, B1>>`
- --> $WORKSPACE/crates/incin-core/src/dist/context.rs
+ --> $WORKSPACE/crates/incin-core/src/dist/context/rendezvous.rs
   |
   | /     pub const fn peer(
   | |         run_id: RunId,
