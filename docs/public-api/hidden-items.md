@@ -68,6 +68,7 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin/src/lib.rs::__macro_support` | A | Macro expansions need stable access to facade allocation and backend support. |
 | `crates/incin-backends/src/cpu/var.rs::AssignFailureGuard` | C | Test-only fault injection owns its scoped guard; it is not consumer API. |
 | `crates/incin-backends/src/cpu/var.rs::fail_assign_on` | C | Test-only fault injection is exported only for deterministic rollback tests. |
+| `crates/incin-backends/src/cpu/var.rs::fail_assignments_at` | C | Test-only multi-fault injection proves rollback continues after an earlier restore failure. |
 | `crates/incin-backends/src/dispatch.rs::DispatchStorage::Unavailable` | C | The unavailable storage variant keeps the backend-neutral enum total when Metal is disabled. |
 | `crates/incin-backends/src/dispatch.rs::DispatchVar::Unavailable` | C | The unavailable variable variant keeps dispatch types total across feature sets. |
 | `crates/incin-backends/src/dispatch.rs::DispatchGrads::Unavailable` | C | The unavailable gradient variant keeps dispatch types total across feature sets. |

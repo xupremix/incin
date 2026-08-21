@@ -464,10 +464,9 @@ impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateRol
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        if let Err(error) = param.rollback_prepared_state() {
-            if self.first_error.is_none() {
-                self.first_error = Some(error);
-            }
+        let result = param.rollback_prepared_state();
+        if self.first_error.is_none() {
+            self.first_error = result.err();
         }
         Ok(())
     }
@@ -484,10 +483,9 @@ impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateRol
             + crate::exec::Capabilities
             + crate::tensor::backend::HostInterop,
     {
-        if let Err(error) = buffer.rollback_prepared_state() {
-            if self.first_error.is_none() {
-                self.first_error = Some(error);
-            }
+        let result = buffer.rollback_prepared_state();
+        if self.first_error.is_none() {
+            self.first_error = result.err();
         }
         Ok(())
     }
