@@ -329,7 +329,13 @@ fn exp_forward_and_gradcheck() {
         let e = canonical_exp(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&e).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    // The inputs and output are f32. A 1e-4 central-difference step is only
+    // a few thousand output ULPs here, so subtracting the two rounded `exp`
+    // results makes the numerical oracle sensitive to the implementation of
+    // the transcendental function rather than the derivative under test.
+    // 1e-3 retains negligible O(h^2) truncation error for exp while giving
+    // the finite difference ten times more signal above f32 rounding.
+    let max_rel_err = gradcheck(op, &[x], 1e-3);
     assert!(
         max_rel_err < 1e-2,
         "exp gradcheck error too high: {max_rel_err}"
