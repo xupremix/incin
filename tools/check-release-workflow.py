@@ -10,6 +10,7 @@ import re
 WORKFLOW = Path(".github/workflows/release.yml")
 REQUIRED = (
     "xvfb-run -a npm test",
+    "npm audit --audit-level=high",
     "release-assets.py checksums",
     "release-assets.py verify",
     "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes --draft",

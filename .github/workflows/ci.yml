@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   MDBOOK_VERSION: 0.4.52
+  NODE_VERSION: 22.14.0
   PUBLIC_API_VERSION: 0.52.0
 
 permissions:
@@ -300,8 +301,16 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ env.NODE_VERSION }}
     - name: Check GitHub Actions are immutably pinned
       run: python3 tools/check-actions-pinned.py
+    - name: Audit VS Code extension build dependencies
+      working-directory: editors/vscode
+      run: |
+        npm ci
+        npm audit --audit-level=high
     - name: Install cargo-deny
       run: cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked
       env:
