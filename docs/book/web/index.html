@@ -75,22 +75,28 @@
         <div class="loading-indicator">Loading chapter...</div>
       </main>
 
-      <!-- Side Floating Nav Arrows (Desktop mdBook Style) -->
-      <nav class="nav-wide-wrapper" aria-label="Page navigation">
-        <a id="nav-prev" class="nav-chapters previous" href="#" aria-label="Previous chapter" title="Previous chapter">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        </a>
-        <a id="nav-next" class="nav-chapters next" href="#" aria-label="Next chapter" title="Next chapter">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
-        </a>
-      </nav>
-
       <!-- Bottom Footer Navigation -->
       <footer class="chapter-nav" aria-label="Chapter navigation">
-        <a id="previous" class="nav-footer-btn" href="#" rel="prev">← Previous</a>
-        <a id="next" class="nav-footer-btn" href="#" rel="next">Next →</a>
+        <a id="previous" class="nav-footer-btn previous" href="#" rel="prev">
+          <span class="nav-direction">← Previous</span>
+          <span class="nav-title"></span>
+        </a>
+        <a id="next" class="nav-footer-btn next" href="#" rel="next">
+          <span class="nav-direction">Next →</span>
+          <span class="nav-title"></span>
+        </a>
       </footer>
     </div>
+
+    <!-- Side Floating Nav Arrows (Desktop mdBook Style) -->
+    <nav class="nav-wide-wrapper" aria-label="Page navigation">
+      <a id="nav-prev" class="nav-chapters previous" href="#" aria-label="Previous chapter" title="Previous chapter">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+      </a>
+      <a id="nav-next" class="nav-chapters next" href="#" aria-label="Next chapter" title="Next chapter">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </a>
+    </nav>
   </div>
 
   <script src="book.js" defer></script>

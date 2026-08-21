@@ -880,7 +880,7 @@ pre.diag-warn-block {
 .diag-verb { color: #38bdf8; font-weight: 600; }
 
 /* ==========================================================================
-   Navigation (Floating Wide Arrows & Footer)
+   Navigation (Floating Wide Side Arrows & Footer Cards)
    ========================================================================== */
 
 .nav-wide-wrapper {
@@ -890,7 +890,7 @@ pre.diag-warn-block {
   left: var(--sidebar-width);
   right: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
   transition: left var(--transition-fast);
 }
 
@@ -900,79 +900,132 @@ body.sidebar-hidden .nav-wide-wrapper {
 
 .nav-chapters {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 64px;
+  top: 0;
+  bottom: 0;
+  width: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--icons);
-  background-color: var(--sidebar-hover);
-  border: 1px solid var(--menu-bar-border);
-  border-radius: var(--radius-md);
+  background: transparent;
   pointer-events: auto;
-  opacity: 0.5;
-  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  opacity: 0.3;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-chapters svg {
+  width: 32px;
+  height: 32px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-chapters:hover {
   opacity: 1;
   color: var(--icons-hover);
-  background-color: var(--code-header-bg);
   text-decoration: none;
 }
 
 .nav-chapters.previous {
-  left: 1rem;
+  left: 0;
+}
+
+.nav-chapters.previous:hover {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.18), transparent);
+}
+
+.nav-chapters.previous:hover svg {
+  transform: translateX(-4px);
 }
 
 .nav-chapters.next {
-  right: 1rem;
+  right: 0;
 }
 
-.nav-chapters.hidden {
-  display: none;
+.nav-chapters.next:hover {
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.18), transparent);
 }
 
-@media (max-width: 1200px) {
+.nav-chapters.next:hover svg {
+  transform: translateX(4px);
+}
+
+.nav-chapters.hidden,
+.nav-chapters[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
   .nav-wide-wrapper {
     display: none;
   }
 }
 
-/* Footer Nav */
+/* Footer Card Navigation */
 .chapter-nav {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
+  margin-top: 4rem;
+  padding-top: 2rem;
   border-top: 1px solid var(--table-border);
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
 }
 
 .nav-footer-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem 1.4rem;
   background-color: var(--code-bg);
   border: 1px solid var(--code-border);
   border-radius: var(--radius-md);
   color: var(--fg);
-  font-weight: 500;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  text-decoration: none;
+  transition: transform var(--transition-fast),
+              border-color var(--transition-fast),
+              background-color var(--transition-fast),
+              box-shadow var(--transition-fast);
 }
 
 .nav-footer-btn:hover {
   background-color: var(--sidebar-hover);
   border-color: var(--sidebar-active);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
   color: var(--fg-heading);
   text-decoration: none;
 }
 
+.nav-footer-btn .nav-direction {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sidebar-group);
+  margin-bottom: 0.35rem;
+}
+
+.nav-footer-btn .nav-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--fg-heading);
+  line-height: 1.4;
+}
+
+.nav-footer-btn.next {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.nav-footer-btn.previous {
+  text-align: left;
+  align-items: flex-start;
+}
+
 .nav-footer-btn[hidden] {
-  display: none;
+  display: none !important;
 }
 
 /* ==========================================================================

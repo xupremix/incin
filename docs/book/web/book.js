@@ -51,10 +51,11 @@
     if (prevItem) {
       previous.hidden = false;
       previous.href = "#/" + prevItem.slug;
-      previous.textContent = "← Previous: " + prevItem.title;
+      previous.innerHTML = '<span class="nav-direction">← Previous</span><span class="nav-title">' + escapeHtml(prevItem.title) + '</span>';
       navPrev.classList.remove("hidden");
       navPrev.href = "#/" + prevItem.slug;
       navPrev.title = "Previous: " + prevItem.title;
+      navPrev.setAttribute("aria-label", "Previous chapter: " + prevItem.title);
     } else {
       previous.hidden = true;
       navPrev.classList.add("hidden");
@@ -63,10 +64,11 @@
     if (nextItem) {
       next.hidden = false;
       next.href = "#/" + nextItem.slug;
-      next.textContent = "Next: " + nextItem.title + " →";
+      next.innerHTML = '<span class="nav-direction">Next →</span><span class="nav-title">' + escapeHtml(nextItem.title) + '</span>';
       navNext.classList.remove("hidden");
       navNext.href = "#/" + nextItem.slug;
       navNext.title = "Next: " + nextItem.title;
+      navNext.setAttribute("aria-label", "Next chapter: " + nextItem.title);
     } else {
       next.hidden = true;
       navNext.classList.add("hidden");
