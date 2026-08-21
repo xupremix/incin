@@ -41,7 +41,7 @@ for package in "${packages[@]}"; do
   if [[ "$package" == "incin" ]]; then
     binary_paths=(src/bin/cargo-incin.rs)
   elif [[ "$package" == "incin-lsp" ]]; then
-    binary_paths=(src/main.rs src/bin/mock_rust_analyzer.rs)
+    binary_paths=(src/main.rs)
   elif [[ "$package" == "incin-viz" ]]; then
     binary_paths=(src/main.rs)
   else
@@ -53,6 +53,17 @@ for package in "${packages[@]}"; do
       exit 1
     fi
   done
+
+  if [[ "$package" == "incin-lsp" ]]; then
+    if ! grep -Fxq "tests/support/mock_rust_analyzer.rs" "$package_list"; then
+      printf 'incin-lsp package is missing its integration-test support\n' >&2
+      exit 1
+    fi
+    if grep -Fxq "src/bin/mock_rust_analyzer.rs" "$package_list"; then
+      printf 'incin-lsp package still exposes the mock server as a binary target\n' >&2
+      exit 1
+    fi
+  fi
 
   if ! grep -Eq '^(license[[:space:]]*=|license\.workspace[[:space:]]*=)' "$manifest"; then
     printf 'package has no declared license metadata: %s\n' "$manifest" >&2
