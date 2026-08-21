@@ -19,10 +19,10 @@ jobs:
     name: CPU Test Suite
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Cache Cargo modules
-      uses: actions/cache@v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -38,7 +38,7 @@ jobs:
     # pins 1.97.1 and asks for both, and naming them here keeps the job
     # correct even if that file changes.
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@1.97.1
+      uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
       with:
         components: rustfmt, clippy
 
@@ -143,10 +143,10 @@ jobs:
     name: Feature Powerset
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Cache Cargo modules
-      uses: actions/cache@v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -154,8 +154,10 @@ jobs:
           target
         key: ${{ runner.os }}-powerset-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@1.97.1
-    - uses: taiki-e/install-action@cargo-hack
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
+      with:
+        tool: cargo-hack
 
     - name: Install System Dependencies
       run: |
@@ -208,10 +210,10 @@ jobs:
     name: Miri and Sanitizers
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Cache Cargo modules
-      uses: actions/cache@v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -219,7 +221,7 @@ jobs:
           target
         key: ${{ runner.os }}-soundness-${{ hashFiles('**/Cargo.lock') }}
 
-    - uses: dtolnay/rust-toolchain@nightly
+    - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
       with:
         components: miri, rust-src
 
@@ -235,8 +237,8 @@ jobs:
     name: Execution Ledger Validation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Validate PROPOSALS.md against docs/plan/ledger.toml
@@ -275,14 +277,14 @@ jobs:
     name: Minimum Supported Rust Version
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     # Pinned to the exact version `rust-version` claims. A `rust-version` that
     # nothing builds at is a guess; this is what makes it a fact. Raising the
     # floor means changing both this line and the workspace manifest, which is
     # the point.
-    - uses: dtolnay/rust-toolchain@1.88.0
+    - uses: dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b # 1.88.0
     - name: Cache Cargo modules
-      uses: actions/cache@v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cargo/registry
@@ -296,8 +298,10 @@ jobs:
     name: Advisories, Licences, and Duplicates
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - name: Check GitHub Actions are immutably pinned
+      run: python3 tools/check-actions-pinned.py
     - name: Install cargo-deny
       run: cargo install cargo-deny --version "${CARGO_DENY_VERSION}" --locked
       env:
@@ -313,8 +317,8 @@ jobs:
     name: Publish Metadata and Packaging
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     # Not `cargo publish --dry-run`: that resolves every path dependency
     # against the registry, and the versions of an unreleased workspace are not
     # there, so it fails for a reason that says nothing about whether the
@@ -335,8 +339,8 @@ jobs:
     name: Documentation Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     # The WGPU dependencies are here for the all-backend build below, which
     # compiles wgpu in order to document what sits on top of it.
     - name: Install System Dependencies
@@ -371,8 +375,8 @@ jobs:
     name: Core no_std Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Check incin-core without default features
       run: cargo check -p incin-core --no-default-features
 
@@ -380,8 +384,8 @@ jobs:
     name: WGPU Software Adapter Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Install WGPU system dependencies
       run: |
         sudo apt-get update
@@ -401,8 +405,8 @@ jobs:
     name: CUDA Compile Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Compile CUDA backend without requiring a GPU
       run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda
 
@@ -427,8 +431,8 @@ jobs:
       matrix:
         backend: [cpu, cuda, wgpu, metal]
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Install system dependencies
       run: sudo apt-get update && sudo apt-get install -y libvulkan-dev
     - name: Compile ${{ matrix.backend }} on its own
@@ -438,8 +442,8 @@ jobs:
     name: Build the mdBook Documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@1.97.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Install Chromium for browser checks
       run: sudo apt-get install -y chromium
 
@@ -448,7 +452,7 @@ jobs:
     # job's cache key would tie this job's speed to workspace lockfile
     # changes that have nothing to do with it.
     - name: Cache mdbook binary
-      uses: actions/cache@v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cargo/bin/mdbook
         key: ${{ runner.os }}-mdbook-${{ env.MDBOOK_VERSION }}-${{ hashFiles('docs/book/book.toml') }}

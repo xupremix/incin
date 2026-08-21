@@ -10,8 +10,6 @@ import re
 WORKFLOW = Path(".github/workflows/release.yml")
 REQUIRED = (
     "xvfb-run -a npm test",
-    "actions/upload-artifact@v4",
-    "actions/download-artifact@v4",
     "release-assets.py checksums",
     "release-assets.py verify",
     "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes --draft",
@@ -21,6 +19,7 @@ REQUIRED = (
     "name: release",
     "incin-rustrover-external-tool-",
 )
+REQUIRED_ACTIONS = ("actions/upload-artifact", "actions/download-artifact")
 FORBIDDEN = (
     "npm version ",
     "needs: create-release",
@@ -31,6 +30,9 @@ FORBIDDEN = (
 def main() -> int:
     text = WORKFLOW.read_text(encoding="utf-8")
     missing = [needle for needle in REQUIRED if needle not in text]
+    for action in REQUIRED_ACTIONS:
+        if not re.search(rf"uses:\s*{re.escape(action)}@[0-9a-f]{{40}}(?:\s+#|\s*$)", text, re.MULTILINE):
+            missing.append(f"{action} pinned to a commit")
     present = [needle for needle in FORBIDDEN if needle in text]
     preflight = re.search(r"(?ms)^  preflight:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
     book = re.search(r"(?ms)^  book:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
@@ -62,7 +64,7 @@ def main() -> int:
         )
         if job is None:
             missing.append(f"{job_name} job")
-        elif "uses: actions/checkout@v5" not in job.group():
+        elif not re.search(r"uses:\s*actions/checkout@[0-9a-f]{40}(?:\s+#|\s*$)", job.group(), re.MULTILINE):
             missing.append(f"{job_name} job checks out release tooling")
     publish = re.search(r"(?ms)^  publish-release:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
     if publish is not None:

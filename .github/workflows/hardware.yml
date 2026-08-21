@@ -131,13 +131,13 @@ jobs:
     if: needs.select.outputs.cuda == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A self-hosted runner keeps its state between runs, so the toolchain is
       # installed explicitly rather than assuming whatever the last job left
       # behind. rust-toolchain.toml pins 1.97.1, so this matches it.
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Record device and driver
         run: |
@@ -183,10 +183,10 @@ jobs:
     if: needs.select.outputs.wgpu_software == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Install WGPU system dependencies
         run: |
@@ -212,10 +212,10 @@ jobs:
     if: needs.select.outputs.wgpu_native == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.wgpu_runner) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Record adapter
         run: |
@@ -239,10 +239,10 @@ jobs:
     if: needs.select.outputs.metal == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.metal_runner) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Record Metal system details
         run: |
@@ -267,10 +267,10 @@ jobs:
     if: needs.select.outputs.dist2_network == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Data Parallel (DP2) Networked Training Test
         run: cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network
@@ -287,10 +287,10 @@ jobs:
     if: needs.select.outputs.multinode == 'true'
     runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the Rust toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Multi-Process Rendezvous & Shutdown Test
         run: cargo test -p incin --features distributed-nccl --test rendezvous
