@@ -21,9 +21,21 @@ def run(*args: str) -> str:
     return subprocess.check_output(args, text=True).strip()
 
 
+def require_ancestor(commit: str, base_ref: str, tag: str) -> None:
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, base_ref],
+        check=False,
+    )
+    if ancestry.returncode == 1:
+        sys.exit(f"release tag {tag!r} is not reachable from {base_ref}")
+    if ancestry.returncode != 0:
+        sys.exit(f"could not verify release ancestry against {base_ref}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", required=True)
+    parser.add_argument("--base-ref")
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
 
@@ -39,6 +51,9 @@ def main() -> int:
     head_commit = run("git", "rev-parse", "HEAD")
     if head_commit != tag_commit:
         sys.exit(f"checkout is {head_commit}, but {args.tag} resolves to {tag_commit}")
+
+    if args.base_ref:
+        require_ancestor(tag_commit, args.base_ref, args.tag)
 
     metadata = json.loads(run("cargo", "metadata", "--no-deps", "--format-version", "1"))
     mismatches = []

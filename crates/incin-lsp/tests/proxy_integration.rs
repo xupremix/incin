@@ -1,19 +1,49 @@
 //! End-to-end proof that the real `incin-lsp` binary - not just its pure
 //! `rewrite` functions - correctly pumps and rewrites frames, using
-//! `mock-rust-analyzer` as a stand-in server so this test needs no real
-//! rust-analyzer install.
+//! a test-only `mock-rust-analyzer` stand-in server so this test needs no
+//! real rust-analyzer install.
 
 use incin_lsp::frame::{read_frame, write_frame};
+use std::ffi::OsString;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static MOCK_BINARY_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+fn build_mock_rust_analyzer() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = manifest_dir.join("tests/support/mock_rust_analyzer.rs");
+    let output_dir = std::env::var_os("CARGO_TARGET_TMPDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let sequence = MOCK_BINARY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let output = output_dir.join(format!(
+        "mock-rust-analyzer-{}-{sequence}{}",
+        std::process::id(),
+        std::env::consts::EXE_SUFFIX,
+    ));
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+
+    let result = Command::new(rustc)
+        .args([
+            "--edition=2024",
+            source.to_str().expect("UTF-8 source path"),
+            "-o",
+        ])
+        .arg(&output)
+        .status()
+        .expect("run rustc for mock-rust-analyzer test support");
+    assert!(result.success(), "compile mock-rust-analyzer test support");
+    output
+}
 
 #[test]
 fn proxy_rewrites_diagnostics_and_hints_but_passes_everything_else_through_byte_identical() {
+    let mock_rust_analyzer = build_mock_rust_analyzer();
     let mut child = Command::new(env!("CARGO_BIN_EXE_incin-lsp"))
-        .env(
-            "INCIN_LSP_RA_PATH",
-            env!("CARGO_BIN_EXE_mock-rust-analyzer"),
-        )
+        .env("INCIN_LSP_RA_PATH", &mock_rust_analyzer)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -68,4 +98,25 @@ fn proxy_rewrites_diagnostics_and_hints_but_passes_everything_else_through_byte_
         status.success(),
         "incin-lsp should exit cleanly once the mock server closes its stdout"
     );
+
+    std::fs::remove_file(mock_rust_analyzer).expect("remove mock-rust-analyzer test support");
+}
+
+#[test]
+fn proxy_forwards_version_probe_to_rust_analyzer() {
+    let mock_rust_analyzer = build_mock_rust_analyzer();
+    let output = Command::new(env!("CARGO_BIN_EXE_incin-lsp"))
+        .arg("--version")
+        .env("INCIN_LSP_RA_PATH", &mock_rust_analyzer)
+        .output()
+        .expect("run incin-lsp version probe");
+
+    assert!(output.status.success(), "version probe should succeed");
+    assert_eq!(output.stdout, b"mock-rust-analyzer 0.1.0\n");
+    assert!(
+        output.stderr.is_empty(),
+        "version probe should not write stderr"
+    );
+
+    std::fs::remove_file(mock_rust_analyzer).expect("remove mock-rust-analyzer test support");
 }

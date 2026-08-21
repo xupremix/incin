@@ -3,10 +3,9 @@
 // extension loaded from source, opens a throwaway workspace containing a
 // Cargo.toml that mentions "incin", and runs src/test/suite/extension.test.ts
 // inside it. This exercises the extension's own activation and
-// settings-rewriting logic for real; it does not spin up rust-analyzer or
-// incin-lsp themselves, so it cannot prove the end-to-end humanized-
-// diagnostic pipeline; see docs/growth/02-ide-extensions.md for what that
-// would additionally require.
+// settings-rewriting logic for real. It does not assert a complete LSP
+// exchange, so the separate live editor check remains the evidence for the
+// end-to-end humanized diagnostic pipeline.
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -42,7 +41,8 @@ async function main(): Promise<void> {
   // in the test/dev host. The fresh profile test-electron manages has no
   // extensions at all, so it must be installed before `runTests()`.
   const [cliPath, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
-  const install = spawnSync(cliPath, [...cliArgs, "--install-extension", "rust-lang.rust-analyzer"], {
+  const rustAnalyzerExtension = process.env.INCIN_TEST_RA_VSIX || "rust-lang.rust-analyzer";
+  const install = spawnSync(cliPath, [...cliArgs, "--install-extension", rustAnalyzerExtension], {
     encoding: "utf-8",
     stdio: "inherit",
   });

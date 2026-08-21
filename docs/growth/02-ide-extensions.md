@@ -411,3 +411,24 @@ anything. The editor already knows every shape."*
 > None of this is a incin-lsp or incin-repo bug; it's what "real user's
 > actual machine" debugging finds that a from-scratch verification never
 > would.
+
+> **2026-08-21 release-readiness update:** the diagnostic path is now checked
+> end to end in both VS Code and Neovim. An isolated demo workspace ran the
+> installed `incin-lsp` with rust-analyzer as its child and produced the
+> humanized `Cannot reshape: source has 6 elements but the target shape has 8
+> elements` diagnostic in both clients. The resulting captures are stored in
+> `docs/assets/editors/`.
+>
+> The live VS Code check found and fixed three integration problems. Activation
+> now uses `onLanguage:rust` plus a root `Cargo.toml` check instead of waiting on
+> a recursive workspace search. The extension restarts rust-analyzer after it
+> writes the proxy configuration. It also sets `INCIN_LSP_RA_PATH` to the
+> official extension's bundled rust-analyzer when present, so the proxy does
+> not depend on the editor process inheriting a Rust toolchain `PATH`.
+>
+> Editor version probes also exposed that `incin-lsp` discarded its own command
+> line arguments. The proxy now forwards arguments to rust-analyzer and uses
+> direct stdio for `--version`, `-V`, `--help`, and `-h`. Its mock server lives
+> under `tests/support/`, so a normal `cargo install incin-lsp` installs only
+> the product binary. RustRover's native LSP path remains unverified; its
+> external-tool integration is unchanged.

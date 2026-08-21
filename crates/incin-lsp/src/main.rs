@@ -13,8 +13,33 @@ use std::thread;
 
 fn main() -> io::Result<()> {
     let config = Config::from_env();
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+
+    // Language clients sometimes probe a configured server before starting an
+    // LSP session (for example, with `--version`). Those invocations do not
+    // speak the framed LSP protocol, so preserve rust-analyzer's regular
+    // command-line behavior and its stdio as well as its arguments.
+    if arguments.iter().any(|argument| {
+        matches!(
+            argument.to_str(),
+            Some("--version" | "-V" | "--help" | "-h")
+        )
+    }) {
+        let status = Command::new(&config.ra_path)
+            .args(&arguments)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .unwrap_or_else(|e| {
+                eprintln!("incin-lsp: failed to spawn '{}': {e}", config.ra_path);
+                std::process::exit(1);
+            });
+        std::process::exit(status.code().unwrap_or(1));
+    }
 
     let mut child = Command::new(&config.ra_path)
+        .args(&arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

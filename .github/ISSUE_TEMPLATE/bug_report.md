@@ -2,7 +2,7 @@
 name: Bug report
 about: Something behaves incorrectly, panics, or produces a wrong result
 title: ""
-labels: bug
+labels: bug,type:bug
 assignees: ""
 ---
 
@@ -26,7 +26,8 @@ assignees: ""
 - incin version or commit:
 - Rust version (`rustc --version`):
 - OS and architecture:
-- Backend feature(s) enabled:
+- Cargo features enabled:
+- Device and driver, if hardware-specific:
 
 ## Additional context
 

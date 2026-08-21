@@ -7,9 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to build, for example v0.1.0'
+        description: 'Existing release tag, for example v0.1.0'
         required: true
         type: string
+      action:
+        description: 'Build a new draft, or publish an existing verified draft'
+        required: true
+        default: build-draft
+        type: choice
+        options:
+          - build-draft
+          - publish-existing-draft
 
 permissions:
   contents: read
@@ -33,13 +41,28 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
 
+      - name: Fetch the release branch for ancestry validation
+        run: git fetch --no-tags origin master:refs/remotes/origin/master
+
+      - name: Validate the manual publication ref
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'publish-existing-draft'
+        env:
+          DISPATCH_REF_TYPE: ${{ github.ref_type }}
+          DISPATCH_REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$DISPATCH_REF_TYPE" != "tag" || "$DISPATCH_REF_NAME" != "$RELEASE_TAG" ]]; then
+            echo "Publish the draft by dispatching this workflow from the matching tag ref: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
       - id: release
         name: Validate tag, checkout, and package versions
-        run: python3 tools/release-preflight.py --tag "$RELEASE_TAG" --github-output "$GITHUB_OUTPUT"
+        run: python3 tools/release-preflight.py --tag "$RELEASE_TAG" --base-ref origin/master --github-output "$GITHUB_OUTPUT"
 
   book:
     name: Package book
     needs: preflight
+    if: github.event_name == 'push' || inputs.action == 'build-draft'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -80,6 +103,7 @@ jobs:
   editors:
     name: Package editor integrations
     needs: preflight
+    if: github.event_name == 'push' || inputs.action == 'build-draft'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -123,6 +147,7 @@ jobs:
   rust-binaries:
     name: Build ${{ matrix.target }} binaries
     needs: preflight
+    if: github.event_name == 'push' || inputs.action == 'build-draft'
     strategy:
       fail-fast: false
       matrix:
@@ -179,6 +204,7 @@ jobs:
   verify-assets:
     name: Verify release asset set
     needs: [preflight, book, editors, rust-binaries]
+    if: github.event_name == 'push' || inputs.action == 'build-draft'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -207,6 +233,7 @@ jobs:
   draft-release:
     name: Upload verified draft release
     needs: [preflight, verify-assets]
+    if: github.event_name == 'push' || inputs.action == 'build-draft'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -238,20 +265,27 @@ jobs:
         run: python3 tools/release-assets.py verify-github --tag "$RELEASE_TAG" --directory release-assets
 
   publish-release:
-    name: Publish verified release
-    needs: [preflight, draft-release]
+    name: Publish an existing verified draft release
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'publish-existing-draft'
+    needs: preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    environment:
+      name: release
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.RELEASE_TAG }}
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-verified-assets
-          path: release-assets
+      - name: Download draft assets for independent verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          gh release download "$RELEASE_TAG" --dir release-assets --pattern "incin-*"
+          python3 tools/release-assets.py manifest --version "${{ needs.preflight.outputs.version }}" --directory release-assets
 
       - name: Reverify draft before publication
         env:

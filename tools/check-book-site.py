@@ -17,7 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BOOK = ROOT / "docs/book"
 SITE = BOOK / "site"
-REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/develop/"
+PAGES_WORKFLOW = ROOT / ".github/workflows/pages.yml"
+REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/master/"
 
 
 def chapters() -> list[str]:
@@ -26,6 +27,12 @@ def chapters() -> list[str]:
 
 
 def main() -> None:
+    workflow = PAGES_WORKFLOW.read_text(encoding="utf-8")
+    if 'branches: ["master"]' not in workflow:
+        sys.exit("Pages workflow does not build from master")
+    if "github.ref == 'refs/heads/master'" not in workflow:
+        sys.exit("Pages deployment is not restricted to master")
+
     index = SITE / "index.html"
     javascript = SITE / "book.js"
     if not index.exists() or not javascript.exists():

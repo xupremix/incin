@@ -19,7 +19,7 @@ ROOT = Path(__file__).parent
 SRC = ROOT / "book"
 SOURCE = ROOT / "src"
 SITE = ROOT / "site"
-REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/develop/"
+REPOSITORY_SOURCE = "https://github.com/xupremix/incin/blob/master/"
 
 
 class TextExtractor(HTMLParser):
@@ -114,6 +114,13 @@ def main() -> None:
     if chapter_dir.exists():
         shutil.rmtree(chapter_dir)
     chapter_dir.mkdir()
+
+    asset_source = SOURCE / "assets"
+    asset_target = SITE / "assets"
+    if asset_target.exists():
+        shutil.rmtree(asset_target)
+    if asset_source.exists():
+        shutil.copytree(asset_source, asset_target)
 
     search: list[dict[str, str]] = []
     for chapter in chapters_global:

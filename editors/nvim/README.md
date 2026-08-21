@@ -17,14 +17,21 @@ mechanism. Skip to "mason-lspconfig / mason-lspconfig `handlers`" below
 instead. `M.server_opts()`/`M.merge_into()` return a plain table that
 works with any of the three integration styles this file documents.
 
+![A reshape error rewritten by incin-lsp in Neovim](../../docs/assets/editors/neovim-shape-diagnostic.png)
+
+The capture uses Neovim 0.12, the module in this directory, the locally
+installed `incin-lsp`, and rust-analyzer. The popup text comes from the live
+LSP diagnostic.
+
 ## Requirements
 
 - Neovim 0.11+ (for `vim.lsp.config`/`vim.lsp.enable`), **or**
   nvim-lspconfig on any supported Neovim version.
-- `incin-lsp` on your `$PATH` (`cargo install --path crates/incin-lsp --bin
-  incin-lsp` from the Incin repo; the explicit `--bin` matters: the crate
-  also builds a `mock-rust-analyzer` test fixture that you don't want on your
-  `PATH`), or pass `lsp_path` to `setup()`/`server_opts()`.
+- `incin-lsp` on your `$PATH` (`cargo install incin-lsp` after the first
+  crates.io publication, or `cargo install --path crates/incin-lsp --bin
+  incin-lsp --locked` from a checkout before then), or pass `lsp_path` to
+  `setup()`/`server_opts()`. A normal `cargo install incin-lsp` installs only
+  the proxy executable.
 
 ## lazy.nvim (native `vim.lsp.enable`, no nvim-lspconfig)
 

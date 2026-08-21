@@ -17,6 +17,8 @@ REQUIRED = (
     "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes --draft",
     "release-assets.py verify-github",
     "gh release edit \"$RELEASE_TAG\" --draft=false",
+    "publish-existing-draft",
+    "name: release",
     "incin-rustrover-external-tool-",
 )
 FORBIDDEN = (
@@ -34,6 +36,14 @@ def main() -> int:
     book = re.search(r"(?ms)^  book:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
     if preflight is None or 'release-preflight.py --tag "$RELEASE_TAG"' not in preflight.group():
         missing.append("preflight job validates RELEASE_TAG")
+    elif "--base-ref origin/master" not in preflight.group():
+        missing.append("preflight job requires the release tag to be reachable from master")
+    if preflight is not None:
+        preflight_text = preflight.group()
+        if "inputs.action == 'publish-existing-draft'" not in preflight_text:
+            missing.append("preflight job recognizes manual publication")
+        if "github.ref_type" not in preflight_text or "github.ref_name" not in preflight_text:
+            missing.append("manual publication requires the matching tag ref")
     if book is None:
         missing.append("book job")
     else:
@@ -54,6 +64,17 @@ def main() -> int:
             missing.append(f"{job_name} job")
         elif "uses: actions/checkout@v5" not in job.group():
             missing.append(f"{job_name} job checks out release tooling")
+    publish = re.search(r"(?ms)^  publish-release:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
+    if publish is not None:
+        publish_text = publish.group()
+        if "github.event_name == 'workflow_dispatch'" not in publish_text:
+            missing.append("publication is limited to workflow_dispatch")
+        if "inputs.action == 'publish-existing-draft'" not in publish_text:
+            missing.append("publication requires the publish-existing-draft action")
+        if "environment:\n      name: release" not in publish_text:
+            missing.append("publication uses the release environment")
+        if "gh release download \"$RELEASE_TAG\"" not in publish_text:
+            missing.append("publication independently downloads draft assets")
     if missing or present:
         if missing:
             print("missing release safeguards: " + ", ".join(missing), file=sys.stderr)

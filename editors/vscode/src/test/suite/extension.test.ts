@@ -23,6 +23,10 @@ suite("Incin VS Code extension", () => {
       "0",
       "shorten-backend env var not set to disabled by default"
     );
+    assert.ok(
+      env?.INCIN_LSP_RA_PATH,
+      "extension did not point the proxy at rust-analyzer's bundled server"
+    );
   });
 
   test("Incin: Toggle Shape Hints command flips the hints env var", async () => {

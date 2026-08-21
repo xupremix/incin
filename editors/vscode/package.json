@@ -21,7 +21,8 @@
     "rust-lang.rust-analyzer"
   ],
   "activationEvents": [
-    "workspaceContains:**/Cargo.toml"
+    "onLanguage:rust",
+    "workspaceContains:Cargo.toml"
   ],
   "main": "./out/extension.js",
   "contributes": {

@@ -2,7 +2,7 @@ name: Deploy documentation
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
   workflow_dispatch:
   pull_request:
     paths:
@@ -45,7 +45,7 @@ jobs:
 
   deploy:
     name: Deploy documentation site
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-latest
     permissions:

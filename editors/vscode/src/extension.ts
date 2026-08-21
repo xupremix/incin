@@ -9,16 +9,50 @@ import * as vscode from "vscode";
 const RA_SECTION = "rust-analyzer";
 const INCIN_SECTION = "incin";
 const HINTS_STATE_KEY = "incin.shapeHintsEnabled";
+const RA_PATH_ENV = "INCIN_LSP_RA_PATH";
 
-async function looksLikeAIncinProject(): Promise<boolean> {
+async function manifestMentionsIncin(uri: vscode.Uri): Promise<boolean> {
+  try {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    return Buffer.from(bytes).toString("utf8").includes("incin");
+  } catch {
+    return false;
+  }
+}
+
+async function looksLikeAnIncinProject(): Promise<boolean> {
+  // Most Cargo workspaces have a root manifest. Reading it directly avoids a
+  // recursive workspace search (and a noticeable activation delay) on the
+  // common path while still supporting nested manifests below.
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    if (await manifestMentionsIncin(vscode.Uri.joinPath(folder.uri, "Cargo.toml"))) {
+      return true;
+    }
+  }
+
   const manifests = await vscode.workspace.findFiles("**/Cargo.toml", "**/target/**", 25);
   for (const uri of manifests) {
-    const bytes = await vscode.workspace.fs.readFile(uri);
-    if (Buffer.from(bytes).toString("utf8").includes("incin")) {
+    if (await manifestMentionsIncin(uri)) {
       return true;
     }
   }
   return false;
+}
+
+async function bundledRustAnalyzerPath(): Promise<string | undefined> {
+  const extension = vscode.extensions.getExtension("rust-lang.rust-analyzer");
+  if (!extension) {
+    return undefined;
+  }
+
+  const executable = process.platform === "win32" ? "rust-analyzer.exe" : "rust-analyzer";
+  const uri = vscode.Uri.joinPath(extension.extensionUri, "server", executable);
+  try {
+    await vscode.workspace.fs.stat(uri);
+    return uri.fsPath;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -39,11 +73,17 @@ async function applyIncinLspConfig(hintsEnabled: boolean): Promise<void> {
   await raConfig.update("server.path", lspPath, vscode.ConfigurationTarget.Workspace);
 
   const existingEnv = raConfig.get<Record<string, string>>("server.extraEnv", {});
-  const mergedEnv = {
+  const mergedEnv: Record<string, string> = {
     ...existingEnv,
     INCIN_LSP_HINTS: hintsEnabled ? "1" : "0",
     INCIN_LSP_SHORTEN_BACKEND: shortenBackend ? "1" : "0",
   };
+  if (!mergedEnv[RA_PATH_ENV]) {
+    const bundledPath = await bundledRustAnalyzerPath();
+    if (bundledPath) {
+      mergedEnv[RA_PATH_ENV] = bundledPath;
+    }
+  }
   await raConfig.update("server.extraEnv", mergedEnv, vscode.ConfigurationTarget.Workspace);
 }
 
@@ -58,12 +98,16 @@ async function restartRustAnalyzer(): Promise<void> {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  if (!(await looksLikeAIncinProject())) {
+  if (!(await looksLikeAnIncinProject())) {
     return;
   }
 
   const hintsEnabled = context.workspaceState.get<boolean>(HINTS_STATE_KEY, true);
   await applyIncinLspConfig(hintsEnabled);
+  // `rust-analyzer` is an extension dependency, so VS Code activates it before
+  // this extension can replace its server path. Restart it once after writing
+  // the workspace settings so the first session also runs through incin-lsp.
+  await restartRustAnalyzer();
 
   context.subscriptions.push(
     vscode.commands.registerCommand("incin.toggleShapeHints", async () => {

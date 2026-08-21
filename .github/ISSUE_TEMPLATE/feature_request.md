@@ -2,7 +2,7 @@
 name: Feature request
 about: Propose a new capability, operation, or API
 title: ""
-labels: enhancement
+labels: enhancement,type:feature
 assignees: ""
 ---
 
@@ -17,6 +17,11 @@ assignees: ""
 // compile, but sketch it target-first (`Cpu.randn(...)`-style) if it's a
 // creation or allocation surface, matching docs/book/src/target_api.md.
 ```
+
+## Support tier and feature flags
+
+<!-- Should this be stable, preview, test-only, or hardware-only? Name any new
+or changed Cargo features and the combinations that need validation. -->
 
 ## Alternatives considered
 

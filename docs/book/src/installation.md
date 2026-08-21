@@ -1,11 +1,8 @@
 # Installation
 
-```toml
-[dependencies]
-incin = "0.1"
-```
-
-Or from a checkout, which is what the examples in this repository do:
+`0.1.0` is prepared for publication but is not on crates.io yet. Until that
+release is published, use a checkout, which is what the examples in this
+repository do:
 
 ```toml
 [dependencies]
@@ -14,26 +11,35 @@ incin = { path = "../incin/crates/incin" }
 incin = { git = "https://github.com/xupremix/incin" }
 ```
 
+After `0.1.0` is available on crates.io, a project can depend on the facade
+with:
+
+```toml
+[dependencies]
+incin = "0.1"
+```
+
 The default feature set is `["std", "cpu"]` - a standard-library CPU build
 with no extra setup. That's enough for everything in this book except the
 [Backends](./backends.md) chapter.
 
 ## Stability
 
-There is none yet, and that is deliberate. `0.1.0` is a first published
-version, not a stability promise: under Cargo's rules for `0.x` the minor
-version is already the breaking slot, and this project intends to use it. Any
-`0.x` bump may remove or reshape public API without a deprecation period.
+The current checkout may still change before release. Once `0.1.0` ships, the
+documented facade API selected for that release becomes Incin's compatibility
+baseline. Changes to that surface will be additive or follow a documented
+deprecation path, even though Cargo treats `0.x` minor releases as potentially
+breaking by default.
 
-Read [What changed in 0.1.0](./release_notes.md) as the model for how that will
-be communicated: every break is listed with the edit it requires, and
-`docs/MIGRATION.md` carries the path-by-path table. Pin an exact version
-(`incin = "=0.1.0"`) if you need the surface to hold still while you work.
+Read [the planned 0.1.0 release notes](./release_notes.md) for the proposed
+baseline and migration notes. Future releases will list any required migration
+with the edit it requires, and `docs/MIGRATION.md` carries the path-by-path
+table. Pin an exact version (`incin = "=0.1.0"`) if you also need dependency
+resolution to hold still while you work.
 
-The parts most likely to move are the ones this book already labels preview:
-the accelerator backends, distributed planning, compiled execution, and the
-automatic `Trainer`. The typed tensor, shape, autograd, and layer surfaces are
-where the design has settled most.
+Preview APIs are outside that selected baseline unless the release notes say
+otherwise. They include accelerator backends, distributed planning, compiled
+execution, and the automatic `Trainer`.
 
 ## What the build needs
 

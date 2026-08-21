@@ -1,17 +1,18 @@
-# What changed in 0.1.0
+# Planned 0.1.0 release notes
 
-The first release intended for crates.io. This chapter is the user-facing view
-of it: what to change in your code, and what changed underneath that explains
-why. `CHANGELOG.md` carries the same ground with more detail, and
+This is the user-facing release note for the first version intended for
+crates.io. It describes the proposed `0.1.0` baseline and must be checked
+against the release tag before publication. `CHANGELOG.md` carries the same
+ground with more detail, and
 `docs/MIGRATION.md` carries the full path-by-path table for anyone moving off a
 `0.0.0` snapshot.
 
-Nothing here applies if 0.1.0 is your first version. Skip to
+Nothing here applies if `0.1.0` is your first version. Skip to
 [What's not finished yet](./whats_not_finished.md).
 
-`0.1.0` is not a stability promise - see
-[Stability](./installation.md#stability). Expect a chapter like this one for
-every `0.x` release, because there will be breaks in each of them.
+`0.1.0` establishes the selected public compatibility baseline described in
+[Stability](./installation.md#stability). Preview APIs remain free to change
+when they are explicitly identified as preview.
 
 ## Things to change in your code
 

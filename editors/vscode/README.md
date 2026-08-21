@@ -21,23 +21,23 @@ error[E0271]: type mismatch resolving `<(...) as ElementCount>::Count == UInt<UI
 error: Cannot reshape: source has 6 elements but the target shape has 8 elements
 ```
 
-...and hovering an intermediate tensor shows `Tensor<[32, 128]>` instead of
+Hovering an intermediate tensor shows `Tensor<[32, 128]>` instead of
 `Tensor<(UInt<...>, UInt<...>), CpuBackendImpl<f32, Cpu>>`.
 
-*(A recorded before/after screenshot belongs here once someone opens a real
-shape-error file with this extension active; the extension's own activation
-and settings-rewriting logic is now verified by an automated test against a
-real VS Code (see "Running the tests" below), but that test doesn't run a
-real `incin-lsp`/rust-analyzer session, so it can't produce this screenshot
-itself; see `docs/growth/02-ide-extensions.md` for the exact scope of what is
-and isn't covered.)*
+![A reshape error rewritten by incin-lsp in VS Code](../../docs/assets/editors/vscode-shape-diagnostic.png)
+
+This capture comes from an isolated VS Code profile running the packaged VSIX,
+the locally installed `incin-lsp`, and rust-analyzer. The extension's automated
+test covers activation and settings. The live capture checks the complete
+diagnostic path.
 
 ## Requirements
 
-- `incin-lsp` on your `PATH` (`cargo install --path crates/incin-lsp --bin
-  incin-lsp` from the Incin repo; the explicit `--bin` matters: the crate
-  also builds a `mock-rust-analyzer` test fixture that you don't want on your
-  `PATH`), or set `incin.lspPath` to its absolute path.
+- `incin-lsp` on your `PATH` (`cargo install incin-lsp` after the first
+  crates.io publication, or `cargo install --path crates/incin-lsp --bin
+  incin-lsp --locked` from a checkout before then), or set `incin.lspPath` to
+  its absolute path. A normal `cargo install incin-lsp` installs only the
+  proxy executable.
 - The standard `rust-lang.rust-analyzer` extension installed and enabled;
   this extension configures it, it does not replace it.
 
@@ -49,7 +49,9 @@ extension sets:
   (default `incin-lsp`, resolved via `PATH`).
 - `rust-analyzer.server.extraEnv` → merges in `INCIN_LSP_HINTS` /
   `INCIN_LSP_SHORTEN_BACKEND` so the **Incin: Toggle Shape Hints** command
-  can flip hint rewriting without you editing settings by hand.
+  can flip hint rewriting without you editing settings by hand. When the
+  official extension includes a bundled server binary, it also sets
+  `INCIN_LSP_RA_PATH` to that binary.
 
 `server.extraEnv` is a best-effort integration point: it's used here because
 it's the standard place rust-analyzer's own extension exposes environment
@@ -87,9 +89,12 @@ activates and correctly rewrites `rust-analyzer.server.path`/`extraEnv`, and
 that **Incin: Toggle Shape Hints** flips the hints env var. It installs
 `rust-lang.rust-analyzer` into its own isolated test profile first (needed
 because of `extensionDependencies` above). It does not touch your real VS
-Code profile. It does **not** spin up a real `incin-lsp`/rust-analyzer
-session, so it can't verify the actual humanized-diagnostic output; see
-`docs/growth/02-ide-extensions.md` for that scope boundary.
+Code profile. It does **not** spin up a full `incin-lsp`/rust-analyzer
+workspace. The live check shown above covers that boundary.
+
+For an offline or repeatable run, set `INCIN_TEST_RA_VSIX` to a downloaded
+rust-analyzer VSIX. By default the harness installs the current Marketplace
+version into its isolated profile.
 
 ## Building from source
 

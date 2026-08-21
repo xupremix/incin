@@ -9,10 +9,11 @@ explicitly marked unverified so it isn't oversold.
 
 ## Requirements
 
-- `cargo-incin` on your `PATH` (`cargo install --path crates/incin` from
-  the Incin repo root). `incin-check.sh` checks for this itself and prints
-  the same install command if it's missing, so this isn't a silent failure;
-  but installing it upfront saves the round trip.
+- `cargo-incin` on your `PATH` (`cargo install incin --bin cargo-incin` after
+  the first crates.io publication, or `cargo install --path crates/incin --bin
+  cargo-incin --locked` from a checkout before then). `incin-check.sh` checks
+  for this itself and prints an install command if it is missing, so this is
+  not a silent failure; installing it first saves the round trip.
 - A RustRover (or any IntelliJ-platform Rust IDE) install with **External
   Tools** and, optionally, **File Watchers** available; both are core
   platform features, no plugin required for Option A.

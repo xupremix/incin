@@ -2,18 +2,18 @@
 
 # incin
 
-**A Rust deep learning framework that catches shape and dtype mistakes at `cargo check`, not at 3am on epoch 40.**
+**A Rust deep learning framework with compile-time checks for tensor shapes and dtypes.**
 
-[![CI](https://github.com/xupremix/incin/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/xupremix/incin/actions/workflows/ci.yml)
+[![CI](https://github.com/xupremix/incin/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/xupremix/incin/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/incin.svg)](https://crates.io/crates/incin)
 [![docs.rs](https://img.shields.io/docsrs/incin)](https://docs.rs/incin)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
-[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](Cargo.toml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://github.com/xupremix/incin/blob/master/Cargo.toml)
 
 [Quick Start](#quick-start) ·
 [Features](#features) ·
 [Architecture](#architecture) ·
-[The Book](docs/book/src/SUMMARY.md) ·
+[The Book](https://github.com/xupremix/incin/blob/master/docs/book/src/SUMMARY.md) ·
 [CLI](#cli--cargo-incin) ·
 [Editors](#editor--ide-support)
 
@@ -21,27 +21,27 @@
 
 <br>
 
-Incin encodes tensor shapes, dtypes, devices, and gradient capability directly
-in Rust's type system. A `matmul` whose dimensions don't line up, a gradient
-step taken on a frozen parameter, or a dtype that a backend can't execute: these are compile errors, not `panic!`s discovered after your training loop
-has been running for an hour.
+Incin encodes tensor shapes, dtypes, devices, and gradient capability in Rust's
+type system. A `matmul` with incompatible dimensions, an update to a frozen
+parameter, or an unsupported dtype becomes a compile error instead of a
+runtime failure during training.
 
 ```rust,ignore
 use incin::prelude::*;
 
-// The types ARE the shapes. [4, 8] · [8, 2] is a legal matmul:
-// the compiler proved it before this ever ran.
+// The types describe the shapes. [4, 8] · [8, 2] is a legal matmul,
+// and the compiler checks it before the program runs.
 let x: Tensor<s![4, 8], DefaultBackend> = Tensor::zeros(())?;
 let w: Tensor<s![8, 2], DefaultBackend> = Tensor::zeros(())?;
 let y = x.matmul(&w)?;                    // Tensor<s![4, 2], ...>
 
-// This one doesn't compile (not "doesn't run," doesn't compile):
+// This one does not compile because the inner dimensions do not match:
 let bad: Tensor<s![3, 8], DefaultBackend> = Tensor::zeros(())?;
 let _ = x.matmul(&bad)?;
 ```
 
-That last line is a real build error, not a made-up one. Plain `cargo check`
-shows Rust's raw typenum encoding:
+The last line produces a normal Rust compiler error. Plain `cargo check` shows
+Rust's raw typenum encoding:
 
 ```text
 error[E0277]: Cannot contract dimension `UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>` with `UInt<UInt<UTerm, B1>, B1>`
@@ -51,9 +51,9 @@ error[E0277]: Cannot contract dimension `UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0
    |               ------ ^^^^ inner dimensions do not match
 ```
 
-[`cargo incin check`](#cli--cargo-incin) rewrites that same error live,
-collapsing the `UInt<UInt<...>>` walls and the shape's own `DimCons<H,
-DimCons<...>>` cons-list encoding down to a plain `[4, 8]`, and appending a
+[`cargo incin check`](#cli--cargo-incin) rewrites the error while the command
+runs. It collapses the `UInt<UInt<...>>` representation and the shape's
+`DimCons<H, DimCons<...>>` cons-list encoding to a plain `[4, 8]`, then adds a
 translation key:
 
 ```text
@@ -69,21 +69,20 @@ error[E0277]: Cannot contract dimension `[4, 8]` with `MatMulShape<[3, 8]>`
       • 3  <= UInt<UInt<UTerm, B1>, B1>
 ```
 
-When rustc elides a type this deeply nested to a `long-type-*.txt` file
-instead of printing it (its own `--verbose` note says so), `cargo incin`
-reads that file too and humanizes it the same way, appending it as an
-`[Expanded Full Type]` section rather than leaving you to go find and
-decode the file yourself.
+When rustc writes a deeply nested type to a `long-type-*.txt` file instead of
+printing it, `cargo incin` reads that file as well. The translated output adds
+an `[Expanded Full Type]` section, so you do not need to find and decode the
+file separately.
 
 > **CPU is the complete, verified backend.** Every operation in the canonical
 > catalog that a backend can execute has a CPU executor, and training runs
 > there today. CUDA, WGPU, and Metal are **previews**: each covers a
 > documented subset (arithmetic, reductions, `matmul`, convolution/pooling,
 > plus unary activations on WGPU) and none yet covers normalization, loss, or
-> embedding. [`docs/capabilities.md`](docs/capabilities.md) is generated
+> embedding. [`docs/capabilities.md`](https://github.com/xupremix/incin/blob/master/docs/capabilities.md) is generated
 > straight from the backend registrations and is the authoritative answer for
 > any given operation. See also [what isn't finished
-> yet](docs/book/src/whats_not_finished.md).
+> yet](https://github.com/xupremix/incin/blob/master/docs/book/src/whats_not_finished.md).
 
 ---
 
@@ -91,74 +90,48 @@ decode the file yourself.
 
 | | |
 |---|---|
-| **Compile-time shape verification** | Static `s![]` shapes catch incompatible tensor operations at build time (no `RuntimeError: shapes (4,8) and (3,2) not aligned` three hours into training). |
-| **Named dimensions** | `dim!` makes semantic axis names (`Batch`, `Channels`, ...) part of the tensor's *type*, not a comment you forgot to update. |
-| **Python-style slicing** | `i![]` gives checked runtime range and index expressions: the ergonomics of NumPy indexing with the guarantees of Rust. |
-| **Typed autograd** | `Grad`/`NoGrad` are type parameters. A frozen layer can't accidentally receive a gradient update; the compiler enforces it. |
-| **ONNX import** | `import_model!` expands a supported `.onnx` graph into typed Rust code at compile time, failing closed on anything it can't faithfully represent. |
-| **Real backends, honestly scoped** | CPU is complete. CUDA, WGPU, and Metal are opt-in previews covering exactly what [`docs/capabilities.md`](docs/capabilities.md) says they cover; nothing is claimed that isn't registered and tested. |
-| **Hugging Face Hub** | Download and load real-world model weights and dataset files directly, behind the opt-in `data-hub` feature. |
-| **Zero-cost by construction** | Static shape information lives entirely in `typenum`'s type system and evaporates at compile time so the backend never sees it. |
+| **Compile-time shape checks** | Static `s![]` shapes reject incompatible tensor operations during compilation. |
+| **Named dimensions** | `dim!` puts semantic axis names such as `Batch` and `Channels` in the tensor type. |
+| **Checked slicing** | `i![]` provides runtime range and index expressions with bounds checks. |
+| **Gradient state in types** | `Grad` and `NoGrad` prevent frozen tensors from receiving gradient updates. |
+| **ONNX import** | `import_model!` expands supported `.onnx` graphs into typed Rust and rejects unsupported graphs. |
+| **Backend support** | CPU is complete. CUDA, WGPU, and Metal are opt-in previews with support recorded in [`docs/capabilities.md`](https://github.com/xupremix/incin/blob/master/docs/capabilities.md). |
+| **Hugging Face Hub** | The `data-hub` feature downloads model weights and dataset files. |
+| **No runtime shape metadata** | Static shape information exists in `typenum` types and is erased during compilation. |
 
 ---
 
 ## Architecture
 
-```mermaid
-graph LR
-    App["Your application"] --> Facade
+| Layer | Responsibility |
+|---|---|
+| `incin` | Facade, prelude, macros, and the `cargo-incin` CLI. |
+| `incin-core` | Typed tensors, operations, and graph definitions. |
+| `incin-backends` | Descriptor dispatch and backend executors. CPU is complete; CUDA, WGPU, and Metal are previews. |
+| Supporting crates | Data loading, telemetry, visualization, diagnostics, and the `incin-lsp` editor proxy. |
 
-    subgraph Facade["incin: facade"]
-        direction TB
-        Prelude["prelude, macros,\ncargo-incin CLI"]
-    end
-
-    Facade --> Core
-
-    subgraph Core["incin-core"]
-        direction TB
-        Tensor["Tensor&lt;S, B, K, G&gt;\nshape · dtype · backend · grad"]
-    end
-
-    Core --> Backends
-
-    subgraph Backends["incin-backends"]
-        direction TB
-        Dispatch["Execute&lt;O&gt; descriptor dispatch"]
-    end
-
-    Backends --> CPU["CPU\n✅ complete"]
-    Backends --> CUDA["CUDA\n🧪 preview"]
-    Backends --> WGPU["WGPU\n🧪 preview"]
-    Backends --> Metal["Metal\n🧪 preview"]
-    Backends --> Candle["Candle\n🔌 external"]
-
-    Facade -.-> Data["incin-data\ndatasets · Hub"]
-    Facade -.-> Telemetry["incin-telemetry\nrun tracing"]
-    Facade -.-> LSP["incin-lsp\nhumanized editor errors"]
-```
-
-Every operation flows through one path: a typed frontend call lowers to a
-validated descriptor, a capability table decides whether the target backend
-can run it, and a backend that can't runs *nothing*: a missing kernel is a
-compile-time trait-bound failure, not a silent fallback. `S`, `B`, `K`, and
-`G` on `Tensor<S, B, K, G>` are the shape, backend, element dtype, and
-gradient-capability type parameters that make this checkable at all.
+Operations follow a typed path from the frontend to a validated descriptor.
+A capability table determines whether the selected backend can execute the
+operation. If no kernel is registered, compilation fails with a trait-bound
+error instead of silently falling back. In `Tensor<S, B, K, G>`, `S`, `B`, `K`,
+and `G` represent the shape, backend, element dtype, and gradient capability.
 
 ---
 
 ## Quick Start
 
-A normal `incin = "0.1.0"` dependency enables only the standard library and
-the native CPU backend. CUDA, WGPU, telemetry, autotuning, nightly
-experiments, and third-party backends are opt-in. Enabling an accelerator
-does not change `DefaultBackend`, which remains CPU whenever the `cpu`
-feature is enabled.
+Version 0.1.0 has not been published to crates.io yet. Until it is published,
+depend on the `master` branch:
 
 ```toml
 [dependencies]
-incin = "0.1.0"
+incin = { git = "https://github.com/xupremix/incin", branch = "master" }
 ```
+
+After publication, replace that line with `incin = "0.1.0"`. The default
+feature set uses the standard library and native CPU backend. CUDA, WGPU,
+telemetry, autotuning, nightly experiments, and third-party backends are
+opt-in. `DefaultBackend` remains CPU whenever the `cpu` feature is enabled.
 
 ### Concrete CPU quick start
 
@@ -289,6 +262,10 @@ runtime loading, or download real-world weights straight from the
 <details>
 <summary>Common feature combinations</summary>
 
+These registry dependency forms apply after `0.1.0` is published. Until then,
+use the `master` Git dependency from the Quick Start and add the same feature
+fields.
+
 ```toml
 # Bare/default CPU installation
 incin = "0.1.0"
@@ -337,7 +314,7 @@ defaults gives the allocation-only diagnostic core.
 
 The per-backend support tables (which operations each backend registers, for
 which element types, layouts, and ranks) are generated from those
-registrations into [docs/capabilities.md](docs/capabilities.md). `cargo incin
+registrations into [docs/capabilities.md](https://github.com/xupremix/incin/blob/master/docs/capabilities.md). `cargo incin
 doctor` reports which of them this machine can actually reach.
 
 `incin-backends` can also be used without default features when implementing a
@@ -351,13 +328,9 @@ adapter.
 
 ## Setup & Requirements
 
-Incin serializes ONNX protocol graphs natively using Protocol Buffers.
-Building the workspace requires the Protocol Buffers compiler (`protoc`).
-
-| Platform | Command |
-|---|---|
-| Ubuntu / Debian | `sudo apt-get install -y protobuf-compiler` |
-| macOS (Homebrew) | `brew install protobuf` |
+The normal build needs only a Rust toolchain. The generated ONNX protobuf
+module is checked into the repository, so `protoc` is needed only when a
+maintainer intentionally regenerates it with `cargo xtask onnx`.
 
 ### Environment Variables
 
@@ -373,15 +346,15 @@ Building the workspace requires the Protocol Buffers compiler (`protoc`).
 
 | Crate | Role |
 |---|---|
-| [`incin`](crates/incin) | Primary facade: unified imports, prelude, and the `cargo-incin` CLI binary. |
-| [`incin-core`](crates/incin-core) | Statically-typed `Tensor` implementation, traits, and graph definitions. |
-| [`incin-backends`](crates/incin-backends) | Native CPU (complete), opt-in CUDA/WGPU/Metal (preview) execution engines, plus an external Candle adapter. |
-| [`incin-macros`](crates/incin-macros) | Procedural macros: `s!`, `shape!`, `axis!`, `i!`, `module`, `import_model!`. |
-| [`incin-data`](crates/incin-data) | Data loading utilities, dataset traits, and Hugging Face Hub support. |
-| [`incin-telemetry`](crates/incin-telemetry) | Event emission, transport streams, and graph snapshot recording. |
-| [`incin-viz`](crates/incin-viz) | Terminal UI (TUI) model graph visualizer. |
-| [`incin-diagnostics`](crates/incin-diagnostics) | Typenum-to-decimal shape diagnostic humanization, shared by the CLI and the editor LSP proxy. |
-| [`incin-lsp`](crates/incin-lsp) | Transparent LSP proxy that routes rust-analyzer through `incin-diagnostics` so shape errors and inlay hints are humanized live in your editor. |
+| [`incin`](https://github.com/xupremix/incin/tree/master/crates/incin) | Primary facade: unified imports, prelude, and the `cargo-incin` CLI binary. |
+| [`incin-core`](https://github.com/xupremix/incin/tree/master/crates/incin-core) | Statically-typed `Tensor` implementation, traits, and graph definitions. |
+| [`incin-backends`](https://github.com/xupremix/incin/tree/master/crates/incin-backends) | Native CPU (complete), opt-in CUDA/WGPU/Metal (preview) execution engines, plus an external Candle adapter. |
+| [`incin-macros`](https://github.com/xupremix/incin/tree/master/crates/incin-macros) | Procedural macros: `s!`, `shape!`, `axis!`, `i!`, `module`, `import_model!`. |
+| [`incin-data`](https://github.com/xupremix/incin/tree/master/crates/incin-data) | Data loading utilities, dataset traits, and Hugging Face Hub support. |
+| [`incin-telemetry`](https://github.com/xupremix/incin/tree/master/crates/incin-telemetry) | Event emission, transport streams, and graph snapshot recording. |
+| [`incin-viz`](https://github.com/xupremix/incin/tree/master/crates/incin-viz) | Terminal UI (TUI) model graph visualizer. |
+| [`incin-diagnostics`](https://github.com/xupremix/incin/tree/master/crates/incin-diagnostics) | Typenum-to-decimal shape diagnostic humanization, shared by the CLI and the editor LSP proxy. |
+| [`incin-lsp`](https://github.com/xupremix/incin/tree/master/crates/incin-lsp) | Transparent LSP proxy that routes rust-analyzer through `incin-diagnostics` so shape errors and inlay hints are humanized live in your editor. |
 
 ---
 
@@ -394,7 +367,7 @@ also inspects exported model files and translates pasted error text ad hoc.
 
 ```bash
 # Install
-cargo install --path crates/incin
+cargo install --path crates/incin --bin cargo-incin --locked
 
 # Use
 cargo incin check                # cargo check, with humanized shape errors
@@ -412,41 +385,47 @@ Flags: `--raw` (skip translation, show the compiler's raw output), `--explain`
 
 ## Editor / IDE Support
 
-The same humanization is available live inside your editor via `incin-lsp`,
-a thin proxy that sits between your editor and rust-analyzer and rewrites
-diagnostics and shape inlay hints through `incin-diagnostics` before they
-reach you without forking rust-analyzer or writing per-editor parsing logic. See
-[`docs/growth/02-ide-extensions.md`](docs/growth/02-ide-extensions.md) for
-the full architecture and verification status of each client below.
+`incin-lsp` runs between an editor and rust-analyzer. It rewrites diagnostics
+and shape inlay hints using the same `incin-diagnostics` code as the CLI.
+[`docs/growth/02-ide-extensions.md`](https://github.com/xupremix/incin/blob/master/docs/growth/02-ide-extensions.md) records
+the design and test boundaries.
 
 | Editor | Status | Install guide |
 |---|---|---|
-| VS Code | Ships; activation + rust-analyzer config-rewriting verified by an automated test against a real VS Code (`npm test`). Full humanized-diagnostic pipeline (real `incin-lsp` + rust-analyzer) not yet exercised end-to-end | [`editors/vscode/README.md`](editors/vscode/README.md) |
-| Neovim (0.11+, or nvim-lspconfig on older versions) | Verified against a real Neovim install | [`editors/nvim/README.md`](editors/nvim/README.md) |
-| RustRover / IntelliJ | External-tool fallback verified; native LSP-mode integration unverified | [`editors/rustrover/README.md`](editors/rustrover/README.md) |
+| VS Code | End-to-end check completed with the local VSIX, `incin-lsp`, and rust-analyzer | [`editors/vscode/README.md`](https://github.com/xupremix/incin/blob/master/editors/vscode/README.md) |
+| Neovim (0.11+, or nvim-lspconfig on older versions) | End-to-end check completed with Neovim 0.12, `incin-lsp`, and rust-analyzer | [`editors/nvim/README.md`](https://github.com/xupremix/incin/blob/master/editors/nvim/README.md) |
+| RustRover / IntelliJ | External-tool fallback verified; native LSP-mode integration unverified | [`editors/rustrover/README.md`](https://github.com/xupremix/incin/blob/master/editors/rustrover/README.md) |
 
 VS Code and Neovim both need the proxy on `PATH` first (RustRover's shipped
 fallback only needs the CLI above):
 
 ```bash
-cargo install --path crates/incin-lsp --bin incin-lsp
+cargo install --path crates/incin-lsp --bin incin-lsp --locked
 ```
+
+### VS Code
+
+![A reshape error rewritten by incin-lsp in VS Code](https://raw.githubusercontent.com/xupremix/incin/master/docs/assets/editors/vscode-shape-diagnostic.png)
+
+### Neovim
+
+![The same reshape error rewritten by incin-lsp in Neovim](https://raw.githubusercontent.com/xupremix/incin/master/docs/assets/editors/neovim-shape-diagnostic.png)
 
 ---
 
 ## Documentation
 
-- **[The Book ("Incinnomicon")](docs/book/src/SUMMARY.md)**: the current
+- **[The Book ("Incinnomicon")](https://github.com/xupremix/incin/blob/master/docs/book/src/SUMMARY.md)**: the current
   user guide. Build it locally with `mdbook build docs/book`. Validate its
   Rust examples with `cargo test -p incin --features 'backend-authoring'
   --doc`; `mdbook test` is not the validation command because standalone
   mdBook rustdoc does not receive Cargo's dependency metadata.
-- **[What's not finished yet](docs/book/src/whats_not_finished.md)**: an
+- **[What's not finished yet](https://github.com/xupremix/incin/blob/master/docs/book/src/whats_not_finished.md)**: an
   honest, source-verified list of what still blocks real usage, kept
   separate so nothing above has to hedge every sentence.
-- **[docs/capabilities.md](docs/capabilities.md)**: generated per-backend,
+- **[docs/capabilities.md](https://github.com/xupremix/incin/blob/master/docs/capabilities.md)**: generated per-backend,
   per-dtype operation support, straight from the registrations.
-- **[Growth & architecture plans](docs/growth/)**: task-by-task execution
+- **[Growth & architecture plans](https://github.com/xupremix/incin/tree/master/docs/growth/)**: task-by-task execution
   plans for adoption-facing features (named dimensions, CLI/IDE tooling,
   deployment, and more), each with its own dated status ledger. The older
   roadmap in `docs/growth/07-the-book.md` is historical and is not the
@@ -460,7 +439,7 @@ cargo install --path crates/incin-lsp --bin incin-lsp
 
 Dual-licensed under either
 
-[**MIT**](LICENSE_MIT) or [**Apache 2.0**](LICENSE_APACHE)
+[**MIT**](https://github.com/xupremix/incin/blob/master/LICENSE_MIT) or [**Apache 2.0**](https://github.com/xupremix/incin/blob/master/LICENSE_APACHE)
 
 at your option.
 

@@ -80,6 +80,7 @@
 #[doc = concat!(
     include_str!("../../../docs/book/src/introduction.md"),
     include_str!("../../../docs/book/src/installation.md"),
+    include_str!("../../../docs/book/src/editor_integrations.md"),
     include_str!("../../../docs/book/src/quickstart.md"),
     include_str!("../../../docs/book/src/tensors.md"),
     include_str!("../../../docs/book/src/shapes.md"),

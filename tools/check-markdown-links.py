@@ -7,7 +7,7 @@ import sys
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP = {"target", "graphify-out", ".git", "node_modules"}
+SKIP = {"target", "graphify-out", ".git", ".vscode-test", "node_modules"}
 
 
 def markdown_files() -> list[Path]:

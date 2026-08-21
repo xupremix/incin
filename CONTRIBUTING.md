@@ -1,30 +1,53 @@
 # Contributing to Incin
 
-First off, thank you for considering contributing to Incin! It's people like you that make Incin such a great tool.
+Search the issue tracker before opening a bug or proposal. Keep each issue and
+pull request focused on one verifiable outcome.
 
-## Where do I go from here?
+## Issue triage
 
-If you've noticed a bug or have a feature request, make sure to check if there's already an open issue on our issue tracker. If not, go ahead and open a new one!
+Maintainers apply four label groups:
 
-## Development Setup
+- one `type:*` label for the kind of work;
+- one or more `area:*` labels for ownership;
+- one `priority:*` label for ordering;
+- either `release:0.1` or `release:post-0.1` for release scope.
 
-1. Clone the repository
-2. Run `cargo build`
-3. Run `cargo test --workspace` to ensure everything works
-4. (Optional) Run `cargo check -p incin-wgpu --all-features` to verify GPU features.
+`status:*` and `breaking-change` add constraints when needed. GitHub's default
+`bug`, `enhancement`, and `documentation` labels remain available for
+compatibility with existing links and searches.
 
-## Submitting a Pull Request
+## Development setup
 
-- Please ensure your code passes `cargo fmt` and `cargo clippy --workspace -- -D warnings`.
-- Add tests for your changes.
-- Document any new `pub` items.
-- Update `CHANGELOG.md` if necessary.
+1. Install the Rust toolchain named in `rust-toolchain.toml`.
+2. Run the smallest build or test for the crate you plan to change.
+3. Read `docs/README.md` before editing documentation or generated files.
+4. Read the relevant binding contract before changing a public API, error,
+   invariant-carrying type, or frozen foundation.
+
+Hardware and preview backends are opt-in. Do not enable every feature as a
+generic first check; use the focused command documented for the surface you
+changed.
+
+## Submitting a pull request
+
+- Run `cargo fmt --check` and the focused Clippy and test commands for the
+  affected crates.
+- Add regression or negative coverage for behavior changes.
+- Document intentional public items and update migration notes for contract
+  changes.
+- Update the Book, generated checks, or release notes when user-visible
+  behavior changes.
+- Link the issue the pull request resolves and list any hardware or broad
+  validation that was not run.
 
 ## Code of Conduct
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+
+Be respectful, keep technical disagreement about the work, and do not harass
+or demean other contributors. Maintainers may remove disruptive contributions
+or participation to keep the project safe and productive.
 
 ## Releases
 
-Release tags automatically build and upload the book, editor integrations,
-`incin-lsp`, and the `cargo-incin` binary. See [docs/RELEASING.md](docs/RELEASING.md)
-for the asset list and tag procedure.
+Release tags build and upload a draft containing the Book, editor integrations,
+`incin-lsp`, and `cargo-incin`. Publishing that draft is a separate protected
+action. See [docs/RELEASING.md](docs/RELEASING.md) for the full procedure.
