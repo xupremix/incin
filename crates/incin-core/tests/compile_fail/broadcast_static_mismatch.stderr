@@ -1,8 +1,8 @@
 error[E0277]: the trait bound `(): Dim` is not satisfied
-  --> tests/compile_fail/broadcast_static_mismatch.rs:10:5
+  --> tests/compile_fail/broadcast_static_mismatch.rs:12:17
    |
-10 |     assert_broadcast::<s![32], s![64]>();
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Dim` is not implemented for `()`
+12 |     let _ = lhs + rhs;
+   |                 ^ the trait `Dim` is not implemented for `()`
    |
    = help: the following other types implement trait `Dim`:
              AddDim<A, B>
@@ -15,4 +15,5 @@ error[E0277]: the trait bound `(): Dim` is not satisfied
              UInt<U, B>
            and $N others
    = note: required for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>` to implement `BroadcastDim<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>>`
-   = note: required for `DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>` to implement `incin::shapes::BroadcastShape<DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>, Nil>>`
+   = note: required for `DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>` to implement `BroadcastShape<DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>, Nil>>`
+   = note: required for `incin::prelude::Tensor<DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, Nil>, CpuBackendImpl>` to implement `std::ops::Add<incin::prelude::Tensor<DimCons<UInt<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, B0>, Nil>, CpuBackendImpl>>`

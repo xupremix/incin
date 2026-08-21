@@ -45,6 +45,14 @@ function M.server_opts(opts)
       INCIN_LSP_HINTS = hints_enabled and "1" or "0",
       INCIN_LSP_SHORTEN_BACKEND = (opts.shorten_backend and "1") or "0",
     },
+    -- rust-analyzer truncates labels before incin-lsp receives them unless
+    -- this is unlimited. A partial `DimCons<UInt<…, …>, …>` label cannot be
+    -- reconstructed safely by the proxy.
+    settings = {
+      ["rust-analyzer"] = {
+        inlayHints = { maxLength = vim.NIL },
+      },
+    },
   }
 end
 

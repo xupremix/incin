@@ -97,6 +97,29 @@ fn test_artifact_incompatible_major_version() {
 }
 
 #[test]
+fn test_artifact_incompatible_minor_version_even_on_zero_major() {
+    let plan = make_test_plan();
+    let artifact = CompiledArtifact::new(plan, ArtifactVersion::new(0, 1, 0), "minor".into())
+        .expect("artifact creation should succeed");
+    assert!(
+        artifact
+            .check_compatibility(&ArtifactVersion::new(0, 2, 0))
+            .is_err(),
+        "preview snapshots must not cross a 0.x minor boundary"
+    );
+}
+
+#[test]
+fn test_artifact_patch_versions_are_compatible() {
+    let plan = make_test_plan();
+    let artifact = CompiledArtifact::new(plan, ArtifactVersion::new(0, 1, 0), "patch".into())
+        .expect("artifact creation should succeed");
+    artifact
+        .check_compatibility(&ArtifactVersion::new(0, 1, 9))
+        .expect("patch versions within one major.minor are compatible");
+}
+
+#[test]
 fn test_artifact_load_happy_path() {
     let plan = make_test_plan();
     let version = current_version();

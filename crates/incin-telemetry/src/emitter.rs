@@ -678,6 +678,7 @@ mod tests {
             other => panic!("expected Event::Scalar, got {other:?}"),
         }
 
+        // SAFETY: env_lock serializes this test's process-global mutation.
         unsafe {
             std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");
         }
@@ -693,6 +694,7 @@ mod tests {
             "incin-telemetry-emitter-to-run-dir-none-test-{}",
             crate::run_dir::generate_run_id()
         ));
+        // SAFETY: env_lock serializes this test's process-global mutation.
         unsafe {
             std::env::set_var("INCIN_TELEMETRY_RUN_DIR", &dir);
         }
@@ -704,6 +706,7 @@ mod tests {
             run.run_id
         );
 
+        // SAFETY: env_lock serializes this test's process-global mutation.
         unsafe {
             std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");
         }

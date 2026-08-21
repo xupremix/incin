@@ -275,7 +275,7 @@ default = ["std"]
 
 [[feature_crate.feature]]
 name = "std"
-enables = ["thiserror/std", "half/std", "anyhow/std", "serde/std", "prost/std", "bytes/std", "safetensors", "serde_json", "postcard"]
+enables = ["thiserror/std", "half/std", "anyhow/std", "serde/std", "prost/std", "bytes/std", "dep:safetensors", "dep:serde_json", "dep:postcard"]
 
 [[feature_crate.feature]]
 name = "nightly"
@@ -287,7 +287,7 @@ enables = []
 
 [[feature_crate.feature]]
 name = "distributed"
-enables = []
+enables = ["incin-macros/distributed"]
 
 [[feature_crate.feature]]
 name = "cuda"
@@ -303,7 +303,19 @@ enables = []
 
 [[feature_crate.feature]]
 name = "compiled"
-enables = []
+enables = ["serde_json"]
+
+[[feature_crate.feature]]
+name = "postcard"
+enables = ["std", "dep:postcard"]
+
+[[feature_crate.feature]]
+name = "safetensors"
+enables = ["std", "dep:safetensors"]
+
+[[feature_crate.feature]]
+name = "serde_json"
+enables = ["std", "dep:serde_json"]
 
 [[feature_crate]]
 package = "incin-macros"
@@ -320,7 +332,7 @@ enables = []
 
 [[feature_crate.feature]]
 name = "distributed"
-enables = ["incin/distributed"]
+enables = []
 
 [[feature_crate]]
 package = "incin-data"
@@ -429,7 +441,7 @@ enables = ["incin-core/nightly", "incin-macros/nightly"]
 
 [[feature_crate.feature]]
 name = "cpu"
-enables = ["incin-backends/cpu"]
+enables = ["std", "incin-backends/cpu"]
 
 [[feature_crate.feature]]
 name = "cpu-blas"
@@ -437,19 +449,19 @@ enables = ["std", "cpu", "incin-backends/cpu-blas"]
 
 [[feature_crate.feature]]
 name = "cuda"
-enables = ["incin-core/cuda", "incin-backends/cuda"]
+enables = ["std", "incin-core/cuda", "incin-backends/cuda"]
 
 [[feature_crate.feature]]
 name = "wgpu"
-enables = ["incin-backends/wgpu"]
+enables = ["std", "incin-backends/wgpu"]
 
 [[feature_crate.feature]]
 name = "metal"
-enables = ["incin-backends/metal"]
+enables = ["std", "incin-backends/metal"]
 
 [[feature_crate.feature]]
 name = "metal-mps"
-enables = ["incin-backends/metal-mps"]
+enables = ["metal", "incin-backends/metal-mps"]
 
 
 [[feature_crate.feature]]
@@ -466,7 +478,7 @@ enables = ["std"]
 
 [[feature_crate.feature]]
 name = "distributed"
-enables = ["incin-core/distributed"]
+enables = ["incin-core/distributed", "incin-macros/distributed"]
 
 [[feature_crate.feature]]
 name = "distributed-reference"
@@ -486,16 +498,16 @@ enables = []
 
 [[feature_crate.feature]]
 name = "compiled"
-enables = ["incin-core/compiled", "incin-backends/compiled"]
+enables = ["std", "cpu", "incin-core/compiled", "incin-backends/compiled"]
 
 [[feature_crate.feature]]
 name = "hardware-tests"
-enables = []
+enables = ["distributed-nccl"]
 
 [[feature_crate.feature]]
 name = "test-utils"
-enables = ["incin-backends/test-utils"]
+enables = ["std", "cpu", "incin-backends/test-utils"]
 
 [[feature_crate.feature]]
 name = "data-hub"
-enables = ["incin-data/hub"]
+enables = ["std", "incin-data/hub"]

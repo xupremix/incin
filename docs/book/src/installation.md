@@ -38,8 +38,9 @@ table. Pin an exact version (`incin = "=0.1.0"`) if you also need dependency
 resolution to hold still while you work.
 
 Preview APIs are outside that selected baseline unless the release notes say
-otherwise. They include accelerator backends, distributed planning, compiled
-execution, and the automatic `Trainer`.
+otherwise. They include accelerator backends, distributed planning, the
+preview-only CPU compiled reference evaluator, and the automatic `Trainer`.
+Compiled plan snapshots are not a deployment format or portable ABI.
 
 ## What the build needs
 

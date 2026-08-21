@@ -1,4 +1,7 @@
-//! Executable CPU lowering for the compiled graph plan.
+//! Experimental CPU reference evaluator for compiled graph plans.
+//!
+//! This is intentionally a preview-only validation path, not an optimized
+//! compiler backend or a deployment target.
 
 use alloc::format;
 use alloc::vec::Vec;

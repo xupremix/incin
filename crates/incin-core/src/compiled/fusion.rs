@@ -1,4 +1,7 @@
-//! Safe kernel fusion pass and backward hook integration for compiled graphs.
+//! Inspection-only fusion analysis for compiled graphs.
+//!
+//! Executable fused lowering is unavailable in the preview CPU evaluator, so
+//! applying candidates fails closed.
 
 use alloc::vec::Vec;
 
@@ -46,7 +49,7 @@ pub struct FusedKernel {
     pub primary_op: OperationKind,
 }
 
-/// Safe fusion pass that identifies fusable chains and produces fused kernels.
+/// Fusion analysis that identifies candidate chains; applying them fails closed.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FusionPass;
 
@@ -77,7 +80,10 @@ impl FusionPass {
         is_pointwise(producer) && is_pointwise(consumer)
     }
 
-    /// Identifies fusion candidates in a captured graph.
+    /// Identifies adjacent pointwise heuristic candidates in a captured graph.
+    ///
+    /// This does not prove that an intermediate value has no other consumers;
+    /// no executable fusion lowering is currently available.
     pub fn find_candidates(&self, graph: &CapturedGraph) -> Vec<FusionCandidate> {
         let mut candidates = Vec::new();
 
@@ -87,7 +93,8 @@ impl FusionPass {
             }
             let next = &graph.nodes[i + 1];
 
-            // Check that the producer's output is consumed by the next node only
+            // Check only that an adjacent node consumes a producer output. This
+            // is a heuristic candidate, not an exclusive-consumer proof.
             let producer_outputs = &node.outputs;
             let consumer_inputs = &next.inputs;
 
@@ -118,7 +125,9 @@ impl FusionPass {
         candidates
     }
 
-    /// Applies fusion candidates to produce a new [`CapturedGraph`] with fused kernels.
+    /// Returns the unchanged graph when there are no candidates.
+    ///
+    /// Non-empty candidate sets fail closed until executable fused-descriptor lowering exists.
     pub fn apply(
         &self,
         graph: &CapturedGraph,

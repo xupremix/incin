@@ -181,6 +181,56 @@ fn parallel_vector_chunks_preserve_operations_and_tails() {
     }
 }
 
+/// Stress the four parallel AVX2 initialization paths under ThreadSanitizer.
+///
+/// The lengths cover empty inputs, the exact f64 and f32 SIMD widths, a small
+/// scalar tail, and more than two Rayon chunks. Calling the parallel helpers
+/// directly is intentional: this gate must exercise every
+/// `spare_capacity_mut`/`set_len` pair rather than a scalar fallback.
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[test]
+#[ignore = "run by tools/soundness.sh tsan"]
+fn tsan_parallel_avx2_initialization_stress() {
+    if !std::arch::is_x86_feature_detected!("avx2") {
+        return;
+    }
+
+    let lengths = [0, 4, 8, 9, SIMD_PARALLEL_CHUNK * 2 + 7];
+    for repetition in 0..8 {
+        for len in lengths {
+            let lhs_f32: Vec<_> = (0..len).map(|index| (index % 1_024) as f32 + 1.0).collect();
+            let rhs_f32: Vec<_> = (0..len).map(|index| (index % 31) as f32 + 0.5).collect();
+            let lhs_f64: Vec<_> = lhs_f32.iter().map(|&value| f64::from(value)).collect();
+            let rhs_f64: Vec<_> = rhs_f32.iter().map(|&value| f64::from(value)).collect();
+
+            let binary_f32 = parallel_avx2_binary_f32(BinaryOp::Add, &lhs_f32, &rhs_f32);
+            let expected_f32: Vec<_> = lhs_f32
+                .iter()
+                .zip(&rhs_f32)
+                .map(|(&lhs, &rhs)| lhs + rhs)
+                .collect();
+            assert_eq!(binary_f32, expected_f32);
+
+            let binary_f64 = parallel_avx2_binary_f64(BinaryOp::Add, &lhs_f64, &rhs_f64);
+            let expected_f64: Vec<_> = lhs_f64
+                .iter()
+                .zip(&rhs_f64)
+                .map(|(&lhs, &rhs)| lhs + rhs)
+                .collect();
+            assert_eq!(binary_f64, expected_f64);
+
+            let scalar_left = repetition % 2 == 0;
+            let scalar_f32 = parallel_avx2_scalar_f32(BinaryOp::Mul, &lhs_f32, 2.0, scalar_left);
+            let expected_f32: Vec<_> = lhs_f32.iter().map(|&value| value * 2.0).collect();
+            assert_eq!(scalar_f32, expected_f32);
+
+            let scalar_f64 = parallel_avx2_scalar_f64(BinaryOp::Mul, &lhs_f64, 2.0, scalar_left);
+            let expected_f64: Vec<_> = lhs_f64.iter().map(|&value| value * 2.0).collect();
+            assert_eq!(scalar_f64, expected_f64);
+        }
+    }
+}
+
 #[test]
 fn half_storage_uses_f32_compute() {
     let lhs = CpuStorage::from_contiguous(

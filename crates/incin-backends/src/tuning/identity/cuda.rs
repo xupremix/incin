@@ -99,6 +99,8 @@ impl TuningEnvironmentFingerprint<Cuda> {
 
 fn cuda_driver_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     let mut encoded = 0_i32;
+    // SAFETY: cudarc's C ABI writes one i32 through this valid, aligned local
+    // pointer and does not retain it; its status is checked immediately.
     let result = unsafe { cudarc::driver::sys::cuDriverGetVersion(&mut encoded) };
     if result != cudarc::driver::sys::CUresult::CUDA_SUCCESS {
         return Err(IdentityError::CudaQuery {
@@ -126,6 +128,8 @@ fn cuda_driver_version() -> core::result::Result<SoftwareVersion, IdentityError>
 fn nvrtc_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     let mut major = 0_i32;
     let mut minor = 0_i32;
+    // SAFETY: NVRTC writes the two valid local i32 pointers synchronously and
+    // does not retain them; the returned status and values are validated.
     let result = unsafe { cudarc::nvrtc::sys::nvrtcVersion(&mut major, &mut minor) };
     if result != cudarc::nvrtc::sys::nvrtcResult::NVRTC_SUCCESS {
         return Err(IdentityError::CudaQuery {

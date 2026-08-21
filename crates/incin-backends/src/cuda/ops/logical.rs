@@ -102,6 +102,8 @@ fn launch_logical_binary(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: numel is checked for the launch and out_b is a fresh unique
+    // allocation, so the kernel receives valid input/output device views.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {
@@ -158,6 +160,8 @@ pub(crate) fn launch_logical_not(input: &CudaStorage) -> Result<CudaStorage> {
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: logical_not validates numel and launch dimensions; the fresh
+    // output allocation is uniquely owned for the duration of this launch.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {

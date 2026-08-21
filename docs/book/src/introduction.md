@@ -30,10 +30,11 @@ state, especially around GPU backends.
 
 ## Where else to look
 
-`docs/GUIDE.md` in the repository is the architectural companion to this
-book - the type-level shape system's internals, the canonical execution
-path, backend authoring, and the idioms the codebase itself follows. This
-book is task-oriented ("how do I train a model"); `GUIDE.md` is
-concept-oriented ("how does the shape-proof system work"). The generated
-`docs/OPERATION_SEMANTICS.md` and `docs/capabilities.md` are the exhaustive,
-always-current per-operation reference this book does not try to duplicate.
+- The source code, issue tracker, and releases are hosted on [GitHub](https://github.com/xupremix/incin).
+- `docs/GUIDE.md` in the repository is the architectural companion to this
+  book -- the type-level shape system's internals, the canonical execution
+  path, backend authoring, and the idioms the codebase itself follows. This
+  book is task-oriented ("how do I train a model"); `GUIDE.md` is
+  concept-oriented ("how does the shape-proof system work"). The generated
+  `docs/OPERATION_SEMANTICS.md` and `docs/capabilities.md` are the exhaustive,
+  always-current per-operation reference this book does not try to duplicate.

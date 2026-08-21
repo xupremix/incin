@@ -1,0 +1,806 @@
+[
+  {
+    "site": "crates/incin/src/bin/cargo-incin.rs:386",
+    "code": ".expect(\"crates/incin always has a parent directory\")",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin/src/bin/cargo-incin.rs:481",
+    "code": "let stdout = child.stdout.take().expect(\"Failed to open child stdout\");",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:137",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:138",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:139",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:140",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:142",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:144",
+    "code": "write!(out, \"const {}* __restrict__ in{}, \", cuda_type(dt), i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:146",
+    "code": "write!(out, \"{}* __restrict__ out_data, \", out_type).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:147",
+    "code": "writeln!(out, \"const int numel) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:153",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:154",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:159",
+    "code": "writeln!(out, \"    const {} val{} = in1[0];\", cuda_type(dt), i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:162",
+    "code": "writeln!(out, \"    const {} val{} = in{}[idx];\", cuda_type(dt), i, i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:173",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:174",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:186",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:196",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:204",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:205",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:212",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:217",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:218",
+    "code": "writeln!(out, \"    let idx = global_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:219",
+    "code": "writeln!(out, \"    if (idx >= arrayLength(&out_data)) {{ return; }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:224",
+    "code": "writeln!(out, \"    let val{} = in1[0];\", i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:227",
+    "code": "writeln!(out, \"    let val{} = in{}[idx];\", i, i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:233",
+    "code": "writeln!(out, \"    out_data[idx] = {}({});\", out_type, expr_str).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:234",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:246",
+    "code": "writeln!(out, \"#include <metal_stdlib>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:247",
+    "code": "writeln!(out, \"using namespace metal;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:248",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:250",
+    "code": "writeln!(out, \"kernel void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:259",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:267",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:268",
+    "code": "writeln!(out, \"    uint idx [[thread_position_in_grid]]\\n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:273",
+    "code": "writeln!(out, \"    const {} val{} = in1[0];\", msl_type(dt), i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:276",
+    "code": "writeln!(out, \"    const {} val{} = in{}[idx];\", msl_type(dt), i, i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:287",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/pointwise.rs:288",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:44",
+    "code": "_ => panic!(\"gradcheck: perturbation only supported for F32/F64 buffers\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:114",
+    "code": "let grads = tape::backward(&out).expect(\"gradcheck: backward() must succeed\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:120",
+    "code": ".expect(\"gradcheck: missing analytic gradient for input\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/mod.rs:271",
+    "code": "<$ty>::from_ne_bytes(chunk.try_into().expect(\"checked chunk size\"))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/elementwise/dispatch.rs:174",
+    "code": "elementwise_unary_typed(UnaryOp::Neg, t).unwrap()",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:9",
+    "code": ".expect(\"2D transpose of a 2D matmul operand cannot fail\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:19",
+    "code": ".expect(\"transpose of the last two axes of a rank>=2 tensor cannot fail\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/reduce/dim.rs:217",
+    "code": ".expect(\"max_dim: squeeze reshape of size-1 keepdim result cannot fail\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/reduce/dim.rs:284",
+    "code": ".expect(\"min_dim: squeeze reshape of size-1 keepdim result cannot fail\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/reduce/select.rs:41",
+    "code": ".expect(\"argmax: squeeze reshape of size-1 keepdim result cannot fail\"))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/ops/reduce/select.rs:95",
+    "code": ".expect(\"argmin: squeeze reshape of size-1 keepdim result cannot fail\"))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/storage.rs:274",
+    "code": ".expect(\"backend-created contiguous CPU storage must match its allocation\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cpu/stride.rs:56",
+    "code": ".expect(\"validated CpuStorage shape must have a representable element count\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/backend/nn.rs:182",
+    "code": "batch_outs.into_iter().next().unwrap()",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/backend/nn.rs:190",
+    "code": "group_outputs.into_iter().next().unwrap()",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:158",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:160",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:161",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:234",
+    "code": "let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:236",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/conv.rs:237",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:75",
+    "code": "let lhs_f32 = lhs_buf.data.transmute::<f32>(lhs_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:76",
+    "code": "let rhs_f32 = rhs_buf.data.transmute::<f32>(rhs_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:81",
+    "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:82",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:148",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:150",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:151",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:153",
+    "code": "Arc::get_mut(&mut idx_b.data).expect(\"idx_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:154",
+    "code": "let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:217",
+    "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:219",
+    "code": "let idx_u32 = idx_buf.data.transmute::<u32>(idx_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:221",
+    "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:222",
+    "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:273",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:275",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:276",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:340",
+    "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:342",
+    "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:343",
+    "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:150",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:151",
+    "code": "let params_f32 = params_dev.transmute::<u32>(21).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:156",
+    "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:157",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:332",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:337",
+    "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:338",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/storage.rs:156",
+    "code": ".expect(\"backend-created contiguous CUDA storage must match its allocation\")",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/tape.rs:159",
+    "code": "crate::cuda::ops::reduce::launch_reduce_op(\"sum\", storage, axis, true).unwrap()",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/dist/nccl/buffer.rs:59",
+    "code": ".expect(\"built-in dtype\")",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/dist/reference.rs:108",
+    "code": ".expect(\"built-in dtype\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:206",
+    "code": ".map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:214",
+    "code": ".map(|chunk| f64::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:224",
+    "code": ".map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:232",
+    "code": ".map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:240",
+    "code": ".map(|chunk| half::f16::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/external/candle/backend.rs:248",
+    "code": ".map(|chunk| half::bf16::from_ne_bytes(chunk.try_into().unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/iteration.rs:224",
+    "code": ".expect(\"merge requires an existing dimension\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/layout.rs:55",
+    "code": ".expect(\"validated storage shape must have representable contiguous strides\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/tuning/identity/cuda.rs:164",
+    "code": "write!(&mut output, \"{:02x}\", byte as u8).expect(\"writing to String cannot fail\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/wgpu/device.rs:21",
+    "code": ".expect(\"WGPU state is initialized before an internal buffer is used\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/wgpu/device.rs:68",
+    "code": ".expect(\"the WGPU state was just initialized\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-backends/src/wgpu/storage.rs:192",
+    "code": ".expect(\"backend-created contiguous WGPU storage must match its allocation\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/dist/mesh.rs:978",
+    "code": ".expect(\"rank is below the world size the count guard already checked\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/exec/proof.rs:240",
+    "code": "panic!(\"paranoid-validation: descriptor failed its own invariants: {error:?}\");",
+    "disposition": "opt-in invariant assertion",
+    "evidence": "exec proof tests"
+  },
+  {
+    "site": "crates/incin-core/src/exec/spec.rs:333",
+    "code": "Self(AxisSetRepr::Inline(AxisMask::EMPTY.insert(axis).unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/exec/spec.rs:340",
+    "code": "Self(AxisSetRepr::Inline(mask.insert(axis).unwrap()))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/conv1d.rs:350",
+    "code": "let bias = Some(self.bias.as_ref().unwrap().as_tensor()?);",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/conv2d.rs:319",
+    "code": "let bias = self.bias.as_ref().unwrap().as_tensor()?;",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/linear.rs:331",
+    "code": "u64::try_from(dims[0]).expect(\"validated dimension must fit u64\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/linear.rs:332",
+    "code": "u64::try_from(dims[1]).expect(\"validated dimension must fit u64\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/linear.rs:451",
+    "code": "let bias_t = self.bias.as_ref().unwrap().as_tensor()?;",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/linear.rs:572",
+    "code": ".unwrap()",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/state.rs:527",
+    "code": ".expect(\"canonical state path was validated\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/stats.rs:124",
+    "code": ".expect(\"parameter tensor shape crossed checked construction\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/stats.rs:125",
+    "code": "u64::try_from(elements).expect(\"usize parameter count must fit u64\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/shapes/dim.rs:55",
+    "code": "panic!(\"invalid static dimension expression\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/shapes/dim.rs:297",
+    "code": "panic!(\"Invalid static dimension expression\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/shapes/shape.rs:849",
+    "code": ".expect(\"validated tensor shape must have a representable element count\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/tensor/conv2d.rs:77",
+    "code": "COut::static_size().expect(\"StaticDim proves a concrete extent\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/tensor/conv2d.rs:79",
+    "code": ".expect(\"StaticDim proves a concrete extent\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/tensor/conv2d.rs:81",
+    "code": ".expect(\"StaticDim proves a concrete extent\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/tensor/ops/mod.rs:34",
+    "code": "Err(_) => panic!(\"incin tensor operator `{operator}` failed\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-data/src/loader.rs:323",
+    "code": "prefetch: NonZeroUsize::new(2).expect(\"constant is non-zero\"),",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-lsp/src/main.rs:52",
+    "code": "let child_stdin = child.stdin.take().expect(\"piped child stdin\");",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-lsp/src/main.rs:53",
+    "code": "let child_stdout = child.stdout.take().expect(\"piped child stdout\");",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-lsp/src/main.rs:67",
+    "code": ".unwrap()",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-lsp/src/main.rs:81",
+    "code": "let mut pending = pending.lock().unwrap();",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-lsp/src/main.rs:92",
+    "code": "serde_json::to_vec(&new_msg).expect(\"serialize rewritten LSP message\");",
+    "disposition": "declared process boundary",
+    "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-macros/src/shape_value.rs:262",
+    "code": ".expect(\"shape! generated an invalid static shape\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-macros/src/shape_value.rs:263",
+    "code": ").expect(\"shape! generated an invalid static shape\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-macros/src/tensor.rs:262",
+    "code": "Ok(syn::parse_str::<Type>(name).expect(\"`i64`/`f32` always parse as a type\"))",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-telemetry/src/emitter.rs:199",
+    "code": "let bulk_tx = self.bulk_tx.as_ref().expect(\"bulk_tx taken before drop\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-telemetry/src/emitter.rs:231",
+    "code": ".expect(\"priority_tx taken before drop\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-viz/src/panels/panic_test.rs:44",
+    "code": "panic!(\"Manual panic triggered from PanicTestPanel\");",
+    "disposition": "explicit diagnostic test panel",
+    "evidence": "incin-viz panic panel tests"
+  }
+]

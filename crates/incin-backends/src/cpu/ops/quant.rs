@@ -190,6 +190,8 @@ unsafe fn vec_dot_q8_0_avx2(
         let lhs_block = &lhs[lhs_row_start + b];
         let rhs_block = &rhs[rhs_row_start + b];
 
+        // SAFETY: the caller's block-count and row-offset contract puts this
+        // complete Q8_0 block within both slices; AVX2 is required here.
         let (l, r) = unsafe {
             (
                 _mm256_loadu_si256(lhs_block.qs.as_ptr() as *const __m256i),

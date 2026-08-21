@@ -50,13 +50,17 @@ for CUDA launch parameters - `AutotunePolicy`, `KernelSignature`,
 
 ## Compiled execution
 
-Feature `compiled`. A structural prototype under
-`incin::experimental::compiled`. The crate's own documentation is blunt about
-it: CPU execution is available through the `compiled,cpu` feature. The generic
-plan builds symbolic guards and liveness information. `CpuCompiledPlan::compile`
-performs executable CPU admission, and `CpuCompiledInvocation` runs the admitted
-descriptor-backed subset. Unsupported operations and malformed descriptors fail
-during admission.
+Feature `compiled`. This is a preview-only CPU reference evaluator under
+`incin::experimental::compiled`, not a stable compiler interface. The generic
+plan builds symbolic guards and liveness information.
+`CpuCompiledPlan::compile` performs CPU admission, and
+`CpuCompiledInvocation` runs the admitted descriptor-backed subset. Unsupported
+operations and malformed descriptors fail during admission.
+
+`CompiledArtifact` serializes a preview plan snapshot for inspection and local
+testing. It is not a deployment format or a portable ABI. A loader checks the
+artifact format and the caller-supplied compatibility major/minor values (patch
+values may differ); it does not verify the running framework version.
 
 ## Telemetry
 

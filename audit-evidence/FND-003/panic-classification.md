@@ -3,12 +3,24 @@
 The raw workspace inventory is archived in
 `test-results/panic-unwrap-expect-inventory.txt`; the final inventory is
 archived separately after implementation. Occurrences were reviewed by
-boundary, not mechanically rewritten.
+boundary, not mechanically rewritten. The release audit is cfg-aware:
+`#[cfg(test)]` and `#[test]` bodies are excluded before classifying production
+paths, so assertion helpers and test-only process-global environment setup do
+not inflate the product inventory. The review covers `panic!`, `unwrap`,
+`expect`, indexing, arithmetic, allocation, conversion, and user-input
+boundaries; it follows the typed failures required by `docs/ERROR_CONTRACT.md`
+rather than relying on a raw occurrence count.
+
+The checked source-of-truth is `production-panic-sites.json`. It records the
+exact path, line, source expression, disposition, and validation evidence for
+each production `panic!`, `unwrap`, and `expect`. Run
+`python3 tools/check-panic-audit.py` to detect drift. Maintainers may run the
+same command with `--update` to create candidates, but must review every
+resulting disposition before committing the inventory.
 
 ## Converted recoverable paths
 
-- Tensor binary and scalar operator overloads now return the same typed
-  `Result` as their named methods.
+- Tensor binary and scalar operator overloads provide an ergonomic panic-on-error convenience boundary using fixed bounded text, while named methods (`try_add`, `add_scalar`, etc.) return typed `Result`s.
 - CUDA and WGPU unary backward recipes propagate kernel, broadcast, device,
   upload, download, and buffer-map errors through the tape.
 - CUDA context creation and WGPU initial adapter/device creation fail through

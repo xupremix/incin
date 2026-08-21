@@ -115,6 +115,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Install editor test display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Test and package VS Code extension
         working-directory: editors/vscode
         run: |
@@ -252,7 +255,11 @@ jobs:
             echo "refusing to modify an existing release for $RELEASE_TAG" >&2
             exit 1
           fi
-          gh release create "$RELEASE_TAG" --target "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes --draft
+          release_kind=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_kind+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" --target "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes "${release_kind[@]}" --draft
           gh release upload "$RELEASE_TAG" release-assets/incin-*
 
       - name: Verify uploaded draft assets

@@ -62,6 +62,10 @@ of repeating a number that won't.
   feature) has a real single-device training loop (`fit`), but explicitly
   refuses a multi-device plan (`TrainError::CollectivesUnavailable`) rather
   than doing something wrong.
+- **Compiled execution** is only the CPU reference evaluator under
+  `incin::experimental::compiled`. It has no stable facade contract, optimized
+  backend, deployment target, or portable artifact ABI; its serialized plan
+  snapshots are local preview data only.
 
 ## Where the current, generated truth lives
 

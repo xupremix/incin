@@ -259,6 +259,8 @@ unsafe fn avx2_scalar_f32_into(
     scalar_left: bool,
     output_ptr: *mut f32,
 ) {
+    // SAFETY: this unsafe wrapper inherits its caller's AVX2 and output
+    // allocation proof, then forwards the identical arguments.
     unsafe { avx2_broadcast_scalar_f32(op, dense, scalar, scalar_left, output_ptr) }
 }
 

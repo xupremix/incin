@@ -1,4 +1,7 @@
-//! Bounded plan tuning measured against a single-device baseline (`DST-013`).
+//! Reserved types for unavailable preview plan tuning.
+//!
+//! The CPU compiled path has no measurement hook or tuning executor. It never
+//! produces a tuning report and returns [`TuningUnavailable`] instead.
 
 use crate::compiled::CompiledPlan;
 use serde::{Deserialize, Serialize};
@@ -12,7 +15,7 @@ impl core::fmt::Display for TuningUnavailable {
     }
 }
 
-/// Report of plan tuning metrics comparing baseline execution to tuned execution.
+/// Reserved report shape for a future measured tuner; no report is produced today.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlanTuningReport {
     pub baseline_latency_us: f64,
@@ -22,7 +25,7 @@ pub struct PlanTuningReport {
     pub is_bounded: bool,
 }
 
-/// Bounded plan tuner interface for measured kernel placements and schedules.
+/// Placeholder interface for a future bounded, measured plan tuner.
 #[derive(Debug, Clone)]
 pub struct BoundedPlanTuner {
     pub max_iterations: usize,
@@ -37,8 +40,7 @@ impl BoundedPlanTuner {
         }
     }
 
-    /// Tunes execution parameters for a given plan within defined iteration bounds.
-    /// Uses the node count as a workload proxy for a single-device baseline.
+    /// Returns [`TuningUnavailable`]; no tuning or proxy measurement is performed.
     pub fn tune_plan(&self, _plan: &CompiledPlan) -> Result<PlanTuningReport, TuningUnavailable> {
         let _ = (self.max_iterations, self.min_speedup_target);
         Err(TuningUnavailable)

@@ -11,7 +11,7 @@
 use crate::dist::placement::Local;
 use crate::err::Result;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes, op};
+use crate::exec::catalog::{op, AttributeContract, CanonicalOperation, NoAttributes};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -581,122 +581,114 @@ impl_broadcast_binary_op!(
 );
 
 macro_rules! impl_std_ops {
-    ($trait:ident, $method:ident, $backend_method:ident, $op:ident) => {
+    ($trait:ident, $method:ident, $backend_method:ident, $op:ident, $operator:literal) => {
         impl<
-            S1: Shape + DynShape,
-            S2: Shape + DynShape,
-            B: Backend + Execute<op::$op>,
-            K: DType,
-            G1: RequiresGrad,
-            G2: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+                S1: Shape + DynShape,
+                S2: Shape + DynShape,
+                B: Backend + Execute<op::$op>,
+                K: DType,
+                G1: RequiresGrad,
+                G2: RequiresGrad,
+            > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
-                self.$backend_method(&rhs)
+                crate::tensor::ops::operator_or_panic($operator, self.$backend_method(&rhs))
             }
         }
 
         impl<
-            'a,
-            'b,
-            S1: Shape + DynShape,
-            S2: Shape + DynShape,
-            B: Backend + Execute<op::$op>,
-            K: DType,
-            G1: RequiresGrad,
-            G2: RequiresGrad,
-        > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+                'a,
+                'b,
+                S1: Shape + DynShape,
+                S2: Shape + DynShape,
+                B: Backend + Execute<op::$op>,
+                K: DType,
+                G1: RequiresGrad,
+                G2: RequiresGrad,
+            > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
             fn $method(self, rhs: &'b Tensor<S2, B, K, G2>) -> Self::Output {
-                self.$backend_method(rhs)
+                crate::tensor::ops::operator_or_panic($operator, self.$backend_method(rhs))
             }
         }
 
         impl<
-            'a,
-            S1: Shape + DynShape,
-            S2: Shape + DynShape,
-            B: Backend + Execute<op::$op>,
-            K: DType,
-            G1: RequiresGrad,
-            G2: RequiresGrad,
-        > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+                'a,
+                S1: Shape + DynShape,
+                S2: Shape + DynShape,
+                B: Backend + Execute<op::$op>,
+                K: DType,
+                G1: RequiresGrad,
+                G2: RequiresGrad,
+            > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
             fn $method(self, rhs: &'a Tensor<S2, B, K, G2>) -> Self::Output {
-                self.$backend_method(rhs)
+                crate::tensor::ops::operator_or_panic($operator, self.$backend_method(rhs))
             }
         }
 
         impl<
-            'a,
-            S1: Shape + DynShape,
-            S2: Shape + DynShape,
-            B: Backend + Execute<op::$op>,
-            K: DType,
-            G1: RequiresGrad,
-            G2: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+                'a,
+                S1: Shape + DynShape,
+                S2: Shape + DynShape,
+                B: Backend + Execute<op::$op>,
+                K: DType,
+                G1: RequiresGrad,
+                G2: RequiresGrad,
+            > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape + DynShape,
             <B as Execute<op::$op>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<
-                Tensor<
-                    <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
-                    B,
-                    K,
-                    JoinedGrad<G1, G2>,
-                >,
+            type Output = Tensor<
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output,
+                B,
+                K,
+                JoinedGrad<G1, G2>,
             >;
             fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
-                self.$backend_method(&rhs)
+                crate::tensor::ops::operator_or_panic($operator, self.$backend_method(&rhs))
             }
         }
     };
 }
 
-impl_std_ops!(Add, add, broadcast_add, Add);
-impl_std_ops!(Sub, sub, broadcast_sub, Sub);
-impl_std_ops!(Mul, mul, broadcast_mul, Mul);
-impl_std_ops!(Div, div, broadcast_div, Div);
+impl_std_ops!(Add, add, broadcast_add, Add, "+");
+impl_std_ops!(Sub, sub, broadcast_sub, Sub, "-");
+impl_std_ops!(Mul, mul, broadcast_mul, Mul, "*");
+impl_std_ops!(Div, div, broadcast_div, Div, "/");

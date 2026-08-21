@@ -126,6 +126,8 @@ pub(crate) fn launch_broadcast_bool_mask(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: validated broadcast metadata fixes the 21-u32 parameter view,
+    // numel, and launch extent; out_b is freshly and uniquely allocated.
     unsafe {
         let params_u32 = params_dev.transmute::<u32>(21).ok_or_else(|| {
             Error::Msg("broadcast-mask params buffer was not 21 u32s wide".into())
@@ -199,6 +201,8 @@ pub(crate) fn launch_where_cond(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: checked broadcast shape and numel bound kernel views; out_b is
+    // fresh, so Arc::get_mut supplies the only mutable device handle.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {
@@ -278,6 +282,8 @@ pub(crate) fn launch_masked_fill(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: checked mask/input/output shapes and numel bound this launch;
+    // out_b is freshly allocated and uniquely owned.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {

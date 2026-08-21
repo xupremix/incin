@@ -19,9 +19,12 @@ fn main() -> ExitCode {
         Some("budgets") => budgets::check(),
         Some("ledger") => ledger::check(),
         Some("docs") => docs::run(std::env::args().nth(2).as_deref() == Some("--check")),
+        Some("feature-msrv") => docs::run_msrv(),
         Some("onnx") => onnx::run(std::env::args().nth(2).as_deref() == Some("--check")),
         Some("feature-matrix") => {
+            let arguments: Vec<_> = std::env::args().skip(2).collect();
             let status = std::process::Command::new("tools/feature-matrix.sh")
+                .args(arguments)
                 .status()
                 .expect("failed to execute tools/feature-matrix.sh");
             if status.success() {
@@ -57,5 +60,10 @@ fn usage() {
     eprintln!("                    manifests; --check fails instead of writing (UX-013)");
     eprintln!("    onnx            Regenerate incin-core's checked-in ONNX protobuf module");
     eprintln!("                    from proto/onnx.proto; --check fails instead of writing");
-    eprintln!("    feature-matrix  Check the supported backend/facade feature contract matrix");
+    eprintln!(
+        "    feature-matrix [stable]  Check feature contract rows (stable is the MSRV union)"
+    );
+    eprintln!(
+        "    feature-msrv    Derive and check every stable package powerset at the active toolchain"
+    );
 }

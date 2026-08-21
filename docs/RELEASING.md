@@ -5,6 +5,13 @@ release. The tagged commit must already be reachable from `master`. The
 workflow does not make the release public. Inspect the draft and its checksums
 before using the explicit manual publish action for the same tag.
 
+Release candidates use the same workflow and assets as the final release. Set
+the workspace, internal path-dependency requirements, VS Code package, and npm
+lockfile to the full candidate version before creating tags such as
+`v0.1.0-rc.1`. The workflow marks those GitHub releases as prereleases. Restore
+the package version to `0.1.0` in a reviewed commit before tagging the final
+release; do not reuse a candidate tag or replace its assets.
+
 ```bash
 git tag v0.1.0
 git push origin v0.1.0

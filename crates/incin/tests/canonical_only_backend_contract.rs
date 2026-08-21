@@ -347,7 +347,8 @@ impl Execute<op::Add> for FailingAddBackend {
 }
 
 #[test]
-fn operator_returns_structured_backend_failure_without_panicking() -> Result<()> {
+fn named_method_returns_structured_backend_failure_and_operator_panics_without_details(
+) -> Result<()> {
     let meta = TensorMeta::contiguous(
         ShapeBuf::from_slice(&[3]),
         <f32 as ConstDType>::DESCRIPTOR,
@@ -369,12 +370,19 @@ fn operator_returns_structured_backend_failure_without_panicking() -> Result<()>
     };
     let lhs = tensor()?;
     let rhs = tensor()?;
-
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| lhs + rhs));
-    assert!(outcome.is_ok(), "operator evaluation must not panic");
     assert!(matches!(
-        outcome.unwrap(),
+        lhs.try_add(&rhs),
         Err(Error::Backend(BackendError::Execution { .. }))
     ));
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| lhs + rhs));
+    let panic = outcome.expect_err("operator evaluation must panic");
+    let message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .expect("operator panic has a string message");
+    assert_eq!(message, "incin tensor operator `+` failed");
+    assert!(!message.contains("simulated failure"));
     Ok(())
 }

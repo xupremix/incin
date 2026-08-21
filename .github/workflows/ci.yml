@@ -89,6 +89,11 @@ jobs:
     - name: Clippy Lints
       run: cargo clippy --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
 
+    - name: Clippy CUDA and NCCL unsafe boundaries
+      run: |
+        cargo clippy -p incin-backends --no-default-features --features cpu,cuda --lib -- -D warnings
+        cargo clippy -p incin-backends --no-default-features --features cpu,distributed-nccl --lib -- -D warnings
+
     - name: Run Unit & Integration Tests
       run: cargo test --all-targets --no-default-features --features incin-backends/cpu,incin/cpu
 
@@ -234,6 +239,9 @@ jobs:
     - name: AddressSanitizer and LeakSanitizer
       run: tools/soundness.sh asan
 
+    - name: ThreadSanitizer
+      run: tools/soundness.sh tsan
+
   ledger:
     name: Execution Ledger Validation
     runs-on: ubuntu-latest
@@ -269,6 +277,10 @@ jobs:
       run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
+    - name: Audit unsafe and panic boundaries
+      run: |
+        python3 tools/check-unsafe-ledger.py
+        python3 tools/check-panic-audit.py
     - name: Validate publishable package boundaries
       run: |
         cargo metadata --locked --format-version 1 --no-deps >/dev/null
@@ -284,6 +296,9 @@ jobs:
     # floor means changing both this line and the workspace manifest, which is
     # the point.
     - uses: dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b # 1.88.0
+    - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
+      with:
+        tool: cargo-hack
     - name: Cache Cargo modules
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -294,6 +309,8 @@ jobs:
         key: ${{ runner.os }}-msrv-${{ hashFiles('**/Cargo.lock') }}
     - name: Build every target at the declared MSRV
       run: cargo check --workspace --all-targets --locked
+    - name: Check metadata-derived stable feature powersets at MSRV
+      run: cargo xtask feature-msrv
 
   supply-chain:
     name: Advisories, Licences, and Duplicates
@@ -507,3 +524,37 @@ jobs:
     # on the runner being torn down: autogen, then clean, every run.
     - name: Remove generated output
       run: rm -rf docs/book/book
+
+  vscode-lsp-e2e:
+    name: VS Code, incin-lsp, and rust-analyzer E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: npm
+        cache-dependency-path: editors/vscode/package-lock.json
+    - name: Cache Rust and pinned VS Code test build
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          editors/vscode/.vscode-test
+        key: ${{ runner.os }}-vscode-lsp-e2e-vscode-1.134.0-ra-0.3.2971-${{ hashFiles('**/Cargo.lock', 'editors/vscode/package-lock.json') }}
+    - name: Install Xvfb
+      run: sudo apt-get update && sudo apt-get install -y xvfb
+    - name: Build the local proxy binary
+      run: cargo build -p incin-lsp
+    - name: Run pinned real editor pipeline
+      working-directory: editors/vscode
+      env:
+        INCIN_REAL_E2E: "1"
+        INCIN_E2E_LSP_PATH: ${{ github.workspace }}/target/debug/incin-lsp
+        INCIN_E2E_REPO_ROOT: ${{ github.workspace }}
+        INCIN_E2E_TIMEOUT_MS: "120000"
+      run: xvfb-run -a npm test

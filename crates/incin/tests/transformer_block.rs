@@ -1,9 +1,9 @@
 #![cfg(feature = "cpu")]
 
-use incin::AdamW;
 use incin::backend_authoring::HostInterop;
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
+use incin::AdamW;
 
 type Cpu = incin_backends::cpu::CpuBackendImpl;
 type Input = Tensor<Dyn, Cpu, f32, Grad>;
@@ -52,13 +52,13 @@ impl Module<Input> for TransformerBlock {
             .mul_scalar(1.0 / (8.0_f32).sqrt())?;
         let attention = scores.softmax(1)?;
         let attended = attention.matmul(&value)?;
-        let attention_residual = (input + &self.projection.forward(attended)?)?;
+        let attention_residual = input + &self.projection.forward(attended)?;
         let feed_forward = self.feed_forward_out.forward(
             self.feed_forward_in
                 .forward(attention_residual.clone())?
                 .gelu()?,
         )?;
-        attention_residual + &feed_forward
+        Ok(attention_residual + &feed_forward)
     }
 }
 
@@ -83,12 +83,10 @@ pub fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()
     let output = model.forward(input)?;
     assert_eq!(output.dims().dims(), &[4, 8]);
     let output_bytes = Cpu::to_bytes::<f32>(output.inner())?;
-    assert!(
-        output_bytes
-            .chunks_exact(core::mem::size_of::<f32>())
-            .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
-            .all(f32::is_finite)
-    );
+    assert!(output_bytes
+        .chunks_exact(core::mem::size_of::<f32>())
+        .map(|bytes| f32::from_ne_bytes(bytes.try_into().expect("f32 bytes")))
+        .all(f32::is_finite));
     let loss = output.mse_loss(&target)?;
     let grads = loss.backward()?;
     let mut nonzero_gradient_count = 0usize;

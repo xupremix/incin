@@ -13,7 +13,8 @@ REQUIRED = (
     "npm audit --audit-level=high",
     "release-assets.py checksums",
     "release-assets.py verify",
-    "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes --draft",
+    "release_kind+=(--prerelease)",
+    "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes \"${release_kind[@]}\" --draft",
     "release-assets.py verify-github",
     "gh release edit \"$RELEASE_TAG\" --draft=false",
     "publish-existing-draft",
@@ -47,6 +48,9 @@ def main() -> int:
             missing.append("preflight job recognizes manual publication")
         if "github.ref_type" not in preflight_text or "github.ref_name" not in preflight_text:
             missing.append("manual publication requires the matching tag ref")
+    draft = re.search(r"(?ms)^  draft-release:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)", text)
+    if draft is not None and '[[ "$RELEASE_TAG" == *-* ]]' not in draft.group():
+        missing.append("prerelease tags are detected from RELEASE_TAG")
     if book is None:
         missing.append("book job")
     else:

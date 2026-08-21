@@ -6,9 +6,11 @@ hints into readable shapes before they reach your editor.
 
 It only changes these server-to-editor messages:
 
-- `textDocument/publishDiagnostics`, where typenum expressions in diagnostic
-  messages become decimal shapes;
-- responses to `textDocument/inlayHint`, where tensor labels are simplified.
+- pushed and pulled diagnostics, where typenum expressions become decimal
+  shapes and known failures gain focused guidance;
+- responses to `textDocument/inlayHint`, where tensor labels are simplified;
+- responses to `textDocument/hover`, where displayed type signatures are
+  simplified.
 
 All other LSP frames are forwarded unchanged. The proxy does not implement a
 separate language server and does not replace rust-analyzer.

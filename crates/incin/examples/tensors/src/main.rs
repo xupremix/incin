@@ -94,8 +94,8 @@ fn main() -> Result<()> {
     // scaled_input is [4, 10]; bias is [10]. The trailing dimensions match,
     // so bias broadcasts across the batch dimension: every row gets the
     // same per-feature offset added to it.
-    let scaled_input = (&normal_input * 2.0)?;
-    let offset_input = (&scaled_input + &bias)?;
+    let scaled_input = &normal_input * 2.0;
+    let offset_input = &scaled_input + &bias;
     println!(
         "\n• Broadcasting: [4, 10] * 2.0 + [10] -> shape {:?}",
         offset_input.dims()

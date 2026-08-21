@@ -18,6 +18,16 @@ The `0.1.0` core stabilization milestone establishes key architectural invariant
 These are the changes a reader upgrading from a `0.0.0` development snapshot
 has to act on.
 
+### Tensor operator syntax is now the panic-on-error convenience boundary
+
+`+`, `-`, `*`, `/`, tensor-scalar forms, and unary `-` now produce tensors
+directly, so remove `?` around operator expressions. The same operations stay
+recoverable through `try_add`, `try_sub`, `try_mul`, `try_div`, `try_neg`, and
+the scalar named methods. Use those named methods at library and application
+boundaries that must handle dynamic-shape, device, or backend failures. An
+operator failure panics with a fixed, operator-only message and never includes
+tensor contents or backend diagnostic text.
+
 ### `protoc` is no longer a build dependency
 
 `incin-core` had a build script that ran `prost-build` on every build, which
@@ -296,38 +306,47 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 
 #### Overview
 
-`incin-core` now exposes a compiled-graph pipeline under `incin_core::compiled`:
+The `compiled` feature is a preview-only CPU reference-evaluation and plan
+inspection surface. Facade users must access it through
+`incin::experimental::compiled`; no compiled types are part of the root or
+prelude compatibility baseline. It is not a stable compiler, deployment target,
+or portable artifact ABI.
+
+Lower-level `incin-core` exposes the implementation pipeline under
+`incin_core::compiled`:
 
 | Component | Module | Purpose |
 |-----------|--------|---------|
 | `CapturedGraph` / `CapturedNode` | `compiled::capture` | Captures an eager `Graph` IR for offline analysis |
 | `CompiledPlan` / `CompileOptions` | `compiled::plan` | Immutable compiled plan with input guards |
 | `ShapeGuard` / `DynamicShapePolicy` | `compiled::plan` | Runtime dtype/shape verification |
-| `ConstantFolder` / `WeightPrepacker` / `ShapeBucket` | `compiled::fold` | Constant folding and shape bucketing passes |
+| `ConstantFolder` / `WeightPrepacker` / `ShapeBucket` | `compiled::fold` | Inspection/prototype pass types; folding and prepacking have no executable lowering and fail closed |
 | `LivenessMap` / `AllocationPlanner` / `MemoryPlan` | `compiled::alloc` | Per-value liveness analysis and buffer slot assignment |
 | `SavedTensorSet` | `compiled::alloc` | Extends liveness for autograd-saved tensors |
-| `FusionPass` / `FusionCandidate` / `FusedKernel` | `compiled::fusion` | Safe pointwise kernel fusion pass |
-| `CompiledArtifact` / `ArtifactVersion` / `ArtifactHeader` | `compiled::artifact` | Versioned, integrity-checked artifact serialization |
+| `FusionPass` / `FusionCandidate` / `FusedKernel` | `compiled::fusion` | Inspection/prototype fusion types; executable fusion is unavailable and fails closed |
+| `CompiledArtifact` / `ArtifactVersion` / `ArtifactHeader` | `compiled::artifact` | Preview plan snapshots with integrity checks; not a deployment format |
 
-All types are re-exported through `incin_core::prelude`.
+These preview types are available from `incin_core::experimental::compiled` to
+lower-level users and `incin::experimental::compiled` through the facade. They
+are intentionally absent from both stable preludes.
 
 #### Graph Capture and Compilation
 
 ```rust
-use incin_core::prelude::*;
-use incin_core::graph::Graph;
-use incin_core::prelude::OperationKind;
-use std::collections::BTreeMap;
+use incin::experimental::compiled::{CapturedGraph, CompileOptions, CompiledPlan, DTypeId, Graph};
 
-let mut graph = Graph::new();
-let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
-let y = graph.add_value(vec![4], DTypeId::F32, Some("y".into()));
-graph.mark_input(x);
-graph.mark_output(y);
-graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
+fn inspect_input_only_plan() -> incin::Result<CompiledPlan> {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
+    graph.mark_input(x);
+    graph.mark_output(x);
+    // A non-empty CPU plan also needs the canonical descriptor payload. The
+    // facade-only Relu invocation is exercised in
+    // `crates/incin/tests/consumer-fixtures/experimental-compiled-pass`.
 
-let captured = CapturedGraph::capture(&graph)?;
-let plan = CompiledPlan::compile(captured, CompileOptions::new());
+    let captured = CapturedGraph::capture(&graph)?;
+    CompiledPlan::compile(captured, CompileOptions::new())
+}
 ```
 
 #### Liveness and Allocation Planning
@@ -348,14 +367,12 @@ saved.save(activation_id);
 liveness.extend_for_saved_tensors(&saved, backward_end_node);
 ```
 
-#### Kernel Fusion
+#### Fusion and prepacking
 
-```rust
-let pass = FusionPass;
-let candidates = pass.find_candidates(&plan.graph);
-let (fused_graph, kernels) = pass.apply(&plan.graph, &candidates)?;
-println!("Fused {} kernel chains", kernels.len());
-```
+`FusionPass`, `ConstantFolder`, and `WeightPrepacker` remain inspection and
+prototype types. The CPU reference evaluator rejects fusion, folding, and
+prepacking requests without an executable lowering rather than silently
+claiming an optimization.
 
 #### Artifact Serialization
 
@@ -367,5 +384,10 @@ let bytes = artifact.serialize()?;
 // Reload with integrity + compatibility verification
 let loaded = CompiledArtifact::load(&bytes, &version)?;
 ```
+
+Snapshots are accepted only when their artifact format and the
+caller-supplied compatibility major/minor values match the requested version.
+Patch values may differ. This is a local preview compatibility policy; it does
+not verify the running framework version or promise a portable artifact ABI.
 
 ---

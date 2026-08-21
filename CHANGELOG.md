@@ -13,6 +13,12 @@ backend; the GPU backends, distributed planning, compiled execution, and the
 automatic trainer ship as previews. See `docs/MIGRATION.md` for what an
 upgrade from a `0.0.0` snapshot has to act on.
 
+The `compiled` feature is specifically a CPU reference evaluator and plan
+inspection surface under `incin::experimental::compiled`. It is not a stable
+compiler, deployment target, or portable artifact ABI. Its preview plan
+snapshots require matching artifact format and caller-supplied compatibility
+major/minor values.
+
 ### Removed
 - **`protoc` as a build dependency.** `incin-core`'s build script ran
   `prost-build` unconditionally, making a system protobuf compiler mandatory
@@ -262,13 +268,8 @@ upgrade from a `0.0.0` snapshot has to act on.
 
 ### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.
-- **Compiled graph capture (`CMP-001`, `incin-core::compiled::capture`):** `CapturedGraph` and `CapturedNode` provide a serializable IR snapshot of an eager `Graph` for offline analysis, inspection, and compilation passes.
-- **Immutable compiled plans and dynamic guards (`CMP-002`, `incin-core::compiled::plan`):** `CompiledPlan` bundles a `CapturedGraph` with `CompileOptions` and per-input `ShapeGuard` entries for runtime dtype/shape verification. `DynamicShapePolicy` and `FusionPolicy` are the two knobs.
-- **Constant folding, weight prepacking, and shape buckets (`CMP-004`, `incin-core::compiled::fold`):** `ConstantFolder` propagates compile-time-known values, `WeightPrepacker` tiles weights into contiguous layouts, and `ShapeBucket` bins dynamic shapes to reduce recompilation.
-- **Liveness and allocation planner (`CMP-003`, `incin-core::compiled::alloc`):** `LivenessMap` computes per-node def/use intervals; `AllocationPlanner` assigns buffer slots with slot reuse; `MemoryPlan` reports peak live slot count and alias candidates for buffer aliasing.
-- **Compiled-graph saved-tensor liveness (`GRD-007`, `incin-core::compiled::alloc`):** `SavedTensorSet` and `LivenessMap::extend_for_saved_tensors` extend forward liveness intervals through the backward pass, preventing premature buffer reuse for autograd-retained tensors.
-- **Safe kernel fusion pass (`CMP-005`, `incin-core::compiled::fusion`):** `FusionPass` identifies adjacent pointwise chains (`FusionCandidate`) and applies them (`FusedKernel`), reducing launch count. `FusionBlocker` documents why two ops may not fuse.
-- **Versioned compiled artifacts (`CMP-006`, `incin-core::compiled::artifact`):** `CompiledArtifact` wraps a `CompiledPlan` with an `ArtifactHeader` containing an `ArtifactVersion` and an Adler-32 integrity checksum. `serialize` / `deserialize` / `load` cover the full roundtrip; `verify_integrity` and `check_compatibility` guard against corruption and version skew.
+- **Preview compiled graph tooling (`CMP-001`..`CMP-006`):** The `compiled` feature provides captured-plan inspection, guards, liveness analysis, and a descriptor-backed CPU reference evaluator only through `experimental::compiled`. Folding, prepacking, tuning, and fusion remain fail-closed where no executable semantics exist; no optimization claim is made.
+- **Preview compiled-plan snapshots (`CMP-006`, `incin-core::compiled::artifact`):** `CompiledArtifact` wraps a `CompiledPlan` with an `ArtifactHeader`, caller-supplied compatibility metadata, and an Adler-32 integrity checksum. It is a local preview snapshot, not a deployment format or portable ABI; loading compares the requested compatibility values rather than the running framework version.
 - **Distributed placement proofs (`DST-003`, `incin-core`'s `distributed`
   feature):** `Replicated`, `Sharded`, `Partial`, and `PipelineStage` extend
   the existing `Local` placement typestate, with `PlacementKind` as their

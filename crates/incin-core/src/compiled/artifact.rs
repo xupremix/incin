@@ -1,5 +1,7 @@
-//! Versioned compiled artifacts: wraps a `CompiledPlan` with a version header
-//! and an Adler-32 checksum for compatibility detection and corruption detection.
+//! Preview compiled-plan snapshots with version and integrity checks.
+//!
+//! These snapshots are an experimental inspection and CPU-reference-evaluator
+//! aid. They are not a deployment format or a portable ABI.
 
 use alloc::string::String;
 #[cfg(feature = "serde_json")]
@@ -14,14 +16,14 @@ pub const ARTIFACT_FORMAT_VERSION: u32 = 1;
 /// Magic bytes written at the start of every serialized artifact.
 pub const ARTIFACT_MAGIC: [u8; 8] = *b"INCIN\x00\x01\x00";
 
-/// Semantic version of the framework that produced an artifact.
+/// Caller-supplied compatibility version for a preview snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ArtifactVersion {
-    /// Framework major version.
+    /// Caller-defined compatibility major version.
     pub major: u32,
-    /// Framework minor version.
+    /// Caller-defined compatibility minor version.
     pub minor: u32,
-    /// Framework patch version.
+    /// Caller-defined compatibility patch version.
     pub patch: u32,
     /// Artifact format version - must match `ARTIFACT_FORMAT_VERSION`.
     pub format: u32,
@@ -39,12 +41,14 @@ impl ArtifactVersion {
         }
     }
 
-    /// Returns `true` if this version is compatible with `other`.
+    /// Returns `true` if this preview snapshot is compatible with `other`.
     ///
-    /// Compatibility requires matching format and equal major versions.
+    /// Compatibility requires matching format and caller-supplied major/minor
+    /// values. Patch values are ignored. This is a local preview policy, not a
+    /// check against the running framework version or a portable ABI promise.
     #[must_use]
     pub fn is_compatible_with(&self, other: &Self) -> bool {
-        self.format == other.format && self.major == other.major
+        self.format == other.format && self.major == other.major && self.minor == other.minor
     }
 }
 
@@ -72,7 +76,9 @@ fn adler32(data: &[u8]) -> u32 {
     (b << 16) | a
 }
 
-/// A versioned, integrity-protected compiled artifact.
+/// A versioned, integrity-protected preview compiled-plan snapshot.
+///
+/// This is not a portable artifact format and must not be used for deployment.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CompiledArtifact {
     /// Version and checksum header.
@@ -140,7 +146,7 @@ impl CompiledArtifact {
         Ok(())
     }
 
-    /// Checks whether this artifact is compatible with the given required version.
+    /// Checks this artifact against the caller-supplied compatibility version.
     pub fn check_compatibility(&self, required: &ArtifactVersion) -> Result<()> {
         if !self.header.version.is_compatible_with(required) {
             return Err(Error::Msg(alloc::format!(

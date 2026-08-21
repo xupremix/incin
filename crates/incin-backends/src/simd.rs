@@ -197,6 +197,8 @@ unsafe fn avx2_reduce_sum_f32(data: &[f32]) -> f32 {
 
     let mut i = 0;
     while i < unrolled_end {
+        // SAFETY: i advances in 16-element steps below unrolled_end, so both
+        // eight-lane loads are within data; AVX2 is required by this function.
         unsafe {
             let v0 = _mm256_loadu_ps(ptr.add(i));
             let v0_lo = _mm256_cvtps_pd(_mm256_castps256_ps128(v0));
@@ -219,6 +221,8 @@ unsafe fn avx2_reduce_sum_f32(data: &[f32]) -> f32 {
 
     let vec_end = (len / 8) * 8;
     while i < vec_end {
+        // SAFETY: i is a multiple of eight below vec_end, so the load stays
+        // within data; AVX2 is required by this function.
         unsafe {
             let v = _mm256_loadu_ps(ptr.add(i));
             let v_lo = _mm256_cvtps_pd(_mm256_castps256_ps128(v));
@@ -228,8 +232,10 @@ unsafe fn avx2_reduce_sum_f32(data: &[f32]) -> f32 {
         i += 8;
     }
 
+    // SAFETY: hsum256_pd only operates on the local AVX accumulator.
     let mut total = unsafe { hsum256_pd(acc) };
     while i < len {
+        // SAFETY: i remains below len and data is borrowed for this loop.
         total += unsafe { *data.get_unchecked(i) } as f64;
         i += 1;
     }
@@ -255,6 +261,8 @@ unsafe fn avx2_reduce_max_f32(data: &[f32], init: f32) -> f32 {
 
     let mut i = 0;
     while i < unrolled_end {
+        // SAFETY: i advances in 32-element steps below unrolled_end, so all
+        // four eight-lane loads are in-bounds; AVX2 is required here.
         unsafe {
             let v0 = _mm256_loadu_ps(ptr.add(i));
             let v1 = _mm256_loadu_ps(ptr.add(i + 8));
@@ -273,6 +281,8 @@ unsafe fn avx2_reduce_max_f32(data: &[f32], init: f32) -> f32 {
 
     let vec_end = (len / 8) * 8;
     while i < vec_end {
+        // SAFETY: i is a multiple of eight below vec_end, so the load stays
+        // within data; AVX2 is required by this function.
         unsafe {
             let v = _mm256_loadu_ps(ptr.add(i));
             acc = _mm256_max_ps(acc, v);
@@ -280,8 +290,10 @@ unsafe fn avx2_reduce_max_f32(data: &[f32], init: f32) -> f32 {
         i += 8;
     }
 
+    // SAFETY: hmax256_ps only operates on the local AVX accumulator.
     let mut max_val = unsafe { hmax256_ps(acc) };
     while i < len {
+        // SAFETY: i remains below len and data is borrowed for this loop.
         let val = unsafe { *data.get_unchecked(i) };
         if val > max_val {
             max_val = val;
@@ -310,6 +322,8 @@ unsafe fn avx2_reduce_min_f32(data: &[f32], init: f32) -> f32 {
 
     let mut i = 0;
     while i < unrolled_end {
+        // SAFETY: i advances in 32-element steps below unrolled_end, so all
+        // four eight-lane loads are in-bounds; AVX2 is required here.
         unsafe {
             let v0 = _mm256_loadu_ps(ptr.add(i));
             let v1 = _mm256_loadu_ps(ptr.add(i + 8));
@@ -328,6 +342,8 @@ unsafe fn avx2_reduce_min_f32(data: &[f32], init: f32) -> f32 {
 
     let vec_end = (len / 8) * 8;
     while i < vec_end {
+        // SAFETY: i is a multiple of eight below vec_end, so the load stays
+        // within data; AVX2 is required by this function.
         unsafe {
             let v = _mm256_loadu_ps(ptr.add(i));
             acc = _mm256_min_ps(acc, v);
@@ -335,8 +351,10 @@ unsafe fn avx2_reduce_min_f32(data: &[f32], init: f32) -> f32 {
         i += 8;
     }
 
+    // SAFETY: hmin256_ps only operates on the local AVX accumulator.
     let mut min_val = unsafe { hmin256_ps(acc) };
     while i < len {
+        // SAFETY: i remains below len and data is borrowed for this loop.
         let val = unsafe { *data.get_unchecked(i) };
         if val < min_val {
             min_val = val;
@@ -358,6 +376,8 @@ pub(crate) unsafe fn avx2_add_into_f32(acc: &mut [f32], src: &[f32]) {
     let vec_end = (len / 8) * 8;
     let mut i = 0;
     while i < vec_end {
+        // SAFETY: i is a multiple of eight below vec_end; acc and src have
+        // equal length and do not alias through their distinct borrows.
         unsafe {
             let v_acc = _mm256_loadu_ps(acc_ptr.add(i));
             let v_src = _mm256_loadu_ps(src_ptr.add(i));
@@ -367,6 +387,7 @@ pub(crate) unsafe fn avx2_add_into_f32(acc: &mut [f32], src: &[f32]) {
         i += 8;
     }
     while i < len {
+        // SAFETY: i remains below len; acc and src have distinct borrows.
         unsafe {
             *acc.get_unchecked_mut(i) += *src.get_unchecked(i);
         }
@@ -378,6 +399,7 @@ pub(crate) unsafe fn avx2_add_into_f32(acc: &mut [f32], src: &[f32]) {
 fn parallel_avx2_reduce_sum_f32(data: &[f32]) -> f32 {
     use rayon::prelude::*;
     data.par_chunks(SIMD_PARALLEL_CHUNK)
+        // SAFETY: avx2_reduce_sum_f32 is entered only after runtime AVX2 detection.
         .map(|chunk| unsafe { avx2_reduce_sum_f32(chunk) })
         .sum()
 }
@@ -386,6 +408,7 @@ fn parallel_avx2_reduce_sum_f32(data: &[f32]) -> f32 {
 fn parallel_avx2_reduce_max_f32(data: &[f32], init: f32) -> f32 {
     use rayon::prelude::*;
     data.par_chunks(SIMD_PARALLEL_CHUNK)
+        // SAFETY: avx2_reduce_max_f32 is entered only after runtime AVX2 detection.
         .map(|chunk| unsafe { avx2_reduce_max_f32(chunk, init) })
         .reduce(|| init, |a, b| if b > a { b } else { a })
 }
@@ -394,6 +417,7 @@ fn parallel_avx2_reduce_max_f32(data: &[f32], init: f32) -> f32 {
 fn parallel_avx2_reduce_min_f32(data: &[f32], init: f32) -> f32 {
     use rayon::prelude::*;
     data.par_chunks(SIMD_PARALLEL_CHUNK)
+        // SAFETY: avx2_reduce_min_f32 is entered only after runtime AVX2 detection.
         .map(|chunk| unsafe { avx2_reduce_min_f32(chunk, init) })
         .reduce(|| init, |a, b| if b < a { b } else { a })
 }
@@ -408,6 +432,8 @@ pub(crate) fn vectorize_reduce_f32(data: &[f32], init: f32, op: SimdReduceOp) ->
     {
         if avx2_detected() || simd_lanes::<f32>() >= 8 {
             if data.len() < SIMD_PARALLEL_CHUNK {
+                // SAFETY: the condition above requires a runtime AVX2 probe
+                // (or a compile-time AVX2 target), satisfying each callee.
                 return unsafe {
                     match op {
                         SimdReduceOp::Sum => avx2_reduce_sum_f32(data),
@@ -462,6 +488,8 @@ pub(crate) fn vectorize_add_into_f32(acc: &mut [f32], src: &[f32]) {
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     {
         if avx2_detected() || simd_lanes::<f32>() >= 8 {
+            // SAFETY: the condition requires a runtime AVX2 probe or a
+            // compile-time AVX2 target, satisfying the target-feature call.
             unsafe { avx2_add_into_f32(acc, src) };
             return;
         }

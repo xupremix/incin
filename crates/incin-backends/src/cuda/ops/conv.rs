@@ -124,7 +124,7 @@ fn launch_cfg(n: usize) -> Result<cudarc::driver::LaunchConfig> {
 
 /// Unfolds `t: [B, C, H, W]` into `[B, C*Kh*Kw, H_out*W_out]` (channel-major
 /// - see module doc). Out-of-bounds (padded-region) source positions are
-/// written as `0.0` by the kernel itself.
+///   written as `0.0` by the kernel itself.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_im2col_2d(
     t: &CudaStorage,

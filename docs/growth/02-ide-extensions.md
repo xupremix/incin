@@ -426,6 +426,16 @@ anything. The editor already knows every shape."*
 > official extension's bundled rust-analyzer when present, so the proxy does
 > not depend on the editor process inheriting a Rust toolchain `PATH`.
 >
+> **2026-08-21 E2E closure:** rust-analyzer 0.3.2971 returned type hints as
+> truncated plain labels such as `: Tensor<DimCons<UInt<…, …>, …>, …>`, with
+> neither `textEdits` nor `inlayHint/resolve` carrying the omitted type. The
+> proxy cannot honestly guess missing shape dimensions. The VS Code extension
+> and Neovim module now set `inlayHints.maxLength` to unlimited; the proxy then
+> receives the full `DimCons` chain and renders `[2, 3]`. A dedicated CI test
+> pins VS Code 1.134.0 and rust-analyzer 0.3.2971, bounds indexing to two
+> minutes, and proves diagnostics, hints, and completion passthrough in one
+> real editor session.
+>
 > Editor version probes also exposed that `incin-lsp` discarded its own command
 > line arguments. The proxy now forwards arguments to rust-analyzer and uses
 > direct stdio for `--version`, `-V`, `--help`, and `-h`. Its mock server lives

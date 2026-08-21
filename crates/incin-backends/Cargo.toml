@@ -68,6 +68,24 @@ distributed-nccl = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 # deliberately opt-in and is never part of a product build.
 test-utils = []
 
+[package.metadata.incin.feature-contract]
+std = { tier = "stable", owner = "backends", prerequisites = [], hardware = "none" }
+cpu = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
+compiled = { tier = "preview", owner = "backends", prerequisites = ["std", "cpu"], hardware = "none" }
+cpu-blas = { tier = "stable", owner = "backends", prerequisites = ["std", "cpu"], hardware = "none" }
+cuda = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "cuda" }
+cuda-vendor = { tier = "preview", owner = "backends", prerequisites = ["cuda"], hardware = "cuda" }
+wgpu = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "wgpu" }
+metal = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "apple-silicon" }
+metal-mps = { tier = "preview", owner = "backends", prerequisites = ["metal"], hardware = "apple-silicon" }
+autotune = { tier = "preview", owner = "backends", prerequisites = ["cuda"], hardware = "cuda" }
+external-candle = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
+telemetry = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
+distributed = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "none" }
+distributed-reference = { tier = "preview", owner = "backends", prerequisites = ["distributed"], hardware = "none" }
+distributed-nccl = { tier = "preview", owner = "backends", prerequisites = ["distributed", "cuda"], hardware = "multi-host-cuda" }
+test-utils = { tier = "test-only", owner = "backends", prerequisites = [], hardware = "none" }
+
 [dependencies]
 incin-core = { path = "../incin-core", default-features = false, version = "0.1.0" }
 # `const-generics` supplies typenum's `Const<N>`/`ToUInt`/`U<N>` bridge, which
@@ -86,7 +104,6 @@ thiserror = { workspace = true, default-features = false }
 bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
 ggml-quants = "0.1.0"
 incin-telemetry = { path = "../incin-telemetry", version = "0.1.0", optional = true }
-hashbrown = { version = "0.17", default-features = false, features = ["alloc", "inline-more", "default-hasher"] }
 rayon = "1.10.0"
 matrixmultiply = { version = "0.3.11", optional = true }
 log = "0.4.22"
@@ -117,5 +134,5 @@ workspace = true
 # document a fraction of this crate. Hardware-only features are deliberately
 # absent: docs.rs has no GPU and a build that cannot link is worse than a
 # page that says the feature exists.
-features = ["std", "cpu", "compiled", "telemetry", "distributed"]
+features = ["std", "cpu", "cpu-blas", "external-candle", "telemetry", "compiled", "distributed"]
 rustdoc-args = ["--cfg", "docsrs"]

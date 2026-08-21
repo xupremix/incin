@@ -69,6 +69,8 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: checked matrix dimensions establish each f32 slice length and
+    // launch extent; out_b was just allocated and is uniquely owned.
     unsafe {
         let lhs_f32 = lhs_buf.data.transmute::<f32>(lhs_buf.len).unwrap();
         let rhs_f32 = rhs_buf.data.transmute::<f32>(rhs_buf.len).unwrap();

@@ -441,7 +441,7 @@ public input error).
 | `distributed` / `distributed-nccl` | `incin::experimental::distributed` - mesh, placement, collective planning |
 | `train` | The preview automatic `Trainer` under `incin::experimental::training` |
 | `autotune` | Preview kernel tuning cache and inspection types |
-| `compiled` | Structural compiled-execution prototype - does not execute graphs yet |
+| `compiled` | Preview-only CPU reference evaluator and plan inspection under `incin::experimental::compiled`; not a stable compiler, deployment target, or portable artifact ABI |
 | `std` | Lifts `no_std` restrictions; several backend/target/test-utils features imply it |
 | `test-utils` | Deterministic fault-injection hooks for downstream test code. There is no stand-in backend: a test that needs a backend uses a real one |
 

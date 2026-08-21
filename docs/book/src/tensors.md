@@ -86,10 +86,10 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 2], B>::ones(())?;
 let b = Tensor::<s![2, 2], B>::ones(())?;
 
-let sum = (&a + &b)?;
-let diff = (&a - &b)?;
-let prod = (&a * &b)?;
-let quot = (&a / &b)?;
+let sum = &a + &b;
+let diff = &a - &b;
+let prod = &a * &b;
+let quot = &a / &b;
 let eq = a.eq(&b)?;       // elementwise comparison
 let both = a.eq(&b)?.logical_and(&a.eq(&b)?)?;
 # Ok::<(), incin::Error>(())
@@ -98,8 +98,10 @@ let both = a.eq(&b)?.logical_and(&a.eq(&b)?)?;
 The checked methods `try_add`, `try_sub`, `try_mul`, and `try_div` require the
 two operands' shape types to match exactly (`ShapeEq`). `+`, `-`, `*`, and `/`
 are also overloaded in every owned and referenced combination. They broadcast
-between compatible shapes and return `Result<Tensor<...>>`; use `?` (or handle
-the error explicitly) before continuing with the tensor.
+between compatible shapes and return a tensor directly. Operator syntax is the
+convenience boundary: a dynamic shape or backend failure panics with a short,
+fixed operator-only message. Use the named methods whenever the failure must
+remain recoverable.
 
 ```rust,no_run
 use incin::prelude::*;
@@ -108,7 +110,7 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::full(2.0, ())?; // shorter shape, broadcasts against `a`
 
-let sum = (a.clone() + b.clone())?;         // operator: broadcasts
+let sum = a.clone() + b.clone();            // operator: broadcasts, panics on failure
 let sum2 = a.try_add(&b)?;                  // checked broadcast operation
 assert_eq!(sum.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())

@@ -247,7 +247,7 @@ pub mod __macro_support {
     pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
     pub use incin_core::backend_authoring::Backend;
     pub use incin_core::backend_authoring::{
-        StorageTransfer, SupportsDType, TransferTo, VariableBackend,
+        Capabilities, Execute, StorageTransfer, SupportsDType, TransferTo, VariableBackend, op,
     };
     pub use incin_core::error::Result;
     pub use incin_core::nn::{ComputeStats, LayerStats};
@@ -258,19 +258,50 @@ pub mod __macro_support {
     pub use incin_core::tensor::device::Device;
     pub use incin_core::tensor::ops::index::IndexSpec;
     pub use incin_core::tensor::transfer::ToDevice;
+    #[cfg(feature = "std")]
+    pub use incin_core::nn::save::load_safetensors;
 }
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
     /// Partial, fail-closed model import macros.
     pub use incin_macros::{import_model, model};
+    #[cfg(feature = "distributed")]
     /// Experimental distributed declaration macros.
     pub use incin_macros::{mesh, parallel, placement};
 
     #[cfg(feature = "compiled")]
-    /// Compiled graph plans and symbolic guards. CPU execution is exposed by
-    /// the matching `compiled,cpu` features.
-    pub use incin_core::experimental::compiled;
+    /// Preview compiled-plan inspection and CPU reference evaluation.
+    ///
+    /// This namespace is deliberately excluded from Incin's stable API. It is
+    /// a CPU reference evaluator and inspection surface, not an optimized
+    /// compiler, deployment target, or portable artifact ABI. Optimizations
+    /// that lack an executable lowering fail closed.
+    pub mod compiled {
+        pub use incin_backends::cpu::{
+            CpuBuffer, CpuCompiledFunction, CpuCompiledInvocation, CpuCompiledPlan,
+            CpuCompiledSupport, CpuStorage, compiled_support,
+        };
+        pub use incin_core::experimental::compiled::{
+            AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
+            CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
+            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
+            WeightPrepacker,
+        };
+        /// Minimal graph and descriptor-building types for the preview CPU
+        /// evaluator. These remain experimental with the rest of this module.
+        pub use incin_core::{
+            exec::{
+                OperationIdentity,
+                catalog::{CapturedDescriptor, Descriptor, LogicalTensorMeta, NoAttributes, op},
+            },
+            graph::{AttributeValue, DescriptorPayload, Graph},
+            shapes::OperationKind,
+            tensor::{device::DeviceId, dtype::DTypeId},
+        };
+    }
 
     #[cfg(feature = "autotune")]
     /// Preview tuning configuration and inspection types.

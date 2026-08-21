@@ -121,7 +121,8 @@ pub fn rewrite_incoming_from_server(
         return rewrite_diagnostic_pull_response(msg, &uri);
     }
     if hints_enabled && pending.take_if_inlay_hint_response(msg) {
-        return Some(rewrite_inlay_hint_response(msg, shorten_backend));
+        let rewritten = rewrite_inlay_hint_response(msg, shorten_backend);
+        return (rewritten != *msg).then_some(rewritten);
     }
     if hints_enabled && pending.take_if_hover_response(msg) {
         return Some(rewrite_hover_response(msg, shorten_backend));
@@ -618,6 +619,54 @@ mod tests {
         assert_eq!(
             rewritten["result"][0]["label"],
             ": Tensor<DimCons<NamedDim<Batch, …>, …>, …>"
+        );
+    }
+
+    #[test]
+    fn inlay_hint_response_rewrites_the_full_dimcons_label_from_rust_analyzer() {
+        let request = json!({"id": 91, "method": "textDocument/inlayHint"});
+        let response = json!({
+            "id": 91,
+            "result": [{
+                "label": ": Result<Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>, CpuBackendImpl>, ShapeError>"
+            }]
+        });
+        let mut pending = PendingRequests::new();
+        pending.observe_outgoing_to_server(&request);
+        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+        assert_eq!(
+            rewritten["result"][0]["label"],
+            ": Result<Tensor<[2, 3], CpuBackendImpl>, ShapeError>"
+        );
+    }
+
+    #[test]
+    fn inlay_hint_response_shortens_the_full_dimcons_label_from_rust_analyzer() {
+        let request = json!({"id": 93, "method": "textDocument/inlayHint"});
+        let response = json!({
+            "id": 93,
+            "result": [{
+                "label": ": Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>, CpuBackendImpl>"
+            }]
+        });
+        let mut pending = PendingRequests::new();
+        pending.observe_outgoing_to_server(&request);
+        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, true).unwrap();
+        assert_eq!(rewritten["result"][0]["label"], ": Tensor<[2, 3]>");
+    }
+
+    #[test]
+    fn inlay_hint_response_leaves_unknown_labels_unserialized() {
+        let request = json!({"id": 92, "method": "textDocument/inlayHint"});
+        let response = json!({
+            "id": 92,
+            "result": [{"label": ": Result<Vec<String>, io::Error>"}]
+        });
+        let mut pending = PendingRequests::new();
+        pending.observe_outgoing_to_server(&request);
+        assert!(
+            rewrite_incoming_from_server(&response, &mut pending, true, false).is_none(),
+            "an inlay response without Incin/typenum content must use the raw frame"
         );
     }
 

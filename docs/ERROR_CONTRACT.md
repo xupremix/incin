@@ -58,11 +58,17 @@ identifiers.
 
 ## Panics and process boundaries
 
-Recoverable tensor operators return `Result`, including Rust `+`, `-`, `*`,
-and `/` overloads. Backend launch, device initialization, buffer readback,
-autograd recipe, macro metadata, data-loader construction, and model/data I/O
-fail through typed results. Remaining `panic!`, `unwrap`, and `expect` sites
-must be one of:
+Named tensor methods (`try_add`, `try_sub`, `try_mul`, `try_div`, `try_neg`,
+the scalar methods, and the exact/broadcast variants) return `Result` for all
+recoverable tensor failures. Rust `+`, `-`, `*`, `/`, scalar forms, and unary
+`-` return a tensor directly so expressions compose ergonomically; they are a
+documented panic-on-error convenience boundary. Their one shared conversion
+emits only the bounded, deterministic text `incin tensor operator `<op>`
+failed`; it never formats an error or tensor contents. Library internals and
+fallible application boundaries must call the named methods. Backend launch,
+device initialization, buffer readback, autograd recipe, macro metadata,
+data-loader construction, and model/data I/O fail through typed results.
+Remaining `panic!`, `unwrap`, and `expect` sites must be one of:
 
 - a test/debug assertion;
 - a process boundary where termination is the declared behavior;

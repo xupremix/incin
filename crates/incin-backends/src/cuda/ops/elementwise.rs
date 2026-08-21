@@ -499,6 +499,8 @@ pub(crate) fn launch_unary_op(
         return Ok(CudaStorage::new(Arc::new(out_b), t.shape.to_vec()));
     }
 
+    // SAFETY: validated metadata determines numel/dtype and the fresh output
+    // owns a uniquely mutable device allocation for this launch.
     unsafe {
         let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| Error::Msg("fresh CUDA output buffer was unexpectedly shared".into()))?;
@@ -681,6 +683,8 @@ pub(crate) fn launch_binary_op(
         return Ok(CudaStorage::new(Arc::new(out_b), out_shape.to_vec()));
     }
 
+    // SAFETY: validated output shape and strided metadata bound every kernel
+    // access; out_b is fresh and uniquely owned for the typed output view.
     unsafe {
         let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| Error::Msg("fresh CUDA output buffer was unexpectedly shared".into()))?;

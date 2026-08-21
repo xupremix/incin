@@ -1,17 +1,17 @@
 //! Reshaping, squeezing, unsqueezing, flattening, and broadcasting operations.
 
 use crate::backend_authoring::{Backend, Descriptor, Execute};
-use crate::dist::Placement;
 use crate::dist::placement::Local;
+use crate::dist::Placement;
 use crate::err::Result;
-use crate::exec::Capabilities;
-use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, FlattenAttributes, LogicalTensorMeta, ShapeAttributes, op,
+    op, AxisAttributes, FlattenAttributes, LogicalTensorMeta, ShapeAttributes,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::exec::Capabilities;
+use crate::exec::ExecutionDescriptor;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, FlattenAt, Shape, ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -80,8 +80,13 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+        S: Shape + DynShape,
+        B: Backend,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+        P: Placement,
+    > Tensor<S, B, K, G, P>
 {
     /// Reshape this tensor using a [`ShapeSpec`].
     ///

@@ -5,15 +5,9 @@ use incin::prelude::*;
 type B = incin_backends::cpu::CpuBackendImpl;
 
 fn main() {
-    // Static broadcast incompatibility must be rejected at the canonical
-    // operation boundary, rather than deferred to a runtime shape error.
-    assert_broadcast::<s![32], s![64]>();
-}
-
-fn assert_broadcast<L, R>()
-where
-    L: Shape + BroadcastShape<R>,
-    R: Shape,
-    <L as BroadcastShape<R>>::Output: Shape + DynShape,
-{
+    // Static broadcast incompatibility is rejected at the `+` operator
+    // boundary, rather than becoming a runtime panic.
+    let lhs = Tensor::<s![32], B>::zeros(()).unwrap();
+    let rhs = Tensor::<s![64], B>::zeros(()).unwrap();
+    let _ = lhs + rhs;
 }

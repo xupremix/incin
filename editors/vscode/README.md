@@ -8,8 +8,8 @@ hints, without forking or replacing rust-analyzer.
 This extension does not speak LSP itself and contains no typenum-parsing
 logic; it only points the standard rust-analyzer extension's server binary
 at `incin-lsp`, a thin proxy that spawns the real rust-analyzer and rewrites
-two message kinds through the `incin-diagnostics` crate before they reach
-you:
+diagnostics, inlay hints, and hover labels through the `incin-diagnostics`
+crate before they reach you:
 
 **Before** (raw rustc/rust-analyzer output):
 ```
@@ -27,9 +27,8 @@ Hovering an intermediate tensor shows `Tensor<[32, 128]>` instead of
 ![A reshape error rewritten by incin-lsp in VS Code](../../docs/assets/editors/vscode-shape-diagnostic.png)
 
 This capture comes from an isolated VS Code profile running the packaged VSIX,
-the locally installed `incin-lsp`, and rust-analyzer. The extension's automated
-test covers activation and settings. The live capture checks the complete
-diagnostic path.
+the locally installed `incin-lsp`, and rust-analyzer. The automated editor test
+also checks the complete path for diagnostics, hints, and completions.
 
 ## Requirements
 
@@ -60,6 +59,11 @@ renames or removes it, `server.path` alone still gets you humanized
 diagnostics and hints (incin-lsp's shipped defaults: hints on, backend tail
 kept). Toggling would just stop working until updated to match.
 
+The extension also sets `rust-analyzer.inlayHints.maxLength` to `null` for the
+workspace. rust-analyzer otherwise truncates the type before `incin-lsp` sees
+it, leaving an incomplete `DimCons<UInt<…>>` label that cannot be translated
+reliably. Incin-lsp rewrites the complete type back to a compact shape label.
+
 ## Settings
 
 | Setting | Default | Description |
@@ -89,12 +93,25 @@ activates and correctly rewrites `rust-analyzer.server.path`/`extraEnv`, and
 that **Incin: Toggle Shape Hints** flips the hints env var. It installs
 `rust-lang.rust-analyzer` into its own isolated test profile first (needed
 because of `extensionDependencies` above). It does not touch your real VS
-Code profile. It does **not** spin up a full `incin-lsp`/rust-analyzer
-workspace. The live check shown above covers that boundary.
+Code profile. The standard run keeps the fast activation/settings tests only.
+
+The dedicated pipeline check used in CI builds `incin-lsp`, opens a local Incin
+workspace, and waits (at most two minutes) for a humanized rust-analyzer
+diagnostic and a full tensor inlay hint; it also asserts that a completion
+request still succeeds through the proxy. It pins VS Code 1.134.0 and
+rust-analyzer 0.3.2971:
+
+```bash
+cargo build -p incin-lsp
+INCIN_REAL_E2E=1 \
+INCIN_E2E_LSP_PATH="$PWD/../../target/debug/incin-lsp" \
+INCIN_E2E_REPO_ROOT="$PWD/../.." \
+xvfb-run -a npm test
+```
 
 For an offline or repeatable run, set `INCIN_TEST_RA_VSIX` to a downloaded
-rust-analyzer VSIX. By default the harness installs the current Marketplace
-version into its isolated profile.
+rust-analyzer VSIX. By default the harness installs pinned rust-analyzer
+0.3.2971 into its isolated profile.
 
 ## Building from source
 

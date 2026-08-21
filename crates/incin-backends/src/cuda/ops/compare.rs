@@ -123,6 +123,8 @@ pub(crate) fn launch_compare(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: numel and launch dimensions were checked above; out_b is freshly
+    // allocated, so its unique u8 storage can be passed to this typed kernel.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {

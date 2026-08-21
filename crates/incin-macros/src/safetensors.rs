@@ -106,11 +106,12 @@ fn generate_structs(
 
         match v {
             Node::Leaf { shape, is_buffer } => {
-                let shape_tokens = shape.iter().map(|&d| {
+                let mut shape_ty = quote! { ::incin::types::Nil };
+                for &d in shape.iter().rev() {
                     let path = quote! { ::incin::prelude:: };
-                    crate::shape::lit_to_typenum(d, &path)
-                });
-                let shape_ty = quote! { (#(#shape_tokens,)*) };
+                    let d_ty = crate::shape::lit_to_typenum(d, &path);
+                    shape_ty = quote! { ::incin::types::DimCons<#d_ty, #shape_ty> };
+                }
                 let ty = if *is_buffer {
                     quote! { ::incin::prelude::Buffer<#shape_ty, B> }
                 } else {
@@ -118,9 +119,9 @@ fn generate_structs(
                 };
 
                 let _common_bound =
-                    quote! { Var<K> = <B as ::incin::prelude::VariableBackend>::Var<K> };
+                    quote! { Var<K> = <B as ::incin::__macro_support::VariableBackend>::Var<K> };
                 bounds.push(
-                    quote! { B: ::incin::prelude::Backend + ::incin::prelude::VariableBackend },
+                    quote! { B: ::incin::__macro_support::Backend + ::incin::__macro_support::VariableBackend },
                 );
                 fields.push(quote! { pub #field_name_ident: #ty });
             }
@@ -139,7 +140,7 @@ fn generate_structs(
     let def = quote! {
         #[::incin::prelude::module]
         #[allow(non_camel_case_types)]
-        pub struct #name<B: ::incin::prelude::Backend>
+        pub struct #name<B: ::incin::__macro_support::Backend>
         where
             #(#bounds,)*
         {
@@ -249,13 +250,13 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     // root implementation of load_default_weights
     let path_str = input.path.value();
     let root_impl = quote! {
-        impl<B: ::incin::prelude::Backend> #root_name<B>
+        impl<B: ::incin::__macro_support::Backend> #root_name<B>
         where
             #(#bounds,)*
         {
             /// Load default weights.
             pub fn load_default_weights(&mut self) -> ::incin::prelude::Result<()> {
-                ::incin::prelude::load_safetensors(self, #path_str)
+                ::incin::__macro_support::load_safetensors(self, #path_str)
             }
         }
     };

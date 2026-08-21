@@ -3,10 +3,9 @@
 ## Reporting a vulnerability
 
 Please do not open a public issue for a suspected security vulnerability.
-Use the repository's private security advisory channel when one is available,
-or contact the maintainers through the project organization before sharing
-reproduction details. Include the affected commit, feature flags, platform,
-and the smallest reproduction that demonstrates the impact.
+Use the repository's [private vulnerability report](https://github.com/xupremix/incin/security/advisories/new)
+before sharing reproduction details. Include the affected commit, feature
+flags, platform, and the smallest reproduction that demonstrates the impact.
 
 Reports should describe whether the issue affects model data, arbitrary code
 execution, memory safety, credential handling, or denial of service. Do not

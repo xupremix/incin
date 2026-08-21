@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     let a = Cpu.ones(shape![2, 2])?.require_grad();
     let b = Cpu.full(shape![2, 2], 3.0)?;
 
-    let c = (&a * &b)?;
+    let c = &a * &b;
     let loss = c.sum_all()?;
 
     let grads = loss.backward()?;

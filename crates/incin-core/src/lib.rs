@@ -79,8 +79,11 @@ pub mod loss {
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
     #[cfg(feature = "compiled")]
-    /// Compiled graph plans and symbolic guards. CPU execution is exposed by
-    /// the matching `incin-backends/compiled` feature.
+    /// Preview graph plans and symbolic guards. The matching
+    /// `incin-backends/compiled` feature supplies a CPU reference evaluator;
+    /// it is not an optimized compiler, deployment target, or portable
+    /// artifact ABI. Folding, prepacking, and fusion without executable
+    /// lowerings fail closed.
     pub mod compiled {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
@@ -207,7 +210,9 @@ pub mod prelude {
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
-    pub use incin_macros::{axis, i, mesh, module, s, shape};
+    #[cfg(feature = "distributed")]
+    pub use incin_macros::mesh;
+    pub use incin_macros::{axis, i, module, s, shape};
 
     pub use super::shapes::prelude::{
         AdaptiveAvgPool2dShape, AppendDim, Axis, AxisIdentity, AxisKey, AxisSchema, AxisTag,

@@ -192,9 +192,10 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 /// ...), CpuBackendImpl>`, which is just as common a hint to hit as a bare
 /// `Tensor` (any `let` binding of a layer/module shows one) but has no single
 /// tuple that's unambiguously "the shape" the way `Tensor`'s first generic
-/// param always is, so it doesn't get the `[...]` bracket treatment - every
-/// `UInt<...>`/`UTerm` chain in it still becomes a plain decimal in place,
-/// which is the whole readability win either way. Truly non-Incin labels
+/// param always is. Complete `DimCons<..., Nil>` chains are also collapsed to
+/// bracket lists, including when rust-analyzer exposes that implementation
+/// spelling inside `Result<Tensor<...>>`. Every other `UInt<...>`/`UTerm`
+/// chain still becomes a plain decimal in place. Truly non-Incin labels
 /// (`i32`, `Dyn`-shaped tensors with no typenum content) pass through
 /// byte-identical, since there's nothing for the underlying translator to find.
 pub fn humanize_inlay_label(label: &str, shorten_backend: bool) -> String {
@@ -214,6 +215,18 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
 
     let Some(tensor_start) = label.find("Tensor<(") else {
         let (text, hints) = translate_typenum_text(label);
+        // rust-analyzer's inferred-type rendering is not stable: depending
+        // on the context it can expose a tensor shape as the tuple alias used
+        // by source code, or as its `DimCons<Head, Tail>` implementation.
+        // The latter is common inside wrappers such as `Result<Tensor<...>>`.
+        // Treat both spellings as the same display shape. `collapse_*` fails
+        // closed for partial/truncated chains, preserving incomplete labels.
+        let text = collapse_dimcons_chains(&text);
+        let text = if shorten_backend {
+            shorten_collapsed_tensor_tail(&text).unwrap_or(text)
+        } else {
+            text
+        };
         return Translated { text, hints };
     };
     let name_end = tensor_start + "Tensor".len(); // index just past "Tensor", i.e. at '<'
@@ -259,6 +272,25 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
         &label[generic_close + 1..]
     );
     Translated { text, hints }
+}
+
+/// Removes a tensor's backend tail after a `DimCons` shape was collapsed to a
+/// bracket list. This is deliberately separate from the tuple parser above:
+/// the same inferred type can be nested inside `Result<...>` and contain a
+/// `DimCons` implementation spelling rather than `Tensor<(...)>`.
+fn shorten_collapsed_tensor_tail(label: &str) -> Option<String> {
+    let tensor_start = label.find("Tensor<[")?;
+    let name_end = tensor_start + "Tensor".len();
+    let generic_open = name_end;
+    let shape_open = generic_open + 1;
+    let shape_close = shape_open + matching_bracket(&label[shape_open..], '[', ']')?;
+    let generic_close = generic_open + matching_bracket(&label[generic_open..], '<', '>')?;
+    Some(format!(
+        "{}<{}>{}",
+        &label[..name_end],
+        &label[shape_open..=shape_close],
+        &label[generic_close + 1..]
+    ))
 }
 
 /// Collapses every qualified path in a type signature down to its last

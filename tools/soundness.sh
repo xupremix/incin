@@ -129,45 +129,38 @@ run_asan() {
     success "asan: +avx2"
 }
 
-# ThreadSanitizer is what would check the claim the SIMD kernels rest on: that
-# the chunks handed to rayon workers by `spare_capacity_mut().par_chunks_mut(..)`
-# are disjoint, so `Vec::set_len` afterwards observes fully initialized memory.
-# It is not wired up. Two attempts, both dead ends:
-#
-#   1. `-Zbuild-std` (needed so TSan instruments std, since an uninstrumented
-#      std ABI-mismatches against a TSan-built crate): incin-backends depends
-#      on `hashbrown` directly, and build-std vendors its own copy for `alloc`,
-#      so linking fails with E0464 "multiple candidates for rmeta dependency
-#      alloc found". `-Cunsafe-allow-abi-mismatch=sanitizer` sidesteps the
-#      build but not honestly: it allows racing on std's own primitives, so
-#      TSan reported 151 warnings, all inside `rayon_core::sleep::Sleep`,
-#      `LockLatch`, the std test-harness mpmc channel, and `__tsan_memcpy` /
-#      `free` — every legitimate rayon handoff flagged because TSan cannot see
-#      synchronization inside the std it wasn't told to instrument. 0 of the
-#      151 were in incin code.
-#   2. Without `-Zbuild-std`: `error: mixing -Zsanitizer will cause an ABI
-#      mismatch ... -Zsanitizer=thread in this crate is incompatible with
-#      -Zsanitizer being unset in dependency core`. Does not build at all.
-#
-# Fixing this needs either hashbrown removed as a direct incin-backends
-# dependency (so build-std's copy is the only one) or a resolution for
-# rust-lang/wg-cargo-std-aware's known build-std + third-party-hashbrown
-# conflict. Until one of those lands, the race-freedom claim above is
-# unverified by an automated gate; it rests on code review of the
-# `par_chunks_mut` call sites instead.
+# ThreadSanitizer checks the claim the SIMD kernels rest on: chunks handed to
+# Rayon by `spare_capacity_mut().par_chunks_mut(..)` are disjoint, and every
+# slot is initialized before `Vec::set_len`. Building std with the sanitizer is
+# essential; permitting an ABI mismatch instead produces false races because
+# TSan cannot see synchronization inside an uninstrumented standard library.
 run_tsan() {
-    fail "tsan: not wired up (hashbrown vs -Zbuild-std conflict; see comment above run_tsan in this file)"
+    if [[ "$TARGET" != "x86_64-unknown-linux-gnu" ]]; then
+        fail "tsan: supported only on x86_64-unknown-linux-gnu (host is $TARGET)"
+    fi
+    if ! grep -qm1 avx2 /proc/cpuinfo 2>/dev/null; then
+        fail "tsan: the focused SIMD stress test requires an AVX2 host"
+    fi
+
+    step "ThreadSanitizer: parallel AVX2 initialization stress"
+    TSAN_OPTIONS="halt_on_error=1" \
+        RAYON_NUM_THREADS=4 \
+        CARGO_TARGET_DIR=target/tsan \
+        RUSTFLAGS="-Zsanitizer=thread -C target-feature=+avx2" \
+        cargo +nightly test -Zbuild-std --locked \
+        -p incin-backends --no-default-features --features std,cpu --lib \
+        --target "$TARGET" \
+        cpu::ops::elementwise_kernel::tests::tsan_parallel_avx2_initialization_stress \
+        -- --exact --ignored --nocapture --test-threads=1 \
+        || fail "tsan: parallel AVX2 initialization"
+    success "tsan: parallel AVX2 initialization"
 }
 
-# `tsan` is deliberately excluded from `all`: it cannot currently pass (see
-# the comment above run_tsan), so including it would make every default run
-# fail on a leg nothing here can fix yet. Run it explicitly if you want the
-# failure demonstrated.
 case "$WHICH" in
     miri) run_miri ;;
     asan) run_asan ;;
     tsan) run_tsan ;;
-    all)  run_miri; run_asan ;;
+    all)  run_miri; run_asan; run_tsan ;;
     *)    fail "unknown selector '$WHICH' (expected miri, asan, tsan or all)" ;;
 esac
 

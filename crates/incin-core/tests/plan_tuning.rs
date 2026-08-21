@@ -1,4 +1,4 @@
-//! `DST-013`: Bounded plan tuning measured against single-device baseline test.
+//! Preview tuning placeholders fail closed until a measurement hook exists.
 
 #![cfg(feature = "compiled")]
 
@@ -27,8 +27,8 @@ fn make_test_plan_with_nodes(node_count: usize) -> CompiledPlan {
 }
 
 #[test]
-fn test_bounded_plan_tuning_evaluation() {
-    // Build a plan with 10 nodes for the unavailable-measurement check.
+fn bounded_plan_tuning_is_unavailable_for_nonempty_plan() {
+    // A nonempty plan must not manufacture a proxy measurement or report.
     let plan = make_test_plan_with_nodes(10);
 
     let tuner = BoundedPlanTuner::new(10, 1.15);
@@ -36,8 +36,8 @@ fn test_bounded_plan_tuning_evaluation() {
 }
 
 #[test]
-fn test_bounded_plan_tuning_empty_graph_does_not_panic() {
-    // Single-node graph (minimum workload)
+fn bounded_plan_tuning_is_unavailable_for_minimal_plan() {
+    // A minimal plan has the same fail-closed result.
     let plan = make_test_plan_with_nodes(1);
     let tuner = BoundedPlanTuner::new(5, 1.0);
     assert!(tuner.tune_plan(&plan).is_err());

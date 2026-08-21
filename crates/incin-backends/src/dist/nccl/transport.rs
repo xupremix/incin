@@ -927,9 +927,14 @@ pub(crate) fn launch_typed<T: DeviceRepr + NcclType>(
     input_elements: usize,
     output_elements: usize,
 ) -> Result<(), NcclTransportError> {
+    // SAFETY: dispatch selected T from the storage dtype and validated both
+    // element counts before this call; failed CudaSlice reinterprets become a
+    // typed protocol error rather than being used.
     let input = unsafe { input.transmute::<T>(input_elements) }.ok_or(
         NcclTransportError::Protocol("input reinterpretation failed"),
     )?;
+    // SAFETY: same validated dtype/count proof as input; output is exclusively
+    // borrowed for the complete NCCL call sequence below.
     let mut output = unsafe { output.transmute_mut::<T>(output_elements) }.ok_or(
         NcclTransportError::Protocol("output reinterpretation failed"),
     )?;

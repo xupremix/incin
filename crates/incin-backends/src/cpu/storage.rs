@@ -887,7 +887,7 @@ mod tests {
     #[test]
     /// `tensor_id_never_repeats_across_many_calls`.
     fn tensor_id_never_repeats_across_many_calls() {
-        let mut ids = hashbrown::HashSet::new();
+        let mut ids = std::collections::HashSet::new();
         for _ in 0..1000 {
             let id = TensorId::next();
             assert!(ids.insert(id), "TensorId::next() produced a duplicate");

@@ -14,6 +14,24 @@ Nothing here applies if `0.1.0` is your first version. Skip to
 [Stability](./installation.md#stability). Preview APIs remain free to change
 when they are explicitly identified as preview.
 
+### Operator expressions compose directly
+
+Tensor `+`, `-`, `*`, `/`, scalar forms, and unary `-` return tensors rather
+than `Result`s. This keeps ordinary expressions and chains readable. They are
+the documented panic-on-error convenience boundary; use `try_add`, `try_sub`,
+`try_mul`, `try_div`, `try_neg`, and scalar named methods when a failure must
+be handled. Operator panic text is deterministic and excludes tensor contents
+and backend diagnostic text.
+
+### Compiled plans remain preview-only
+
+The `compiled` feature exposes its types only through
+`incin::experimental::compiled`. Its CPU path is a reference evaluator for the
+admitted descriptor-backed subset, not a stable compiler or deployment target.
+`CompiledArtifact` is a preview plan snapshot, never a portable ABI: loading
+checks the artifact format and caller-supplied compatibility major/minor values
+(patch values may differ), not the running framework version.
+
 ## Things to change in your code
 
 ### `ModelExt::load` no longer takes a device

@@ -11,6 +11,12 @@ BOLD='\033[1m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
+TIER="${1:-all}"
+
+if [[ "$TIER" != "all" && "$TIER" != "stable" ]]; then
+    echo "usage: tools/feature-matrix.sh [stable]" >&2
+    exit 2
+fi
 
 run_row() {
     local name="$1"
@@ -21,6 +27,13 @@ run_row() {
 }
 
 echo "Supported feature contract matrix"
+
+# The compatibility promise has its own deterministic MSRV row. CI runs this
+# mode under Rust 1.88; keeping it executable also makes a locally installed
+# MSRV prove the exact same union rather than a hand-maintained approximation.
+if [[ "$TIER" == "stable" ]]; then
+    exec cargo xtask feature-msrv
+fi
 
 # Core: no_std, normal std, and representative independent opt-ins. The full
 # core powerset remains in the cargo-hack job because it is small and useful.

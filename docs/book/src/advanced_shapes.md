@@ -63,7 +63,7 @@ wrote the operation:
 | Form | Rule | Fails how |
 |---|---|---|
 | `a.try_add(&b)` | broadcasting | recoverable error |
-| `a + b` | `BroadcastShape` - numpy-style | recoverable error |
+| `a + b` | `BroadcastShape` - numpy-style | panic on dynamic/backend error |
 | `a.broadcast_add(&b)` | `BroadcastShape` | compile error if unbroadcastable |
 
 ```rust,no_run
@@ -73,15 +73,16 @@ type B = DefaultBackend;
 let a = Tensor::<s![2, 3], B>::ones(())?;
 let b = Tensor::<s![3], B>::ones(())?;
 
-let via_operator = (a.clone() + b.clone())?;   // broadcasts
+let via_operator = a.clone() + b.clone();      // broadcasts; panic convenience boundary
 let via_method = a.broadcast_add(&b)?;          // same thing
 assert_eq!(via_operator.dims().as_ref(), &[2, 3]);
 # Ok::<(), incin::Error>(())
 ```
 
 The type-level `BroadcastShape` proof determines the output type. Runtime
-shape or backend validation still returns an `Err`, so propagate or handle the
-operator result before using the tensor.
+shape or backend validation remains recoverable through `try_add` and the
+other named methods. Operator syntax panics instead, with no error or tensor
+contents in its fixed message.
 
 `broadcast_left` exists for the left-aligned case that right-aligned
 broadcasting cannot express.

@@ -25,15 +25,19 @@ mod axis;
 mod idx;
 mod index_expr;
 /// Helper module for logical device mesh topology macro.
+#[cfg(feature = "distributed")]
 mod mesh;
 /// Helper module for deriving neural network module traits.
 mod module;
 /// Internal helper module for tensor placement macro.
+#[cfg(feature = "distributed")]
 mod placement;
 
 /// Internal helper module for distributed main macro.
+#[cfg(feature = "distributed")]
 mod distributed_main;
 /// Internal helper module for parallel block macro.
+#[cfg(feature = "distributed")]
 mod parallel_block;
 
 /// Helper module for parsing ONNX model graphs into Rust structs.
@@ -369,6 +373,7 @@ pub fn axis(input: TokenStream) -> TokenStream {
 /// ```text
 /// type MyMesh = mesh![dp = 2, tp = 4, pp = 1];
 /// ```
+#[cfg(feature = "distributed")]
 #[proc_macro]
 pub fn mesh(input: TokenStream) -> TokenStream {
     mesh::mesh(input)
@@ -458,6 +463,7 @@ pub fn import_model(input: TokenStream) -> TokenStream {
 /// type P4 = placement![Partial(Sum) on MyMesh];
 /// type P5 = placement![PipelineStage(0) on MyMesh];
 /// ```
+#[cfg(feature = "distributed")]
 #[proc_macro]
 pub fn placement(input: TokenStream) -> TokenStream {
     placement::placement(input)
@@ -472,12 +478,14 @@ pub fn placement(input: TokenStream) -> TokenStream {
 /// let val = parallel!(mesh => { 42 });
 /// assert_eq!(val, 42);
 /// ```
+#[cfg(feature = "distributed")]
 #[proc_macro]
 pub fn parallel(input: TokenStream) -> TokenStream {
     parallel_block::parallel_block(input)
 }
 
 /// Attributes a main function to initialize and run distributed launcher boilerplate.
+#[cfg(feature = "distributed")]
 #[proc_macro_attribute]
 pub fn distributed_main(attr: TokenStream, item: TokenStream) -> TokenStream {
     distributed_main::distributed_main(attr, item)

@@ -27,7 +27,12 @@ std = []
 # Enables nightly-only macro experiments. Empty on stable by design.
 nightly = []
 # Enables distributed macro tests and integrations.
-distributed = ["incin/distributed"]
+distributed = []
+
+[package.metadata.incin.feature-contract]
+std = { tier = "stable", owner = "macros", prerequisites = [], hardware = "none" }
+nightly = { tier = "preview", owner = "macros", prerequisites = [], hardware = "nightly" }
+distributed = { tier = "preview", owner = "macros", prerequisites = [], hardware = "none" }
 
 
 

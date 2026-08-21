@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 
 suite("Incin VS Code extension", () => {
   test("activates in a workspace with a incin Cargo.toml and configures rust-analyzer", async () => {
+    if (process.env.INCIN_REAL_E2E === "1") return;
     const ext = vscode.extensions.getExtension("incin.incin-lsp-vscode");
     assert.ok(ext, "extension incin.incin-lsp-vscode was not found in this dev host");
 
@@ -27,9 +28,15 @@ suite("Incin VS Code extension", () => {
       env?.INCIN_LSP_RA_PATH,
       "extension did not point the proxy at rust-analyzer's bundled server"
     );
+    assert.strictEqual(
+      raConfig.get("inlayHints.maxLength"),
+      null,
+      "extension must request untruncated labels before incin-lsp can humanize them"
+    );
   });
 
   test("Incin: Toggle Shape Hints command flips the hints env var", async () => {
+    if (process.env.INCIN_REAL_E2E === "1") return;
     // The toggle command also asks the real rust-analyzer extension to
     // restart its server, which means actually spawning whatever
     // `incin.lspPath` resolves to. Point it at a real, always-present,

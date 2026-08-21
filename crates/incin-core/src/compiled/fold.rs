@@ -1,4 +1,7 @@
-//! Constant folding, weight prepacking, and shape bucketing passes for compiled graphs.
+//! Inspection-only constant-folding, prepacking, and shape-bucketing types.
+//!
+//! Folding and prepacking have no executable lowering in the preview CPU
+//! evaluator and therefore fail closed.
 
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
@@ -42,7 +45,7 @@ impl ShapeBucket {
     }
 }
 
-/// Constant folding pass for eliminating constant computation subgraphs.
+/// Inspection-only constant-folding pass; execution requests fail closed.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ConstantFolder;
 
@@ -57,7 +60,7 @@ impl ConstantFolder {
     }
 }
 
-/// Weight prepacking pass for reformatting weight layouts ahead of kernel execution.
+/// Inspection-only weight-prepacking pass; execution requests fail closed.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct WeightPrepacker;
 

@@ -12,7 +12,7 @@ to be automatically executed. Read it first if you are new to the codebase.
 |---|---|
 | [GUIDE.md](GUIDE.md) | the crate map, the type-level shape system, tensor creation, the operation surface, the canonical execution architecture, the target API, backend authoring, autograd, modules, errors, feature flags, and the idioms the rest of this tree assumes. Concept-oriented: "how does the shape-proof system work" |
 | [book/src/](book/src/SUMMARY.md) | the full user-facing book. The chapter count and hierarchy are checked from `SUMMARY.md`; `mdbook build docs/book` renders the source, `python3 docs/book/build_site.py` builds the chaptered Pages site, `python3 tools/check-book-site.py` validates its static shell, `python3 tools/test-book-site.py` exercises routing and theme behavior in Chromium, and `python3 docs/book/make_single_page.py` builds the separate self-contained offline artifact. |
-| [security/unsafe-ledger.md](security/unsafe-ledger.md) | production unsafe-code inventory and the checker that keeps new unsafe-bearing files visible during review. |
+| [security/unsafe-ledger.md](security/unsafe-ledger.md) | production unsafe-code threat model, invariant-family evidence, and the cfg-aware checker that keeps new unsafe blocks visible during review. |
 | [../SECURITY.md](../SECURITY.md) | vulnerability reporting guidance and the security review boundary. |
 | [public-api/hidden-items.md](public-api/hidden-items.md) | reviewed inventory of hidden exports used for macro, proof, backend, and compatibility plumbing. |
 | [architecture/](architecture/) | validated repository architecture map covering runtime layering, extension boundaries, and documentation delivery. |

@@ -7,15 +7,15 @@
 use crate::dist::{Local, Placement};
 use crate::err::Result;
 use crate::exec::catalog::{
-    AxisAttributes, CanonicalOperation, Descriptor, LogicalTensorMeta, Operation, op,
+    op, AxisAttributes, CanonicalOperation, Descriptor, LogicalTensorMeta, Operation,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
-use crate::shapes::ShapeBuf;
-use crate::shapes::StaticCursor;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
+use crate::shapes::ShapeBuf;
+use crate::shapes::StaticCursor;
 use crate::shapes::{DynShape, RuntimeRankProjection, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
@@ -440,15 +440,15 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
 }
 
 impl<
-    S: crate::shapes::Shape
-        + crate::shapes::DynShape
-        + crate::shapes::RemoveOneRank
-        + crate::shapes::PreserveRank,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    P: Placement,
-> Tensor<S, B, K, G, P>
+        S: crate::shapes::Shape
+            + crate::shapes::DynShape
+            + crate::shapes::RemoveOneRank
+            + crate::shapes::PreserveRank,
+        B: Backend,
+        K: crate::tensor::dtype::DType,
+        G: RequiresGrad,
+        P: Placement,
+    > Tensor<S, B, K, G, P>
 where
     <S as crate::shapes::RemoveOneRank>::Output: crate::shapes::Shape,
     <S as crate::shapes::PreserveRank>::Output: crate::shapes::Shape,
@@ -620,11 +620,11 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
 }
 
 impl<
-    S: crate::shapes::Shape + crate::shapes::DynShape,
-    B: crate::tensor::backend::Backend + Execute<op::Sub> + Execute<op::Mul>,
-    K: crate::tensor::dtype::DType,
-    G: crate::tensor::grad::RequiresGrad,
-> Tensor<S, B, K, G>
+        S: crate::shapes::Shape + crate::shapes::DynShape,
+        B: crate::tensor::backend::Backend + Execute<op::Sub> + Execute<op::Mul>,
+        K: crate::tensor::dtype::DType,
+        G: crate::tensor::grad::RequiresGrad,
+    > Tensor<S, B, K, G>
 where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
@@ -870,18 +870,18 @@ where
 // -------------------------------------------------------------------------
 
 impl<
-    S: crate::shapes::Shape + crate::shapes::DynShape,
-    B: crate::tensor::backend::Backend
-        + Execute<op::Sub>
-        + Execute<op::Mul>
-        + Execute<op::Sqrt>
-        + Execute<op::MeanAll>
-        + Execute<op::SumAll>
-        + Execute<op::MulScalar>
-        + crate::exec::Capabilities,
-    K: crate::tensor::dtype::DType,
-    G: crate::tensor::grad::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
-> Tensor<S, B, K, G>
+        S: crate::shapes::Shape + crate::shapes::DynShape,
+        B: crate::tensor::backend::Backend
+            + Execute<op::Sub>
+            + Execute<op::Mul>
+            + Execute<op::Sqrt>
+            + Execute<op::MeanAll>
+            + Execute<op::SumAll>
+            + Execute<op::MulScalar>
+            + crate::exec::Capabilities,
+        K: crate::tensor::dtype::DType,
+        G: crate::tensor::grad::RequiresGrad + crate::tensor::grad::GradJoin<G, Output = G>,
+    > Tensor<S, B, K, G>
 where
     <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
@@ -901,7 +901,11 @@ where
 
         let n = self.shape_buf().numel().unwrap_or(0) as f32;
         let denom = if unbiased {
-            if n <= 1.0 { 0.0 } else { n - 1.0 }
+            if n <= 1.0 {
+                0.0
+            } else {
+                n - 1.0
+            }
         } else {
             n
         };

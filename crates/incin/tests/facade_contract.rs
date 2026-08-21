@@ -37,12 +37,34 @@ fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
     }
 }
 
+fn test_fixture(name: &str) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = root
+        .join("tests/consumer-fixtures")
+        .join(name)
+        .join("Cargo.toml");
+    let target = root.join("../../target/facade-contract").join(name);
+    let output = Command::new(env!("CARGO"))
+        .args(["test", "--quiet", "--manifest-path"])
+        .arg(&manifest)
+        .env("CARGO_TARGET_DIR", target)
+        .env_remove("CARGO_PRIMARY_PACKAGE")
+        .output()
+        .expect("consumer fixture cargo test invocation must start");
+    assert!(
+        output.status.success(),
+        "fixture {name} test failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn stable_facade_consumer_contracts() {
     check_fixture("default-pass", true, &[]);
     check_fixture("backend-authoring-pass", true, &[]);
     check_fixture("custom-op-cpu-pass", true, &[]);
     check_fixture("experimental-distributed-pass", true, &[]);
+    check_fixture("experimental-compiled-pass", true, &[]);
     check_fixture("test-utils-pass", true, &[]);
     check_fixture("no-default-pass", true, &[]);
     check_fixture("internal-absent", false, &["no `Graph` in the root"]);
@@ -55,6 +77,16 @@ fn stable_facade_consumer_contracts() {
         "experimental-absent",
         false,
         &["could not find `compiled` in `experimental`"],
+    );
+    check_fixture(
+        "experimental-compiled-root-absent",
+        false,
+        &["no `CompiledPlan` in the root"],
+    );
+    check_fixture(
+        "experimental-compiled-prelude-absent",
+        false,
+        &["no `CompiledPlan` in `prelude`"],
     );
     check_fixture(
         "test-utils-absent",
@@ -73,6 +105,11 @@ fn stable_facade_consumer_contracts() {
         false,
         &["no `DefaultBackend` in the root"],
     );
+}
+
+#[test]
+fn experimental_compiled_facade_executes_a_non_empty_cpu_plan() {
+    test_fixture("experimental-compiled-pass");
 }
 
 #[test]

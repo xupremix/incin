@@ -23,6 +23,10 @@ The capture uses Neovim 0.12, the module in this directory, the locally
 installed `incin-lsp`, and rust-analyzer. The popup text comes from the live
 LSP diagnostic.
 
+The module also asks rust-analyzer for unlimited inlay-label length. This is
+necessary because the server otherwise truncates a `DimCons<UInt<…>>` type
+before `incin-lsp` can turn it into a readable tensor shape.
+
 ## Requirements
 
 - Neovim 0.11+ (for `vim.lsp.config`/`vim.lsp.enable`), **or**

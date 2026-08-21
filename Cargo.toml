@@ -52,7 +52,7 @@ version = "0.1.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/xupremix/incin"
-homepage = "https://github.com/xupremix/incin"
+homepage = "https://xupremix.github.io/incin/"
 authors = ["xupremix <xupremix.me@gmail.com>"]
 # The oldest toolchain the workspace has actually been built on, not a guess:
 # `cargo +1.88.0 check --workspace --all-targets` passes and 1.87 is refused by
@@ -62,6 +62,9 @@ rust-version = "1.88"
 [workspace.lints.rust]
 # Evaluating ShapeEq associated consts as statements triggers compile-time shape assertions.
 path_statements = "allow"
+# Every unsafe operation inside an unsafe function must remain visibly scoped.
+# This prevents a future edit from silently inheriting the function's contract.
+unsafe_op_in_unsafe_fn = "deny"
 
 [workspace.lints.clippy]
 # Public generic signatures keep primary trait bounds near parameters and capability bounds in where clauses.
@@ -69,6 +72,10 @@ multiple_bound_locations = "allow"
 # The public error contract intentionally returns the structured framework
 # error by value. Test and example targets also use that contract directly.
 result_large_err = "allow"
+# Unsafe blocks are reviewable only when their immediate invariant is recorded.
+undocumented_unsafe_blocks = "deny"
+# A public unsafe API must state the contract that callers have to uphold.
+missing_safety_doc = "deny"
 [workspace.dependencies]
 proc-macro2 = { version = "1.0.106", default-features = false }
 syn = { version = "2.0.118", features = ["full"] }

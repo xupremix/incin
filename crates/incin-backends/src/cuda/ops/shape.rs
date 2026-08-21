@@ -144,6 +144,8 @@ fn launch_shape_op(
         shared_mem_bytes: 0,
     };
 
+    // SAFETY: checked reshape metadata fixes the source and 21-u32 parameter
+    // views, output length, and launch dimensions; out_b is uniquely owned.
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let params_f32 = params_dev.transmute::<u32>(21).unwrap();
@@ -324,6 +326,8 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
             shared_mem_bytes: 0,
         };
 
+        // SAFETY: each checked slice range stays within the validated source;
+        // out_b remains uniquely owned across launches and lengths match f32.
         unsafe {
             let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
             // out_b.data was allocated once before this loop and never cloned, so it

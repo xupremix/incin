@@ -19,6 +19,9 @@ default = ["std"]
 # Standard-library support for filesystem-backed diagnostic expansion.
 std = []
 
+[package.metadata.incin.feature-contract]
+std = { tier = "stable", owner = "diagnostics", prerequisites = [], hardware = "none" }
+
 [lints]
 workspace = true
 

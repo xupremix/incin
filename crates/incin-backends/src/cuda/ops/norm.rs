@@ -228,6 +228,8 @@ pub(crate) fn launch_layer_norm(
     let bias_storage = bias.unwrap_or(weight);
     let has_bias = i32::from(bias.is_some());
 
+    // SAFETY: the selected kernel's checked launch candidate and validated
+    // tensor metadata bound all views; output is a fresh unique allocation.
     unsafe {
         let output_u8 = Arc::get_mut(&mut output.data).ok_or_else(|| {
             Error::Msg("fresh CUDA layer norm output was unexpectedly shared".into())
@@ -351,6 +353,8 @@ pub(crate) fn launch_batch_norm(
     let mean_storage = running_mean.unwrap_or(input);
     let variance_storage = running_variance.unwrap_or(input);
 
+    // SAFETY: validated batch-norm metadata and the checked launch candidate
+    // bound device accesses; output is freshly allocated and uniquely owned.
     unsafe {
         let output_u8 = Arc::get_mut(&mut output.data).ok_or_else(|| {
             Error::Msg("fresh CUDA batch norm output was unexpectedly shared".into())

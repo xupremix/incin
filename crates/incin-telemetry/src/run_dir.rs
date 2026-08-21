@@ -104,6 +104,7 @@ pub(crate) mod tests {
         assert_eq!(result, dir);
         assert!(dir.is_dir(), "run dir should exist on disk after the call");
 
+        // SAFETY: ENV_LOCK serializes this test's process-global mutation.
         unsafe {
             std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");
         }
@@ -139,6 +140,7 @@ pub(crate) mod tests {
         assert_eq!(created, resolved);
         let _ = std::fs::remove_dir_all(&dir);
 
+        // SAFETY: ENV_LOCK serializes this test's process-global mutation.
         unsafe {
             std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");
         }

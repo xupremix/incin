@@ -5,7 +5,10 @@
 with a SemVer prerelease suffix. It checks that the runner is checked out at
 the tag's peeled commit, that the commit is reachable from `master`, that every
 publishable workspace Cargo package has the tag version, and that
-`editors/vscode/package.json` has that same version.
+`editors/vscode/package.json` has that same version. A prerelease tag such as
+`v0.1.0-rc.1` therefore requires the workspace and editor package to be
+`0.1.0-rc.1`; the final release commit changes them to `0.1.0` before the
+stable tag is created.
 
 All build jobs test and package into GitHub Actions workflow artifacts; they do
 not contact a GitHub release. The book job runs both its static checker and the
@@ -21,6 +24,7 @@ It never publishes that draft. Publication is a separate manual
 `workflow_dispatch` action for the same tag: it downloads the draft assets,
 rebuilds the expected manifest, verifies the checksums and the draft asset
 list, and runs in the `release` environment before making the draft public.
+Tags with a SemVer prerelease suffix are marked as prereleases in GitHub.
 The dispatch must use the release tag as its workflow ref, matching the
 environment's `v*` tag policy.
 The RustRover archive is deliberately named

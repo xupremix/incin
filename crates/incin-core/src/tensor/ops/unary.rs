@@ -458,12 +458,11 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `tensor * scalar`, returning the same typed failure contract as
-            /// [`Tensor::mul_scalar`].
+            /// `tensor * scalar` panics if [`Tensor::mul_scalar`] fails.
             fn mul(self, rhs: $t) -> Self::Output {
-                self.mul_scalar(rhs)
+                crate::tensor::ops::operator_or_panic("* (scalar)", self.mul_scalar(rhs))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -473,12 +472,11 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `tensor * scalar`, returning the same typed failure contract as
-            /// [`Tensor::mul_scalar`].
+            /// `tensor * scalar` panics if [`Tensor::mul_scalar`] fails.
             fn mul(self, rhs: $t) -> Self::Output {
-                self.mul_scalar(rhs)
+                crate::tensor::ops::operator_or_panic("* (scalar)", self.mul_scalar(rhs))
             }
         }
         impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -488,12 +486,11 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `tensor + scalar`, returning the same typed failure contract as
-            /// [`Tensor::add_scalar`].
+            /// `tensor + scalar` panics if [`Tensor::add_scalar`] fails.
             fn add(self, rhs: $t) -> Self::Output {
-                self.add_scalar(rhs)
+                crate::tensor::ops::operator_or_panic("+ (scalar)", self.add_scalar(rhs))
             }
         }
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
@@ -503,12 +500,11 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `tensor + scalar`, returning the same typed failure contract as
-            /// [`Tensor::add_scalar`].
+            /// `tensor + scalar` panics if [`Tensor::add_scalar`] fails.
             fn add(self, rhs: $t) -> Self::Output {
-                self.add_scalar(rhs)
+                crate::tensor::ops::operator_or_panic("+ (scalar)", self.add_scalar(rhs))
             }
         }
 
@@ -518,10 +514,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
 
             fn sub(self, rhs: $t) -> Self::Output {
-                self.sub_scalar(rhs as f64)
+                crate::tensor::ops::operator_or_panic("- (scalar)", self.sub_scalar(rhs as f64))
             }
         }
 
@@ -531,10 +527,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
 
             fn sub(self, rhs: $t) -> Self::Output {
-                self.sub_scalar(rhs as f64)
+                crate::tensor::ops::operator_or_panic("- (scalar)", self.sub_scalar(rhs as f64))
             }
         }
 
@@ -544,10 +540,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
 
             fn div(self, rhs: $t) -> Self::Output {
-                self.div_scalar(rhs as f64)
+                crate::tensor::ops::operator_or_panic("/ (scalar)", self.div_scalar(rhs as f64))
             }
         }
 
@@ -557,10 +553,10 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Result<Tensor<S, B, K, G>>;
+            type Output = Tensor<S, B, K, G>;
 
             fn div(self, rhs: $t) -> Self::Output {
-                self.div_scalar(rhs as f64)
+                crate::tensor::ops::operator_or_panic("/ (scalar)", self.div_scalar(rhs as f64))
             }
         }
     };
@@ -577,10 +573,10 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Result<Tensor<S, B, K, G>>;
+    type Output = Tensor<S, B, K, G>;
 
     fn neg(self) -> Self::Output {
-        self.try_neg()
+        crate::tensor::ops::operator_or_panic("- (unary)", self.try_neg())
     }
 }
 
@@ -590,9 +586,9 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Result<Tensor<S, B, K, G>>;
+    type Output = Tensor<S, B, K, G>;
 
     fn neg(self) -> Self::Output {
-        self.try_neg()
+        crate::tensor::ops::operator_or_panic("- (unary)", self.try_neg())
     }
 }

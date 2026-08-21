@@ -1,4 +1,9 @@
-//! Compiled graph representation, IR capture, and execution planning.
+//! Experimental compiled graph representation, IR capture, and execution planning.
+//!
+//! This feature supplies plan inspection plus a CPU reference evaluator through
+//! `incin-backends`. It is neither an optimized compiler nor a stable execution
+//! API, deployment target, or portable-ABI format. Optimization requests that
+//! have no executable lowering (including fusion) fail closed.
 
 pub mod alloc;
 pub mod artifact;

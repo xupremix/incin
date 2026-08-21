@@ -23,6 +23,11 @@ uses the rust-analyzer binary bundled with the official extension when it is
 available. Other clients can set `INCIN_LSP_RA_PATH` to an absolute binary
 path.
 
+For Incin workspaces, the VS Code extension sets rust-analyzer's
+`inlayHints.maxLength` to `null`. This gives the proxy the full type to
+translate; rust-analyzer's default truncated `DimCons<UInt<…>>` labels cannot
+be reconstructed safely after truncation.
+
 Tagged GitHub releases package prebuilt `incin-lsp` binaries for Linux x86_64,
 macOS Apple Silicon, and Windows x86_64. They also package the VS Code and
 Neovim integrations described below. Those assets exist only after the

@@ -1,13 +1,94 @@
 impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
+impl incin::doctor::Cache
+impl incin::doctor::Feature
+impl incin::doctor::Host for incin::doctor::HostMachine
+impl incin::doctor::IsaFeature
+impl incin::doctor::Report
 impl<T> incin_data::vision::mnist::MnistBatchTarget for incin::TargetBatch<T> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub const incin::doctor::EXIT_FINDINGS: i32
+pub const incin::doctor::EXIT_OK: i32
+pub const incin::doctor::EXIT_USAGE: i32
+pub const incin::doctor::SCHEMA_VERSION: u32
+pub const incin::experimental::tuning_report::EXIT_OK: i32
+pub const incin::experimental::tuning_report::EXIT_USAGE: i32
+pub enum incin::doctor::CacheState
+pub enum incin::doctor::Severity
 pub fn incin::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub fn incin::TargetBatch<T>::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
 pub fn incin::data::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub fn incin::doctor::Cache::new(&str, core::option::Option<std::path::PathBuf>, incin::doctor::CacheState) -> Self
+pub fn incin::doctor::Cache::with_detail(self, &str) -> Self
+pub fn incin::doctor::Feature::new(&str, bool) -> Self
+pub fn incin::doctor::Host::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::Host::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::Host::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::Host::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::Host::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::Host::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::Host::rustc_version(&self) -> core::option::Option<alloc::string::String>
+pub fn incin::doctor::HostMachine::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::HostMachine::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::HostMachine::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::HostMachine::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::HostMachine::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::HostMachine::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::HostMachine::rustc_version(&self) -> core::option::Option<alloc::string::String>
+pub fn incin::doctor::IsaFeature::new(&str, bool) -> Self
+pub fn incin::doctor::Report::exit_code(&self) -> i32
+pub fn incin::doctor::Report::gather(&dyn incin::doctor::Host) -> Self
+pub fn incin::doctor::Report::to_json(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn incin::doctor::Report::to_text(&self) -> alloc::string::String
+pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
+pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub fn incin::experimental::tuning_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
 pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
+pub incin::doctor::Cache::detail: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::name: alloc::string::String
+pub incin::doctor::Cache::path: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::state: incin::doctor::CacheState
+pub incin::doctor::CacheState::Absent
+pub incin::doctor::CacheState::NotCompiled
+pub incin::doctor::CacheState::NotWritable
+pub incin::doctor::CacheState::Unset
+pub incin::doctor::CacheState::Writable
+pub incin::doctor::DeviceReport::available: bool
+pub incin::doctor::DeviceReport::compiled_in: bool
+pub incin::doctor::DeviceReport::kind: alloc::string::String
+pub incin::doctor::DeviceReport::ordinal: core::option::Option<usize>
+pub incin::doctor::Feature::enabled: bool
+pub incin::doctor::Feature::name: alloc::string::String
+pub incin::doctor::Finding::code: alloc::string::String
+pub incin::doctor::Finding::message: alloc::string::String
+pub incin::doctor::Finding::remedy: core::option::Option<alloc::string::String>
+pub incin::doctor::Finding::severity: incin::doctor::Severity
+pub incin::doctor::IsaFeature::available: bool
+pub incin::doctor::IsaFeature::name: alloc::string::String
+pub incin::doctor::Probe::device: alloc::string::String
+pub incin::doctor::Probe::dtype: alloc::string::String
+pub incin::doctor::Probe::operation: alloc::string::String
+pub incin::doctor::Probe::rank: usize
+pub incin::doctor::Probe::reason: core::option::Option<alloc::string::String>
+pub incin::doctor::Probe::support: alloc::string::String
+pub incin::doctor::Probe::training: bool
+pub incin::doctor::Report::caches: alloc::vec::Vec<incin::doctor::Cache>
+pub incin::doctor::Report::cpu_isa: alloc::vec::Vec<incin::doctor::IsaFeature>
+pub incin::doctor::Report::devices: alloc::vec::Vec<incin::doctor::DeviceReport>
+pub incin::doctor::Report::features: alloc::vec::Vec<incin::doctor::Feature>
+pub incin::doctor::Report::findings: alloc::vec::Vec<incin::doctor::Finding>
+pub incin::doctor::Report::probes: alloc::vec::Vec<incin::doctor::Probe>
+pub incin::doctor::Report::schema_version: u32
+pub incin::doctor::Report::toolchain: incin::doctor::Toolchain
+pub incin::doctor::Severity::Error
+pub incin::doctor::Severity::Note
+pub incin::doctor::Severity::Warning
+pub incin::doctor::Toolchain::incin: alloc::string::String
+pub incin::doctor::Toolchain::rustc: core::option::Option<alloc::string::String>
 pub mod incin
 pub mod incin::advanced
 pub mod incin::data
+pub mod incin::doctor
 pub mod incin::experimental
+pub mod incin::experimental::tuning_report
 pub mod incin::macros
 pub mod incin::macros::advanced
 pub mod incin::metrics
@@ -19,8 +100,18 @@ pub mod incin::transforms
 pub mod incin::types
 pub mod incin::types::dtype
 pub struct incin::TargetBatch<T>(pub T)
+pub struct incin::doctor::Cache
+pub struct incin::doctor::DeviceReport
+pub struct incin::doctor::Feature
+pub struct incin::doctor::Finding
+pub struct incin::doctor::HostMachine
+pub struct incin::doctor::IsaFeature
+pub struct incin::doctor::Probe
+pub struct incin::doctor::Report
+pub struct incin::doctor::Toolchain
 pub trait incin::MnistTargetExt
 pub trait incin::data::MnistTargetExt
+pub trait incin::doctor::Host
 pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
 pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
 pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
@@ -60,6 +151,7 @@ pub use incin::BuiltinDType
 pub use incin::ConstDType
 pub use incin::ConstantLR
 pub use incin::ConversionFailure
+pub use incin::CosineAnnealingLR
 pub use incin::Cpu
 pub use incin::DType
 pub use incin::DTypeDescriptor
@@ -102,6 +194,7 @@ pub use incin::StateRole
 pub use incin::StateSnapshot
 pub use incin::StateValue
 pub use incin::StateVisitor
+pub use incin::StepLR
 pub use incin::TensorElement
 pub use incin::TrainState
 pub use incin::VisitState
@@ -144,10 +237,7 @@ pub use incin::data::MnistBatchTarget
 pub use incin::data::vision
 pub use incin::dim
 pub use incin::experimental::import_model
-pub use incin::experimental::mesh
 pub use incin::experimental::model
-pub use incin::experimental::parallel
-pub use incin::experimental::placement
 pub use incin::f16
 pub use incin::macros::advanced::idx
 pub use incin::macros::i
@@ -244,6 +334,7 @@ pub use incin::nn::sum_stats
 pub use incin::optim::Adam
 pub use incin::optim::AdamW
 pub use incin::optim::ConstantLR
+pub use incin::optim::CosineAnnealingLR
 pub use incin::optim::Gradients
 pub use incin::optim::LRScheduler
 pub use incin::optim::LinearLR
@@ -251,6 +342,7 @@ pub use incin::optim::Optimizer
 pub use incin::optim::OptimizerBackend
 pub use incin::optim::ParameterGroup
 pub use incin::optim::SGD
+pub use incin::optim::StepLR
 pub use incin::optim::clip_grad_norm
 pub use incin::optim::clip_grad_value
 pub use incin::prelude::Accuracy
@@ -278,6 +370,7 @@ pub use incin::prelude::ConstDevice
 pub use incin::prelude::ConstDim
 pub use incin::prelude::ConstantLR
 pub use incin::prelude::ConversionFailure
+pub use incin::prelude::CosineAnnealingLR
 pub use incin::prelude::Cpu
 pub use incin::prelude::CrossEntropyLoss
 pub use incin::prelude::DType
@@ -304,6 +397,7 @@ pub use incin::prelude::Flatten
 pub use incin::prelude::FlattenAxes
 pub use incin::prelude::FloatDType
 pub use incin::prelude::FloatToIntPolicy
+pub use incin::prelude::Format
 pub use incin::prelude::GELU
 pub use incin::prelude::GeneratedFill
 pub use incin::prelude::Grad
@@ -326,6 +420,7 @@ pub use incin::prelude::MatMulShape
 pub use incin::prelude::MaxPool2d
 pub use incin::prelude::Mean
 pub use incin::prelude::Metric
+pub use incin::prelude::ModelExt
 pub use incin::prelude::Module
 pub use incin::prelude::NamedDim
 pub use incin::prelude::Native
@@ -348,6 +443,7 @@ pub use incin::prelude::RequiresGrad
 pub use incin::prelude::ReshapeShape
 pub use incin::prelude::Result
 pub use incin::prelude::SGD
+pub use incin::prelude::STATE_FORMAT_VERSION
 pub use incin::prelude::SameCount
 pub use incin::prelude::Scalar
 pub use incin::prelude::ScaledOptimizer
@@ -364,6 +460,7 @@ pub use incin::prelude::StatePath
 pub use incin::prelude::StateRole
 pub use incin::prelude::StateSnapshot
 pub use incin::prelude::StateValue
+pub use incin::prelude::StepLR
 pub use incin::prelude::StructuralFlatten
 pub use incin::prelude::Swish
 pub use incin::prelude::Tanh

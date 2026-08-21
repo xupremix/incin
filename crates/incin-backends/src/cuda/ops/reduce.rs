@@ -200,6 +200,8 @@ pub(crate) fn launch_reduce_op(
     let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
     let out_numel_i32 = checked_i32(out_numel, "output element count")?;
 
+    // SAFETY: checked axis, offsets, element counts, and launch dimensions
+    // bound the reduction views; out_buffer is freshly and uniquely owned.
     unsafe {
         let out_u8 = Arc::get_mut(&mut out_buffer.data).ok_or_else(|| {
             Error::Msg("fresh CUDA reduction output buffer was unexpectedly shared".into())

@@ -71,6 +71,11 @@ async function applyIncinLspConfig(hintsEnabled: boolean): Promise<void> {
   const shortenBackend = incinConfig.get<boolean>("shortenBackend", false);
 
   await raConfig.update("server.path", lspPath, vscode.ConfigurationTarget.Workspace);
+  // rust-analyzer truncates inlay labels to 25 characters by default. The
+  // proxy receives that already-truncated string, so it cannot turn a partial
+  // `DimCons<UInt<…, …>, …>` type into a trustworthy shape. Request the
+  // complete label in Incin workspaces, then let incin-lsp render it compactly.
+  await raConfig.update("inlayHints.maxLength", null, vscode.ConfigurationTarget.Workspace);
 
   const existingEnv = raConfig.get<Record<string, string>>("server.extraEnv", {});
   const mergedEnv: Record<string, string> = {

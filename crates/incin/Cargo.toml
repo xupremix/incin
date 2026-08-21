@@ -31,18 +31,18 @@ std = ["incin-core/std", "incin-macros/std", "incin-backends/std"]
 # Enables nightly-only APIs in the core and macro crates.
 nightly = ["incin-core/nightly", "incin-macros/nightly"]
 # Enables the built-in CPU backend. This is the only default backend.
-cpu = ["incin-backends/cpu"]
+cpu = ["std", "incin-backends/cpu"]
 # Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete
 # without it; see incin-backends for what it does and does not change.
 cpu-blas = ["std", "cpu", "incin-backends/cpu-blas"]
 # Preview: the native CUDA backend, covering the subset in docs/capabilities.md. Never enabled implicitly.
-cuda = ["incin-core/cuda", "incin-backends/cuda"]
+cuda = ["std", "incin-core/cuda", "incin-backends/cuda"]
 # Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly.
-wgpu = ["incin-backends/wgpu"]
+wgpu = ["std", "incin-backends/wgpu"]
 # Preview: the native Metal backend for Apple Silicon. Its executors are stubs pending MTL-002/003; see docs/capabilities.md. Never enabled implicitly.
-metal = ["incin-backends/metal"]
+metal = ["std", "incin-backends/metal"]
 # Enables MPS and MPSGraph structured primitives for Apple Silicon.
-metal-mps = ["incin-backends/metal-mps"]
+metal-mps = ["metal", "incin-backends/metal-mps"]
 
 
 # Enables the external Candle backend at `incin::external::candle`.
@@ -57,7 +57,7 @@ train = ["std"]
 # Preview: typed meshes, static/runtime tensor placements, and distributed
 # lowering proofs. This is a planning and validation layer; there is no
 # distributed execution path. Transports remain separate opt-in backend features.
-distributed = ["incin-core/distributed"]
+distributed = ["incin-core/distributed", "incin-macros/distributed"]
 # Enables the deterministic in-process collective transport used by
 # conformance tests and local distributed-plan development.
 distributed-reference = ["distributed", "incin-backends/distributed-reference"]
@@ -69,18 +69,45 @@ distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
 # Deterministic fault-injection hooks for tests. No stand-in backend: a test
 # that needs a backend uses a real one.
-test-utils = ["incin-backends/test-utils"]
+test-utils = ["std", "cpu", "incin-backends/test-utils"]
 # Extension contracts for backend authors.
 backend-authoring = []
 # The Hugging Face Hub client at `incin::hub`. Off by default because it brings
 # an async runtime and a second TLS stack into the dependency graph for an API
 # most training code never calls; dataset downloading does not need it.
-data-hub = ["incin-data/hub"]
-# Preview: curated types for compiled execution. The interface may change without a migration path.
-compiled = ["incin-core/compiled", "incin-backends/compiled"]
+data-hub = ["std", "incin-data/hub"]
+# Preview-only CPU reference evaluator and plan-inspection types under
+# `incin::experimental::compiled`. No stable API, deployment format, or
+# portable artifact ABI is promised.
+compiled = ["std", "cpu", "incin-core/compiled", "incin-backends/compiled"]
 # Opt-in only: ignored multi-host CUDA runtime fixtures require actual hardware
 # and are not part of compile-only feature coverage.
-hardware-tests = []
+hardware-tests = ["distributed-nccl"]
+
+# Authoritative release-support classification for every public feature. The
+# `cargo xtask docs` generator validates this table against `[features]` and
+# renders the README, feature matrix, and book inventory from it.
+[package.metadata.incin.feature-contract]
+std = { tier = "stable", owner = "facade", prerequisites = [], hardware = "none" }
+nightly = { tier = "preview", owner = "facade", prerequisites = [], hardware = "nightly" }
+cpu = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "none" }
+cpu-blas = { tier = "stable", owner = "facade", prerequisites = ["std", "cpu"], hardware = "none" }
+cuda = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "cuda" }
+wgpu = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "wgpu" }
+metal = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "apple-silicon" }
+metal-mps = { tier = "preview", owner = "facade", prerequisites = ["metal"], hardware = "apple-silicon" }
+external-candle = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "none" }
+autotune = { tier = "preview", owner = "facade", prerequisites = ["cuda"], hardware = "cuda" }
+train = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "none" }
+distributed = { tier = "preview", owner = "facade", prerequisites = [], hardware = "none" }
+distributed-reference = { tier = "preview", owner = "facade", prerequisites = ["distributed"], hardware = "none" }
+distributed-nccl = { tier = "preview", owner = "facade", prerequisites = ["distributed", "cuda"], hardware = "multi-host-cuda" }
+telemetry = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "none" }
+test-utils = { tier = "test-only", owner = "facade", prerequisites = ["std", "cpu"], hardware = "none" }
+backend-authoring = { tier = "stable", owner = "facade", prerequisites = [], hardware = "none" }
+data-hub = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "network" }
+compiled = { tier = "preview", owner = "facade", prerequisites = ["std", "cpu"], hardware = "none" }
+hardware-tests = { tier = "hardware-only", owner = "facade", prerequisites = ["distributed-nccl"], hardware = "multi-host-cuda" }
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.1.0", default-features = false }
@@ -139,5 +166,5 @@ required-features = ["backend-authoring", "cpu"]
 # document a fraction of this crate. Hardware-only features are deliberately
 # absent: docs.rs has no GPU and a build that cannot link is worse than a
 # page that says the feature exists.
-features = ["cpu", "std", "backend-authoring", "train", "compiled", "telemetry", "distributed", "test-utils"]
+features = ["cpu", "std", "cpu-blas", "external-candle", "telemetry", "backend-authoring", "data-hub", "train", "compiled", "distributed", "test-utils"]
 rustdoc-args = ["--cfg", "docsrs"]

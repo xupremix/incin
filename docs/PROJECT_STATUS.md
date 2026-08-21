@@ -37,8 +37,11 @@ it is not repeated here as if it were a current API description.
 - CUDA and Metal are feature-compiled where dependencies permit, but no
   hardware execution claim is made without the device.
 - WGPU has a supported software-adapter path for its documented subset.
-- Distributed execution, ONNX import, and compiled execution remain
-  experimental or partial where their dedicated documentation says so.
+- Distributed execution and ONNX import remain experimental or partial where
+  their dedicated documentation says so. Compiled execution is a separately
+  gated preview-only CPU reference evaluator under
+  `incin::experimental::compiled`; its plan snapshots are not a deployment
+  format or portable ABI.
 - Quantized operations are backend-authoring functionality, not a stable
   `Tensor` method surface, and training through them is not claimed.
 

@@ -25,6 +25,10 @@ download = ["dep:ureq", "dep:flate2"]
 # facade, for an API most training code never calls.
 hub = ["dep:hf-hub"]
 
+[package.metadata.incin.feature-contract]
+download = { tier = "stable", owner = "data", prerequisites = [], hardware = "network" }
+hub = { tier = "stable", owner = "data", prerequisites = [], hardware = "network" }
+
 [dependencies]
 hf-hub = { version = "0.5.0", default-features = false, features = ["tokio", "rustls-tls", "ureq"], optional = true }
 incin-core = { version = "0.1.0", path = "../incin-core" }
