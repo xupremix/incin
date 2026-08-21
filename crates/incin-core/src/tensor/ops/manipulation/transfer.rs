@@ -8,12 +8,12 @@ use crate::tensor::grad::{NoGrad, RequiresGrad};
 use core::marker::PhantomData;
 
 impl<
-        S: Shape,
-        B: Backend,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        NewD: crate::tensor::device::Device,
-    > crate::tensor::transfer::ToDevice<B, NewD> for Tensor<S, B, K, G>
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    NewD: crate::tensor::device::Device,
+> crate::tensor::transfer::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
     B: Backend + StorageTransfer<NewD>,
     <B as StorageTransfer<NewD>>::Output: SupportsDType<K>,

@@ -55,11 +55,7 @@ fn int64(field: Option<i64>) -> i64 {
 }
 
 fn display_domain(domain: &str) -> &str {
-    if domain.is_empty() {
-        "ai.onnx"
-    } else {
-        domain
-    }
+    if domain.is_empty() { "ai.onnx" } else { domain }
 }
 
 fn opset_for(model: &ModelProto, domain: &str) -> Option<i64> {
@@ -756,8 +752,9 @@ pub(crate) fn parse_onnx(
 mod tests {
     use super::*;
     use crate::onnx_pb::{
-        tensor_shape_proto::{dimension, Dimension},
-        type_proto, OperatorSetIdProto, TensorProto, TensorShapeProto, TypeProto,
+        OperatorSetIdProto, TensorProto, TensorShapeProto, TypeProto,
+        tensor_shape_proto::{Dimension, dimension},
+        type_proto,
     };
 
     fn value(name: &str, dims: Option<Vec<i64>>) -> ValueInfoProto {

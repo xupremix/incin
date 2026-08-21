@@ -3,12 +3,12 @@
 use crate::backend_authoring::{Backend, Execute};
 use crate::dist::placement::Local;
 use crate::err::Result;
+use crate::exec::Capabilities;
 use crate::exec::catalog::{
-    op, EpsilonAttributes, GroupNormAttributes, PixelShuffleAttributes, Pool2dAttributes,
+    EpsilonAttributes, GroupNormAttributes, PixelShuffleAttributes, Pool2dAttributes, op,
 };
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -16,11 +16,11 @@ use crate::tensor::grad::RequiresGrad;
 use alloc::vec;
 
 impl<
-        S: Shape + DynShape,
-        B: Backend + Execute<op::MaxPool2d>,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + DynShape,
+    B: Backend + Execute<op::MaxPool2d>,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 where
     B: Capabilities,
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<K>>,

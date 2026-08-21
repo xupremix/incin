@@ -250,6 +250,8 @@ pub mod __macro_support {
         Capabilities, Execute, StorageTransfer, SupportsDType, TransferTo, VariableBackend, op,
     };
     pub use incin_core::error::Result;
+    #[cfg(feature = "std")]
+    pub use incin_core::nn::save::load_safetensors;
     pub use incin_core::nn::{ComputeStats, LayerStats};
     pub use incin_core::nn::{
         LayerNode, NamedLayers, ParameterVisitor, ShapeInfo, StateMutVisitor, StatePath,
@@ -258,8 +260,6 @@ pub mod __macro_support {
     pub use incin_core::tensor::device::Device;
     pub use incin_core::tensor::ops::index::IndexSpec;
     pub use incin_core::tensor::transfer::ToDevice;
-    #[cfg(feature = "std")]
-    pub use incin_core::nn::save::load_safetensors;
 }
 
 /// Unstable APIs that carry no compatibility guarantee.

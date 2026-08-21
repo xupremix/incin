@@ -3,10 +3,10 @@
 use crate::backend_authoring::{Backend, Execute};
 use crate::dist::placement::Local;
 use crate::err::Result;
-use crate::exec::catalog::{op, TransposeAttributes};
+use crate::exec::Capabilities;
+use crate::exec::catalog::{TransposeAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue, SwapAxes};
 use crate::tensor::base::Tensor;

@@ -11,7 +11,7 @@
 use crate::dist::placement::Local;
 use crate::err::Result;
 use crate::exec::capability::Capabilities;
-use crate::exec::catalog::{op, AttributeContract, CanonicalOperation, NoAttributes};
+use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -583,13 +583,13 @@ impl_broadcast_binary_op!(
 macro_rules! impl_std_ops {
     ($trait:ident, $method:ident, $backend_method:ident, $op:ident, $operator:literal) => {
         impl<
-                S1: Shape + DynShape,
-                S2: Shape + DynShape,
-                B: Backend + Execute<op::$op>,
-                K: DType,
-                G1: RequiresGrad,
-                G2: RequiresGrad,
-            > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<op::$op>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -608,15 +608,15 @@ macro_rules! impl_std_ops {
         }
 
         impl<
-                'a,
-                'b,
-                S1: Shape + DynShape,
-                S2: Shape + DynShape,
-                B: Backend + Execute<op::$op>,
-                K: DType,
-                G1: RequiresGrad,
-                G2: RequiresGrad,
-            > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+            'a,
+            'b,
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<op::$op>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -635,14 +635,14 @@ macro_rules! impl_std_ops {
         }
 
         impl<
-                'a,
-                S1: Shape + DynShape,
-                S2: Shape + DynShape,
-                B: Backend + Execute<op::$op>,
-                K: DType,
-                G1: RequiresGrad,
-                G2: RequiresGrad,
-            > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+            'a,
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<op::$op>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -661,14 +661,14 @@ macro_rules! impl_std_ops {
         }
 
         impl<
-                'a,
-                S1: Shape + DynShape,
-                S2: Shape + DynShape,
-                B: Backend + Execute<op::$op>,
-                K: DType,
-                G1: RequiresGrad,
-                G2: RequiresGrad,
-            > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+            'a,
+            S1: Shape + DynShape,
+            S2: Shape + DynShape,
+            B: Backend + Execute<op::$op>,
+            K: DType,
+            G1: RequiresGrad,
+            G2: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,

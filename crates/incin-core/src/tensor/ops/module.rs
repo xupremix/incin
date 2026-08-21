@@ -1,7 +1,7 @@
 //! Module operations (LayerNorm, BatchNorm, etc) for neural networks.
 use crate::dist::Local;
 use crate::err::{Error, Result};
-use crate::exec::catalog::{op, BatchNormAttributes, LayerNormAttributes};
+use crate::exec::catalog::{BatchNormAttributes, LayerNormAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::shapes::{Dyn, DynShape, Shape};

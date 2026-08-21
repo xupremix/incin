@@ -6,12 +6,12 @@
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::dist::placement::Local;
 use crate::err::Result;
-use crate::exec::catalog::{op, LossAttributes, LossReduction};
+use crate::exec::catalog::{LossAttributes, LossReduction, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Shape;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::Shape;
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -54,11 +54,11 @@ where
 }
 
 impl<
-        S: Shape + crate::shapes::DynShape,
-        B: Backend,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-    > Tensor<S, B, K, G>
+    S: Shape + crate::shapes::DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 {
     /// Computes the Cross Entropy loss between predictions and target labels.
     /// Uses the default `Mean` reduction.

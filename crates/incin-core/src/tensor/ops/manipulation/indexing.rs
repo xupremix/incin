@@ -1,18 +1,18 @@
 //! Slicing, narrowing, indexing, masking, and gathering operations.
 
 use crate::backend_authoring::{Backend, Descriptor, Execute};
-use crate::dist::placement::Local;
 use crate::dist::Placement;
+use crate::dist::placement::Local;
 use crate::err::Result;
+use crate::exec::Capabilities;
+use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    op, AxisAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta,
-    NarrowAttributes, NoAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes,
+    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta, NarrowAttributes,
+    NoAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
-use crate::exec::ExecutionDescriptor;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
@@ -242,13 +242,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<
-        S: Shape + DynShape,
-        B: Backend,
-        K: crate::tensor::dtype::DType,
-        G: RequiresGrad,
-        P: Placement,
-    > Tensor<S, B, K, G, P>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
+    Tensor<S, B, K, G, P>
 {
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(

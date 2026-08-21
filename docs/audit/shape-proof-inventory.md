@@ -241,7 +241,7 @@ themselves.
 | Rule surface | `unwrap` | `expect` | `panic!`-class | `assert!` |
 |---|---:|---:|---:|---:|
 | `shapes` | 0 | 1 | 2 | 1 |
-| `tensor` | 0 | 3 | 0 | 9 |
+| `tensor` | 0 | 3 | 1 | 9 |
 | `backend` | 0 | 0 | 1 | 0 |
 
 ### Named chains with a required terminal count of zero

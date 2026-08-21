@@ -3,10 +3,10 @@
 use crate::backend_authoring::{Backend, Execute};
 use crate::dist::placement::Local;
 use crate::err::Result;
-use crate::exec::catalog::{op, PadAttributes, RepeatAttributes};
+use crate::exec::Capabilities;
+use crate::exec::catalog::{PadAttributes, RepeatAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::exec::Capabilities;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;

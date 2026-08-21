@@ -347,8 +347,8 @@ impl Execute<op::Add> for FailingAddBackend {
 }
 
 #[test]
-fn named_method_returns_structured_backend_failure_and_operator_panics_without_details(
-) -> Result<()> {
+fn named_method_returns_structured_backend_failure_and_operator_panics_without_details()
+-> Result<()> {
     let meta = TensorMeta::contiguous(
         ShapeBuf::from_slice(&[3]),
         <f32 as ConstDType>::DESCRIPTOR,

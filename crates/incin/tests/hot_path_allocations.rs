@@ -63,15 +63,18 @@ fn record() {
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         record();
+        // SAFETY: forwarding layout directly to the System allocator.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        // SAFETY: forwarding pointer and layout directly to the System allocator.
         unsafe { System.dealloc(pointer, layout) }
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         record();
+        // SAFETY: forwarding pointer, layout, and new size directly to the System allocator.
         unsafe { System.realloc(pointer, layout, new_size) }
     }
 }

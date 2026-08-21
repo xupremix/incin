@@ -1,6 +1,6 @@
 use incin::{
-    convert_f64_to_i64, BackendError, ConversionFailure, DTypeId, Error, ErrorMessage,
-    FloatToIntPolicy,
+    BackendError, ConversionFailure, DTypeId, Error, ErrorMessage, FloatToIntPolicy,
+    convert_f64_to_i64,
 };
 
 #[test]
@@ -31,7 +31,7 @@ fn stable_facade_exposes_typed_bounded_failure_contract() {
 #[cfg(feature = "cpu")]
 #[test]
 fn tensor_operators_are_infallible_syntax_over_fallible_named_methods() -> incin::Result<()> {
-    use incin::prelude::{s, DefaultBackend, Tensor};
+    use incin::prelude::{DefaultBackend, Tensor, s};
 
     let lhs = Tensor::<s![2], DefaultBackend>::ones(())?;
     let rhs = Tensor::<s![2], DefaultBackend>::ones(())?;
@@ -47,7 +47,7 @@ fn tensor_operators_are_infallible_syntax_over_fallible_named_methods() -> incin
 #[cfg(feature = "cpu")]
 #[test]
 fn extracting_a_tensor_as_a_same_width_but_different_type_is_refused() {
-    use incin::prelude::{s, DefaultBackend, Tensor};
+    use incin::prelude::{DefaultBackend, Tensor, s};
 
     let t = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
 

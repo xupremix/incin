@@ -1,9 +1,9 @@
 //! Axis and shape selector traits and implementations.
 
 use crate::err::Result;
+use crate::shapes::RuntimeRankProjection;
 use crate::shapes::idx::ReverseAxis;
 use crate::shapes::idx::StaticCursor;
-use crate::shapes::RuntimeRankProjection;
 use crate::shapes::{Dyn, DynShape, Shape};
 use crate::shapes::{FlattenAt, FlattenFromEndAt, SwapAxes, SwapFromEndAt};
 use alloc::string::ToString;
