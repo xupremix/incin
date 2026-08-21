@@ -21,7 +21,7 @@ async function eventually<T>(description: string, probe: () => Promise<T | undef
 }
 
 suite("Incin VS Code real LSP pipeline", () => {
-  test("humanizes diagnostics and full inlay labels while completion remains available", async function () {
+  test("humanizes diagnostics and full inlay labels while completion remains available", async function (this: Mocha.Context) {
     if (!enabled) this.skip();
     this.timeout(timeoutMs + 30_000);
 
@@ -38,7 +38,7 @@ suite("Incin VS Code real LSP pipeline", () => {
     await extension.activate();
 
     const diagnostics = await eventually("humanized rust-analyzer diagnostic", async () => {
-      const found = vscode.languages.getDiagnostics(document.uri).find((diagnostic) =>
+      const found = vscode.languages.getDiagnostics(document.uri).find((diagnostic: vscode.Diagnostic) =>
         diagnostic.message.includes("Cannot reshape: source has 6 elements but the target shape has 8 elements")
       );
       return found;
@@ -51,7 +51,7 @@ suite("Incin VS Code real LSP pipeline", () => {
         document.uri,
         new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, 0))
       );
-      return result?.find((hint) => labelText(hint.label).includes("Tensor<[2, 3]"));
+      return result?.find((hint: vscode.InlayHint) => labelText(hint.label).includes("Tensor<[2, 3]"));
     });
     assert.ok(!labelText(hints.label).includes("UInt<"), "inlay hint leaked raw typenum text");
 
