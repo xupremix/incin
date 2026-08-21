@@ -11,6 +11,8 @@
 //! sequence once per parameter per optimizer step.
 
 use alloc::rc::Rc;
+#[cfg(feature = "test-utils")]
+use alloc::vec::Vec;
 use core::cell::RefCell;
 
 #[cfg(feature = "test-utils")]
@@ -46,6 +48,11 @@ pub(crate) fn var_as_tensor(var: &CpuVar) -> Result<CpuStorage> {
     Ok(var.0.borrow().clone())
 }
 
+/// Stable identity of the interior-mutable variable slot shared by clones.
+pub(crate) fn slot_identity(var: &CpuVar) -> usize {
+    Rc::as_ptr(&var.0) as usize
+}
+
 /// Replace the value wrapped by `var` with a clone of `tensor`.
 ///
 /// This is the ONLY function in the whole `incin-cpu` crate permitted
@@ -66,7 +73,7 @@ pub(crate) fn assign_var(var: &mut CpuVar, tensor: &CpuStorage) -> Result<()> {
 
 #[cfg(feature = "test-utils")]
 std::thread_local! {
-    static FAIL_ASSIGN_AT: Cell<Option<usize>> = const { Cell::new(None) };
+    static FAIL_ASSIGN_AT: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
     static ASSIGN_COUNT: Cell<usize> = const { Cell::new(0) };
 }
 
@@ -78,9 +85,12 @@ fn should_fail_assign() -> bool {
         next
     });
     FAIL_ASSIGN_AT.with(|fail_at| {
-        if fail_at.get() == Some(count) {
-            // One-shot failure: rollback assignments must remain possible.
-            fail_at.set(None);
+        let mut failures = fail_at.borrow_mut();
+        if let Some(index) = failures.iter().position(|&failure| failure == count) {
+            // Each configured failure is one-shot. Tests can inject a later
+            // rollback fault while still allowing subsequent leaves to be
+            // restored, which exercises the transaction's all-leaves attempt.
+            failures.remove(index);
             true
         } else {
             false
@@ -98,7 +108,7 @@ pub struct AssignFailureGuard;
 #[cfg(feature = "test-utils")]
 impl Drop for AssignFailureGuard {
     fn drop(&mut self) {
-        FAIL_ASSIGN_AT.with(|fail_at| fail_at.set(None));
+        FAIL_ASSIGN_AT.with(|fail_at| fail_at.borrow_mut().clear());
         ASSIGN_COUNT.with(|count| count.set(0));
     }
 }
@@ -108,9 +118,27 @@ impl Drop for AssignFailureGuard {
 #[cfg(feature = "test-utils")]
 #[doc(hidden)]
 pub fn fail_assign_on(nth: usize) -> AssignFailureGuard {
-    assert!(nth > 0, "assignment failure index is one-based");
+    fail_assignments_at(&[nth])
+}
+
+/// Injects one-shot failures at the requested CPU assignment numbers.
+///
+/// This exists solely to verify transaction rollback behavior: each listed
+/// index fails once, while later assignments continue so a test can prove
+/// that rollback visits every eligible leaf after an earlier restore failure.
+#[cfg(feature = "test-utils")]
+#[doc(hidden)]
+pub fn fail_assignments_at(indices: &[usize]) -> AssignFailureGuard {
+    assert!(
+        !indices.is_empty() && indices.iter().all(|&index| index > 0),
+        "assignment failure indices are one-based and non-empty"
+    );
     ASSIGN_COUNT.with(|count| count.set(0));
-    FAIL_ASSIGN_AT.with(|fail_at| fail_at.set(Some(nth)));
+    FAIL_ASSIGN_AT.with(|fail_at| {
+        let mut failures = fail_at.borrow_mut();
+        failures.clear();
+        failures.extend_from_slice(indices);
+    });
     AssignFailureGuard
 }
 

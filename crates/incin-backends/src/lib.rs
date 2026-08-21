@@ -74,7 +74,7 @@ pub use simd::simd_lanes;
 #[cfg(all(feature = "test-utils", feature = "cpu"))]
 #[doc(hidden)]
 pub mod test_utils {
-    pub use crate::cpu::var::{AssignFailureGuard, fail_assign_on};
+    pub use crate::cpu::var::{AssignFailureGuard, fail_assign_on, fail_assignments_at};
 }
 
 #[cfg(any(

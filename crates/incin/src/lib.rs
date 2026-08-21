@@ -414,7 +414,7 @@ pub mod backend_authoring {
 /// backend uses a real one.
 pub mod test_utils {
     #[cfg(feature = "cpu")]
-    pub use incin_backends::test_utils::{AssignFailureGuard, fail_assign_on};
+    pub use incin_backends::test_utils::{AssignFailureGuard, fail_assign_on, fail_assignments_at};
 }
 
 /// Neural network modules, activation functions, layers, and building blocks.

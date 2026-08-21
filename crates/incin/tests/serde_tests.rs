@@ -22,6 +22,48 @@ struct ExplicitStateNames {
     internal_query_projection: Linear<s![2, 2], CpuBackendImpl>,
 }
 
+#[module]
+struct TiedStateModel {
+    left: Param<s![2, 2], CpuBackendImpl>,
+    right: Param<s![2, 2], CpuBackendImpl>,
+}
+
+#[module(no_shape_info)]
+struct TransactionalStateModel {
+    encoder: Linear<s![2, 2], CpuBackendImpl>,
+    norm: BatchNorm2d<s![2], CpuBackendImpl>,
+    decoder: Linear<s![2, 2], CpuBackendImpl>,
+    tied_left: Param<s![2, 2], CpuBackendImpl>,
+    tied_right: Param<s![2, 2], CpuBackendImpl>,
+}
+
+fn zeroed_snapshot(snapshot: &StateSnapshot) -> Result<StateSnapshot> {
+    let mut target = StateSnapshot::new();
+    for (path, value) in snapshot.iter() {
+        target.insert(
+            path.clone(),
+            StateValue::new(
+                value.shape().clone(),
+                value.dtype(),
+                vec![0; value.bytes().len()],
+                value.role(),
+            )?,
+        )?;
+    }
+    Ok(target)
+}
+
+fn transactional_state_model() -> Result<TransactionalStateModel> {
+    let tied = Param::<s![2, 2], CpuBackendImpl>::ones(())?;
+    Ok(TransactionalStateModel {
+        encoder: Linear::build(())?,
+        norm: BatchNorm2d::build((1e-5, 0.1))?,
+        decoder: Linear::build(())?,
+        tied_right: tied.clone(),
+        tied_left: tied,
+    })
+}
+
 #[test]
 /// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
@@ -261,6 +303,214 @@ fn test_late_state_failure_does_not_commit_earlier_leaves() -> Result<()> {
     }
 
     assert!(load_state::<CpuBackendImpl, _>(&mut model, &invalid).is_err());
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
+    Ok(())
+}
+
+#[test]
+fn test_tied_parameter_load_updates_external_clone_without_replacing_slot() -> Result<()> {
+    let left = Param::<s![2, 2], CpuBackendImpl>::ones(())?;
+    let external = left.clone();
+    let mut model = TiedStateModel {
+        right: left.clone(),
+        left,
+    };
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let mut target = StateSnapshot::new();
+    for (path, value) in original.iter() {
+        target.insert(
+            path.clone(),
+            StateValue::new(
+                value.shape().clone(),
+                value.dtype(),
+                vec![0; value.bytes().len()],
+                value.role(),
+            )?,
+        )?;
+    }
+
+    load_state::<CpuBackendImpl, _>(&mut model, &target)?;
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, target);
+    let external_state = collect_state::<CpuBackendImpl, _>(&external)?;
+    assert_eq!(
+        external_state.get(&StatePath::root()),
+        target.get(&StatePath::new("left")?)
+    );
+    Ok(())
+}
+
+#[test]
+fn test_tied_parameter_load_rejects_conflicting_payloads_deterministically() -> Result<()> {
+    let left = Param::<s![2, 2], CpuBackendImpl>::ones(())?;
+    let mut model = TiedStateModel {
+        right: left.clone(),
+        left,
+    };
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let right = original.get(&StatePath::new("right")?).unwrap();
+    let mut invalid = StateSnapshot::new();
+    for (path, value) in original.iter() {
+        invalid.insert(
+            path.clone(),
+            if path.as_str() == "right" {
+                StateValue::new(
+                    right.shape().clone(),
+                    right.dtype(),
+                    vec![0; right.bytes().len()],
+                    right.role(),
+                )?
+            } else {
+                value.clone()
+            },
+        )?;
+    }
+
+    let error = load_state::<CpuBackendImpl, _>(&mut model, &invalid).unwrap_err();
+    assert!(matches!(error, Error::InvalidModuleState { .. }));
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
+    Ok(())
+}
+
+#[test]
+fn test_tied_parameter_load_rejects_role_shape_and_dtype_disagreements() -> Result<()> {
+    let left = Param::<s![2, 2], CpuBackendImpl>::ones(())?;
+    let mut model = TiedStateModel {
+        right: left.clone(),
+        left,
+    };
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let right_path = StatePath::new("right")?;
+    let right = original.get(&right_path).unwrap();
+
+    let disagreements = [
+        StateValue::new(
+            right.shape().clone(),
+            right.dtype(),
+            right.bytes().to_vec(),
+            StateRole::Buffer,
+        )?,
+        StateValue::new(
+            incin_core::prelude::ShapeBuf::from_slice(&[1, 4]),
+            right.dtype(),
+            right.bytes().to_vec(),
+            right.role(),
+        )?,
+        StateValue::new(
+            right.shape().clone(),
+            DTypeId::F16.descriptor(),
+            vec![0; right.shape().numel().unwrap() * 2],
+            right.role(),
+        )?,
+    ];
+
+    for disagreement in disagreements {
+        // Rebuild rather than overwriting so StateSnapshot's duplicate guard
+        // remains part of the public construction contract.
+        let mut invalid = StateSnapshot::new();
+        for (path, value) in original.iter() {
+            invalid.insert(
+                path.clone(),
+                if path == &right_path {
+                    disagreement.clone()
+                } else {
+                    value.clone()
+                },
+            )?;
+        }
+        assert!(matches!(
+            load_state::<CpuBackendImpl, _>(&mut model, &invalid),
+            Err(Error::InvalidModuleState { .. })
+        ));
+        assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_combined_model_state_load_is_atomic_across_params_buffers_and_tied_slots() -> Result<()> {
+    let mut model = transactional_state_model()?;
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    assert!(
+        original
+            .iter()
+            .any(|(path, value)| path.as_str() == "norm.running_mean"
+                && value.role() == StateRole::Buffer)
+    );
+    let target = zeroed_snapshot(&original)?;
+
+    // The fifth assignment fails after both parameters and buffers have been
+    // prepared and several leaves have committed.  A one-shot backend fault
+    // lets the rollback itself complete, proving all prior leaf mutations are
+    // restored even in a mixed, tied multi-layer module.
+    let failure = incin::test_utils::fail_assign_on(5);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &target).is_err());
+    drop(failure);
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
+
+    load_state::<CpuBackendImpl, _>(&mut model, &target)?;
+    assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, target);
+    Ok(())
+}
+
+#[test]
+fn test_rollback_failure_is_reported_after_all_leaves_are_attempted() -> Result<()> {
+    let mut model = transactional_state_model()?;
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let target = zeroed_snapshot(&original)?;
+
+    // Assignment five rejects the commit; assignment six rejects the first
+    // rollback. Later restores remain enabled, so StateRollback must consume
+    // the first failure and continue its complete deterministic traversal.
+    let failure = incin::test_utils::fail_assignments_at(&[5, 6]);
+    let error = load_state::<CpuBackendImpl, _>(&mut model, &target).unwrap_err();
+    drop(failure);
+    match error {
+        Error::InvalidModuleState {
+            operation: "load state rollback",
+            reason,
+        } => {
+            assert!(reason.to_string().contains("commit failed"));
+            assert!(reason.to_string().contains("rollback"));
+        }
+        other => panic!("expected deterministic rollback error, got {other}"),
+    }
+
+    // Commit order starts with encoder.weight, encoder.bias, norm.weight,
+    // and norm.bias. The injected rollback fault therefore leaves only the
+    // first committed leaf at its target value; every later committed leaf
+    // must have been restored despite that earlier fault.
+    let after = collect_state::<CpuBackendImpl, _>(&model)?;
+    for (path, value) in after.iter() {
+        if path.as_str() == "encoder.weight" {
+            assert_ne!(value, original.get(path).expect("original state path"));
+            assert_eq!(value, target.get(path).expect("target state path"));
+        } else {
+            assert_eq!(
+                value,
+                original.get(path).expect("original state path"),
+                "rollback did not restore {path}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_commit_failure_rolls_back_all_prepared_state() -> Result<()> {
+    let mut model = MixedStateModel {
+        fp32: Linear::build(())?,
+        fp16: incin_core::nn::Linear::<
+            s![2, 2],
+            CpuBackendImpl,
+            incin_core::nn::optional::True,
+            f16,
+        >::build(())?,
+    };
+    let original = collect_state::<CpuBackendImpl, _>(&model)?;
+    let target = zeroed_snapshot(&original)?;
+    let failure = incin::test_utils::fail_assign_on(2);
+    assert!(load_state::<CpuBackendImpl, _>(&mut model, &target).is_err());
+    drop(failure);
     assert_eq!(collect_state::<CpuBackendImpl, _>(&model)?, original);
     Ok(())
 }

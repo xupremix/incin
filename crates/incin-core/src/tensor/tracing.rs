@@ -349,6 +349,10 @@ impl<B: Backend + crate::tensor::backend::AutogradBackend> crate::tensor::backen
 impl<B: VariableBackend> VariableBackend for TracingBackend<B> {
     type Var<K: DType> = TracingVar<<B as crate::tensor::backend::VariableBackend>::Var<K>>;
 
+    fn var_slot_identity<K: DType>(var: &Self::Var<K>) -> Option<usize> {
+        B::var_slot_identity(&var.inner)
+    }
+
     fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<<Self as StorageBackend>::Storage<K>> {
         let inner = B::var_as_tensor(&var.inner)?;
         Ok(TracingTensor {

@@ -289,6 +289,7 @@ where
 
 struct StatePreparation<'a> {
     snapshot: &'a StateSnapshot,
+    alias_sources: &'a BTreeMap<usize, StatePath>,
 }
 
 impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StatePreparation<'a> {
@@ -305,7 +306,11 @@ impl<'a, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for Stat
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        param.prepare_state_value(path, self.snapshot)
+        let source = param
+            .state_slot_identity()
+            .and_then(|slot| self.alias_sources.get(&slot))
+            .unwrap_or(path);
+        param.prepare_state_value(source, self.snapshot)
     }
 
     fn visit_buffer<S, K>(
@@ -340,8 +345,7 @@ impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateCom
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState,
     {
-        param.commit_prepared_state();
-        Ok(())
+        param.commit_prepared_state()
     }
 
     fn visit_buffer<S, K>(
@@ -356,14 +360,14 @@ impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateCom
             + crate::exec::Capabilities
             + crate::tensor::backend::HostInterop,
     {
-        buffer.commit_prepared_state();
-        Ok(())
+        buffer.commit_prepared_state()
     }
 }
 
-struct StateClear;
+/// Drops transaction staging after a fully successful load.
+struct StateFinalize;
 
-impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateClear {
+impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateFinalize {
     fn visit_param<S, K, Train>(
         &mut self,
         _path: &StatePath,
@@ -398,6 +402,164 @@ impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateCle
     }
 }
 
+/// Drops staging for leaves that were never committed, or that were restored
+/// successfully.  A leaf whose restore failed deliberately retains its
+/// original storage and committed marker: clearing either would hide that the
+/// backend left the transaction only partially rolled back.
+struct StateAbortClear;
+
+impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateAbortClear {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        _path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        param.clear_prepared_state_if_rolled_back();
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        _path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        buffer.clear_prepared_state_if_rolled_back();
+        Ok(())
+    }
+}
+
+/// Restores every previously committed leaf.  Mutable state traversal stops
+/// at the first visitor error, so rollback records its first error and keeps
+/// visiting; traversal order is structural and therefore deterministic.
+struct StateRollback {
+    first_error: Option<Error>,
+}
+
+impl<B: crate::tensor::backend::VariableBackend> StateMutVisitor<B> for StateRollback {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        _path: &StatePath,
+        param: &mut crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        if let Err(error) = param.rollback_prepared_state() {
+            if self.first_error.is_none() {
+                self.first_error = Some(error);
+            }
+        }
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        _path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        if let Err(error) = buffer.rollback_prepared_state() {
+            if self.first_error.is_none() {
+                self.first_error = Some(error);
+            }
+        }
+        Ok(())
+    }
+}
+
+struct StateAliasAudit<'a> {
+    snapshot: &'a StateSnapshot,
+    sources: BTreeMap<usize, StatePath>,
+}
+
+impl<'a, B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StateAliasAudit<'a> {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        let Some(slot) = param.state_slot_identity() else {
+            return Ok(());
+        };
+        let value = self
+            .snapshot
+            .get(path)
+            .ok_or_else(|| Error::InvalidModuleState {
+                operation: "load state",
+                reason: ErrorMessage::new(format!("missing state path {path}")),
+            })?;
+        if let Some(canonical) = self.sources.get(&slot) {
+            let canonical_value = self
+                .snapshot
+                .get(canonical)
+                .expect("canonical state path was validated");
+            if canonical_value != value {
+                return Err(Error::InvalidModuleState {
+                    operation: "load state",
+                    reason: ErrorMessage::new(format!(
+                        "conflicting payloads for tied parameters at {canonical} and {path}"
+                    )),
+                });
+            }
+            if path < canonical {
+                self.sources.insert(slot, path.clone());
+            }
+        } else {
+            self.sources.insert(slot, path.clone());
+        }
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        _path: &StatePath,
+        _buffer: &crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        Ok(())
+    }
+}
+
 /// Restores a complete snapshot through typed mutable leaf visits.
 pub fn load_state<B, M>(module: &mut M, snapshot: &StateSnapshot) -> Result<()>
 where
@@ -424,15 +586,41 @@ where
             )),
         });
     }
-    let mut visitor = StatePreparation { snapshot };
+    let mut aliases = StateAliasAudit {
+        snapshot,
+        sources: BTreeMap::new(),
+    };
+    module.visit_state(&StatePath::root(), &mut aliases)?;
+    let mut visitor = StatePreparation {
+        snapshot,
+        alias_sources: &aliases.sources,
+    };
     if let Err(error) = module.visit_state_mut(&StatePath::root(), &mut visitor) {
-        let mut clear = StateClear;
+        let mut clear = StateFinalize;
         let _ = module.visit_state_mut(&StatePath::root(), &mut clear);
         return Err(error);
     }
 
     let mut commit = StateCommit;
-    module.visit_state_mut(&StatePath::root(), &mut commit)
+    if let Err(error) = module.visit_state_mut(&StatePath::root(), &mut commit) {
+        let mut rollback = StateRollback { first_error: None };
+        // StateRollback consumes leaf errors so every committed leaf receives
+        // a restoration attempt even if an earlier one fails.
+        module.visit_state_mut(&StatePath::root(), &mut rollback)?;
+        let mut clear = StateAbortClear;
+        let _ = module.visit_state_mut(&StatePath::root(), &mut clear);
+        if let Some(rollback_error) = rollback.first_error {
+            return Err(Error::InvalidModuleState {
+                operation: "load state rollback",
+                reason: ErrorMessage::new(format!(
+                    "commit failed ({error}); backend also rejected rollback ({rollback_error})"
+                )),
+            });
+        }
+        return Err(error);
+    }
+    let mut clear = StateFinalize;
+    module.visit_state_mut(&StatePath::root(), &mut clear)
 }
 
 /// One owned, exact-dtype state value.
@@ -568,12 +756,13 @@ impl StateSnapshot {
     }
     /// Inserts a value, rejecting duplicate paths.
     pub fn insert(&mut self, path: StatePath, value: StateValue) -> Result<()> {
-        if self.0.insert(path, value).is_some() {
+        if self.0.contains_key(&path) {
             return Err(Error::InvalidModuleState {
                 operation: "state snapshot",
                 reason: ErrorMessage::new("duplicate state path"),
             });
         }
+        self.0.insert(path, value);
         Ok(())
     }
     /// Looks up a path.
@@ -620,6 +809,34 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn duplicate_insert_rejects_without_replacing_the_first_value() {
+        let path = StatePath::new("weight").expect("valid path");
+        let first = StateValue::new(
+            ShapeBuf::from_slice(&[1]),
+            DTypeId::F32.descriptor(),
+            vec![0, 0, 128, 63],
+            StateRole::Parameter,
+        )
+        .expect("valid first value");
+        let replacement = StateValue::new(
+            ShapeBuf::from_slice(&[1]),
+            DTypeId::F32.descriptor(),
+            vec![0, 0, 0, 64],
+            StateRole::Parameter,
+        )
+        .expect("valid replacement value");
+        let mut snapshot = StateSnapshot::new();
+
+        snapshot.insert(path.clone(), first.clone()).unwrap();
+        assert!(matches!(
+            snapshot.insert(path.clone(), replacement),
+            Err(Error::InvalidModuleState { .. })
+        ));
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot.get(&path), Some(&first));
     }
 
     #[test]

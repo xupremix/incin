@@ -43,7 +43,18 @@ bytes remain intact. SGD, Adam, and AdamW validate and prepare every candidate
 before mutation. Commit failure restores all parameter snapshots. Adam and
 AdamW publish moment maps and advance the step counter only after every
 parameter commit succeeds. State-dictionary loads validate complete paired
-moments in temporary maps before replacing live state.
+moments in temporary maps before replacing live state. A state load stages an
+original and candidate storage value for every leaf, assigns candidates into
+the existing variable slots, and rolls back every prior assignment if a later
+commit fails. Every eligible rollback is attempted even when an earlier
+rollback fails. A backend that rejects a rollback returns a deterministic
+`Error::InvalidModuleState` with `operation: "load state rollback"`; the
+failed leaf retains its staged original and committed marker rather than being
+reported as restored. Backends may opt into clone-shared slot identity; tied parameter
+paths must then carry identical role, shape, dtype, and payload values or the
+load fails with `Error::InvalidModuleState` before mutation. The durable
+snapshot remains a `StatePath -> StateValue` map and never serializes alias
+identifiers.
 
 ## Panics and process boundaries
 

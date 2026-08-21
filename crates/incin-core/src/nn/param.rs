@@ -271,7 +271,11 @@ pub struct Param<
     Train: TrainState = Trainable,
 > {
     pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
-    pub(crate) pending_state: Option<<B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    pub(crate) pending_state: Option<(B::Storage<K>, B::Storage<K>)>,
+    /// Private identity copied by `Clone` only when the backend explicitly
+    /// declares cloned handles to share a mutable variable slot.
+    pub(crate) state_slot: Option<usize>,
+    pub(crate) state_committed: bool,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
@@ -285,6 +289,8 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
         Self {
             inner: self.inner.clone(),
             pending_state: None,
+            state_slot: self.state_slot,
+            state_committed: false,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
@@ -354,9 +360,12 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
             });
         }
 
+        let state_slot = B::var_slot_identity(&raw_var);
         Ok(Self {
             inner: raw_var,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: shape_value,
             _dtype: dtype,
             _device: device,
@@ -382,6 +391,8 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
         Param {
             inner: self.inner,
             pending_state: None,
+            state_slot: self.state_slot,
+            state_committed: false,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: self._device,
@@ -394,6 +405,8 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
         Param {
             inner: self.inner,
             pending_state: None,
+            state_slot: self.state_slot,
+            state_committed: false,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: self._device,
@@ -463,18 +476,45 @@ where
         let device = <B::Device as Device>::to_incin(&self._device)?;
         let storage =
             B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
-        self.pending_state = Some(B::var_from_tensor::<K>(&storage)?);
+        let original = B::var_as_tensor::<K>(&self.inner)?;
+        self.pending_state = Some((original, storage));
         Ok(())
     }
 
-    pub(crate) fn commit_prepared_state(&mut self) {
-        if let Some(var) = self.pending_state.take() {
-            self.inner = var;
+    pub(crate) fn commit_prepared_state(&mut self) -> Result<()> {
+        if let Some((_, candidate)) = &self.pending_state {
+            B::assign_var::<K>(&mut self.inner, candidate)?;
+            self.state_committed = true;
         }
+        Ok(())
+    }
+
+    pub(crate) fn rollback_prepared_state(&mut self) -> Result<()> {
+        if self.state_committed {
+            if let Some((original, _)) = &self.pending_state {
+                B::assign_var::<K>(&mut self.inner, original)?;
+            }
+            self.state_committed = false;
+        }
+        Ok(())
     }
 
     pub(crate) fn clear_prepared_state(&mut self) {
         self.pending_state = None;
+        self.state_committed = false;
+    }
+
+    /// Clears staging only after a successful rollback (or before any commit).
+    /// A failed restore must retain its original snapshot and committed marker
+    /// so transaction failure reporting never claims the leaf was restored.
+    pub(crate) fn clear_prepared_state_if_rolled_back(&mut self) {
+        if !self.state_committed {
+            self.clear_prepared_state();
+        }
+    }
+
+    pub(crate) fn state_slot_identity(&self) -> Option<usize> {
+        self.state_slot
     }
 }
 
@@ -493,9 +533,12 @@ where
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_var::<K>(&self.inner, &self._dtype, &field)?;
+        let state_slot = <B as VariableTransfer<NewD>>::VariableOutput::var_slot_identity(&inner);
         Ok(Param {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: field,
@@ -526,10 +569,13 @@ where
         let dims = _shape.clone();
         let inner = execute_initializer::<B, K>(dims.as_ref(), &_dtype, &_device, init)?;
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::new_init_raw")?;
+        let state_slot = B::var_slot_identity(&inner);
 
         Ok(Self {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -560,9 +606,12 @@ where
             crate::nn::init::InitPlan::Zeros,
         )?;
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::zeros_raw")?;
+        let state_slot = B::var_slot_identity(&inner);
         Ok(Self {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -596,9 +645,12 @@ where
             },
         )?;
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::randn")?;
+        let state_slot = B::var_slot_identity(&inner);
         Ok(Self {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -620,9 +672,12 @@ where
             crate::nn::init::InitPlan::Ones,
         )?;
         validate_initialized_var::<B, K>(&inner, &dims, &_dtype, &_device, "Param::ones_raw")?;
+        let state_slot = B::var_slot_identity(&inner);
         Ok(Self {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -674,9 +729,12 @@ where
                 got: meta.device,
             });
         }
+        let state_slot = B::var_slot_identity(&inner);
         Ok(Self {
             inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: shape_value,
             _dtype,
             _device,
@@ -694,9 +752,12 @@ where
         <B as VariableTransfer<D2>>::VariableOutput: SupportsDType<K>,
     {
         let new_inner = B::transfer_var::<K>(&self.inner, &self._dtype, _device)?;
+        let state_slot = <B as VariableTransfer<D2>>::VariableOutput::var_slot_identity(&new_inner);
         Ok(Param {
             inner: new_inner,
             pending_state: None,
+            state_slot,
+            state_committed: false,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: _device.clone(),
@@ -774,6 +835,8 @@ impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: 
         Ok(Param::<S2, B, K, Train> {
             inner: self.inner,
             pending_state: None,
+            state_slot: self.state_slot,
+            state_committed: false,
             _shape: shape_value,
             _dtype: self._dtype,
             _device: self._device,
@@ -785,7 +848,8 @@ impl<S1: DynShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: 
 /// A non-trainable state buffer.
 pub struct Buffer<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType = f32> {
     pub(crate) inner: <B as crate::tensor::backend::VariableBackend>::Var<K>,
-    pub(crate) pending_state: Option<<B as crate::tensor::backend::VariableBackend>::Var<K>>,
+    pub(crate) pending_state: Option<(B::Storage<K>, B::Storage<K>)>,
+    pub(crate) state_committed: bool,
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
@@ -796,6 +860,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Clone for B
         Self {
             inner: self.inner.clone(),
             pending_state: None,
+            state_committed: false,
             _shape: self._shape.clone(),
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
@@ -855,6 +920,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B
         Ok(Self {
             inner: raw_var,
             pending_state: None,
+            state_committed: false,
             _shape: shape_value,
             _dtype: dtype,
             _device: device,
@@ -913,18 +979,39 @@ where
         let device = <B::Device as Device>::to_incin(&self._device)?;
         let storage =
             B::from_bytes::<K>(value.bytes(), value.shape().dims(), expected_dtype, &device)?;
-        self.pending_state = Some(B::var_from_tensor::<K>(&storage)?);
+        let original = B::var_as_tensor::<K>(&self.inner)?;
+        self.pending_state = Some((original, storage));
         Ok(())
     }
 
-    pub(crate) fn commit_prepared_state(&mut self) {
-        if let Some(var) = self.pending_state.take() {
-            self.inner = var;
+    pub(crate) fn commit_prepared_state(&mut self) -> Result<()> {
+        if let Some((_, candidate)) = &self.pending_state {
+            B::assign_var::<K>(&mut self.inner, candidate)?;
+            self.state_committed = true;
         }
+        Ok(())
+    }
+
+    pub(crate) fn rollback_prepared_state(&mut self) -> Result<()> {
+        if self.state_committed {
+            if let Some((original, _)) = &self.pending_state {
+                B::assign_var::<K>(&mut self.inner, original)?;
+            }
+            self.state_committed = false;
+        }
+        Ok(())
     }
 
     pub(crate) fn clear_prepared_state(&mut self) {
         self.pending_state = None;
+        self.state_committed = false;
+    }
+
+    /// See [`Param::clear_prepared_state_if_rolled_back`].
+    pub(crate) fn clear_prepared_state_if_rolled_back(&mut self) {
+        if !self.state_committed {
+            self.clear_prepared_state();
+        }
     }
 }
 
@@ -945,6 +1032,7 @@ where
         Ok(Buffer {
             inner,
             pending_state: None,
+            state_committed: false,
             _shape: self._shape,
             _dtype: self._dtype,
             _device: field,
@@ -976,6 +1064,7 @@ where
         Ok(Self {
             inner,
             pending_state: None,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -1006,6 +1095,7 @@ where
         Ok(Self {
             inner,
             pending_state: None,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,
@@ -1035,6 +1125,7 @@ where
         Ok(Self {
             inner,
             pending_state: None,
+            state_committed: false,
             _shape: ShapeValue::from_validated(_shape),
             _dtype,
             _device,

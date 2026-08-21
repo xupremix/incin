@@ -6,6 +6,12 @@ use crate::tensor::dtype::DType;
 pub trait VariableBackend: Backend {
     /// Backend-native variable handle.
     type Var<K: DType>: Clone + 'static;
+    /// Returns a stable identity for a variable slot when cloned handles share
+    /// one mutable destination. Backends that cannot make that guarantee must
+    /// return `None`; state loading will then treat every parameter as distinct.
+    fn var_slot_identity<K: DType>(_var: &Self::Var<K>) -> Option<usize> {
+        None
+    }
     /// Views a variable as ordinary tensor storage.
     fn var_as_tensor<K: DType>(_var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         Err(crate::err::Error::Backend(BackendError::unsupported(

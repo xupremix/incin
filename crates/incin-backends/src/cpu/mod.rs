@@ -368,6 +368,10 @@ impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImp
 impl<D: Device> incin_core::backend_authoring::VariableBackend for CpuBackendImpl<D> {
     type Var<K: DType> = var::CpuVar;
 
+    fn var_slot_identity<K: DType>(var: &Self::Var<K>) -> Option<usize> {
+        Some(var::slot_identity(var))
+    }
+
     /// `var_as_tensor`.
     fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> Result<Self::Storage<K>> {
         var::var_as_tensor(var)

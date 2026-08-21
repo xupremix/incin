@@ -44,7 +44,17 @@ Loading is transactional. Every path in the file is checked against the
 module's own state before anything is written, so a snapshot that is missing a
 parameter or carries an unexpected one is refused with both lists named rather
 than half-applied. If a leaf fails during preparation the prepared state is
-cleared and the model is left as it was.
+cleared and the model is left as it was. Commit writes candidates into the
+existing variable slots, then rolls back all earlier writes if a later commit
+fails; a separately held clone therefore observes a successful load instead
+of becoming a stale handle.
+
+The on-disk snapshot has one value per state path and intentionally contains
+no alias IDs. A backend can declare that cloned parameter handles share one
+slot. When it does, all paths for that tied parameter must contain identical
+role, shape, dtype, and payload data; conflicting entries are rejected before
+any write. This makes ordinary named snapshots portable while keeping tied
+weights safe to restore.
 
 ## The format version
 
