@@ -63,12 +63,27 @@ true. Publication is still a manual step, and it has to run in dependency
 order, because each crate resolves its path dependencies against the registry
 versions its manifest names:
 
+Use the release helper rather than a loop. It verifies the fixed ten-package
+order, package metadata and file lists, internal release-version dependencies,
+the workspace version against the tag, and the current crates.io state. It
+writes a non-secret report containing public crates.io owner logins, the
+configured docs.rs feature set, and the expected documentation artifact URL.
+`check` never publishes:
+
 ```bash
-for package in incin-macros incin-core incin-telemetry incin-viz-plugin-api \
-               incin-backends incin-data incin-diagnostics incin-lsp \
-               incin-viz incin; do
-  cargo publish -p "$package" --locked
-done
+python3 tools/publish-crates.py check --tag v0.1.0 --report release-publish-report.json
+```
+
+For publication, check out the clean tag at a commit reachable from
+`origin/master`. Each command requires the exact next package as an explicit
+confirmation, publishes only that package, and waits for both the crates.io API
+and Cargo's resolver before returning. Publication explicitly targets the
+`crates-io` registry. Re-run it with the next listed package; an already visible
+prefix is skipped without invoking `cargo publish`.
+
+```bash
+python3 tools/publish-crates.py publish --tag v0.1.0 --confirm incin-macros \
+  --report release-publish-report.json
 ```
 
 A crate cannot be published until everything it depends on is already on the
@@ -79,11 +94,21 @@ not exist yet, and fails for that reason rather than for anything about the
 manifests. `tools/check-publish-metadata.py` is the check that does work
 beforehand.
 
-After each published crate becomes visible in the registry, run its intended
-install command in a clean temporary Cargo home. In particular, confirm that
-`cargo install incin-lsp` produces only the `incin-lsp` executable and that
-`cargo install incin --bin cargo-incin` makes `cargo incin doctor` available.
-Do not mark the release complete until those registry-installed commands work.
+After every package is visible, use the helper's isolated smoke gate. It uses a
+fresh `CARGO_HOME`, installs the exact release versions from crates.io, verifies
+that `incin-lsp` installs only its executable, installs `cargo-incin` from the
+`incin` package and runs the real `cargo incin doctor` subcommand, then checks a
+fresh `incin = "=0.1.0"` consumer. It also refuses verification until every
+documentable package has a live docs.rs artifact and every package has a
+non-empty public owner list:
+
+```bash
+python3 tools/publish-crates.py verify --tag v0.1.0 --smoke \
+  --report release-publish-report.json
+```
+
+Do not mark the release complete until this registry-installed smoke test
+works.
 
 Building `incin-core` no longer requires `protoc`. The ONNX protobuf module is
 checked in at `crates/incin-core/src/generated/onnx.rs`, regenerated with
