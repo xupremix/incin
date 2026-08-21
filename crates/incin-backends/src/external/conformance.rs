@@ -258,7 +258,7 @@ fn matmul_spec(
 /// Statically shaped, unlike the matmul fixture, and not by preference:
 /// `ReshapeShape` carries an `ElementCount` proof that `Dyn` cannot supply, so
 /// a dynamically shaped reshape has nothing to lower. That is the rule working
-/// - element count is what reshape has to preserve - and it means the harness
+/// because element count is what reshape has to preserve, and it means the harness
 /// fixes this shape pair rather than taking it as arguments.
 fn reshape_spec() -> Result<Validated<Descriptor<op::ReshapeExact>>, String> {
     Descriptor::<op::ReshapeExact>::infer_runtime(
