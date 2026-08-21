@@ -14,7 +14,7 @@
 
 </div>
 
-Incin encodes tensor shapes, dtypes, devices, and gradient capability in Rust's type system. A `matmul` with incompatible dimensions, an update to a frozen parameter, or an unsupported dtype becomes a compile error instead of a runtime failure during training.
+Incin encodes tensor shapes, dtypes, devices, and gradient capability in Rust's type system. A `matmul` with incompatible dimensions, an update to a frozen parameter, or an unsupported dtype becomes a compile error instead of a runtime failure on epoch 40 at 3 AM on a Saturday.
 
 ```rust,ignore
 use incin::prelude::*;
