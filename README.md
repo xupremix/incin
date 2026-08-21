@@ -1,17 +1,20 @@
-# Incin
+<div align="center">
 
-A Rust deep learning framework that checks tensor shapes and dtypes at compile
-time.
+# incin
 
-[![CI](https://github.com/xupremix/incin/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/xupremix/incin/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/incin.svg)](https://crates.io/crates/incin)
-[![docs.rs](https://img.shields.io/docsrs/incin)](https://docs.rs/incin)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
-[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://github.com/xupremix/incin/blob/master/Cargo.toml)
+### A Rust deep learning framework with compile-time checks for tensor shapes and dtypes.
 
-Incin carries shape, dtype, device, and gradient information in Rust types. An
-invalid matrix multiplication, an update to a frozen parameter, or an
-unsupported dtype is rejected before training starts.
+[![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
+[![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
+[![docs](https://img.shields.io/badge/docs-passing-brightgreen)](https://docs.rs/incin)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](./LICENSE-MIT)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange)](./Cargo.toml)
+
+[Quick Start](#quick-start) · [Features](#features) · [Architecture](#architecture) · [The Book](https://xupremix.github.io/incin) · [CLI](#cli-cargo-incin) · [Editors](#editor-support)
+
+</div>
+
+Incin encodes tensor shapes, dtypes, devices, and gradient capability in Rust's type system. A `matmul` with incompatible dimensions, an update to a frozen parameter, or an unsupported dtype becomes a compile error instead of a runtime failure during training.
 
 ```rust,ignore
 use incin::prelude::*;

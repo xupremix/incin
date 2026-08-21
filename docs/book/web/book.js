@@ -83,6 +83,7 @@
 
     html.className = theme;
     html.dataset.theme = theme;
+    localStorage.setItem("incin-book-theme", theme);
     localStorage.setItem("mdbook-theme", theme);
 
     if (themeList) {
@@ -93,7 +94,7 @@
   }
 
   function initTheme() {
-    const saved = localStorage.getItem("mdbook-theme") || localStorage.getItem("incin-book-theme") || "navy";
+    const saved = localStorage.getItem("incin-book-theme") || localStorage.getItem("mdbook-theme") || "navy";
     setTheme(saved);
   }
 
@@ -448,23 +449,31 @@
   }
 
   // Theme dropdown toggle
-  if (themeToggle && themeList) {
+  if (themeToggle) {
     themeToggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      themeList.hidden = !themeList.hidden;
-      themeToggle.setAttribute("aria-expanded", String(!themeList.hidden));
+      const current = html.dataset.theme || "navy";
+      const nextTheme = current === "navy" ? "light" : (current === "light" ? "rust" : (current === "rust" ? "coal" : (current === "coal" ? "ayu" : "navy")));
+      setTheme(nextTheme);
+      if (themeList) {
+        themeList.hidden = !themeList.hidden;
+        themeToggle.setAttribute("aria-expanded", String(!themeList.hidden));
+      }
     });
 
-    themeList.querySelectorAll(".theme-option").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        setTheme(btn.dataset.theme);
-        themeList.hidden = true;
-        themeToggle.setAttribute("aria-expanded", "false");
+    if (themeList) {
+      themeList.querySelectorAll(".theme-option").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          setTheme(btn.dataset.theme);
+          themeList.hidden = true;
+          themeToggle.setAttribute("aria-expanded", "false");
+        });
       });
-    });
+    }
 
     document.addEventListener("click", (e) => {
-      if (!themeToggle.contains(e.target) && !themeList.contains(e.target)) {
+      if (themeList && !themeToggle.contains(e.target) && !themeList.contains(e.target)) {
         themeList.hidden = true;
         themeToggle.setAttribute("aria-expanded", "false");
       }
