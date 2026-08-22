@@ -139,19 +139,53 @@ assert_eq!(h_final.dims().as_ref(), &[2, 6]);
 
 ## Custom modules with `#[module]`
 
-`#[module]` derives typed state and parameter visitors for a struct by walking
-its fields: built-in layers and nested `Sequential` values are delegated to
-recursively; anything else is skipped. State consumers and optimizer adapters
-are built on those visitors.
+The `#[module]` attribute macro derives composable module traits for structs by
+recursively walking its fields. Built-in layers (`Linear`, `Conv2d`, `Dropout`),
+nested modules, and `Sequential` blocks are aggregated automatically; non-tensor
+fields (or fields marked with `#[module(ignore)]`) are skipped.
+
+### Struct-level arguments
+
+You can selectively disable derived trait implementations:
+
+| Argument | Disables | Purpose |
+|:---|:---|:---|
+| `no_to_device` | `ToDevice` | Use when struct fields cannot be transferred across device boundaries or when device transfer is handled manually. |
+| `no_train_mode` | `TrainMode` | Disables recursive `train()` and `eval()` mode switching. |
+| `no_stats` | `ComputeStats` | Disables parameter count and FLOP estimation. |
+| `no_parameters` | `VisitParameters` | Disables parameter discovery for optimizers (e.g. for stateless or inference-only modules). |
+| `no_state` | `VisitState` / `VisitStateMut` | Disables checkpoint saving and loading visitors. |
+| `no_named_layers` | `NamedLayers` | Disables layer hierarchy introspection. |
+| `no_shape_info` | `ShapeInfo` | Disables static shape debug formatting. |
+
+### Field-level attributes
+
+* `#[module(ignore)]`: Ignores the field during all module visitor traversals (parameters, state, training modes, device transfer).
+* `#[state(name = "custom_name")]`: Overrides the deterministic key used in state snapshots and checkpoints for this field.
+* `#[parallel(mesh = "m", stage = 0)]`: Declares distributed pipeline and mesh stage placement for the field.
+* `#[shard(axis = "dp")]`: Specifies distributed tensor sharding along a mesh axis.
+
+### Training and evaluation modes (`TrainMode`)
+
+Modules implement `TrainMode` by default, providing:
+* `model.train()` (or `model.set_training(true)`): Switches the model and all nested submodules into training mode.
+* `model.eval()` (or `model.set_training(false)`): Switches the model and all nested submodules into evaluation/inference mode.
+
+Leaf layers without mode-dependent behavior (`Linear`, `Conv2d`, activations, normalization) implement `TrainMode` as a zero-cost no-op.
+
+Mode-sensitive layers like `Dropout` actively respond to `TrainMode`:
+* In **training mode** (`train()`), Dropout randomly zeroes activations with probability $p$ and scales surviving elements by $\frac{1}{1 - p}$.
+* In **evaluation mode** (`eval()`), Dropout acts as a zero-overhead identity pass-through.
 
 ```rust,no_run
 use incin::prelude::*;
 
 type B = DefaultBackend;
 
-#[module(no_shape_info)]
+#[module]
 pub struct MLP {
     fc1: Linear<s![768, 256], B>,
+    drop: Dropout,
     fc2: Linear<s![256, 10], B>,
 }
 
@@ -159,6 +193,7 @@ impl MLP {
     pub fn new() -> Result<Self> {
         Ok(Self {
             fc1: Linear::build(())?,
+            drop: Dropout::new(0.2),
             fc2: Linear::build(())?,
         })
     }
@@ -166,14 +201,22 @@ impl MLP {
     pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B, f32, Grad>> {
         let h = self.fc1.forward(x)?;
         let h = ReLU.forward(h)?;
+        let h = self.drop.forward(h)?;
         self.fc2.forward(h)
     }
 }
+
 # fn main() -> Result<()> {
-let model = MLP::new()?;
+let mut model = MLP::new()?;
 let x = Tensor::<s![2, 768], B>::ones(())?;
-let y = model.forward(x)?;
-assert_eq!(y.dims().as_ref(), &[2, 10]);
+
+// Switch to evaluation mode for validation/inference
+model.eval();
+let y_eval = model.forward(x.clone())?;
+assert_eq!(y_eval.dims().as_ref(), &[2, 10]);
+
+// Switch back to training mode
+model.train();
 let _optimizer = AdamW::<B>::from_module(&model, 1e-2)?;
 # Ok(())
 # }

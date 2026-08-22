@@ -17,7 +17,7 @@
 //! here; this is an honest gap, not a bug.
 
 use crate::nn::param::{Buffer, Param};
-use crate::nn::{GELU, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
+use crate::nn::{Dropout, ELU, GELU, Mish, ReLU, Sequential, Sigmoid, Softmax, Swish, Tanh};
 use crate::shapes::error::OperationKind;
 use crate::shapes::{DynShape, Shape, ShapeBuf};
 use crate::tensor::dtype::DType;
@@ -154,7 +154,33 @@ macro_rules! impl_zero_compute_stats {
         )+
     };
 }
-impl_zero_compute_stats!(ReLU, GELU, Swish, Sigmoid, Tanh, Softmax);
+impl_zero_compute_stats!(
+    ReLU, GELU, Swish, Mish, ELU, Sigmoid, Tanh, Softmax, Dropout
+);
+
+impl<K: typenum::Unsigned, S: typenum::Unsigned, P: typenum::Unsigned, D: typenum::Unsigned>
+    ComputeStats for crate::nn::max_pool2d::MaxPool2d<K, S, P, D>
+{
+    fn compute_stats(&self, _batch: u64) -> LayerStats {
+        LayerStats::default()
+    }
+}
+
+impl<K: typenum::Unsigned, S: typenum::Unsigned, P: typenum::Unsigned, D: typenum::Unsigned>
+    ComputeStats for crate::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+{
+    fn compute_stats(&self, _batch: u64) -> LayerStats {
+        LayerStats::default()
+    }
+}
+
+impl<HOut: typenum::Unsigned, WOut: typenum::Unsigned> ComputeStats
+    for crate::nn::adaptive_avg_pool2d::AdaptiveAvgPool2d<HOut, WOut>
+{
+    fn compute_stats(&self, _batch: u64) -> LayerStats {
+        LayerStats::default()
+    }
+}
 
 /// Aggregates a slice of already-computed per-field [`LayerStats`] - a tiny
 /// helper so `#[module]`'s generated code has one place to sum, matching

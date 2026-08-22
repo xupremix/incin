@@ -381,7 +381,7 @@ fn parse_graph_nodes(
             "Add" => {
                 let left = &inputs[0];
                 let right = &inputs[1];
-                quote! { let #output = #left.add(&#right)?; }
+                quote! { let #output = #left.broadcast_add(&#right)?; }
             }
             "MatMul" => {
                 let left = &inputs[0];
@@ -1043,5 +1043,50 @@ fn initializers_are_parameters_with_exact_values() {
             error.contains("expected 1 input(s) and 1 output(s)"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn generate_dense_initializer_fixture() {
+        let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../incin/tests/fixtures/dense_initializers.onnx");
+        let model = ModelProto {
+            ir_version: Some(8),
+            opset_import: vec![OperatorSetIdProto {
+                domain: Some(String::new()),
+                version: Some(18),
+            }],
+            graph: Some(GraphProto {
+                name: Some("test_dense_initializers".to_string()),
+                node: vec![
+                    NodeProto {
+                        input: vec!["x".to_string(), "weight".to_string()],
+                        output: vec!["hidden".to_string()],
+                        name: Some("matmul_node".to_string()),
+                        op_type: Some("MatMul".to_string()),
+                        ..Default::default()
+                    },
+                    NodeProto {
+                        input: vec!["hidden".to_string(), "bias".to_string()],
+                        output: vec!["y".to_string()],
+                        name: Some("add_node".to_string()),
+                        op_type: Some("Add".to_string()),
+                        ..Default::default()
+                    },
+                ],
+                input: vec![value("x", Some(vec![1, 2]))],
+                output: vec![value("y", Some(vec![1, 3]))],
+                initializer: vec![
+                    initializer("weight", vec![2, 3], vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
+                    initializer("bias", vec![1, 3], vec![0.5, 0.5, 0.5]),
+                ],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        if let Some(parent) = fixture_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&fixture_path, model.encode_to_vec()).expect("write fixture");
+        assert!(fixture_path.exists());
     }
 }

@@ -80,8 +80,12 @@ in the manifest, since topology and payload can change independently.
 ## ONNX
 
 `incin::experimental::model!("model.onnx", Name)` and `import_model!` expand
-a supported `.onnx` graph into typed Rust code at compile time. Support is
-deliberately partial and fail-closed: initializers, unknown rank, control
-flow, custom domains, and unsupported node types are macro-expansion errors,
-not silently-wrong generated code. Treat this as import tooling for a known,
-simple graph shape rather than a general ONNX runtime.
+a supported `.onnx` graph into typed Rust code at compile time.
+
+Dense f32 initializers (weights and biases) are parsed at compile time and
+embedded into typed `Param<Shape, B>` module state with deterministic state keys
+(`initializer_000`, `initializer_001`, etc.). Unsupported constructs - such as
+sparse initializers, unknown rank, non-f32 initializers, control flow, custom
+domains, and unsupported node types - produce compile diagnostics rather than
+silently-wrong code. Treat this as import tooling for supported feed-forward graph
+topologies rather than an arbitrary ONNX runtime.
