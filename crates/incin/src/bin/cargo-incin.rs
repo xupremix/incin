@@ -444,14 +444,18 @@ fn main() -> io::Result<()> {
                 let mut custom_dir: Option<std::path::PathBuf> = None;
                 let mut iter = cargo_args.iter().skip(1);
                 while let Some(arg) = iter.next() {
-                    if arg == "--tool" || arg == "-t" {
-                        if let Some(t) = iter.next() {
-                            tool = t.as_str();
+                    match arg.as_str() {
+                        "--tool" | "-t" => {
+                            if let Some(t) = iter.next() {
+                                tool = t.as_str();
+                            }
                         }
-                    } else if arg == "--dir" || arg == "-d" {
-                        if let Some(d) = iter.next() {
-                            custom_dir = Some(std::path::PathBuf::from(d));
+                        "--dir" | "-d" => {
+                            if let Some(d) = iter.next() {
+                                custom_dir = Some(std::path::PathBuf::from(d));
+                            }
                         }
+                        _ => {}
                     }
                 }
 
@@ -527,7 +531,7 @@ fn main() -> io::Result<()> {
                                 install_cursor_rule(name, content, dir)?;
                             }
                         }
-                        "all" | _ => {
+                        _ => {
                             println!(
                                 "Installing Incin agent skills for all environments (.agents/skills/ and .cursor/rules/)..."
                             );

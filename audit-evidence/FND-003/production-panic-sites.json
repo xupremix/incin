@@ -1,12 +1,12 @@
 [
   {
-    "site": "crates/incin/src/bin/cargo-incin.rs:386",
+    "site": "crates/incin/src/bin/cargo-incin.rs:396",
     "code": ".expect(\"crates/incin always has a parent directory\")",
     "disposition": "declared process boundary",
     "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
   },
   {
-    "site": "crates/incin/src/bin/cargo-incin.rs:481",
+    "site": "crates/incin/src/bin/cargo-incin.rs:626",
     "code": "let stdout = child.stdout.take().expect(\"Failed to open child stdout\");",
     "disposition": "declared process boundary",
     "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
