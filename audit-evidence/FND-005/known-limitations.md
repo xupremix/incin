@@ -87,11 +87,20 @@ and prove nothing about the ones not yet migrated.
 The parity tests cover the migrated identities against the legacy method the
 catalog names as each one's source. They are **parity** tests, not reference-vector
 tests: they prove the canonical path computes what the legacy path computes, not
-that the legacy path is numerically correct against an external oracle. The
-full CPU reference vector set FND-005 calls for does not exist yet.
+that the legacy path is numerically correct against an external oracle.
 
-`SEMANTIC_CONFORMANCE_VECTORS` remains the frozen ten-vector minimum from
-FND-004, one per semantic class. It is not per-operation coverage.
+The reference-vector gap is now partially closed by the semantic conformance
+suite (`crates/incin/tests/semantic_conformance.rs`), which executes every
+`SEMANTIC_CONFORMANCE_VECTORS` row - grown from ten to twenty-seven rows
+covering elementwise, reduction, matmul, normalization, loss, dtype-cast,
+broadcasting, zero-length, NaN, and infinity semantics - plus five typed
+attribute-bearing cases (max-pool, avg-pool, conv2d, embedding, axis
+reduction) against hand-computed expected values on the CPU path. Adding a
+row remains data-only; execution and comparison are generic. What remains
+open: exhaustive per-operation coverage of all 158 backend-executable
+identities (the suite pins families and semantic edges, not every op), and
+vectors for the f32-only pool/conv/norm kernels in f64 once those kernels
+widen their dtype support.
 
 ## Formatter
 
