@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Single source for the PROPOSALS.md ledger table and docs/plan/ledger.toml."""
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+LEDGER_PATH = ROOT / "docs" / "plan" / "ledger.toml"
+PROPOSALS_PATH = ROOT / "PROPOSALS.md"
+
 # (id, tier, theme, status, deps, target, deliverable, evidence)
 T = [
 # --- governance -------------------------------------------------------------
@@ -413,7 +420,7 @@ COMPLETED = {
  "TUN-000": ("2026-07-27", "tuning.rs verified: 2 warmups (line 24), 7 samples (line 26), median select (220-222), 1024-entry cache (line 22), single-flight coordinator (284-296)"),
  "SHP-001": ("2026-07-27", "tools/audit-shapes.sh --check -> ok; docs/audit/shape-proof-inventory.md classifies 19 rules by proof stage (T/L/B/N/U) and records the baseline: 28 from_dyn().unwrap(), 2 from_size().unwrap(), 4 Default::default() spatial zeroing, 9 rules short of rank 8 and 1 over, SupportsDType blanket default proving nothing (backend.rs:61). Confirmed defect for SHP-005: Pool2dShape on (U1,U1,usize,usize) with 8x8/k2/s2/p0/d1 returns spatial dims (0,0) instead of (4,4) -- a wrong shape that propagates, not a panic. Fault injection confirms --check fails on both a doctored count in the document and a new unwrap in the source tree"),
  "SHP-004": ("2026-07-27", "cargo test -p incin-core --test shape_fallible -> 13 passed; 0 failed; full workspace 733 passed, 0 failed. The from_dyn().unwrap() chain is at 0, down from the corrected baseline of 39 live sites across 11 files (tools/audit-shapes.sh --check). The shapes surface fell from 13 unwraps to 1 and from 1 panic!-class site to 0. BroadcastShape::output_shape and MatMulShape::output_shape are now fallible; shapes/shape.rs adds field_from_dims() and error.rs adds ShapeError::TargetShapeRejected for the residual generic cases. checked_broadcast_dim converted from assert! to Result per decision D-013, and the named_dims.rs test that asserted the panic now asserts the error and its axis. Three latent wrong-answer bugs found and fixed while converting: (1) broadcast used lhs.max(rhs), so a size-1 axis against a size-0 one yielded 1 instead of 0; (2) Dyn matmul returned vec![] -- the scalar shape -- as a sentinel for every unmatched rank combination, including [m,k] x [k], whose answer is [m] not a scalar; (3) no MatMulShape impl ever checked the contracted dimension, so a disagreeing K produced a confidently wrong output shape (now DimensionMismatch on axis 'k'). The rank-4 x rank-2 'flattened batch' convention is preserved deliberately and pinned by a test. broadcast_dims' unreachable!() arm is gone: a missing axis is now an implicit 1, which is the actual right-alignment rule. no-default-features check clean"),
- "SHP-006": ("2026-07-27", "Historical evidence from the pre-structural migration. cargo test -p incin-core --test rank_matrix -> 13 passed, 0 failed; full workspace 746 passed, 0 failed. The former MAX_RANK and rank_sweep ladder were removed during the canonical structural migration. The remaining details describe the historical implementation and are not current architecture claims."),
+ "SHP-006": ("2026-07-27", "Historical evidence from the pre-structural migration. The former MAX_RANK and rank_sweep ladder were removed during the canonical structural migration. The current architecture uses structural recursion without a semantic rank ceiling."),
  "SHP-005": ("2026-07-27", "cargo test -p incin-core --test spatial_geometry -> 17 passed; 0 failed; full workspace 709 passed, 0 failed. spatial.rs gains spatial_out_size(), a named checked sequence for (in + 2p - d*(k-1) - 1)/s + 1: it rejects a 0 stride/kernel/dilation by parameter name, reports a kernel that does not fit its padded input as EmptyOutput instead of underflowing the subtraction, and names each overflowing term individually ('2 * padding', 'input + 2 * padding', 'dilation * (kernel - 1)'). compute_output_shape on Pool2dShape, SpatialConv1d, SpatialConv2d, and AdaptiveAvgPool2dShape now returns Result<Field, ShapeError>; 10 call sites take ?. Confirmed regression closed: pool2d on (U1,U1,usize,usize) with 8x8/k2/s2/p0/d1 returns (4,4), was (0,0). Two further silent defects found and fixed while here: the Dyn conv/pool rules tested len()==4 (or ==3) and returned the input shape unchanged for every other rank, so rank-3 (C,H,W) was never pooled and an unsupported rank was never reported; both accepted ranks are now handled and others report RankMismatch. from_size().unwrap() 2->0 and Default::default() in spatial output 4->0, both verified by tools/audit-shapes.sh --check. The audit's rank scan was corrected twice in the process (variadic macros with fixed trailing tuple elements were undercounted: SpatialConv1d 5->7, SpatialConv2d 4->7; and the repetition-strip pattern missed the $(..)+ form, inflating BroadcastShape 4->6); the SHP-001 exit table also said 9 rules short of rank 8 while its own table listed 14, now corrected. A third measurement fix re-baselined SHP-004: the from_dyn().unwrap() chain was counted with a regex that stops at the first inner ')', so it never matched from_dyn(&broadcast_dims::<Self, (A, B)>(lhs, rhs)).unwrap() -- 14 of the sites were invisible. Counted by balancing parentheses the true figure is 39 live sites across 11 files, not 28"),
  "SHP-003": ("2026-07-27", "cargo test -p incin-core --test shape_buf -> 17 passed; 0 failed. shapes/buf.rs adds InlineOrHeap (inline to INLINE_RANK=8, spills to Vec), ShapeBuf, and StrideBuf. checked_numel/checked_byte_len/contiguous_for/checked_span all use checked_mul and return ShapeError::ArithmeticOverflow naming the failing term; no derived value is cached. Properties are checked against u128 references over 5000 cases each from a fixed-seed generator biased to 0/1/usize::MAX/2^32, with assertions that both the overflow and non-overflow branches were reached. The suite found a real ordering bug in the first implementation: a left-to-right fold made numel([MAX,0,MAX]) = Ok(0) but numel([MAX,MAX,0]) = Err, so the zero case is now short-circuited and order independence is pinned by numel_does_not_depend_on_axis_order (reversal plus rotation). Replaces the panicking cpu::stride::contiguous_strides; EXE-004 migrates the storages. Workspace check, no-default-features check, and cargo test -p incin-core all clean"),
  "EXE-001": ("2026-07-27", "cargo test -p incin-core --test descriptor_schema -> 42 passed; 0 failed; full workspace 0 failures. crates/incin-core/src/exec/{mod,spec}.rs adds DescriptorSchemaVersion (pinned at 1 by test), AxisMask, the sealed OperationSpec trait that binds each descriptor to one OperationKind, and the four descriptors PROPOSALS.md 1.2.1 names: BroadcastSpec, MatMulSpec, ReductionSpec, Conv2dSpec. Every descriptor is #[non_exhaustive] with pub fields -- readable by any backend, constructible only through the checked constructors -- and every field a constructor did not receive is DERIVED from the ones it did: broadcast masks from strides, output shapes from operands, outer/reduced/inner from the input, h_out/w_out via SHP-005's spatial_out_size() rather than a second copy of the formula. Descriptors hold logical geometry only; storage offset, dtype, device, and alignment stay for TensorMeta (EXE-004), which is what lets one descriptor be reused as a cache key. OperationFamily deleted per D-008: incin-backends/src/dtype_policy.rs re-exports incin_core OperationKind and folds through the new OperationKind::family(), which maps the accumulating ops (matmul, conv, pool) onto Reduction and the reindexing ops (every shape manipulation, plus embedding) onto Storage; family() is total and idempotent, asserted over all 23 variants. Design finding the test suite forced: reducing away the only zero axis of [MAX,0,MAX] leaves [MAX,MAX], an output whose element count overflows usize, so all four constructors now reject an unrepresentable output at resolution rather than handing a backend a descriptor it cannot launch. Two SHP loose ends closed while here: INLINE_RANK is now MAX_RANK rather than a literal 8 (the SHP-006 comment promised this), and StrideBuf gained push/pop to match ShapeBuf, needed by the stride-normalizing loops. rustdoc, no-default-features, and tools/audit-shapes.sh --check all clean"),
@@ -718,8 +725,53 @@ def toml():
     return "\n".join(L)
 
 
+LEDGER_PATH = ROOT / "docs" / "plan" / "ledger.toml"
+PROPOSALS_PATH = ROOT / "PROPOSALS.md"
+
+
+def committed_md_rows():
+    """Return the PROPOSALS.md ledger table as one row per line.
+
+    Blank lines between tier groups are human formatting, not content;
+    the comparison ignores them so the generator stays byte-stable while
+    the document stays readable.
+    """
+    header = "| ID | Tier | Theme | Status | Dependencies | Target crate::module | Deliverable | Evidence |"
+    lines = PROPOSALS_PATH.read_text().splitlines()
+    try:
+        start = lines.index(header)
+    except ValueError:
+        raise SystemExit(f"ledger check: ledger table header not found in {PROPOSALS_PATH}")
+    rows = []
+    for line in lines[start:]:
+        if line.startswith("|"):
+            rows.append(line)
+        elif not line:
+            continue
+        else:
+            break
+    return "\n".join(rows)
+
+
+def check():
+    """Fail on drift between this source and the two committed mirrors."""
+    drifted = False
+    want_toml = toml()
+    if LEDGER_PATH.read_text() != want_toml:
+        print(f"drift: {LEDGER_PATH} does not match generation", file=sys.stderr)
+        drifted = True
+    want_md = md()
+    if committed_md_rows() != want_md:
+        print(f"drift: ledger table in {PROPOSALS_PATH} does not match generation", file=sys.stderr)
+        drifted = True
+    if drifted:
+        print("regenerate with: python3 tools/gen-ledger.py toml > docs/plan/ledger.toml "
+              "and refresh the PROPOSALS.md section 4 table", file=sys.stderr)
+        sys.exit(1)
+    print(f"ledger sync ok: {len(T)} tasks, both mirrors match")
+
+
 if __name__ == "__main__":
-    import sys
     errs, terminals = validate()
     if errs:
         print("VALIDATION ERRORS:", file=sys.stderr)
@@ -728,7 +780,9 @@ if __name__ == "__main__":
         sys.exit(1)
     print(f"# ok: {len(T)} tasks, 0 errors", file=sys.stderr)
     print(f"# terminals ({len(terminals)}): {terminals}", file=sys.stderr)
-    if len(sys.argv) > 1 and sys.argv[1] == "toml":
+    if "--check" in sys.argv[1:]:
+        check()
+    elif "toml" in sys.argv[1:]:
         # `toml()` already terminates the generated file.  Avoid adding a
         # second newline so the checked-in mirror is byte-for-byte stable.
         sys.stdout.write(toml())

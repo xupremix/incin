@@ -34,6 +34,7 @@ success "Formatting OK"
 
 step "2. Ledger & Governance Validation"
 cargo xtask ledger || fail "Ledger validation failed!"
+python3 tools/gen-ledger.py --check || fail "Ledger mirror sync check failed!"
 cargo test -p xtask || fail "xtask unit tests failed!"
 cargo xtask budgets || fail "Budgets enforcement failed!"
 cargo xtask docs --check || fail "README feature table check failed!"
