@@ -59,7 +59,7 @@
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^3.0.0",
-    "mocha": "^11.7.6",
+    "mocha": "^11.8.0",
     "typescript": "^5.4.0"
   },
   "overrides": {
