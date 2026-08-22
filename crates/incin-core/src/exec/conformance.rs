@@ -49,6 +49,17 @@ const NAN: &[f64] = &[f64::NAN];
 const INF: &[f64] = &[f64::INFINITY];
 const EMPTY: &[f64] = &[];
 const SCALAR: &[f64] = &[2.0];
+const ZERO: &[f64] = &[0.0];
+const ONE: &[f64] = &[1.0];
+const FOUR: &[f64] = &[4.0];
+const MINUS_THREE: &[f64] = &[-3.0];
+const PAIR: &[f64] = &[2.0, 3.0];
+const ZEROS4: &[f64] = &[0.0, 0.0, 0.0, 0.0];
+const B3: &[f64] = &[2.0, 0.5, -1.0];
+const DIV_L: &[f64] = &[8.0, 2.0, -6.0, 12.0];
+const DIV_R: &[f64] = &[2.0, 1.0, -2.0, 4.0];
+const MAT_A: &[f64] = &[1.0, 2.0, 3.0, 4.0];
+const MAT_B: &[f64] = &[5.0, 6.0, 7.0, 8.0];
 const SHAPE_2X2: &[usize] = &[2, 2];
 const SHAPE_1: &[usize] = &[1];
 const SHAPE_0X2: &[usize] = &[0, 2];
@@ -101,7 +112,7 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         name: "incompatible-broadcast",
         operation: OperationKind::Add,
         class: ConformanceClass::InvalidShape,
-        inputs: &[A, B],
+        inputs: &[A, B3],
         input_shapes: &[&[2, 2], &[3, 1]],
         expected: EMPTY,
         expected_shape: SHAPE_SCALAR,
@@ -117,15 +128,19 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         expected_shape: SHAPE_SCALAR,
         disposition: ExpectedDisposition::TypedError,
     },
+    // Dtype casts follow Rust's `as` semantics: fractional values truncate
+    // toward zero deterministically. Exact-conversion policy boundaries
+    // (scalar readback, embedding indices) are separate checked paths and
+    // are covered by their own suites; this row pins the cast contract.
     ConformanceVector {
-        name: "checked-dtype-boundary",
+        name: "dtype-cast-truncates-fractions",
         operation: OperationKind::ToDType,
         class: ConformanceClass::DTypeBoundary,
-        inputs: &[&[255.0, 256.0]],
-        input_shapes: &[&[2]],
-        expected: EMPTY,
-        expected_shape: SHAPE_SCALAR,
-        disposition: ExpectedDisposition::TypedError,
+        inputs: &[&[255.5]],
+        input_shapes: &[&[1]],
+        expected: &[255.0],
+        expected_shape: &[1],
+        disposition: ExpectedDisposition::Succeeds,
     },
     ConformanceVector {
         name: "nan-propagation",
@@ -156,6 +171,181 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         expected: EMPTY,
         expected_shape: SHAPE_2X2,
         disposition: ExpectedDisposition::FiniteDifference,
+    },
+    // --- elementwise, hand-computed --------------------------------------
+    ConformanceVector {
+        name: "mul-normal-values",
+        operation: OperationKind::Mul,
+        class: ConformanceClass::Normal,
+        inputs: &[A, B],
+        input_shapes: &[SHAPE_2X2, SHAPE_2X2],
+        expected: &[2.0, -1.0, -3.0, 12.0],
+        expected_shape: SHAPE_2X2,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "sub-normal-values",
+        operation: OperationKind::Sub,
+        class: ConformanceClass::Normal,
+        inputs: &[A, B],
+        input_shapes: &[SHAPE_2X2, SHAPE_2X2],
+        expected: &[-1.0, -2.5, 4.0, 1.0],
+        expected_shape: SHAPE_2X2,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "div-exact-quotients",
+        operation: OperationKind::Div,
+        class: ConformanceClass::Normal,
+        inputs: &[DIV_L, DIV_R],
+        input_shapes: &[SHAPE_2X2, SHAPE_2X2],
+        expected: &[4.0, 2.0, 3.0, 3.0],
+        expected_shape: SHAPE_2X2,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "neg-flips-sign",
+        operation: OperationKind::Neg,
+        class: ConformanceClass::Normal,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: &[-1.0, 2.0, -3.0, -4.0],
+        expected_shape: SHAPE_2X2,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "sigmoid-at-zero-is-one-half",
+        operation: OperationKind::Sigmoid,
+        class: ConformanceClass::ScalarRank,
+        inputs: &[ZERO],
+        input_shapes: &[SHAPE_SCALAR],
+        expected: &[0.5],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "tanh-at-zero-is-zero",
+        operation: OperationKind::Tanh,
+        class: ConformanceClass::ScalarRank,
+        inputs: &[ZERO],
+        input_shapes: &[SHAPE_SCALAR],
+        expected: &[0.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "log-of-one-is-zero",
+        operation: OperationKind::Log,
+        class: ConformanceClass::ScalarRank,
+        inputs: &[ONE],
+        input_shapes: &[SHAPE_SCALAR],
+        expected: &[0.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "sqrt-of-four-is-two",
+        operation: OperationKind::Sqrt,
+        class: ConformanceClass::ScalarRank,
+        inputs: &[FOUR],
+        input_shapes: &[SHAPE_SCALAR],
+        expected: &[2.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "abs-of-minus-three-is-three",
+        operation: OperationKind::Abs,
+        class: ConformanceClass::ScalarRank,
+        inputs: &[MINUS_THREE],
+        input_shapes: &[SHAPE_SCALAR],
+        expected: &[3.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    // --- reductions -------------------------------------------------------
+    ConformanceVector {
+        name: "sum-all-elements",
+        operation: OperationKind::SumAll,
+        class: ConformanceClass::Normal,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: &[6.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "mean-all-elements",
+        operation: OperationKind::MeanAll,
+        class: ConformanceClass::Normal,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: &[1.5],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "max-all-elements",
+        operation: OperationKind::MaxAll,
+        class: ConformanceClass::Normal,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: &[4.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "min-all-elements",
+        operation: OperationKind::MinAll,
+        class: ConformanceClass::Normal,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: &[-2.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    ConformanceVector {
+        name: "prod-all-elements",
+        operation: OperationKind::ProdAll,
+        class: ConformanceClass::Normal,
+        inputs: &[PAIR],
+        input_shapes: &[&[2]],
+        expected: &[6.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    // --- matmul -----------------------------------------------------------
+    ConformanceVector {
+        name: "matmul-hand-computed",
+        operation: OperationKind::MatMulExact,
+        class: ConformanceClass::Normal,
+        inputs: &[MAT_A, MAT_B],
+        input_shapes: &[SHAPE_2X2, SHAPE_2X2],
+        expected: &[19.0, 22.0, 43.0, 50.0],
+        expected_shape: SHAPE_2X2,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    // --- normalization ----------------------------------------------------
+    ConformanceVector {
+        name: "softmax-uniform-pair-is-half-half",
+        operation: OperationKind::Softmax,
+        class: ConformanceClass::Normal,
+        inputs: &[&[0.0, 0.0]],
+        input_shapes: &[&[2]],
+        expected: &[0.5, 0.5],
+        expected_shape: SHAPE_1,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    // --- loss -------------------------------------------------------------
+    ConformanceVector {
+        name: "mse-loss-of-ones-versus-a",
+        operation: OperationKind::MseLoss,
+        class: ConformanceClass::Normal,
+        inputs: &[ZEROS4, A],
+        input_shapes: &[SHAPE_2X2, SHAPE_2X2],
+        expected: &[7.5],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
     },
 ];
 
