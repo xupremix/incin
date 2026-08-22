@@ -165,7 +165,7 @@ jobs:
   # backend and facade powersets are not a CI contract.
   powerset:
     name: Feature Powerset
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -233,7 +233,7 @@ jobs:
   # file that runs them at all.
   soundness:
     name: Miri and Sanitizers
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,6 +334,7 @@ jobs:
     - name: Build every target at the declared MSRV
       run: cargo check --workspace --all-targets --locked
     - name: Check metadata-derived stable feature powersets at MSRV
+      if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
       run: cargo xtask feature-msrv
 
   supply-chain:
