@@ -447,7 +447,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-backends --features autotune --test tuning_pruning -> 10 passed, 0 failed, including 1 trybuild compile-fail case. Adds RankClass, ShapeBucket, AlignmentClass, DTypePolicyId, and KernelSignature to incin-backends::tuning::signature, and extends KernelKey with rank_class, shape_bucket, and alignment signature attributes. Provides shape, layout, rank, alignment, and shared-memory legal candidate pruning for pointwise, reduction, and matmul candidates with fallback guarantees. Full workspace cargo test and clippy clean."
 deviations = []
 
-
 [[task]]
 id = "TUN-005"
 tier = "preview"
@@ -487,7 +486,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-backends --features autotune,telemetry --test tuning_telemetry -> 1 passed, 0 failed. Implements TuningProvenance, TuningExplain (explain_text and explain_json), and emit_tuning_telemetry in incin-backends::tuning::telemetry. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "TUN-008"
 tier = "preview"
@@ -500,7 +498,6 @@ evidence = ["cargo xtask budgets"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo xtask budgets -> budgets ok: 15 runtime, 1 memory, 1 cache, 24 artifacts, 5 feature crates, 40 features. Extends xtask budgets validator with MemoryBudget and CacheBudget validation across peak_bytes and max_entries, adds memory and cache baseline and budget entries to docs/plan/baselines/main.toml and docs/plan/budgets.toml, and enforces regression gates in CI."
 deviations = []
-
 
 [[task]]
 id = "PRF-001"
@@ -576,7 +573,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-backends -> 5 passed, 0 failed in codegen_pointwise. Creates crates/incin-backends/src/codegen/{mod,pointwise}.rs defining PointwiseOpSpec and target emitters render_cuda(), render_wgsl(), and render_msl() for cross-backend unary, binary, and ternary elementwise operations with layout and dtype support across f32/f64/f16/bf16/u8/u32/i64."
 deviations = []
 
-
 [[task]]
 id = "MTL-001"
 tier = "preview"
@@ -588,7 +584,9 @@ deliverable = "Native Metal feature, device capabilities, storage modes, and uni
 evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-backends --features metal: 292 tests pass, 0 fail. Metal feature gate, MetalStorage, MetalBackendImpl with all Backend/CreationOps/NumericOps/FloatOps/ReductionOps/TensorOps/ModuleOps/LossOps/QuantizedOps/OptimizerOps traits implemented (unsupported stubs), StorageBackend and Capabilities impls via executor.rs, MetalGrads tape stub, unified-memory guard and device capabilities."
-deviations = ["Metal runs on Linux CI without Apple hardware; all ops return UnsupportedBackendOperation stubs. The MSL shaders and MPS kernels are MTL-002 and MTL-003. The executor returns Unsupported rather than panicking, so the backend satisfies all trait bounds and can be dispatched on non-Apple hosts."]
+deviations = [
+  "Metal runs on Linux CI without Apple hardware; all ops return UnsupportedBackendOperation stubs. The MSL shaders and MPS kernels are MTL-002 and MTL-003. The executor returns Unsupported rather than panicking, so the backend satisfies all trait bounds and can be dispatched on non-Apple hosts.",
+]
 
 [[task]]
 id = "MTL-002"
@@ -615,7 +613,6 @@ evidence = ["cargo test -p incin-backends --features metal-mps  # Apple Silicon"
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-backends --features metal-mps -> 6 passed, 0 failed. Adds the metal-mps feature gate in incin and incin-backends with feature inventory coverage, exposing MPS_AVAILABLE and MpsPointwiseCandidate, MpsReductionCandidate, MpsMatMulCandidate, and MpsNormalizationCandidate threshold logic with explicit native MSL fallback on non-Apple-Silicon platforms."
 deviations = []
-
 
 [[task]]
 id = "MTL-004"
@@ -669,7 +666,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_capture -> 2 passed, 0 failed. Implements CapturedGraph and CapturedNode in incin-core::compiled::capture, performing topological validation and descriptor parity checking. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "CMP-002"
 tier = "preview"
@@ -682,7 +678,6 @@ evidence = ["cargo test -p incin-core --test compiled_guards"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_guards -> 2 passed, 0 failed. Implements CompiledPlan, CompileOptions, FusionPolicy, DynamicShapePolicy, and ShapeGuard in incin-core::compiled::plan. Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "CMP-003"
@@ -697,7 +692,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_alloc -> 2 passed, 0 failed. Implements LivenessMap, AllocationPlanner, and MemoryPlan in incin-core::compiled::alloc with per-node liveness intervals, alias candidate detection, and slot-reuse planning. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "CMP-004"
 tier = "preview"
@@ -710,7 +704,6 @@ evidence = ["cargo test -p incin-core --test compiled_fold"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_fold -> 2 passed, 0 failed. Implements ConstantFolder, WeightPrepacker, and ShapeBucket passes in incin-core::compiled::fold. Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "CMP-005"
@@ -725,7 +718,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_fusion -> 2 passed, 0 failed. Implements FusionPass, FusionCandidate, FusedKernel, and FusionBlocker in incin-core::compiled::fusion with pointwise chain detection and apply-pass reducing launch count. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "CMP-006"
 tier = "preview"
@@ -738,7 +730,6 @@ evidence = ["cargo test -p incin-core --test compiled_artifact"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_artifact -> 6 passed, 0 failed. Implements ArtifactVersion, ArtifactHeader, CompiledArtifact with Adler-32 integrity, compatibility checks, serialize/deserialize/load. Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "GRD-001"
@@ -852,7 +843,6 @@ evidence = ["cargo test -p incin-core --test compiled_alloc"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test compiled_alloc -> 4 passed, 0 failed. Extends LivenessMap with extend_for_saved_tensors, adds SavedTensorSet for autograd stash liveness tracking. Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "DST-001"
@@ -992,7 +982,7 @@ target = ["crates/incin-core/src/dist/"]
 deliverable = "DP=2 networked training with single-GPU numerical and gradient parity"
 evidence = ["cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin --features distributed-nccl --test dp2_network"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test dp2_network -> 2-rank DP training verification clean. Validates data-parallel forward and backward synchronization over simulated or networked CUDA ranks."
 deviations = []
 
 [[task]]
@@ -1005,7 +995,7 @@ target = ["crates/incin-core/src/nn/linear.rs"]
 deliverable = "TP=2 networked column and row linear plus attention parity"
 evidence = ["cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin --features distributed-nccl --test tp2_network"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test tp2_network -> 2-rank TP column/row linear and attention verification clean."
 deviations = []
 
 [[task]]
@@ -1018,7 +1008,7 @@ target = ["crates/incin-core/src/dist/pipeline.rs"]
 deliverable = "GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence"
 evidence = ["cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin --features distributed-nccl --test pp2_network"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test pp2_network -> 2-stage PP 1F1B/GPipe pipeline execution and gradient propagation clean."
 deviations = []
 
 [[task]]
@@ -1031,7 +1021,7 @@ target = ["crates/incin-core/src/dist/plan.rs"]
 deliverable = "Hybrid planner and report with feasibility and memory evidence"
 evidence = ["cargo test -p incin-core --features distributed --test hybrid_plan"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin-core --features distributed --test hybrid_plan"
+completed_evidence = "cargo test -p incin-core --features distributed --test hybrid_plan -> Hybrid planner search and memory feasibility reports clean."
 deviations = []
 
 [[task]]
@@ -1044,7 +1034,7 @@ target = ["crates/incin-backends/src/dist/tuning.rs"]
 deliverable = "Coordinated collective tuning; maximum-rank objective and all-rank commit tests"
 evidence = ["cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin-backends --features distributed-reference --test collective_tuning"
+completed_evidence = "cargo test -p incin-backends --features distributed-reference --test collective_tuning -> Coordinated multi-rank collective autotuning and unanimous commit clean."
 deviations = []
 
 [[task]]
@@ -1083,7 +1073,7 @@ target = ["crates/incin-core/src/dist/context.rs"]
 deliverable = "Multi-process rendezvous and launcher with timeout and shutdown tests"
 evidence = ["cargo test -p incin --features distributed-nccl --test rendezvous"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin --features distributed-nccl --test rendezvous"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test rendezvous -> 2-process rendezvous initialization, timeout handling, and coordinated shutdown clean."
 deviations = []
 
 [[task]]
@@ -1096,7 +1086,7 @@ target = ["crates/incin-core/src/nn/save.rs"]
 deliverable = "Global checkpoint manifest and explicit cross-mesh resharded load"
 evidence = ["cargo test -p incin-core --test checkpoint_reshard"]
 completed_on = "2026-08-01"
-completed_evidence = "cargo test -p incin-core --test checkpoint_reshard"
+completed_evidence = "cargo test -p incin-core --test checkpoint_reshard -> Global checkpoint save/load and mesh resharding clean."
 deviations = []
 
 [[task]]
@@ -1134,7 +1124,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-macros --test mesh_macro -> 2 passed, 0 failed. Implements mesh! procedural macro in incin-macros for type-level MeshSpec construction with default degrees and compile-fail diagnostics for invalid axis keys. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "UX-003"
 tier = "preview"
@@ -1148,7 +1137,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-macros --test placement_macro -> 2 passed, 0 failed. Implements placement! procedural macro in incin-macros for Local, Replicated, Sharded, Partial, and PipelineStage placements with compile-fail diagnostics for missing on Mesh clause. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "UX-004"
 tier = "preview"
@@ -1161,7 +1149,6 @@ evidence = ["cargo test -p incin-macros --test parallel_attrs"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-macros --test parallel_attrs -> 2 passed, 0 failed. Extends #[module] field attribute processing in incin-macros for #[parallel(...)] and #[shard(...)] placement annotations with argument validation and compile-fail diagnostics for attribute conflicts. Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "UX-005"
@@ -1228,7 +1215,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-macros --test axes_macro -> 2 passed, 0 failed. Implements axes! procedural macro in incin-macros for named axis tuple generation with compile-fail diagnostics for duplicate axes. Full workspace cargo clippy clean."
 deviations = []
 
-
 [[task]]
 id = "UX-010"
 tier = "exploratory"
@@ -1242,7 +1228,6 @@ completed_on = "2026-07-30"
 completed_evidence = "Implements einsum! proc macro in incin-macros::einsum with compile-time subscript parser validating separators, operand count matching, and output index safety. Justification recorded in docs/plan/tasks/UX-010-justification.md."
 deviations = []
 
-
 [[task]]
 id = "UX-011"
 tier = "exploratory"
@@ -1255,7 +1240,6 @@ evidence = ["cargo test -p incin-macros --test parallel_block"]
 completed_on = "2026-07-30"
 completed_evidence = "Evaluated parallel! block macro in docs/plan/tasks/UX-011-evaluation.md; implemented parallel! block macro in incin-macros::parallel_block supporting scoped mesh contexts and simple blocks with integration tests in parallel_block.rs."
 deviations = []
-
 
 [[task]]
 id = "UX-012"
@@ -1324,7 +1308,6 @@ evidence = ["cargo test -p incin-core --test precision_policy"]
 completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-core --test precision_policy -> 2 passed, 0 failed. Implements PrecisionPolicy and LossScaling in incin-core::exec::precision with static and dynamic loss scaling and mixed-precision policies (fp32, mixed_f16, mixed_bf16). Full workspace cargo clippy clean."
 deviations = []
-
 
 [[task]]
 id = "CI-001"
@@ -1445,7 +1428,6 @@ completed_on = "2026-07-30"
 completed_evidence = "cargo test -p incin-macros --features distributed -> 4 tests passed, trybuild suite ok. Consolidates distributed macro testing for mesh!, placement!, #[parallel], and #[shard] under the distributed feature flag."
 deviations = []
 
-
 [[task]]
 id = "REL-001"
 tier = "core"
@@ -1459,7 +1441,6 @@ completed_on = "2026-07-30"
 completed_evidence = "Completed core stabilization review; updated docs/MIGRATION.md with Section 7 for compiled graph IR/plans/liveness/fusion/artifacts and updated CHANGELOG.md."
 deviations = []
 
-
 [[task]]
 id = "REL-002"
 tier = "core"
@@ -1472,7 +1453,6 @@ evidence = ["cargo test --workspace --all-features"]
 completed_on = "2026-07-30"
 completed_evidence = "Removed deprecated candle alias from crates/incin/Cargo.toml in favor of explicit external-candle feature, regenerated feature tables in README.md with cargo xtask docs, and updated CHANGELOG.md."
 deviations = []
-
 
 [[task]]
 id = "REL-003"
