@@ -39,7 +39,7 @@ impl PendingRequests {
         };
         let Some(id) = msg.get("id") else { return };
         match method {
-            "textDocument/inlayHint" => {
+            "textDocument/inlayHint" | "inlayHint/resolve" => {
                 self.inlay_hint_ids.insert(id_key(id));
             }
             "textDocument/hover" => {
@@ -57,7 +57,7 @@ impl PendingRequests {
     }
 
     /// Returns `true` (and forgets the id) if `msg` is the response to a
-    /// previously observed `textDocument/inlayHint` request.
+    /// previously observed `textDocument/inlayHint` or `inlayHint/resolve` request.
     fn take_if_inlay_hint_response(&mut self, msg: &Value) -> bool {
         if msg.get("method").is_some() {
             return false; // requests/notifications are never responses
@@ -188,30 +188,40 @@ fn rewrite_inlay_hint_response(msg: &Value, shorten_backend: bool) -> Value {
     let mut msg = msg.clone();
     if let Some(hints) = msg.get_mut("result").and_then(Value::as_array_mut) {
         for hint in hints.iter_mut() {
-            // rust-analyzer truncates deeply-nested generics (typenum shapes
-            // routinely qualify) in `label` with a `…` ellipsis, discarding
-            // the bits we need to humanize - but it always includes the
-            // complete, fully-path-qualified type in `textEdits[0].newText`
-            // (used for "insert the full type" instead of the ellipsis).
-            // Prefer that as the source of truth whenever it's present.
-            let from_text_edit = hint
-                .pointer("/textEdits/0/newText")
-                .and_then(Value::as_str)
-                .map(|full| humanize_inlay_label(&strip_path_qualifiers(full), shorten_backend));
-            match from_text_edit {
-                Some(rewritten) => hint["label"] = json!(rewritten),
-                None => {
-                    if let Some(label) = hint.get_mut("label") {
-                        match collapse_multi_part_label(label, shorten_backend) {
-                            Some(rewritten) => *label = json!(rewritten),
-                            None => rewrite_label_value(label, shorten_backend),
-                        }
-                    }
+            rewrite_single_inlay_hint(hint, shorten_backend);
+        }
+    } else if let Some(hint) = msg.get_mut("result").and_then(Value::as_object_mut) {
+        let mut hint_val = Value::Object(std::mem::take(hint));
+        rewrite_single_inlay_hint(&mut hint_val, shorten_backend);
+        if let Value::Object(obj) = hint_val {
+            *hint = obj;
+        }
+    }
+    msg
+}
+
+fn rewrite_single_inlay_hint(hint: &mut Value, shorten_backend: bool) {
+    // rust-analyzer truncates deeply-nested generics (typenum shapes
+    // routinely qualify) in `label` with a `…` ellipsis, discarding
+    // the bits we need to humanize - but it always includes the
+    // complete, fully-path-qualified type in `textEdits[0].newText`
+    // (used for "insert the full type" instead of the ellipsis).
+    // Prefer that as the source of truth whenever it's present.
+    let from_text_edit = hint
+        .pointer("/textEdits/0/newText")
+        .and_then(Value::as_str)
+        .map(|full| humanize_inlay_label(&strip_path_qualifiers(full), shorten_backend));
+    match from_text_edit {
+        Some(rewritten) => hint["label"] = json!(rewritten),
+        None => {
+            if let Some(label) = hint.get_mut("label") {
+                match collapse_multi_part_label(label, shorten_backend) {
+                    Some(rewritten) => *label = json!(rewritten),
+                    None => rewrite_label_value(label, shorten_backend),
                 }
             }
         }
     }
-    msg
 }
 
 /// When a hint's `label` is an array of two or more `InlayHintLabelPart`s
@@ -653,6 +663,26 @@ mod tests {
         pending.observe_outgoing_to_server(&request);
         let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, true).unwrap();
         assert_eq!(rewritten["result"][0]["label"], ": Tensor<[2, 3]>");
+    }
+
+    #[test]
+    fn inlay_hint_resolve_rewrites_single_object_response() {
+        let request = json!({"id": 94, "method": "inlayHint/resolve", "params": {}});
+        let response = json!({
+            "id": 94,
+            "result": {
+                "position": {"line": 5, "character": 8},
+                "label": ": Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>, CpuBackendImpl<Cpu>>",
+                "textEdits": [{
+                    "range": {"start": {"line": 5, "character": 8}, "end": {"line": 5, "character": 8}},
+                    "newText": ": incin_core::tensor::base::types::Tensor<(typenum::UInt<typenum::UInt<typenum::UTerm, typenum::B1>, typenum::B0>, typenum::UInt<typenum::UInt<typenum::UTerm, typenum::B1>, typenum::B1>), incin_backends::cpu::CpuBackendImpl<incin_core::tensor::device::Cpu>>"
+                }]
+            }
+        });
+        let mut pending = PendingRequests::new();
+        pending.observe_outgoing_to_server(&request);
+        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, true).unwrap();
+        assert_eq!(rewritten["result"]["label"], ": Tensor<[2, 3]>");
     }
 
     #[test]

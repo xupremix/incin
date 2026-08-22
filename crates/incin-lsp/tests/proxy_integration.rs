@@ -103,6 +103,45 @@ fn proxy_rewrites_diagnostics_and_hints_but_passes_everything_else_through_byte_
 }
 
 #[test]
+fn proxy_rewrites_inlay_hint_resolve_requests() {
+    let mock_rust_analyzer = build_mock_rust_analyzer();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_incin-lsp"))
+        .env("INCIN_LSP_RA_PATH", &mock_rust_analyzer)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn incin-lsp");
+
+    let mut proxy_stdin = child.stdin.take().unwrap();
+    let request = br#"{"jsonrpc":"2.0","id":77,"method":"inlayHint/resolve","params":{}}"#;
+    write_frame(&mut proxy_stdin, request).unwrap();
+    drop(proxy_stdin);
+
+    let mut proxy_stdout = BufReader::new(child.stdout.take().unwrap());
+    let resolve_frame = read_frame(&mut proxy_stdout).unwrap().unwrap();
+    let resolve: serde_json::Value = serde_json::from_slice(&resolve_frame).unwrap();
+    assert_eq!(resolve["id"], 77);
+    assert_eq!(
+        resolve["result"]["label"],
+        "Tensor<[2, 3], CpuBackendImpl<Cpu>>"
+    );
+
+    assert!(
+        read_frame(&mut proxy_stdout).unwrap().is_none(),
+        "no extra frames"
+    );
+
+    let status = child.wait().unwrap();
+    assert!(
+        status.success(),
+        "incin-lsp should exit cleanly once the mock server closes its stdout"
+    );
+
+    std::fs::remove_file(mock_rust_analyzer).expect("remove mock-rust-analyzer test support");
+}
+
+#[test]
 fn proxy_forwards_version_probe_to_rust_analyzer() {
     let mock_rust_analyzer = build_mock_rust_analyzer();
     let output = Command::new(env!("CARGO_BIN_EXE_incin-lsp"))

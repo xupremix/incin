@@ -112,6 +112,30 @@ fn test_humanize_inlay_label_rewrites_non_tensor_struct_types_generically() {
 }
 
 #[test]
+fn test_humanize_inlay_label_handles_compound_signatures_with_multiple_tensors() {
+    let label = "(Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>, Tensor<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>,), CpuBackendImpl<Cpu>>)";
+    assert_eq!(
+        humanize_inlay_label(label, false),
+        "(Tensor<[2, 3], CpuBackendImpl<Cpu>>, Tensor<[4], CpuBackendImpl<Cpu>>)"
+    );
+    assert_eq!(
+        humanize_inlay_label(label, true),
+        "(Tensor<[2, 3]>, Tensor<[4]>)"
+    );
+}
+
+#[test]
+fn test_humanize_inlay_label_handles_colon_prefix_from_rust_analyzer() {
+    let label =
+        ": Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>";
+    assert_eq!(
+        humanize_inlay_label(label, false),
+        ": Tensor<[2, 3], CpuBackendImpl<Cpu>>"
+    );
+    assert_eq!(humanize_inlay_label(label, true), ": Tensor<[2, 3]>");
+}
+
+#[test]
 fn test_strip_path_qualifiers_collapses_qualified_paths() {
     assert_eq!(strip_path_qualifiers("typenum::B1"), "B1");
     assert_eq!(strip_path_qualifiers("incin::cpu::Tensor"), "Tensor");
