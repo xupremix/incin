@@ -21,11 +21,9 @@ mod templates {
 
 /// Embedded Incin AI Agent Skills for model developers and framework contributors.
 mod embedded_skills {
-    pub const INCIN_EXPERT: &str = include_str!("../../../../.agents/skills/incin-expert/SKILL.md");
-    pub const INCIN_ENGINEERING: &str =
-        include_str!("../../../../.agents/skills/incin-engineering/SKILL.md");
-    pub const INCIN_REPOSITORY: &str =
-        include_str!("../../../../.agents/skills/incin-repository/SKILL.md");
+    pub const INCIN_EXPERT: &str = include_str!("skills/incin-expert/SKILL.md");
+    pub const INCIN_ENGINEERING: &str = include_str!("skills/incin-engineering/SKILL.md");
+    pub const INCIN_REPOSITORY: &str = include_str!("skills/incin-repository/SKILL.md");
 }
 
 /// Absolute path to this crate's own manifest directory (`crates/incin`),

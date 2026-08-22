@@ -28,7 +28,10 @@ install_skill() {
     local dest_dir="$2"
     mkdir -p "$dest_dir/$skill_name"
     local dest_file="$dest_dir/$skill_name/SKILL.md"
-    local src_file=".agents/skills/$skill_name/SKILL.md"
+    local src_file="crates/incin/src/bin/skills/$skill_name/SKILL.md"
+    if [[ ! -f "$src_file" ]]; then
+        src_file=".agents/skills/$skill_name/SKILL.md"
+    fi
     
     # If in local repo and not writing to same file, copy; otherwise download from GitHub raw
     if [[ -f "$src_file" ]]; then
@@ -36,7 +39,7 @@ install_skill() {
             cp "$src_file" "$dest_file"
         fi
     else
-        curl -fsSL "$REPO_RAW_URL/.agents/skills/$skill_name/SKILL.md" -o "$dest_file"
+        curl -fsSL "$REPO_RAW_URL/crates/incin/src/bin/skills/$skill_name/SKILL.md" -o "$dest_file"
     fi
     echo -e "  ${GREEN}✓${NC} Installed ${BOLD}$skill_name${NC} -> $dest_file"
 }
@@ -46,14 +49,17 @@ install_cursor_rule() {
     local dest_dir="$2"
     mkdir -p "$dest_dir"
     local dest_file="$dest_dir/$skill_name.mdc"
-    local src_file=".agents/skills/$skill_name/SKILL.md"
+    local src_file="crates/incin/src/bin/skills/$skill_name/SKILL.md"
+    if [[ ! -f "$src_file" ]]; then
+        src_file=".agents/skills/$skill_name/SKILL.md"
+    fi
     
     if [[ -f "$src_file" ]]; then
         if [[ "$(realpath -q "$src_file" 2>/dev/null || echo "")" != "$(realpath -q "$dest_file" 2>/dev/null || echo "")" ]]; then
             cp "$src_file" "$dest_file"
         fi
     else
-        curl -fsSL "$REPO_RAW_URL/.agents/skills/$skill_name/SKILL.md" -o "$dest_file"
+        curl -fsSL "$REPO_RAW_URL/crates/incin/src/bin/skills/$skill_name/SKILL.md" -o "$dest_file"
     fi
     echo -e "  ${GREEN}✓${NC} Installed Cursor rule ${BOLD}$skill_name.mdc${NC} -> $dest_file"
 }
