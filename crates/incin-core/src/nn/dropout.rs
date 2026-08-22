@@ -51,6 +51,52 @@ impl Dropout {
     }
 }
 
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitState<B> for Dropout {
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitStateMut<B> for Dropout {
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        _: &crate::nn::StatePath,
+        _: &mut V,
+    ) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl crate::nn::NamedLayers for Dropout {
+    fn layer_structure(&self, prefix: &str) -> alloc::vec::Vec<crate::nn::LayerNode> {
+        alloc::vec![crate::nn::LayerNode {
+            name: alloc::string::String::from(prefix),
+            type_name: alloc::string::String::from("Dropout"),
+            shape_info: alloc::format!("p={}", self.p),
+            children: alloc::vec![],
+        }]
+    }
+}
+
+impl crate::nn::ShapeInfo for Dropout {
+    fn shape_info(&self) -> Option<alloc::string::String> {
+        None
+    }
+}
+
+impl<B: crate::tensor::backend::VariableBackend, NewD: crate::tensor::device::Device>
+    crate::tensor::transfer::ToDevice<B, NewD> for Dropout
+{
+    type Output = Dropout;
+    fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
+        Ok(self)
+    }
+}
+
 impl TrainMode for Dropout {
     /// Directly sets `is_training` - `Dropout`'s own forward already reads
     /// this flag to decide identity-vs-random-zeroing behavior.
