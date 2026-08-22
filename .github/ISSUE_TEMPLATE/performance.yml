@@ -1,0 +1,58 @@
+name: "🏎️ Performance Regression / Optimization"
+description: Report a slow kernel, unexpected memory allocation, or optimization opportunity
+title: "[Perf]: "
+labels: ["performance", "area:perf"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Incin has strict allocation budgets and performance contracts. Please include benchmark data or profiles.
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: Subsystem & Execution Mode
+      options:
+        - "CPU AVX2 / SIMD Elementwise Kernels"
+        - "CPU MatMul (Native GEMM / BLAS)"
+        - "CUDA MatMul / Autotuned Kernels"
+        - "WGPU / Metal Compute Shaders"
+        - "Autograd Tape Allocation / Backward Traversal"
+        - "Compiled Plan / Kernel Fusion"
+        - "Data Loading / Dataset Pipeline"
+      multiple: true
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Performance Issue Description
+      description: Describe the observed slowdown, excessive heap allocation, or optimization target.
+    validations:
+      required: true
+  - type: textarea
+    id: benchmark-data
+    attributes:
+      label: Benchmark Code & Measurements
+      description: Include `criterion` benchmark output or execution timings comparing Incin with baselines (e.g. PyTorch, Candle).
+      placeholder: |
+        ```text
+        Operation: [1024, 1024] x [1024, 1024] f32 matmul
+        Incin (CPU baseline) : 12.4 ms
+        PyTorch (MKL)        : 3.1 ms
+        ```
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: profiling-trace
+    attributes:
+      label: Profiling / Flamegraph / Telemetry Data
+      description: Attach flamegraph, `perf record` summary, or `cargo incin watch` telemetry trace.
+      placeholder: "Top function in perf report: `incin_backends::cpu::ops::elementwise_kernel::...` taking 85% of cycles."
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware Configuration
+      placeholder: "AMD Ryzen 9 7950X (16c/32t), 64GB DDR5-6000, NVIDIA RTX 4090"
+    validations:
+      required: true

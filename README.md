@@ -7,7 +7,7 @@
 [![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
 [![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
 [![docs](https://img.shields.io/badge/docs-passing-brightgreen)](https://docs.rs/incin)
-[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](./LICENSE-MIT)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](./LICENSE_MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange)](./Cargo.toml)
 
 [Quick Start](#quick-start) · [Features](#features) · [Architecture](#architecture) · [The Book](https://xupremix.github.io/incin) · [CLI](#cli-cargo-incin) · [Editors](#editor-support)
@@ -352,13 +352,10 @@ cargo install --path crates/incin-lsp --bin incin-lsp --locked
 - [Architecture and growth notes](https://github.com/xupremix/incin/tree/master/docs/growth/)
   cover longer-term work.
 
-Build the Book with `mdbook build docs/book`. Its Rust examples are checked by
-`cargo test -p incin --features backend-authoring --doc`.
+<div align="center">
 
 ## License
 
-Dual-licensed under either
+Dual-licensed under either [**MIT**](./LICENSE_MIT) or [**Apache 2.0**](./LICENSE_APACHE) at your option.
 
-[**MIT**](https://github.com/xupremix/incin/blob/master/LICENSE_MIT) or [**Apache 2.0**](https://github.com/xupremix/incin/blob/master/LICENSE_APACHE)
-
-at your option.
+</div>

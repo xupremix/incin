@@ -1,0 +1,44 @@
+name: "📚 Documentation / Book Improvement"
+description: Propose an improvement or fix a typo/broken link in the Incin Book or Rustdocs
+title: "[Docs]: "
+labels: ["documentation", "area:docs"]
+body:
+  - type: dropdown
+    id: doc-section
+    attributes:
+      label: Documentation Area
+      options:
+        - "The Incin Book (xupremix.github.io/incin)"
+        - "API Rustdoc (docs.rs/incin)"
+        - "README / Quick Start"
+        - "Architecture Guides (docs/*.md)"
+        - "Examples & Tutorials"
+        - "Wiki Guides"
+    validations:
+      required: true
+  - type: input
+    id: page-url
+    attributes:
+      label: Page URL or File Path
+      placeholder: "e.g. docs/book/src/autograd.md or https://xupremix.github.io/incin/#/autograd"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear, missing, or inaccurate?
+      description: Explain what needs improvement.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-change
+    attributes:
+      label: Suggested Documentation Text / Example
+      description: What should the text or example look like instead?
+      placeholder: |
+        ```rust
+        // Improved code snippet or revised explanatory prose
+        ```
+      render: markdown
+    validations:
+      required: true

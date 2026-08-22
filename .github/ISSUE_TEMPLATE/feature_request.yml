@@ -1,0 +1,66 @@
+name: "✨ Feature Request"
+description: Propose a new operation, layer, target API capability, or tool improvement
+title: "[Feature]: "
+labels: ["enhancement", "type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome feature proposals and API ideas! Please describe the use case and how it fits Incin's compile-time shape safety principles.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What domain does this proposal touch?
+      options:
+        - "New Tensor Operation / Math Primitive"
+        - "Neural Network Layer / Module (incin::nn)"
+        - "Optimizer / Loss Function / Autograd"
+        - "Hardware Backend / Accelerator Support"
+        - "Model Serialization / ONNX / Safetensors"
+        - "Diagnostic / Editor / LSP Tooling"
+        - "CLI / Scaffolding / Developer Experience"
+        - "Dataset / Dataloader (incin-data)"
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem & Motivation
+      description: What problem are you trying to solve? Is your feature request related to a specific workflow?
+      placeholder: "Currently, implementing model architecture X requires manual reshaping because..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-api
+    attributes:
+      label: Proposed Solution / API Sketch
+      description: How should the Rust code look when using this feature?
+      placeholder: |
+        ```rust
+        // Example sketch of the proposed API
+        let x: Tensor<s![B, C, H, W], Cpu> = Cpu.randn(shape![16, 3, 224, 224])?;
+        let y = x.adaptive_avg_pool2d(s![7, 7])?;
+        ```
+      render: rust
+    validations:
+      required: true
+  - type: textarea
+    id: shape-invariants
+    attributes:
+      label: Shape & Type System Invariants
+      description: How should static shapes (`s![]`) and runtime shapes (`shape!`) be verified at compile time or dispatch time?
+      placeholder: "Input shape [B, C, H, W] -> Output shape [B, C, OH, OW] where OH and OW are verified..."
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other designs or workarounds did you consider?
+      placeholder: "Alternative 1: Runtime-only shape check. Alternative 2: Separate macro..."
+  - type: checkboxes
+    id: willingness
+    attributes:
+      label: Contribution
+      options:
+        - label: "I would be interested in submitting a PR or testing an experimental implementation."
+          required: false
