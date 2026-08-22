@@ -58,7 +58,12 @@ if `incin-lsp` is not on `PATH`.
 The extension's **Incin: Toggle Shape Hints** command turns hint rewriting on
 or off and restarts rust-analyzer. `incin.shortenBackend` removes the trailing
 backend, dtype, and gradient detail from rewritten hints when that shorter view
-is preferable.
+is preferable (e.g. `Tensor<[2, 3]>` instead of `Tensor<[2, 3], CpuBackendImpl<Cpu>>`).
+
+`incin-lsp` intercepts both full document hint requests (`textDocument/inlayHint`)
+and on-demand lazy resolution requests (`inlayHint/resolve`), ensuring multi-part
+labels and text edits containing raw typenum or `DimCons` structures are normalized
+into clean bracket shapes across VS Code and Neovim.
 
 The exact VSIX for a published version is attached to that version's GitHub
 release. It is not currently uploaded to the Visual Studio Marketplace or Open

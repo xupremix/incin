@@ -65,6 +65,15 @@ fn main() -> io::Result<()> {
     let id = request_id(&request);
     let mut stdout = io::stdout();
 
+    let method_is_resolve = request.windows(17).any(|w| w == b"inlayHint/resolve");
+    if method_is_resolve {
+        write_frame(
+            &mut stdout,
+            format!(r#"{{"jsonrpc":"2.0","id":{},"result":{{"position":{{"line":3,"character":12}},"label":"Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>"}}}}"#, String::from_utf8_lossy(id)).as_bytes(),
+        )?;
+        return Ok(());
+    }
+
     write_frame(
         &mut stdout,
         br#"{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"mock server started"}}"#,

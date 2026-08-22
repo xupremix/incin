@@ -208,89 +208,102 @@ pub fn humanize_inlay_label(label: &str, shorten_backend: bool) -> String {
 /// to show a legend mapping each humanized number back to its raw typenum
 /// expression.
 pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated {
-    let no_op = || Translated {
-        text: label.to_string(),
-        hints: Vec::new(),
-    };
-
-    let Some(tensor_start) = label.find("Tensor<(") else {
-        let (text, hints) = translate_typenum_text(label);
-        // rust-analyzer's inferred-type rendering is not stable: depending
-        // on the context it can expose a tensor shape as the tuple alias used
-        // by source code, or as its `DimCons<Head, Tail>` implementation.
-        // The latter is common inside wrappers such as `Result<Tensor<...>>`.
-        // Treat both spellings as the same display shape. `collapse_*` fails
-        // closed for partial/truncated chains, preserving incomplete labels.
-        let text = collapse_dimcons_chains(&text);
-        let text = if shorten_backend {
-            shorten_collapsed_tensor_tail(&text).unwrap_or(text)
-        } else {
-            text
-        };
-        return Translated { text, hints };
-    };
-    let name_end = tensor_start + "Tensor".len(); // index just past "Tensor", i.e. at '<'
-    let generic_open = name_end; // index of '<'
-    let tuple_open = generic_open + 1; // index of '(', guaranteed by the "Tensor<(" match above
-
-    // Find the shape tuple's own matching ')' via balanced-paren scanning
-    // (a shape tuple never nests parens, but scanning is cheap and robust).
-    let Some(tuple_close) = matching_bracket(&label[tuple_open..], '(', ')') else {
-        return no_op();
-    };
-    let tuple_close = tuple_open + tuple_close;
-
-    let (shape_digits, hints) = translate_typenum_text(&label[tuple_open + 1..tuple_close]);
-    // Rust's 1-tuple syntax (`(U8,)`) leaves a trailing comma inside the
-    // parens that `translate_typenum_text` faithfully preserves (it only
-    // rewrites typenum spans, not surrounding punctuation) - strip it so a
-    // rank-1 shape renders as `[8]`, not `[8,]`.
-    let shape_digits = shape_digits.trim_end_matches(|c: char| c == ',' || c.is_whitespace());
-    let shape = format!("[{}]", shape_digits);
-
-    if !shorten_backend {
-        let text = format!(
-            "{}<{}{}",
-            &label[..generic_open],
-            shape,
-            &label[tuple_close + 1..]
-        );
-        return Translated { text, hints };
+    let mut hints = Vec::new();
+    let converted = convert_tensor_tuples_to_brackets(label, &mut hints);
+    let (text, text_hints) = translate_typenum_text(&converted);
+    for h in text_hints {
+        if !hints.contains(&h) {
+            hints.push(h);
+        }
     }
-
-    // Find the matching '>' for the `Tensor<`'s own '<' so the backend/dtype/
-    // grad tail after the shape tuple can be dropped entirely.
-    let Some(generic_close) = matching_bracket(&label[generic_open..], '<', '>') else {
-        return no_op();
+    // rust-analyzer's inferred-type rendering is not stable: depending
+    // on the context it can expose a tensor shape as the tuple alias used
+    // by source code, or as its `DimCons<Head, Tail>` implementation.
+    // The latter is common inside wrappers such as `Result<Tensor<...>>`.
+    // Treat both spellings as the same display shape. `collapse_*` fails
+    // closed for partial/truncated chains, preserving incomplete labels.
+    let text = collapse_dimcons_chains(&text);
+    let text = if shorten_backend {
+        shorten_collapsed_tensor_tail(&text).unwrap_or(text)
+    } else {
+        text
     };
-    let generic_close = generic_open + generic_close;
-
-    let text = format!(
-        "{}<{}>{}",
-        &label[..name_end],
-        shape,
-        &label[generic_close + 1..]
-    );
     Translated { text, hints }
 }
 
-/// Removes a tensor's backend tail after a `DimCons` shape was collapsed to a
-/// bracket list. This is deliberately separate from the tuple parser above:
-/// the same inferred type can be nested inside `Result<...>` and contain a
-/// `DimCons` implementation spelling rather than `Tensor<(...)>`.
+fn convert_tensor_tuples_to_brackets(label: &str, hints: &mut Vec<(String, String)>) -> String {
+    let mut result = String::with_capacity(label.len());
+    let mut last_end = 0;
+    let mut search_idx = 0;
+
+    while let Some(rel_start) = label[search_idx..].find("Tensor<(") {
+        let tensor_start = search_idx + rel_start;
+        let name_end = tensor_start + "Tensor".len(); // index at '<'
+        let tuple_open = name_end + 1; // index at '('
+        let Some(tuple_close_rel) = matching_bracket(&label[tuple_open..], '(', ')') else {
+            search_idx = tensor_start + "Tensor<(".len();
+            continue;
+        };
+        let tuple_close = tuple_open + tuple_close_rel;
+
+        let (shape_digits, tuple_hints) =
+            translate_typenum_text(&label[tuple_open + 1..tuple_close]);
+        for h in tuple_hints {
+            if !hints.contains(&h) {
+                hints.push(h);
+            }
+        }
+        // Rust's 1-tuple syntax (`(U8,)`) leaves a trailing comma inside the
+        // parens that `translate_typenum_text` faithfully preserves - strip it so a
+        // rank-1 shape renders as `[8]`, not `[8,]`.
+        let shape_digits = shape_digits.trim_end_matches(|c: char| c == ',' || c.is_whitespace());
+        let shape = format!("[{}]", shape_digits);
+
+        result.push_str(&label[last_end..name_end]);
+        result.push('<');
+        result.push_str(&shape);
+        last_end = tuple_close + 1;
+        search_idx = last_end;
+    }
+    result.push_str(&label[last_end..]);
+    result
+}
+
+/// Removes a tensor's backend tail after a shape was collapsed to a
+/// bracket list. Handles multiple tensors across compound type signatures.
 fn shorten_collapsed_tensor_tail(label: &str) -> Option<String> {
-    let tensor_start = label.find("Tensor<[")?;
-    let name_end = tensor_start + "Tensor".len();
-    let generic_open = name_end;
-    let shape_open = generic_open + 1;
-    let shape_close = shape_open + matching_bracket(&label[shape_open..], '[', ']')?;
-    let generic_close = generic_open + matching_bracket(&label[generic_open..], '<', '>')?;
-    Some(format!(
-        "{}<{}>{}",
-        &label[..name_end],
-        &label[shape_open..=shape_close],
-        &label[generic_close + 1..]
-    ))
+    if !label.contains("Tensor<[") {
+        return None;
+    }
+    let mut result = String::with_capacity(label.len());
+    let mut last_end = 0;
+    let mut search_idx = 0;
+
+    while let Some(rel_start) = label[search_idx..].find("Tensor<[") {
+        let tensor_start = search_idx + rel_start;
+        let name_end = tensor_start + "Tensor".len();
+        let generic_open = name_end;
+        let shape_open = generic_open + 1;
+        let Some(shape_close_rel) = matching_bracket(&label[shape_open..], '[', ']') else {
+            search_idx = tensor_start + "Tensor<[".len();
+            continue;
+        };
+        let shape_close = shape_open + shape_close_rel;
+        let Some(generic_close_rel) = matching_bracket(&label[generic_open..], '<', '>') else {
+            search_idx = tensor_start + "Tensor<[".len();
+            continue;
+        };
+        let generic_close = generic_open + generic_close_rel;
+
+        result.push_str(&label[last_end..name_end]);
+        result.push('<');
+        result.push_str(&label[shape_open..=shape_close]);
+        result.push('>');
+        last_end = generic_close + 1;
+        search_idx = last_end;
+    }
+    result.push_str(&label[last_end..]);
+    Some(result)
 }
 
 /// Collapses every qualified path in a type signature down to its last
