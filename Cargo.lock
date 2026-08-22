@@ -1950,12 +1950,12 @@ dependencies = [
 name = "incin-data"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "flate2",
  "hf-hub",
  "incin-backends",
  "incin-core",
  "rand 0.10.2",
+ "thiserror 2.0.20",
  "ureq",
 ]
 

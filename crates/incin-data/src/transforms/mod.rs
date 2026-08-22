@@ -3,10 +3,15 @@
 //! Provides traits and implementations for data preprocessing, batch normalization,
 //! image transformations, and pipeline composition.
 
+use crate::loader::{BatchResult as Result, DataError};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use anyhow::{Result, bail};
+
+/// Rejects a transform input that violates its declared contract.
+fn invalid_input(message: impl Into<String>) -> DataError {
+    DataError::InvalidInput(message.into())
+}
 use rand::RngExt as _;
 
 /// Core trait for a data transformation step.
@@ -91,16 +96,18 @@ impl Transform for Normalize {
 
     fn transform(&self, (mut data, shape): Self::Input) -> Result<Self::Output> {
         if shape.is_empty() {
-            bail!("Normalize transform requires a non-empty shape");
+            return Err(invalid_input(
+                "Normalize transform requires a non-empty shape",
+            ));
         }
         let channels = shape[0];
         if channels != self.mean.len() || channels != self.std.len() {
-            bail!(
+            return Err(invalid_input(format!(
                 "Normalize channel count mismatch: input has {} channels, mean has {}, std has {}",
                 channels,
                 self.mean.len(),
                 self.std.len()
-            );
+            )));
         }
 
         let channel_stride = data.len() / channels;
@@ -108,7 +115,9 @@ impl Transform for Normalize {
             let mean_c = self.mean[c];
             let std_c = self.std[c];
             if std_c == 0.0 {
-                bail!("Normalize std dev cannot be zero for channel {}", c);
+                return Err(invalid_input(format!(
+                    "Normalize std dev cannot be zero for channel {c}"
+                )));
             }
             let start = c * channel_stride;
             let end = start + channel_stride;
@@ -172,7 +181,9 @@ impl Transform for RandomHorizontalFlip {
 
     fn transform(&self, (data, shape): Self::Input) -> Result<Self::Output> {
         if shape.len() != 3 {
-            bail!("RandomHorizontalFlip requires 3D shape [C, H, W]");
+            return Err(invalid_input(
+                "RandomHorizontalFlip requires 3D shape [C, H, W]",
+            ));
         }
         let mut rng = rand::rng();
         if rng.random_bool(self.p) {
@@ -219,20 +230,17 @@ impl Transform for CenterCrop {
 
     fn transform(&self, (data, shape): Self::Input) -> Result<Self::Output> {
         if shape.len() != 3 {
-            bail!("CenterCrop requires 3D shape [C, H, W]");
+            return Err(invalid_input("CenterCrop requires 3D shape [C, H, W]"));
         }
         let c = shape[0];
         let h = shape[1];
         let w = shape[2];
 
         if self.crop_h > h || self.crop_w > w {
-            bail!(
+            return Err(invalid_input(format!(
                 "Crop dimensions [{}, {}] exceed image dimensions [{}, {}]",
-                self.crop_h,
-                self.crop_w,
-                h,
-                w
-            );
+                self.crop_h, self.crop_w, h, w
+            )));
         }
 
         let start_h = (h - self.crop_h) / 2;
@@ -282,5 +290,45 @@ mod tests {
         assert_eq!(shape, vec![1, 2, 2]);
         // Center 2x2 of 4x4: rows 1..3, cols 1..3 -> [5, 6, 9, 10]
         assert_eq!(out, vec![5.0, 6.0, 9.0, 10.0]);
+    }
+
+    #[test]
+    fn normalize_rejects_empty_shape_as_invalid_input() {
+        let error = Normalize::new(vec![1.0], vec![1.0])
+            .transform((vec![1.0], Vec::new()))
+            .expect_err("an empty shape has no channel axis");
+        assert!(matches!(error, DataError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn normalize_rejects_channel_count_mismatch_as_invalid_input() {
+        let error = Normalize::new(vec![1.0], vec![1.0])
+            .transform((vec![1.0, 2.0], vec![3]))
+            .expect_err("three channels cannot be normalized by one mean and std");
+        assert!(matches!(error, DataError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn normalize_rejects_zero_std_as_invalid_input() {
+        let error = Normalize::new(vec![1.0], vec![0.0])
+            .transform((vec![1.0], vec![1]))
+            .expect_err("a zero standard deviation divides every value by zero");
+        assert!(matches!(error, DataError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn random_horizontal_flip_rejects_non_3d_shape_as_invalid_input() {
+        let error = RandomHorizontalFlip::default()
+            .transform((vec![1.0, 2.0], vec![2]))
+            .expect_err("the flip kernel indexes channels, height, and width");
+        assert!(matches!(error, DataError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn center_crop_rejects_crop_larger_than_image_as_invalid_input() {
+        let error = CenterCrop::new(8, 8)
+            .transform((vec![0.0; 16], vec![1, 4, 4]))
+            .expect_err("a crop larger than the image has no center");
+        assert!(matches!(error, DataError::InvalidInput(_)));
     }
 }

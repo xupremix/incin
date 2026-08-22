@@ -130,6 +130,17 @@ major/minor values.
 
 ## [Unreleased]
 
+### Breaking changes
+- **incin-data typed errors:** Public `incin-data` APIs no longer return
+  `anyhow::Result`. `Downloader`, `MnistDataset` construction, and the Hugging
+  Face Hub client now return the framework error (`incin_core::error::Result`),
+  classifying failures as `Error::Io`, `Error::MalformedArtifact`,
+  `Error::ResourceLimit`, or `Error::ArithmeticOverflow`. Transform pipelines
+  and collation return the crate's typed `DataError`, which gained an
+  `InvalidInput` variant for rejected transform inputs. Callers matching on
+  error text or constructing `anyhow` errors from these surfaces must switch to
+  the typed variants.
+
 ### Changed
 - **Advanced indexing facade:** Curated `incin::advanced` to export only the
   documented type-level indexing selectors and traits.
